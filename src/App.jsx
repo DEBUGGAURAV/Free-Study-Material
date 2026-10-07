@@ -477,7 +477,7 @@ function App() {
               style={{ cursor: 'pointer' }}
             >
               <span className="brand-mark"><Zap size={18} fill="currentColor" /></span>
-              <span>Tech <i>Titan</i></span>
+              <span>FreeStudy<i>Material</i></span>
             </span>
           </div>
 
@@ -651,7 +651,7 @@ function Home({ onExplore, onSignIn, signedIn, noticeBoard = [] }) {
   return <>
     <section className="hero page-width">
       <div>
-        <div className="eyebrow"><span className="live-dot" /> TECH TITAN // QUANTUM KNOWLEDGE CLOUD</div>
+        <div className="eyebrow"><span className="live-dot" /> FREESTUDYMATERIAL // QUANTUM KNOWLEDGE CLOUD</div>
         <h1>Architect your engineering mastery.</h1>
         <p>Curated university lecture archives, verified engineering blueprints, and private Telegram cloud infrastructure. Designed for high-performing computer scientists and builders.</p>
         <div className="hero-actions" style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '28px' }}>
@@ -697,11 +697,11 @@ function Home({ onExplore, onSignIn, signedIn, noticeBoard = [] }) {
             <div className="console-code-block">
               <div className="code-line">
                 <span className="code-prefix">$</span>
-                <span className="code-cmd">techtitan cluster --sync</span>
+                <span className="code-cmd">freestudymaterial cluster --sync</span>
                 <span className="code-flag">--storage=telegram</span>
               </div>
               <div className="code-output success">
-                ✓ Supergroup connected: <strong>TECH TITAN STORAGE</strong>
+                ✓ Supergroup connected: <strong>FREESTUDYMATERIAL STORAGE</strong>
               </div>
               <div className="code-output info">
                 ✓ Active Topic Pipeline: <strong>Thread #2 [DBMS & Algorithms]</strong>

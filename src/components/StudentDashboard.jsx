@@ -154,7 +154,7 @@ export default function StudentDashboard({
                 </h1>
                 
                 <p className="cadet-subtext">
-                  Connected to <strong>Free Study Material Cloud</strong> for <strong>{userBranch}</strong>. Direct Telegram Supergroup edge stream active with 100% loss-free academic archives.
+                  Connected to <strong>FreeStudyMaterial Cloud</strong> for <strong>{userBranch}</strong>. Direct Telegram Supergroup edge stream active with 100% loss-free academic archives.
                 </p>
               </div>
             </div>

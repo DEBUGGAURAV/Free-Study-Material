@@ -78,7 +78,7 @@ export default function Sidebar({
             boxShadow: '0 0 16px rgba(0, 242, 254, 0.65)'
           }}><Zap size={20} fill="currentColor" /></span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '1.15rem', fontWeight: '900', letterSpacing: '-0.02em' }}>Free <i>Study Material</i></span>
+            <span style={{ fontSize: '1.2rem', fontWeight: '900', letterSpacing: '-0.02em' }}>FreeStudy<i>Material</i></span>
             <span style={{ fontSize: '0.68rem', color: '#00f2fe', letterSpacing: '0.08em', fontWeight: '800' }}>QUANTUM CLOUD 2.0</span>
           </div>
         </button>
