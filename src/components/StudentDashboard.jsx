@@ -17,8 +17,10 @@ export default function StudentDashboard({
   notes = [], 
   folders = [], 
   notices = [], 
+  token,
   onNavigate, 
   onNoteAccess,
+  onUploadSuccess,
   activeView = 'home',
   onViewChange
 }) {
@@ -282,7 +284,7 @@ export default function StudentDashboard({
               </button>
             </div>
             <div className="drawer-content">
-              <UploadDocumentSpace />
+              <UploadDocumentSpace folders={folders} token={token} onUploadSuccess={onUploadSuccess} />
             </div>
           </section>
         )}

@@ -91,6 +91,19 @@ export const createNote = (note, token) => {
   invalidateCache('/notes');
   return request('/notes', { method: 'POST', body: JSON.stringify(note) }, token);
 }
+export const uploadNoteFile = async (formData, token) => {
+  invalidateCache('/notes');
+  const response = await fetch(`${API_URL}/notes/upload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || 'Upload failed');
+  }
+  return data;
+}
 export const getNotices = (token) => request('/notices', {}, token, true)
 export const createNotice = (notice, token) => {
   invalidateCache('/notices');

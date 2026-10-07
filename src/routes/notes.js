@@ -74,6 +74,40 @@ router.get("/", optionalAuth, readLimiter, async (req, res) => {
   }
 });
 
+// Create note record (e.g. with Google Drive link or metadata)
+router.post("/", auth, async (req, res) => {
+  try {
+    const { title, subject, folderId, year, branch, driveLink, visibility = "public", status = "approved" } = req.body;
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, message: "Title is required" });
+    }
+
+    const noteDoc = {
+      title: title.trim(),
+      subject: subject || "General",
+      folderId: folderId || "",
+      year: year || "1st year",
+      branch: branch || "CSE",
+      driveLink: driveLink ? driveLink.trim() : "",
+      status: status || "approved",
+      visibility: visibility || "public",
+      visible: true,
+      downloadCount: 0,
+      downloads: 0,
+      uploadedBy: req.user?.uid || "admin",
+      uploadedByName: req.user?.name || "System Admin",
+      uploadedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await db.collection("notes").add(noteDoc);
+    res.json({ success: true, id: docRef.id, ...noteDoc });
+  } catch (error) {
+    console.error("[Notes Create] Error:", error);
+    res.status(500).json({ success: false, message: "Failed to create note: " + error.message });
+  }
+});
+
 // 2. GET /api/notes/:id/download - Secure stream download from Telegram storage
 router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
   try {

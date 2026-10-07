@@ -8,7 +8,7 @@ import {
   getAdminNotes, getAdminRoleRequests, getAdminUsers, getFolders, getNotices,
   getNotes, recordLogout, recordNoteAccess,
   setUserBlocked, setUserPermissions, updateAdminUser,
-  updateFolder, updateNote, updateProfile, downloadAdminExport,
+  updateFolder, updateNote, updateProfile, downloadAdminExport, uploadNoteFile,
 } from './api'
 const AuthModal = lazy(() => import('./components/AuthModal'))
 const NotesView = lazy(() => import('./components/NotesView'))
@@ -264,11 +264,25 @@ function App() {
     try {
       const folder = folders.find((item) => item.id === note.folderId)
       if (!folder) throw new Error('Create the matching year folder before publishing this note.')
-      const created = await createNote({ ...note, year: folder.year, subject: folder.subject, folderId: folder.id, status: 'approved' }, session.token)
+      let created;
+      if (note.file) {
+        const formData = new FormData()
+        formData.append('file', note.file)
+        formData.append('title', note.title)
+        formData.append('subject', folder.subject)
+        formData.append('year', folder.year)
+        formData.append('folderId', folder.id)
+        formData.append('branch', note.branch || 'CSE')
+        formData.append('visibility', 'public')
+        const res = await uploadNoteFile(formData, session.token)
+        created = res.note || { ...note, id: res.note?.id, year: folder.year, subject: folder.subject, folderId: folder.id, status: 'approved' }
+      } else {
+        created = await createNote({ ...note, year: folder.year, subject: folder.subject, folderId: folder.id, status: 'approved' }, session.token)
+      }
       setAdminNotes((current) => [created, ...current])
       setLiveNotes((current) => [created, ...current])
       setNewUploadCount(1)
-      setNotice('Note published. Students will see it in their subject room shortly.')
+      setNotice('Note published successfully to Telegram Cloud and Catalog.')
       return true
     } catch (error) { setNotice(error.message); return false }
   }
@@ -562,6 +576,7 @@ function App() {
             <div id="student-portal">
               <StudentDashboard
                 user={session.user}
+                token={session.token}
                 notes={liveNotes}
                 folders={folders}
                 notices={noticeBoard}
@@ -572,6 +587,11 @@ function App() {
                 }}
                 onExploreNotes={() => setView('notes')}
                 onNoteAccess={handleNoteAccess}
+                onUploadSuccess={(createdNote) => {
+                  setLiveNotes(prev => [createdNote, ...prev])
+                  setNewUploadCount(1)
+                  setNotice('Blueprint contributed and uploaded to Telegram Storage!')
+                }}
               />
             </div>
           ) : (
