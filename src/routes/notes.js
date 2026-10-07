@@ -139,9 +139,16 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
       lastDownloadedAt: new Date().toISOString()
     }).catch(err => console.warn("[Notes Download] Could not increment counter:", err.message));
 
-    // Stream directly through the server: bot token is NEVER exposed to browser
-    const stream = bot.getFileStream(note.telegramFileId);
     const safeName = String(note.fileName || `${note.title || "note"}.pdf`).replace(/[^\w.\- ]/g, "_");
+
+    // If Cloudflare Worker URL is configured, redirect to high-speed global Edge CDN
+    if (process.env.CLOUDFLARE_WORKER_URL) {
+      const workerBase = process.env.CLOUDFLARE_WORKER_URL.replace(/\/+$/, "");
+      return res.redirect(`${workerBase}/stream/${note.telegramFileId}?name=${encodeURIComponent(safeName)}`);
+    }
+
+    // Direct Stream through server fallback
+    const stream = bot.getFileStream(note.telegramFileId);
 
     // Smart Cache Headers: Edge stream caches file for 7 days with background revalidation
     res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
