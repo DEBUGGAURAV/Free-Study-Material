@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_URL || 'https://techtitan-api.onrender.com/api')
+export const API_URL = import.meta.env.VITE_API_URL || '/api'
 
 // High-performance in-memory cache for ultra-fast instant page loads & reloads
 const apiCache = new Map();
