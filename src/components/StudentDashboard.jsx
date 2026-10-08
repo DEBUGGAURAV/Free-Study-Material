@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Sparkles, BookOpen, Download, ShieldCheck, Zap, 
   ArrowUpRight, Clock, Award, ChevronRight, Eye,
@@ -44,6 +44,16 @@ export default function StudentDashboard({
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [previewNote, setPreviewNote] = useState(null);
   const [copiedNoteId, setCopiedNoteId] = useState(null);
+
+  // Fast Escape Key Listener for Note Preview
+  useEffect(() => {
+    if (!previewNote) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setPreviewNote(null);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [previewNote]);
 
   const userYear = user?.year || '1st year';
   const userBranch = user?.branch || 'Computer Science & Engineering';
