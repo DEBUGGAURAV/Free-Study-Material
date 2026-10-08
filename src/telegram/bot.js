@@ -3,30 +3,42 @@ const { db } = require("../firebase");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 
+let bot;
+
 if (!token) {
-  throw new Error("TELEGRAM_BOT_TOKEN is missing");
+  console.warn("⚠️ [Telegram Bot] WARNING: TELEGRAM_BOT_TOKEN is missing in environment variables! Web server will start, but Telegram bot polling is paused until the token is added in Render Dashboard.");
+  bot = new Proxy({}, {
+    get(target, prop) {
+      if (prop === "on" || prop === "onText") {
+        return () => {}; // No-op for registering event listeners
+      }
+      return async () => {
+        throw new Error("TELEGRAM_BOT_TOKEN is missing in server environment variables. Please add it in Render Dashboard.");
+      };
+    }
+  });
+} else {
+  const https = require("https");
+
+  const agent = new https.Agent({
+    keepAlive: true,
+    keepAliveMsecs: 60000,
+    maxSockets: 50,
+    maxFreeSockets: 20,
+    timeout: 60000
+  });
+
+  bot = new TelegramBot(token, {
+    polling: true,
+    request: {
+      agent
+    }
+  });
+
+  bot.on("polling_error", (error) => {
+    console.error("Telegram polling error:", error.message);
+  });
 }
-
-const https = require("https");
-
-const agent = new https.Agent({
-  keepAlive: true,
-  keepAliveMsecs: 60000,
-  maxSockets: 50,
-  maxFreeSockets: 20,
-  timeout: 60000
-});
-
-const bot = new TelegramBot(token, {
-  polling: true,
-  request: {
-    agent
-  }
-});
-
-bot.on("polling_error", (error) => {
-  console.error("Telegram polling error:", error.message);
-});
 
 // Helper: Auto-sync any document posted directly in Telegram into Firestore
 async function syncTelegramDocument(msg) {

@@ -12,4 +12,19 @@ services:
         value: production
       - key: CLIENT_URL
         value: https://freestudymaterial.onrender.com
-
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_STORAGE_CHAT_ID
+        sync: false
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
