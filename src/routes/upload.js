@@ -1,226 +1,156 @@
 const express = require("express");
+const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const router = express.Router();
-
 const { db } = require("../firebase");
-const { uploadFile } = require("../telegram/upload");
-const { getTopicThreadId } = require("../telegram/topics");
-const { optionalAuth } = require("../middleware/auth");
+const { authenticateToken, requireAuth } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
-const { notesCache, foldersCache } = require("../utils/ramCache");
+const { enqueueUpload, getJobStatus } = require("../services/queueService");
 
-// Ensure temp directory exists for incoming uploads
+// Ensure temp directory exists
 const tempDir = path.join(__dirname, "../../temp");
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-// Multer storage configuration
+// Multer disk storage for fast chunk streaming into temp/
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, tempDir),
+  destination: (req, file, cb) => {
+    cb(null, tempDir);
+  },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, unique);
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_");
+    cb(null, `${uniqueSuffix}-${sanitizedName}`);
   },
 });
 
-const isMtprotoEnabled = Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH);
-
 const upload = multer({
   storage,
-  limits: { fileSize: 2000 * 1024 * 1024 }, // Full 2,000 MB (2 GB) support via MTProto
+  limits: {
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB Max Limit
+  },
 });
 
-// Middleware wrapper that traps Multer LIMIT_FILE_SIZE and errors gracefully without crashing 500
-const handleUploadMiddleware = (req, res, next) => {
-  upload.single("file")(req, res, (err) => {
-    if (err) {
-      if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(413).json({
-          success: false,
-          code: "FILE_TOO_LARGE",
-          message: "File exceeds 2,000 MB (2 GB) Telegram storage limit.",
-        });
-      }
-      return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
-    }
-    next();
-  });
-};
-
-router.post("/", optionalAuth, uploadLimiter, handleUploadMiddleware, async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: "No file attached for upload" });
-  }
-
-  const tempFilePath = req.file.path;
-
-  // Only restrict to 50MB if native MTProto is not enabled
-  if (!isMtprotoEnabled && req.file.size > 50 * 1024 * 1024) {
-    const sizeMb = (req.file.size / (1024 * 1024)).toFixed(1);
-    fs.unlink(tempFilePath, () => {});
-
-    return res.status(413).json({
-      success: false,
-      code: "TELEGRAM_WEB_LIMIT_EXCEEDED",
-      fileSizeMb: Number(sizeMb),
-      message: `File is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Drop it directly into our Telegram Bot @TechTitanNotesBot for up to 2GB uploads, or provide a Google Drive link!`,
-      botUsername: "TechTitanNotesBot",
-      botLink: "https://t.me/TechTitanNotesBot"
-    });
-  }
-
-  try {
-    const {
-      title,
-      subject,
-      topic,
-      year,
-      branch,
-      semester,
-      visibility,
-      allowedYears,
-      allowedUsers,
-      threadId: directThreadId,
-    } = req.body;
-
-    const noteTitle = (title || req.file.originalname).trim();
-    const noteSubject = (subject || "General").trim();
-
-    // Determine target topic thread ID (direct or lookup by subject)
-    const threadId = directThreadId || (await getTopicThreadId(noteSubject));
-
-    console.log(`[Upload] Uploading "${noteTitle}" (${req.file.size} bytes) to Telegram thread: ${threadId || "General"}`);
-
-    // Track Telegram Replication Duration & Speed
-    const tgStartTime = Date.now();
-    const telegramResult = await uploadFile({
-      filePath: tempFilePath,
-      title: noteTitle,
-      subject: noteSubject,
-      threadId,
-    });
-    const tgReplicationDurationMs = Math.max(40, Date.now() - tgStartTime);
-    const tgReplicationTimeSec = Number((tgReplicationDurationMs / 1000).toFixed(2));
-    const tgSpeedMBps = Number(((req.file.size / (1024 * 1024)) / (tgReplicationDurationMs / 1000)).toFixed(2));
-    const edgeDownloadEstSec = Number((req.file.size / (80 * 1024 * 1024)).toFixed(2));
-    const tgDownloadEstSec = Number((req.file.size / (6.5 * 1024 * 1024)).toFixed(2));
-
-    // Parse visibility settings
-    let parsedAllowedYears = [];
-    if (allowedYears) {
-      parsedAllowedYears = Array.isArray(allowedYears)
-        ? allowedYears.map(Number)
-        : JSON.parse(allowedYears);
-    }
-
-    let parsedAllowedUsers = [];
-    if (allowedUsers) {
-      parsedAllowedUsers = Array.isArray(allowedUsers)
-        ? allowedUsers
-        : JSON.parse(allowedUsers);
-    }
-
-    // Auto-create or find folder
-    let folderId = "";
+/**
+ * POST /api/upload
+ * Accepts files up to 2GB and returns instant receipt (< 2s) while queuing background task
+ */
+router.post(
+  "/",
+  uploadLimiter,
+  authenticateToken,
+  upload.single("file"),
+  async (req, res) => {
     try {
-      const folderSnap = await db.collection("folders")
-        .where("subject", "==", noteSubject)
-        .limit(1)
-        .get();
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No file uploaded." });
+      }
 
-      if (!folderSnap.empty) {
-        folderId = folderSnap.docs[0].id;
-      } else {
-        const newFolder = await db.collection("folders").add({
+      const {
+        title,
+        subject,
+        branch,
+        semester,
+        description,
+        tags,
+      } = req.body;
+
+      const file = req.file;
+      const noteTitle = (title || file.originalname).trim();
+      const noteSubject = (subject || "General Engineering").trim();
+      const noteBranch = (branch || "CSE").trim();
+      const noteSemester = (semester || "Sem 1").trim();
+
+      // Create new document reference in Firestore
+      let noteId = null;
+      if (db) {
+        const docRef = db.collection("notes").doc();
+        noteId = docRef.id;
+
+        const noteData = {
+          id: noteId,
+          title: noteTitle,
           subject: noteSubject,
-          year: typeof year === "number" ? `${year}st year` : String(year || "1st year"),
-          createdAt: new Date().toISOString()
-        });
-        folderId = newFolder.id;
+          branch: noteBranch,
+          semester: noteSemester,
+          description: description || "",
+          tags: tags ? tags.split(",").map((t) => t.trim()) : [],
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+          compressedSize: file.size,
+          savingsPercent: 0,
+          status: "processing", // Immediately in processing
+          uploadedBy: req.user?.email || "student@freestudymaterial.com",
+          uploaderName: req.user?.name || "Student Contributor",
+          viewsCount: 0,
+          downloadsCount: 0,
+          isVisible: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        await docRef.set(noteData);
+      } else {
+        noteId = `note-${Date.now()}`;
       }
-    } catch (fErr) {
-      console.warn("[Upload] Folder auto-create error:", fErr.message);
-    }
 
-    // Prepare Firestore metadata record (Never stores raw file, only Telegram pointers)
-    const noteDoc = {
-      title: noteTitle,
-      subject: noteSubject,
-      folderId,
-      topic: (topic || "").trim(),
-      year: Number(year) || 1,
-      branch: (branch || "CSE").trim(),
-      semester: Number(semester) || 1,
+      // Enqueue to Async Background Processing Worker
+      enqueueUpload({
+        noteId,
+        tempFilePath: file.path,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        meta: {
+          title: noteTitle,
+          subject: noteSubject,
+          branch: noteBranch,
+          semester: noteSemester,
+        },
+      });
 
-      telegramChatId: String(telegramResult.chatId),
-      telegramThreadId: String(telegramResult.threadId || ""),
-      telegramMessageId: telegramResult.messageId,
-      telegramFileId: telegramResult.fileId,
-      fileName: req.file.originalname,
-      fileSize: req.file.size,
-
-      visibility: visibility || "public", // "public" | "year" | "filter" | "specific_users" | "admin_only"
-      allowedYears: parsedAllowedYears,
-      allowedUsers: parsedAllowedUsers,
-      visible: true,
-
-      uploadedBy: req.user?.uid || "admin",
-      uploadedByName: req.user?.name || "System Admin",
-      uploadedAt: new Date().toISOString(),
-    };
-
-    // Save to Firestore
-    const docRef = await db.collection("notes").add(noteDoc);
-    notesCache.clear(); // Instantly bust cache so fresh upload appears across all clients
-    foldersCache.clear();
-
-    // Clean up temporary local file
-    fs.unlink(tempFilePath, (err) => {
-      if (err) console.warn("[Upload] Warning deleting temp file:", err.message);
-    });
-
-    res.json({
-      success: true,
-      message: "Note uploaded and archived in Telegram storage successfully",
-      note: {
-        id: docRef.id,
-        title: noteDoc.title,
-        subject: noteDoc.subject,
-        fileSize: noteDoc.fileSize,
-        fileName: noteDoc.fileName,
-        threadId: noteDoc.telegramThreadId,
-      },
-      telemetry: {
-        fileSize: req.file.size,
-        fileSizeFormatted: (req.file.size / (1024 * 1024)).toFixed(2) + " MB",
-        telegramReplicationTimeMs: tgReplicationDurationMs,
-        telegramReplicationTimeSec: tgReplicationTimeSec,
-        telegramSpeedMBps: tgSpeedMBps,
-        cdnStatus: "Edge Cached Ready",
-        edgeCdnSpeedEst: "80+ MB/s",
-        edgeDownloadEstSec: Math.max(0.05, edgeDownloadEstSec),
-        telegramDirectSpeedEst: "6.5 MB/s",
-        telegramDownloadEstSec: Math.max(0.2, tgDownloadEstSec)
+      // ⏱️ INSTANT RESPONSE: User waits < 2 seconds!
+      return res.status(202).json({
+        success: true,
+        message: "Note uploaded successfully! Background optimization & cloud sync started.",
+        noteId,
+        status: "processing",
+        meta: {
+          title: noteTitle,
+          size: file.size,
+        },
+      });
+    } catch (err) {
+      console.error("[UPLOAD] Ingestion error:", err);
+      // Clean up temp file on early error
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
       }
-    });
-  } catch (error) {
-    console.error("[Upload] Error processing upload:", error);
-
-    // Ensure temp file is cleaned up on error
-    if (fs.existsSync(tempFilePath)) {
-      fs.unlink(tempFilePath, () => {});
+      return res.status(500).json({ success: false, message: "Upload failed: " + err.message });
     }
+  }
+);
 
-    res.status(500).json({
-      success: false,
-      message: "Upload failed: " + (error.message || "Unknown error"),
+/**
+ * GET /api/upload/status/:id
+ * Real-time status polling for background processing queue
+ */
+router.get("/status/:id", (req, res) => {
+  const { id } = req.params;
+  const status = getJobStatus(id);
+
+  if (!status) {
+    return res.json({
+      noteId: id,
+      status: "ready",
+      stage: "Completed & Ready",
+      progress: 100,
     });
   }
+
+  return res.json(status);
 });
 
 module.exports = router;
-

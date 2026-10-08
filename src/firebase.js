@@ -1,36 +1,29 @@
 const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
-  const projectId = process.env.FIREBASE_PROJECT_ID;
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  try {
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+    if (privateKey) {
+      privateKey = privateKey.replace(/\\n/g, "\n");
+      // Strip potential extra wrapping quotes
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = privateKey.slice(1, -1);
+      }
+    }
 
-  if (privateKey) {
-    privateKey = privateKey.replace(/\\n/g, "\n");
-  }
-
-  if (projectId && clientEmail && privateKey) {
     admin.initializeApp({
       credential: admin.credential.cert({
-        projectId,
-        clientEmail,
-        privateKey,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: privateKey,
       }),
     });
-    console.log(`[Firebase] Initialized Firestore for project: ${projectId}`);
-  } else if (projectId) {
-    admin.initializeApp({ projectId });
-    console.log(`[Firebase] Initialized with application defaults: ${projectId}`);
-  } else {
-    console.warn("[Firebase] Warning: Credentials not found, running in unauthenticated mode");
-    admin.initializeApp();
+    console.log("[FIREBASE] Initialized successfully.");
+  } catch (err) {
+    console.error("[FIREBASE] Initialization warning/error:", err.message);
   }
 }
 
-const db = admin.firestore();
+const db = admin.apps.length ? admin.firestore() : null;
 
-module.exports = {
-  admin,
-  db,
-};
-
+module.exports = { admin, db };

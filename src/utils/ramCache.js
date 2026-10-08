@@ -1,28 +1,34 @@
 /**
- * Ultra-Fast In-Memory RAM Cache with TTL and Auto-Invalidation
- * Eliminates redundant Firestore reads and provides ~1-3ms response times.
+ * Ultra-fast In-Memory RAM Cache for Academic Vault
  */
-
-class RamCache {
-  constructor(defaultTtlMs = 60000) {
+class MemoryCache {
+  constructor() {
     this.cache = new Map();
-    this.defaultTtlMs = defaultTtlMs;
+    this.hits = 0;
+    this.misses = 0;
   }
 
   get(key) {
-    const entry = this.cache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiry) {
-      this.cache.delete(key);
+    const item = this.cache.get(key);
+    if (!item) {
+      this.misses++;
       return null;
     }
-    return entry.value;
+
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      this.misses++;
+      return null;
+    }
+
+    this.hits++;
+    return item.data;
   }
 
-  set(key, value, ttlMs = this.defaultTtlMs) {
+  set(key, data, ttlSeconds = 60) {
     this.cache.set(key, {
-      value,
-      expiry: Date.now() + ttlMs,
+      data,
+      expiresAt: Date.now() + ttlSeconds * 1000,
     });
   }
 
@@ -34,18 +40,26 @@ class RamCache {
     this.cache.clear();
   }
 
-  size() {
-    return this.cache.size;
+  getStats() {
+    return {
+      keysCount: this.cache.size,
+      hits: this.hits,
+      misses: this.misses,
+      hitRatio: this.hits + this.misses > 0 
+        ? ((this.hits / (this.hits + this.misses)) * 100).toFixed(1) + "%" 
+        : "0%",
+    };
   }
 }
 
-// Global cache singletons
-const notesCache = new RamCache(45000);   // 45 seconds TTL for notes list
-const foldersCache = new RamCache(60000); // 60 seconds TTL for folders
+const ramCache = new MemoryCache();
+
+function invalidateAllCache() {
+  ramCache.clear();
+  console.log("[RAM CACHE] Cache invalidated.");
+}
 
 module.exports = {
-  notesCache,
-  foldersCache,
-  RamCache,
+  ramCache,
+  invalidateAllCache,
 };
-

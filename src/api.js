@@ -1,252 +1,127 @@
-export const API_URL = import.meta.env.VITE_API_URL || '/api'
+/**
+ * Academic Cloud API Client
+ * Interacts with freestudymaterial backend
+ */
 
-// High-performance in-memory cache for ultra-fast instant page loads & reloads
-const apiCache = new Map();
-const CACHE_TTL_MS = 45000; // 45 seconds stale-while-revalidate window
+const API_BASE = "/api";
 
-export function invalidateCache(pathPrefix = '') {
-  if (!pathPrefix) {
-    apiCache.clear();
-    return;
-  }
-  for (const key of apiCache.keys()) {
-    if (key.includes(pathPrefix)) apiCache.delete(key);
+export function getAuthToken() {
+  return localStorage.getItem("vault_token") || null;
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem("vault_token", token);
+  } else {
+    localStorage.removeItem("vault_token");
   }
 }
 
-async function request(path, options = {}, token, useCache = false) {
-  const method = (options.method || 'GET').toUpperCase();
-  const cacheKey = `${method}:${path}:${token || ''}`;
-
-  // If cached and fresh, return immediately for 0ms latency
-  if (useCache && method === 'GET') {
-    const cached = apiCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      // Background revalidation
-      fetchFreshData(path, options, token, cacheKey).catch(() => {});
-      return cached.data;
-    }
-  }
-
-  return fetchFreshData(path, options, token, cacheKey, useCache);
-}
-
-async function fetchFreshData(path, options = {}, token, cacheKey, saveToCache = false) {
-  let response;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s fast timeout
-
+export function getCurrentUser() {
   try {
-    response = await fetch(`${API_URL}${path}`, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...(options.headers || {})
-      },
-    });
-  } catch (err) {
-    clearTimeout(timeoutId);
-    // If we have a cached stale version, use it gracefully
-    const cached = apiCache.get(cacheKey);
-    if (cached) return cached.data;
-
-    const error = new Error('Connecting to Free Study Material cloud server. The service may be starting; try again shortly.');
-    error.code = 'API_UNREACHABLE';
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+    const userStr = localStorage.getItem("vault_user");
+    return userStr ? JSON.parse(userStr) : null;
+  } catch {
+    return null;
   }
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || body.error || (response.status === 401 ? 'Email or password is incorrect.' : `Request failed (${response.status})`));
-
-  // Save to in-memory cache if requested or it's a safe GET
-  if (saveToCache || (options.method || 'GET').toUpperCase() === 'GET') {
-    apiCache.set(cacheKey, { data: body, timestamp: Date.now() });
-  }
-
-  return body;
 }
 
-export const requestSignupCode = (email) => request('/auth/request-otp', { method: 'POST', body: JSON.stringify({ email, purpose: 'signup' }) })
-export const signUp = (data) => {
-  invalidateCache();
-  return request('/auth/signup', { method: 'POST', body: JSON.stringify(data) });
-};
-export const verifySignupCode = (email, code, password, name, college, year, branch, course, mobile) => request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ email, code, password, name, college, year, branch, course, mobile }) });
-export const updateProfile = (profile, token) => {
-  invalidateCache('/me');
-  return request('/me', { method: 'PATCH', body: JSON.stringify(profile) }, token);
-};
-export const signIn = (email, password) => {
-  invalidateCache();
-  return request('/auth/signin', { method: 'POST', body: JSON.stringify({ email, password }) });
-};
-export const changePassword = (currentPassword, newPassword, token) => request('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }, token);
-export const forgotPassword = (email) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
-export const resetPassword = (data, password) => {
-  const body = typeof data === 'object' ? data : { token: data, password };
-  return request('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) });
-};
-
-// Fast cached GET requests
-export const getNotes = async (token) => {
-  const data = await request('/notes', {}, token, true);
-  if (Array.isArray(data)) return data;
-  if (data && Array.isArray(data.notes)) return data.notes;
-  return [];
-};
-export const createNote = (note, token) => {
-  invalidateCache('/notes');
-  return request('/notes', { method: 'POST', body: JSON.stringify(note) }, token);
+export function setCurrentUser(user) {
+  if (user) {
+    localStorage.setItem("vault_user", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("vault_user");
+  }
 }
-export const uploadNoteFile = (formData, token, onProgress) => {
-  invalidateCache('/notes');
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    const startTime = Date.now();
 
-    if (xhr.upload && onProgress) {
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percent = Math.round((e.loaded / e.total) * 100);
-          const elapsedSec = (Date.now() - startTime) / 1000 || 0.05;
-          const speedMBps = Number(((e.loaded / (1024 * 1024)) / elapsedSec).toFixed(2));
-          const remainingBytes = Math.max(0, e.total - e.loaded);
-          const etaSec = speedMBps > 0 ? Number(((remainingBytes / (1024 * 1024)) / speedMBps).toFixed(1)) : 0;
+async function request(endpoint, options = {}) {
+  const token = getAuthToken();
+  const headers = {
+    ...options.headers,
+  };
 
-          onProgress({
-            loaded: e.loaded,
-            total: e.total,
-            percent,
-            speedMBps,
-            elapsedSec: Number(elapsedSec.toFixed(1)),
-            etaSec
-          });
-        }
-      });
-    }
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
-    xhr.addEventListener('load', () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          resolve(data);
-        } catch (err) {
-          resolve({ success: true, message: 'Upload complete' });
-        }
-      } else {
-        try {
-          const errData = JSON.parse(xhr.responseText);
-          reject(new Error(errData.message || 'Upload failed'));
-        } catch (_) {
-          reject(new Error(`Upload failed with status ${xhr.status}`));
-        }
-      }
-    });
+  // Do not set Content-Type if FormData is used
+  if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
-    xhr.addEventListener('error', () => {
-      reject(new Error('Network error during file upload'));
-    });
-
-    xhr.open('POST', `${API_URL}/notes/upload`);
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    }
-    xhr.send(formData);
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
   });
-};
-export const getNotices = (token) => request('/notices', {}, token, true)
-export const createNotice = (notice, token) => {
-  invalidateCache('/notices');
-  return request('/notices', { method: 'POST', body: JSON.stringify(notice) }, token);
-}
-export const updateNotice = (id, changes, token) => {
-  invalidateCache('/notices');
-  return request(`/notices/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }, token);
-}
-export const deleteNotice = (id, token) => {
-  invalidateCache('/notices');
-  return request(`/notices/${id}`, { method: 'DELETE' }, token);
-}
-export const getFolders = (token) => request('/folders', {}, token, true)
-export const createFolder = (folder, token) => {
-  invalidateCache('/folders');
-  return request('/folders', { method: 'POST', body: JSON.stringify(folder) }, token);
-}
-export const updateFolder = (id, changes, token) => {
-  invalidateCache('/folders');
-  return request(`/folders/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }, token);
-}
-export const deleteFolder = (id, token) => {
-  invalidateCache('/folders');
-  return request(`/folders/${id}`, { method: 'DELETE' }, token);
-}
-export const getAdminNotes = (token) => request('/admin/notes', {}, token, true)
-export const updateNote = (id, changes, token) => {
-  invalidateCache('/notes');
-  return request(`/notes/${id}`, { method: 'PATCH', body: JSON.stringify(changes) }, token);
-}
-export const deleteNote = (id, token) => {
-  invalidateCache('/notes');
-  return request(`/notes/${id}`, { method: 'DELETE' }, token);
-}
-export const purgeStaleNotes = (options = {}, token) => {
-  invalidateCache('/notes');
-  return request('/notes/purge-stale', { method: 'POST', body: JSON.stringify(options) }, token);
-}
-export const getAdminUsers = (token) => request('/admin/users', {}, token, true)
-export const getAdminRoleRequests = (token) => request('/admin/admin-requests', {}, token, true)
-export const decideAdminRoleRequest = (id, decision, token) => {
-  invalidateCache('/admin');
-  return request(`/admin/admin-requests/${id}/decision`, { method: 'POST', body: JSON.stringify({ decision }) }, token);
-}
-export const getAdminUserDetails = (id, token) => request(`/admin/users/${id}`, {}, token)
-export const deleteUserActivityLog = (userId, logId, token) => {
-  invalidateCache(`/admin/users/${userId}`);
-  return request(`/admin/users/${userId}/activity/${logId}`, { method: 'DELETE' }, token);
-}
-export const deleteAllUserActivityLogs = (userId, token) => {
-  invalidateCache(`/admin/users/${userId}`);
-  return request(`/admin/users/${userId}/activity`, { method: 'DELETE' }, token);
-}
-export const updateAdminUser = (id, profile, token) => {
-  invalidateCache('/admin/users');
-  return request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(profile) }, token);
-}
-export const setUserBlocked = (id, blocked, token) => {
-  invalidateCache('/admin/users');
-  return request(`/admin/users/${id}/block`, { method: 'PATCH', body: JSON.stringify({ blocked }) }, token);
-}
-export const setUserPermissions = (id, permissions, fullAdmin, token) => {
-  invalidateCache('/admin/users');
-  return request(`/admin/users/${id}/permissions`, { method: 'PATCH', body: JSON.stringify({ permissions, fullAdmin }) }, token);
-}
-export const deleteAdminUser = (id, token) => {
-  invalidateCache('/admin/users');
-  return request(`/admin/users/${id}`, { method: 'DELETE' }, token);
-}
-export const deleteAllAdminUsers = (token) => {
-  invalidateCache('/admin/users');
-  return request('/admin/users', { method: 'DELETE' }, token);
-}
-export const recordNoteAccess = (id, token) => request(`/notes/${id}/access`, { method: 'POST' }, token)
-export const recordLogout = (token) => {
-  invalidateCache();
-  return request('/auth/logout', { method: 'POST' }, token);
-}
-export const downloadAdminExport = async (token) => {
-  const response = await fetch(`${API_URL}/admin/users/export`, { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.message || 'Unable to export the workbook.')
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || `Request failed with status ${res.status}`);
   }
-  const downloadUrl = URL.createObjectURL(await response.blob())
-  const link = document.createElement('a')
-  link.href = downloadUrl
-  link.download = 'tech-titan-team-students.xlsx'
-  link.click()
-  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0)
+
+  return data;
 }
+
+export const api = {
+  // Auth
+  login: async (identifier, password) => {
+    const data = await request("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ identifier, password }),
+    });
+    if (data.token) {
+      setAuthToken(data.token);
+      setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  logout: () => {
+    setAuthToken(null);
+    setCurrentUser(null);
+  },
+
+  getMe: () => request("/auth/me"),
+
+  // Notes
+  getNotes: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.branch && params.branch !== "All") query.append("branch", params.branch);
+    if (params.semester && params.semester !== "All") query.append("semester", params.semester);
+    if (params.subject && params.subject !== "All") query.append("subject", params.subject);
+    if (params.search) query.append("search", params.search);
+
+    const queryString = query.toString() ? `?${query.toString()}` : "";
+    return request(`/notes${queryString}`);
+  },
+
+  getNoteById: (id) => request(`/notes/${id}`),
+
+  getDownloadUrl: (id) => `${API_BASE}/notes/${id}/stream`,
+
+  // Upload (Async Ingestion)
+  uploadNote: async (formData) => {
+    return request("/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
+  getUploadStatus: (noteId) => request(`/upload/status/${noteId}`),
+
+  // Admin
+  getStats: () => request("/admin/stats"),
+
+  toggleVisibility: (noteId, isVisible) =>
+    request(`/admin/notes/${noteId}/visibility`, {
+      method: "PATCH",
+      body: JSON.stringify({ isVisible }),
+    }),
+
+  deleteNote: (noteId) =>
+    request(`/admin/notes/${noteId}`, {
+      method: "DELETE",
+    }),
+
+  getHealth: () => request("/health"),
+};

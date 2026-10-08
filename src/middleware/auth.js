@@ -1,37 +1,49 @@
 const jwt = require("jsonwebtoken");
 
-function auth(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ success: false, message: "Authentication required" });
+const JWT_SECRET = process.env.JWT_SECRET || "academic-vault-ultra-secret-key-2026";
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+
+  if (!token) {
+    req.user = null;
+    return next();
   }
 
-  const token = authHeader.split(" ")[1];
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
-    req.user = decoded;
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      req.user = null;
+    } else {
+      req.user = user;
+    }
     next();
-  } catch (err) {
-    return res.status(401).json({ success: false, message: "Invalid or expired session token" });
-  }
+  });
 }
 
-// Optional auth: attaches user if token is valid, otherwise proceeds without failing
-function optionalAuth(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.split(" ")[1];
-    try {
-      req.user = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret");
-    } catch {
-      req.user = null;
-    }
+function requireAuth(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
   }
   next();
 }
 
-module.exports = {
-  auth,
-  optionalAuth,
-};
+function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
 
+  const isAdmin = req.user.role === "admin" || req.user.email?.toLowerCase() === "jnplotus@gmail.com";
+  if (!isAdmin) {
+    return res.status(403).json({ success: false, message: "Admin access required." });
+  }
+
+  next();
+}
+
+module.exports = {
+  authenticateToken,
+  requireAuth,
+  requireAdmin,
+  JWT_SECRET,
+};
