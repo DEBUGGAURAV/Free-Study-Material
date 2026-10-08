@@ -1,36 +1,32 @@
 import React, { useState } from 'react';
-import { X, LockKeyhole, ArrowUpRight, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { signIn, verifySignupCode, requestSignupCode, forgotPassword, resetPassword } from '../api';
+import { X, LockKeyhole, ArrowUpRight, Mail, AlertCircle, CheckCircle2, User, KeyRound, Sparkles } from 'lucide-react';
+import { signIn, signUp, forgotPassword, resetPassword } from '../api';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 const years = ['1st year', '2nd year', '3rd year', '4th year'];
-const isValidMobile = (value) => {
-  const mobile = value.trim();
-  const digitCount = (mobile.match(/\d/g) || []).length;
-  return mobile.length <= 20 && /^\+?[0-9][0-9\s().-]*$/.test(mobile) && digitCount >= 7 && digitCount <= 15;
-};
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const [step, setStep] = useState('form');
-  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset') || '');
-  const [mode, setMode] = useState(resetToken ? 'reset' : new URLSearchParams(window.location.search).get('signup') === '1' ? 'signup' : 'signin');
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup' | 'forgot' | 'set-new-pass'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [college, setCollege] = useState('');
   const [year, setYear] = useState('1st year');
   const [branch, setBranch] = useState('CSE');
   const [course, setCourse] = useState('B.Tech');
-  const [code, setCode] = useState('');
+  const [resetToken, setResetToken] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // 1. Submit Sign In
   const submitSignIn = async (e) => {
     e?.preventDefault();
     setError('');
     setMessage('');
+
     if (!email.trim() || !password.trim()) {
       setError('Please enter both your email address and password.');
       return;
@@ -39,114 +35,105 @@ export default function AuthModal({ onClose, onSuccess }) {
       setError('Please enter a valid email address.');
       return;
     }
-    if (password.length < 6) {
-      setError('A password of at least 6 characters is required.');
-      return;
-    }
 
     setLoading(true);
     try {
       const authResult = await signIn(email.trim(), password);
       onSuccess(authResult);
-    } catch (requestError) {
-      setError(requestError.message);
+    } catch (err) {
+      setError(err.message || 'Unable to sign in. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  const validateSignup = () => {
-    if (!name.trim()) return 'Please enter your full name.';
-    if (!mobile.trim() || !isValidMobile(mobile)) return 'Please enter a valid mobile number (7-15 digits).';
-    if (!college.trim()) return 'Please specify your university / college name.';
-    if (!year) return 'Please choose your academic year.';
-    if (!branch.trim()) return 'Please enter your engineering branch (e.g. CSE).';
-    if (!email.trim() || !emailPattern.test(email.trim())) return 'Please provide a valid email address.';
-    if (password.length < 6) return 'Password must be at least 6 characters long.';
-    return '';
-  };
-
-  const sendSignupCode = async (e) => {
+  // 2. Submit Direct Sign Up
+  const submitSignUp = async (e) => {
     e?.preventDefault();
     setError('');
     setMessage('');
-    const validationError = validateSignup();
-    if (validationError) {
-      setError(validationError);
+
+    if (!name.trim()) {
+      setError('Please enter your full name.');
       return;
     }
-
-    setLoading(true);
-    try {
-      await requestSignupCode({
-        email: email.trim(),
-        name: name.trim(),
-        mobile: mobile.trim(),
-        college: college.trim(),
-        year,
-        branch: branch.trim(),
-        course: course.trim(),
-        password
-      });
-      setStep('otp');
-      setMessage(`Verification code sent to ${email.trim()}.`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitSignup = async (e) => {
-    e?.preventDefault();
-    if (!code.trim() || code.trim().length !== 6) {
-      setError('Please enter the 6-digit OTP code.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const result = await verifySignupCode({ email: email.trim(), code: code.trim() });
-      onSuccess(result);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const sendReset = async (e) => {
-    e?.preventDefault();
     if (!email.trim() || !emailPattern.test(email.trim())) {
       setError('Please enter a valid email address.');
       return;
     }
+    if (!password.trim() || password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await forgotPassword(email.trim());
-      setMessage('Password reset instructions have been sent to your email.');
-      setError('');
+      const authResult = await signUp({
+        name: name.trim(),
+        email: email.trim(),
+        password: password.trim(),
+        mobile: mobile.trim(),
+        college: college.trim() || 'Engineering College',
+        year,
+        branch: branch.trim() || 'CSE',
+        course: course.trim() || 'B.Tech'
+      });
+      onSuccess(authResult);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const submitReset = async (e) => {
+  // 3. Initiate Password Reset
+  const submitForgotPassword = async (e) => {
     e?.preventDefault();
-    if (password.length < 6) {
-      setError('New password must be at least 6 characters.');
+    setError('');
+    setMessage('');
+
+    if (!email.trim() || !emailPattern.test(email.trim())) {
+      setError('Please enter your registered email address.');
       return;
     }
+
     setLoading(true);
     try {
-      await resetPassword(resetToken, password);
-      setMode('signin');
-      setMessage('Password updated successfully. Please sign in with your new credentials.');
-      setError('');
-      setPassword('');
+      const res = await forgotPassword(email.trim());
+      setResetToken(res.resetToken || '');
+      setMode('set-new-pass');
+      setMessage('Account found! Please enter your new password below.');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Email not found. Please create an account.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 4. Save New Password & Auto Sign In
+  const submitResetPassword = async (e) => {
+    e?.preventDefault();
+    setError('');
+    setMessage('');
+
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setError('New password must be at least 6 characters long.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const authResult = await resetPassword({
+        email: email.trim(),
+        password: newPassword.trim(),
+        token: resetToken
+      });
+      setMessage('Password updated successfully! Logging you in...');
+      setTimeout(() => {
+        onSuccess(authResult);
+      }, 500);
+    } catch (err) {
+      setError(err.message || 'Failed to update password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -154,10 +141,8 @@ export default function AuthModal({ onClose, onSuccess }) {
 
   const changeMode = (nextMode) => {
     setMode(nextMode);
-    setStep('form');
     setError('');
     setMessage('');
-    setCode('');
   };
 
   return (
@@ -170,7 +155,7 @@ export default function AuthModal({ onClose, onSuccess }) {
             </div>
             <div>
               <div className="modal-title" style={{ fontSize: '1.1rem' }}>
-                {mode === 'signin' ? 'Sign In to Account' : mode === 'signup' ? 'Create Student Account' : 'Password Recovery'}
+                {mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Reset Password'}
               </div>
               <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>Free Study Material Portal</div>
             </div>
@@ -181,8 +166,8 @@ export default function AuthModal({ onClose, onSuccess }) {
         </div>
 
         <div className="modal-body">
-          {/* Tabs */}
-          {mode !== 'reset' && (
+          {/* Segmented Control Tabs */}
+          {(mode === 'signin' || mode === 'signup') && (
             <div style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
@@ -212,9 +197,20 @@ export default function AuthModal({ onClose, onSuccess }) {
           )}
 
           {error && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '16px', color: '#fb7185', fontSize: '0.86rem' }}>
-              <AlertCircle size={18} style={{ flexShrink: 0 }} />
-              <span>{error}</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '16px', color: '#fb7185', fontSize: '0.86rem' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <div style={{ flex: 1 }}>
+                <div>{error}</div>
+                {error.toLowerCase().includes('create account') && mode === 'signin' && (
+                  <button
+                    type="button"
+                    onClick={() => changeMode('signup')}
+                    style={{ color: '#38bdf8', fontWeight: 700, marginTop: '4px', textDecoration: 'underline' }}
+                  >
+                    Switch to Create Account →
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -225,9 +221,9 @@ export default function AuthModal({ onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Form Content */}
-          {mode === 'forgot' ? (
-            <form onSubmit={sendReset}>
+          {/* TAB 1: SIGN IN */}
+          {mode === 'signin' && (
+            <form onSubmit={submitSignIn}>
               <div className="form-group">
                 <label className="form-label">Email Address *</label>
                 <input
@@ -236,124 +232,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                   placeholder="your.email@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button type="submit" className="button button-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
-                {loading ? 'Sending...' : 'Send Recovery Link'}
-              </button>
-
-              <button type="button" className="button button-ghost" style={{ width: '100%', marginTop: '10px' }} onClick={() => changeMode('signin')}>
-                Back to Sign In
-              </button>
-            </form>
-          ) : mode === 'signup' && step === 'otp' ? (
-            <form onSubmit={submitSignup}>
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                Enter the 6-digit confirmation code delivered to <strong>{email}</strong>:
-              </p>
-
-              <div className="form-group">
-                <label className="form-label">Verification OTP</label>
-                <input
-                  type="text"
-                  maxLength="6"
-                  className="form-input"
-                  style={{ textAlign: 'center', letterSpacing: '6px', fontSize: '1.2rem', fontWeight: 700 }}
-                  placeholder="••••••"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button type="submit" className="button button-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
-                {loading ? 'Verifying...' : 'Complete Registration'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={mode === 'signup' ? sendSignupCode : submitSignIn}>
-              {mode === 'signup' && (
-                <>
-                  <div className="form-group">
-                    <label className="form-label">Full Name *</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Rahul Sharma"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Mobile Number *</label>
-                      <input
-                        type="tel"
-                        className="form-input"
-                        placeholder="+91 9876543210"
-                        value={mobile}
-                        onChange={(e) => setMobile(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Academic Year</label>
-                      <select className="form-select" value={year} onChange={(e) => setYear(e.target.value)}>
-                        {years.map(y => <option key={y} value={y} style={{ background: '#0f172a' }}>{y.toUpperCase()}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">College / Institute *</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Delhi Technological University"
-                      value={college}
-                      onChange={(e) => setCollege(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Branch *</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. CSE / IT"
-                        value={branch}
-                        onChange={(e) => setBranch(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Course</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. B.Tech"
-                        value={course}
-                        onChange={(e) => setCourse(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="form-group">
-                <label className="form-label">Email Address *</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  placeholder="student@gmail.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -361,18 +240,21 @@ export default function AuthModal({ onClose, onSuccess }) {
               <div className="form-group">
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
                   <label className="form-label" style={{ margin: 0 }}>Password *</label>
-                  {mode === 'signin' && (
-                    <button type="button" onClick={() => changeMode('forgot')} style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)' }}>
-                      Forgot password?
-                    </button>
-                  )}
+                  <button 
+                    type="button" 
+                    onClick={() => changeMode('forgot')} 
+                    style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)' }}
+                  >
+                    Forgot password?
+                  </button>
                 </div>
                 <input
                   type="password"
                   className="form-input"
-                  placeholder="Minimum 6 characters"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
                 />
               </div>
@@ -383,7 +265,190 @@ export default function AuthModal({ onClose, onSuccess }) {
                 style={{ width: '100%', padding: '12px', marginTop: '10px' }}
                 disabled={loading}
               >
-                {loading ? 'Please wait...' : mode === 'signup' ? 'Proceed to Verification' : 'Sign In'}
+                {loading ? 'Signing in...' : 'Sign In'}
+              </button>
+
+              <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>
+                Don't have an account yet?{' '}
+                <button
+                  type="button"
+                  onClick={() => changeMode('signup')}
+                  style={{ color: 'var(--primary-light)', fontWeight: 600 }}
+                >
+                  Create one now
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* TAB 2: CREATE ACCOUNT */}
+          {mode === 'signup' && (
+            <form onSubmit={submitSignUp}>
+              <div className="form-group">
+                <label className="form-label">Full Name *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. Gaurav Yadav"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Email Address *</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="your.email@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Create Password (Min 6 chars) *</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter a secure password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Academic Year</label>
+                  <select className="form-select" value={year} onChange={(e) => setYear(e.target.value)}>
+                    {years.map(y => <option key={y} value={y} style={{ background: '#0f172a' }}>{y.toUpperCase()}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branch</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. CSE / IT"
+                    value={branch}
+                    onChange={(e) => setBranch(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">College / Institute (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. GNIT / DTU"
+                  value={college}
+                  onChange={(e) => setCollege(e.target.value)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button-primary"
+                style={{ width: '100%', padding: '12px', marginTop: '10px' }}
+                disabled={loading}
+              >
+                {loading ? 'Creating account...' : 'Create Account & Sign In'}
+              </button>
+
+              <div style={{ textAlign: 'center', marginTop: '16px', fontSize: '0.82rem', color: 'var(--text-dim)' }}>
+                Already registered?{' '}
+                <button
+                  type="button"
+                  onClick={() => changeMode('signin')}
+                  style={{ color: 'var(--primary-light)', fontWeight: 600 }}
+                >
+                  Sign in here
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* TAB 3: FORGOT PASSWORD (STEP 1: ENTER EMAIL) */}
+          {mode === 'forgot' && (
+            <form onSubmit={submitForgotPassword}>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Enter your registered email address to verify your account and set a new password:
+              </p>
+
+              <div className="form-group">
+                <label className="form-label">Registered Email Address *</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="your.email@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button-primary"
+                style={{ width: '100%', padding: '12px', marginTop: '10px' }}
+                disabled={loading}
+              >
+                {loading ? 'Checking account...' : 'Find Account & Continue'}
+              </button>
+
+              <button
+                type="button"
+                className="button button-ghost"
+                style={{ width: '100%', marginTop: '10px' }}
+                onClick={() => changeMode('signin')}
+              >
+                Back to Sign In
+              </button>
+            </form>
+          )}
+
+          {/* TAB 4: SET NEW PASSWORD (STEP 2: ENTER NEW PASSWORD) */}
+          {mode === 'set-new-pass' && (
+            <form onSubmit={submitResetPassword}>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Resetting password for <strong>{email}</strong>:
+              </p>
+
+              <div className="form-group">
+                <label className="form-label">New Password (Min 6 characters) *</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter your new password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button-primary"
+                style={{ width: '100%', padding: '12px', marginTop: '10px' }}
+                disabled={loading}
+              >
+                {loading ? 'Updating password...' : 'Save New Password & Sign In'}
+              </button>
+
+              <button
+                type="button"
+                className="button button-ghost"
+                style={{ width: '100%', marginTop: '10px' }}
+                onClick={() => changeMode('signin')}
+              >
+                Cancel
               </button>
             </form>
           )}

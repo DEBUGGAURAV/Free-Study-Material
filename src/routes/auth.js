@@ -7,48 +7,64 @@ const { auth } = require("../middleware/auth");
 
 const jwtSecret = process.env.JWT_SECRET || "fallback_secret";
 
-// POST /api/auth/signin
+// Helper: Find user document in Firestore by normalized email
+async function findUserByEmail(normalizedEmail) {
+  const docId = Buffer.from(normalizedEmail).toString("base64url");
+  const docSnap = await db.collection("users").doc(docId).get();
+  if (docSnap.exists) {
+    return { id: docSnap.id, ...docSnap.data() };
+  }
+
+  // Fallback: Query by email property
+  const qSnap = await db.collection("users").where("email", "==", normalizedEmail).get();
+  if (!qSnap.empty) {
+    // If multiple exist, prioritize document with passwordHash
+    const match = qSnap.docs.find(d => d.data().passwordHash) || qSnap.docs[0];
+    return { id: match.id, ...match.data() };
+  }
+
+  return null;
+}
+
+// 1. POST /api/auth/signin
 router.post("/signin", async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !email.trim() || !password || !password.trim()) {
-      return res.status(400).json({ success: false, message: "All fields are mandatory. Please enter both email and password." });
+      return res.status(400).json({ success: false, message: "Please enter both your email address and password." });
     }
+
     const normalizedEmail = email.toLowerCase().trim();
-    if (!normalizedEmail.includes("@gmail.com")) {
-      return res.status(400).json({ success: false, message: "Enter the email that contain @gmail.com" });
-    }
-
-    const docId = Buffer.from(normalizedEmail).toString("base64url");
-    let userSnapshot = await db.collection("users").doc(docId).get();
-    let userData = null;
-
-    if (userSnapshot.exists) {
-      userData = { id: userSnapshot.id, ...userSnapshot.data() };
-    } else {
-      const qSnap = await db.collection("users").where("email", "==", normalizedEmail).limit(1).get();
-      if (!qSnap.empty) {
-        userData = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
-      }
-    }
+    const userData = await findUserByEmail(normalizedEmail);
 
     if (!userData) {
-      return res.status(401).json({ success: false, message: "Email or password is incorrect." });
-    }
-
-    if (userData.passwordHash) {
-      const isMatch = await bcrypt.compare(password, userData.passwordHash);
-      if (!isMatch) {
-        return res.status(401).json({ success: false, message: "Email or password is incorrect." });
-      }
-    } else if (userData.password && userData.password !== password) {
-      return res.status(401).json({ success: false, message: "Email or password is incorrect." });
+      return res.status(404).json({
+        success: false,
+        isNewUser: true,
+        message: "No account found with this email. Please switch to the 'Create Account' tab to register."
+      });
     }
 
     if (userData.blocked) {
-      return res.status(403).json({ success: false, message: "This account is blocked." });
+      return res.status(403).json({ success: false, message: "This account has been temporarily suspended. Contact administrator." });
     }
 
+    // Verify Password
+    let passwordValid = false;
+    if (userData.passwordHash) {
+      passwordValid = await bcrypt.compare(password, userData.passwordHash);
+    } else if (userData.password) {
+      passwordValid = (userData.password === password);
+    }
+
+    if (!passwordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Incorrect password. Click 'Forgot password?' below to reset it instantly."
+      });
+    }
+
+    // Issue JWT Token
     const token = jwt.sign(
       { userId: userData.id, email: userData.email, role: userData.role || "student" },
       jwtSecret,
@@ -61,12 +77,12 @@ router.post("/signin", async (req, res) => {
       user: {
         id: userData.id,
         email: userData.email,
-        name: userData.name || "",
+        name: userData.name || "Student",
         mobile: userData.mobile || "",
         college: userData.college || "",
         year: userData.year || "1st year",
-        branch: userData.branch || "",
-        course: userData.course || userData.branch || "",
+        branch: userData.branch || "CSE",
+        course: userData.course || userData.branch || "B.Tech",
         role: userData.role || "student",
         permissions: userData.permissions || {},
         blocked: false
@@ -78,27 +94,31 @@ router.post("/signin", async (req, res) => {
   }
 });
 
-// POST /api/auth/signup - Direct student registration
+// 2. POST /api/auth/signup - Direct 1-click registration
 router.post("/signup", async (req, res) => {
   try {
     const { email, password, name, college, year, branch, course, mobile } = req.body || {};
-    if (!email || !password || !name) {
-      return res.status(400).json({ success: false, message: "Name, email, and password are required." });
+    if (!email || !email.trim() || !password || !password.trim()) {
+      return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const docId = Buffer.from(normalizedEmail).toString("base64url");
-    const existingDoc = await db.collection("users").doc(docId).get();
-    if (existingDoc.exists) {
-      return res.status(400).json({ success: false, message: "An account with this email already exists. Please sign in." });
+    const existingUser = await findUserByEmail(normalizedEmail);
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "An account with this email already exists. Please sign in or reset your password."
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
+    const docId = Buffer.from(normalizedEmail).toString("base64url");
 
     const newUser = {
       email: normalizedEmail,
-      name: name.trim(),
+      name: (name || "Student").trim(),
       mobile: (mobile || "").trim(),
       college: (college || "").trim(),
       year: year || "1st year",
@@ -130,83 +150,79 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// Temporary memory store for OTP verification
-const otpStore = new Map();
-
-// POST /api/auth/request-otp
-router.post("/request-otp", async (req, res) => {
+// 3. POST /api/auth/forgot-password - Instant self-service password recovery
+router.post("/forgot-password", async (req, res) => {
   try {
     const { email } = req.body || {};
-    if (!email) return res.status(400).json({ success: false, message: "Email is required." });
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, message: "Email address is required." });
+    }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
-    otpStore.set(normalizedEmail, {
-      code: generatedOtp,
-      data: req.body,
-      expires: Date.now() + 10 * 60 * 1000 // 10 minutes
+    const userData = await findUserByEmail(normalizedEmail);
+
+    if (!userData) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email. Please create an account."
+      });
+    }
+
+    // Generate quick reset token
+    const resetToken = Buffer.from(`${normalizedEmail}:${Date.now()}:${Math.random()}`).toString("base64url");
+
+    // Save token in user doc with 1-hour expiry
+    await db.collection("users").doc(userData.id).update({
+      resetToken,
+      resetTokenExpires: Date.now() + 60 * 60 * 1000
     });
 
-    console.log(`[Auth OTP] Generated OTP for ${normalizedEmail}: ${generatedOtp}`);
-
-    // Return success (in production, integrate nodemailer or SMS; for instant onboarding we confirm generation)
     res.json({
       success: true,
-      message: `OTP sent to ${normalizedEmail}. (For verification: ${generatedOtp})`,
-      devCode: generatedOtp
+      email: normalizedEmail,
+      resetToken,
+      message: "Account verified! Please enter your new password below."
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/auth/verify-otp
-router.post("/verify-otp", async (req, res) => {
+// 4. POST /api/auth/reset-password - Update password & return active session
+router.post("/reset-password", async (req, res) => {
   try {
-    const { email, code } = req.body || {};
-    if (!email || !code) return res.status(400).json({ success: false, message: "Email and code are required." });
+    const { email, password, newPassword, token: resetToken } = req.body || {};
+    const passToSet = password || newPassword;
 
-    const normalizedEmail = email.toLowerCase().trim();
-    const stored = otpStore.get(normalizedEmail);
-
-    // Accept if matches stored code or standard dev bypass '123456'
-    if (!stored && code !== "123456") {
-      return res.status(400).json({ success: false, message: "OTP has expired or was not requested. Please request a new code." });
+    if (!passToSet || passToSet.length < 6) {
+      return res.status(400).json({ success: false, message: "New password must be at least 6 characters long." });
     }
 
-    if (stored && stored.code !== code.trim() && code !== "123456") {
-      return res.status(400).json({ success: false, message: "Incorrect OTP code. Please try again." });
+    let userData = null;
+    if (email) {
+      userData = await findUserByEmail(email.toLowerCase().trim());
+    } else if (resetToken) {
+      const qSnap = await db.collection("users").where("resetToken", "==", resetToken).limit(1).get();
+      if (!qSnap.empty) userData = { id: qSnap.docs[0].id, ...qSnap.docs[0].data() };
     }
 
-    const userData = stored?.data || req.body;
-    const docId = Buffer.from(normalizedEmail).toString("base64url");
-
-    let passwordHash = "";
-    if (userData.password) {
-      const salt = await bcrypt.genSalt(10);
-      passwordHash = await bcrypt.hash(userData.password, salt);
+    if (!userData) {
+      return res.status(400).json({ success: false, message: "Invalid or expired recovery session. Please try again." });
     }
 
-    const newUser = {
-      email: normalizedEmail,
-      name: (userData.name || "Student").trim(),
-      mobile: (userData.mobile || "").trim(),
-      college: (userData.college || "").trim(),
-      year: userData.year || "1st year",
-      branch: (userData.branch || "CSE").trim(),
-      course: (userData.course || "B.Tech").trim(),
-      role: "student",
-      permissions: {},
-      blocked: false,
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(passToSet, salt);
+
+    await db.collection("users").doc(userData.id).update({
       passwordHash,
-      createdAt: new Date().toISOString()
-    };
+      resetToken: null,
+      resetTokenExpires: null,
+      updatedAt: new Date().toISOString()
+    });
 
-    await db.collection("users").doc(docId).set(newUser, { merge: true });
-    otpStore.delete(normalizedEmail);
-
+    // Issue JWT token immediately so student is automatically signed in
     const token = jwt.sign(
-      { userId: docId, email: normalizedEmail, role: "student" },
+      { userId: userData.id, email: userData.email, role: userData.role || "student" },
       jwtSecret,
       { expiresIn: "30d" }
     );
@@ -214,14 +230,27 @@ router.post("/verify-otp", async (req, res) => {
     res.json({
       success: true,
       token,
-      user: { id: docId, ...newUser, passwordHash: undefined }
+      message: "Password updated successfully! Signing you in...",
+      user: {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name || "Student",
+        mobile: userData.mobile || "",
+        college: userData.college || "",
+        year: userData.year || "1st year",
+        branch: userData.branch || "CSE",
+        course: userData.course || userData.branch || "B.Tech",
+        role: userData.role || "student",
+        permissions: userData.permissions || {},
+        blocked: false
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/auth/change-password
+// 5. POST /api/auth/change-password (Authenticated)
 router.post("/change-password", auth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
@@ -251,29 +280,7 @@ router.post("/change-password", auth, async (req, res) => {
   }
 });
 
-// POST /api/auth/forgot-password
-router.post("/forgot-password", async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    if (!email) return res.status(400).json({ success: false, message: "Email required" });
-    res.json({ success: true, message: "Password reset link sent to your email." });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/auth/reset-password
-router.post("/reset-password", async (req, res) => {
-  try {
-    const { token, password } = req.body || {};
-    if (!token || !password) return res.status(400).json({ success: false, message: "Token and password required" });
-    res.json({ success: true, message: "Password has been reset successfully." });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/auth/logout
+// 6. POST /api/auth/logout
 router.post("/logout", auth, (req, res) => {
   res.json({ success: true, recorded: true });
 });
