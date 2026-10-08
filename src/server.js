@@ -55,17 +55,19 @@ app.use(cors({
 }));
 app.use(express.json({ limit: "100kb" }));
 
-// Rate Limiting on API routes
-app.use("/api", globalLimiter);
-
-// Health Check
+// Health Check (Exempt from rate limit so uptime monitors never get blocked)
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     message: "Free Study Material API & Telegram Storage Bot are running",
     storageChatId: process.env.TELEGRAM_STORAGE_CHAT_ID || "Not configured",
+    uptimeSeconds: Math.round(process.uptime()),
+    ramUsageMB: Math.round(process.memoryUsage().rss / (1024 * 1024)),
   });
 });
+
+// Rate Limiting on API routes
+app.use("/api", globalLimiter);
 
 // API Routes
 const authRoutes = require("./routes/auth");
