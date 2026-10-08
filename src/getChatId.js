@@ -14,7 +14,7 @@ const bot = new TelegramBot(token, {
 });
 
 console.log("=========================================");
-console.log(" Tech Titan Telegram ID Helper is running");
+console.log(" Free Study Material Telegram ID Helper is running");
 console.log(" Send a message in your group or topic! ");
 console.log("=========================================");
 

@@ -9,7 +9,7 @@ async function uploadFile({
   const caption =
     `📚 ${title}\n` +
     `📖 Subject: ${subject}\n` +
-    `🤖 Tech Titan`;
+    `🌐 Free Study Material`;
 
   const options = {
     caption

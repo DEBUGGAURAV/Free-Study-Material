@@ -26,7 +26,7 @@ app.use("/api", globalLimiter);
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
-    message: "Tech Titan API & Telegram Storage Bot are running",
+    message: "Free Study Material API & Telegram Storage Bot are running",
     storageChatId: process.env.TELEGRAM_STORAGE_CHAT_ID || "Not configured",
   });
 });
