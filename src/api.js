@@ -52,7 +52,7 @@ async function fetchFreshData(path, options = {}, token, cacheKey, saveToCache =
     const cached = apiCache.get(cacheKey);
     if (cached) return cached.data;
 
-    const error = new Error('Unable to connect to Notes Sharing Group. The server may be starting; try again shortly.');
+    const error = new Error('Connecting to Free Study Material cloud server. The service may be starting; try again shortly.');
     error.code = 'API_UNREACHABLE';
     throw error;
   } finally {

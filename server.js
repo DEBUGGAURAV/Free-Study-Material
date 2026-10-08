@@ -15,8 +15,30 @@ const { globalLimiter } = require("./middleware/rateLimit");
 const app = express();
 app.set("trust proxy", 1);
 
-app.use(helmet());
-app.use(cors({ origin: process.env.CLIENT_URL || true, credentials: true }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false
+}));
+
+const allowedOrigins = [
+  "https://freestudymaterial.onrender.com",
+  "https://free-study-material.onrender.com",
+  "http://localhost:5173",
+  "http://localhost:5000"
+];
+if (process.env.CLIENT_URL && !allowedOrigins.includes(process.env.CLIENT_URL)) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+}
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith(".onrender.com")) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: "100kb" }));
 
 // Rate Limiting on API routes

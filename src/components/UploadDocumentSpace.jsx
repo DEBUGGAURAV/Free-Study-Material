@@ -1,15 +1,29 @@
 import React, { useState } from 'react';
-import { UploadCloud, ArrowUpRight, Sparkles, CheckCircle2, FileText, ShieldCheck, Zap, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { 
+  UploadCloud, ArrowUpRight, Sparkles, CheckCircle2, FileText, 
+  ShieldCheck, Zap, Link as LinkIcon, AlertCircle, X, ChevronDown, Check
+} from 'lucide-react';
 import { uploadNoteFile } from '../api';
 
-const defaultSubjects = ['Cloud Computing (CC)', 'Cryptography (CNS)', 'Artificial Intelligence (AI)', 'Deep Learning', 'Data Structures'];
+const defaultSubjects = [
+  'Cloud Computing (CC)', 
+  'Cryptography (CNS)', 
+  'Artificial Intelligence (AI)', 
+  'Deep Learning', 
+  'Data Structures & Algorithms',
+  'Database Management Systems',
+  'Operating Systems',
+  'Computer Networks'
+];
 const yearsList = ['1st year', '2nd year', '3rd year', '4th year'];
+const branchesList = ['CSE', 'IT', 'ECE', 'EE', 'ME', 'Civil', 'AI & DS'];
 
 export default function UploadDocumentSpace({ folders = [], token, onUploadSuccess }) {
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState(defaultSubjects[0]);
   const [customSubject, setCustomSubject] = useState('');
   const [year, setYear] = useState('1st year');
+  const [branch, setBranch] = useState('CSE');
   const [file, setFile] = useState(null);
   const [uploadMode, setUploadMode] = useState('telegram'); // 'telegram' | 'drive'
   const [driveLink, setDriveLink] = useState('');
@@ -18,7 +32,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
   const [errorMsg, setErrorMsg] = useState('');
 
   const subjectOptions = folders.length > 0 
-    ? [...new Set(folders.map(f => f.subject))] 
+    ? [...new Set([...folders.map(f => f.subject), ...defaultSubjects])] 
     : defaultSubjects;
 
   const handleFileChange = (e) => {
@@ -33,24 +47,41 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
     }
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const dropped = e.dataTransfer.files[0];
+      setFile(dropped);
+      setErrorMsg('');
+      if (!title) {
+        const cleanName = dropped.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+        setTitle(cleanName);
+      }
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     setUploadResult(null);
 
-    const activeSubject = subject === 'Other' ? (customSubject.trim() || 'General') : subject;
+    const activeSubject = subject === 'Other' ? (customSubject.trim() || 'General Engineering') : subject;
     if (!title.trim()) {
-      setErrorMsg('Please enter a note / blueprint title.');
+      setErrorMsg('Please specify a title for this note or document.');
       return;
     }
 
     if (uploadMode === 'telegram' && !file) {
-      setErrorMsg('Please select a PDF or Document file to upload.');
+      setErrorMsg('Please select or drop a PDF document file to upload.');
       return;
     }
 
     if (uploadMode === 'drive' && !driveLink.trim()) {
-      setErrorMsg('Please enter a Google Drive link.');
+      setErrorMsg('Please enter a valid Google Drive or document link.');
       return;
     }
 
@@ -63,13 +94,13 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
         formData.append('title', title.trim());
         formData.append('subject', activeSubject);
         formData.append('year', year);
-        formData.append('branch', 'CSE');
+        formData.append('branch', branch);
         formData.append('visibility', 'public');
 
         const res = await uploadNoteFile(formData, token);
         setUploadResult({
           success: true,
-          message: res.message || 'Blueprint successfully uploaded to Telegram Storage!',
+          message: res.message || 'Note successfully uploaded and synchronized to Free Study Material Cloud!',
           fileName: file.name,
           fileSize: (file.size / (1024 * 1024)).toFixed(2) + ' MB'
         });
@@ -86,7 +117,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
             title: title.trim(),
             subject: activeSubject,
             year,
-            branch: 'CSE',
+            branch,
             driveLink: driveLink.trim(),
             visibility: 'public'
           })
@@ -95,270 +126,274 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
         if (!res.ok) throw new Error(data.message || 'Failed to save note');
         setUploadResult({
           success: true,
-          message: 'Drive link note published successfully!',
+          message: 'Drive link document indexed successfully!',
           fileName: title.trim(),
           fileSize: 'Cloud URL'
         });
         if (onUploadSuccess) onUploadSuccess(data);
       }
 
-      // Reset fields
+      // Reset
       setTitle('');
       setFile(null);
       setDriveLink('');
     } catch (err) {
-      setErrorMsg(err.message || 'Upload failed. Please verify connection and try again.');
+      setErrorMsg(err.message || 'Upload failed. Please check your network and try again.');
     } finally {
       setIsUploading(false);
     }
   };
 
   return (
-    <section className="creative-upload-space" style={{
-      margin: '20px 0 40px',
-      position: 'relative',
-      background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)',
-      border: '2px solid rgba(0, 242, 254, 0.4)',
-      borderRadius: '24px',
-      padding: 'clamp(20px, 3vw, 36px)',
-      boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 242, 254, 0.15)',
-      overflow: 'hidden'
-    }}>
-      <div style={{ position: 'relative', zIndex: 1 }}>
-        {/* Top Badges */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              background: 'linear-gradient(135deg, #00f2fe 0%, #4facfe 100%)',
-              color: '#000', fontWeight: '900', fontSize: '0.8rem',
-              padding: '4px 12px', borderRadius: '20px', letterSpacing: '0.5px', textTransform: 'uppercase'
-            }}>
-              <Zap size={14} /> Telegram Cloud Uploader
-            </span>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: '6px',
-              background: 'rgba(255, 255, 255, 0.08)', color: '#cbd5e1',
-              fontSize: '0.8rem', fontWeight: '700', padding: '4px 12px', borderRadius: '20px', border: '1px solid rgba(255, 255, 255, 0.15)'
-            }}>
-              <Sparkles size={13} style={{ color: '#f59e0b' }} /> Free Community Drop
+    <div className="upload-card-wrapper">
+      {/* Header */}
+      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 14px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-light)', marginBottom: '14px' }}>
+          <Sparkles size={14} />
+          <span>Free Study Material Contribution Studio</span>
+        </div>
+        <h2 style={{ fontSize: 'clamp(1.6rem, 2.8vw, 2.2rem)', marginBottom: '8px' }}>
+          Publish & Share Study Materials
+        </h2>
+        <p style={{ maxWidth: '540px', margin: '0 auto', fontSize: '0.92rem' }}>
+          Share class lecture notes, past exam papers, and syllabus blueprints with fellow students across the university.
+        </p>
+      </div>
+
+      {/* Engine Mode Selector */}
+      <div className="engine-mode-selector">
+        <button
+          type="button"
+          className={`engine-mode-btn ${uploadMode === 'telegram' ? 'active' : ''}`}
+          onClick={() => setUploadMode('telegram')}
+        >
+          <Zap size={18} />
+          <span>Telegram Cloud Storage (File Upload)</span>
+        </button>
+
+        <button
+          type="button"
+          className={`engine-mode-btn ${uploadMode === 'drive' ? 'active' : ''}`}
+          onClick={() => setUploadMode('drive')}
+        >
+          <LinkIcon size={18} />
+          <span>Google Drive / Cloud Link</span>
+        </button>
+      </div>
+
+      {/* Success Notification */}
+      {uploadResult && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px',
+          padding: '16px 20px',
+          background: 'rgba(16, 185, 129, 0.1)',
+          border: '1px solid rgba(16, 185, 129, 0.3)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '24px'
+        }}>
+          <CheckCircle2 size={24} style={{ color: '#10b981', flexShrink: 0 }} />
+          <div>
+            <strong style={{ color: '#34d399', display: 'block', fontSize: '0.94rem' }}>
+              {uploadResult.message}
+            </strong>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+              {uploadResult.fileName} • {uploadResult.fileSize} • Live in student vault now
             </span>
           </div>
+        </div>
+      )}
 
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {['PDF', 'DOCX', 'PPTX', 'TELEGRAM SYNC'].map((fmt) => (
-              <span key={fmt} style={{
-                background: 'rgba(0, 0, 0, 0.4)', color: '#94a3b8', fontSize: '0.72rem',
-                fontWeight: '800', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.08)'
-              }}>
-                {fmt}
-              </span>
+      {/* Error Alert */}
+      {errorMsg && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '14px 18px',
+          background: 'rgba(244, 63, 94, 0.1)',
+          border: '1px solid rgba(244, 63, 94, 0.3)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '24px',
+          color: '#fb7185',
+          fontSize: '0.9rem'
+        }}>
+          <AlertCircle size={20} style={{ flexShrink: 0 }} />
+          <span>{errorMsg}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleUpload}>
+        {/* Document Title */}
+        <div className="form-group">
+          <label className="form-label">Document / Note Title *</label>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="e.g. Unit 3 Cloud Virtualization & Containers"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+
+        {/* Subject & Year Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div className="form-group">
+            <label className="form-label">Academic Year</label>
+            <select
+              className="form-select"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+            >
+              {yearsList.map(y => (
+                <option key={y} value={y} style={{ background: '#0f172a', color: '#fff' }}>
+                  {y.toUpperCase()}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Engineering Branch</label>
+            <select
+              className="form-select"
+              value={branch}
+              onChange={(e) => setBranch(e.target.value)}
+            >
+              {branchesList.map(b => (
+                <option key={b} value={b} style={{ background: '#0f172a', color: '#fff' }}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Subject Dropdown */}
+        <div className="form-group">
+          <label className="form-label">Subject / Course Module</label>
+          <select
+            className="form-select"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+          >
+            {subjectOptions.map(s => (
+              <option key={s} value={s} style={{ background: '#0f172a', color: '#fff' }}>
+                {s}
+              </option>
             ))}
-          </div>
+            <option value="Other" style={{ background: '#0f172a', color: '#fff' }}>+ Add Custom Subject</option>
+          </select>
         </div>
 
-        {/* Dual Mode Switch */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', maxWidth: '420px', background: 'rgba(11, 18, 38, 0.8)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(0, 242, 254, 0.3)' }}>
-          <button
-            type="button"
-            onClick={() => setUploadMode('telegram')}
-            style={{
-              flex: 1, padding: '8px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-              fontSize: '0.84rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              background: uploadMode === 'telegram' ? 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)' : 'transparent',
-              color: uploadMode === 'telegram' ? '#0f172a' : '#94a3b8'
-            }}
-          >
-            <UploadCloud size={15} /> Telegram Storage (Direct File)
-          </button>
-          <button
-            type="button"
-            onClick={() => setUploadMode('drive')}
-            style={{
-              flex: 1, padding: '8px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer',
-              fontSize: '0.84rem', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-              background: uploadMode === 'drive' ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)' : 'transparent',
-              color: uploadMode === 'drive' ? '#0f172a' : '#94a3b8'
-            }}
-          >
-            <LinkIcon size={15} /> Google Drive Link
-          </button>
-        </div>
-
-        {/* Upload Form Grid */}
-        <form onSubmit={handleUpload} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-          <div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <label className="field" style={{ margin: 0 }}>
-                <span style={{ color: '#38bdf8', fontSize: '0.85rem', fontWeight: '700' }}>Blueprint / Note Title</span>
-                <input
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Unit 3 - Cloud Architecture Notes"
-                  style={{ background: 'rgba(8, 14, 26, 0.9)', borderColor: 'rgba(0, 242, 254, 0.35)', color: '#f0fdfa' }}
-                />
-              </label>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <label className="field" style={{ margin: 0 }}>
-                  <span style={{ color: '#38bdf8', fontSize: '0.85rem', fontWeight: '700' }}>Subject</span>
-                  <select
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    style={{ background: 'rgba(8, 14, 26, 0.9)', borderColor: 'rgba(0, 242, 254, 0.35)', color: '#f0fdfa' }}
-                  >
-                    {subjectOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                    <option value="Other">Other / Custom</option>
-                  </select>
-                </label>
-
-                <label className="field" style={{ margin: 0 }}>
-                  <span style={{ color: '#38bdf8', fontSize: '0.85rem', fontWeight: '700' }}>Student Year</span>
-                  <select
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    style={{ background: 'rgba(8, 14, 26, 0.9)', borderColor: 'rgba(0, 242, 254, 0.35)', color: '#f0fdfa' }}
-                  >
-                    {yearsList.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
-                </label>
-              </div>
-
-              {subject === 'Other' && (
-                <label className="field" style={{ margin: 0 }}>
-                  <span style={{ color: '#38bdf8', fontSize: '0.85rem', fontWeight: '700' }}>Custom Subject Name</span>
-                  <input
-                    required
-                    value={customSubject}
-                    onChange={(e) => setCustomSubject(e.target.value)}
-                    placeholder="Enter subject name"
-                    style={{ background: 'rgba(8, 14, 26, 0.9)', borderColor: 'rgba(0, 242, 254, 0.35)', color: '#f0fdfa' }}
-                  />
-                </label>
-              )}
-            </div>
+        {subject === 'Other' && (
+          <div className="form-group">
+            <label className="form-label">Enter Custom Subject Name</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. Microprocessors 8086"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+            />
           </div>
+        )}
 
+        {/* Upload Mode 1: File Dropzone */}
+        {uploadMode === 'telegram' ? (
           <div>
-            {uploadMode === 'telegram' ? (
-              <div style={{
-                background: 'rgba(8, 14, 26, 0.8)',
-                border: '2px dashed rgba(0, 242, 254, 0.4)',
-                borderRadius: '16px',
-                padding: '24px',
-                textAlign: 'center',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-                alignItems: 'center'
-              }}>
-                <input
-                  type="file"
-                  id="dashboard-dropzone-input"
-                  accept=".pdf,.doc,.docx,.ppt,.pptx"
-                  onChange={handleFileChange}
-                  style={{ display: 'none' }}
-                />
-                <label htmlFor="dashboard-dropzone-input" style={{ cursor: 'pointer', margin: 0, width: '100%' }}>
-                  <div style={{
-                    width: '54px', height: '54px', borderRadius: '50%',
-                    background: 'rgba(0, 242, 254, 0.15)', border: '1.5px solid #00f2fe',
-                    display: 'grid', placeItems: 'center', color: '#00f2fe', margin: '0 auto 12px'
-                  }}>
-                    <FileText size={26} />
+            <label className="form-label">Document File (PDF, DOCX, ZIP) *</label>
+            
+            {file ? (
+              <div className="selected-file-box">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <FileText size={22} style={{ color: '#10b981' }} />
+                  <div>
+                    <strong style={{ color: 'var(--text-pure)', fontSize: '0.92rem', display: 'block' }}>
+                      {file.name}
+                    </strong>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for Telegram Cloud
+                    </span>
                   </div>
-                  {file ? (
-                    <div>
-                      <strong style={{ color: '#00f2fe', display: 'block', fontSize: '0.95rem' }}>{file.name}</strong>
-                      <small style={{ color: '#94a3b8', display: 'block', marginTop: '4px' }}>
-                        {(file.size / (1024 * 1024)).toFixed(2)} MB • Click to replace file
-                      </small>
-                    </div>
-                  ) : (
-                    <div>
-                      <strong style={{ color: '#f1f5f9', display: 'block', fontSize: '1rem', marginBottom: '4px' }}>
-                        Click to select PDF or Document
-                      </strong>
-                      <small style={{ color: '#94a3b8' }}>
-                        Direct lossless stream to Telegram private channel
-                      </small>
-                    </div>
-                  )}
-                </label>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setFile(null)}
+                  style={{ color: 'var(--text-dim)', padding: '6px' }}
+                >
+                  <X size={18} />
+                </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
-                <label className="field" style={{ margin: 0 }}>
-                  <span style={{ color: '#fbbf24', fontSize: '0.85rem', fontWeight: '700' }}>Google Drive Document URL</span>
-                  <div className="input-icon" style={{ marginTop: '6px' }}>
-                    <LinkIcon size={18} style={{ color: '#fbbf24' }} />
-                    <input
-                      required
-                      type="url"
-                      value={driveLink}
-                      onChange={(e) => setDriveLink(e.target.value)}
-                      placeholder="https://drive.google.com/file/d/..."
-                      style={{ background: 'rgba(8, 14, 26, 0.9)', borderColor: 'rgba(251, 191, 36, 0.35)', color: '#f0fdfa' }}
-                    />
-                  </div>
-                </label>
-                <small style={{ color: '#94a3b8', marginTop: '8px', display: 'block' }}>
-                  Make sure link sharing is set to "Anyone with the link can view".
-                </small>
-              </div>
-            )}
-          </div>
-
-          {/* Full Width Submit & Feedback */}
-          <div style={{ gridColumn: '1 / -1' }}>
-            {errorMsg && (
-              <div style={{
-                padding: '10px 14px', borderRadius: '10px', background: 'rgba(244, 63, 94, 0.15)',
-                border: '1px solid rgba(244, 63, 94, 0.4)', color: '#fb7185', fontSize: '0.85rem',
-                display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px'
-              }}>
-                <AlertCircle size={16} /> {errorMsg}
-              </div>
-            )}
-
-            {uploadResult && (
-              <div style={{
-                padding: '12px 16px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)',
-                border: '1.5px solid rgba(16, 185, 129, 0.4)', color: '#34d399', fontSize: '0.9rem',
-                display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px'
-              }}>
-                <CheckCircle2 size={18} />
-                <div>
-                  <strong>{uploadResult.message}</strong>
-                  <span style={{ display: 'block', fontSize: '0.78rem', color: '#a7f3d0' }}>
-                    Archive record: {uploadResult.fileName} ({uploadResult.fileSize})
-                  </span>
+              <div 
+                className="file-dropzone"
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onClick={() => document.getElementById('file-upload-input').click()}
+              >
+                <input 
+                  type="file" 
+                  id="file-upload-input" 
+                  style={{ display: 'none' }} 
+                  onChange={handleFileChange}
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.zip,.txt"
+                />
+                <div className="dropzone-icon">
+                  <UploadCloud size={28} />
+                </div>
+                <div className="dropzone-title">
+                  Click to select file or drag & drop here
+                </div>
+                <div className="dropzone-hint">
+                  PDF, DOCX, PPTX or ZIP up to 2GB • Stored directly on Telegram Cloud
                 </div>
               </div>
             )}
-
-            <button
-              type="submit"
-              className="button button-block"
-              disabled={isUploading}
-              style={{
-                background: uploadMode === 'telegram'
-                  ? 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)'
-                  : 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-                color: '#0f172a', fontWeight: '900', padding: '14px 24px', fontSize: '1rem',
-                boxShadow: uploadMode === 'telegram' ? '0 4px 20px rgba(0, 242, 254, 0.35)' : '0 4px 20px rgba(251, 191, 36, 0.35)'
-              }}
-            >
-              <UploadCloud size={20} />
-              {isUploading 
-                ? 'Streaming Blueprint to Telegram Storage...' 
-                : uploadMode === 'telegram' ? 'Stream Upload to Telegram Storage' : 'Save Drive Link Note'}
-            </button>
           </div>
-        </form>
-      </div>
-    </section>
+        ) : (
+          /* Upload Mode 2: Google Drive Link */
+          <div className="form-group">
+            <label className="form-label">Google Drive or External Resource Link *</label>
+            <input
+              type="url"
+              className="form-input"
+              placeholder="https://drive.google.com/file/d/..."
+              value={driveLink}
+              onChange={(e) => setDriveLink(e.target.value)}
+              required
+            />
+            <small style={{ display: 'block', marginTop: '6px', color: 'var(--text-dim)', fontSize: '0.78rem' }}>
+              Ensure link sharing is set to "Anyone with the link can view"
+            </small>
+          </div>
+        )}
+
+        {/* Submit Button */}
+        <div style={{ marginTop: '28px' }}>
+          <button
+            type="submit"
+            className="button button-primary"
+            style={{ width: '100%', padding: '14px', fontSize: '1rem' }}
+            disabled={isUploading}
+          >
+            {isUploading ? (
+              <>
+                <Zap size={18} className="animate-spin" />
+                <span>Uploading to Free Study Material Cloud...</span>
+              </>
+            ) : (
+              <>
+                <UploadCloud size={18} />
+                <span>Publish Study Material</span>
+              </>
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { 
   LayoutDashboard, BookOpen, Users, ShieldCheck, Zap, X, 
-  Settings2, LogOut, ArrowUpRight, GraduationCap, Building2, Mail, ShieldAlert, Megaphone
+  Settings2, LogOut, ArrowUpRight, GraduationCap, Building2, Mail, Bell, UploadCloud
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -12,11 +12,11 @@ export default function Sidebar({
   const setIsOpen = setSidebarOpen || setMobileNavOpen;
 
   const items = [
-    ['home', 'Home', LayoutDashboard],
-    ['notices', 'Notice Board', Megaphone],
-    ['notes', 'Library', BookOpen],
-    ['students', 'Community', Users],
-    ...(canManageContent || session?.user?.role === 'admin' || session?.user?.role === 'content_admin' ? [['admin', 'Admin Panel', ShieldCheck]] : []),
+    ['home', 'Notes Vault', BookOpen],
+    ['upload', 'Upload Notes', UploadCloud],
+    ['notices', 'Notice Board', Bell],
+    ['students', 'Student Community', Users],
+    ...(canManageContent || session?.user?.role === 'admin' || session?.user?.role === 'content_admin' ? [['admin', 'Admin Center', ShieldCheck]] : []),
   ];
 
   // Auto-close on ESC key
@@ -32,242 +32,113 @@ export default function Sidebar({
 
   const handleNavClick = (key) => {
     setView(key);
-    if (window.innerWidth <= 1024) {
+    if (window.innerWidth <= 1024 && setIsOpen) {
       setIsOpen(false);
     }
-    setTimeout(() => {
-      if (key === 'home') window.scrollTo({ top: 0, behavior: 'smooth' });
-      else scrollTo(key);
-    }, 80);
-  };
-
-  const handleProfileClick = () => {
-    navigate('profile');
-    if (window.innerWidth <= 1024) setIsOpen(false);
-  };
-
-  const handleSignOutClick = () => {
-    if (window.innerWidth <= 1024) setIsOpen(false);
-    handleSignOut();
-  };
-
-  const handleSignInClick = () => {
-    if (window.innerWidth <= 1024) setIsOpen(false);
-    setAuthOpen(true);
   };
 
   const user = session?.user;
-  const initials = user?.name ? user.name.slice(0, 2).toUpperCase() : 'TT';
-  const roleName = user?.role === 'admin' ? 'Administrator' : user?.role === 'content_admin' ? 'Content Admin' : 'Verified Student';
+  const initials = user?.name ? user.name.slice(0, 2).toUpperCase() : 'FS';
+
+  if (!isOpen) return null;
 
   return (
-    <aside className={`sidebar ${isOpen ? 'is-open mobile-open' : ''}`}>
-      <div className="sidebar-top">
-        <button 
-          className="brand" 
-          onClick={() => {
-            setView('home');
-            if (window.innerWidth <= 1024) setIsOpen(false);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }} 
-          aria-label="Go to home"
-        >
-          <span className="brand-mark" style={{
-            background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-            color: '#030712',
-            boxShadow: '0 0 16px rgba(0, 242, 254, 0.65)'
-          }}><Zap size={20} fill="currentColor" /></span>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '1.2rem', fontWeight: '900', letterSpacing: '-0.02em' }}>FreeStudy<i>Material</i></span>
-            <span style={{ fontSize: '0.68rem', color: '#00f2fe', letterSpacing: '0.08em', fontWeight: '800' }}>QUANTUM CLOUD 2.0</span>
+    <aside style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      bottom: 0,
+      width: '280px',
+      background: 'rgba(10, 15, 28, 0.96)',
+      borderRight: '1px solid var(--border-card)',
+      zIndex: 300,
+      backdropFilter: 'blur(20px)',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      padding: '24px 20px',
+      boxShadow: '0 0 50px rgba(0, 0, 0, 0.7)'
+    }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div className="brand-icon-wrapper" style={{ width: '36px', height: '36px' }}>
+              <BookOpen size={18} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.96rem', fontWeight: 800, color: 'var(--text-pure)' }}>Free Study Material</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)' }}>Academic Cloud</div>
+            </div>
           </div>
-        </button>
-        <button 
-          className="sidebar-close-btn"
-          onClick={() => setIsOpen(false)} 
-          aria-label="Close sidebar"
-          title="Close sidebar"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
-      <div style={{ padding: '0 4px', marginBottom: '14px' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: '6px',
-          padding: '3px 10px', borderRadius: '20px',
-          background: 'rgba(0, 242, 254, 0.1)', border: '1px solid rgba(0, 242, 254, 0.3)',
-          color: '#38bdf8', fontSize: '0.72rem', fontWeight: '800'
-        }}>
-          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }}></span>
-          <span>NODE 5000 // ONLINE</span>
-        </div>
-      </div>
-
-      <nav className="sidebar-nav" aria-label="Primary navigation">
-        <span className="nav-label">Command Center</span>
-        {items.map(([key, label, Icon]) => (
-          <button
-            key={key}
-            className={`nav-item ${view === key ? 'active' : ''}`}
-            onClick={() => handleNavClick(key)}
-          >
-            <Icon size={19} /> {label}
+          <button onClick={() => setIsOpen && setIsOpen(false)} style={{ color: 'var(--text-dim)' }}>
+            <X size={20} />
           </button>
-        ))}
-      </nav>
+        </div>
 
-      <div className="sidebar-foot" style={{ marginTop: 'auto', paddingTop: '16px' }}>
-        {signedIn ? (
-          <div 
-            className="user-profile-card"
-            style={{
-              background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(9, 15, 31, 0.98) 100%)',
-              border: '1.5px solid rgba(0, 242, 254, 0.35)',
-              borderRadius: '18px',
-              padding: '16px 14px',
-              boxShadow: '0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 242, 254, 0.12)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}
-          >
-            {/* User Profile Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div 
-                className="avatar-circle"
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {items.map(([key, label, Icon]) => {
+            const isActive = view === key;
+            return (
+              <button
+                key={key}
+                onClick={() => handleNavClick(key)}
                 style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-                  color: '#040d1a',
-                  fontWeight: '900',
-                  fontSize: '0.95rem',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 0 15px rgba(0, 242, 254, 0.4)',
-                  flexShrink: 0
+                  gap: '12px',
+                  padding: '11px 16px',
+                  borderRadius: 'var(--radius-md)',
+                  background: isActive ? 'var(--grad-primary)' : 'transparent',
+                  color: isActive ? '#fff' : 'var(--text-muted)',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  transition: 'all 0.15s ease',
+                  textAlign: 'left',
+                  width: '100%'
                 }}
               >
+                <Icon size={18} />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div>
+        {signedIn ? (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            padding: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <div style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-sm)', background: 'var(--grad-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.82rem', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
                 {initials}
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px',
-                  marginBottom: '2px' 
-                }}>
-                  <strong style={{ 
-                    fontSize: '0.95rem', 
-                    color: '#f8fafc',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    display: 'block'
-                  }}>
-                    {user?.name || 'Student'}
-                  </strong>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-pure)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user?.name || 'Student'}
                 </div>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '0.72rem',
-                  fontWeight: '800',
-                  color: user?.role === 'admin' ? '#f59e0b' : '#38bdf8',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.4px'
-                }}>
-                  {user?.role === 'admin' && <ShieldAlert size={11} />}
-                  {roleName}
-                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{user?.year || 'Member'}</div>
               </div>
             </div>
 
-            {/* Quick Metadata Pill */}
-            {(user?.college || user?.year) && (
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: '10px',
-                padding: '6px 10px',
-                fontSize: '0.75rem',
-                color: '#94a3b8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '8px'
-              }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  <Building2 size={12} style={{ color: '#00f2fe', flexShrink: 0 }} />
-                  {user?.college || 'Member'}
-                </span>
-                <span style={{ color: '#38bdf8', fontWeight: '800', flexShrink: 0 }}>
-                  {user?.year || ''}
-                </span>
-              </div>
-            )}
-
-            {/* Creative Two-Action Suite */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '2px' }}>
-              <button
-                onClick={handleProfileClick}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '9px 10px',
-                  borderRadius: '10px',
-                  background: 'rgba(0, 242, 254, 0.12)',
-                  border: '1px solid rgba(0, 242, 254, 0.4)',
-                  color: '#00f2fe',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  transition: 'all 0.18s ease'
-                }}
-                title="Edit student profile details"
-              >
-                <Settings2 size={14} /> Edit Info
-              </button>
-
-              <button
-                onClick={handleSignOutClick}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  padding: '9px 10px',
-                  borderRadius: '10px',
-                  background: 'rgba(244, 63, 94, 0.12)',
-                  border: '1px solid rgba(244, 63, 94, 0.4)',
-                  color: '#fb7185',
-                  fontSize: '0.8rem',
-                  fontWeight: '800',
-                  transition: 'all 0.18s ease'
-                }}
-                title="Sign out of student account"
-              >
-                <LogOut size={14} /> Sign Out
-              </button>
-            </div>
+            <button onClick={handleSignOut} title="Sign Out" style={{ color: 'var(--text-dim)', padding: '6px' }}>
+              <LogOut size={16} />
+            </button>
           </div>
         ) : (
           <button 
-            className="button button-block" 
-            onClick={handleSignInClick}
-            style={{
-              background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-              color: '#040d1a',
-              fontWeight: '900',
-              boxShadow: '0 0 20px rgba(0, 242, 254, 0.3)'
-            }}
+            className="button button-primary"
+            style={{ width: '100%', padding: '12px' }}
+            onClick={() => { if (setIsOpen) setIsOpen(false); setAuthOpen(true); }}
           >
-            Sign In <ArrowUpRight size={18} />
+            <span>Sign In / Join</span>
           </button>
         )}
       </div>

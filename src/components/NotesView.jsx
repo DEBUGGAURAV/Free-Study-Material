@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ChevronDown, FileText, Download, ArrowUpRight, UploadCloud, X } from 'lucide-react';
+import { Search, ChevronDown, FileText, Download, ArrowUpRight, UploadCloud, X, Sparkles, HardDrive, Share2, Check } from 'lucide-react';
 import UploadDocumentSpace from './UploadDocumentSpace';
 
 export default function NotesView({
@@ -16,191 +16,222 @@ export default function NotesView({
     (subject === 'All notes' || (selectedFolder && (note.folderId ? note.folderId === selectedFolder.id : note.subject === subject))) &&
     `${note.title} ${note.subject}`.toLowerCase().includes(search.toLowerCase())
   );
-  const visibleNotes = showAllNotes ? filteredNotes : filteredNotes.slice(0, 9);
+  const visibleNotes = showAllNotes ? filteredNotes : filteredNotes.slice(0, 12);
 
   return (
-    <section className="page-width">
-      <header className="view-head">
+    <section className="page-width" style={{ padding: '30px 24px 60px' }}>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px', marginBottom: '28px' }}>
         <div>
-          <span className="eyebrow">⚡ KNOWLEDGE REPOSITORY // VERIFIED ARCHIVES</span>
-          <h1 className="view-title">Precision archives.<br />Zero compromise.</h1>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '4px 12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '10px' }}>
+            <Sparkles size={14} />
+            <span>Free Study Material • Academic Archives</span>
+          </div>
+          <h1 style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)' }}>
+            Curated Knowledge Vault
+          </h1>
         </div>
-        <span className="chip" style={{ background: 'rgba(0, 242, 254, 0.1)', borderColor: 'rgba(0, 242, 254, 0.35)', color: '#00f2fe' }}>
-          {studentYear ? `${studentYear} Cluster` : 'All Engineering Years'}
+        <span className="badge badge-year" style={{ padding: '8px 16px', fontSize: '0.85rem' }}>
+          {studentYear ? `${studentYear} Syllabus` : 'All Engineering Years'}
         </span>
       </header>
 
       {connectionError && (
-        <div className="banner">
-          <div><strong>Connection interrupted:</strong> {connectionError}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: 'var(--radius-md)', marginBottom: '24px', color: '#fb7185' }}>
+          <div><strong>Connection status:</strong> {connectionError}</div>
           <button className="button button-ghost compact-button" onClick={onRetry}>Try again</button>
         </div>
       )}
 
-      <LatestUploadsPanel notes={latestUploads} newUploadCount={newUploadCount} onDismiss={onDismissNewUploads} onNoteAccess={onNoteAccess} />
-
-      <div className="hint" style={{ background: 'rgba(10, 16, 32, 0.85)', borderColor: 'rgba(0, 242, 254, 0.3)' }}>
-        <span className="icon-tile cyan"><UploadCloud size={22} /></span>
-        <span style={{ color: '#cbd5e1' }}>Direct Telegram storage pipeline active. Notes and syllabus modules are peer-reviewed and synced topic-wise.</span>
-      </div>
-
-      <div className="searchbar" style={{ borderColor: 'rgba(0, 242, 254, 0.3)', background: 'rgba(7, 12, 28, 0.9)' }}>
-        <Search size={20} style={{ color: '#00f2fe' }} />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter blueprints, algorithms, subjects (e.g. DBMS, DSA, Operating Systems)..." />
-      </div>
-
-      <div className="tabs" role="tablist">
-        {availableSubjects.length > 1 ? availableSubjects.map((item) => (
-          <button role="tab" aria-selected={subject === item} className={`tab ${subject === item ? 'active' : ''}`} key={item} onClick={() => setSubject(item)}>{item}</button>
-        )) : <span style={{ paddingBottom: 12 }}>No subject folders yet for this year.</span>}
-      </div>
-
-      <div className="notes-grid">
-        {visibleNotes.map((note) => <NoteCard key={note.id || note.title} note={note} onAccess={onNoteAccess} />)}
-      </div>
-
-      {filteredNotes.length === 0 && (
-        <div className="empty-state">
-          <FileText size={44} />
-          <p>No approved notes match that search yet. Try a different subject tab or clear the search box.</p>
-        </div>
+      {latestUploads && latestUploads.length > 0 && (
+        <LatestUploadsPanel notes={latestUploads} newUploadCount={newUploadCount} onDismiss={onDismissNewUploads} onNoteAccess={onNoteAccess} />
       )}
 
-      {filteredNotes.length > 9 && (
-        <div className="center-row">
-          <button className="button button-ghost" onClick={() => setShowAllNotes((shown) => !shown)}>
-            {showAllNotes ? 'Show fewer notes' : `Show all ${filteredNotes.length} notes`}
-            <ChevronDown size={18} style={{ transform: showAllNotes ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+      {/* Cloud Status Hint Banner */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '14px',
+        padding: '16px 20px',
+        background: 'rgba(99, 102, 241, 0.08)',
+        border: '1px solid rgba(99, 102, 241, 0.2)',
+        borderRadius: 'var(--radius-md)',
+        marginBottom: '24px'
+      }}>
+        <div style={{ width: '38px', height: '38px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-light)', flexShrink: 0 }}>
+          <HardDrive size={20} />
+        </div>
+        <span style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
+          Direct Telegram storage cloud active. Notes are peer-reviewed and synced across all semesters.
+        </span>
+      </div>
+
+      {/* Search Bar */}
+      <div className="search-input-wrapper" style={{ marginBottom: '20px' }}>
+        <Search size={18} className="search-input-icon" />
+        <input 
+          className="search-input" 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)} 
+          placeholder="Filter notes, algorithms, subjects (e.g. DBMS, DSA, Operating Systems)..." 
+        />
+        {search && (
+          <button 
+            onClick={() => setSearch('')}
+            style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+          >
+            <X size={16} />
+          </button>
+        )}
+      </div>
+
+      {/* Subject Filter Tabs */}
+      <div className="subject-chips-bar" style={{ marginBottom: '24px' }}>
+        {availableSubjects.map((item) => (
+          <button 
+            className={`subject-chip ${subject === item ? 'active' : ''}`} 
+            key={item} 
+            onClick={() => setSubject(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {/* Notes Grid */}
+      <div className="notes-grid">
+        {visibleNotes.map((note) => (
+          <NoteCard key={note.id || note.title} note={note} onAccess={onNoteAccess} />
+        ))}
+      </div>
+
+      {filteredNotes.length > 12 && !showAllNotes && (
+        <div style={{ textAlign: 'center', marginTop: '36px' }}>
+          <button 
+            className="button button-secondary" 
+            onClick={() => setShowAllNotes(true)}
+            style={{ padding: '12px 28px' }}
+          >
+            Show All {filteredNotes.length} Notes <ChevronDown size={16} />
           </button>
         </div>
       )}
-
-      <UploadDocumentSpace />
     </section>
   );
 }
 
 function LatestUploadsPanel({ notes = [], newUploadCount, onDismiss, onNoteAccess }) {
-  const displayNotes = notes.slice(0, 8);
-  if (!displayNotes.length) return null;
+  if (!notes || notes.length === 0) return null;
+  const displayNotes = notes.slice(0, 4);
 
   return (
-    <section className="latest" aria-label="Latest uploads">
-      <div className="latest-head">
-        <div>
-          <span className="eyebrow"><span className="live-dot" /> fresh from the library</span>
-          <h2>Latest uploads</h2>
+    <div style={{
+      background: 'rgba(18, 27, 48, 0.65)',
+      border: '1px solid var(--border-card)',
+      borderRadius: 'var(--radius-lg)',
+      padding: '20px 24px',
+      marginBottom: '24px',
+      backdropFilter: 'blur(16px)'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.88rem', fontWeight: 700, color: 'var(--accent-cyan)' }}>
+          <Sparkles size={16} />
+          <span>Recently Uploaded Study Notes</span>
+          {newUploadCount > 0 && (
+            <span style={{ padding: '2px 8px', background: 'var(--grad-primary)', color: '#fff', borderRadius: 'var(--radius-full)', fontSize: '0.72rem' }}>
+              +{newUploadCount} New
+            </span>
+          )}
         </div>
-        <span className="chip">{displayNotes.length} in the feed</span>
+        {onDismiss && (
+          <button onClick={onDismiss} style={{ color: 'var(--text-dim)', fontSize: '0.8rem', padding: '4px' }}>
+            <X size={15} />
+          </button>
+        )}
       </div>
 
-      {newUploadCount > 0 && (
-        <div className="new-alert" role="status">
-          <div>
-            <strong>{newUploadCount > 1 ? `${newUploadCount} new notes` : 'New note'} just arrived</strong><br />
-            <small>New notes from the team are ready to explore.</small>
-          </div>
-          <button onClick={onDismiss} aria-label="Dismiss new upload notification"><X size={18} /></button>
-        </div>
-      )}
-
-      <div className="latest-grid">
-        {displayNotes.map((note, index) => (
-          <a key={note.id || note.title} className={`latest-item ${index === 0 ? 'first' : ''}`} href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')} target="_blank" rel="noreferrer" onClick={() => onNoteAccess?.(note)}>
-            <span className="rank">{index === 0 ? 'New' : String(index + 1).padStart(2, '0')}</span>
-            <div>
-              <strong>{note.title}</strong>
-              <small>{note.subject} • {note.createdAt ? new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Recently added'}</small>
-            </div>
-            <ArrowUpRight size={20} />
-          </a>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
+        {displayNotes.map((note, index) => {
+          const downloadHref = note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#');
+          return (
+            <a
+              key={note.id || note.title}
+              href={downloadHref}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => onNoteAccess?.(note)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '12px 14px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-md)',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <div style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', background: 'rgba(56, 189, 248, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', flexShrink: 0 }}>
+                <FileText size={16} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-pure)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {note.title}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                  {note.subject || 'Engineering'}
+                </div>
+              </div>
+            </a>
+          );
+        })}
       </div>
-    </section>
+    </div>
   );
 }
 
 function NoteCard({ note, onAccess }) {
-  const subjectColors = {
-    'Cloud Computing (CC)': { accent: '#38bdf8', glow: 'rgba(56,189,248,0.18)' },
-    'Cryptography (CNS)':   { accent: '#a78bfa', glow: 'rgba(167,139,250,0.18)' },
-    'Artificial Intelligence (AI)': { accent: '#34d399', glow: 'rgba(52,211,153,0.18)' },
-    'Deep Learning':        { accent: '#fb923c', glow: 'rgba(251,146,60,0.18)'  },
-  };
-  const colors = subjectColors[note.subject] || { accent: '#00f2fe', glow: 'rgba(0,242,254,0.15)' };
+  const downloadHref = note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#');
+  const sizeMb = note.fileSize ? `${(note.fileSize / (1024 * 1024)).toFixed(1)} MB` : 'PDF';
+  const downloads = (note.downloadCount || note.downloads || 0).toLocaleString();
 
   return (
-    <article className="note-card" style={{
-      background: `linear-gradient(145deg, rgba(15,23,42,0.95) 0%, rgba(30,41,59,0.9) 100%)`,
-      border: `1.5px solid ${colors.accent}44`,
-      borderRadius: '18px',
-      padding: '22px 20px 18px',
-      position: 'relative',
-      overflow: 'hidden',
-      boxShadow: `0 4px 20px rgba(0,0,0,0.35)`,
-      transition: 'transform 0.2s ease, border-color 0.2s ease',
-      cursor: 'default',
-      contain: 'content',
-    }}>
-      {/* Accent glow blob */}
-      <div style={{
-        position: 'absolute', top: '-30px', right: '-30px',
-        width: '110px', height: '110px',
-        background: `radial-gradient(circle, ${colors.glow} 0%, transparent 70%)`,
-        borderRadius: '50%', pointerEvents: 'none'
-      }} />
-
-      {/* Top bar: subject pill + type badge */}
-      <div className="note-meta" style={{ marginBottom: '12px' }}>
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: '5px',
-          background: `${colors.accent}22`, color: colors.accent,
-          fontSize: '0.72rem', fontWeight: '800', padding: '3px 10px',
-          borderRadius: '20px', border: `1px solid ${colors.accent}55`,
-          letterSpacing: '0.3px', textTransform: 'uppercase',
-          whiteSpace: 'nowrap'
-        }}>
-          {note.subject || 'General'}
-        </span>
-        <span className="badge" style={{
-          background: `${colors.accent}22`, color: colors.accent,
-          border: `1px solid ${colors.accent}44`, borderRadius: '6px',
-          fontSize: '0.72rem', fontWeight: '900', padding: '3px 8px',
-          letterSpacing: '0.5px'
-        }}>
-          {note.type || 'LINK'}
-        </span>
+    <div className="note-card">
+      <div className="note-header">
+        <div className="note-file-icon">
+          <FileText size={22} />
+        </div>
+        <div className="note-meta-badges">
+          <span className="badge badge-year">{note.year || '1st year'}</span>
+          <span className="badge badge-subject">{note.subject || 'General'}</span>
+        </div>
       </div>
 
-      {/* Title */}
-      <h3 style={{
-        color: '#f1f5f9', fontSize: '1.05rem', fontWeight: '800',
-        lineHeight: '1.35', margin: '0 0 14px', letterSpacing: '-0.2px'
-      }}>
-        {note.title}
-      </h3>
+      <div className="note-body">
+        <h3 className="note-title" title={note.title}>
+          {note.title}
+        </h3>
+        <div className="note-details">
+          <span>{sizeMb}</span>
+          <span>•</span>
+          <span>{downloads} downloads</span>
+        </div>
+      </div>
 
-      {/* Footer: author + open button */}
-      <div className="note-foot" style={{ borderTop: `1px solid ${colors.accent}22`, paddingTop: '12px', marginTop: 'auto' }}>
-        <span style={{ color: '#94a3b8', fontSize: '0.82rem' }}>
-          By <b style={{ color: '#cbd5e1' }}>{note.author}</b>
-          {note.year && <span style={{ marginLeft: 6, color: colors.accent, fontSize: '0.75rem', fontWeight: '700' }}>• {note.year}</span>}
+      <div className="note-footer">
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+          {note.uploadedByName || 'Telegram Peer'}
         </span>
         <a
-          className="button compact-button"
-          href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')}
+          className="button button-primary compact-button"
+          href={downloadHref}
           target="_blank"
           rel="noreferrer"
           onClick={() => onAccess?.(note)}
-          style={{
-            background: `linear-gradient(135deg, ${colors.accent} 0%, ${colors.accent}bb 100%)`,
-            color: '#000', fontWeight: '900', border: 'none',
-            boxShadow: `0 3px 10px ${colors.glow}`
-          }}
         >
-          <Download size={14} /> Open
+          <Download size={14} />
+          <span>Download</span>
         </a>
       </div>
-    </article>
+    </div>
   );
 }

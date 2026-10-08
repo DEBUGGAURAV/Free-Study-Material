@@ -1,140 +1,128 @@
 import React, { useState } from 'react';
-import { ArrowUpRight, Award, Sparkles, Users, Zap } from 'lucide-react';
+import { ArrowUpRight, Award, Sparkles, Users, Zap, CheckCircle2, BookOpen } from 'lucide-react';
 
 const students = [
-  { name: 'Aarav Mehta', branch: 'Computer Science', year: '3rd year', initials: 'AM', score: '92%', color: 'coral', tag: 'Top Contributor' },
-  { name: 'Meera Iyer', branch: 'Information Technology', year: '2nd year', initials: 'MI', score: '88%', color: 'blue', tag: 'Study Lead' },
-  { name: 'Kabir Shah', branch: 'Computer Science', year: '4th year', initials: 'KS', score: '95%', color: 'yellow', tag: 'Resource Archon' },
-  { name: 'Priya Sharma', branch: 'Artificial Intelligence', year: '3rd year', initials: 'PS', score: '94%', color: 'coral', tag: 'Core Mentor' },
-  { name: 'Rohan Verma', branch: 'Data Science', year: '2nd year', initials: 'RV', score: '89%', color: 'blue', tag: 'Lab Captain' },
-  { name: 'Ananya Sen', branch: 'Cyber Security', year: '4th year', initials: 'AS', score: '97%', color: 'yellow', tag: 'Code Master' },
+  { name: 'Aarav Mehta', branch: 'Computer Science & Eng', year: '3rd year', initials: 'AM', score: '92%', tag: 'Top Contributor', notesShared: 18 },
+  { name: 'Meera Iyer', branch: 'Information Technology', year: '2nd year', initials: 'MI', score: '88%', tag: 'Study Lead', notesShared: 14 },
+  { name: 'Kabir Shah', branch: 'Computer Science & Eng', year: '4th year', initials: 'KS', score: '95%', tag: 'Senior Archon', notesShared: 25 },
+  { name: 'Priya Sharma', branch: 'Artificial Intelligence', year: '3rd year', initials: 'PS', score: '94%', tag: 'Core Mentor', notesShared: 19 },
+  { name: 'Rohan Verma', branch: 'Data Science', year: '2nd year', initials: 'RV', score: '89%', tag: 'Peer Reviewer', notesShared: 12 },
+  { name: 'Ananya Sen', branch: 'Cyber Security', year: '4th year', initials: 'AS', score: '97%', tag: 'Vault Contributor', notesShared: 31 },
 ];
 
-export default function StudentsView({ onProfile }) {
+export default function StudentsView() {
   const [showAll, setShowAll] = useState(false);
-  const visibleStudents = showAll ? students : students.slice(0, 3);
+  const visibleStudents = showAll ? students : students.slice(0, 6);
 
   return (
-    <section className="page-width">
-      <header className="view-head">
+    <section>
+      <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px', marginBottom: '32px' }}>
         <div>
-          <span className="eyebrow" style={{ color: '#00f2fe' }}>
-            <Users size={16} /> ACADEMIC PEER NETWORK
-          </span>
-          <h1 className="view-title">
-            People who<br />get it.
-          </h1>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '4px 12px', background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--primary-light)', marginBottom: '10px' }}>
+            <Users size={14} />
+            <span>Academic Peer Network & Contributors</span>
+          </div>
+          <h2 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.5rem)' }}>
+            Student Community Hub
+          </h2>
         </div>
-        <div className="stat-note" style={{
-          background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.16) 0%, rgba(56, 189, 248, 0.12) 100%)',
-          border: '1.5px solid rgba(0, 242, 254, 0.45)',
-          borderRadius: '16px', padding: '14px 22px',
-          boxShadow: '0 0 25px rgba(0, 242, 254, 0.25)'
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '16px',
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border-card)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '16px 22px',
+          backdropFilter: 'blur(16px)'
         }}>
-          <strong style={{
-            background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            fontSize: '2.4rem'
-          }}>
-            8,240
-          </strong>
-          <span style={{ color: '#cbd5e1', fontWeight: '700', fontSize: '0.9rem' }}>
-            active peers<br />collaborating daily
-          </span>
+          <div style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--accent-cyan)', lineHeight: 1 }}>
+            8,450+
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+            Active Students<br />Sharing Knowledge
+          </div>
         </div>
       </header>
 
-      <div className="people-grid">
+      {/* Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
         {visibleStudents.map((student) => (
-          <article key={student.name} className={`person-card tone-${student.color}`} style={{
-            background: 'linear-gradient(145deg, rgba(20, 30, 52, 0.9) 0%, rgba(15, 23, 42, 0.96) 100%)',
-            border: '1.5px solid rgba(255, 255, 255, 0.14)',
-            borderRadius: '20px',
-            boxShadow: '0 10px 35px rgba(0, 0, 0, 0.45)',
-            overflow: 'hidden',
-            transition: 'all 0.2s ease'
-          }}>
-            <div className="person-top" style={{ padding: '20px 22px 0' }}>
-              <div className="avatar-circle" style={{
-                border: '2px solid rgba(0, 242, 254, 0.6)',
-                boxShadow: '0 0 15px rgba(0, 242, 254, 0.35)'
-              }}>
-                {student.initials}
-              </div>
-              <span className="chip" style={{
-                marginBottom: 12,
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                color: '#10b981',
-                fontSize: '0.8rem',
-                fontWeight: '800'
-              }}>
-                <span className="live-dot" style={{ background: '#10b981' }} /> Active Now
-              </span>
-            </div>
-            <div className="person-body">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <h3 style={{
-                  fontSize: '1.35rem',
-                  background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 50%, #c084fc 100%)',
-                  WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
+          <div
+            key={student.name}
+            style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              backdropFilter: 'blur(16px)',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--grad-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.1rem',
+                  fontWeight: 800,
+                  color: '#fff',
+                  boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)'
                 }}>
-                  {student.name}
-                </h3>
-                <span style={{
-                  fontSize: '0.72rem', fontWeight: '900', padding: '2px 8px', borderRadius: '6px',
-                  background: 'rgba(0, 242, 254, 0.12)', color: '#00f2fe', border: '1px solid rgba(0, 242, 254, 0.3)'
-                }}>
+                  {student.initials}
+                </div>
+
+                <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
                   {student.tag}
                 </span>
               </div>
-              <p style={{ color: '#94a3b8', fontSize: '0.92rem', margin: '0 0 18px' }}>
+
+              <h3 style={{ fontSize: '1.15rem', marginBottom: '4px', color: 'var(--text-pure)' }}>
+                {student.name}
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
                 {student.branch} • {student.year}
               </p>
-              <div className="person-foot" style={{ borderTop: '1px solid rgba(255, 255, 255, 0.1)', paddingTop: '14px' }}>
-                <span style={{ fontSize: '0.88rem', color: '#cbd5e1' }}>
-                  Score: <b style={{ color: '#facc15', fontSize: '1rem' }}>{student.score}</b>
-                </span>
-                <button
-                  className="link-btn"
-                  onClick={onProfile}
-                  style={{
-                    color: '#00f2fe', fontWeight: '800',
-                    display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer'
-                  }}
-                >
-                  Profile <ArrowUpRight size={16} />
-                </button>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+                padding: '12px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-subtle)',
+                marginBottom: '18px'
+              }}>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block' }}>Notes Shared</span>
+                  <strong style={{ fontSize: '0.96rem', color: 'var(--text-pure)' }}>{student.notesShared} files</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'block' }}>Accuracy Rating</span>
+                  <strong style={{ fontSize: '0.96rem', color: '#10b981' }}>{student.score}</strong>
+                </div>
               </div>
             </div>
-          </article>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Verified Contributor</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '0.82rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>
+                Active Peer <CheckCircle2 size={13} style={{ color: '#10b981' }} />
+              </span>
+            </div>
+          </div>
         ))}
       </div>
-
-      {students.length > 3 && (
-        <div style={{ textAlign: 'center', marginTop: '36px' }}>
-          <button
-            onClick={() => setShowAll((prev) => !prev)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 32px',
-              borderRadius: '50px',
-              background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.18) 0%, rgba(56, 189, 248, 0.12) 100%)',
-              border: '1.5px solid rgba(0, 242, 254, 0.5)',
-              color: '#00f2fe',
-              fontWeight: '800',
-              fontSize: '0.92rem',
-              cursor: 'pointer',
-              boxShadow: '0 0 25px rgba(0, 242, 254, 0.25)',
-              transition: 'all 0.18s ease'
-            }}
-          >
-            {showAll ? 'Show Latest 3 Peers' : `Show All ${students.length} Peers`}
-          </button>
-        </div>
-      )}
     </section>
   );
 }

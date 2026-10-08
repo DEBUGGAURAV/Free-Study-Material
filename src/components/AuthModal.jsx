@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, LockKeyhole, ArrowUpRight, Mail } from 'lucide-react';
+import { X, LockKeyhole, ArrowUpRight, Mail, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { signIn, verifySignupCode, requestSignupCode, forgotPassword, resetPassword } from '../api';
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
@@ -19,37 +19,35 @@ export default function AuthModal({ onClose, onSuccess }) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [college, setCollege] = useState('');
-  const [year, setYear] = useState('');
-  const [branch, setBranch] = useState('');
-  const [course, setCourse] = useState('');
+  const [year, setYear] = useState('1st year');
+  const [branch, setBranch] = useState('CSE');
+  const [course, setCourse] = useState('B.Tech');
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const submitSignIn = async () => {
+  const submitSignIn = async (e) => {
+    e?.preventDefault();
     setError('');
     setMessage('');
     if (!email.trim() || !password.trim()) {
-      setError('All fields are mandatory. Please enter both email and password.');
-      return;
-    }
-    if (!email.trim().toLowerCase().includes('@gmail.com')) {
-      setError('Enter the email that contain @gmail.com');
+      setError('Please enter both your email address and password.');
       return;
     }
     if (!emailPattern.test(email.trim())) {
-      setError('Enter a valid email address.');
+      setError('Please enter a valid email address.');
       return;
     }
-    if (password.length < 8) {
-      setError('A password of at least 8 characters is required.');
+    if (password.length < 6) {
+      setError('A password of at least 6 characters is required.');
       return;
     }
 
     setLoading(true);
     try {
-      onSuccess(await signIn(email.trim(), password));
+      const authResult = await signIn(email.trim(), password);
+      onSuccess(authResult);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -58,111 +56,97 @@ export default function AuthModal({ onClose, onSuccess }) {
   };
 
   const validateSignup = () => {
-    if ([name, mobile, college, year, branch, course, email, password].some((value) => !value || !value.trim())) {
-      setError('All fields are mandatory. Complete every signup field.');
-      return false;
-    }
-    if (!email.trim().toLowerCase().includes('@gmail.com')) {
-      setError('Enter the email that contain @gmail.com');
-      return false;
-    }
-    if (!isValidMobile(mobile)) {
-      setError('Enter a valid mobile number with 7 to 15 digits.');
-      return false;
-    }
-    if (!emailPattern.test(email.trim())) {
-      setError('Enter a valid email address.');
-      return false;
-    }
-    if (password.length < 8) {
-      setError('A password of at least 8 characters is required.');
-      return false;
-    }
-    return true;
+    if (!name.trim()) return 'Please enter your full name.';
+    if (!mobile.trim() || !isValidMobile(mobile)) return 'Please enter a valid mobile number (7-15 digits).';
+    if (!college.trim()) return 'Please specify your university / college name.';
+    if (!year) return 'Please choose your academic year.';
+    if (!branch.trim()) return 'Please enter your engineering branch (e.g. CSE).';
+    if (!email.trim() || !emailPattern.test(email.trim())) return 'Please provide a valid email address.';
+    if (password.length < 6) return 'Password must be at least 6 characters long.';
+    return '';
   };
 
-  const submitSignup = async () => {
+  const sendSignupCode = async (e) => {
+    e?.preventDefault();
     setError('');
     setMessage('');
-    if (!code.trim() || code.length !== 6) {
-      setError('Please enter the 6-digit verification code sent to your email.');
+    const validationError = validateSignup();
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    setLoading(true);
-    try {
-      onSuccess(await verifySignupCode(email.trim(), code.trim(), password, name.trim(), college.trim(), year.trim(), branch.trim(), course.trim(), mobile.trim()));
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const sendSignupCode = async () => {
-    setError('');
-    setMessage('');
-    if (!validateSignup()) return;
     setLoading(true);
     try {
-      await requestSignupCode(email.trim());
+      await requestSignupCode({
+        email: email.trim(),
+        name: name.trim(),
+        mobile: mobile.trim(),
+        college: college.trim(),
+        year,
+        branch: branch.trim(),
+        course: course.trim(),
+        password
+      });
       setStep('otp');
-      setError('');
-      setMessage(`Verification code sent to ${email.trim()}. Check your spam folder if it isn't in your inbox.`);
-    } catch (requestError) {
-      setError(requestError.message);
+      setMessage(`Verification code sent to ${email.trim()}.`);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const sendReset = async () => {
-    setError('');
-    setMessage('');
-    if (!email.trim()) {
-      setError('All fields are mandatory. Please enter your email.');
-      return;
-    }
-    if (!email.trim().toLowerCase().includes('@gmail.com')) {
-      setError('Enter the email that contain @gmail.com');
+  const submitSignup = async (e) => {
+    e?.preventDefault();
+    if (!code.trim() || code.trim().length !== 6) {
+      setError('Please enter the 6-digit OTP code.');
       return;
     }
     setLoading(true);
     try {
-      const result = await forgotPassword(email.trim());
-      setMessage(result.message);
-      setError('');
-    } catch (requestError) {
-      setError(requestError.message);
+      const result = await verifySignupCode({ email: email.trim(), code: code.trim() });
+      onSuccess(result);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const submitReset = async () => {
-    setError('');
-    setMessage('');
-    if (!resetToken) {
-      setError('Password reset link is missing or invalid. Please request a new link.');
+  const sendReset = async (e) => {
+    e?.preventDefault();
+    if (!email.trim() || !emailPattern.test(email.trim())) {
+      setError('Please enter a valid email address.');
       return;
     }
-    if (!password || password.length < 8) {
-      setError('A password of at least 8 characters is required.');
+    setLoading(true);
+    try {
+      await forgotPassword(email.trim());
+      setMessage('Password reset instructions have been sent to your email.');
+      setError('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitReset = async (e) => {
+    e?.preventDefault();
+    if (password.length < 6) {
+      setError('New password must be at least 6 characters.');
       return;
     }
     setLoading(true);
     try {
       await resetPassword(resetToken, password);
       setMode('signin');
-      setMessage('Password updated successfully! Sign in with your new password.');
+      setMessage('Password updated successfully. Please sign in with your new credentials.');
       setError('');
       setPassword('');
-      if (window.history && window.history.replaceState) {
-        const url = new URL(window.location.href);
-        url.searchParams.delete('reset');
-        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : '') + url.hash);
-      }
-    } catch (requestError) {
-      setError(requestError.message);
+    } catch (err) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -176,114 +160,234 @@ export default function AuthModal({ onClose, onSuccess }) {
     setCode('');
   };
 
-  const renderFields = () => {
-    if (mode === 'forgot') {
-      return (
-        <>
-          <h2>Find your way back</h2>
-          <p>Enter your Gmail address and we'll send a secure reset link.</p>
-          <label className="field">Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" required /></label>
-          <button className="button button-block" onClick={sendReset} disabled={loading}>
-            {loading ? 'Sending...' : 'Send reset link'} <Mail size={18} />
-          </button>
-          <button type="button" className="ghost-button" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => changeMode('signin')}>
-            Back to Sign in
-          </button>
-        </>
-      );
-    }
-    if (mode === 'reset') {
-      return (
-        <>
-          <h2>Set a fresh start</h2>
-          {resetToken ? (
-            <>
-              <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '14px' }}>
-                Enter your new secure password below (minimum 8 characters).
-              </p>
-              <label className="field">New password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required /></label>
-              <button className="button button-block" onClick={submitReset} disabled={loading}>
-                {loading ? 'Updating...' : 'Update password'} <ArrowUpRight size={18} />
-              </button>
-              <button type="button" className="ghost-button" style={{ marginTop: 12, width: '100%', justifyContent: 'center' }} onClick={() => changeMode('signin')}>
-                Back to Sign in
-              </button>
-            </>
-          ) : (
-            <>
-              <p style={{ color: '#f87171', fontSize: '14px', marginBottom: '16px' }}>
-                No reset token detected in link. Please request a new recovery link.
-              </p>
-              <button className="button button-block" onClick={() => changeMode('forgot')}>
-                Request new reset link <Mail size={18} />
-              </button>
-            </>
-          )}
-        </>
-      );
-    }
-    if (mode === 'signup' && step === 'otp') {
-      return (
-        <>
-          <h2>One last step</h2>
-          <p>Enter the code sent to {email} to finish creating your account.</p>
-          <label className="field">Signup OTP<input className="otp-input" inputMode="numeric" maxLength="6" value={code} onChange={(e) => setCode(e.target.value)} placeholder="······" required /></label>
-          <button className="button button-block" onClick={submitSignup} disabled={loading}>
-            {loading ? 'Verifying...' : 'Verify & create account'} <ArrowUpRight size={18} />
-          </button>
-        </>
-      );
-    }
-
-    return (
-      <>
-        <h2>{mode === 'signin' ? 'Sign in to your space' : 'Sign up for your space'}</h2>
-        <p>{mode === 'signin' ? 'Welcome back! Please enter your details.' : 'Create your student account with a verified Gmail address.'}</p>
-
-        {mode === 'signup' && (
-          <div className="field-row">
-            <label className="field field-wide">Name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required /></label>
-            <label className="field field-wide">Mobile number<input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="e.g. +91 98765 43210" required /></label>
-            <label className="field field-wide">College<input value={college} onChange={(e) => setCollege(e.target.value)} placeholder="Your college" required /></label>
-            <label className="field">Year
-              <select value={year} onChange={(e) => setYear(e.target.value)} required>
-                <option value="">Choose year</option>
-                {years.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <label className="field">Branch<input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="Computer Science" required /></label>
-            <label className="field field-wide">Course<input value={course} onChange={(e) => setCourse(e.target.value)} placeholder="e.g. B.Tech" required /></label>
-          </div>
-        )}
-
-        <label className="field">Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" required /></label>
-        <label className="field">Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required /></label>
-
-        <button className="button button-block" onClick={mode === 'signup' ? sendSignupCode : submitSignIn} disabled={loading}>
-          {loading ? 'Processing...' : (mode === 'signup' ? 'Send signup OTP' : 'Sign in')} <ArrowUpRight size={18} />
-        </button>
-      </>
-    );
-  };
-
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-card" role="dialog" aria-modal="true">
-        <button className="modal-close" onClick={onClose} aria-label="Close"><X size={18} /></button>
-        <span className="icon-tile" style={{ marginBottom: 18 }}><LockKeyhole size={22} /></span>
-
-        {mode !== 'reset' && (
-          <div className="seg">
-            <button className={mode === 'signin' ? 'on' : ''} onClick={() => changeMode('signin')}>Sign in</button>
-            <button className={mode === 'signup' ? 'on' : ''} onClick={() => changeMode('signup')}>Sign up</button>
-            <button className={mode === 'forgot' ? 'on' : ''} onClick={() => changeMode('forgot')}>Forgot password</button>
+    <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-container" style={{ maxWidth: '460px' }}>
+        <div className="modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-light)' }}>
+              <LockKeyhole size={18} />
+            </div>
+            <div>
+              <div className="modal-title" style={{ fontSize: '1.1rem' }}>
+                {mode === 'signin' ? 'Sign In to Account' : mode === 'signup' ? 'Create Student Account' : 'Password Recovery'}
+              </div>
+              <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>Free Study Material Portal</div>
+            </div>
           </div>
-        )}
+          <button className="modal-close-btn" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
 
-        {renderFields()}
+        <div className="modal-body">
+          {/* Tabs */}
+          {mode !== 'reset' && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '6px',
+              background: 'rgba(255, 255, 255, 0.04)',
+              padding: '4px',
+              borderRadius: 'var(--radius-md)',
+              marginBottom: '20px'
+            }}>
+              <button
+                type="button"
+                className={`engine-mode-btn ${mode === 'signin' ? 'active' : ''}`}
+                style={{ padding: '8px' }}
+                onClick={() => changeMode('signin')}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                className={`engine-mode-btn ${mode === 'signup' ? 'active' : ''}`}
+                style={{ padding: '8px' }}
+                onClick={() => changeMode('signup')}
+              >
+                Create Account
+              </button>
+            </div>
+          )}
 
-        {error && <div className="form-error">{error}</div>}
-        {message && <div className="form-success">{message}</div>}
+          {error && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: 'rgba(244, 63, 94, 0.12)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '16px', color: '#fb7185', fontSize: '0.86rem' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {message && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 'var(--radius-sm)', marginBottom: '16px', color: '#34d399', fontSize: '0.86rem' }}>
+              <CheckCircle2 size={18} style={{ flexShrink: 0 }} />
+              <span>{message}</span>
+            </div>
+          )}
+
+          {/* Form Content */}
+          {mode === 'forgot' ? (
+            <form onSubmit={sendReset}>
+              <div className="form-group">
+                <label className="form-label">Email Address *</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="your.email@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="button button-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
+                {loading ? 'Sending...' : 'Send Recovery Link'}
+              </button>
+
+              <button type="button" className="button button-ghost" style={{ width: '100%', marginTop: '10px' }} onClick={() => changeMode('signin')}>
+                Back to Sign In
+              </button>
+            </form>
+          ) : mode === 'signup' && step === 'otp' ? (
+            <form onSubmit={submitSignup}>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Enter the 6-digit confirmation code delivered to <strong>{email}</strong>:
+              </p>
+
+              <div className="form-group">
+                <label className="form-label">Verification OTP</label>
+                <input
+                  type="text"
+                  maxLength="6"
+                  className="form-input"
+                  style={{ textAlign: 'center', letterSpacing: '6px', fontSize: '1.2rem', fontWeight: 700 }}
+                  placeholder="••••••"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="button button-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
+                {loading ? 'Verifying...' : 'Complete Registration'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={mode === 'signup' ? sendSignupCode : submitSignIn}>
+              {mode === 'signup' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Full Name *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Rahul Sharma"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Mobile Number *</label>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        placeholder="+91 9876543210"
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Academic Year</label>
+                      <select className="form-select" value={year} onChange={(e) => setYear(e.target.value)}>
+                        {years.map(y => <option key={y} value={y} style={{ background: '#0f172a' }}>{y.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">College / Institute *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Delhi Technological University"
+                      value={college}
+                      onChange={(e) => setCollege(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Branch *</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. CSE / IT"
+                        value={branch}
+                        onChange={(e) => setBranch(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Course</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. B.Tech"
+                        value={course}
+                        onChange={(e) => setCourse(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div className="form-group">
+                <label className="form-label">Email Address *</label>
+                <input
+                  type="email"
+                  className="form-input"
+                  placeholder="student@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Password *</label>
+                  {mode === 'signin' && (
+                    <button type="button" onClick={() => changeMode('forgot')} style={{ fontSize: '0.78rem', color: 'var(--accent-cyan)' }}>
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="button button-primary"
+                style={{ width: '100%', padding: '12px', marginTop: '10px' }}
+                disabled={loading}
+              >
+                {loading ? 'Please wait...' : mode === 'signup' ? 'Proceed to Verification' : 'Sign In'}
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );

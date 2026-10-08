@@ -1,12 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Sparkles, BookOpen, Download, ShieldCheck, Zap, 
-  Terminal, ArrowUpRight, Flame, Clock, Award, 
-  ChevronRight, Compass, Cpu, Bell, ExternalLink,
-  Code2, CheckCircle2, Lock, FileText, Search, X,
-  Radio, HardDrive, Filter, Eye, Layers, Share2,
-  FolderOpen, UserCheck, TrendingUp, ChevronDown,
-  UploadCloud, Activity
+  ArrowUpRight, Clock, Award, ChevronRight, Eye,
+  CheckCircle2, FileText, Search, X, Filter, HardDrive,
+  Share2, FolderOpen, TrendingUp, UploadCloud, Activity,
+  Layers, Users, Bell, ExternalLink, Copy, Check, LayoutGrid, List
 } from 'lucide-react';
 import UploadDocumentSpace from './UploadDocumentSpace';
 import StudentsView from './StudentsView';
@@ -24,26 +22,28 @@ export default function StudentDashboard({
   activeView = 'home',
   onViewChange
 }) {
-  // Navigation tab state: 'overview' | 'vault' | 'radar' | 'network'
-  const initialTab = activeView === 'notes' ? 'vault' 
-                   : activeView === 'notices' ? 'radar' 
-                   : activeView === 'students' ? 'network' 
-                   : 'overview';
-  const [activeTab, setActiveTab] = useState(initialTab);
+  // Navigation tabs: 'vault' (Notes) | 'upload' (Upload Studio) | 'radar' (Notices) | 'network' (Students)
+  const [activeTab, setActiveTab] = useState(() => {
+    if (activeView === 'notes') return 'vault';
+    if (activeView === 'notices') return 'radar';
+    if (activeView === 'students') return 'network';
+    return 'vault';
+  });
   
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedYear, setSelectedYear] = useState('All'); // 'All' | '1st year' | '2nd year' | '3rd year' | '4th year'
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [sortBy, setSortBy] = useState('popular'); // 'popular' | 'newest' | 'alphabetical'
-  const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [previewNote, setPreviewNote] = useState(null);
+  const [copiedNoteId, setCopiedNoteId] = useState(null);
 
   const userYear = user?.year || '1st year';
   const userBranch = user?.branch || 'Computer Science & Engineering';
-  const userName = user?.name || 'Cadet';
-  const initials = userName.slice(0, 2).toUpperCase();
+  const userName = user?.name || 'Student';
 
-  // Distinct subjects list with item counts
+  // Distinct subjects list with note counts
   const subjectList = useMemo(() => {
     const map = new Map();
     notes.forEach(note => {
@@ -57,36 +57,46 @@ export default function StudentDashboard({
     return list;
   }, [notes]);
 
-  // Notes recommended for the student's year
-  const recommendedNotes = useMemo(() => {
-    return notes.filter(n => {
-      if (!n) return false;
-      if (!n.year) return true;
-      const nYearStr = String(n.year).toLowerCase();
-      const userYearStr = String(userYear || '').toLowerCase();
-      const nDigit = nYearStr.match(/\d+/)?.[0];
-      const userDigit = userYearStr.match(/\d+/)?.[0];
-      if (nDigit && userDigit && nDigit === userDigit) return true;
-      return nYearStr.includes(userYearStr) || userYearStr.includes(nYearStr);
-    });
-  }, [notes, userYear]);
-
-  // Filtered & sorted notes
+  // Filtered and sorted notes
   const filteredNotes = useMemo(() => {
     let result = notes.filter(n => {
       if (!n) return false;
-      const matchesSearch = !searchQuery || 
-        `${n.title} ${n.subject} ${n.author} ${n.year}`.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesSubject = selectedSubject === 'All' || n.subject === selectedSubject;
-      return matchesSearch && matchesSubject;
+
+      // Year filter
+      if (selectedYear !== 'All') {
+        const nYearStr = String(n.year || '').toLowerCase();
+        const selYearStr = selectedYear.toLowerCase();
+        const nDigit = nYearStr.match(/\d+/)?.[0];
+        const selDigit = selYearStr.match(/\d+/)?.[0];
+        if (nDigit && selDigit) {
+          if (nDigit !== selDigit) return false;
+        } else if (!nYearStr.includes(selYearStr) && !selYearStr.includes(nYearStr)) {
+          return false;
+        }
+      }
+
+      // Subject filter
+      if (selectedSubject !== 'All' && n.subject !== selectedSubject) {
+        return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const target = `${n.title || ''} ${n.subject || ''} ${n.author || ''} ${n.year || ''} ${n.fileName || ''}`.toLowerCase();
+        if (!target.includes(query)) return false;
+      }
+
+      return true;
     });
 
+    // Sorting
     if (sortBy === 'popular') {
-      result.sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0));
+      result.sort((a, b) => (b.downloadCount || b.downloads || 0) - (a.downloadCount || a.downloads || 0));
     } else if (sortBy === 'newest') {
       result.sort((a, b) => {
-        const timeA = a.createdAt?._seconds || (a.createdAt ? new Date(a.createdAt).getTime() : 0);
-        const timeB = b.createdAt?._seconds || (b.createdAt ? new Date(b.createdAt).getTime() : 0);
+        const timeA = a.createdAt?._seconds ? a.createdAt._seconds * 1000 : (a.createdAt ? new Date(a.createdAt).getTime() : 0);
+        const timeB = b.createdAt?._seconds ? b.createdAt._seconds * 1000 : (b.createdAt ? new Date(b.createdAt).getTime() : 0);
         return timeB - timeA;
       });
     } else if (sortBy === 'alphabetical') {
@@ -94,505 +104,439 @@ export default function StudentDashboard({
     }
 
     return result;
-  }, [notes, searchQuery, selectedSubject, sortBy]);
+  }, [notes, selectedYear, selectedSubject, searchQuery, sortBy]);
 
-  // Top trending blueprints
-  const topTrendingNotes = useMemo(() => {
-    return [...notes]
-      .sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0))
-      .slice(0, 4);
+  // Total downloads aggregate
+  const totalDownloads = useMemo(() => {
+    return notes.reduce((acc, curr) => acc + (curr.downloadCount || curr.downloads || 0), 0);
   }, [notes]);
 
-  // Recent urgent notices
-  const recentNotices = notices.slice(0, 4);
-  const urgentCount = notices.filter(n => n.type === 'alert').length;
-
-  const handleTabSwitch = (tab) => {
-    setActiveTab(tab);
-    if (onViewChange) {
-      if (tab === 'overview') onViewChange('home');
-      else if (tab === 'vault') onViewChange('notes');
-      else if (tab === 'radar') onViewChange('notices');
-      else if (tab === 'network') onViewChange('students');
-    }
+  // Copy share link helper
+  const handleCopyLink = (note) => {
+    const downloadUrl = note.driveLink || (note.id ? `${window.location.origin}/api/notes/${note.id}/download` : window.location.href);
+    navigator.clipboard.writeText(downloadUrl).then(() => {
+      setCopiedNoteId(note.id || note.title);
+      setTimeout(() => setCopiedNoteId(null), 2500);
+    });
   };
 
   return (
-    <div className="quantum-dashboard-shell">
-      {/* 🌌 AMBIENT BACKGROUND GLOW ENGINE */}
-      <div className="ambient-mesh-canvas" aria-hidden="true">
-        <div className="mesh-orb orb-cyan" />
-        <div className="mesh-orb orb-violet" />
-        <div className="mesh-orb orb-amber" />
-      </div>
+    <div className="vault-container">
+      {/* Top Welcome & Bento Metrics */}
+      <div className="page-width">
+        <section className="dashboard-welcome-banner" style={{
+          background: 'linear-gradient(135deg, rgba(30, 41, 68, 0.45) 0%, rgba(15, 23, 42, 0.65) 100%)',
+          border: '1px solid var(--border-card)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '32px 36px',
+          marginBottom: '28px',
+          backdropFilter: 'blur(20px)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: '-60px',
+            right: '-60px',
+            width: '260px',
+            height: '260px',
+            background: 'radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
+            pointerEvents: 'none'
+          }} />
 
-      <div className="dashboard-dynamic-container">
-        
-        {/* =========================================================
-            🚀 1. HOLOGRAPHIC CADET HUD HERO BAR
-            ========================================================= */}
-        <header className="cadet-hud-banner">
-          <div className="hud-glass-surface">
-            <div className="hud-left-profile">
-              <div className="cadet-holo-avatar-wrap">
-                <div className="cadet-holo-avatar">
-                  <span>{initials}</span>
-                </div>
-                <span className="cadet-live-pulse-beacon" title="Cadet Connected & Synced" />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+            <div>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '5px 12px', background: 'rgba(56, 189, 248, 0.1)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: 'var(--radius-full)', fontSize: '0.78rem', fontWeight: 600, color: 'var(--accent-cyan)', marginBottom: '12px' }}>
+                <Sparkles size={14} />
+                <span>Free Study Material • Next-Gen Academic Cloud</span>
               </div>
-
-              <div className="cadet-info-stack">
-                <div className="cadet-tag-row">
-                  <span className="cyber-pill pill-cyan">
-                    <span className="dot-blink" /> CADET ONLINE
-                  </span>
-                  <span className="cyber-pill pill-gold">
-                    <Award size={12} />
-                    {user?.role === 'admin' ? 'SYSTEM PROTOCOL ARCHITECT' : user?.role === 'content_admin' ? 'CONTENT CURATOR' : 'HONOR CADET'}
-                  </span>
-                  <span className="cyber-pill pill-mono">
-                    <Terminal size={12} /> {userYear}
-                  </span>
-                </div>
-
-                <h1 className="cadet-greeting-title">
-                  Greetings, <span className="text-holo-gradient">{userName}</span>
-                </h1>
-                
-                <p className="cadet-subtext">
-                  Connected to <strong>FreeStudyMaterial Cloud</strong> for <strong>{userBranch}</strong>. Direct Telegram Supergroup edge stream active with 100% loss-free academic archives.
-                </p>
-              </div>
+              <h1 style={{ fontSize: 'clamp(1.8rem, 3vw, 2.4rem)', marginBottom: '8px' }}>
+                {user ? `Welcome, ${userName}` : 'Academic Knowledge Cloud'}
+              </h1>
+              <p style={{ maxWidth: '600px', fontSize: '0.96rem' }}>
+                {user 
+                  ? `${userBranch} • ${userYear} • Instant access to peer-curated semester notes, guides, and blueprints.`
+                  : 'Free university study notes, syllabus blueprints, and continuous cloud archives.'}
+              </p>
             </div>
 
-            {/* Live Telemetry Matrix */}
-            <div className="hud-telemetry-cluster">
-              <div className="telemetry-node">
-                <div className="telemetry-node-top">
-                  <Cpu size={14} className="node-icon cyan" />
-                  <span className="node-label">STREAM NODE</span>
-                </div>
-                <div className="node-value">Telegram Supergroup</div>
-                <div className="node-status text-cyan">⚡ 12ms // LIVE STREAM</div>
-              </div>
-
-              <div className="telemetry-node">
-                <div className="telemetry-node-top">
-                  <HardDrive size={14} className="node-icon gold" />
-                  <span className="node-label">TOTAL REPOSITORY</span>
-                </div>
-                <div className="node-value">{notes.length} Blueprints</div>
-                <div className="node-status text-gold">Across {folders.length} Subjects</div>
-              </div>
-
-              <div className="telemetry-node">
-                <div className="telemetry-node-top">
-                  <Radio size={14} className="node-icon mint" />
-                  <span className="node-label">CAMPUS RADAR</span>
-                </div>
-                <div className="node-value">{notices.length} Transmissions</div>
-                <div className="node-status text-mint">
-                  {urgentCount > 0 ? `🚨 ${urgentCount} Urgent Alert` : '✓ All Systems Nominal'}
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* =========================================================
-            🧭 2. DYNAMIC COMMAND DOCK (NAVIGATION MATRIX)
-            ========================================================= */}
-        <nav className="command-dock-bar" aria-label="Command Center Switcher">
-          <div className="dock-pill-track">
-            <button 
-              className={`dock-pill-btn ${activeTab === 'overview' ? 'active' : ''}`}
-              onClick={() => handleTabSwitch('overview')}
-            >
-              <Zap size={16} />
-              <span>Mission Overview</span>
-            </button>
-
-            <button 
-              className={`dock-pill-btn ${activeTab === 'vault' ? 'active' : ''}`}
-              onClick={() => handleTabSwitch('vault')}
-            >
-              <BookOpen size={16} />
-              <span>Quantum Vault</span>
-              <span className="dock-badge">{notes.length}</span>
-            </button>
-
-            <button 
-              className={`dock-pill-btn ${activeTab === 'radar' ? 'active' : ''}`}
-              onClick={() => handleTabSwitch('radar')}
-            >
-              <Radio size={16} />
-              <span>Campus Radar</span>
-              {urgentCount > 0 && <span className="dock-badge alert">{urgentCount}</span>}
-            </button>
-
-            <button 
-              className={`dock-pill-btn ${activeTab === 'network' ? 'active' : ''}`}
-              onClick={() => handleTabSwitch('network')}
-            >
-              <Award size={16} />
-              <span>Cadet Network</span>
-            </button>
-
-            {(user?.role === 'admin' || user?.role === 'content_admin') && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button 
-                className="dock-pill-btn"
-                onClick={() => onNavigate && onNavigate('admin')}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.25) 100%)',
-                  border: '1px solid rgba(251, 191, 36, 0.5)',
-                  color: '#fbbf24',
-                  boxShadow: '0 0 12px rgba(251, 191, 36, 0.2)'
-                }}
+                className="button button-primary"
+                onClick={() => setActiveTab('upload')}
+                style={{ padding: '12px 22px' }}
               >
-                <ShieldCheck size={16} />
-                <span>Admin Operations</span>
-              </button>
-            )}
-          </div>
-
-          <div className="dock-action-wrap">
-            <button 
-              className="cyber-action-button"
-              onClick={() => setUploadDrawerOpen(prev => !prev)}
-            >
-              <UploadCloud size={16} />
-              <span>Contribute Blueprint</span>
-            </button>
-          </div>
-        </nav>
-
-        {/* =========================================================
-            📤 3. EXPANDABLE UPLOAD BLUEPRINT DRAWER
-            ========================================================= */}
-        {uploadDrawerOpen && (
-          <section className="dashboard-upload-drawer card">
-            <div className="drawer-header">
-              <div className="drawer-title-group">
-                <span className="icon-tile cyan"><UploadCloud size={20} /></span>
-                <div>
-                  <h3>Direct Academic Contribution Dock</h3>
-                  <p>Upload new lecture notes, exam quantum blueprints, or syllabus modules directly to the archive.</p>
-                </div>
-              </div>
-              <button 
-                className="close-drawer-btn" 
-                onClick={() => setUploadDrawerOpen(false)}
-                aria-label="Close upload drawer"
-              >
-                <X size={18} />
+                <UploadCloud size={18} />
+                <span>Upload & Share Notes</span>
               </button>
             </div>
-            <div className="drawer-content">
-              <UploadDocumentSpace folders={folders} token={token} onUploadSuccess={onUploadSuccess} />
-            </div>
-          </section>
-        )}
-
-        {/* =========================================================
-            ⚡ TAB 1: MISSION OVERVIEW
-            ========================================================= */}
-        {activeTab === 'overview' && (
-          <div className="overview-tab-view">
-            
-            {/* Quick Action Stat Grid */}
-            <div className="overview-stat-row">
-              <div className="cyber-metric-card cyan" onClick={() => handleTabSwitch('vault')}>
-                <div className="metric-header">
-                  <span className="metric-tag">VAULT BLUEPRINTS</span>
-                  <ArrowUpRight size={16} className="metric-arrow" />
-                </div>
-                <div className="metric-number">{notes.length}</div>
-                <p className="metric-sub">Curated exam questions, unit breakdowns & code solutions</p>
-              </div>
-
-              <div className="cyber-metric-card violet" onClick={() => handleTabSwitch('vault')}>
-                <div className="metric-header">
-                  <span className="metric-tag">TAILORED FOR YOU</span>
-                  <Sparkles size={16} className="metric-arrow" />
-                </div>
-                <div className="metric-number">{recommendedNotes.length}</div>
-                <p className="metric-sub">Specifically mapped to {userYear} engineering curriculum</p>
-              </div>
-
-              <div className="cyber-metric-card amber" onClick={() => handleTabSwitch('radar')}>
-                <div className="metric-header">
-                  <span className="metric-tag">LIVE BROADCASTS</span>
-                  <Radio size={16} className="metric-arrow" />
-                </div>
-                <div className="metric-number">{notices.length}</div>
-                <p className="metric-sub">Official campus announcements, timetables & directives</p>
-              </div>
-            </div>
-
-            {/* Urgent Campus Radar Preview (If notices exist) */}
-            {recentNotices.length > 0 && (
-              <section className="overview-section">
-                <div className="section-title-bar">
-                  <div className="title-left">
-                    <span className="live-radar-dot" />
-                    <h2>Urgent Campus Radar // Transmissions</h2>
-                  </div>
-                  <button className="view-more-link" onClick={() => handleTabSwitch('radar')}>
-                    View All Transmissions <ChevronRight size={16} />
-                  </button>
-                </div>
-
-                <div className="urgent-radar-grid">
-                  {recentNotices.map((notice, idx) => (
-                    <article key={notice.id || idx} className={`radar-card-premium ${notice.type === 'alert' ? 'is-alert' : ''}`}>
-                      <div className="radar-card-top">
-                        <span className={`radar-badge ${notice.type === 'alert' ? 'badge-alert' : 'badge-general'}`}>
-                          {notice.type === 'alert' ? '🚨 EMERGENCY DIRECTIVE' : '📢 CAMPUS BULLETIN'}
-                        </span>
-                        <span className="radar-date">
-                          {notice.createdAt?._seconds 
-                            ? new Date(notice.createdAt._seconds * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                            : 'Broadcasted'}
-                        </span>
-                      </div>
-                      <h3 className="radar-card-heading">{notice.title}</h3>
-                      <p className="radar-card-text">{notice.message}</p>
-                      {notice.link && (
-                        <a href={notice.link} target="_blank" rel="noreferrer" className="radar-attach-btn">
-                          Open Official Attachment <ExternalLink size={13} />
-                        </a>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Hot Trending Blueprints Section */}
-            <section className="overview-section">
-              <div className="section-title-bar">
-                <div className="title-left">
-                  <Flame size={20} className="flame-icon-hot" />
-                  <h2>Top Downloaded Engineering Blueprints</h2>
-                </div>
-                <button className="view-more-link" onClick={() => handleTabSwitch('vault')}>
-                  Explore Complete Vault <ChevronRight size={16} />
-                </button>
-              </div>
-
-              <div className="blueprint-cards-grid">
-                {topTrendingNotes.map((note) => (
-                  <BlueprintCard 
-                    key={note.id || note.title} 
-                    note={note} 
-                    onAccess={onNoteAccess}
-                    onPreview={setPreviewNote}
-                  />
-                ))}
-              </div>
-            </section>
-
-            {/* Fast Subject Quick-Launch Matrix */}
-            <section className="overview-section">
-              <div className="section-title-bar">
-                <div className="title-left">
-                  <Layers size={20} className="cyan-icon" />
-                  <h2>Subject Clusters</h2>
-                </div>
-              </div>
-
-              <div className="subject-cluster-strip">
-                {subjectList.map((item) => (
-                  <button 
-                    key={item.name} 
-                    className="subject-pill-tile"
-                    onClick={() => {
-                      setSelectedSubject(item.name);
-                      handleTabSwitch('vault');
-                    }}
-                  >
-                    <FolderOpen size={16} className="cluster-icon" />
-                    <span className="cluster-name">{item.name}</span>
-                    <span className="cluster-count">{item.count}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
           </div>
-        )}
 
-        {/* =========================================================
-            📚 TAB 2: QUANTUM VAULT (COMPLETE LIBRARY)
-            ========================================================= */}
+          {/* Quick Metrics Strip */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginTop: '28px', paddingTop: '24px', borderTop: '1px solid var(--border-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', background: 'rgba(99, 102, 241, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-light)' }}>
+                <BookOpen size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-pure)' }}>{notes.length}</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Available Documents</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', background: 'rgba(56, 189, 248, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)' }}>
+                <Download size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-pure)' }}>{totalDownloads.toLocaleString()}</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total Downloads</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}>
+                <HardDrive size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-pure)' }}>Telegram Cloud</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Zero File Size Limits</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-sm)', background: 'rgba(245, 158, 11, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24' }}>
+                <Zap size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-pure)' }}>80+ MB/s</div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Edge CDN Throughput</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Studio Tab Navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '24px', overflowX: 'auto', paddingBottom: '2px' }}>
+          <button 
+            className={`tab-btn ${activeTab === 'vault' ? 'active' : ''}`}
+            onClick={() => setActiveTab('vault')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              color: activeTab === 'vault' ? 'var(--text-pure)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'vault' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              background: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <BookOpen size={18} />
+            <span>Study Notes Vault ({notes.length})</span>
+          </button>
+
+          <button 
+            className={`tab-btn ${activeTab === 'upload' ? 'active' : ''}`}
+            onClick={() => setActiveTab('upload')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              color: activeTab === 'upload' ? 'var(--text-pure)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'upload' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              background: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <UploadCloud size={18} />
+            <span>Contribute Notes</span>
+          </button>
+
+          <button 
+            className={`tab-btn ${activeTab === 'radar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('radar')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              color: activeTab === 'radar' ? 'var(--text-pure)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'radar' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              background: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Bell size={18} />
+            <span>Campus Notice Board ({notices.length})</span>
+          </button>
+
+          <button 
+            className={`tab-btn ${activeTab === 'network' ? 'active' : ''}`}
+            onClick={() => setActiveTab('network')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 20px',
+              fontSize: '0.95rem',
+              fontWeight: 600,
+              color: activeTab === 'network' ? 'var(--text-pure)' : 'var(--text-muted)',
+              borderBottom: activeTab === 'network' ? '2px solid var(--accent-cyan)' : '2px solid transparent',
+              background: 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Users size={18} />
+            <span>Student Peers</span>
+          </button>
+        </div>
+
+        {/* Tab 1: STUDY NOTES VAULT */}
         {activeTab === 'vault' && (
-          <div className="vault-tab-view">
-            
-            {/* Vault Filter & Search Control Panel */}
-            <div className="vault-control-panel card">
-              <div className="control-search-row">
-                <div className="vault-search-box">
-                  <Search size={18} className="search-symbol" />
-                  <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by blueprint title, unit number, algorithms, syllabus keywords, or author..."
-                  />
-                  {searchQuery && (
-                    <button className="clear-search-btn" onClick={() => setSearchQuery('')} aria-label="Clear search">
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-
-                <div className="vault-sort-select-wrap">
-                  <TrendingUp size={16} className="sort-symbol" />
-                  <select 
-                    value={sortBy} 
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="vault-select"
-                  >
-                    <option value="popular">🔥 Sort by Most Downloaded</option>
-                    <option value="newest">⚡ Sort by Newest Uploaded</option>
-                    <option value="alphabetical">🔤 Sort Alphabetically</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Dynamic Subject Selector Chips */}
-              <div className="vault-subject-carousel">
-                {subjectList.map((item) => (
-                  <button 
-                    key={item.name}
-                    className={`subject-chip-btn ${selectedSubject === item.name ? 'active' : ''}`}
-                    onClick={() => setSelectedSubject(item.name)}
-                  >
-                    <span>{item.name}</span>
-                    <span className="chip-counter">{item.count}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Results Count & Active Filters Indicator */}
-            <div className="vault-results-bar">
-              <span className="results-label">
-                Displaying <strong>{filteredNotes.length}</strong> academic blueprints
-                {selectedSubject !== 'All' && <span> in <em>{selectedSubject}</em></span>}
-              </span>
-
-              {(selectedSubject !== 'All' || searchQuery) && (
-                <button 
-                  className="reset-filter-btn"
-                  onClick={() => { setSelectedSubject('All'); setSearchQuery(''); }}
+          <div>
+            {/* Year Filter Pills Bar */}
+            <div className="year-pills-bar">
+              {['All', '1st year', '2nd year', '3rd year', '4th year'].map(yr => (
+                <button
+                  key={yr}
+                  className={`year-pill ${selectedYear === yr ? 'active' : ''}`}
+                  onClick={() => setSelectedYear(yr)}
                 >
-                  <X size={14} /> Reset Filters
+                  {yr === 'All' ? '⚡ All Years' : yr.toUpperCase()}
                 </button>
-              )}
+              ))}
             </div>
 
-            {/* Blueprints Grid */}
-            {filteredNotes.length > 0 ? (
-              <div className="blueprint-cards-grid">
-                {filteredNotes.map((note) => (
-                  <BlueprintCard 
-                    key={note.id || note.title} 
-                    note={note} 
-                    onAccess={onNoteAccess}
-                    onPreview={setPreviewNote}
+            {/* Subject Chips Carousel */}
+            <div className="subject-chips-bar">
+              {subjectList.map(subj => (
+                <button
+                  key={subj.name}
+                  className={`subject-chip ${selectedSubject === subj.name ? 'active' : ''}`}
+                  onClick={() => setSelectedSubject(subj.name)}
+                >
+                  <span>{subj.name}</span>
+                  <span className="subject-chip-badge">{subj.count}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Search and Sort Controls Bar */}
+            <div className="controls-bar">
+              <div className="search-input-wrapper">
+                <Search size={18} className="search-input-icon" />
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search by title, subject, semester, or topics (e.g. DBMS, DSA, Operating Systems)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
+              <div className="controls-right">
+                <select 
+                  className="custom-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="popular">🔥 Most Popular</option>
+                  <option value="newest">🕒 Newest Uploads</option>
+                  <option value="alphabetical">🔤 Title (A-Z)</option>
+                </select>
+
+                <div className="view-toggle-group">
+                  <button
+                    className={`view-toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                    onClick={() => setViewMode('grid')}
+                    title="Grid View"
+                  >
+                    <LayoutGrid size={17} />
+                  </button>
+                  <button
+                    className={`view-toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                    onClick={() => setViewMode('list')}
+                    title="List View"
+                  >
+                    <List size={17} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Notes List / Grid View */}
+            {filteredNotes.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '60px 20px',
+                background: 'var(--bg-card)',
+                borderRadius: 'var(--radius-xl)',
+                border: '1px dashed var(--border-card)',
+                margin: '20px 0'
+              }}>
+                <FileText size={48} style={{ color: 'var(--text-dim)', margin: '0 auto 16px' }} />
+                <h3 style={{ marginBottom: '8px' }}>No study notes matched your filter</h3>
+                <p style={{ maxWidth: '440px', margin: '0 auto 20px', fontSize: '0.9rem' }}>
+                  Try switching the year or subject filter, or be the first to upload notes for this section.
+                </p>
+                <button 
+                  className="button button-primary compact-button"
+                  onClick={() => { setSelectedYear('All'); setSelectedSubject('All'); setSearchQuery(''); }}
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="notes-grid">
+                {filteredNotes.map(note => (
+                  <NoteGridCard
+                    key={note.id || note.title}
+                    note={note}
+                    onPreview={() => setPreviewNote(note)}
+                    onAccess={() => onNoteAccess?.(note)}
+                    onCopyLink={() => handleCopyLink(note)}
+                    isCopied={copiedNoteId === (note.id || note.title)}
                   />
                 ))}
               </div>
             ) : (
-              <div className="empty-vault-state card">
-                <FileText size={48} className="empty-icon" />
-                <h3>No Academic Blueprints Found</h3>
-                <p>We could not find blueprints matching "{searchQuery}". Try selecting "All" subjects or refine your keywords.</p>
-                <button 
-                  className="button button-ghost"
-                  onClick={() => { setSelectedSubject('All'); setSearchQuery(''); }}
-                >
-                  Clear Search Filters
-                </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {filteredNotes.map(note => (
+                  <NoteListRow
+                    key={note.id || note.title}
+                    note={note}
+                    onPreview={() => setPreviewNote(note)}
+                    onAccess={() => onNoteAccess?.(note)}
+                    onCopyLink={() => handleCopyLink(note)}
+                    isCopied={copiedNoteId === (note.id || note.title)}
+                  />
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* =========================================================
-            📢 TAB 3: CAMPUS RADAR (TRANSMISSIONS)
-            ========================================================= */}
+        {/* Tab 2: UPLOAD STUDIO */}
+        {activeTab === 'upload' && (
+          <UploadDocumentSpace 
+            folders={folders}
+            token={token}
+            onUploadSuccess={(createdNote) => {
+              onUploadSuccess?.(createdNote);
+              setActiveTab('vault');
+            }}
+          />
+        )}
+
+        {/* Tab 3: NOTICE BOARD */}
         {activeTab === 'radar' && (
-          <div className="radar-tab-view">
-            <header className="radar-view-header">
-              <div>
-                <span className="eyebrow"><Radio size={14} /> OFFICIAL CAMPUS BROADCAST SYSTEM</span>
-                <h2>Urgent Radar Transmissions</h2>
-              </div>
-              <span className="radar-status-chip">
-                <span className="dot-blink" /> LIVE FEED ACTIVE
-              </span>
-            </header>
-
-            <NoticeBoard notices={notices} canManage={false} />
-          </div>
+          <NoticeBoard 
+            notices={notices}
+            isAdmin={user?.role === 'admin'}
+          />
         )}
 
-        {/* =========================================================
-            🛡️ TAB 4: CADET NETWORK (COMMUNITY)
-            ========================================================= */}
+        {/* Tab 4: STUDENTS PEER NETWORK */}
         {activeTab === 'network' && (
-          <div className="network-tab-view">
-            <header className="radar-view-header">
-              <div>
-                <span className="eyebrow"><Award size={14} /> PEER ACADEMIC DIRECTORY</span>
-                <h2>Cadet Network & Community</h2>
-              </div>
-            </header>
-
-            <StudentsView onProfile={() => onNavigate?.('profile')} />
-          </div>
+          <StudentsView />
         )}
-
       </div>
 
-      {/* =========================================================
-          🔍 BLUEPRINT PREVIEW MODAL
-          ========================================================= */}
+      {/* Note Preview & Download Modal */}
       {previewNote && (
         <div className="modal-backdrop" onClick={() => setPreviewNote(null)}>
-          <div className="modal preview-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div className="preview-header-tags">
-                <span className="cyber-pill pill-cyan">{previewNote.subject}</span>
-                {previewNote.year && <span className="cyber-pill pill-mono">{previewNote.year}</span>}
-              </div>
-              <button className="icon-button" onClick={() => setPreviewNote(null)} aria-label="Close modal">
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="preview-modal-body">
-              <h2 className="preview-title">{previewNote.title}</h2>
-              <div className="preview-meta-row">
-                <span>Curated by: <strong>{previewNote.author || 'Academic Contributor'}</strong></span>
-                <span>Type: <strong>{previewNote.type || 'DOCUMENT / BLUEPRINT'}</strong></span>
-                <span>Downloads: <strong>{previewNote.downloadCount || 0} times</strong></span>
-              </div>
-
-              <div className="preview-notice-box">
-                <ShieldCheck size={20} className="text-cyan" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-sm)', background: 'rgba(56, 189, 248, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)' }}>
+                  <FileText size={20} />
+                </div>
                 <div>
-                  <strong>Direct Telegram Supergroup Channel</strong>
-                  <p>This file is served directly through encrypted Telegram cloud storage without size degradation or rate limiting.</p>
+                  <div className="modal-title" style={{ fontSize: '1.1rem' }}>Document Overview</div>
+                  <div style={{ fontSize: '0.76rem', color: 'var(--text-dim)' }}>Verified Free Study Material Cloud</div>
                 </div>
               </div>
+              <button className="modal-close-btn" onClick={() => setPreviewNote(null)}>
+                <X size={18} />
+              </button>
             </div>
 
-            <div className="modal-actions">
-              <button className="button button-ghost" onClick={() => setPreviewNote(null)}>
-                Dismiss
+            <div className="modal-body">
+              <h2 style={{ fontSize: '1.35rem', marginBottom: '14px', lineHeight: 1.35 }}>
+                {previewNote.title}
+              </h2>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '24px' }}>
+                <span className="badge badge-year">{previewNote.year || '1st year'}</span>
+                <span className="badge badge-subject">{previewNote.subject || 'Engineering'}</span>
+                {previewNote.branch && <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.12)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' }}>{previewNote.branch}</span>}
+                <span className="badge badge-cloud">⚡ Telegram Edge Storage</span>
+              </div>
+
+              <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '16px', marginBottom: '20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.85rem' }}>
+                  <div>
+                    <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '2px' }}>File Name</span>
+                    <strong style={{ color: 'var(--text-pure)', wordBreak: 'break-all' }}>{previewNote.fileName || `${previewNote.title}.pdf`}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '2px' }}>File Size</span>
+                    <strong style={{ color: 'var(--text-pure)' }}>{previewNote.fileSize ? `${(previewNote.fileSize / (1024 * 1024)).toFixed(2)} MB` : 'Optimized Cloud PDF'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '2px' }}>Downloads</span>
+                    <strong style={{ color: 'var(--text-pure)' }}>{(previewNote.downloadCount || previewNote.downloads || 0).toLocaleString()} times</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-dim)', display: 'block', marginBottom: '2px' }}>Contributor</span>
+                    <strong style={{ color: 'var(--text-pure)' }}>{previewNote.uploadedByName || previewNote.author || 'Telegram Peer'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                Direct global edge stream is enabled with high-speed 80+ MB/s cache replication for instant delivery.
+              </p>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                className="button button-ghost"
+                onClick={() => handleCopyLink(previewNote)}
+              >
+                {copiedNoteId === (previewNote.id || previewNote.title) ? (
+                  <>
+                    <Check size={16} style={{ color: '#10b981' }} />
+                    <span style={{ color: '#10b981' }}>Link Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} />
+                    <span>Copy Stream Link</span>
+                  </>
+                )}
               </button>
+
               <a 
                 href={previewNote.driveLink || (previewNote.id ? `/api/notes/${previewNote.id}/download` : '#')}
                 target="_blank"
@@ -603,7 +547,8 @@ export default function StudentDashboard({
                   setPreviewNote(null);
                 }}
               >
-                <Download size={16} /> Open & Download Blueprint
+                <Download size={17} />
+                <span>Download Note</span>
               </a>
             </div>
           </div>
@@ -613,79 +558,123 @@ export default function StudentDashboard({
   );
 }
 
-/**
- * 💎 Bespoke, Ultra-Premium Quantum Blueprint Card
- */
-function BlueprintCard({ note, onAccess, onPreview }) {
-  const subjectAesthetics = {
-    'Artificial Intelligence (AI)': { borderGlow: '#10b981', badgeClass: 'pill-mint', dotColor: '#10b981' },
-    'Cloud Computing (CC)': { borderGlow: '#00f2fe', badgeClass: 'pill-cyan', dotColor: '#00f2fe' },
-    'Cryptography (CNS)': { borderGlow: '#c084fc', badgeClass: 'pill-violet', dotColor: '#c084fc' },
-    'Deep Learning': { borderGlow: '#f59e0b', badgeClass: 'pill-amber', dotColor: '#f59e0b' },
-  };
-
-  const styleConfig = subjectAesthetics[note.subject] || {
-    borderGlow: '#00f2fe',
-    badgeClass: 'pill-cyan',
-    dotColor: '#00f2fe'
-  };
+// Subcomponent: Grid Card for Note
+function NoteGridCard({ note, onPreview, onAccess, onCopyLink, isCopied }) {
+  const downloadHref = note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#');
+  const sizeMb = note.fileSize ? `${(note.fileSize / (1024 * 1024)).toFixed(1)} MB` : 'PDF';
+  const downloads = (note.downloadCount || note.downloads || 0).toLocaleString();
 
   return (
-    <article 
-      className="quantum-blueprint-card"
-      style={{ '--card-accent': styleConfig.borderGlow }}
-    >
-      <div className="card-ambient-glow" />
-
-      {/* Card Header */}
-      <div className="card-top-row">
-        <span className={`blueprint-subject-tag ${styleConfig.badgeClass}`}>
-          <span className="tag-dot" style={{ background: styleConfig.dotColor }} />
-          {note.subject || 'Engineering Core'}
-        </span>
-        <span className="blueprint-format-tag">
-          {note.type || 'DOCUMENT'}
-        </span>
-      </div>
-
-      {/* Card Title */}
-      <h3 className="blueprint-card-title" title={note.title}>
-        {note.title}
-      </h3>
-
-      {/* Metadata Row */}
-      <div className="blueprint-meta-strip">
-        <div className="meta-author">
-          <span>By <strong>{note.author || 'Academic Team'}</strong></span>
-          {note.year && <span className="year-dot">• {note.year}</span>}
+    <div className="note-card">
+      <div className="note-header">
+        <div className="note-file-icon">
+          <FileText size={22} />
         </div>
-
-        <div className="download-velocity-badge">
-          <Flame size={13} className="flame-icon" />
-          <span>{note.downloadCount || 0} DLs</span>
+        <div className="note-meta-badges">
+          <span className="badge badge-year">{note.year || '1st year'}</span>
+          <span className="badge badge-subject">{note.subject || 'General'}</span>
         </div>
       </div>
 
-      {/* Card Action Bar */}
-      <div className="card-action-bar">
+      <div className="note-body">
+        <h3 className="note-title" title={note.title}>
+          {note.title}
+        </h3>
+        <div className="note-details">
+          <span>{sizeMb}</span>
+          <span>•</span>
+          <span>{downloads} downloads</span>
+        </div>
+      </div>
+
+      <div className="note-footer">
         <button 
-          className="preview-btn" 
-          onClick={() => onPreview?.(note)}
-          title="Preview Details"
+          className="button button-ghost compact-button"
+          onClick={onPreview}
+          title="Quick preview details"
         >
-          <Eye size={15} /> Details
+          <Eye size={15} />
+          <span>Preview</span>
         </button>
 
-        <a 
-          href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')} 
-          target="_blank" 
-          rel="noreferrer" 
-          onClick={() => onAccess?.(note)}
-          className="stream-download-btn"
-        >
-          <Download size={15} /> Stream Blueprint
+        <div className="note-action-btns">
+          <button
+            className="button button-ghost compact-button"
+            onClick={onCopyLink}
+            title="Copy download link"
+          >
+            {isCopied ? <Check size={14} style={{ color: '#10b981' }} /> : <Share2 size={14} />}
+          </button>
+
+          <a
+            href={downloadHref}
+            target="_blank"
+            rel="noreferrer"
+            className="button button-primary compact-button"
+            onClick={onAccess}
+            title="Download document"
+          >
+            <Download size={14} />
+            <span>Download</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Subcomponent: List View Row for Note
+function NoteListRow({ note, onPreview, onAccess, onCopyLink, isCopied }) {
+  const downloadHref = note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#');
+  const sizeMb = note.fileSize ? `${(note.fileSize / (1024 * 1024)).toFixed(1)} MB` : 'PDF';
+  const downloads = (note.downloadCount || note.downloads || 0).toLocaleString();
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '16px',
+      padding: '16px 20px',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border-card)',
+      borderRadius: 'var(--radius-md)',
+      backdropFilter: 'blur(14px)',
+      transition: 'all 0.2s ease'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
+        <div style={{ width: '38px', height: '38px', borderRadius: 'var(--radius-sm)', background: 'rgba(56, 189, 248, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-cyan)', flexShrink: 0 }}>
+          <FileText size={18} />
+        </div>
+        <div style={{ minWidth: 0 }}>
+          <h4 style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--text-pure)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {note.title}
+          </h4>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '2px' }}>
+            <span style={{ color: 'var(--accent-cyan)' }}>{note.subject || 'Engineering'}</span>
+            <span>•</span>
+            <span>{note.year || '1st year'}</span>
+            <span>•</span>
+            <span>{sizeMb}</span>
+            <span>•</span>
+            <span>{downloads} downloads</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <button className="button button-ghost compact-button" onClick={onPreview}>
+          <Eye size={14} />
+          <span>View</span>
+        </button>
+        <button className="button button-ghost compact-button" onClick={onCopyLink}>
+          {isCopied ? <Check size={14} style={{ color: '#10b981' }} /> : <Share2 size={14} />}
+        </button>
+        <a href={downloadHref} target="_blank" rel="noreferrer" className="button button-primary compact-button" onClick={onAccess}>
+          <Download size={14} />
+          <span>Download</span>
         </a>
       </div>
-    </article>
+    </div>
   );
 }
