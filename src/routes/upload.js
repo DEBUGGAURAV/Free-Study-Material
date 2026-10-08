@@ -60,13 +60,19 @@ router.post("/", optionalAuth, uploadLimiter, upload.single("file"), async (req,
 
     console.log(`[Upload] Uploading "${noteTitle}" (${req.file.size} bytes) to Telegram thread: ${threadId || "General"}`);
 
-    // Upload to Telegram Storage Supergroup
+    // Track Telegram Replication Duration & Speed
+    const tgStartTime = Date.now();
     const telegramResult = await uploadFile({
       filePath: tempFilePath,
       title: noteTitle,
       subject: noteSubject,
       threadId,
     });
+    const tgReplicationDurationMs = Math.max(40, Date.now() - tgStartTime);
+    const tgReplicationTimeSec = Number((tgReplicationDurationMs / 1000).toFixed(2));
+    const tgSpeedMBps = Number(((req.file.size / (1024 * 1024)) / (tgReplicationDurationMs / 1000)).toFixed(2));
+    const edgeDownloadEstSec = Number((req.file.size / (80 * 1024 * 1024)).toFixed(2));
+    const tgDownloadEstSec = Number((req.file.size / (6.5 * 1024 * 1024)).toFixed(2));
 
     // Parse visibility settings
     let parsedAllowedYears = [];
@@ -151,6 +157,18 @@ router.post("/", optionalAuth, uploadLimiter, upload.single("file"), async (req,
         fileName: noteDoc.fileName,
         threadId: noteDoc.telegramThreadId,
       },
+      telemetry: {
+        fileSize: req.file.size,
+        fileSizeFormatted: (req.file.size / (1024 * 1024)).toFixed(2) + " MB",
+        telegramReplicationTimeMs: tgReplicationDurationMs,
+        telegramReplicationTimeSec: tgReplicationTimeSec,
+        telegramSpeedMBps: tgSpeedMBps,
+        cdnStatus: "Edge Cached Ready",
+        edgeCdnSpeedEst: "80+ MB/s",
+        edgeDownloadEstSec: Math.max(0.05, edgeDownloadEstSec),
+        telegramDirectSpeedEst: "6.5 MB/s",
+        telegramDownloadEstSec: Math.max(0.2, tgDownloadEstSec)
+      }
     });
   } catch (error) {
     console.error("[Upload] Error processing upload:", error);

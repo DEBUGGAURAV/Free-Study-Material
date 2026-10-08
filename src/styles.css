@@ -1219,6 +1219,198 @@ button {
 }
 
 /* ===================================================================
+   UPLOAD TELEMETRY & LIVE PERFORMANCE HUD
+   =================================================================== */
+
+.upload-hud-box {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.92) 0%, rgba(10, 16, 32, 0.98) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 12px 35px -8px rgba(0, 0, 0, 0.6), 0 0 25px rgba(99, 102, 241, 0.15);
+  backdrop-filter: blur(20px);
+  animation: fadeIn 0.3s ease;
+}
+
+.hud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.hud-title-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.hud-progress-container {
+  margin-bottom: 18px;
+}
+
+.hud-progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+}
+
+.hud-progress-track {
+  width: 100%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hud-progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, #6366f1 0%, #06b6d4 50%, #10b981 100%);
+  background-size: 200% 100%;
+  animation: progressShimmer 2s linear infinite;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes progressShimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.hud-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 640px) {
+  .hud-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.hud-metric-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-metric-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-metric-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-pure);
+  font-family: var(--font-mono, monospace);
+}
+
+.hud-pipeline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.pipeline-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pipeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.pipeline-step.active .pipeline-dot {
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  animation: pulse 1.5s infinite;
+}
+
+.pipeline-step.completed .pipeline-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+/* Post-Upload Telemetry Receipt Card */
+.telemetry-receipt-card {
+  background: linear-gradient(150deg, rgba(16, 24, 44, 0.95) 0%, rgba(9, 14, 28, 0.98) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 28px;
+  box-shadow: 0 16px 45px -10px rgba(0, 0, 0, 0.7), 0 0 30px rgba(16, 185, 129, 0.12);
+  backdrop-filter: blur(20px);
+  animation: fadeIn 0.4s ease;
+}
+
+.telemetry-success-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 20px;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.telemetry-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  transition: all 0.2s ease;
+}
+
+.telemetry-item:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.telemetry-benchmark-section {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  margin-top: 16px;
+}
+
+/* ===================================================================
    CAMPUS NOTICE BOARD
    =================================================================== */
 

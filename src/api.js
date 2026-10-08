@@ -102,19 +102,62 @@ export const createNote = (note, token) => {
   invalidateCache('/notes');
   return request('/notes', { method: 'POST', body: JSON.stringify(note) }, token);
 }
-export const uploadNoteFile = async (formData, token) => {
+export const uploadNoteFile = (formData, token, onProgress) => {
   invalidateCache('/notes');
-  const response = await fetch(`${API_URL}/notes/upload`, {
-    method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body: formData,
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    const startTime = Date.now();
+
+    if (xhr.upload && onProgress) {
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 100);
+          const elapsedSec = (Date.now() - startTime) / 1000 || 0.05;
+          const speedMBps = Number(((e.loaded / (1024 * 1024)) / elapsedSec).toFixed(2));
+          const remainingBytes = Math.max(0, e.total - e.loaded);
+          const etaSec = speedMBps > 0 ? Number(((remainingBytes / (1024 * 1024)) / speedMBps).toFixed(1)) : 0;
+
+          onProgress({
+            loaded: e.loaded,
+            total: e.total,
+            percent,
+            speedMBps,
+            elapsedSec: Number(elapsedSec.toFixed(1)),
+            etaSec
+          });
+        }
+      });
+    }
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data);
+        } catch (err) {
+          resolve({ success: true, message: 'Upload complete' });
+        }
+      } else {
+        try {
+          const errData = JSON.parse(xhr.responseText);
+          reject(new Error(errData.message || 'Upload failed'));
+        } catch (_) {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
+        }
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new Error('Network error during file upload'));
+    });
+
+    xhr.open('POST', `${API_URL}/notes/upload`);
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+    xhr.send(formData);
   });
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.message || 'Upload failed');
-  }
-  return data;
-}
+};
 export const getNotices = (token) => request('/notices', {}, token, true)
 export const createNotice = (notice, token) => {
   invalidateCache('/notices');
