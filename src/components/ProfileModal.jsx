@@ -220,13 +220,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             </div>
 
             <div className="form-group">
-              <label className="form-label">Registered Gmail (Fixed)</label>
+              <label className="form-label">Registered Email</label>
               <input
                 type="email"
                 className="form-input"
                 value={currentUser.email}
-                disabled
-                style={{ opacity: 0.6, cursor: "not-allowed" }}
+                readOnly
+                style={{ opacity: 0.7 }}
               />
             </div>
 
