@@ -10,7 +10,7 @@ export default function HeroBanner({ totalNotes, totalSaved }) {
       </div>
 
       <h1 className="hero-title">
-        High-Speed Academic Vault & <span>Study Materials</span>
+        Free Study Material — <span>Academic Cloud Vault</span>
       </h1>
 
       <p className="hero-subtitle">

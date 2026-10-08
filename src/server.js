@@ -102,9 +102,18 @@ app.use("/api/notes", notesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notices", noticesRoutes);
 
-// Serve Client Web Application (Vite Dist)
+// Serve Client Web Application (Vite Dist) with immutable caching for hashed assets
 const distPath = path.join(__dirname, "../dist");
-app.use(express.static(distPath));
+app.use(
+  express.static(distPath, {
+    maxAge: "1d",
+    setHeaders: (res, filePath) => {
+      if (filePath.includes("/assets/")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  })
+);
 
 // SPA Catch-All Route
 app.get("*", (req, res) => {

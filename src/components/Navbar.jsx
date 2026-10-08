@@ -27,10 +27,10 @@ export default function Navbar({
             <Cloud size={24} />
           </div>
           <div>
-            <div className="brand-title">Academic Vault</div>
+            <div className="brand-title">Free Study Material</div>
             <div className="brand-status-tag">
               <span className="pulse-dot"></span>
-              MTProto 2GB • Cloudflare CDN
+              Academic Vault • CDN Ready
             </div>
           </div>
         </div>

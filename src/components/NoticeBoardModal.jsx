@@ -391,3 +391,4 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser }) {
     </div>
   );
 }
+

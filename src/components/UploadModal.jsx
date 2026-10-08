@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { X, UploadCloud, CheckCircle2, FileText, AlertCircle, Sparkles, PlusCircle } from "lucide-react";
+import { X, UploadCloud, CheckCircle2, FileText, AlertCircle, Sparkles, Activity } from "lucide-react";
 import { api } from "../api";
 
 export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {
@@ -11,10 +11,20 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
   const [customBranchName, setCustomBranchName] = useState("");
   const [semester, setSemester] = useState("Sem 1");
   const [description, setDescription] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successData, setSuccessData] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Live Upload Metrics
+  const [uploadProgress, setUploadProgress] = useState({
+    percent: 0,
+    speed: "0 KB/s",
+    loadedMB: "0",
+    totalMB: "0",
+    timeRemaining: "Calculating...",
+  });
 
   const fileInputRef = useRef(null);
 
@@ -66,6 +76,13 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
 
     setLoading(true);
     setError(null);
+    setUploadProgress({
+      percent: 5,
+      speed: "Starting...",
+      loadedMB: "0",
+      totalMB: (file.size / (1024 * 1024)).toFixed(1),
+      timeRemaining: "Estimating...",
+    });
 
     try {
       const formData = new FormData();
@@ -78,7 +95,9 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
       formData.append("description", description);
 
       const startTime = performance.now();
-      const res = await api.uploadNote(formData);
+      const res = await api.uploadNoteWithProgress(formData, (metrics) => {
+        setUploadProgress(metrics);
+      });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
 
       setSuccessData({
@@ -107,6 +126,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
     setDescription("");
     setError(null);
     setSuccessData(null);
+    setUploadProgress({ percent: 0, speed: "0 KB/s", loadedMB: "0", totalMB: "0", timeRemaining: "" });
     onClose();
   };
 
@@ -114,7 +134,12 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
     <div className="modal-overlay" onClick={resetForm}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <div className="modal-title">Upload Study Material</div>
+          <div>
+            <div className="modal-title">Upload Study Material</div>
+            <div style={{ fontSize: "0.78rem", color: "var(--accent-cyan)" }}>
+              Free Study Material Vault • Instant 2s Async Pipeline
+            </div>
+          </div>
           <button className="modal-close-btn" onClick={resetForm}>
             <X size={20} />
           </button>
@@ -139,15 +164,15 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
             </div>
 
             <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "8px" }}>
-              ⚡ Uploaded in {successData.elapsed}s!
+              ⚡ Ingested in {successData.elapsed}s!
             </h3>
 
             <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: "420px", margin: "0 auto 16px" }}>
-              Your file is accepted. The <strong>Async Background Engine</strong> is now optimizing PDF streams, checking SHA-256 deduplication, archiving to Telegram Cloud, and has published a notice on the Notice Board!
+              File received at maximum bandwidth. Background MTProto worker is now pushing to Telegram Cloud, checking SHA-256 deduplication, and updating Notice Board!
             </p>
 
             <button className="btn-primary" onClick={resetForm}>
-              Done & Return to Vault
+              Done & Return to Free Study Material
             </button>
           </div>
         ) : (
@@ -213,7 +238,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                     {file.name}
                   </div>
                   <div style={{ color: "var(--accent-cyan)", fontSize: "0.8rem", marginTop: "4px" }}>
-                    {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for Instant Ingestion
+                    {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for High-Speed Transfer
                   </div>
                 </div>
               ) : (
@@ -227,6 +252,56 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                 </div>
               )}
             </div>
+
+            {/* LIVE TRANSFER SPEED & PERCENTAGE MONITOR */}
+            {loading && (
+              <div
+                style={{
+                  marginTop: "16px",
+                  background: "rgba(6, 182, 212, 0.08)",
+                  border: "1px solid rgba(6, 182, 212, 0.3)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "14px 18px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", color: "#fff", fontWeight: 700 }}>
+                    <Activity size={15} style={{ color: "var(--accent-cyan)" }} />
+                    <span>Uploading: {uploadProgress.percent}%</span>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "var(--accent-cyan)", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                    🚀 {uploadProgress.speed}
+                  </div>
+                </div>
+
+                {/* Progress Bar Container */}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "8px",
+                    background: "rgba(255, 255, 255, 0.1)",
+                    borderRadius: "var(--radius-full)",
+                    overflow: "hidden",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${uploadProgress.percent}%`,
+                      height: "100%",
+                      background: "linear-gradient(90deg, var(--accent-indigo), var(--accent-cyan))",
+                      boxShadow: "0 0 10px var(--accent-cyan)",
+                      transition: "width 0.15s ease",
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                  <span>{uploadProgress.loadedMB} MB of {uploadProgress.totalMB} MB</span>
+                  <span>{uploadProgress.timeRemaining}</span>
+                </div>
+              </div>
+            )}
 
             <div style={{ marginTop: "18px" }}>
               <div className="form-group">
@@ -270,7 +345,6 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                 </div>
               </div>
 
-              {/* Custom Branch Input if user chose to create a new branch */}
               {isCustomBranch && (
                 <div className="form-group" style={{ animation: "fadeIn 0.2s ease" }}>
                   <label className="form-label" style={{ color: "var(--accent-cyan)" }}>
@@ -279,7 +353,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. AERONAUTICAL, BIOTECH, ROBOTICS, CYBER SECURITY"
+                    placeholder="e.g. AERONAUTICAL, BIOTECH, ROBOTICS"
                     value={customBranchName}
                     onChange={(e) => setCustomBranchName(e.target.value)}
                     required
@@ -318,14 +392,14 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "20px" }}>
-              <button type="button" className="btn-secondary" onClick={resetForm}>
+              <button type="button" className="btn-secondary" onClick={resetForm} disabled={loading}>
                 Cancel
               </button>
               <button type="submit" className="btn-primary" disabled={loading}>
                 {loading ? (
                   <>
                     <div className="spinner"></div>
-                    <span>Uploading in 2s...</span>
+                    <span>Streaming ({uploadProgress.percent}%)...</span>
                   </>
                 ) : (
                   <>

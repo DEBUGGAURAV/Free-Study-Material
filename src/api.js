@@ -1,6 +1,6 @@
 /**
  * Academic Cloud API Client
- * Interacts with freestudymaterial backend
+ * Free Study Material Platform Engine
  */
 
 const API_BASE = "/api";
@@ -33,6 +33,9 @@ export function setCurrentUser(user) {
     localStorage.removeItem("vault_user");
   }
 }
+
+// Client Stale-While-Revalidate Memory Cache for 0ms Reload Performance
+const clientMemoryCache = new Map();
 
 async function request(endpoint, options = {}) {
   const token = getAuthToken();
@@ -98,9 +101,19 @@ export const api = {
   getMe: () => request("/auth/me"),
 
   // Notes
-  getBranches: () => request("/notes/branches"),
+  getBranches: async () => {
+    const cached = clientMemoryCache.get("branches");
+    if (cached) {
+      // Async revalidate
+      request("/notes/branches").then((r) => clientMemoryCache.set("branches", r)).catch(() => {});
+      return cached;
+    }
+    const res = await request("/notes/branches");
+    clientMemoryCache.set("branches", res);
+    return res;
+  },
 
-  getNotes: (params = {}) => {
+  getNotes: async (params = {}) => {
     const query = new URLSearchParams();
     if (params.branch && params.branch !== "All") query.append("branch", params.branch);
     if (params.semester && params.semester !== "All") query.append("semester", params.semester);
@@ -126,12 +139,150 @@ export const api = {
       body: JSON.stringify(noteData),
     }),
 
-  // Upload (Async Ingestion)
-  uploadNote: async (formData) => {
-    return request("/upload", {
-      method: "POST",
-      body: formData,
+  /**
+   * Upload Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
+   */
+  uploadNoteWithProgress: (formData, onProgress) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      const token = getAuthToken();
+      const startTime = performance.now();
+      let prevLoaded = 0;
+      let prevTime = startTime;
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const now = performance.now();
+          const timeDiff = (now - prevTime) / 1000;
+          const loadedDiff = e.loaded - prevLoaded;
+
+          // Speed in bytes per second
+          let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
+          if (speedBytes <= 0) {
+            const totalElapsed = (now - startTime) / 1000;
+            speedBytes = totalElapsed > 0 ? e.loaded / totalElapsed : 0;
+          }
+
+          prevLoaded = e.loaded;
+          prevTime = now;
+
+          const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+          const speedFormatted =
+            speedBytes >= 1024 * 1024
+              ? `${(speedBytes / (1024 * 1024)).toFixed(1)} MB/s`
+              : `${(speedBytes / 1024).toFixed(0)} KB/s`;
+
+          const remainingBytes = e.total - e.loaded;
+          const secondsRemaining = speedBytes > 0 ? (remainingBytes / speedBytes).toFixed(1) : "0";
+
+          if (onProgress) {
+            onProgress({
+              percent,
+              speed: speedFormatted,
+              loadedMB: (e.loaded / (1024 * 1024)).toFixed(1),
+              totalMB: (e.total / (1024 * 1024)).toFixed(1),
+              timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s remaining` : "Completing...",
+            });
+          }
+        }
+      });
+
+      xhr.addEventListener("load", () => {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(res);
+          } else {
+            reject(new Error(res.message || "Upload failed with status " + xhr.status));
+          }
+        } catch {
+          reject(new Error("Invalid response received from server."));
+        }
+      });
+
+      xhr.addEventListener("error", () => reject(new Error("Network transfer failed.")));
+      xhr.addEventListener("abort", () => reject(new Error("Upload cancelled.")));
+
+      xhr.open("POST", `${API_BASE}/upload`);
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      }
+      xhr.send(formData);
     });
+  },
+
+  /**
+   * Download Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
+   */
+  downloadNoteWithProgress: async (id, fileName, onProgress) => {
+    const token = getAuthToken();
+    const url = `${API_BASE}/notes/${id}/stream${token ? `?token=${token}` : ""}`;
+    const startTime = performance.now();
+    let prevLoaded = 0;
+    let prevTime = startTime;
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Download failed with status ${res.status}`);
+    }
+
+    const contentLengthHeader = res.headers.get("Content-Length");
+    const total = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+    let loaded = 0;
+
+    const reader = res.body.getReader();
+    const chunks = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      chunks.push(value);
+      loaded += value.length;
+
+      const now = performance.now();
+      const timeDiff = (now - prevTime) / 1000;
+      const loadedDiff = loaded - prevLoaded;
+
+      let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
+      if (speedBytes <= 0) {
+        const totalElapsed = (now - startTime) / 1000;
+        speedBytes = totalElapsed > 0 ? loaded / totalElapsed : 0;
+      }
+
+      prevLoaded = loaded;
+      prevTime = now;
+
+      const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 100;
+      const speedFormatted =
+        speedBytes >= 1024 * 1024
+          ? `${(speedBytes / (1024 * 1024)).toFixed(1)} MB/s`
+          : `${(speedBytes / 1024).toFixed(0)} KB/s`;
+
+      const remainingBytes = total > 0 ? total - loaded : 0;
+      const secondsRemaining = speedBytes > 0 && total > 0 ? (remainingBytes / speedBytes).toFixed(1) : "0";
+
+      if (onProgress) {
+        onProgress({
+          percent,
+          speed: speedFormatted,
+          loadedMB: (loaded / (1024 * 1024)).toFixed(1),
+          totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(1) : (loaded / (1024 * 1024)).toFixed(1),
+          timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s left` : "Ready",
+        });
+      }
+    }
+
+    // Convert streamed chunks into downloadable blob
+    const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "application/pdf" });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = fileName || "Free_Study_Material.pdf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
   },
 
   getUploadStatus: (noteId) => request(`/upload/status/${noteId}`),
