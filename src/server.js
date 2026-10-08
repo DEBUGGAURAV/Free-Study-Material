@@ -105,6 +105,12 @@ app.use("/api/notes/upload", uploadRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notes", notesRoutes);
 
+// Universal direct download routes and aliases
+app.use("/api/download", notesRoutes);
+app.get("/download/:id", (req, res) => res.redirect(`/api/notes/${req.params.id}/download`));
+app.get("/api/download/:id", (req, res) => res.redirect(`/api/notes/${req.params.id}/download`));
+app.get("/api/notes/download/:id", (req, res) => res.redirect(`/api/notes/${req.params.id}/download`));
+
 // Dynamic Frontend static assets resolution
 const possibleDistPaths = [
   path.join(process.cwd(), "dist"),

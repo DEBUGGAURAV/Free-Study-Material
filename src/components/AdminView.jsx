@@ -371,7 +371,7 @@ export default function AdminView({
                           {count} {count === 1 ? 'dl' : 'dls'}
                         </span>
                         <a
-                          href={note.driveLink || `/api/notes/${note.id}/download`}
+                          href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')}
                           target="_blank"
                           rel="noreferrer"
                           style={{

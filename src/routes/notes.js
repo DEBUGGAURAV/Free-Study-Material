@@ -108,15 +108,25 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-// 2. GET /api/notes/:id/download - Secure stream download from Telegram storage
-router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
+// 2. GET /api/notes/:id/download & /api/notes/download/:id - Universal stream download
+const handleDownload = async (req, res) => {
+  const noteId = req.params.id;
+  if (!noteId || noteId === "undefined" || noteId === "null") {
+    return res.status(400).json({ success: false, message: "Invalid note identifier" });
+  }
+
   try {
-    const doc = await db.collection("notes").doc(req.params.id).get();
+    const doc = await db.collection("notes").doc(noteId).get();
     if (!doc.exists) {
       return res.status(404).json({ success: false, message: "Note record not found" });
     }
 
     const note = doc.data();
+
+    // If external drive link exists, redirect directly
+    if (note.driveLink) {
+      return res.redirect(note.driveLink);
+    }
 
     // Check Access Permission
     if (!canAccess(note, req.user)) {
@@ -134,7 +144,7 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
     }
 
     // Increment download count in Firestore for Analytics & Top Downloads Tracking
-    db.collection("notes").doc(req.params.id).update({
+    db.collection("notes").doc(noteId).update({
       downloadCount: admin.firestore.FieldValue.increment(1),
       lastDownloadedAt: new Date().toISOString()
     }).catch(err => console.warn("[Notes Download] Could not increment counter:", err.message));
@@ -147,6 +157,13 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
       return res.redirect(`${workerBase}/stream/${note.telegramFileId}?name=${encodeURIComponent(safeName)}`);
     }
 
+    // Telegram Bot API standard limit check:
+    // Standard Bot API getFile has a 20MB limit. For files > 20MB, direct to Telegram post link if available.
+    if (note.fileSize && note.fileSize > 20 * 1024 * 1024 && note.telegramChatId && note.telegramMessageId) {
+      const cleanChatId = String(note.telegramChatId).replace(/^-100/, "");
+      return res.redirect(`https://t.me/c/${cleanChatId}/${note.telegramMessageId}`);
+    }
+
     // Direct Stream through server fallback
     const stream = bot.getFileStream(note.telegramFileId);
 
@@ -157,13 +174,25 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
 
     stream.on("error", async (err) => {
       console.error("[Notes Download] Telegram stream error:", err.message);
-      // Auto-purge note from Firestore if file was deleted or invalid in Telegram
-      if (err.message && (err.message.includes("400") || err.message.includes("404") || err.message.includes("wrong file identifier") || err.message.includes("deleted") || err.message.includes("not found"))) {
-        console.warn(`[Notes Download] Stale/deleted file detected for note ${req.params.id}. Purging from database...`);
-        db.collection("notes").doc(req.params.id).delete().catch(() => {});
+
+      // Handle Telegram Bot API 20MB limit gracefully
+      if (err.message && err.message.includes("file is too big")) {
+        console.warn(`[Notes Download] File ${noteId} is >20MB. Redirecting to Telegram post stream.`);
+        if (note.telegramChatId && note.telegramMessageId && !res.headersSent) {
+          const cleanChatId = String(note.telegramChatId).replace(/^-100/, "");
+          return res.redirect(`https://t.me/c/${cleanChatId}/${note.telegramMessageId}`);
+        }
       }
+
+      // Auto-purge note from Firestore ONLY if genuinely deleted or invalid identifier
+      // NEVER purge if the error is "file is too big"
+      if (err.message && !err.message.includes("file is too big") && (err.message.includes("wrong file identifier") || err.message.includes("message to delete not found") || (err.message.includes("404") && !err.message.includes("Endpoint")))) {
+        console.warn(`[Notes Download] Stale/deleted file detected for note ${noteId}. Purging from database...`);
+        db.collection("notes").doc(noteId).delete().catch(() => {});
+      }
+
       if (!res.headersSent) {
-        res.status(502).json({ success: false, message: "File is no longer available or was deleted from Telegram storage" });
+        res.status(502).json({ success: false, message: "File download stream error: " + err.message });
       } else {
         res.end();
       }
@@ -172,7 +201,28 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
     stream.pipe(res);
   } catch (error) {
     console.error("[Notes Download] Error:", error);
-    res.status(500).json({ success: false, message: "Download failed" });
+    res.status(500).json({ success: false, message: "Download failed: " + error.message });
+  }
+};
+
+router.get("/:id/download", optionalAuth, downloadLimiter, handleDownload);
+router.get("/download/:id", optionalAuth, downloadLimiter, handleDownload);
+router.get("/:id/file", optionalAuth, downloadLimiter, handleDownload);
+
+// Fetch single note by ID
+router.get("/:id", optionalAuth, readLimiter, async (req, res) => {
+  try {
+    const doc = await db.collection("notes").doc(req.params.id).get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, message: "Note not found" });
+    }
+    const note = { id: doc.id, ...doc.data() };
+    if (!canAccess(note, req.user)) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+    res.json({ success: true, note: sanitizeNote(note) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
