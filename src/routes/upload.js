@@ -28,15 +28,49 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB standard Cloud Bot limit (larger handled via Local Bot API)
+  limits: { fileSize: 100 * 1024 * 1024 }, // Ingest up to 100MB safely
 });
 
-router.post("/", optionalAuth, uploadLimiter, upload.single("file"), async (req, res) => {
+// Middleware wrapper that traps Multer LIMIT_FILE_SIZE and errors gracefully without crashing 500
+const handleUploadMiddleware = (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+          success: false,
+          code: "FILE_TOO_LARGE",
+          message: "File exceeds 100MB limit. For large textbooks and video archives, send them directly to our Telegram Bot @TechTitanNotesBot (up to 2GB!) or use a Google Drive link.",
+          botLink: "https://t.me/TechTitanNotesBot"
+        });
+      }
+      return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
+    }
+    next();
+  });
+};
+
+router.post("/", optionalAuth, uploadLimiter, handleUploadMiddleware, async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: "No file attached for upload" });
   }
 
   const tempFilePath = req.file.path;
+
+  // Telegram Cloud Bot API strictly allows up to 50MB per document for web HTTP upload
+  if (req.file.size > 50 * 1024 * 1024) {
+    const sizeMb = (req.file.size / (1024 * 1024)).toFixed(1);
+    // Delete temp file immediately
+    fs.unlink(tempFilePath, () => {});
+
+    return res.status(413).json({
+      success: false,
+      code: "TELEGRAM_WEB_LIMIT_EXCEEDED",
+      fileSizeMb: Number(sizeMb),
+      message: `File is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Drop it directly into our Telegram Bot @TechTitanNotesBot for up to 2GB (2000 MB) uploads with 50+ MB/s speed, or use a Google Drive link!`,
+      botUsername: "TechTitanNotesBot",
+      botLink: "https://t.me/TechTitanNotesBot"
+    });
+  }
 
   try {
     const {

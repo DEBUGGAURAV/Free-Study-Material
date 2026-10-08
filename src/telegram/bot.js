@@ -7,8 +7,21 @@ if (!token) {
   throw new Error("TELEGRAM_BOT_TOKEN is missing");
 }
 
+const https = require("https");
+
+const agent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 60000,
+  maxSockets: 50,
+  maxFreeSockets: 20,
+  timeout: 60000
+});
+
 const bot = new TelegramBot(token, {
-  polling: true
+  polling: true,
+  request: {
+    agent
+  }
 });
 
 bot.on("polling_error", (error) => {

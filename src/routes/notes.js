@@ -167,10 +167,16 @@ const handleDownload = async (req, res) => {
     // Direct Stream through server fallback
     const stream = bot.getFileStream(note.telegramFileId);
 
-    // Smart Cache Headers: Edge stream caches file for 7 days with background revalidation
+    // Smart Cache & Multi-Stream Acceleration Headers
     res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
     res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
     res.setHeader("Content-Type", "application/octet-stream");
+    if (note.fileSize) {
+      res.setHeader("Content-Length", note.fileSize);
+    }
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.setHeader("Connection", "keep-alive");
 
     stream.on("error", async (err) => {
       console.error("[Notes Download] Telegram stream error:", err.message);

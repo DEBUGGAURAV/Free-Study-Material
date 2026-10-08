@@ -46,6 +46,9 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [benchmarkResult, setBenchmarkResult] = useState(null);
 
+  // Large File Detection (> 50MB)
+  const [largeFileAlert, setLargeFileAlert] = useState(null);
+
   const subjectOptions = folders.length > 0 
     ? [...new Set([...folders.map(f => f.subject), ...defaultSubjects])] 
     : defaultSubjects;
@@ -55,6 +58,17 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
       const selected = e.target.files[0];
       setFile(selected);
       setErrorMsg('');
+
+      if (selected.size > 50 * 1024 * 1024) {
+        const sizeMb = (selected.size / (1024 * 1024)).toFixed(1);
+        setLargeFileAlert({
+          sizeMb,
+          fileName: selected.name
+        });
+      } else {
+        setLargeFileAlert(null);
+      }
+
       if (!title) {
         const cleanName = selected.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
         setTitle(cleanName);
@@ -68,6 +82,17 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
       const dropped = e.dataTransfer.files[0];
       setFile(dropped);
       setErrorMsg('');
+
+      if (dropped.size > 50 * 1024 * 1024) {
+        const sizeMb = (dropped.size / (1024 * 1024)).toFixed(1);
+        setLargeFileAlert({
+          sizeMb,
+          fileName: dropped.name
+        });
+      } else {
+        setLargeFileAlert(null);
+      }
+
       if (!title) {
         const cleanName = dropped.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
         setTitle(cleanName);
@@ -93,6 +118,16 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
 
     if (uploadMode === 'telegram' && !file) {
       setErrorMsg('Please select or drop a PDF document file to upload.');
+      return;
+    }
+
+    if (uploadMode === 'telegram' && file && file.size > 50 * 1024 * 1024) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setErrorMsg(`This document is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Please use the @TechTitanNotesBot (up to 2GB) or Google Drive link option below!`);
+      setLargeFileAlert({
+        sizeMb,
+        fileName: file.name
+      });
       return;
     }
 
@@ -180,6 +215,12 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
       setFile(null);
       setDriveLink('');
     } catch (err) {
+      if (err.message && (err.message.includes("50MB") || err.message.includes("FILE_TOO_LARGE") || err.message.includes("TELEGRAM_WEB_LIMIT") || err.message.includes("too large") || err.message.includes("413"))) {
+        setLargeFileAlert({
+          sizeMb: file ? (file.size / (1024 * 1024)).toFixed(1) : "50+",
+          fileName: file ? file.name : "Document"
+        });
+      }
       setErrorMsg(err.message || 'Upload failed. Please check your network and try again.');
     } finally {
       setIsUploading(false);
@@ -565,6 +606,76 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
         </div>
       )}
 
+      {/* LARGE FILE ACCELERATOR CARD (Triggered when file > 50MB) */}
+      {largeFileAlert && (
+        <div className="large-file-accelerator-card">
+          <div className="accelerator-header">
+            <span className="accelerator-tag">
+              <Zap size={13} />
+              Large File Accelerator ({largeFileAlert.sizeMb} MB)
+            </span>
+            <button
+              type="button"
+              onClick={() => setLargeFileAlert(null)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: '4px' }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+            Telegram's standard Bot API limits direct browser uploads to <strong>50 MB</strong>. For your <strong>{largeFileAlert.sizeMb} MB</strong> document, use one of our two instant high-speed options:
+          </p>
+
+          <div className="accelerator-grid">
+            <div className="accelerator-option">
+              <div>
+                <strong style={{ color: '#00f2fe', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <CloudLightning size={16} />
+                  1. Telegram Bot (Up to 2 GB)
+                </strong>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: '6px 0 12px' }}>
+                  Send this file directly to <strong>@TechTitanNotesBot</strong> in Telegram. Native MTProto streams up to 2,000 MB at 40+ MB/s and automatically publishes it to the site in seconds!
+                </p>
+              </div>
+              <a
+                href="https://t.me/TechTitanNotesBot"
+                target="_blank"
+                rel="noreferrer"
+                className="button button-primary compact-button"
+                style={{ width: '100%', justifyContent: 'center' }}
+              >
+                <span>Send to @TechTitanNotesBot</span>
+                <ArrowUpRight size={14} />
+              </a>
+            </div>
+
+            <div className="accelerator-option">
+              <div>
+                <strong style={{ color: '#34d399', fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <LinkIcon size={16} />
+                  2. Google Drive / Cloud Link
+                </strong>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: '6px 0 12px' }}>
+                  Paste a shareable Google Drive link. Zero size limits and instant 100+ MB/s download stream for all students.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button button-secondary compact-button"
+                style={{ width: '100%', justifyContent: 'center' }}
+                onClick={() => {
+                  setUploadMode('drive');
+                  setLargeFileAlert(null);
+                }}
+              >
+                <span>Switch to Drive Mode</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleUpload}>
         {/* Document Title */}
         <div className="form-group">
@@ -660,9 +771,15 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
                     <strong style={{ color: 'var(--text-pure)', fontSize: '0.92rem', display: 'block' }}>
                       {file.name}
                     </strong>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-                      {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for High-Speed CDN & Telegram
-                    </span>
+                    {file.size > 50 * 1024 * 1024 ? (
+                      <span style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <AlertCircle size={13} /> {(file.size / (1024 * 1024)).toFixed(2)} MB • Exceeds 50MB web limit (Use Bot or Drive)
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
+                        {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for High-Speed CDN & Telegram
+                      </span>
+                    )}
                   </div>
                 </div>
 

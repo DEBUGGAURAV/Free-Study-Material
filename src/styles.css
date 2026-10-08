@@ -1410,6 +1410,67 @@ button {
   margin-top: 16px;
 }
 
+/* Large File Accelerator Card (50MB+ to 2GB) */
+.large-file-accelerator-card {
+  background: linear-gradient(145deg, rgba(30, 20, 10, 0.9) 0%, rgba(18, 25, 45, 0.95) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.15);
+  animation: fadeIn 0.3s ease;
+}
+
+.accelerator-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.accelerator-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+}
+
+.accelerator-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .accelerator-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.accelerator-option {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.accelerator-option:hover {
+  border-color: rgba(0, 242, 254, 0.4);
+  background: rgba(255, 255, 255, 0.07);
+}
+
 /* ===================================================================
    CAMPUS NOTICE BOARD
    =================================================================== */
