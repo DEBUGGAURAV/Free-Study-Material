@@ -7,16 +7,31 @@ const { auth } = require("../middleware/auth");
 
 const jwtSecret = process.env.JWT_SECRET || "fallback_secret";
 
-// Helper: Find user document in Firestore by normalized email
+// Helper: Find user document in Firestore by normalized email or username
 async function findUserByEmail(normalizedEmail) {
-  const docId = Buffer.from(normalizedEmail).toString("base64url");
+  const input = String(normalizedEmail || "").toLowerCase().trim();
+
+  // 1. Alias: Allow logging in with username "admin" or "gaurav"
+  if (input === "admin" || input === "gaurav") {
+    const primaryAdminId = Buffer.from("aky435316@gmail.com").toString("base64url");
+    const primaryDoc = await db.collection("users").doc(primaryAdminId).get();
+    if (primaryDoc.exists) {
+      return { id: primaryDoc.id, ...primaryDoc.data() };
+    }
+    const adminSnap = await db.collection("users").where("role", "==", "admin").limit(1).get();
+    if (!adminSnap.empty) {
+      return { id: adminSnap.docs[0].id, ...adminSnap.docs[0].data() };
+    }
+  }
+
+  const docId = Buffer.from(input).toString("base64url");
   const docSnap = await db.collection("users").doc(docId).get();
   if (docSnap.exists) {
     return { id: docSnap.id, ...docSnap.data() };
   }
 
   // Fallback: Query by email property
-  const qSnap = await db.collection("users").where("email", "==", normalizedEmail).get();
+  const qSnap = await db.collection("users").where("email", "==", input).get();
   if (!qSnap.empty) {
     // If multiple exist, prioritize document with passwordHash
     const match = qSnap.docs.find(d => d.data().passwordHash) || qSnap.docs[0];
