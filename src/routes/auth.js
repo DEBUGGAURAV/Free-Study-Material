@@ -11,16 +11,21 @@ const jwtSecret = process.env.JWT_SECRET || "fallback_secret";
 async function findUserByEmail(normalizedEmail) {
   const input = String(normalizedEmail || "").toLowerCase().trim();
 
-  // 1. Alias: Allow logging in with username "admin" or "gaurav"
-  if (input === "admin" || input === "gaurav") {
-    const primaryAdminId = Buffer.from("aky435316@gmail.com").toString("base64url");
+  // 1. Alias: Allow logging in with username "admin", "jnplotus", or "mainadmin" (Primary Main Admin)
+  if (input === "admin" || input === "jnplotus" || input === "mainadmin") {
+    const primaryAdminId = Buffer.from("jnplotus@gmail.com").toString("base64url");
     const primaryDoc = await db.collection("users").doc(primaryAdminId).get();
     if (primaryDoc.exists) {
       return { id: primaryDoc.id, ...primaryDoc.data() };
     }
-    const adminSnap = await db.collection("users").where("role", "==", "admin").limit(1).get();
-    if (!adminSnap.empty) {
-      return { id: adminSnap.docs[0].id, ...adminSnap.docs[0].data() };
+  }
+
+  // 2. Secondary admin alias
+  if (input === "gaurav") {
+    const gauravId = Buffer.from("aky435316@gmail.com").toString("base64url");
+    const gauravDoc = await db.collection("users").doc(gauravId).get();
+    if (gauravDoc.exists) {
+      return { id: gauravDoc.id, ...gauravDoc.data() };
     }
   }
 
