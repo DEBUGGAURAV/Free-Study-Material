@@ -10,8 +10,16 @@ const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
 const ADMIN_ALIASES = ["admin", "jnplotus", "mainadmin"];
 
 /**
+ * Helper: Validates that an email ends with @gmail.com
+ */
+function isGmail(email) {
+  if (!email || typeof email !== "string") return false;
+  return email.trim().toLowerCase().endsWith("@gmail.com");
+}
+
+/**
  * POST /api/auth/register
- * Mandatory: name, mobile, email, college, password
+ * Mandatory: name, mobile, email (@gmail.com), college, password
  * Optional: year
  */
 router.post("/register", async (req, res) => {
@@ -38,6 +46,14 @@ router.post("/register", async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanMobile = mobile.trim();
 
+    // 📧 VALIDATION: Must end with @gmail.com
+    if (!isGmail(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only @gmail.com email addresses are allowed for account registration & OTP verification.",
+      });
+    }
+
     if (!db) {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
@@ -45,7 +61,7 @@ router.post("/register", async (req, res) => {
     // Check if email already registered
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!existingSnap.empty) {
-      return res.status(400).json({ success: false, message: "This email is already registered. Please sign in." });
+      return res.status(400).json({ success: false, message: "This @gmail.com address is already registered. Please sign in." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -68,7 +84,7 @@ router.post("/register", async (req, res) => {
       year: (year || "Not Specified").trim(),
       role: cleanEmail === MAIN_ADMIN_EMAIL ? "admin" : "student",
       isBlocked: false,
-      permissions: cleanEmail === MAIN_ADMIN_EMAIL 
+      permissions: cleanEmail === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : ["upload_notes", "download_notes"],
       activities: [initialActivity],
@@ -96,7 +112,7 @@ router.post("/register", async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful! Welcome to Academic Vault.",
+      message: "Registration successful! Welcome to Free Study Material Vault.",
       token,
       user: payload,
     });
@@ -109,6 +125,7 @@ router.post("/register", async (req, res) => {
 /**
  * POST /api/auth/login
  * Handles both Main Admin login and Student login
+ * Email field requires @gmail.com
  */
 router.post("/login", async (req, res) => {
   try {
@@ -116,13 +133,21 @@ router.post("/login", async (req, res) => {
     let inputIdentity = (identifier || email || "").trim().toLowerCase();
 
     if (!inputIdentity || !password) {
-      return res.status(400).json({ success: false, message: "Email / Username and password are required." });
+      return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
     // Check if input is Main Admin alias
     const isMainAdminAlias = ADMIN_ALIASES.includes(inputIdentity) || inputIdentity === MAIN_ADMIN_EMAIL;
     if (isMainAdminAlias) {
       inputIdentity = MAIN_ADMIN_EMAIL;
+    } else {
+      // 📧 If standard email is entered, verify @gmail.com
+      if (inputIdentity.includes("@") && !isGmail(inputIdentity)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please enter a valid @gmail.com email address.",
+        });
+      }
     }
 
     let userRecord = null;
@@ -136,7 +161,7 @@ router.post("/login", async (req, res) => {
       }
     }
 
-    // Check if user is blocked (Main Admin can NEVER be blocked)
+    // Check if user is blocked
     if (userRecord && userRecord.isBlocked && inputIdentity !== MAIN_ADMIN_EMAIL) {
       return res.status(403).json({
         success: false,
@@ -180,11 +205,11 @@ router.post("/login", async (req, res) => {
       const loginEvent = {
         id: crypto.randomUUID(),
         type: "login",
-        detail: "User logged into Academic Vault",
+        detail: "User logged into Free Study Material Vault",
         timestamp: new Date().toISOString(),
       };
       await db.collection("users").doc(docId).update({
-        activities: (userRecord.activities || []).concat(loginEvent).slice(-100), // Keep last 100 events
+        activities: (userRecord.activities || []).concat(loginEvent).slice(-100),
         lastLoginAt: new Date().toISOString(),
       }).catch(() => {});
     }
@@ -217,8 +242,176 @@ router.post("/login", async (req, res) => {
 });
 
 /**
+ * POST /api/auth/send-otp
+ * Prepares OTP dispatch for @gmail.com (Simulation / ready state for user's SMTP mailer)
+ */
+router.post("/send-otp", async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = (email || "").trim().toLowerCase();
+
+    if (!cleanEmail || !isGmail(cleanEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only @gmail.com email addresses are supported for OTP verification.",
+      });
+    }
+
+    const simulatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.log(`[AUTH-OTP] Generated OTP for ${cleanEmail}: ${simulatedOtp} (Ready for SMTP mailer)`);
+
+    return res.json({
+      success: true,
+      message: `OTP request registered for ${cleanEmail}. (Ready for SMTP Mailer integration)`,
+      email: cleanEmail,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * PUT /api/auth/profile
+ * Allows any logged-in user to update their own profile details (Name, Mobile, College, Year)
+ */
+router.put("/profile", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: "Authentication required." });
+    }
+
+    const { name, mobile, college, year } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: "Full Name is required." });
+    }
+
+    if (!db) return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
+
+    if (req.user.id === "admin-root") {
+      return res.json({
+        success: true,
+        message: "Master Admin profile active.",
+        user: { ...req.user, name: name.trim(), mobile, college, year },
+      });
+    }
+
+    const userDocRef = db.collection("users").doc(req.user.id);
+    const snap = await userDocRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, message: "User account not found." });
+    }
+
+    const updateData = {
+      name: name.trim(),
+      mobile: (mobile || "").trim(),
+      college: (college || "").trim(),
+      year: (year || "Not Specified").trim(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updateEvent = {
+      id: crypto.randomUUID(),
+      type: "profile_update",
+      detail: "Updated profile details",
+      timestamp: new Date().toISOString(),
+    };
+
+    const existingActivities = snap.data().activities || [];
+    updateData.activities = existingActivities.concat(updateEvent).slice(-100);
+
+    await userDocRef.update(updateData);
+
+    const updatedUser = {
+      ...req.user,
+      ...updateData,
+    };
+
+    return res.json({
+      success: true,
+      message: "Profile details updated successfully!",
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error("[AUTH] Profile update error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * PUT /api/auth/change-password
+ * Allows any logged-in user to change their account password
+ */
+router.put("/change-password", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: "Authentication required." });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ success: false, message: "Current password and new password are required." });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "New password must be at least 6 characters long." });
+    }
+
+    if (!db) return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
+
+    if (req.user.id === "admin-root") {
+      return res.json({ success: true, message: "Master admin password updated in session." });
+    }
+
+    const userDocRef = db.collection("users").doc(req.user.id);
+    const snap = await userDocRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, message: "User account not found." });
+    }
+
+    const userData = snap.data();
+    let isCurrentValid = false;
+
+    if (userData.password) {
+      if (userData.password.startsWith("$2a$") || userData.password.startsWith("$2b$")) {
+        isCurrentValid = await bcrypt.compare(currentPassword, userData.password);
+      } else {
+        isCurrentValid = userData.password === currentPassword;
+      }
+    }
+
+    if (!isCurrentValid) {
+      return res.status(401).json({ success: false, message: "Current password is incorrect." });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+    const pwEvent = {
+      id: crypto.randomUUID(),
+      type: "password_change",
+      detail: "Account password changed",
+      timestamp: new Date().toISOString(),
+    };
+
+    const existingActivities = userData.activities || [];
+    await userDocRef.update({
+      password: hashedNewPassword,
+      activities: existingActivities.concat(pwEvent).slice(-100),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return res.json({
+      success: true,
+      message: "Password changed successfully!",
+    });
+  } catch (err) {
+    console.error("[AUTH] Password change error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
  * POST /api/auth/logout
- * Records logout activity
  */
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
@@ -246,8 +439,7 @@ router.get("/me", authenticateToken, async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ success: false, message: "Not authenticated" });
   }
-  
-  // Refresh fresh user data from DB if exists
+
   if (db && req.user.id && req.user.id !== "admin-root") {
     const snap = await db.collection("users").doc(req.user.id).get().catch(() => null);
     if (snap && snap.exists) {

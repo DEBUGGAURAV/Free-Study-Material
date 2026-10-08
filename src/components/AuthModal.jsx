@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, UserPlus, LogIn, Mail, Lock, User, Phone, School, Calendar, AlertCircle } from "lucide-react";
+import { X, UserPlus, LogIn, Mail, Lock, User, Phone, School, Calendar, AlertCircle, CheckCircle2, Send } from "lucide-react";
 import { api } from "../api";
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = "signin" }) {
@@ -19,12 +19,30 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const [year, setYear] = useState("1st Year");
   const [signUpPassword, setSignUpPassword] = useState("");
 
+  // OTP State (Prepared for user's future mailer integration)
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpMessage, setOtpMessage] = useState(null);
+
   if (!isOpen) return null;
+
+  const isGmail = (str) => {
+    if (!str) return false;
+    return str.trim().toLowerCase().endsWith("@gmail.com");
+  };
 
   const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    const cleanInput = signInIdentifier.trim().toLowerCase();
+
+    // Check @gmail.com if standard email is entered (exempt admin alias)
+    if (cleanInput.includes("@") && !isGmail(cleanInput)) {
+      setLoading(false);
+      return setError("Email must end with @gmail.com (e.g. yourname@gmail.com).");
+    }
 
     try {
       const res = await api.login(signInIdentifier, signInPassword);
@@ -42,12 +60,27 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setLoading(true);
     setError(null);
 
-    // Validation
-    if (!name.trim()) return setError("Full Name is mandatory.");
-    if (!mobile.trim() || mobile.trim().length < 10) return setError("Valid 10-digit Mobile Number is mandatory.");
-    if (!email.trim() || !email.includes("@")) return setError("Valid Email Address is mandatory.");
-    if (!college.trim()) return setError("College Name is mandatory.");
-    if (!signUpPassword || signUpPassword.length < 6) return setError("Password must be at least 6 characters.");
+    // Strict Validations
+    if (!name.trim()) {
+      setLoading(false);
+      return setError("Full Name is mandatory.");
+    }
+    if (!mobile.trim() || mobile.trim().length < 10) {
+      setLoading(false);
+      return setError("Valid 10-digit Mobile Number is mandatory.");
+    }
+    if (!email.trim() || !isGmail(email)) {
+      setLoading(false);
+      return setError("Email MUST end with @gmail.com (Required for OTP verification).");
+    }
+    if (!college.trim()) {
+      setLoading(false);
+      return setError("College Name is mandatory.");
+    }
+    if (!signUpPassword || signUpPassword.length < 6) {
+      setLoading(false);
+      return setError("Password must be at least 6 characters.");
+    }
 
     try {
       const res = await api.register({
@@ -68,18 +101,38 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     }
   };
 
+  const handleRequestOtp = async (targetEmail) => {
+    if (!targetEmail || !isGmail(targetEmail)) {
+      setError("Please enter a valid @gmail.com address to request OTP.");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError(null);
+
+    try {
+      const res = await api.sendOtp(targetEmail);
+      setOtpSent(true);
+      setOtpMessage(res.message);
+    } catch (err) {
+      setError(err.message || "Failed to dispatch OTP.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content"
-        style={{ maxWidth: "480px" }}
+        style={{ maxWidth: "490px" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
           <div style={{ display: "flex", gap: "8px" }}>
             <button
               className={`filter-tab ${tab === "signin" ? "active" : ""}`}
-              onClick={() => { setTab("signin"); setError(null); }}
+              onClick={() => { setTab("signin"); setError(null); setOtpMessage(null); }}
               type="button"
             >
               <LogIn size={15} style={{ marginRight: "4px" }} />
@@ -87,7 +140,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             </button>
             <button
               className={`filter-tab ${tab === "signup" ? "active" : ""}`}
-              onClick={() => { setTab("signup"); setError(null); }}
+              onClick={() => { setTab("signup"); setError(null); setOtpMessage(null); }}
               type="button"
             >
               <UserPlus size={15} style={{ marginRight: "4px" }} />
@@ -100,6 +153,25 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
           </button>
         </div>
 
+        {/* Gmail OTP Notice Badge */}
+        <div
+          style={{
+            background: "rgba(6, 182, 212, 0.08)",
+            border: "1px solid rgba(6, 182, 212, 0.25)",
+            borderRadius: "var(--radius-sm)",
+            padding: "8px 12px",
+            marginBottom: "14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            fontSize: "0.78rem",
+            color: "var(--accent-cyan)",
+          }}
+        >
+          <Mail size={15} style={{ flexShrink: 0 }} />
+          <span><strong>Gmail Verification:</strong> Email field me <strong>@gmail.com</strong> zaroori hai.</span>
+        </div>
+
         {error && (
           <div
             style={{
@@ -108,7 +180,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               color: "#f43f5e",
               padding: "10px 14px",
               borderRadius: "var(--radius-md)",
-              marginBottom: "16px",
+              marginBottom: "14px",
               fontSize: "0.85rem",
               display: "flex",
               alignItems: "center",
@@ -120,21 +192,42 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
           </div>
         )}
 
+        {otpMessage && (
+          <div
+            style={{
+              background: "rgba(16, 185, 129, 0.12)",
+              border: "1px solid rgba(16, 185, 129, 0.35)",
+              color: "#10b981",
+              padding: "10px 14px",
+              borderRadius: "var(--radius-md)",
+              marginBottom: "14px",
+              fontSize: "0.82rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <CheckCircle2 size={16} />
+            <span>{otpMessage}</span>
+          </div>
+        )}
+
         {tab === "signin" ? (
           /* Sign In Form */
           <form onSubmit={handleSignIn}>
             <div className="form-group">
-              <label className="form-label">Email or Admin Alias *</label>
-              <div style={{ position: "relative" }}>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="student@college.edu or admin"
-                  value={signInIdentifier}
-                  onChange={(e) => setSignInIdentifier(e.target.value)}
-                  required
-                />
-              </div>
+              <label className="form-label">Gmail Address or Admin Alias *</label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="yourname@gmail.com or admin"
+                value={signInIdentifier}
+                onChange={(e) => setSignInIdentifier(e.target.value)}
+                required
+              />
+              <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "3px" }}>
+                Must be an <strong>@gmail.com</strong> address (or admin alias).
+              </span>
             </div>
 
             <div className="form-group">
@@ -163,7 +256,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               ) : (
                 <>
                   <LogIn size={16} />
-                  <span>Sign In to Vault</span>
+                  <span>Sign In to Free Study Material</span>
                 </>
               )}
             </button>
@@ -186,7 +279,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <input
                 type="text"
                 className="form-input"
-                placeholder="e.g. Rahul Sharma"
+                placeholder="e.g. Rahul Yadav"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -208,11 +301,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               </div>
 
               <div className="form-group">
-                <label className="form-label">Email Address *</label>
+                <label className="form-label">Gmail Address * (@gmail.com must)</label>
                 <input
                   type="email"
                   className="form-input"
-                  placeholder="student@college.edu"
+                  placeholder="name@gmail.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -296,4 +389,3 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     </div>
   );
 }
-

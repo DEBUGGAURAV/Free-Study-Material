@@ -8,6 +8,7 @@ export default function Navbar({
   onOpenAdmin,
   onOpenNotices,
   onOpenAuth,
+  onOpenProfile,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -99,7 +100,11 @@ export default function Navbar({
                   border: "1px solid var(--border-subtle)",
                   borderRadius: "var(--radius-full)",
                   padding: "6px 12px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
                 }}
+                onClick={onOpenProfile}
+                title="Edit My Profile & Password"
               >
                 <div
                   style={{
@@ -122,7 +127,7 @@ export default function Navbar({
                     {currentUser.name?.split(" ")[0] || currentUser.email?.split("@")[0]}
                   </span>
                   <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>
-                    {currentUser.role === "admin" ? "Admin" : currentUser.college ? currentUser.college.substring(0, 16) + "..." : "Student"}
+                    {currentUser.role === "admin" ? "Admin" : currentUser.college ? currentUser.college.substring(0, 16) + "..." : "Student"} • Settings
                   </span>
                 </div>
               </div>

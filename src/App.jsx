@@ -8,6 +8,7 @@ import PreviewModal from "./components/PreviewModal";
 import AdminModal from "./components/AdminModal";
 import NoticeBoardModal from "./components/NoticeBoardModal";
 import AuthModal from "./components/AuthModal";
+import ProfileModal from "./components/ProfileModal";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
 import { BookOpen, ChevronDown, ChevronUp, Bell } from "lucide-react";
@@ -26,6 +27,7 @@ export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isNoticeBoardOpen, setIsNoticeBoardOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [previewNote, setPreviewNote] = useState(null);
 
   // User & Notices
@@ -110,6 +112,7 @@ export default function App() {
         }}
         onOpenNotices={() => setIsNoticeBoardOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
         noticeCount={notices.length}
@@ -288,6 +291,15 @@ export default function App() {
         onAuthSuccess={(user) => {
           setCurrentUser(user);
           fetchNotes();
+        }}
+      />
+
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        currentUser={currentUser}
+        onProfileUpdated={(updated) => {
+          setCurrentUser(updated);
         }}
       />
 

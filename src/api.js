@@ -100,6 +100,29 @@ export const api = {
 
   getMe: () => request("/auth/me"),
 
+  updateProfile: async (profileData) => {
+    const data = await request("/auth/profile", {
+      method: "PUT",
+      body: JSON.stringify(profileData),
+    });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  changePassword: (passwordData) =>
+    request("/auth/change-password", {
+      method: "PUT",
+      body: JSON.stringify(passwordData),
+    }),
+
+  sendOtp: (email) =>
+    request("/auth/send-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
   // Notes
   getBranches: async () => {
     const cached = clientMemoryCache.get("branches");
