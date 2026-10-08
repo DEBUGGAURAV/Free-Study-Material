@@ -40,25 +40,84 @@ async function syncTelegramDocument(msg) {
   const cleanTitle = caption || fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
 
   // Intelligent Subject & Year Detection
-  let subject = "Cloud Computing (CC)";
+  let subject = "General Engineering";
   let year = "1st year";
 
   const lowerText = `${fileName} ${caption}`.toLowerCase();
-  if (lowerText.includes("cc") || lowerText.includes("cloud")) subject = "Cloud Computing (CC)";
-  else if (lowerText.includes("cns") || lowerText.includes("crypto") || lowerText.includes("security")) subject = "Cryptography (CNS)";
-  else if (lowerText.includes("ai") || lowerText.includes("intelligence")) subject = "Artificial Intelligence (AI)";
-  else if (lowerText.includes("deep") || lowerText.includes("dl") || lowerText.includes("learning")) subject = "Deep Learning";
-  else if (lowerText.includes("dsa") || lowerText.includes("data struct") || lowerText.includes("algorithm")) subject = "Data Structures";
-  else if (lowerText.includes("dbms") || lowerText.includes("database")) subject = "DBMS";
 
-  if (lowerText.includes("1st") || lowerText.includes("1 year") || lowerText.includes("first")) year = "1st year";
-  else if (lowerText.includes("2nd") || lowerText.includes("2 year") || lowerText.includes("second")) year = "2nd year";
-  else if (lowerText.includes("3rd") || lowerText.includes("3 year") || lowerText.includes("third")) year = "3rd year";
-  else if (lowerText.includes("4th") || lowerText.includes("4 year") || lowerText.includes("final")) year = "4th year";
+  // Check explicit subject in caption (e.g. "Subject: Operating Systems" or "Sub: DBMS")
+  const explicitSubMatch = caption.match(/(?:subject|sub|course):\s*([^\n\r,]+)/i);
+  if (explicitSubMatch && explicitSubMatch[1]) {
+    subject = explicitSubMatch[1].trim();
+  } else if (lowerText.includes("cc") || lowerText.includes("cloud")) {
+    subject = "Cloud Computing (CC)";
+  } else if (lowerText.includes("cns") || lowerText.includes("crypto") || lowerText.includes("security") || lowerText.includes("cyber")) {
+    subject = "Cryptography (CNS)";
+  } else if (lowerText.includes("ai") || lowerText.includes("intelligence")) {
+    subject = "Artificial Intelligence (AI)";
+  } else if (lowerText.includes("deep") || lowerText.includes("dl") || lowerText.includes("neural")) {
+    subject = "Deep Learning";
+  } else if (lowerText.includes("dsa") || lowerText.includes("data struct") || lowerText.includes("algorithm")) {
+    subject = "Data Structures & Algorithms";
+  } else if (lowerText.includes("dbms") || lowerText.includes("database") || lowerText.includes("sql")) {
+    subject = "Database Management (DBMS)";
+  } else if (lowerText.includes("os") || lowerText.includes("operating system") || lowerText.includes("linux")) {
+    subject = "Operating Systems (OS)";
+  } else if (lowerText.includes("cn") || lowerText.includes("network") || lowerText.includes("tcp")) {
+    subject = "Computer Networks (CN)";
+  } else if (lowerText.includes("math") || lowerText.includes("calculus") || lowerText.includes("discrete")) {
+    subject = "Engineering Mathematics";
+  } else if (lowerText.includes("web") || lowerText.includes("html") || lowerText.includes("react") || lowerText.includes("javascript")) {
+    subject = "Web Development";
+  } else if (lowerText.includes("python")) {
+    subject = "Python Programming";
+  } else if (lowerText.includes("java")) {
+    subject = "Java Programming";
+  }
+
+  // Year Detection
+  if (lowerText.includes("1st") || lowerText.includes("1 year") || lowerText.includes("first") || lowerText.includes("sem 1") || lowerText.includes("sem 2")) {
+    year = "1st year";
+  } else if (lowerText.includes("2nd") || lowerText.includes("2 year") || lowerText.includes("second") || lowerText.includes("sem 3") || lowerText.includes("sem 4")) {
+    year = "2nd year";
+  } else if (lowerText.includes("3rd") || lowerText.includes("3 year") || lowerText.includes("third") || lowerText.includes("sem 5") || lowerText.includes("sem 6")) {
+    year = "3rd year";
+  } else if (lowerText.includes("4th") || lowerText.includes("4 year") || lowerText.includes("final") || lowerText.includes("sem 7") || lowerText.includes("sem 8")) {
+    year = "4th year";
+  }
+
+  // Auto-find or create the corresponding subject folder in Firestore
+  let folderId = "";
+  try {
+    const folderSnap = await db.collection("folders")
+      .where("subject", "==", subject)
+      .limit(1)
+      .get();
+
+    if (!folderSnap.empty) {
+      folderId = folderSnap.docs[0].id;
+      const folderData = folderSnap.docs[0].data();
+      if (folderData.year && !lowerText.includes("year") && !lowerText.includes("sem") && !lowerText.includes("1st") && !lowerText.includes("2nd") && !lowerText.includes("3rd") && !lowerText.includes("4th")) {
+        year = folderData.year;
+      }
+      console.log(`[Telegram Auto-Sync] 📁 Matched existing folder "${subject}" (${year}) (ID: ${folderId})`);
+    } else {
+      const newFolder = await db.collection("folders").add({
+        subject,
+        year,
+        createdAt: new Date().toISOString()
+      });
+      folderId = newFolder.id;
+      console.log(`[Telegram Auto-Sync] 📁 Auto-created subject folder "${subject}" for ${year} (ID: ${folderId})`);
+    }
+  } catch (fErr) {
+    console.warn("[Telegram Auto-Sync] Folder lookup/create error:", fErr.message);
+  }
 
   const noteDoc = {
     title: cleanTitle,
     subject,
+    folderId,
     year,
     branch: "CSE",
     semester: 1,

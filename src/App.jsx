@@ -47,7 +47,10 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('tech-titan-session') || 'null'); } catch { return null; }
   });
   const [liveNotes, setLiveNotes] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('tech-titan-notes-cache') || '[]'); } catch { return []; }
+    try {
+      const cached = JSON.parse(localStorage.getItem('tech-titan-notes-cache') || '[]');
+      return Array.isArray(cached) ? cached : (cached?.notes || []);
+    } catch { return []; }
   });
   const [folders, setFolders] = useState(() => {
     try { return JSON.parse(localStorage.getItem('tech-titan-folders-cache') || '[]'); } catch { return []; }
@@ -74,9 +77,10 @@ export default function App() {
       try {
         const token = session?.token || null;
         const fetchedNotes = await getNotes(token);
-        if (active && fetchedNotes) {
-          setLiveNotes(fetchedNotes);
-          try { localStorage.setItem('tech-titan-notes-cache', JSON.stringify(fetchedNotes)); } catch {}
+        if (active) {
+          const notesArr = Array.isArray(fetchedNotes) ? fetchedNotes : (fetchedNotes?.notes || []);
+          setLiveNotes(notesArr);
+          try { localStorage.setItem('tech-titan-notes-cache', JSON.stringify(notesArr)); } catch {}
           setConnectionError('');
         }
       } catch (err) {

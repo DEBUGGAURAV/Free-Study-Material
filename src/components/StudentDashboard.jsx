@@ -12,7 +12,7 @@ import NoticeBoard from './NoticeBoard';
 
 export default function StudentDashboard({ 
   user, 
-  notes = [], 
+  notes: rawNotes = [], 
   folders = [], 
   notices = [], 
   token,
@@ -22,6 +22,12 @@ export default function StudentDashboard({
   activeView = 'home',
   onViewChange
 }) {
+  const notes = useMemo(() => {
+    if (Array.isArray(rawNotes)) return rawNotes;
+    if (rawNotes && Array.isArray(rawNotes.notes)) return rawNotes.notes;
+    return [];
+  }, [rawNotes]);
+
   // Navigation tabs: 'vault' (Notes) | 'upload' (Upload Studio) | 'radar' (Notices) | 'network' (Students)
   const [activeTab, setActiveTab] = useState(() => {
     if (activeView === 'notes') return 'vault';

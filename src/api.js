@@ -86,7 +86,12 @@ export const forgotPassword = (email) => request('/auth/forgot-password', { meth
 export const resetPassword = (token, password) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, password }) })
 
 // Fast cached GET requests
-export const getNotes = (token) => request('/notes', {}, token, true)
+export const getNotes = async (token) => {
+  const data = await request('/notes', {}, token, true);
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.notes)) return data.notes;
+  return [];
+};
 export const createNote = (note, token) => {
   invalidateCache('/notes');
   return request('/notes', { method: 'POST', body: JSON.stringify(note) }, token);

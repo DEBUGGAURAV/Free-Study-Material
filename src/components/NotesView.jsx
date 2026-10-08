@@ -8,11 +8,12 @@ export default function NotesView({
   connectionError, onRetry, onNoteAccess
 }) {
   const [showAllNotes, setShowAllNotes] = useState(false);
-  const studentFolders = folders;
+  const studentFolders = Array.isArray(folders) ? folders : [];
   const availableSubjects = ['All notes', ...new Set(studentFolders.map((folder) => folder.subject))];
   const selectedFolder = studentFolders.find((folder) => folder.subject === subject);
+  const safeNotes = Array.isArray(notes) ? notes : (notes?.notes || []);
 
-  const filteredNotes = notes.filter((note) =>
+  const filteredNotes = safeNotes.filter((note) =>
     (subject === 'All notes' || (selectedFolder && (note.folderId ? note.folderId === selectedFolder.id : note.subject === subject))) &&
     `${note.title} ${note.subject}`.toLowerCase().includes(search.toLowerCase())
   );

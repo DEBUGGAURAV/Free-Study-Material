@@ -83,10 +83,33 @@ router.post("/", optionalAuth, uploadLimiter, upload.single("file"), async (req,
         : JSON.parse(allowedUsers);
     }
 
+    // Auto-create or find folder
+    let folderId = "";
+    try {
+      const folderSnap = await db.collection("folders")
+        .where("subject", "==", noteSubject)
+        .limit(1)
+        .get();
+
+      if (!folderSnap.empty) {
+        folderId = folderSnap.docs[0].id;
+      } else {
+        const newFolder = await db.collection("folders").add({
+          subject: noteSubject,
+          year: typeof year === "number" ? `${year}st year` : String(year || "1st year"),
+          createdAt: new Date().toISOString()
+        });
+        folderId = newFolder.id;
+      }
+    } catch (fErr) {
+      console.warn("[Upload] Folder auto-create error:", fErr.message);
+    }
+
     // Prepare Firestore metadata record (Never stores raw file, only Telegram pointers)
     const noteDoc = {
       title: noteTitle,
       subject: noteSubject,
+      folderId,
       topic: (topic || "").trim(),
       year: Number(year) || 1,
       branch: (branch || "CSE").trim(),
