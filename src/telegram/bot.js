@@ -37,74 +37,105 @@ async function syncTelegramDocument(msg) {
   }
 
   // Derive title from caption or filename
+  // Derive title from caption or filename
   const cleanTitle = caption || fileName.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
-
-  // Intelligent Subject & Year Detection
-  let subject = "General Engineering";
-  let year = "1st year";
 
   const lowerText = `${fileName} ${caption}`.toLowerCase();
 
-  // Check explicit subject in caption (e.g. "Subject: Operating Systems" or "Sub: DBMS")
+  // 1. Explicit Year Detection
+  let explicitYear = null;
+  if (/\b(4th\s*year|fourth\s*year|year\s*4|4\s*yr|final\s*year|sem\s*[78]|semester\s*[78]|iv\s*year|7th\s*sem|8th\s*sem|\b4th\b|\bfinal\b)\b/i.test(lowerText)) {
+    explicitYear = "4th year";
+  } else if (/\b(3rd\s*year|third\s*year|year\s*3|3\s*yr|sem\s*[56]|semester\s*[56]|iii\s*year|5th\s*sem|6th\s*sem|\b3rd\b)\b/i.test(lowerText)) {
+    explicitYear = "3rd year";
+  } else if (/\b(2nd\s*year|second\s*year|year\s*2|2\s*yr|sem\s*[34]|semester\s*[34]|ii\s*year|3rd\s*sem|4th\s*sem|\b2nd\b)\b/i.test(lowerText)) {
+    explicitYear = "2nd year";
+  } else if (/\b(1st\s*year|first\s*year|year\s*1|1\s*yr|sem\s*[12]|semester\s*[12]|i\s*year|1st\s*sem|2nd\s*sem|\b1st\b)\b/i.test(lowerText)) {
+    explicitYear = "1st year";
+  }
+
+  // 2. Intelligent Subject Detection with strict word boundaries
+  let subject = "General Engineering";
+  let defaultYear = "4th year"; // Default senior engineering
+
   const explicitSubMatch = caption.match(/(?:subject|sub|course):\s*([^\n\r,]+)/i);
   if (explicitSubMatch && explicitSubMatch[1]) {
     subject = explicitSubMatch[1].trim();
-  } else if (lowerText.includes("cc") || lowerText.includes("cloud")) {
+  } else if (/\b(cloud\s*computing|cloud\s*tech|cloud\s*architecture|\bcc\b)\b/i.test(lowerText)) {
     subject = "Cloud Computing (CC)";
-  } else if (lowerText.includes("cns") || lowerText.includes("crypto") || lowerText.includes("security") || lowerText.includes("cyber")) {
+    defaultYear = "4th year";
+  } else if (/\b(cryptography|crypto|cns|cyber\s*sec|information\s*security|network\s*security)\b/i.test(lowerText)) {
     subject = "Cryptography (CNS)";
-  } else if (lowerText.includes("ai") || lowerText.includes("intelligence")) {
+    defaultYear = "4th year";
+  } else if (/\b(artificial\s*intelligence|\bai\b|machine\s*learning|\bml\b|heuristics)\b/i.test(lowerText)) {
     subject = "Artificial Intelligence (AI)";
-  } else if (lowerText.includes("deep") || lowerText.includes("dl") || lowerText.includes("neural")) {
+    defaultYear = "4th year";
+  } else if (/\b(deep\s*learning|\bdl\b|neural\s*network|cnn|rnn|transformers)\b/i.test(lowerText)) {
     subject = "Deep Learning";
-  } else if (lowerText.includes("dsa") || lowerText.includes("data struct") || lowerText.includes("algorithm")) {
-    subject = "Data Structures & Algorithms";
-  } else if (lowerText.includes("dbms") || lowerText.includes("database") || lowerText.includes("sql")) {
-    subject = "Database Management (DBMS)";
-  } else if (lowerText.includes("os") || lowerText.includes("operating system") || lowerText.includes("linux")) {
-    subject = "Operating Systems (OS)";
-  } else if (lowerText.includes("cn") || lowerText.includes("network") || lowerText.includes("tcp")) {
+    defaultYear = "4th year";
+  } else if (/\b(computer\s*networks?|\bcn\b|networking|tcp\s*\/?\s*ip|osi\s*model)\b/i.test(lowerText)) {
     subject = "Computer Networks (CN)";
-  } else if (lowerText.includes("math") || lowerText.includes("calculus") || lowerText.includes("discrete")) {
+    defaultYear = "4th year";
+  } else if (/\b(data\s*structures?|\bdsa\b|algorithms?|\bada\b|daa)\b/i.test(lowerText)) {
+    subject = "Data Structures & Algorithms";
+    defaultYear = "2nd year";
+  } else if (/\b(database|dbms|sql|nosql)\b/i.test(lowerText)) {
+    subject = "Database Management (DBMS)";
+    defaultYear = "2nd year";
+  } else if (/\b(operating\s*systems?|\bos\b|linux\s*kernel)\b/i.test(lowerText)) {
+    subject = "Operating Systems (OS)";
+    defaultYear = "2nd year";
+  } else if (/\b(engineering\s*mathematics|maths?|calculus|matrices|differential)\b/i.test(lowerText)) {
     subject = "Engineering Mathematics";
-  } else if (lowerText.includes("web") || lowerText.includes("html") || lowerText.includes("react") || lowerText.includes("javascript")) {
+    defaultYear = "1st year";
+  } else if (/\b(physics|laser|optics|quantum)\b/i.test(lowerText)) {
+    subject = "Engineering Physics";
+    defaultYear = "1st year";
+  } else if (/\b(chemistry|polymers)\b/i.test(lowerText)) {
+    subject = "Engineering Chemistry";
+    defaultYear = "1st year";
+  } else if (/\b(web\s*development|web\s*tech|html|react|javascript)\b/i.test(lowerText)) {
     subject = "Web Development";
-  } else if (lowerText.includes("python")) {
+    defaultYear = "3rd year";
+  } else if (/\b(python|python3)\b/i.test(lowerText)) {
     subject = "Python Programming";
-  } else if (lowerText.includes("java")) {
+    defaultYear = "2nd year";
+  } else if (/\b(java|oops?|object\s*oriented)\b/i.test(lowerText)) {
     subject = "Java Programming";
+    defaultYear = "2nd year";
   }
 
-  // Year Detection
-  if (lowerText.includes("1st") || lowerText.includes("1 year") || lowerText.includes("first") || lowerText.includes("sem 1") || lowerText.includes("sem 2")) {
-    year = "1st year";
-  } else if (lowerText.includes("2nd") || lowerText.includes("2 year") || lowerText.includes("second") || lowerText.includes("sem 3") || lowerText.includes("sem 4")) {
-    year = "2nd year";
-  } else if (lowerText.includes("3rd") || lowerText.includes("3 year") || lowerText.includes("third") || lowerText.includes("sem 5") || lowerText.includes("sem 6")) {
-    year = "3rd year";
-  } else if (lowerText.includes("4th") || lowerText.includes("4 year") || lowerText.includes("final") || lowerText.includes("sem 7") || lowerText.includes("sem 8")) {
-    year = "4th year";
-  }
+  let year = explicitYear || defaultYear;
 
   // Auto-find or create the corresponding subject folder in Firestore
   let folderId = "";
   try {
-    const folderSnap = await db.collection("folders")
+    let folderSnap = await db.collection("folders")
       .where("subject", "==", subject)
+      .where("year", "==", year)
       .limit(1)
       .get();
+
+    if (folderSnap.empty) {
+      folderSnap = await db.collection("folders")
+        .where("subject", "==", subject)
+        .limit(1)
+        .get();
+    }
 
     if (!folderSnap.empty) {
       folderId = folderSnap.docs[0].id;
       const folderData = folderSnap.docs[0].data();
-      if (folderData.year && !lowerText.includes("year") && !lowerText.includes("sem") && !lowerText.includes("1st") && !lowerText.includes("2nd") && !lowerText.includes("3rd") && !lowerText.includes("4th")) {
+      if (folderData.year && !explicitYear) {
         year = folderData.year;
       }
       console.log(`[Telegram Auto-Sync] 📁 Matched existing folder "${subject}" (${year}) (ID: ${folderId})`);
     } else {
       const newFolder = await db.collection("folders").add({
+        name: subject,
         subject,
         year,
+        createdBy: "telegram_sync",
         createdAt: new Date().toISOString()
       });
       folderId = newFolder.id;
@@ -221,6 +252,104 @@ bot.onText(/^\/id(@\S+)?/i, async (msg) => {
     await bot.sendMessage(msg.chat.id, text, options);
   } catch (err) {
     console.error("Error sending /id reply:", err.message);
+  }
+});
+
+// Match /delete, /del, or /remove command (reply to note file/message to delete it from website)
+bot.onText(/^\/(delete|del|remove)(@\S+)?(\s+(.+))?$/i, async (msg, match) => {
+  try {
+    const threadId = msg.message_thread_id;
+    const sendOptions = {
+      reply_to_message_id: msg.message_id,
+      parse_mode: "Markdown"
+    };
+    if (threadId) sendOptions.message_thread_id = threadId;
+
+    const queryArg = match && match[4] ? match[4].trim() : "";
+    const replyMsg = msg.reply_to_message;
+
+    let targetNoteSnap = null;
+    let targetDocRef = null;
+    let deletedNoteData = null;
+
+    // 1. Reply to a document message or note message
+    if (replyMsg) {
+      if (replyMsg.document && replyMsg.document.file_id) {
+        targetNoteSnap = await db.collection("notes")
+          .where("telegramFileId", "==", replyMsg.document.file_id)
+          .limit(1)
+          .get();
+      }
+      if ((!targetNoteSnap || targetNoteSnap.empty) && replyMsg.message_id) {
+        targetNoteSnap = await db.collection("notes")
+          .where("telegramMessageId", "==", replyMsg.message_id)
+          .limit(1)
+          .get();
+      }
+    }
+
+    // 2. Direct argument: note ID or exact title
+    if ((!targetNoteSnap || targetNoteSnap.empty) && queryArg) {
+      try {
+        const directDoc = await db.collection("notes").doc(queryArg).get();
+        if (directDoc.exists) {
+          targetDocRef = directDoc.ref;
+          deletedNoteData = directDoc.data();
+        }
+      } catch (_) {}
+
+      if (!targetDocRef) {
+        const titleSnap = await db.collection("notes")
+          .where("title", "==", queryArg)
+          .limit(1)
+          .get();
+        if (!titleSnap.empty) {
+          targetNoteSnap = titleSnap;
+        }
+      }
+    }
+
+    if (targetNoteSnap && !targetNoteSnap.empty) {
+      targetDocRef = targetNoteSnap.docs[0].ref;
+      deletedNoteData = targetNoteSnap.docs[0].data();
+    }
+
+    if (!targetDocRef || !deletedNoteData) {
+      return await bot.sendMessage(
+        msg.chat.id,
+        "⚠️ *Note not found to delete!*\n\n👉 *To delete a note from the website:*\n• Reply directly to any uploaded note document or message with `/del` or `/delete`\n• Or type: `/del <exact note title or ID>`",
+        sendOptions
+      );
+    }
+
+    // Delete note document from Firestore
+    await targetDocRef.delete();
+    console.log(`[Telegram Auto-Sync] 🗑️ Note "${deletedNoteData.title}" deleted from DB.`);
+
+    // Delete the Telegram file message if bot has delete permission
+    if (deletedNoteData.telegramMessageId && deletedNoteData.telegramChatId) {
+      try {
+        await bot.deleteMessage(deletedNoteData.telegramChatId, deletedNoteData.telegramMessageId);
+      } catch (err) {
+        console.warn("[Telegram Auto-Sync] Could not delete original TG message:", err.message);
+      }
+    }
+    if (replyMsg) {
+      try {
+        await bot.deleteMessage(msg.chat.id, replyMsg.message_id);
+      } catch (_) {}
+    }
+
+    await bot.sendMessage(
+      msg.chat.id,
+      `🗑️ *Note Deleted Successfully!*\n\n` +
+      `📄 *Title:* ${deletedNoteData.title}\n` +
+      `📚 *Subject:* ${deletedNoteData.subject} (${deletedNoteData.year || '4th year'})\n` +
+      `🌐 *Status:* Note has been permanently removed from Free Study Material website!`,
+      sendOptions
+    );
+  } catch (err) {
+    console.error("[Telegram Delete Command] Error:", err.message);
   }
 });
 

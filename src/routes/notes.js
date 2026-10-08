@@ -155,10 +155,15 @@ router.get("/:id/download", optionalAuth, downloadLimiter, async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
     res.setHeader("Content-Type", "application/octet-stream");
 
-    stream.on("error", (err) => {
+    stream.on("error", async (err) => {
       console.error("[Notes Download] Telegram stream error:", err.message);
+      // Auto-purge note from Firestore if file was deleted or invalid in Telegram
+      if (err.message && (err.message.includes("400") || err.message.includes("404") || err.message.includes("wrong file identifier") || err.message.includes("deleted") || err.message.includes("not found"))) {
+        console.warn(`[Notes Download] Stale/deleted file detected for note ${req.params.id}. Purging from database...`);
+        db.collection("notes").doc(req.params.id).delete().catch(() => {});
+      }
       if (!res.headersSent) {
-        res.status(502).json({ success: false, message: "Failed to stream file from Telegram storage" });
+        res.status(502).json({ success: false, message: "File is no longer available or was deleted from Telegram storage" });
       } else {
         res.end();
       }

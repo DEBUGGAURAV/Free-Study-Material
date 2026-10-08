@@ -13,7 +13,7 @@ import {
   updateFolder, updateNote, updateProfile, downloadAdminExport, uploadNoteFile,
 } from './api';
 
-const AuthModal = lazy(() => import('./components/AuthModal'));
+import AuthModal from './components/AuthModal';
 const NotesView = lazy(() => import('./components/NotesView'));
 const StudentsView = lazy(() => import('./components/StudentsView'));
 const StudentDashboard = lazy(() => import('./components/StudentDashboard'));
