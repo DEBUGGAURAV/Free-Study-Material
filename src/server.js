@@ -23,18 +23,8 @@ app.use(helmet({
   crossOriginResourcePolicy: false
 }));
 
-// Automatic 301 Permanent Redirect: free-study-material.onrender.com -> freestudymaterial.onrender.com
-app.use((req, res, next) => {
-  const host = req.headers.host || "";
-  if (host.includes("free-study-material.onrender.com")) {
-    return res.redirect(301, `https://freestudymaterial.onrender.com${req.originalUrl}`);
-  }
-  next();
-});
-
 const allowedOrigins = [
   "https://freestudymaterial.onrender.com",
-  "https://free-study-material.onrender.com",
   "http://localhost:5173",
   "http://localhost:5000"
 ];

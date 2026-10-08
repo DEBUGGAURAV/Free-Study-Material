@@ -12,3 +12,4 @@ services:
         value: production
       - key: CLIENT_URL
         value: https://freestudymaterial.onrender.com
+
