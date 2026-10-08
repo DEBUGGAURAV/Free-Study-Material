@@ -21,6 +21,7 @@ export default function App() {
   const [selectedSemester, setSelectedSemester] = useState("All");
   const [selectedBranch, setSelectedBranch] = useState("All");
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [viewMode, setViewMode] = useState("grid"); // 'grid' or 'table'
 
   // Modals
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -155,7 +156,7 @@ export default function App() {
         {/* Hero Banner with Tech Architecture */}
         <HeroBanner totalNotes={notes.length} />
 
-        {/* Filter Bar (With Dynamic Custom Branches) */}
+        {/* Filter Bar (With Dynamic Custom Branches & View Switcher) */}
         <CategoryFilter
           selectedSemester={selectedSemester}
           setSelectedSemester={setSelectedSemester}
@@ -163,9 +164,11 @@ export default function App() {
           setSelectedBranch={setSelectedBranch}
           branches={branches}
           totalCount={notes.length}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
         />
 
-        {/* Notes Grid */}
+        {/* Notes View (Grid or Compact List) */}
         {loading ? (
           <div style={{ textAlign: "center", padding: "60px 0" }}>
             <div className="spinner" style={{ width: "32px", height: "32px", margin: "0 auto 16px" }}></div>
@@ -175,15 +178,73 @@ export default function App() {
           </div>
         ) : notes.length > 0 ? (
           <>
-            <div className="notes-grid">
-              {displayedNotes.map((note) => (
-                <NoteCard
-                  key={note.id}
-                  note={note}
-                  onPreview={(n) => setPreviewNote(n)}
-                />
-              ))}
-            </div>
+            {viewMode === "grid" ? (
+              <div className="notes-grid">
+                {displayedNotes.map((note) => (
+                  <NoteCard
+                    key={note.id}
+                    note={note}
+                    onPreview={(n) => setPreviewNote(n)}
+                  />
+                ))}
+              </div>
+            ) : (
+              /* Compact Table / List View */
+              <div style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "var(--bg-glass-card)" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(255, 255, 255, 0.03)", color: "var(--text-dim)", textAlign: "left" }}>
+                      <th style={{ padding: "12px 16px" }}>Material Title & Subject</th>
+                      <th style={{ padding: "12px 16px" }}>Branch & Sem</th>
+                      <th style={{ padding: "12px 16px" }}>File Size</th>
+                      <th style={{ padding: "12px 16px" }}>Downloads</th>
+                      <th style={{ padding: "12px 16px", textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedNotes.map((note) => (
+                      <tr key={note.id} style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
+                        <td style={{ padding: "12px 16px", color: "#fff", fontWeight: 600 }}>
+                          <div>{note.title}</div>
+                          <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 400 }}>{note.subject}</div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span className="tech-pill branch">{note.branch}</span> {note.semester}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>
+                          {(note.compressedSize ? note.compressedSize / (1024 * 1024) : (note.fileSize / (1024 * 1024))).toFixed(1)} MB
+                          {note.savingsPercent > 0 && <span style={{ color: "#34d399", fontSize: "0.72rem", marginLeft: "6px" }}>(-{note.savingsPercent}%)</span>}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>
+                          {note.downloadsCount || 0}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: "6px" }}>
+                            <a
+                              href={api.getDownloadUrl(note.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn-card-download"
+                              style={{ padding: "6px 12px", fontSize: "0.78rem" }}
+                            >
+                              ⚡ Download
+                            </a>
+                            <button
+                              className="btn-card-preview"
+                              style={{ width: "32px", height: "32px" }}
+                              onClick={() => setPreviewNote(note)}
+                              title="Preview Document"
+                            >
+                              👁️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Show 15 notes rule: Expand / Collapse Button */}
             {notes.length > 15 && (
