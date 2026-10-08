@@ -1,5 +1,5 @@
 {
-  "name": "free-study-material",
+  "name": "freestudymaterial",
   "version": "1.0.0",
   "type": "commonjs",
   "main": "src/server.js",
