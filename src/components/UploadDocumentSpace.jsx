@@ -56,6 +56,10 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
+      if (selected.size > 2000 * 1024 * 1024) {
+        setErrorMsg('File size exceeds 2,000 MB (2 GB). Telegram maximum limit is 2 GB.');
+        return;
+      }
       setFile(selected);
       setErrorMsg('');
 
@@ -80,6 +84,10 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const dropped = e.dataTransfer.files[0];
+      if (dropped.size > 2000 * 1024 * 1024) {
+        setErrorMsg('File size exceeds 2,000 MB (2 GB). Telegram maximum limit is 2 GB.');
+        return;
+      }
       setFile(dropped);
       setErrorMsg('');
 
@@ -121,13 +129,9 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
       return;
     }
 
-    if (uploadMode === 'telegram' && file && file.size > 50 * 1024 * 1024) {
+    if (uploadMode === 'telegram' && file && file.size > 2000 * 1024 * 1024) {
       const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-      setErrorMsg(`This document is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Please use the @TechTitanNotesBot (up to 2GB) or Google Drive link option below!`);
-      setLargeFileAlert({
-        sizeMb,
-        fileName: file.name
-      });
+      setErrorMsg(`This document is ${sizeMb} MB. Telegram's maximum cloud storage limit is 2,000 MB (2 GB). Please provide a Google Drive link instead.`);
       return;
     }
 
@@ -612,7 +616,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
           <div className="accelerator-header">
             <span className="accelerator-tag">
               <Zap size={13} />
-              Large File Accelerator ({largeFileAlert.sizeMb} MB)
+              High-Capacity Document ({largeFileAlert.sizeMb} MB) • MTProto 2GB Active
             </span>
             <button
               type="button"
@@ -624,7 +628,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
           </div>
 
           <p style={{ fontSize: '0.86rem', color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            Telegram's standard Bot API limits direct browser uploads to <strong>50 MB</strong>. For your <strong>{largeFileAlert.sizeMb} MB</strong> document, use one of our two instant high-speed options:
+            Native Telegram MTProto engine is active! Your <strong>{largeFileAlert.sizeMb} MB</strong> document will be uploaded directly through the website via 8 parallel worker streams. You can also use our alternative options if preferred:
           </p>
 
           <div className="accelerator-grid">
@@ -635,7 +639,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
                   1. Telegram Bot (Up to 2 GB)
                 </strong>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: '6px 0 12px' }}>
-                  Send this file directly to <strong>@TechTitanNotesBot</strong> in Telegram. Native MTProto streams up to 2,000 MB at 40+ MB/s and automatically publishes it to the site in seconds!
+                  Send this file directly to <strong>@TechTitanNotesBot</strong> in Telegram if your browser connection is slow.
                 </p>
               </div>
               <a
@@ -657,7 +661,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
                   2. Google Drive / Cloud Link
                 </strong>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-dim)', margin: '6px 0 12px' }}>
-                  Paste a shareable Google Drive link. Zero size limits and instant 100+ MB/s download stream for all students.
+                  Paste a shareable Google Drive link for instant indexing without uploading.
                 </p>
               </div>
               <button
@@ -772,8 +776,8 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
                       {file.name}
                     </strong>
                     {file.size > 50 * 1024 * 1024 ? (
-                      <span style={{ fontSize: '0.78rem', color: '#fbbf24', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <AlertCircle size={13} /> {(file.size / (1024 * 1024)).toFixed(2)} MB • Exceeds 50MB web limit (Use Bot or Drive)
+                      <span style={{ fontSize: '0.78rem', color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <Zap size={13} /> {(file.size / (1024 * 1024)).toFixed(2)} MB • MTProto 2GB High-Speed Engine Active
                       </span>
                     ) : (
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
@@ -815,7 +819,7 @@ export default function UploadDocumentSpace({ folders = [], token, onUploadSucce
                   Click to select file or drag & drop here
                 </div>
                 <div className="dropzone-hint">
-                  PDF, DOCX, PPTX or ZIP up to 50MB (Web) / 2GB (Telegram Bot) • Instant Edge Delivery
+                  PDF, DOCX, PPTX or ZIP up to 2,000 MB (2 GB) • Accelerated with MTProto 8x Parallel Engine
                 </div>
               </div>
             )}

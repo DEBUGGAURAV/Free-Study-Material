@@ -26,9 +26,11 @@ const storage = multer.diskStorage({
   },
 });
 
+const isMtprotoEnabled = Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH);
+
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // Ingest up to 100MB safely
+  limits: { fileSize: 2000 * 1024 * 1024 }, // Full 2,000 MB (2 GB) support via MTProto
 });
 
 // Middleware wrapper that traps Multer LIMIT_FILE_SIZE and errors gracefully without crashing 500
@@ -39,8 +41,7 @@ const handleUploadMiddleware = (req, res, next) => {
         return res.status(413).json({
           success: false,
           code: "FILE_TOO_LARGE",
-          message: "File exceeds 100MB limit. For large textbooks and video archives, send them directly to our Telegram Bot @TechTitanNotesBot (up to 2GB!) or use a Google Drive link.",
-          botLink: "https://t.me/TechTitanNotesBot"
+          message: "File exceeds 2,000 MB (2 GB) Telegram storage limit.",
         });
       }
       return res.status(400).json({ success: false, message: `Upload error: ${err.message}` });
@@ -56,17 +57,16 @@ router.post("/", optionalAuth, uploadLimiter, handleUploadMiddleware, async (req
 
   const tempFilePath = req.file.path;
 
-  // Telegram Cloud Bot API strictly allows up to 50MB per document for web HTTP upload
-  if (req.file.size > 50 * 1024 * 1024) {
+  // Only restrict to 50MB if native MTProto is not enabled
+  if (!isMtprotoEnabled && req.file.size > 50 * 1024 * 1024) {
     const sizeMb = (req.file.size / (1024 * 1024)).toFixed(1);
-    // Delete temp file immediately
     fs.unlink(tempFilePath, () => {});
 
     return res.status(413).json({
       success: false,
       code: "TELEGRAM_WEB_LIMIT_EXCEEDED",
       fileSizeMb: Number(sizeMb),
-      message: `File is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Drop it directly into our Telegram Bot @TechTitanNotesBot for up to 2GB (2000 MB) uploads with 50+ MB/s speed, or use a Google Drive link!`,
+      message: `File is ${sizeMb} MB. Telegram's standard Bot API limits direct web browser uploads to 50MB. Drop it directly into our Telegram Bot @TechTitanNotesBot for up to 2GB uploads, or provide a Google Drive link!`,
       botUsername: "TechTitanNotesBot",
       botLink: "https://t.me/TechTitanNotesBot"
     });

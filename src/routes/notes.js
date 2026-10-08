@@ -3,8 +3,11 @@ const router = express.Router();
 
 const { db, admin } = require("../firebase");
 const bot = require("../telegram/bot");
+const { streamDownloadMtproto } = require("../telegram/mtproto");
 const { optionalAuth, auth } = require("../middleware/auth");
 const { readLimiter, downloadLimiter } = require("../middleware/rateLimit");
+
+const isMtprotoActive = Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH);
 
 // Access Control Engine: Decides if a student or user has permission to view/download
 function canAccess(note, user) {
@@ -136,10 +139,10 @@ const handleDownload = async (req, res) => {
       });
     }
 
-    if (!note.telegramFileId) {
+    if (!note.telegramFileId && !note.telegramMessageId) {
       return res.status(400).json({
         success: false,
-        message: "This note does not have an attached Telegram file ID.",
+        message: "This note does not have an attached Telegram file.",
       });
     }
 
@@ -152,59 +155,92 @@ const handleDownload = async (req, res) => {
     const safeName = String(note.fileName || `${note.title || "note"}.pdf`).replace(/[^\w.\- ]/g, "_");
 
     // If Cloudflare Worker URL is configured, redirect to high-speed global Edge CDN
-    if (process.env.CLOUDFLARE_WORKER_URL) {
+    if (process.env.CLOUDFLARE_WORKER_URL && note.telegramFileId) {
       const workerBase = process.env.CLOUDFLARE_WORKER_URL.replace(/\/+$/, "");
       return res.redirect(`${workerBase}/stream/${note.telegramFileId}?name=${encodeURIComponent(safeName)}`);
     }
 
-    // Telegram Bot API standard limit check:
+    const applyHeaders = (actualSize) => {
+      if (!res.headersSent) {
+        res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
+        res.setHeader("Content-Type", "application/octet-stream");
+        const finalSize = actualSize || note.fileSize;
+        if (finalSize) {
+          res.setHeader("Content-Length", finalSize);
+        }
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("X-Accel-Buffering", "no");
+        res.setHeader("Connection", "keep-alive");
+      }
+    };
+
+    // 1. Primary: Native MTProto Direct Stream (supports up to 2,000 MB / 2 GB with 8x parallel engine)
+    if (isMtprotoActive && note.telegramChatId && note.telegramMessageId) {
+      try {
+        await streamDownloadMtproto({
+          chatId: note.telegramChatId,
+          messageId: note.telegramMessageId,
+          res,
+          beforeStream: ({ fileSize }) => {
+            applyHeaders(fileSize);
+          },
+        });
+        return;
+      } catch (mtErr) {
+        console.warn(`[Notes Download] MTProto stream exception for note ${noteId}:`, mtErr.message);
+        if (res.headersSent) {
+          return res.end();
+        }
+      }
+    }
+
+    // 2. Secondary Telegram Bot API standard limit check:
     // Standard Bot API getFile has a 20MB limit. For files > 20MB, direct to Telegram post link if available.
     if (note.fileSize && note.fileSize > 20 * 1024 * 1024 && note.telegramChatId && note.telegramMessageId) {
       const cleanChatId = String(note.telegramChatId).replace(/^-100/, "");
       return res.redirect(`https://t.me/c/${cleanChatId}/${note.telegramMessageId}`);
     }
 
-    // Direct Stream through server fallback
-    const stream = bot.getFileStream(note.telegramFileId);
+    // 3. Fallback: Bot API getFileStream (files <= 20MB or legacy notes with fileId)
+    if (note.telegramFileId) {
+      applyHeaders(note.fileSize);
+      const stream = bot.getFileStream(note.telegramFileId);
 
-    // Smart Cache & Multi-Stream Acceleration Headers
-    res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}"`);
-    res.setHeader("Content-Type", "application/octet-stream");
-    if (note.fileSize) {
-      res.setHeader("Content-Length", note.fileSize);
-    }
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.setHeader("Connection", "keep-alive");
+      stream.on("error", async (err) => {
+        console.error("[Notes Download] Telegram stream error:", err.message);
 
-    stream.on("error", async (err) => {
-      console.error("[Notes Download] Telegram stream error:", err.message);
-
-      // Handle Telegram Bot API 20MB limit gracefully
-      if (err.message && err.message.includes("file is too big")) {
-        console.warn(`[Notes Download] File ${noteId} is >20MB. Redirecting to Telegram post stream.`);
-        if (note.telegramChatId && note.telegramMessageId && !res.headersSent) {
-          const cleanChatId = String(note.telegramChatId).replace(/^-100/, "");
-          return res.redirect(`https://t.me/c/${cleanChatId}/${note.telegramMessageId}`);
+        // Handle Telegram Bot API 20MB limit gracefully
+        if (err.message && err.message.includes("file is too big")) {
+          console.warn(`[Notes Download] File ${noteId} is >20MB. Redirecting to Telegram post stream.`);
+          if (note.telegramChatId && note.telegramMessageId && !res.headersSent) {
+            const cleanChatId = String(note.telegramChatId).replace(/^-100/, "");
+            return res.redirect(`https://t.me/c/${cleanChatId}/${note.telegramMessageId}`);
+          }
         }
-      }
 
-      // Auto-purge note from Firestore ONLY if genuinely deleted or invalid identifier
-      // NEVER purge if the error is "file is too big"
-      if (err.message && !err.message.includes("file is too big") && (err.message.includes("wrong file identifier") || err.message.includes("message to delete not found") || (err.message.includes("404") && !err.message.includes("Endpoint")))) {
-        console.warn(`[Notes Download] Stale/deleted file detected for note ${noteId}. Purging from database...`);
-        db.collection("notes").doc(noteId).delete().catch(() => {});
-      }
+        // Auto-purge note from Firestore ONLY if genuinely deleted or invalid identifier
+        // NEVER purge if the error is "file is too big"
+        if (err.message && !err.message.includes("file is too big") && (err.message.includes("wrong file identifier") || err.message.includes("message to delete not found") || (err.message.includes("404") && !err.message.includes("Endpoint")))) {
+          console.warn(`[Notes Download] Stale/deleted file detected for note ${noteId}. Purging from database...`);
+          db.collection("notes").doc(noteId).delete().catch(() => {});
+        }
 
-      if (!res.headersSent) {
-        res.status(502).json({ success: false, message: "File download stream error: " + err.message });
-      } else {
-        res.end();
-      }
+        if (!res.headersSent) {
+          res.status(502).json({ success: false, message: "File download stream error: " + err.message });
+        } else {
+          res.end();
+        }
+      });
+
+      stream.pipe(res);
+      return;
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "No valid download source or file ID attached to this note.",
     });
-
-    stream.pipe(res);
   } catch (error) {
     console.error("[Notes Download] Error:", error);
     res.status(500).json({ success: false, message: "Download failed: " + error.message });
