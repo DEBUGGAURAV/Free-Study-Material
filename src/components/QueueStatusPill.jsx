@@ -75,3 +75,4 @@ export default function QueueStatusPill({ activeJob, onCompleted, onDismiss }) {
     </div>
   );
 }
+

@@ -816,12 +816,94 @@ body {
   to { transform: rotate(360deg); }
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .hero-title { font-size: 2.1rem; }
-  .navbar-content { flex-direction: column; align-items: stretch; }
-  .search-wrapper { max-width: 100%; }
-  .nav-actions { justify-content: space-between; }
-  .notes-grid { grid-template-columns: 1fr; }
-  .floating-queue-pill { bottom: 16px; right: 16px; }
+/* ==========================================================================
+   Comprehensive Responsive System (Mobile, Tablet, Desktop)
+   Guarantees zero overlapping across all viewport sizes
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .app-container {
+    padding: 0 16px 60px;
+  }
+  .tech-hud-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .hero-title {
+    font-size: 2.3rem;
+  }
 }
+
+@media (max-width: 768px) {
+  .navbar-wrapper {
+    padding: 12px 16px;
+  }
+  .navbar-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .brand-section {
+    justify-content: space-between;
+  }
+  .search-wrapper {
+    max-width: 100%;
+    min-width: 100%;
+  }
+  .nav-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .hero-section {
+    padding: 32px 0 20px;
+  }
+  .hero-title {
+    font-size: 1.85rem;
+  }
+  .hero-subtitle {
+    font-size: 0.95rem;
+  }
+  .tech-hud-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .notes-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .modal-content {
+    padding: 20px 16px;
+    max-height: 94vh;
+    border-radius: var(--radius-md);
+  }
+  .floating-queue-pill {
+    bottom: 14px;
+    right: 14px;
+    left: 14px;
+    justify-content: center;
+  }
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.55rem;
+  }
+  .btn-primary, .btn-secondary {
+    font-size: 0.8rem;
+    padding: 8px 14px;
+  }
+  .filter-tab {
+    padding: 6px 12px;
+    font-size: 0.78rem;
+  }
+  .branch-chip {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+  }
+}
+
+

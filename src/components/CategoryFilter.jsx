@@ -1,15 +1,17 @@
 import React from "react";
 
 const SEMESTERS = ["All", "Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
-const BRANCHES = ["All", "CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"];
 
 export default function CategoryFilter({
   selectedSemester,
   setSelectedSemester,
   selectedBranch,
   setSelectedBranch,
+  branches = [],
   totalCount,
 }) {
+  const branchList = ["All", ...(branches.length > 0 ? branches : ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"])];
+
   return (
     <div className="control-bar-wrapper">
       {/* Semester Filter */}
@@ -25,10 +27,10 @@ export default function CategoryFilter({
         ))}
       </div>
 
-      {/* Branch Chips & Counter */}
+      {/* Dynamic Branch Chips (Includes Custom User Branches) */}
       <div className="branch-chips-bar">
         <div className="branch-chips-list">
-          {BRANCHES.map((branch) => (
+          {branchList.map((branch) => (
             <button
               key={branch}
               className={`branch-chip ${selectedBranch === branch ? "active" : ""}`}

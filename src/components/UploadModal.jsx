@@ -1,12 +1,14 @@
 import React, { useState, useRef } from "react";
-import { X, UploadCloud, CheckCircle2, FileText, AlertCircle, Sparkles } from "lucide-react";
+import { X, UploadCloud, CheckCircle2, FileText, AlertCircle, Sparkles, PlusCircle } from "lucide-react";
 import { api } from "../api";
 
-export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
+export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
   const [branch, setBranch] = useState("CSE");
+  const [isCustomBranch, setIsCustomBranch] = useState(false);
+  const [customBranchName, setCustomBranchName] = useState("");
   const [semester, setSemester] = useState("Sem 1");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -18,6 +20,18 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
 
   if (!isOpen) return null;
 
+  const defaultBranchOptions = [
+    "CSE",
+    "IT",
+    "ECE",
+    "ME",
+    "Civil",
+    "BCA",
+    "MCA",
+    "AI/ML",
+    ...existingBranches.filter((b) => !["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"].includes(b)),
+  ];
+
   const handleFileSelect = (selected) => {
     if (selected) {
       setFile(selected);
@@ -27,20 +41,14 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
     }
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
+  const handleBranchChange = (e) => {
+    const val = e.target.value;
+    if (val === "CUSTOM_NEW") {
+      setIsCustomBranch(true);
+      setCustomBranchName("");
+    } else {
+      setIsCustomBranch(false);
+      setBranch(val);
     }
   };
 
@@ -48,6 +56,11 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
     e.preventDefault();
     if (!file) {
       setError("Please select a document or note file.");
+      return;
+    }
+
+    if (isCustomBranch && !customBranchName.trim()) {
+      setError("Please specify the custom branch name.");
       return;
     }
 
@@ -59,7 +72,8 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
       formData.append("file", file);
       formData.append("title", title);
       formData.append("subject", subject);
-      formData.append("branch", branch);
+      formData.append("branch", isCustomBranch ? customBranchName.trim().toUpperCase() : branch);
+      formData.append("customBranch", isCustomBranch ? customBranchName.trim().toUpperCase() : "");
       formData.append("semester", semester);
       formData.append("description", description);
 
@@ -71,6 +85,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
         elapsed,
         noteId: res.noteId,
         title: title || file.name,
+        branch: isCustomBranch ? customBranchName.trim().toUpperCase() : branch,
       });
 
       if (onUploadQueued) {
@@ -87,6 +102,8 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
     setFile(null);
     setTitle("");
     setSubject("");
+    setIsCustomBranch(false);
+    setCustomBranchName("");
     setDescription("");
     setError(null);
     setSuccessData(null);
@@ -125,14 +142,12 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
               ⚡ Uploaded in {successData.elapsed}s!
             </h3>
 
-            <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: "420px", margin: "0 auto 24px" }}>
-              Your file is accepted and safely queued. The <strong>Async Background Engine</strong>{" "}
-              is now optimizing PDF streams, checking SHA-256 deduplication, and archiving to
-              Telegram Cloud.
+            <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: "420px", margin: "0 auto 16px" }}>
+              Your file is accepted. The <strong>Async Background Engine</strong> is now optimizing PDF streams, checking SHA-256 deduplication, archiving to Telegram Cloud, and has published a notice on the Notice Board!
             </p>
 
             <button className="btn-primary" onClick={resetForm}>
-              Done & Return to Notes
+              Done & Return to Vault
             </button>
           </div>
         ) : (
@@ -160,9 +175,13 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
             {/* Dropzone */}
             <div
               className={`dropzone-box ${isDragging ? "dragging" : ""}`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                if (e.dataTransfer.files?.[0]) handleFileSelect(e.dataTransfer.files[0]);
+              }}
               onClick={() => fileInputRef.current?.click()}
             >
               <input
@@ -215,7 +234,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="e.g. Data Structures & Algorithms Hand-written Notes"
+                  placeholder="e.g. Operating Systems Complete Handwritten Notes"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   required
@@ -228,30 +247,45 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
                   <input
                     type="text"
                     className="form-input"
-                    placeholder="e.g. Computer Networks"
+                    placeholder="e.g. Operating Systems"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Branch</label>
+                  <label className="form-label">Branch / Department</label>
                   <select
                     className="form-select"
-                    value={branch}
-                    onChange={(e) => setBranch(e.target.value)}
+                    value={isCustomBranch ? "CUSTOM_NEW" : branch}
+                    onChange={handleBranchChange}
                   >
-                    <option value="CSE">CSE</option>
-                    <option value="IT">IT</option>
-                    <option value="ECE">ECE</option>
-                    <option value="ME">Mechanical</option>
-                    <option value="Civil">Civil</option>
-                    <option value="BCA">BCA</option>
-                    <option value="MCA">MCA</option>
-                    <option value="AI/ML">AI / ML</option>
+                    {defaultBranchOptions.map((b) => (
+                      <option key={b} value={b}>
+                        {b}
+                      </option>
+                    ))}
+                    <option value="CUSTOM_NEW">+ Create New Branch...</option>
                   </select>
                 </div>
               </div>
+
+              {/* Custom Branch Input if user chose to create a new branch */}
+              {isCustomBranch && (
+                <div className="form-group" style={{ animation: "fadeIn 0.2s ease" }}>
+                  <label className="form-label" style={{ color: "var(--accent-cyan)" }}>
+                    Enter New Custom Branch Name *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. AERONAUTICAL, BIOTECH, ROBOTICS, CYBER SECURITY"
+                    value={customBranchName}
+                    onChange={(e) => setCustomBranchName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
 
               <div className="form-group">
                 <label className="form-label">Semester</label>
@@ -276,7 +310,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
                 <textarea
                   className="form-textarea"
                   rows={2}
-                  placeholder="Key topics covered, professor name, or syllabus unit..."
+                  placeholder="Key topics, exam tips, or professor reference..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
@@ -296,7 +330,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued }) {
                 ) : (
                   <>
                     <Sparkles size={16} />
-                    <span>Upload & Fast Queue</span>
+                    <span>Upload & Queue Instant</span>
                   </>
                 )}
               </button>

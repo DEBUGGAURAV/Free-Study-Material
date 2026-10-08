@@ -60,3 +60,4 @@ async function compressPdf(inputFilePath) {
 module.exports = {
   compressPdf,
 };
+

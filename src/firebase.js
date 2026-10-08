@@ -27,3 +27,4 @@ if (!admin.apps.length) {
 const db = admin.apps.length ? admin.firestore() : null;
 
 module.exports = { admin, db };
+

@@ -28,3 +28,4 @@ const safeBot = new Proxy(bot || {}, {
 });
 
 module.exports = safeBot;
+

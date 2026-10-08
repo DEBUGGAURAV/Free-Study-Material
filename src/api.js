@@ -44,7 +44,6 @@ async function request(endpoint, options = {}) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Do not set Content-Type if FormData is used
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
@@ -64,6 +63,18 @@ async function request(endpoint, options = {}) {
 
 export const api = {
   // Auth
+  register: async (userData) => {
+    const data = await request("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    });
+    if (data.token) {
+      setAuthToken(data.token);
+      setCurrentUser(data.user);
+    }
+    return data;
+  },
+
   login: async (identifier, password) => {
     const data = await request("/auth/login", {
       method: "POST",
@@ -76,7 +87,10 @@ export const api = {
     return data;
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      await request("/auth/logout", { method: "POST" });
+    } catch {}
     setAuthToken(null);
     setCurrentUser(null);
   },
@@ -84,12 +98,16 @@ export const api = {
   getMe: () => request("/auth/me"),
 
   // Notes
+  getBranches: () => request("/notes/branches"),
+
   getNotes: (params = {}) => {
     const query = new URLSearchParams();
     if (params.branch && params.branch !== "All") query.append("branch", params.branch);
     if (params.semester && params.semester !== "All") query.append("semester", params.semester);
     if (params.subject && params.subject !== "All") query.append("subject", params.subject);
     if (params.search) query.append("search", params.search);
+    if (params.limit) query.append("limit", params.limit);
+    if (params.all) query.append("all", "true");
 
     const queryString = query.toString() ? `?${query.toString()}` : "";
     return request(`/notes${queryString}`);
@@ -97,7 +115,16 @@ export const api = {
 
   getNoteById: (id) => request(`/notes/${id}`),
 
-  getDownloadUrl: (id) => `${API_BASE}/notes/${id}/stream`,
+  getDownloadUrl: (id) => {
+    const token = getAuthToken();
+    return `${API_BASE}/notes/${id}/stream${token ? `?token=${token}` : ""}`;
+  },
+
+  updateNote: (id, noteData) =>
+    request(`/notes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(noteData),
+    }),
 
   // Upload (Async Ingestion)
   uploadNote: async (formData) => {
@@ -109,8 +136,66 @@ export const api = {
 
   getUploadStatus: (noteId) => request(`/upload/status/${noteId}`),
 
-  // Admin
+  // Notices
+  getNotices: () => request("/notices"),
+
+  createNotice: (noticeData) =>
+    request("/notices", {
+      method: "POST",
+      body: JSON.stringify(noticeData),
+    }),
+
+  updateNotice: (id, noticeData) =>
+    request(`/notices/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(noticeData),
+    }),
+
+  deleteNotice: (id) =>
+    request(`/notices/${id}`, {
+      method: "DELETE",
+    }),
+
+  // Admin & Student Management
   getStats: () => request("/admin/stats"),
+
+  getUsers: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.page) query.append("page", params.page);
+    if (params.limit) query.append("limit", params.limit);
+    if (params.search) query.append("search", params.search);
+    const queryString = query.toString() ? `?${query.toString()}` : "";
+    return request(`/admin/users${queryString}`);
+  },
+
+  getUserActivities: (userId) => request(`/admin/users/${userId}/activities`),
+
+  deleteUserActivity: (userId, activityId) =>
+    request(`/admin/users/${userId}/activities/${activityId}`, {
+      method: "DELETE",
+    }),
+
+  clearUserActivities: (userId) =>
+    request(`/admin/users/${userId}/activities`, {
+      method: "DELETE",
+    }),
+
+  updateUser: (userId, data) =>
+    request(`/admin/users/${userId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  blockUser: (userId, isBlocked) =>
+    request(`/admin/users/${userId}/block`, {
+      method: "PATCH",
+      body: JSON.stringify({ isBlocked }),
+    }),
+
+  deleteUser: (userId) =>
+    request(`/admin/users/${userId}`, {
+      method: "DELETE",
+    }),
 
   toggleVisibility: (noteId, isVisible) =>
     request(`/admin/notes/${noteId}/visibility`, {

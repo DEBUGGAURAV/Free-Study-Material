@@ -14,6 +14,7 @@ const authRoutes = require("./routes/auth");
 const uploadRoutes = require("./routes/upload");
 const notesRoutes = require("./routes/notes");
 const adminRoutes = require("./routes/admin");
+const noticesRoutes = require("./routes/notices");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -99,6 +100,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/notices", noticesRoutes);
 
 // Serve Client Web Application (Vite Dist)
 const distPath = path.join(__dirname, "../dist");
@@ -150,3 +152,4 @@ app.listen(PORT, async () => {
 });
 
 module.exports = app;
+

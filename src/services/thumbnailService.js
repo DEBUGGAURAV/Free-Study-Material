@@ -36,3 +36,4 @@ async function generateWebPThumbnail(inputFilePath) {
 module.exports = {
   generateWebPThumbnail,
 };
+

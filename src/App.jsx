@@ -6,28 +6,57 @@ import NoteCard from "./components/NoteCard";
 import UploadModal from "./components/UploadModal";
 import PreviewModal from "./components/PreviewModal";
 import AdminModal from "./components/AdminModal";
+import NoticeBoardModal from "./components/NoticeBoardModal";
+import AuthModal from "./components/AuthModal";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, RefreshCw } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell } from "lucide-react";
 
 export default function App() {
   const [notes, setNotes] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedSemester, setSelectedSemester] = useState("All");
   const [selectedBranch, setSelectedBranch] = useState("All");
+  const [showAllNotes, setShowAllNotes] = useState(false);
 
+  // Modals
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isNoticeBoardOpen, setIsNoticeBoardOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [previewNote, setPreviewNote] = useState(null);
+
+  // User & Notices
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [notices, setNotices] = useState([]);
 
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
 
   useEffect(() => {
+    fetchBranches();
+    fetchNotices();
+  }, []);
+
+  useEffect(() => {
     fetchNotes();
   }, [selectedSemester, selectedBranch, searchTerm]);
+
+  const fetchBranches = async () => {
+    try {
+      const res = await api.getBranches();
+      setBranches(res.branches || []);
+    } catch {}
+  };
+
+  const fetchNotices = async () => {
+    try {
+      const res = await api.getNotices();
+      setNotices(res.notices || []);
+    } catch {}
+  };
 
   const fetchNotes = async () => {
     try {
@@ -47,18 +76,23 @@ export default function App() {
 
   const handleUploadQueued = (noteId, title) => {
     setActiveJob({ noteId, title });
-    // Invalidate and refresh notes list
     fetchNotes();
+    fetchBranches();
+    fetchNotices();
   };
 
   const handleQueueCompleted = (noteId) => {
     fetchNotes();
+    fetchBranches();
   };
 
-  const handleLogout = () => {
-    api.logout();
+  const handleLogout = async () => {
+    await api.logout();
     setCurrentUser(null);
   };
+
+  // Rule: Display initial 15 notes, keep rest hidden until user clicks "Show All Notes"
+  const displayedNotes = showAllNotes ? notes : notes.slice(0, 15);
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -67,21 +101,64 @@ export default function App() {
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         onOpenUpload={() => setIsUploadOpen(true)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
+        onOpenAdmin={() => {
+          if (!currentUser) {
+            setIsAuthOpen(true);
+          } else {
+            setIsAdminOpen(true);
+          }
+        }}
+        onOpenNotices={() => setIsNoticeBoardOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
+        noticeCount={notices.length}
       />
 
       <main className="app-container" style={{ flex: 1 }}>
+        {/* Notice Board Ticker Bar (if notices exist) */}
+        {notices.length > 0 && (
+          <div
+            style={{
+              margin: "16px 0 -8px",
+              background: "rgba(6, 182, 212, 0.08)",
+              border: "1px solid rgba(6, 182, 212, 0.25)",
+              borderRadius: "var(--radius-md)",
+              padding: "10px 18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              cursor: "pointer",
+            }}
+            onClick={() => setIsNoticeBoardOpen(true)}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
+              <Bell size={16} style={{ color: "var(--accent-cyan)", flexShrink: 0 }} />
+              <span style={{ fontSize: "0.82rem", color: "#fff", fontWeight: 600 }}>
+                Latest Notice:
+              </span>
+              <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {notices[0].title}
+              </span>
+            </div>
+
+            <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 700, flexShrink: 0 }}>
+              View Notice Board &rarr;
+            </span>
+          </div>
+        )}
+
         {/* Hero Banner with Tech Architecture */}
         <HeroBanner totalNotes={notes.length} />
 
-        {/* Filter Bar */}
+        {/* Filter Bar (With Dynamic Custom Branches) */}
         <CategoryFilter
           selectedSemester={selectedSemester}
           setSelectedSemester={setSelectedSemester}
           selectedBranch={selectedBranch}
           setSelectedBranch={setSelectedBranch}
+          branches={branches}
           totalCount={notes.length}
         />
 
@@ -94,15 +171,40 @@ export default function App() {
             </p>
           </div>
         ) : notes.length > 0 ? (
-          <div className="notes-grid">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                onPreview={(n) => setPreviewNote(n)}
-              />
-            ))}
-          </div>
+          <>
+            <div className="notes-grid">
+              {displayedNotes.map((note) => (
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onPreview={(n) => setPreviewNote(n)}
+                />
+              ))}
+            </div>
+
+            {/* Show 15 notes rule: Expand / Collapse Button */}
+            {notes.length > 15 && (
+              <div style={{ textAlign: "center", marginTop: "32px" }}>
+                <button
+                  className="btn-secondary"
+                  style={{ padding: "12px 28px", fontSize: "0.9rem", fontWeight: 600 }}
+                  onClick={() => setShowAllNotes((prev) => !prev)}
+                >
+                  {showAllNotes ? (
+                    <>
+                      <span>Show Less (Only 15 Notes)</span>
+                      <ChevronUp size={16} />
+                    </>
+                  ) : (
+                    <>
+                      <span>Show All {notes.length} Notes (Showing 15 of {notes.length})</span>
+                      <ChevronDown size={16} />
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div
             style={{
@@ -148,11 +250,12 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Modals & Floating Pills */}
+      {/* Modals & Overlays */}
       <UploadModal
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onUploadQueued={handleUploadQueued}
+        existingBranches={branches}
       />
 
       <PreviewModal
@@ -170,6 +273,22 @@ export default function App() {
         }}
         notes={notes}
         onRefreshNotes={fetchNotes}
+        branches={branches}
+      />
+
+      <NoticeBoardModal
+        isOpen={isNoticeBoardOpen}
+        onClose={() => setIsNoticeBoardOpen(false)}
+        currentUser={currentUser}
+      />
+
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+          fetchNotes();
+        }}
       />
 
       <QueueStatusPill

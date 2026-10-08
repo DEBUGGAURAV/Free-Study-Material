@@ -71,3 +71,4 @@ export default function HeroBanner({ totalNotes, totalSaved }) {
     </section>
   );
 }
+

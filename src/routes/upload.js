@@ -3,8 +3,9 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 const { db } = require("../firebase");
-const { authenticateToken, requireAuth } = require("../middleware/auth");
+const { authenticateToken } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus } = require("../services/queueService");
 
@@ -35,7 +36,7 @@ const upload = multer({
 
 /**
  * POST /api/upload
- * Accepts files up to 2GB and returns instant receipt (< 2s) while queuing background task
+ * Accepts files up to 2GB, supports custom branch creation, creates auto-notice, and queues async job
  */
 router.post(
   "/",
@@ -52,6 +53,7 @@ router.post(
         title,
         subject,
         branch,
+        customBranch,
         semester,
         description,
         tags,
@@ -59,8 +61,13 @@ router.post(
 
       const file = req.file;
       const noteTitle = (title || file.originalname).trim();
-      const noteSubject = (subject || "General Engineering").trim();
-      const noteBranch = (branch || "CSE").trim();
+      const noteSubject = (subject || "General Academic").trim();
+      
+      // Determine final branch: customBranch takes precedence if provided!
+      const finalBranch = (customBranch && customBranch.trim() !== "") 
+        ? customBranch.trim().toUpperCase() 
+        : (branch || "CSE").trim();
+
       const noteSemester = (semester || "Sem 1").trim();
 
       // Create new document reference in Firestore
@@ -73,7 +80,7 @@ router.post(
           id: noteId,
           title: noteTitle,
           subject: noteSubject,
-          branch: noteBranch,
+          branch: finalBranch,
           semester: noteSemester,
           description: description || "",
           tags: tags ? tags.split(",").map((t) => t.trim()) : [],
@@ -82,7 +89,7 @@ router.post(
           fileSize: file.size,
           compressedSize: file.size,
           savingsPercent: 0,
-          status: "processing", // Immediately in processing
+          status: "processing",
           uploadedBy: req.user?.email || "student@freestudymaterial.com",
           uploaderName: req.user?.name || "Student Contributor",
           viewsCount: 0,
@@ -93,6 +100,33 @@ router.post(
         };
 
         await docRef.set(noteData);
+
+        // Auto-create notice on the Notice Board with direct click link!
+        await db.collection("notices").add({
+          title: `📚 New Note: ${noteTitle}`,
+          content: `New study material has been uploaded for ${finalBranch} (${noteSemester}) — Subject: ${noteSubject}. Click below to view and download!`,
+          link: `/api/notes/${noteId}/stream`,
+          linkText: "Click Here to Download Note",
+          type: "new_material",
+          isPinned: false,
+          createdBy: req.user?.name || "System Vault",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).catch((e) => console.warn("[UPLOAD] Notice creation notice:", e.message));
+
+        // Log upload activity in student's profile
+        if (req.user?.id && req.user.id !== "admin-root") {
+          const uploadEvent = {
+            id: crypto.randomUUID(),
+            type: "upload",
+            detail: `Uploaded note: "${noteTitle}" (${finalBranch})`,
+            noteId: noteId,
+            timestamp: new Date().toISOString(),
+          };
+          db.collection("users").doc(req.user.id).update({
+            activities: ((await db.collection("users").doc(req.user.id).get()).data()?.activities || []).concat(uploadEvent).slice(-100),
+          }).catch(() => {});
+        }
       } else {
         noteId = `note-${Date.now()}`;
       }
@@ -106,25 +140,25 @@ router.post(
         meta: {
           title: noteTitle,
           subject: noteSubject,
-          branch: noteBranch,
+          branch: finalBranch,
           semester: noteSemester,
         },
       });
 
-      // ⏱️ INSTANT RESPONSE: User waits < 2 seconds!
+      // Instant receipt response (< 2 seconds)
       return res.status(202).json({
         success: true,
-        message: "Note uploaded successfully! Background optimization & cloud sync started.",
+        message: "Note uploaded successfully! Background engine is optimizing & syncing.",
         noteId,
         status: "processing",
         meta: {
           title: noteTitle,
+          branch: finalBranch,
           size: file.size,
         },
       });
     } catch (err) {
       console.error("[UPLOAD] Ingestion error:", err);
-      // Clean up temp file on early error
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
@@ -135,7 +169,6 @@ router.post(
 
 /**
  * GET /api/upload/status/:id
- * Real-time status polling for background processing queue
  */
 router.get("/status/:id", (req, res) => {
   const { id } = req.params;
@@ -145,7 +178,7 @@ router.get("/status/:id", (req, res) => {
     return res.json({
       noteId: id,
       status: "ready",
-      stage: "Completed & Ready",
+      stage: "Completed & Ready in Cloud",
       progress: 100,
     });
   }
