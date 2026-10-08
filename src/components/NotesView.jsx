@@ -106,7 +106,7 @@ function LatestUploadsPanel({ notes = [], newUploadCount, onDismiss, onNoteAcces
 
       <div className="latest-grid">
         {displayNotes.map((note, index) => (
-          <a key={note.id || note.title} className={`latest-item ${index === 0 ? 'first' : ''}`} href={note.driveLink || '#'} target="_blank" rel="noreferrer" onClick={() => onNoteAccess?.(note)}>
+          <a key={note.id || note.title} className={`latest-item ${index === 0 ? 'first' : ''}`} href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')} target="_blank" rel="noreferrer" onClick={() => onNoteAccess?.(note)}>
             <span className="rank">{index === 0 ? 'New' : String(index + 1).padStart(2, '0')}</span>
             <div>
               <strong>{note.title}</strong>
@@ -188,7 +188,7 @@ function NoteCard({ note, onAccess }) {
         </span>
         <a
           className="button compact-button"
-          href={note.driveLink || '#'}
+          href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')}
           target="_blank"
           rel="noreferrer"
           onClick={() => onAccess?.(note)}

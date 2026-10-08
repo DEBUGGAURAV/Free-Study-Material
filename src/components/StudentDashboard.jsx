@@ -62,8 +62,12 @@ export default function StudentDashboard({
     return notes.filter(n => {
       if (!n) return false;
       if (!n.year) return true;
-      return n.year.toLowerCase().includes(userYear.toLowerCase()) || 
-             userYear.toLowerCase().includes(n.year.toLowerCase());
+      const nYearStr = String(n.year).toLowerCase();
+      const userYearStr = String(userYear || '').toLowerCase();
+      const nDigit = nYearStr.match(/\d+/)?.[0];
+      const userDigit = userYearStr.match(/\d+/)?.[0];
+      if (nDigit && userDigit && nDigit === userDigit) return true;
+      return nYearStr.includes(userYearStr) || userYearStr.includes(nYearStr);
     });
   }, [notes, userYear]);
 
@@ -590,7 +594,7 @@ export default function StudentDashboard({
                 Dismiss
               </button>
               <a 
-                href={previewNote.driveLink || '#'}
+                href={previewNote.driveLink || (previewNote.id ? `/api/notes/${previewNote.id}/download` : '#')}
                 target="_blank"
                 rel="noreferrer"
                 className="button button-primary"
@@ -673,7 +677,7 @@ function BlueprintCard({ note, onAccess, onPreview }) {
         </button>
 
         <a 
-          href={note.driveLink || '#'} 
+          href={note.driveLink || (note.id ? `/api/notes/${note.id}/download` : '#')} 
           target="_blank" 
           rel="noreferrer" 
           onClick={() => onAccess?.(note)}

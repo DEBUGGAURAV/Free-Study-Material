@@ -45,3 +45,4 @@ Ab jab bhi koi student kisi bhi PDF note par download click karega:
 * Request automatically Cloudflare Edge CDN se route hogi.
 * File India ke local Mumbai/Delhi server par 7 days tak cache rahegi.
 * Students ko **80+ MB/s** ki superfast speed milegi aur Render server par 0% load aayega!
+
