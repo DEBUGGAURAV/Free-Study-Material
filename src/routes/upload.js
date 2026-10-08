@@ -9,6 +9,7 @@ const { uploadFile } = require("../telegram/upload");
 const { getTopicThreadId } = require("../telegram/topics");
 const { optionalAuth } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
+const { notesCache, foldersCache } = require("../utils/ramCache");
 
 // Ensure temp directory exists for incoming uploads
 const tempDir = path.join(__dirname, "../../temp");
@@ -174,6 +175,8 @@ router.post("/", optionalAuth, uploadLimiter, handleUploadMiddleware, async (req
 
     // Save to Firestore
     const docRef = await db.collection("notes").add(noteDoc);
+    notesCache.clear(); // Instantly bust cache so fresh upload appears across all clients
+    foldersCache.clear();
 
     // Clean up temporary local file
     fs.unlink(tempFilePath, (err) => {

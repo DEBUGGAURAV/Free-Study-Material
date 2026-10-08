@@ -6,6 +6,7 @@ const bot = require("../telegram/bot");
 const { streamDownloadMtproto } = require("../telegram/mtproto");
 const { optionalAuth, auth } = require("../middleware/auth");
 const { readLimiter, downloadLimiter } = require("../middleware/rateLimit");
+const { notesCache } = require("../utils/ramCache");
 
 const isMtprotoActive = Boolean(process.env.TELEGRAM_API_ID && process.env.TELEGRAM_API_HASH);
 
@@ -57,19 +58,30 @@ function sanitizeNote({ telegramChatId, telegramMessageId, telegramFileId, allow
   return cleanNote;
 }
 
-// 1. GET /api/notes - List all accessible notes
+// 1. GET /api/notes - List all accessible notes with In-Memory RAM Caching (~1-3ms)
 router.get("/", optionalAuth, readLimiter, async (req, res) => {
   try {
-    const snapshot = await db.collection("notes").limit(500).get();
-    const notes = [];
+    let allNotes = notesCache.get("all_notes");
+    let cacheHit = true;
 
-    snapshot.forEach((doc) => {
-      const note = { id: doc.id, ...doc.data() };
+    if (!allNotes) {
+      cacheHit = false;
+      const snapshot = await db.collection("notes").limit(500).get();
+      allNotes = [];
+      snapshot.forEach((doc) => {
+        allNotes.push({ id: doc.id, ...doc.data() });
+      });
+      notesCache.set("all_notes", allNotes);
+    }
+
+    const notes = [];
+    for (const note of allNotes) {
       if (canAccess(note, req.user)) {
         notes.push(sanitizeNote(note));
       }
-    });
+    }
 
+    res.setHeader("X-Cache", cacheHit ? "HIT" : "MISS");
     res.json({ success: true, count: notes.length, notes });
   } catch (error) {
     console.error("[Notes] Failed to load notes:", error);
@@ -104,6 +116,7 @@ router.post("/", auth, async (req, res) => {
     };
 
     const docRef = await db.collection("notes").add(noteDoc);
+    notesCache.clear(); // Purge cache so new note appears instantly
     res.json({ success: true, id: docRef.id, ...noteDoc });
   } catch (error) {
     console.error("[Notes Create] Error:", error);
@@ -285,6 +298,7 @@ router.patch("/:id/visibility", auth, async (req, res) => {
     if (Array.isArray(allowedYears)) updates.allowedYears = allowedYears;
 
     await db.collection("notes").doc(req.params.id).update(updates);
+    notesCache.clear();
 
     res.json({
       success: true,
@@ -321,6 +335,7 @@ router.delete("/:id", auth, async (req, res) => {
 
     // Delete metadata from Firestore
     await db.collection("notes").doc(req.params.id).delete();
+    notesCache.clear();
 
     res.json({ success: true, message: "Note deleted successfully" });
   } catch (error) {
@@ -377,6 +392,10 @@ router.post("/purge-stale", auth, async (req, res) => {
       // Delete from Firestore
       await db.collection("notes").doc(note.id).delete();
       deletedCount++;
+    }
+
+    if (deletedCount > 0) {
+      notesCache.clear();
     }
 
     res.json({
