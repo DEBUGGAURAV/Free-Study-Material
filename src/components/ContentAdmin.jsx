@@ -25,21 +25,11 @@ export function NoteQueue({ notes = [], folders, can, onEditNote, onDeleteNote, 
   const visible = showAll ? matches : matches.slice(0, 7);
 
   return (
-    <div className="admin-table" style={{
-      background: 'linear-gradient(145deg, rgba(20, 30, 52, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-      border: '1.5px solid rgba(0, 242, 254, 0.3)',
-      boxShadow: '0 15px 45px rgba(0,0,0,0.6), 0 0 25px rgba(0, 242, 254, 0.1)',
-      borderRadius: '20px'
-    }}>
+    <div className="admin-table">
       <div className="table-title">
         <div>
-          <span className="eyebrow" style={{ color: '#00f2fe' }}>⚡ CONTENT MODERATION QUEUE</span>
-          <h2 style={{
-            background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 50%, #c084fc 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 15px rgba(0, 242, 254, 0.25))'
-          }}>
+          <span className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>⚡ CONTENT MODERATION QUEUE</span>
+          <h2 style={{ color: 'var(--text-pure)' }}>
             Pending & Published Notes
           </h2>
         </div>
@@ -53,13 +43,7 @@ export function NoteQueue({ notes = [], folders, can, onEditNote, onDeleteNote, 
         <div key={note.id} className="table-row">
           <span className={`file-dot ${statusTone[note.status] ?? ''}`}><FileText size={20} /></span>
           <div className="row-name">
-            <b style={{
-              background: 'linear-gradient(135deg, #e0f2fe 0%, #38bdf8 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontSize: '1.05rem',
-              fontWeight: '800'
-            }}>
+            <b style={{ color: 'var(--text-pure)', fontSize: '1rem', fontWeight: 600 }}>
               {note.title}
             </b>
             <small style={{ color: '#94a3b8', display: 'block', marginTop: '3px' }}>

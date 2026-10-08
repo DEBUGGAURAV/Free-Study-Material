@@ -353,6 +353,34 @@ bot.onText(/^\/(delete|del|remove)(@\S+)?(\s+(.+))?$/i, async (msg, match) => {
   }
 });
 
-console.log("Telegram bot started with Two-Way Web Sync");
+// Periodic Auto-Sync Cleaner: Checks if any Telegram messages were deleted directly in the group
+async function cleanDeletedTelegramNotes() {
+  try {
+    const snap = await db.collection("notes").where("uploadedBy", "==", "telegram_direct").get();
+    for (const doc of snap.docs) {
+      const data = doc.data();
+      if (data.telegramChatId && data.telegramMessageId) {
+        try {
+          await bot.editMessageReplyMarkup({ inline_keyboard: [] }, { chat_id: data.telegramChatId, message_id: data.telegramMessageId });
+        } catch (err) {
+          if (err.message && err.message.includes("message to edit not found")) {
+            console.log(`[Auto-Sync Cleaner] 🗑️ Note message deleted in Telegram: "${data.title}". Purging from website...`);
+            await doc.ref.delete().catch(() => {});
+          }
+        }
+      }
+    }
+  } catch (err) {
+    // Non-blocking catch
+  }
+}
+
+// Run periodic cleaner every 60 seconds
+setInterval(cleanDeletedTelegramNotes, 60 * 1000);
+// Also run once 5 seconds after startup
+setTimeout(cleanDeletedTelegramNotes, 5000);
+
+console.log("Telegram bot started with Two-Way Web Sync & Periodic Auto-Purge");
 
 module.exports = bot;
+module.exports.cleanDeletedTelegramNotes = cleanDeletedTelegramNotes;

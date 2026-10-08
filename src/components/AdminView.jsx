@@ -185,118 +185,81 @@ export default function AdminView({
   }, [safeNotes]);
 
   return (
-    <section className="page-width">
+    <section className="page-width" style={{ padding: '32px 24px 60px' }}>
       {/* Executive Admin Header */}
-      <header className="view-head">
+      <header className="view-head" style={{ marginBottom: '32px' }}>
         <div>
-          <span className="eyebrow" style={{ color: '#00f2fe' }}>
+          <span className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>
             <Cpu size={16} /> ROOT SYSTEM CONTROL & TELEMETRY
           </span>
-          <h1 className="view-title">
-            Keep the room<br />in motion.
+          <h1 className="view-title" style={{ fontSize: 'clamp(2rem, 3.5vw, 2.8rem)' }}>
+            Administrative Center
           </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginTop: '6px' }}>
+            Academic resource management, user access control, and storage telemetry.
+          </p>
         </div>
         <button
-          className="button"
+          className="button button-primary compact-button"
           onClick={onExport}
-          style={{
-            background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 50%, #818cf8 100%)',
-            color: '#0f172a', fontWeight: '900', padding: '12px 24px', borderRadius: '12px',
-            boxShadow: '0 4px 20px rgba(0, 242, 254, 0.4)'
-          }}
+          style={{ padding: '12px 22px' }}
         >
-          <Download size={18} /> Export Workbook
+          <Download size={16} /> Export Workbook
         </button>
       </header>
 
       {/* Cyber Metric Stats Grid */}
-      <div className="stat-grid" style={{ marginBottom: '28px' }}>
-        <div className="stat" style={{
-          background: 'linear-gradient(145deg, rgba(20, 30, 52, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-          border: '1.5px solid rgba(0, 242, 254, 0.35)',
-          borderRadius: '18px', padding: '24px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.45), 0 0 15px rgba(0, 242, 254, 0.15)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <small style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase' }}>Total Users</small>
-            <span style={{ color: '#00f2fe', background: 'rgba(0, 242, 254, 0.15)', padding: '4px', borderRadius: '8px' }}><Users size={16} /></span>
+      <div className="stat-grid" style={{ marginBottom: '32px' }}>
+        <div className="stat">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Users</small>
+            <span style={{ color: 'var(--accent-cyan)', background: 'rgba(56, 189, 248, 0.12)', padding: '6px', borderRadius: 'var(--radius-sm)' }}><Users size={18} /></span>
           </div>
-          <strong style={{
-            fontSize: '2.8rem',
-            background: 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>
+          <strong style={{ fontSize: '2.4rem', color: 'var(--text-pure)', fontWeight: 800 }}>
             {safeUsers.length}
           </strong>
-          <small style={{ color: '#64748b', display: 'block', marginTop: '4px' }}>Active database profiles</small>
+          <small style={{ color: 'var(--text-dim)', display: 'block', marginTop: '4px' }}>Active database profiles</small>
         </div>
 
-        <div className="stat" style={{
-          background: 'linear-gradient(145deg, rgba(30, 27, 75, 0.7) 0%, rgba(15, 23, 42, 0.95) 100%)',
-          border: '1.5px solid rgba(192, 132, 252, 0.35)',
-          borderRadius: '18px', padding: '24px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.45), 0 0 15px rgba(192, 132, 252, 0.15)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <small style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase' }}>Subject Folders</small>
-            <span style={{ color: '#c084fc', background: 'rgba(192, 132, 252, 0.15)', padding: '4px', borderRadius: '8px' }}><Folder size={16} /></span>
+        <div className="stat">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subject Folders</small>
+            <span style={{ color: '#c084fc', background: 'rgba(168, 85, 247, 0.12)', padding: '6px', borderRadius: 'var(--radius-sm)' }}><Folder size={18} /></span>
           </div>
-          <strong style={{
-            fontSize: '2.8rem',
-            background: 'linear-gradient(135deg, #c084fc 0%, #a855f7 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>
+          <strong style={{ fontSize: '2.4rem', color: 'var(--text-pure)', fontWeight: 800 }}>
             {safeFolders.length}
           </strong>
-          <small style={{ color: '#64748b', display: 'block', marginTop: '4px' }}>Curated academic rooms</small>
+          <small style={{ color: 'var(--text-dim)', display: 'block', marginTop: '4px' }}>Curated academic rooms</small>
         </div>
 
-        <div className="stat" style={{
-          background: 'linear-gradient(145deg, rgba(40, 25, 20, 0.7) 0%, rgba(15, 23, 42, 0.95) 100%)',
-          border: '1.5px solid rgba(245, 158, 11, 0.35)',
-          borderRadius: '18px', padding: '24px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.45), 0 0 15px rgba(245, 158, 11, 0.15)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <small style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase' }}>Review Queue</small>
-            <span style={{ color: '#f59e0b', background: 'rgba(245, 158, 11, 0.15)', padding: '4px', borderRadius: '8px' }}><Clock size={16} /></span>
+        <div className="stat">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Review Queue</small>
+            <span style={{ color: '#fbbf24', background: 'rgba(245, 158, 11, 0.12)', padding: '6px', borderRadius: 'var(--radius-sm)' }}><Clock size={18} /></span>
           </div>
-          <strong style={{
-            fontSize: '2.8rem',
-            background: 'linear-gradient(135deg, #facc15 0%, #f59e0b 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>
+          <strong style={{ fontSize: '2.4rem', color: 'var(--text-pure)', fontWeight: 800 }}>
             {pendingNotes.length}
           </strong>
-          <small style={{ color: '#64748b', display: 'block', marginTop: '4px' }}>Notes awaiting review</small>
+          <small style={{ color: 'var(--text-dim)', display: 'block', marginTop: '4px' }}>Notes awaiting review</small>
         </div>
 
-        <div className="stat" style={{
-          background: 'linear-gradient(145deg, rgba(16, 35, 50, 0.7) 0%, rgba(15, 23, 42, 0.95) 100%)',
-          border: '1.5px solid rgba(56, 189, 248, 0.35)',
-          borderRadius: '18px', padding: '24px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.45), 0 0 15px rgba(56, 189, 248, 0.15)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <small style={{ color: '#94a3b8', fontSize: '0.85rem', fontWeight: '800', textTransform: 'uppercase' }}>Active Notices</small>
-            <span style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', padding: '4px', borderRadius: '8px' }}><Megaphone size={16} /></span>
+        <div className="stat">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+            <small style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Notices</small>
+            <span style={{ color: '#34d399', background: 'rgba(16, 185, 129, 0.12)', padding: '6px', borderRadius: 'var(--radius-sm)' }}><Megaphone size={18} /></span>
           </div>
-          <strong style={{
-            fontSize: '2.8rem',
-            background: 'linear-gradient(135deg, #38bdf8 0%, #00f2fe 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-          }}>
+          <strong style={{ fontSize: '2.4rem', color: 'var(--text-pure)', fontWeight: 800 }}>
             {safeNotices.length}
           </strong>
-          <small style={{ color: '#64748b', display: 'block', marginTop: '4px' }}>Campus broadcasts live</small>
+          <small style={{ color: 'var(--text-dim)', display: 'block', marginTop: '4px' }}>Campus broadcasts live</small>
         </div>
       </div>
 
       {/* 🚀 EXECUTIVE COMMAND DECK NAVIGATION BAR */}
       <div style={{
         display: 'flex', gap: '8px', padding: '6px', marginBottom: '32px',
-        background: 'rgba(11, 18, 38, 0.9)', border: '1.5px solid rgba(0, 242, 254, 0.28)',
-        borderRadius: '16px', overflowX: 'auto', backdropFilter: 'blur(16px)'
+        background: 'rgba(11, 18, 38, 0.7)', border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-lg)', overflowX: 'auto', backdropFilter: 'blur(16px)'
       }}>
         {[
           { key: 'overview', label: 'All-in-One Dashboard', icon: BarChart3, badge: null },
@@ -313,13 +276,13 @@ export default function AdminView({
               onClick={() => setAdminTab(item.key)}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '8px',
-                padding: '10px 18px', borderRadius: '12px',
-                background: isActive ? 'linear-gradient(135deg, rgba(0, 242, 254, 0.22) 0%, rgba(56, 189, 248, 0.16) 100%)' : 'transparent',
-                border: '1px solid ' + (isActive ? 'rgba(0, 242, 254, 0.55)' : 'transparent'),
-                color: isActive ? '#00f2fe' : '#94a3b8',
-                fontWeight: isActive ? '800' : '600',
+                padding: '10px 18px', borderRadius: 'var(--radius-md)',
+                background: isActive ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(56, 189, 248, 0.15) 100%)' : 'transparent',
+                border: '1px solid ' + (isActive ? 'rgba(99, 102, 241, 0.5)' : 'transparent'),
+                color: isActive ? 'var(--text-pure)' : 'var(--text-muted)',
+                fontWeight: isActive ? '700' : '500',
                 fontSize: '0.88rem', whiteSpace: 'nowrap',
-                boxShadow: isActive ? '0 0 20px rgba(0, 242, 254, 0.25)' : 'none',
+                boxShadow: isActive ? '0 4px 14px rgba(0, 0, 0, 0.35)' : 'none',
                 transition: 'all 0.2s ease', cursor: 'pointer'
               }}
             >
@@ -327,9 +290,9 @@ export default function AdminView({
               <span>{item.label}</span>
               {item.badge && (
                 <span style={{
-                  padding: '2px 8px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800',
-                  background: isActive ? 'rgba(0, 242, 254, 0.2)' : 'rgba(255, 255, 255, 0.08)',
-                  color: isActive ? '#00f2fe' : '#cbd5e1'
+                  padding: '2px 8px', borderRadius: 'var(--radius-full)', fontSize: '0.72rem', fontWeight: '700',
+                  background: isActive ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                  color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'
                 }}>
                   {item.badge}
                 </span>
@@ -564,10 +527,7 @@ export default function AdminView({
 
           {/* Admin Role Requests */}
           {safeRoleRequests.length > 0 && (
-            <div className="admin-table" style={{
-              background: 'linear-gradient(145deg, rgba(30, 20, 40, 0.9) 0%, rgba(15, 244, 63, 0.95) 100%)',
-              border: '1.5px solid rgba(244, 63, 94, 0.4)', borderRadius: '20px', marginBottom: '32px'
-            }}>
+            <div className="admin-table">
               <div className="table-title">
                 <div>
                   <span className="eyebrow" style={{ color: '#f43f5e' }}>⚠️ SECURITY ELEVATION QUEUE</span>
@@ -578,10 +538,10 @@ export default function AdminView({
                 <div key={request.id} className="table-row">
                   <span className="file-dot pink"><ShieldCheck size={20} /></span>
                   <div className="row-name">
-                    <b style={{ color: '#fecdd3', fontSize: '1.05rem' }}>
+                    <b style={{ color: 'var(--text-pure)', fontSize: '1.02rem' }}>
                       {request.targetName || request.targetEmail || 'Promotion request'}
                     </b>
-                    <small style={{ color: '#94a3b8', display: 'block', marginTop: '3px' }}>
+                    <small style={{ color: 'var(--text-muted)', display: 'block', marginTop: '3px' }}>
                       {request.requestedByName || request.requestedByEmail || 'A content admin'} requested full admin access
                     </small>
                   </div>
@@ -620,13 +580,10 @@ export default function AdminView({
 
       {/* 👥 USERS & ACCESS DIRECTORY TAB OR OVERVIEW - User Records Management Table */}
       {(adminTab === 'overview' || adminTab === 'users') && (
-        <div className="admin-table" style={{
-        background: 'linear-gradient(145deg, rgba(20, 30, 52, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
-        border: '1.5px solid rgba(0, 242, 254, 0.3)', borderRadius: '20px', marginBottom: '32px'
-      }}>
+        <div className="admin-table">
         <div className="table-title">
           <div>
-            <span className="eyebrow" style={{ color: '#00f2fe' }}>⚡ ACCESS DIRECTORY</span>
+            <span className="eyebrow" style={{ color: 'var(--accent-cyan)' }}>⚡ ACCESS DIRECTORY</span>
             <h2>User Profiles & Accounts</h2>
           </div>
           <div className="table-tools">
@@ -657,13 +614,13 @@ export default function AdminView({
               key={user.id}
               id={`student-row-${user.id}`}
               style={{
-                margin: '12px 18px',
-                borderRadius: '16px',
-                border: '1.5px solid ' + (isEditing ? 'rgba(0, 242, 254, 0.7)' : isExpanded ? 'rgba(0, 242, 254, 0.5)' : 'rgba(0, 242, 254, 0.15)'),
-                background: isEditing ? 'linear-gradient(145deg, rgba(16, 26, 48, 0.95) 0%, rgba(10, 18, 36, 0.98) 100%)' : 'rgba(15, 23, 42, 0.85)',
+                margin: '10px 0',
+                borderRadius: 'var(--radius-lg)',
+                border: '1px solid ' + (isEditing ? 'var(--accent-cyan)' : isExpanded ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.06)'),
+                background: isEditing ? 'rgba(30, 41, 68, 0.55)' : 'rgba(15, 23, 42, 0.45)',
                 overflow: 'hidden',
-                transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                boxShadow: (isEditing || isExpanded) ? '0 12px 36px rgba(0, 242, 254, 0.22)' : '0 4px 14px rgba(0,0,0,0.3)'
+                transition: 'all 0.25s ease',
+                boxShadow: (isEditing || isExpanded) ? '0 10px 30px rgba(0, 0, 0, 0.4)' : 'none'
               }}
             >
               {/* Main User Row Header */}
@@ -673,14 +630,14 @@ export default function AdminView({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: '1 1 320px' }}>
                   <div style={{
-                    width: '46px', height: '46px', borderRadius: '12px',
+                    width: '44px', height: '44px', borderRadius: 'var(--radius-md)',
                     background: user.role === 'admin'
-                      ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.2) 0%, rgba(245, 158, 11, 0.3) 100%)'
-                      : 'linear-gradient(135deg, rgba(0, 242, 254, 0.15) 0%, rgba(56, 189, 248, 0.25) 100%)',
-                    border: '1.5px solid ' + (user.role === 'admin' ? '#fbbf24' : '#00f2fe'),
+                      ? 'rgba(245, 158, 11, 0.15)'
+                      : 'rgba(56, 189, 248, 0.12)',
+                    border: '1px solid ' + (user.role === 'admin' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(56, 189, 248, 0.3)'),
                     display: 'grid', placeItems: 'center',
-                    color: user.role === 'admin' ? '#fbbf24' : '#00f2fe',
-                    fontWeight: '900', fontSize: '1.1rem'
+                    color: user.role === 'admin' ? '#fbbf24' : 'var(--accent-cyan)',
+                    fontWeight: '800', fontSize: '1.05rem'
                   }}>
                     {user.name?.slice(0, 2)?.toUpperCase() || 'TT'}
                   </div>
@@ -688,26 +645,23 @@ export default function AdminView({
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <b style={{
-                        background: user.role === 'admin'
-                          ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)'
-                          : 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)',
-                        WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-                        fontSize: '1.15rem', fontWeight: '800'
+                        color: user.role === 'admin' ? '#fbbf24' : 'var(--text-pure)',
+                        fontSize: '1.05rem', fontWeight: '700'
                       }}>
                         {user.name || 'Unnamed student'}
                       </b>
 
                       <span style={{
-                        padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800',
-                        background: user.role === 'admin' ? 'rgba(251, 191, 36, 0.15)' : user.role === 'content_admin' ? 'rgba(0, 242, 254, 0.15)' : 'rgba(56, 189, 248, 0.15)',
-                        color: user.role === 'admin' ? '#fbbf24' : user.role === 'content_admin' ? '#00f2fe' : '#38bdf8',
+                        padding: '2px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.72rem', fontWeight: '700',
+                        background: user.role === 'admin' ? 'rgba(245, 158, 11, 0.15)' : user.role === 'content_admin' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(99, 102, 241, 0.15)',
+                        color: user.role === 'admin' ? '#fbbf24' : user.role === 'content_admin' ? 'var(--accent-cyan)' : 'var(--primary-light)',
                         border: '1px solid currentColor'
                       }}>
                         {user.role === 'admin' ? '👑 Full Admin' : user.role === 'content_admin' ? '⚡ Content Admin' : '🎓 Student'}
                       </span>
 
                       <span style={{
-                        padding: '2px 10px', borderRadius: '20px', fontSize: '0.72rem', fontWeight: '800',
+                        padding: '2px 10px', borderRadius: 'var(--radius-full)', fontSize: '0.72rem', fontWeight: '700',
                         background: user.blocked ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)',
                         color: user.blocked ? '#fb7185' : '#34d399',
                         border: '1px solid currentColor'
@@ -716,8 +670,8 @@ export default function AdminView({
                       </span>
                     </div>
 
-                    <div style={{ color: '#94a3b8', fontSize: '0.85rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{ color: '#e0f2fe' }}>{user.email}</span>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.84rem', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ color: 'var(--text-main)' }}>{user.email}</span>
                       {user.mobile && <span>• 📱 {user.mobile}</span>}
                       {user.college && <span>• 🏛️ {user.college}</span>}
                       {user.year && <span>• 📚 {user.year}</span>}
@@ -727,12 +681,12 @@ export default function AdminView({
                     {/* 🕒 REGISTRATION TIME BADGE */}
                     <div style={{
                       display: 'inline-flex', alignItems: 'center', gap: '6px',
-                      marginTop: '6px', padding: '3px 10px', borderRadius: '8px',
-                      background: 'rgba(0, 242, 254, 0.08)', border: '1px solid rgba(0, 242, 254, 0.25)',
-                      color: '#38bdf8', fontSize: '0.78rem', fontWeight: '600'
+                      marginTop: '6px', padding: '3px 10px', borderRadius: 'var(--radius-sm)',
+                      background: 'rgba(255, 255, 255, 0.04)', border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-dim)', fontSize: '0.76rem', fontWeight: '500'
                     }}>
-                      <Calendar size={13} style={{ color: '#00f2fe' }} />
-                      <span>Registration Time: <strong style={{ color: '#00f2fe' }}>{formatDate(user.registeredAt || user.createdAt)}</strong></span>
+                      <Calendar size={13} style={{ color: 'var(--accent-cyan)' }} />
+                      <span>Registered: <strong style={{ color: 'var(--text-main)' }}>{formatDate(user.registeredAt || user.createdAt)}</strong></span>
                     </div>
                   </div>
                 </div>
@@ -741,42 +695,36 @@ export default function AdminView({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   {/* ✏️ EDIT USER DETAIL BUTTON */}
                   <button
-                    className="button compact-button"
+                    className="button button-secondary compact-button"
                     onClick={() => startEditUser(user)}
                     style={{
-                      background: isEditing
-                        ? 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)'
-                        : 'linear-gradient(135deg, rgba(0, 242, 254, 0.15) 0%, rgba(56, 189, 248, 0.25) 100%)',
-                      border: '1.2px solid rgba(0, 242, 254, 0.6)',
-                      color: isEditing ? '#0f172a' : '#00f2fe',
-                      fontWeight: '800', padding: '6px 14px', borderRadius: '8px',
-                      display: 'flex', alignItems: 'center', gap: '6px'
+                      borderColor: isEditing ? 'var(--accent-cyan)' : 'var(--border-subtle)',
+                      color: isEditing ? 'var(--accent-cyan)' : 'var(--text-main)',
+                      fontSize: '0.8rem', padding: '6px 12px'
                     }}
                   >
-                    <Pencil size={13} /> {isEditing ? 'Close Card Form' : 'Edit / Update Student'}
+                    <Pencil size={13} /> {isEditing ? 'Close Edit' : 'Edit Profile'}
                   </button>
 
                   {/* 📊 ACTIVITY & AUDIT LOGS BUTTON */}
                   <button
-                    className="button compact-button"
+                    className="button button-ghost compact-button"
                     onClick={() => toggleUserActivity(user.id)}
                     style={{
-                      background: isExpanded ? 'linear-gradient(135deg, #00f2fe 0%, #38bdf8 100%)' : 'rgba(0, 242, 254, 0.08)',
-                      border: '1.2px solid rgba(0, 242, 254, 0.4)',
-                      color: isExpanded ? '#0f172a' : '#38bdf8',
-                      fontWeight: '800', padding: '6px 14px', borderRadius: '8px',
-                      display: 'flex', alignItems: 'center', gap: '6px'
+                      background: isExpanded ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                      color: isExpanded ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                      fontSize: '0.8rem', padding: '6px 12px'
                     }}
                   >
                     <Activity size={13} />
-                    Logs & History {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    Logs {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </button>
 
                   {/* BLOCK / UNBLOCK BUTTON */}
                   <button
                     className="button button-ghost compact-button"
                     onClick={() => onBlock(user.id, !user.blocked)}
-                    style={{ padding: '6px 12px', fontSize: '0.8rem', borderRadius: '8px' }}
+                    style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                   >
                     {user.blocked ? 'Unblock' : 'Block'}
                   </button>
