@@ -2,6 +2,7 @@ services:
   - type: web
     name: freestudymaterial
     runtime: node
+    region: singapore
     plan: free
     buildCommand: npm install --include=dev && npm run build
     startCommand: node src/server.js
