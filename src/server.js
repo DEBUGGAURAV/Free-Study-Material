@@ -37,6 +37,7 @@ app.use(
 // CORS Policy
 const allowedOrigins = [
   process.env.CLIENT_URL,
+  "https://free-study-material-1g0w.onrender.com",
   "https://freestudymaterial.onrender.com",
   "http://localhost:5173",
   "http://localhost:5000",

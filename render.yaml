@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
-        value: https://freestudymaterial.onrender.com
+        value: https://free-study-material-1g0w.onrender.com
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID
