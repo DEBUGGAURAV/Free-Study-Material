@@ -230,6 +230,13 @@ function enqueueUpload(task) {
           progress: 100,
           isDuplicate: true,
           savingsPercent: 100,
+          duplicateReceipt: {
+            isDuplicate: true,
+            title: originalName,
+            existingNoteId: duplicate.id,
+            streamUrl: `/api/notes/${duplicate.id}/stream`,
+            message: "♻️ Duplicate Notice: This file already exists in Academic Cloud Vault. Instant 0s deduplication applied.",
+          },
         });
 
         updatePipelineStage(noteId, 3, "completed", "Deduplication Hit! Reused existing file reference", { progress: 70 });

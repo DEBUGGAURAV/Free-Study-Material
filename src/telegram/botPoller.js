@@ -268,14 +268,15 @@ async function processIncomingMessage(message) {
 
       if (syncLock.canSendReceipt(chatId, messageId)) {
         const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
-        const dupNotice = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-          `✅ <b>Note Live on Academic Cloud Website!</b>\n` +
+        const dupNotice = `♻️ <b>Free Study Material — Duplicate Notice Receipt</b>\n\n` +
+          `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
           `📄 <b>Title:</b> ${dupData.title || title}\n` +
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
           `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
           `💾 <b>Size:</b> ${sizeMB} MB\n` +
-          `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-          `<i>Note is live at #1 position and accessible to registered students. (Unified without duplication).</i>`;
+          `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${duplicateDoc.id}/stream\n` +
+          `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
+          `<i>🛡️ <b>Deduplication Shield:</b> This document is already indexed and live on the website. Duplicate re-upload was safely prevented to conserve cloud storage. Students can access it directly.</i>`;
 
         await sendTelegramMessage(chatId, dupNotice, messageId, threadId);
       }
@@ -366,7 +367,8 @@ async function processIncomingMessage(message) {
         `📚 <b>Subject:</b> ${subject}\n` +
         `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
         `💾 <b>Size:</b> ${sizeMB} MB\n` +
-        `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
+        `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${noteRef.id}/stream\n` +
+        `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
         `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
       await sendTelegramMessage(chatId, receiptText, messageId, threadId);
