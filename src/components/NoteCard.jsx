@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { FileText, Download, Eye, Share2, Check, Activity, Sparkles, Wifi } from "lucide-react";
+import { FileText, Download, Eye, Share2, Check, Activity } from "lucide-react";
 import { api } from "../api";
 import { downloadFromPeerMesh, cacheNoteBuffer } from "../utils/p2pMesh";
 

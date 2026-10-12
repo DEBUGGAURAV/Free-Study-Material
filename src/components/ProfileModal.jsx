@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, Key, Phone, School, Calendar, CheckCircle2, AlertCircle, Save } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save } from "lucide-react";
 import { api } from "../api";
 
 export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUpdated }) {

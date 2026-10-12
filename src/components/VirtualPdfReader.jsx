@@ -12,10 +12,8 @@ import {
   Maximize,
   Minimize,
   Download,
-  Share2,
   FileText,
   AlertCircle,
-  Wifi,
   Sparkles,
 } from "lucide-react";
 import { cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";

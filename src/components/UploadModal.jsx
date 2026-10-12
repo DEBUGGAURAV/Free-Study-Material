@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { X, UploadCloud, CheckCircle2, FileText, AlertCircle, Sparkles, Activity } from "lucide-react";
+import { X, UploadCloud, CheckCircle2, AlertCircle, Sparkles, Activity } from "lucide-react";
 import { api } from "../api";
 
 export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {

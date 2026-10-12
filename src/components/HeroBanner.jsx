@@ -1,5 +1,5 @@
 import React from "react";
-import { Sparkles, Wifi, FileText, Search, Zap, Cpu } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 export default function HeroBanner({ totalNotes }) {
   return (

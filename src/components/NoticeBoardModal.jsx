@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Bell, Pin, ExternalLink, Plus, Trash2, Edit3, CheckCircle, AlertCircle } from "lucide-react";
+import { X, Bell, Pin, ExternalLink, Plus, Trash2, Edit3 } from "lucide-react";
 import { api } from "../api";
 
 export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenNote, onOpenAuth }) {
