@@ -15,6 +15,7 @@ import {
   FileText,
   AlertCircle,
   Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import { cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
 
@@ -36,6 +37,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
   const [nightMode, setNightMode] = useState(true); // Default to eye-care Dark Mode
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(null);
+  const [reloadTrigger, setReloadTrigger] = useState(0);
   const [isAuthGated, setIsAuthGated] = useState(false);
   const [useNativeViewer, setUseNativeViewer] = useState(false);
 
@@ -141,7 +143,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
     return () => {
       isCancelled = true;
     };
-  }, [url, noteId, file, note]);
+  }, [url, noteId, file, note, reloadTrigger]);
 
   // Render page when currentPage or scale changes
   useEffect(() => {
@@ -716,7 +718,18 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
             <AlertCircle size={32} style={{ color: "#f43f5e", margin: "0 auto 10px" }} />
             <div style={{ fontWeight: 600, color: "#fff", marginBottom: "6px" }}>Document Viewer Notice</div>
             <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "16px" }}>{error}</div>
-            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={() => {
+                  setError(null);
+                  setReloadTrigger((prev) => prev + 1);
+                }}
+                className="btn-secondary"
+                style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <RefreshCw size={14} />
+                <span>Retry Connection</span>
+              </button>
               <button
                 onClick={() => {
                   setError(null);

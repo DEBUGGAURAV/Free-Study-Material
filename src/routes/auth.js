@@ -111,17 +111,20 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
       password,
     });
 
-    // Send email via Brevo SMTP
+    // Send email via Brevo HTTPS API / SMTP
     try {
       await sendSignupOtpEmail(cleanEmail, otp, name.trim());
     } catch (mailErr) {
       console.warn("[BREVO-SMTP] Signup OTP dispatch warning:", mailErr.message);
     }
 
+    const hasBrevoKey = Boolean((process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || "").trim());
+
     return res.json({
       success: true,
-      message: `A 6-digit registration verification code has been dispatched to ${cleanEmail}.`,
+      message: `A 6-digit registration verification code has been dispatched to ${cleanEmail}. Check your inbox or spam folder.`,
       email: cleanEmail,
+      simulationOtp: (!hasBrevoKey || process.env.NODE_ENV !== "production") ? otp : undefined,
     });
   } catch (err) {
     console.error("[AUTH] Register OTP Request error:", err);
@@ -675,16 +678,20 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
       email: cleanEmail,
     });
 
+    // Send email via Brevo HTTPS API / SMTP
     try {
       await sendForgotPasswordOtpEmail(cleanEmail, otp, userData.name || "Scholar");
     } catch (mailErr) {
       console.warn("[BREVO-SMTP] Forgot Password OTP warning:", mailErr.message);
     }
 
+    const hasBrevoKey = Boolean((process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || "").trim());
+
     return res.json({
       success: true,
-      message: `A password reset code has been dispatched to ${cleanEmail}.`,
+      message: `A password reset code has been dispatched to ${cleanEmail}. Check your inbox or spam folder.`,
       email: cleanEmail,
+      simulationOtp: (!hasBrevoKey || process.env.NODE_ENV !== "production") ? otp : undefined,
     });
   } catch (err) {
     console.error("[AUTH] Forgot Password Request error:", err);

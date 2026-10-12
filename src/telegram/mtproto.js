@@ -8,10 +8,10 @@ const fs = require("fs");
 const path = require("path");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 
-const apiId = parseInt(process.env.TELEGRAM_API_ID, 10);
-const apiHash = process.env.TELEGRAM_API_HASH;
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
-const storageChatId = process.env.TELEGRAM_STORAGE_CHAT_ID;
+const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
+const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();
+const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const storageChatId = (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
 
 let client = null;
 let isConnected = false;
@@ -35,12 +35,34 @@ function clearCache() {
 }
 
 async function getClient() {
-  if (client && isConnected) return client;
+  // If client exists and is actively connected, return immediately
+  if (client && isConnected && client.connected) return client;
+
+  // If client exists but connection dropped, attempt fast re-connect
+  if (client && !client.connected) {
+    try {
+      console.log("[MTProto] Socket re-connecting to Telegram DC...");
+      await client.connect();
+      if (client.connected) {
+        isConnected = true;
+        return client;
+      }
+    } catch (e) {
+      console.warn("[MTProto] Quick socket re-connect warning:", e.message);
+      client = null;
+      isConnected = false;
+    }
+  }
+
   if (connectPromise) return connectPromise;
 
   connectPromise = (async () => {
     try {
-      if (!apiId || !apiHash || !botToken) {
+      const activeApiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
+      const activeApiHash = (process.env.TELEGRAM_API_HASH || "").trim();
+      const activeBotToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+
+      if (!activeApiId || !activeApiHash || !activeBotToken) {
         console.warn("[MTProto] Telegram credentials missing. MTProto disabled.");
         return null;
       }
@@ -54,16 +76,18 @@ async function getClient() {
       }
 
       const stringSession = new StringSession(savedSession);
-      client = new TelegramClient(stringSession, apiId, apiHash, {
-        connectionRetries: 5,
-        useWSS: true,
+      client = new TelegramClient(stringSession, activeApiId, activeApiHash, {
+        connectionRetries: 25,
+        retryDelay: 1000,
+        autoReconnect: true,
+        useWSS: false, // Node.js works best with direct TCPFull
         deviceModel: "AcademicCloud-v3",
         appVersion: "3.0.0",
         systemVersion: "Production",
       });
 
       await client.start({
-        botAuthToken: botToken,
+        botAuthToken: activeBotToken,
       });
 
       try {
@@ -74,7 +98,7 @@ async function getClient() {
       } catch {}
 
       isConnected = true;
-      console.log("[MTProto] Connected directly to Telegram DC via GramJS (8 Workers Engine).");
+      console.log("[MTProto] Connected directly to Telegram DC via GramJS (16 Workers Engine).");
 
       // Initialize Two-Way Channel Synchronization Listeners
       setupChannelSyncListeners(client);
@@ -1226,10 +1250,15 @@ async function uploadToStorageChannel(filePath, caption = "", fileName = null, o
  * Streams a document from Telegram storage channel directly in 512KB chunks
  */
 async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
-  const c = await getClient();
-  if (!c) throw new Error("MTProto client not initialized");
+  let c = await getClient();
+  if (!c) {
+    console.log("[MTProto STREAM] MTProto socket initializing, awaiting connection...");
+    await new Promise((r) => setTimeout(r, 2500));
+    c = await getClient();
+  }
+  if (!c) throw new Error("MTProto client not initialized. Telegram DC is reconnecting, please retry in a moment.");
 
-  const targetChannel = storageChatId;
+  const targetChannel = (process.env.TELEGRAM_STORAGE_CHAT_ID || storageChatId || "").trim();
   const messages = await c.getMessages(targetChannel, { ids: [Number(messageId)] });
   if (!messages || !messages[0] || !messages[0].media || !messages[0].media.document) {
     throw new Error(`Document not found for message ID ${messageId}`);
@@ -1269,7 +1298,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
     res.setHeader("Content-Length", totalSize);
   }
 
-  // Stream in 512KB chunks using 8 parallel worker connections
+  // Stream in 512KB chunks using 16 parallel worker connections
   const chunkSize = 512 * 1024;
   const location = new Api.InputDocumentFileLocation({
     id: doc.id,
@@ -1284,7 +1313,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
     offset: bigInt(start),
     chunkSize: chunkSize,
     requestSize: chunkSize,
-    workers: 8,
+    workers: 16,
   })) {
     if (res.writableEnded || res.destroyed) break;
 
@@ -1387,8 +1416,8 @@ function getMTProtoDetails() {
     dcIp: `${serverAddress}:${port}`,
     dcLocation: dcId === 4 ? "DC 4 (Amsterdam, Netherlands - Primary EU/Global)" : dcId === 2 ? "DC 2 (Amsterdam, Netherlands)" : `DC ${dcId}`,
     protocol: "MTProto 2.0 (GramJS / TCPFull)",
-    transport: "WSS / TCP Socket Fallback",
-    workers: 8,
+    transport: "High-Speed TCP Socket (16 Parallel Threads)",
+    workers: 16,
     deviceModel: "AcademicCloud-v3",
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,

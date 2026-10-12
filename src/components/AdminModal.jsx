@@ -1642,7 +1642,7 @@ export default function AdminModal({
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Worker Socket Pool:</span>
-                      <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>{softwareInfo?.mtproto?.workers || 8} Parallel Sockets</span>
+                      <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>{softwareInfo?.mtproto?.workers || 16} Parallel Sockets</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Vault Storage Channel:</span>

@@ -510,12 +510,38 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
       downloadsCount: (note.downloadsCount || 0) + 1,
     }).catch(() => {});
 
-    // Stream directly from Telegram DC via MTProto 8-Worker engine
-    await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+    // Stream directly from Telegram DC via MTProto 16-Worker engine
+    try {
+      await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+    } catch (streamErr) {
+      console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
+
+      // Secondary Failover: Telegram Bot API direct stream (if bot file ID exists)
+      const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+      const botFileId = note.telegramBotFileId || note.telegramFileId;
+      if (botFileId && botToken) {
+        try {
+          const fileMetaRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`);
+          const fileMetaData = await fileMetaRes.json();
+          if (fileMetaData.ok && fileMetaData.result?.file_path) {
+            const rawFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileMetaData.result.file_path}`;
+            return res.redirect(rawFileUrl);
+          }
+        } catch (botErr) {
+          console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
+        }
+      }
+
+      if (note.driveLink) {
+        return res.redirect(note.driveLink);
+      }
+
+      throw streamErr;
+    }
   } catch (err) {
     console.error("[STREAM] Error streaming note:", err.message);
     if (!res.headersSent) {
-      res.status(500).json({ success: false, message: "Streaming error: " + err.message });
+      res.status(500).json({ success: false, message: "Streaming error: " + err.message, retryable: true });
     }
   }
 });

@@ -103,7 +103,12 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     try {
       const res = await api.requestForgotPasswordOtp(cleanEmail);
       setForgotOtpStep(true);
-      setSuccessMsg(res.message || "Password recovery OTP code sent to your Gmail.");
+      if (res.simulationOtp) {
+        setForgotOtpCode(res.simulationOtp);
+        setSuccessMsg(`${res.message || "Code dispatched!"} (Auto-Fill Code: ${res.simulationOtp})`);
+      } else {
+        setSuccessMsg(res.message || "Password recovery OTP code sent to your Gmail.");
+      }
     } catch (err) {
       setError(err.message || "Failed to dispatch password recovery OTP.");
     } finally {
@@ -184,7 +189,12 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
       });
 
       setSignUpOtpStep(true);
-      setSuccessMsg(res.message || "Verification code sent to your Gmail.");
+      if (res.simulationOtp) {
+        setSignUpOtpCode(res.simulationOtp);
+        setSuccessMsg(`${res.message || "Code dispatched!"} (Auto-Fill Code: ${res.simulationOtp})`);
+      } else {
+        setSuccessMsg(res.message || "Verification code sent to your Gmail.");
+      }
     } catch (err) {
       setError(err.message || "Failed to dispatch registration OTP.");
     } finally {
