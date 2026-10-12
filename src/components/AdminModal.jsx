@@ -51,6 +51,7 @@ import {
   Monitor,
   Compass,
   ShieldCheck,
+  ShieldAlert,
   PlayCircle,
   Filter,
 } from "lucide-react";
@@ -67,6 +68,7 @@ export default function AdminModal({
   branches = [],
 }) {
   const [activeTab, setActiveTab] = useState("notes");
+  const isHalfAdmin = currentUser?.role === "half_admin";
 
   // Dashboard Slides Catalog (1 to 8)
   const DASHBOARD_TABS = [
@@ -76,7 +78,7 @@ export default function AdminModal({
     { id: "software", num: 4, label: "4. 💻 Software Telemetry", title: "Software Telemetry" },
     { id: "pipeline", num: 5, label: "5. 🚀 Upload Pipeline", title: "Upload Pipeline" },
     { id: "performance", num: 6, label: "6. ⚡ CDN & Performance", title: "CDN & Performance" },
-    { id: "database", num: 7, label: "7. 🗄️ Database Studio", title: "Database Studio" },
+    { id: "database", num: 7, label: isHalfAdmin ? "7. 🔒 Database (Restricted)" : "7. 🗄️ Database Studio", title: "Database Studio" },
     { id: "recycle_bin", num: 8, label: "8. ♻️ Restore Vault", title: "Restore Vault" },
   ];
 
@@ -294,6 +296,7 @@ export default function AdminModal({
   };
 
   const loadDatabaseOverview = async () => {
+    if (isHalfAdmin) return;
     try {
       const res = await api.getDatabaseOverview();
       setDbOverview(res);
@@ -301,6 +304,7 @@ export default function AdminModal({
   };
 
   const loadCollectionItems = async (colName = selectedCollection) => {
+    if (isHalfAdmin) return;
     try {
       setCollectionLoading(true);
       const res = await api.getDatabaseCollection(colName);
@@ -1084,14 +1088,16 @@ export default function AdminModal({
                     <span>{syncingTelegram ? "Syncing..." : "Sync Telegram Channel"}</span>
                   </button>
 
-                  <button
-                    onClick={() => setShowDeleteAllModal(true)}
-                    className="btn-danger"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
-                  >
-                    <Trash2 size={14} />
-                    <span>Move All Notes to Restore Vault</span>
-                  </button>
+                  {!isHalfAdmin && (
+                    <button
+                      onClick={() => setShowDeleteAllModal(true)}
+                      className="btn-danger"
+                      style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
+                    >
+                      <Trash2 size={14} />
+                      <span>Move All Notes to Restore Vault</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1218,14 +1224,16 @@ export default function AdminModal({
                   />
                 </div>
 
-                <button
-                  onClick={handleDeleteAllStudents}
-                  className="btn-danger"
-                  style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
-                >
-                  <Trash2 size={14} />
-                  <span>Move All Students to Restore Vault</span>
-                </button>
+                {!isHalfAdmin && (
+                  <button
+                    onClick={handleDeleteAllStudents}
+                    className="btn-danger"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
+                  >
+                    <Trash2 size={14} />
+                    <span>Move All Students to Restore Vault</span>
+                  </button>
+                )}
               </div>
 
               {studentsError && (
@@ -1281,16 +1289,44 @@ export default function AdminModal({
                           <td style={{ padding: "12px 16px" }}>
                             <span
                               style={{
-                                padding: "2px 8px",
+                                padding: "3px 9px",
                                 borderRadius: "6px",
                                 fontSize: "0.72rem",
                                 fontWeight: 700,
-                                background: student.role === "admin" ? "rgba(245, 158, 11, 0.15)" : student.role === "manager" ? "rgba(99, 102, 241, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                                color: student.role === "admin" ? "#fbbf24" : student.role === "manager" ? "#818cf8" : "var(--text-dim)",
-                                border: `1px solid ${student.role === "admin" ? "rgba(245, 158, 11, 0.3)" : student.role === "manager" ? "rgba(99, 102, 241, 0.3)" : "rgba(255, 255, 255, 0.1)"}`,
+                                background:
+                                  student.email?.toLowerCase() === "jnplotus@gmail.com"
+                                    ? "rgba(245, 158, 11, 0.25)"
+                                    : student.role === "admin"
+                                    ? "rgba(245, 158, 11, 0.15)"
+                                    : student.role === "half_admin"
+                                    ? "rgba(168, 85, 247, 0.18)"
+                                    : "rgba(255, 255, 255, 0.05)",
+                                color:
+                                  student.email?.toLowerCase() === "jnplotus@gmail.com"
+                                    ? "#f59e0b"
+                                    : student.role === "admin"
+                                    ? "#fbbf24"
+                                    : student.role === "half_admin"
+                                    ? "#c084fc"
+                                    : "var(--text-dim)",
+                                border: `1px solid ${
+                                  student.email?.toLowerCase() === "jnplotus@gmail.com"
+                                    ? "rgba(245, 158, 11, 0.5)"
+                                    : student.role === "admin"
+                                    ? "rgba(245, 158, 11, 0.3)"
+                                    : student.role === "half_admin"
+                                    ? "rgba(168, 85, 247, 0.35)"
+                                    : "rgba(255, 255, 255, 0.1)"
+                                }`,
                               }}
                             >
-                              {(student.role || "student").toUpperCase()}
+                              {student.email?.toLowerCase() === "jnplotus@gmail.com"
+                                ? "👑 MASTER ADMIN"
+                                : student.role === "admin"
+                                ? "👑 FULL ADMIN"
+                                : student.role === "half_admin"
+                                ? "⚡ HALF ADMIN"
+                                : "🎓 STUDENT"}
                             </span>
                           </td>
                           <td style={{ padding: "12px 16px" }}>
@@ -2294,6 +2330,71 @@ export default function AdminModal({
 
           {/* TAB 7: DATABASE STUDIO */}
           {activeTab === "database" && (
+            isHalfAdmin ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "60px 24px",
+                  background: "rgba(239, 68, 68, 0.04)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                  borderRadius: "16px",
+                  margin: "10px 0 20px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "68px",
+                    height: "68px",
+                    borderRadius: "50%",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 18px",
+                    color: "#f87171",
+                  }}
+                >
+                  <ShieldAlert size={36} />
+                </div>
+                <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#f87171", margin: "0 0 10px" }}>
+                  Database Studio Access Restricted
+                </h3>
+                <p
+                  style={{
+                    maxWidth: "560px",
+                    margin: "0 auto 18px",
+                    fontSize: "0.88rem",
+                    color: "var(--text-muted)",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Aapka account <strong>Half Admin (Sub-Administrator)</strong> position par configured hai. System security aur raw records protection ke liye Google Cloud Firestore raw collections, dynamic document explorer, DB JSON backup export, aur batch purge controls exclusively <strong>Full Administrator (Master Admin)</strong> ke liye reserved hain.
+                </p>
+                <div
+                  style={{
+                    display: "inline-flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    textAlign: "left",
+                    background: "rgba(255, 255, 255, 0.03)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    padding: "16px 22px",
+                    borderRadius: "12px",
+                    fontSize: "0.82rem",
+                    color: "var(--text-dim)",
+                    maxWidth: "520px",
+                  }}
+                >
+                  <div style={{ color: "#34d399", fontWeight: 700 }}>✅ Half Admin Allowed Capabilities:</div>
+                  <div>• 📚 Notes Vault: Edit study notes, toggle visibility &amp; soft-delete to Restore Vault.</div>
+                  <div>• 👥 Student Registry: View registered students, edit profiles &amp; toggle block/unblock.</div>
+                  <div>• 🖥️ Telemetry &amp; CDN: Monitor server health, RAM usage &amp; edge cached speeds.</div>
+                  <div style={{ marginTop: "6px", color: "#f87171", fontWeight: 700 }}>🔒 Database Restrictions:</div>
+                  <div>• Direct database studio, raw collection drops, JSON export, and student bulk-wipe are disabled.</div>
+                </div>
+              </div>
+            ) : (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
@@ -2429,6 +2530,7 @@ export default function AdminModal({
                 </div>
               </div>
             </div>
+            )
           )}
 
           {/* TAB 8: RESTORE VAULT (RECYCLE BIN) */}
@@ -2454,13 +2556,15 @@ export default function AdminModal({
                       >
                         Restore Selected ({selectedRecycleIds.length})
                       </button>
-                      <button
-                        onClick={handleBatchPurge}
-                        className="btn-danger"
-                        style={{ padding: "8px 14px", fontSize: "0.82rem" }}
-                      >
-                        Purge Selected ({selectedRecycleIds.length})
-                      </button>
+                      {!isHalfAdmin && (
+                        <button
+                          onClick={handleBatchPurge}
+                          className="btn-danger"
+                          style={{ padding: "8px 14px", fontSize: "0.82rem" }}
+                        >
+                          Purge Selected ({selectedRecycleIds.length})
+                        </button>
+                      )}
                     </>
                   )}
 
@@ -2473,14 +2577,16 @@ export default function AdminModal({
                     ♻️ Restore All Items
                   </button>
 
-                  <button
-                    onClick={handlePermanentDeleteAllItems}
-                    className="btn-danger"
-                    style={{ padding: "8px 14px", fontSize: "0.82rem" }}
-                    disabled={recycleBinItems.length === 0}
-                  >
-                    🗑️ Empty Restore Vault
-                  </button>
+                  {!isHalfAdmin && (
+                    <button
+                      onClick={handlePermanentDeleteAllItems}
+                      className="btn-danger"
+                      style={{ padding: "8px 14px", fontSize: "0.82rem" }}
+                      disabled={recycleBinItems.length === 0}
+                    >
+                      🗑️ Empty Restore Vault
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2616,14 +2722,16 @@ export default function AdminModal({
                                   ♻️ Restore
                                 </button>
 
-                                <button
-                                  onClick={() => handlePermanentDeleteItem(item.id)}
-                                  className="btn-danger"
-                                  style={{ padding: "6px 10px", fontSize: "0.78rem" }}
-                                  title="Purge Forever"
-                                >
-                                  ✕
-                                </button>
+                                {!isHalfAdmin && (
+                                  <button
+                                    onClick={() => handlePermanentDeleteItem(item.id)}
+                                    className="btn-danger"
+                                    style={{ padding: "6px 10px", fontSize: "0.78rem" }}
+                                    title="Purge Forever"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2907,16 +3015,64 @@ export default function AdminModal({
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Account Role</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Account Role &amp; Privileges</label>
+                    {editingStudent.email?.toLowerCase() === "jnplotus@gmail.com" && (
+                      <span style={{ fontSize: "0.72rem", color: "#fbbf24", fontWeight: 700 }}>
+                        👑 Permanent Master Admin
+                      </span>
+                    )}
+                  </div>
                   <select
                     className="form-input"
                     value={editingStudent.role || "student"}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, role: e.target.value })}
+                    disabled={editingStudent.email?.toLowerCase() === "jnplotus@gmail.com" || isHalfAdmin}
+                    onChange={(e) => {
+                      const newRole = e.target.value;
+                      let newPerms = ["upload_notes", "download_notes"];
+                      if (newRole === "admin") {
+                        newPerms = ["all", "manage_notes", "manage_users", "manage_notices", "delete_records", "database"];
+                      } else if (newRole === "half_admin") {
+                        newPerms = ["manage_notes", "manage_notices", "manage_users"];
+                      }
+                      setEditingStudent({ ...editingStudent, role: newRole, permissions: newPerms });
+                    }}
+                    style={{
+                      borderColor:
+                        editingStudent.role === "admin"
+                          ? "rgba(245, 158, 11, 0.5)"
+                          : editingStudent.role === "half_admin"
+                          ? "rgba(168, 85, 247, 0.5)"
+                          : "rgba(255, 255, 255, 0.15)",
+                      background:
+                        editingStudent.role === "admin"
+                          ? "rgba(245, 158, 11, 0.08)"
+                          : editingStudent.role === "half_admin"
+                          ? "rgba(168, 85, 247, 0.08)"
+                          : "rgba(255, 255, 255, 0.03)",
+                    }}
                   >
-                    <option value="student">Student</option>
-                    <option value="manager">Manager / Staff</option>
-                    <option value="admin">Administrator</option>
+                    <option value="student">🎓 Student (Standard - Notes Access &amp; Uploads)</option>
+                    <option value="half_admin">⚡ Half Admin (Edit &amp; Manage - Database Restricted)</option>
+                    <option value="admin">👑 Full Administrator (Super Admin - All 8 Tabs &amp; Database Studio)</option>
                   </select>
+
+                  {/* Dynamic Role Capability Legend */}
+                  <div style={{ marginTop: "8px", fontSize: "0.75rem", lineHeight: 1.45, padding: "8px 12px", borderRadius: "8px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                    {editingStudent.role === "admin" ? (
+                      <span style={{ color: "#fbbf24" }}>
+                        👑 <strong>Full Administrator:</strong> Complete platform control. All 8 tabs, direct Google Firestore Database Studio (Tab 7), DB JSON export, and permanent database purge.
+                      </span>
+                    ) : editingStudent.role === "half_admin" ? (
+                      <span style={{ color: "#c084fc" }}>
+                        ⚡ <strong>Half Admin (Sub-Admin):</strong> Can edit/manage notes, student accounts, block/unblock, and view telemetry. <strong>Database Studio (Tab 7) is 100% blocked</strong> to protect raw data.
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-dim)" }}>
+                        🎓 <strong>Student (Standard / Revoked):</strong> Standard user permissions. Can view and download approved notes and upload study materials. Admin dashboard access is revoked.
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>

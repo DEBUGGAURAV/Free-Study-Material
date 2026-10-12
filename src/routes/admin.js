@@ -70,10 +70,25 @@ function checkAdminOrPermission(permissionKey) {
       return res.status(401).json({ success: false, message: "Authentication required." });
     }
     const isMainAdmin = req.user.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
-    const isAdmin = req.user.role === "admin";
+    const isFullAdmin = req.user.role === "admin";
+    const isHalfAdmin = req.user.role === "half_admin";
+
+    // 🛡️ Half Admin is strictly restricted from raw Database Studio & Permanent Deletions
+    if (isHalfAdmin && (permissionKey === "database" || permissionKey === "delete_records")) {
+      return res.status(403).json({
+        success: false,
+        message: "PERMISSION RESTRICTED: Database Studio & System Purge is exclusively reserved for Full Administrators.",
+      });
+    }
+
     const hasPerm = req.user.permissions?.includes("all") || req.user.permissions?.includes(permissionKey);
 
-    if (isMainAdmin || isAdmin || hasPerm) {
+    if (isMainAdmin || isFullAdmin || hasPerm) {
+      return next();
+    }
+
+    // Half Admin can view dashboard, hardware, telemetry, pipeline, cdn, and manage notes/users
+    if (isHalfAdmin && ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices"].includes(permissionKey)) {
       return next();
     }
 
@@ -91,9 +106,24 @@ function checkAdminOrPermission(permissionKey) {
         }
 
         if (uData) {
-          const liveAdmin = uData.email?.toLowerCase() === MAIN_ADMIN_EMAIL || uData.role === "admin";
+          const liveMain = uData.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
+          const liveFull = uData.role === "admin";
+          const liveHalf = uData.role === "half_admin";
+
+          if (liveHalf && (permissionKey === "database" || permissionKey === "delete_records")) {
+            return res.status(403).json({
+              success: false,
+              message: "PERMISSION RESTRICTED: Database Studio is exclusively reserved for Full Administrators.",
+            });
+          }
+
           const livePerm = uData.permissions?.includes("all") || uData.permissions?.includes(permissionKey);
-          if (liveAdmin || livePerm) {
+          if (
+            liveMain ||
+            liveFull ||
+            livePerm ||
+            (liveHalf && ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices"].includes(permissionKey))
+          ) {
             req.user.role = uData.role;
             req.user.permissions = uData.permissions || [];
             return next();
@@ -372,6 +402,14 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
       }
     }
 
+    // 🛡️ Half Admin cannot promote or demote Full Admins
+    if (req.user?.role === "half_admin" && (role === "admin" || targetUser.role === "admin")) {
+      return res.status(403).json({
+        success: false,
+        message: "PERMISSION DENIED: Half Admins cannot modify or assign Full Administrator privileges.",
+      });
+    }
+
     const updateData = {
       updatedAt: new Date().toISOString(),
     };
@@ -383,12 +421,22 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
 
     // Only allow role / permission updates if target is NOT main admin
     if (targetUser.email?.toLowerCase() !== MAIN_ADMIN_EMAIL) {
-      if (role !== undefined) updateData.role = role;
-      if (permissions !== undefined) updateData.permissions = permissions;
+      if (role !== undefined) {
+        updateData.role = role;
+        if (role === "admin") {
+          updateData.permissions = ["all", "manage_notes", "manage_users", "manage_notices", "delete_records", "database"];
+        } else if (role === "half_admin") {
+          updateData.permissions = ["manage_notes", "manage_notices", "manage_users"];
+        } else {
+          updateData.permissions = ["upload_notes", "download_notes"];
+        }
+      } else if (permissions !== undefined) {
+        updateData.permissions = permissions;
+      }
     }
 
     await docRef.update(updateData);
-    return res.json({ success: true, message: "Student record updated successfully." });
+    return res.json({ success: true, message: `Account updated! Assigned role: ${updateData.role || targetUser.role || "student"}.` });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -825,7 +873,7 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
 /**
  * DELETE /api/admin/recycle-bin/permanent/:id
  */
-router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
     const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
@@ -849,7 +897,7 @@ router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermi
  * DELETE /api/admin/recycle-bin/delete-all
  * Permanently purges and empties ALL items from the Restore Vault forever
  */
-router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
 
@@ -899,7 +947,7 @@ router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermissi
    DELETE ALL STUDENTS (WITH PERMANENT MAIN ADMIN IMMUNITY)
    ========================================================================== */
 
-router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
+router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
 
@@ -1472,7 +1520,7 @@ router.post("/telegram/sync", authenticateToken, checkAdminOrPermission("manage_
    DYNAMIC DATABASE CONTROLS & JSON EXPORT
    ========================================================================== */
 
-router.get("/database/overview", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.get("/database/overview", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     if (!db) return res.json({ success: true, collections: {} });
 
@@ -1497,7 +1545,7 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("all"
   }
 });
 
-router.get("/database/export", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.get("/database/export", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
 
@@ -1532,7 +1580,7 @@ router.get("/database/export", authenticateToken, checkAdminOrPermission("all"),
  * GET /api/admin/database/collection/:collectionName
  * Inspect any collection in Firestore dynamically
  */
-router.get("/database/collection/:collectionName", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.get("/database/collection/:collectionName", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     const { collectionName } = req.params;
     if (!["notes", "users", "notices", "deleted_notes"].includes(collectionName)) {
@@ -1554,7 +1602,7 @@ router.get("/database/collection/:collectionName", authenticateToken, checkAdmin
  * DELETE /api/admin/database/clear-collection/:collectionName
  * Bulk purge an entire collection
  */
-router.delete("/database/clear-collection/:collectionName", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.delete("/database/clear-collection/:collectionName", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     const { collectionName } = req.params;
     if (!["notes", "notices", "activities", "deleted_notes"].includes(collectionName)) {
@@ -1628,7 +1676,7 @@ router.delete("/database/clear-collection/:collectionName", authenticateToken, c
  * DELETE /api/admin/database/item/:collectionName/:id
  * Delete any individual document from any collection dynamically (Safely archived to Restore Vault)
  */
-router.delete("/database/item/:collectionName/:id", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.delete("/database/item/:collectionName/:id", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     const { collectionName, id } = req.params;
     if (!["notes", "users", "notices"].includes(collectionName)) {

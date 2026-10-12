@@ -33,7 +33,10 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ success: false, message: "Authentication required." });
   }
 
-  const isAdmin = req.user.role === "admin" || req.user.email?.toLowerCase() === "jnplotus@gmail.com";
+  const isAdmin =
+    req.user.role === "admin" ||
+    req.user.role === "half_admin" ||
+    req.user.email?.toLowerCase() === "jnplotus@gmail.com";
   if (!isAdmin) {
     return res.status(403).json({ success: false, message: "Admin access required." });
   }
