@@ -37,9 +37,6 @@ app.use(
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "https://freestudymaterial.onrender.com",
-  "https://freestudymaterial-s5x7.onrender.com",
-  "https://freestudtmaterial.onrender.com",
-  "https://free-study-material-1g0w.onrender.com",
   "http://localhost:5173",
   "http://localhost:5000",
 ].filter(Boolean);
