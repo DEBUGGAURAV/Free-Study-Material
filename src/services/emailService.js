@@ -19,7 +19,8 @@ let transporter = null;
 function getTransporter() {
   if (transporter) return transporter;
 
-  if (!SMTP_USER || !SMTP_PASS) {
+  // xkeysib- is a REST API key, not an SMTP relay password
+  if (!SMTP_USER || !SMTP_PASS || SMTP_PASS.startsWith("xkeysib-")) {
     return null;
   }
 
@@ -107,7 +108,7 @@ async function dispatchEmail({ to, toName, subject, text, html, otpType = "OTP",
           htmlContent: html,
           textContent: text,
         }),
-        signal: AbortSignal.timeout(2500),
+        signal: AbortSignal.timeout(4000),
       });
 
       if (res.ok) {
@@ -117,9 +118,20 @@ async function dispatchEmail({ to, toName, subject, text, html, otpType = "OTP",
       } else {
         const errText = await res.text().catch(() => "");
         console.warn(`[BREVO-API] HTTP ${res.status} notice: ${errText}`);
+        if (res.status === 401 && errText.includes("authorised_ips")) {
+          return {
+            success: false,
+            delivered: false,
+            ipBlocked: true,
+            error: "Brevo IP restriction active. Please deactivate blocking at https://app.brevo.com/security/authorised_ips",
+            otp,
+          };
+        }
+        return { success: false, delivered: false, error: `Brevo API HTTP ${res.status}: ${errText}`, otp };
       }
     } catch (apiErr) {
       console.warn(`[BREVO-API] API dispatch notice: ${apiErr.message}`);
+      return { success: false, delivered: false, error: apiErr.message, otp };
     }
   }
 
