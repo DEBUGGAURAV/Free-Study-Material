@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Bell, Pin, ExternalLink, Plus, Trash2, Edit3, CheckCircle, AlertCircle } from "lucide-react";
 import { api } from "../api";
 
-export default function NoticeBoardModal({ isOpen, onClose, currentUser }) {
+export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenNote, onOpenAuth }) {
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -39,6 +39,46 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleNoticeLinkClick = (e, n) => {
+    e.preventDefault();
+    if (!n.link) return;
+
+    // Check if link points to an internal note (e.g. /api/notes/:id or /api/notes/:id/stream)
+    const noteMatch = n.link.match(/\/api\/notes\/([a-zA-Z0-9_-]+)/);
+    if (noteMatch) {
+      const noteId = noteMatch[1];
+      if (currentUser) {
+        if (onOpenNote) {
+          onOpenNote(noteId);
+        }
+        onClose();
+      } else {
+        onClose();
+        if (onOpenAuth) {
+          onOpenAuth("signup");
+        }
+      }
+      return;
+    }
+
+    // If user is not logged in and link is an internal app path, prompt signup
+    if (!currentUser && (n.link.startsWith("/") || n.link.includes(window.location.host))) {
+      onClose();
+      if (onOpenAuth) {
+        onOpenAuth("signup");
+      }
+      return;
+    }
+
+    // External link: append token if pointing to notes API, else open cleanly
+    const token = localStorage.getItem("vault_token");
+    let targetUrl = n.link;
+    if (token && targetUrl.includes("/api/notes/")) {
+      targetUrl += (targetUrl.includes("?") ? "&" : "?") + `token=${token}`;
+    }
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 
   if (!isOpen) return null;
@@ -357,10 +397,9 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser }) {
                 {/* Optional Link Button: "Click Here" */}
                 {n.link && (
                   <div style={{ marginTop: "12px" }}>
-                    <a
-                      href={n.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={(e) => handleNoticeLinkClick(e, n)}
                       className="btn-secondary"
                       style={{
                         display: "inline-flex",
@@ -372,11 +411,12 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser }) {
                         borderColor: "rgba(6, 182, 212, 0.3)",
                         color: "var(--accent-cyan)",
                         fontWeight: 600,
+                        cursor: "pointer",
                       }}
                     >
                       <span>{n.linkText || "Click Here"}</span>
                       <ExternalLink size={13} />
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>

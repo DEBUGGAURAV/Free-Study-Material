@@ -1,12 +1,26 @@
 import React from "react";
-import { LayoutGrid, List, Sparkles } from "lucide-react";
+import { LayoutGrid, List, Sparkles, GraduationCap, Calendar, Layers } from "lucide-react";
 
-const SEMESTERS = ["All", "Sem 1", "Sem 2", "Sem 3", "Sem 4", "Sem 5", "Sem 6", "Sem 7", "Sem 8"];
+const COURSES = [
+  "All Courses",
+  "B.Tech",
+  "BCA",
+  "MCA",
+  "Diploma",
+  "M.Tech",
+  "B.Sc",
+  "Handwritten Notes",
+  "Question Papers",
+];
+
+const YEARS = ["All Years", "1st Year", "2nd Year", "3rd Year", "4th Year"];
 
 export default function CategoryFilter({
-  selectedSemester,
-  setSelectedSemester,
-  selectedBranch,
+  selectedCourse = "All Courses",
+  setSelectedCourse,
+  selectedYear = "All Years",
+  setSelectedYear,
+  selectedBranch = "All",
   setSelectedBranch,
   branches = [],
   totalCount,
@@ -17,22 +31,58 @@ export default function CategoryFilter({
 
   return (
     <div className="control-bar-wrapper">
-      {/* Semester Filter Tabs */}
-      <div className="semester-tabs">
-        {SEMESTERS.map((sem) => (
+      {/* Dynamic Course & Program Filter Bar (Replaced rigid Semester Scene) */}
+      <div className="semester-tabs" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-cyan)", fontSize: "0.78rem", fontWeight: 700, paddingRight: "4px", flexShrink: 0 }}>
+          <GraduationCap size={15} />
+          <span>Course:</span>
+        </div>
+        {COURSES.map((course) => (
           <button
-            key={sem}
-            className={`filter-tab ${selectedSemester === sem ? "active" : ""}`}
-            onClick={() => setSelectedSemester(sem)}
+            key={course}
+            className={`filter-tab ${selectedCourse === course ? "active" : ""}`}
+            onClick={() => setSelectedCourse(course)}
           >
-            {sem}
+            {course}
           </button>
         ))}
       </div>
 
-      {/* Dynamic Branch Chips & View Mode Switcher */}
+      {/* Year / Level Quick Bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderBottom: "1px solid rgba(255, 255, 255, 0.05)", overflowX: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 700, paddingRight: "4px", flexShrink: 0 }}>
+          <Calendar size={13} />
+          <span>Year / Level:</span>
+        </div>
+        {YEARS.map((yr) => (
+          <button
+            key={yr}
+            onClick={() => setSelectedYear(yr)}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "var(--radius-sm)",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              background: selectedYear === yr ? "rgba(99, 102, 241, 0.2)" : "transparent",
+              color: selectedYear === yr ? "var(--accent-indigo)" : "var(--text-dim)",
+              border: selectedYear === yr ? "1px solid rgba(99, 102, 241, 0.4)" : "1px solid transparent",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {yr}
+          </button>
+        ))}
+      </div>
+
+      {/* Dynamic Branch / Department Chips & View Mode Switcher */}
       <div className="branch-chips-bar">
         <div className="branch-chips-list">
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 600, marginRight: "4px" }}>
+            <Layers size={13} />
+            <span>Branch:</span>
+          </div>
           {branchList.map((branch) => (
             <button
               key={branch}
@@ -44,7 +94,7 @@ export default function CategoryFilter({
           ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
           {/* View Mode Switcher */}
           {setViewMode && (
             <div

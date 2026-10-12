@@ -7,7 +7,8 @@ const crypto = require("crypto");
 const { db } = require("../firebase");
 const { authenticateToken } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
-const { enqueueUpload, getJobStatus } = require("../services/queueService");
+const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
+const { invalidateAllCache } = require("../utils/ramCache");
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, "../../temp");
@@ -54,6 +55,9 @@ router.post(
         subject,
         branch,
         customBranch,
+        course,
+        customCourse,
+        year,
         semester,
         description,
         tags,
@@ -68,7 +72,12 @@ router.post(
         ? customBranch.trim().toUpperCase() 
         : (branch || "CSE").trim();
 
-      const noteSemester = (semester || "Sem 1").trim();
+      // Determine course (e.g. B.Tech, BCA, MCA, Diploma, M.Tech, etc.)
+      const finalCourse = (customCourse && customCourse.trim() !== "")
+        ? customCourse.trim().toUpperCase()
+        : (course || "B.Tech").trim();
+
+      const noteYear = (year || semester || "All Years").trim();
 
       // Create new document reference in Firestore
       let noteId = null;
@@ -81,7 +90,9 @@ router.post(
           title: noteTitle,
           subject: noteSubject,
           branch: finalBranch,
-          semester: noteSemester,
+          course: finalCourse,
+          year: noteYear,
+          semester: noteYear, // Backward compatibility for legacy clients
           description: description || "",
           tags: tags ? tags.split(",").map((t) => t.trim()) : [],
           originalName: file.originalname,
@@ -97,16 +108,18 @@ router.post(
           isVisible: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          _sortTimestamp: Date.now(),
         };
 
         await docRef.set(noteData);
+        invalidateAllCache();
 
         // Auto-create notice on the Notice Board with direct click link!
         await db.collection("notices").add({
-          title: `📚 New Note: ${noteTitle}`,
-          content: `New study material has been uploaded for ${finalBranch} (${noteSemester}) — Subject: ${noteSubject}. Click below to view and download!`,
+          title: `📚 New Material: ${noteTitle}`,
+          content: `New study material has been uploaded for ${finalCourse} (${finalBranch} • ${noteYear}) — Subject: ${noteSubject}. Click below to view and download!`,
           link: `/api/notes/${noteId}/stream`,
-          linkText: "Click Here to Download Note",
+          linkText: "Click Here to Read & Download Note",
           type: "new_material",
           isPinned: false,
           createdBy: req.user?.name || "System Vault",
@@ -119,7 +132,7 @@ router.post(
           const uploadEvent = {
             id: crypto.randomUUID(),
             type: "upload",
-            detail: `Uploaded note: "${noteTitle}" (${finalBranch})`,
+            detail: `Uploaded note: "${noteTitle}" (${finalCourse} - ${finalBranch})`,
             noteId: noteId,
             timestamp: new Date().toISOString(),
           };
@@ -131,6 +144,25 @@ router.post(
         noteId = `note-${Date.now()}`;
       }
 
+      // Initialize Realtime Pipeline Tracking
+      recordPipelineStart({
+        noteId,
+        title: noteTitle,
+        originalName: file.originalname,
+        fileSize: file.size,
+        formattedSize: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+        mimeType: file.mimetype,
+        branch: finalBranch,
+        subject: noteSubject,
+        course: finalCourse,
+        year: noteYear,
+        uploaderEmail: req.user?.email || "student@freestudymaterial.com",
+        uploaderName: req.user?.name || "Student Contributor",
+        uploaderIp: req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1",
+        clientSpeed: req.body.clientSpeed || "High Speed Direct Transfer",
+        clientElapsed: req.body.clientElapsed || "1.2s",
+      });
+
       // Enqueue to Async Background Processing Worker
       enqueueUpload({
         noteId,
@@ -141,7 +173,8 @@ router.post(
           title: noteTitle,
           subject: noteSubject,
           branch: finalBranch,
-          semester: noteSemester,
+          course: finalCourse,
+          year: noteYear,
         },
       });
 

@@ -78,6 +78,24 @@ export const api = {
     return data;
   },
 
+  requestRegisterOtp: (userData) =>
+    request("/auth/register-request-otp", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    }),
+
+  verifyRegisterOtp: async (email, otp) => {
+    const data = await request("/auth/register-verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, otp }),
+    });
+    if (data.token) {
+      setAuthToken(data.token);
+      setCurrentUser(data.user);
+    }
+    return data;
+  },
+
   login: async (identifier, password) => {
     const data = await request("/auth/login", {
       method: "POST",
@@ -115,6 +133,36 @@ export const api = {
     request("/auth/change-password", {
       method: "PUT",
       body: JSON.stringify(passwordData),
+    }),
+
+  requestLoginOtp: (identifier, password) =>
+    request("/auth/login-request-otp", {
+      method: "POST",
+      body: JSON.stringify({ identifier, password }),
+    }),
+
+  verifyLoginOtp: async (email, otp) => {
+    const data = await request("/auth/login-verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, otp }),
+    });
+    if (data.token) {
+      setAuthToken(data.token);
+      setCurrentUser(data.user);
+    }
+    return data;
+  },
+
+  requestForgotPasswordOtp: (email) =>
+    request("/auth/forgot-password-request-otp", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyForgotPasswordOtp: (email, otp, newPassword) =>
+    request("/auth/forgot-password-verify-otp", {
+      method: "POST",
+      body: JSON.stringify({ email, otp, newPassword }),
     }),
 
   sendOtp: (email) =>
@@ -237,16 +285,22 @@ export const api = {
   /**
    * Download Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
    */
-  downloadNoteWithProgress: async (id, fileName, onProgress) => {
+  downloadNoteWithProgress: async (id, fileName, onProgress, signal = null) => {
     const token = getAuthToken();
     const url = `${API_BASE}/notes/${id}/stream${token ? `?token=${token}` : ""}`;
     const startTime = performance.now();
     let prevLoaded = 0;
     let prevTime = startTime;
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Download failed with status ${res.status}`);
+    const res = await fetch(url, { signal });
+    const contentType = res.headers.get("Content-Type") || "";
+    if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
+      let errMessage = `Document is unavailable (${res.status})`;
+      try {
+        const errorJson = await res.json();
+        if (errorJson && errorJson.message) errMessage = errorJson.message;
+      } catch {}
+      throw new Error(errMessage);
     }
 
     const contentLengthHeader = res.headers.get("Content-Length");
@@ -383,4 +437,45 @@ export const api = {
     }),
 
   getHealth: () => request("/health"),
+
+  // Enhanced Admin Studio Controls
+  deleteAllStudents: () => request("/admin/users-all-students", { method: "DELETE" }),
+  getCdnStats: () => request("/admin/cdn/stats"),
+  setCdnRetention: (days) => request("/admin/cdn/retention", { method: "POST", body: JSON.stringify({ days }) }),
+  purgeCdn: () => request("/admin/cdn/purge", { method: "POST" }),
+  purgeNoteCdn: (noteId) => request(`/admin/cdn/purge/${noteId}`, { method: "POST" }),
+  getSystemMemory: () => request("/admin/system/memory"),
+  getHardwareSpecs: () => request("/admin/system/hardware"),
+  getSoftwareSpecs: () => request("/admin/system/software"),
+  getSoftwareInfo: () => request("/admin/system/software"),
+  getUploadPipelines: () => request("/admin/upload-pipeline"),
+  cleanupSystem: () => request("/admin/system/cleanup", { method: "POST" }),
+  syncTelegram: () => request("/admin/telegram/sync", { method: "POST" }),
+  testSmtp: () => request("/admin/smtp/test", { method: "POST" }),
+  getDatabaseOverview: () => request("/admin/database/overview"),
+  getDatabaseCollection: (collectionName) => request(`/admin/database/collection/${collectionName}`),
+  clearDatabaseCollection: (collectionName) => request(`/admin/database/clear-collection/${collectionName}`, { method: "DELETE" }),
+  deleteDatabaseItem: (collectionName, id) => request(`/admin/database/item/${collectionName}/${id}`, { method: "DELETE" }),
+  getCdnFiles: () => request("/admin/cdn/files"),
+  // Restore Vault (Recycle Bin) & Delete All Notes
+  deleteAllNotes: (password) =>
+    request("/admin/notes/delete-all", {
+      method: "POST",
+      body: JSON.stringify({ password }),
+    }),
+  getRecycleBinNotes: () => request("/admin/recycle-bin/notes"),
+  getRecycleBinItems: () => request("/admin/recycle-bin/items"),
+  restoreNote: (id) => request(`/admin/recycle-bin/restore/${id}`, { method: "POST" }),
+  restoreItem: (id) => request(`/admin/recycle-bin/restore/${id}`, { method: "POST" }),
+  restoreAllNotes: () => request("/admin/recycle-bin/restore-all", { method: "POST" }),
+  restoreAllItems: () => request("/admin/recycle-bin/restore-all", { method: "POST" }),
+  deletePermanentNote: (id) => request(`/admin/recycle-bin/permanent/${id}`, { method: "DELETE" }),
+  deletePermanentItem: (id) => request(`/admin/recycle-bin/permanent/${id}`, { method: "DELETE" }),
+  deleteAllRecycleBinItems: () => request("/admin/recycle-bin/delete-all", { method: "DELETE" }),
+  emptyRecycleBin: () => request("/admin/recycle-bin/delete-all", { method: "DELETE" }),
+
+  getDatabaseExportUrl: () => {
+    const token = getAuthToken();
+    return `/api/admin/database/export?token=${token || ""}`;
+  },
 };

@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { FileText, Download, Eye, Share2, Check, Activity, Sparkles } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { FileText, Download, Eye, Share2, Check, Activity, Sparkles, Wifi } from "lucide-react";
 import { api } from "../api";
+import { downloadFromPeerMesh, cacheNoteBuffer } from "../utils/p2pMesh";
 
-export default function NoteCard({ note, onPreview }) {
+export default function NoteCard({ note, onPreview, currentUser, onRequireAuth }) {
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const abortControllerRef = useRef(null);
   const [downloadProgress, setDownloadProgress] = useState({
     percent: 0,
     speed: "0 MB/s",
@@ -28,14 +30,32 @@ export default function NoteCard({ note, onPreview }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCancelDownload = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setDownloading(false);
+    setDownloadProgress(null);
+  };
+
   const handleTrackedDownload = async (e) => {
     e.preventDefault();
+    if (!currentUser) {
+      if (onRequireAuth) onRequireAuth("signin");
+      return;
+    }
     if (downloading) return;
 
+    abortControllerRef.current = new AbortController();
     setDownloading(true);
     setDownloadProgress({
       percent: 5,
-      speed: "Connecting to CDN...",
+      speed: "Checking Local Wi-Fi Peers...",
       loadedMB: "0",
       totalMB: (note.compressedSize ? note.compressedSize / (1024 * 1024) : 1).toFixed(1),
       timeRemaining: "Estimating...",
@@ -43,13 +63,46 @@ export default function NoteCard({ note, onPreview }) {
 
     try {
       const fileName = note.originalName || `${note.title}.pdf`;
+      // Check WebRTC P2P Mesh first for direct peer-to-peer 100 MB/s transfer
+      try {
+        const p2pBuffer = await downloadFromPeerMesh(note.id, (metrics) => {
+          setDownloadProgress(metrics);
+        });
+
+        if (p2pBuffer) {
+          // File was transferred via WebRTC P2P mesh! Trigger browser download
+          const blob = new Blob([p2pBuffer], { type: note.mimeType || "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        }
+      } catch (p2pErr) {
+        console.debug("[P2P] Peer transfer fallback to Cloudflare stream:", p2pErr.message);
+      }
+
+      // Standard high-speed Cloudflare MTProto stream with AbortSignal
       await api.downloadNoteWithProgress(note.id, fileName, (metrics) => {
         setDownloadProgress(metrics);
-      });
+      }, abortControllerRef.current.signal);
     } catch (err) {
-      console.warn("[DOWNLOAD] Direct stream fallback:", err.message);
-      // Fallback: open direct link
-      window.open(directDownloadUrl, "_blank");
+      if (err.name === "AbortError" || err.message?.includes("aborted")) {
+        console.log("[DOWNLOAD] User cancelled active stream.");
+        return;
+      }
+      console.warn("[DOWNLOAD] Download error:", err.message);
+      if (err.message.includes("401") || err.message.includes("Restricted") || err.message.includes("exclusively for registered")) {
+        if (onRequireAuth) onRequireAuth("signin");
+      } else if (note.driveLink) {
+        window.open(note.driveLink, "_blank");
+      } else {
+        alert(err.message || "Document is currently being processed in the vault. Please try another note.");
+      }
     } finally {
       setTimeout(() => {
         setDownloading(false);
@@ -67,11 +120,35 @@ export default function NoteCard({ note, onPreview }) {
           </div>
 
           <div className="note-badges-row">
+            {note.foundViaOcr && (
+              <span className="tech-pill compress" style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+                🔍 Found in Handwritten (OCR)
+              </span>
+            )}
             {note.isDuplicate && (
               <span className="tech-pill dedup">⚡ 0s Dedup</span>
             )}
             {note.savingsPercent > 0 && !note.isDuplicate && (
               <span className="tech-pill compress">🗜️ -{note.savingsPercent}% Saved</span>
+            )}
+            {note.isLatest && (
+              <span
+                className="tech-pill"
+                style={{
+                  background: "linear-gradient(135deg, #10b981, #06b6d4)",
+                  color: "#fff",
+                  fontWeight: 800,
+                  fontSize: "0.68rem",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                ✨ LATEST
+              </span>
+            )}
+            {note.course && (
+              <span className="tech-pill" style={{ background: "rgba(139, 92, 246, 0.15)", color: "#a78bfa", border: "1px solid rgba(139, 92, 246, 0.3)" }}>
+                {note.course}
+              </span>
             )}
             {note.branch && (
               <span className="tech-pill branch">{note.branch}</span>
@@ -101,7 +178,7 @@ export default function NoteCard({ note, onPreview }) {
       {/* Footer & Actions */}
       <div>
         <div className="note-meta-footer">
-          <span>{note.semester || "All Semesters"}</span>
+          <span>{note.year || note.semester || "All Years"}</span>
           <span>{formattedSize} • {note.downloadsCount || 0} downloads</span>
         </div>
 
@@ -116,14 +193,36 @@ export default function NoteCard({ note, onPreview }) {
               padding: "8px 10px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#fff", fontWeight: 700, marginBottom: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#fff", fontWeight: 700, marginBottom: "4px" }}>
               <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                 <Activity size={12} style={{ color: "var(--accent-cyan)" }} />
                 Downloading: {downloadProgress.percent}%
               </span>
-              <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
-                ⚡ {downloadProgress.speed}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                  ⚡ {downloadProgress.speed}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCancelDownload}
+                  style={{
+                    background: "rgba(239, 68, 68, 0.25)",
+                    color: "#f87171",
+                    border: "1px solid rgba(239, 68, 68, 0.45)",
+                    borderRadius: "4px",
+                    fontSize: "0.68rem",
+                    fontWeight: 700,
+                    padding: "1px 6px",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "2px",
+                  }}
+                  title="Cancel Download"
+                >
+                  ✕ Cancel
+                </button>
+              </div>
             </div>
 
             <div
@@ -176,7 +275,13 @@ export default function NoteCard({ note, onPreview }) {
 
           <button
             className="btn-card-preview"
-            onClick={() => onPreview(note)}
+            onClick={() => {
+              if (!currentUser) {
+                if (onRequireAuth) onRequireAuth("signin");
+                return;
+              }
+              onPreview(note);
+            }}
             title="Preview Document"
           >
             <Eye size={16} />

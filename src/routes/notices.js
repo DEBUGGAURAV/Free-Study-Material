@@ -110,8 +110,20 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
     const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable." });
 
-    await db.collection("notices").doc(id).delete();
-    return res.json({ success: true, message: "Notice deleted." });
+    const doc = await db.collection("notices").doc(id).get();
+    if (doc.exists) {
+      await db.collection("deleted_records").doc(`notices_${id}`).set({
+        ...doc.data(),
+        originalId: id,
+        collectionName: "notices",
+        typeLabel: "Notice",
+        title: doc.data().title || "Campus Notice",
+        archivedAt: new Date().toISOString(),
+        archivedBy: req.user?.email || "Admin",
+      });
+      await db.collection("notices").doc(id).delete();
+    }
+    return res.json({ success: true, message: "Notice safely moved to Restore Vault." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

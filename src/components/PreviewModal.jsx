@@ -1,66 +1,41 @@
 import React from "react";
-import { X, Download, ExternalLink, FileText } from "lucide-react";
+import VirtualPdfReader from "./VirtualPdfReader";
 import { api } from "../api";
 
-export default function PreviewModal({ note, onClose }) {
+export default function PreviewModal({ note, onClose, onOpenAuth }) {
   if (!note) return null;
 
   const downloadUrl = api.getDownloadUrl(note.id);
+  const isPdf = (note.mimeType || "").includes("pdf") || (note.originalName || "").toLowerCase().endsWith(".pdf") || true;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} style={{ padding: "12px", zIndex: 1100 }}>
       <div
         className="modal-content"
-        style={{ maxWidth: "900px", height: "85vh", display: "flex", flexDirection: "column" }}
+        style={{
+          maxWidth: "1050px",
+          width: "95vw",
+          height: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          padding: "0",
+          overflow: "hidden",
+          border: "1px solid rgba(255, 255, 255, 0.15)",
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.7)",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header" style={{ marginBottom: "16px" }}>
-          <div>
-            <div className="modal-title" style={{ fontSize: "1.15rem" }}>
-              {note.title}
-            </div>
-            <div style={{ fontSize: "0.8rem", color: "var(--accent-cyan)", marginTop: "2px" }}>
-              {note.subject} • {note.semester}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <a
-              href={downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-secondary"
-              style={{ padding: "8px 14px", fontSize: "0.8rem" }}
-            >
-              <Download size={14} />
-              <span>Download</span>
-            </a>
-
-            <button className="modal-close-btn" onClick={onClose}>
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Embedded Viewer */}
-        <div
-          style={{
-            flex: 1,
-            borderRadius: "var(--radius-md)",
-            overflow: "hidden",
-            background: "#0a0f1d",
-            border: "1px solid var(--border-subtle)",
-            position: "relative",
-          }}
-        >
-          <iframe
-            src={downloadUrl}
-            title={note.title}
-            style={{ width: "100%", height: "100%", border: "none" }}
-          />
-        </div>
+        <VirtualPdfReader
+          url={downloadUrl}
+          title={note.title}
+          subject={note.subject}
+          noteId={note.id}
+          note={note}
+          onClose={onClose}
+          onDownload={() => window.open(downloadUrl, "_blank")}
+          onOpenAuth={onOpenAuth}
+        />
       </div>
     </div>
   );
 }
-

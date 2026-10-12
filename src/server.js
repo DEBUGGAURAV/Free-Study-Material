@@ -8,13 +8,17 @@ const os = require("os");
 
 const { ramCache } = require("./utils/ramCache");
 const { globalLimiter } = require("./middleware/rateLimit");
-const { getClient } = require("./telegram/mtproto");
+const { getClient, startAutoSyncWorker } = require("./telegram/mtproto");
+const { startBotPoller } = require("./telegram/botPoller");
+
+const { brotliCompression } = require("./middleware/brotli");
 
 const authRoutes = require("./routes/auth");
 const uploadRoutes = require("./routes/upload");
 const notesRoutes = require("./routes/notes");
 const adminRoutes = require("./routes/admin");
 const noticesRoutes = require("./routes/notices");
+const p2pRoutes = require("./routes/p2p");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -50,18 +54,8 @@ app.use(
   })
 );
 
-// Smart Gzip HTTP Compression (Bypasses binary streams)
-app.use(
-  compression({
-    filter: (req, res) => {
-      if (req.path.includes("/stream")) {
-        return false;
-      }
-      return compression.filter(req, res);
-    },
-    level: 6,
-  })
-);
+// High-Efficiency Unified Brotli (br) & Gzip Smart Compression Middleware
+app.use(brotliCompression);
 
 // Body Parsers
 app.use(express.json({ limit: "50mb" }));
@@ -76,13 +70,17 @@ app.get("/api/health", (req, res) => {
     service: "freestudymaterial",
     domain: "freestudymaterial.onrender.com",
     features: [
+      "Brotli (br) Compression (15-25% Extra Bandwidth Saving)",
+      "WebRTC Peer-to-Peer Mesh (Campus Wi-Fi Direct Accelerator)",
+      "Mozilla PDF.js Virtual Range Streamer",
+      "Tesseract OCR Handwritten Text Extraction",
       "SHA-256 Deduplication (0s Duplicate Reuse)",
       "PDF Compressor (pdf-lib 75% Data Saver)",
       "PassThrough Streaming (2x Fast IO)",
       "Async Background Queue (< 2s Feedback)",
       "Sharp WebP Thumbnails",
       "Cloudflare CDN Edge LRU Caching",
-      "Telegram MTProto 2GB Streaming",
+      "Multi-Gigabit Distributed Cloud Streaming",
     ],
     uptime: Math.floor(process.uptime()) + "s",
     memoryUsageMB: Math.round(mem.rss / 1024 / 1024),
@@ -101,6 +99,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notices", noticesRoutes);
+app.use("/api/p2p", p2pRoutes);
 
 // Serve Client Web Application (Vite Dist) with immutable caching for hashed assets
 const distPath = path.join(__dirname, "../dist");
@@ -157,6 +156,20 @@ app.listen(PORT, async () => {
     await getClient();
   } catch (e) {
     console.warn("[MTProto] Telegram connect deferred:", e.message);
+  }
+
+  // Start Realtime Bot API Long-Polling (DM + Group + Subgroup ingest + receipts)
+  try {
+    startBotPoller();
+  } catch (e) {
+    console.warn("[BOT POLLER] Poller start deferred:", e.message);
+  }
+
+  // Start Periodic Background Auto-Sync (every 30 minutes to conserve Firestore quota)
+  try {
+    startAutoSyncWorker(30 * 60 * 1000);
+  } catch (e) {
+    console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
   }
 });
 

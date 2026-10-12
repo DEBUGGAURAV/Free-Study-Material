@@ -9,7 +9,8 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
   const [branch, setBranch] = useState("CSE");
   const [isCustomBranch, setIsCustomBranch] = useState(false);
   const [customBranchName, setCustomBranchName] = useState("");
-  const [semester, setSemester] = useState("Sem 1");
+  const [course, setCourse] = useState("B.Tech");
+  const [year, setYear] = useState("All Years / General");
   const [description, setDescription] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -91,7 +92,9 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
       formData.append("subject", subject);
       formData.append("branch", isCustomBranch ? customBranchName.trim().toUpperCase() : branch);
       formData.append("customBranch", isCustomBranch ? customBranchName.trim().toUpperCase() : "");
-      formData.append("semester", semester);
+      formData.append("course", course);
+      formData.append("year", year);
+      formData.append("semester", year); // Backward-compatible
       formData.append("description", description);
 
       const startTime = performance.now();
@@ -168,10 +171,10 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
             </h3>
 
             <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", maxWidth: "420px", margin: "0 auto 16px" }}>
-              File received at maximum bandwidth. Background MTProto worker is now pushing to Telegram Cloud, checking SHA-256 deduplication, and updating Notice Board!
+              File received at maximum bandwidth. Background Cloud Worker is now syncing to Encrypted Distributed Storage, checking SHA-256 deduplication, and updating Notice Board!
             </p>
 
-            <button className="btn-primary" onClick={resetForm}>
+            <button className="btn-primary" onClick={resetForm} style={{ marginTop: "16px" }}>
               Done & Return to Free Study Material
             </button>
           </div>
@@ -361,22 +364,38 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">Semester</label>
-                <select
-                  className="form-select"
-                  value={semester}
-                  onChange={(e) => setSemester(e.target.value)}
-                >
-                  <option value="Sem 1">Semester 1</option>
-                  <option value="Sem 2">Semester 2</option>
-                  <option value="Sem 3">Semester 3</option>
-                  <option value="Sem 4">Semester 4</option>
-                  <option value="Sem 5">Semester 5</option>
-                  <option value="Sem 6">Semester 6</option>
-                  <option value="Sem 7">Semester 7</option>
-                  <option value="Sem 8">Semester 8</option>
-                </select>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+                <div className="form-group">
+                  <label className="form-label">Degree / Course Program</label>
+                  <select
+                    className="form-select"
+                    value={course}
+                    onChange={(e) => setCourse(e.target.value)}
+                  >
+                    <option value="B.Tech">B.Tech / B.E.</option>
+                    <option value="BCA">BCA (Bachelor of Comp. Apps)</option>
+                    <option value="MCA">MCA (Master of Comp. Apps)</option>
+                    <option value="Diploma">Diploma / Polytechnic</option>
+                    <option value="M.Tech">M.Tech / M.E.</option>
+                    <option value="B.Sc">B.Sc / IT</option>
+                    <option value="General">General / All Courses</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Year / Target Level</label>
+                  <select
+                    className="form-select"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                  >
+                    <option value="All Years / General">All Years / Common</option>
+                    <option value="1st Year">1st Year</option>
+                    <option value="2nd Year">2nd Year</option>
+                    <option value="3rd Year">3rd Year</option>
+                    <option value="4th Year">4th Year (Final Year)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="form-group">

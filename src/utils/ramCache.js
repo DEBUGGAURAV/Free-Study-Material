@@ -32,6 +32,20 @@ class MemoryCache {
     });
   }
 
+  has(key) {
+    const item = this.cache.get(key);
+    if (!item) return false;
+    if (Date.now() > item.expiresAt) {
+      this.cache.delete(key);
+      return false;
+    }
+    return true;
+  }
+
+  delete(key) {
+    this.cache.delete(key);
+  }
+
   del(key) {
     this.cache.delete(key);
   }
