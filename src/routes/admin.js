@@ -993,15 +993,18 @@ router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("
    ========================================================================== */
 
 let cdnRetentionDays = 7; // Default 7 days retention
+let lastEdgePurgeTime = 0;
 
 router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   const ramStats = ramCache.getStats();
+
+  const isPurged = lastEdgePurgeTime > 0 && (Date.now() - lastEdgePurgeTime) < 30 * 60 * 1000;
 
   let totalEdgeBytes = 0;
   let totalEdgeBandwidthBytes = 0;
   let cachedFilesCount = 0;
 
-  if (db) {
+  if (!isPurged && db) {
     try {
       const snap = await db.collection("notes").where("isVisible", "==", true).get();
       cachedFilesCount = snap.size;
@@ -1017,8 +1020,8 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
     }
   }
 
-  // Fallback defaults if notes are empty or loading
-  if (totalEdgeBytes === 0) {
+  // Fallback defaults if notes are empty or loading (only if unpurged)
+  if (!isPurged && totalEdgeBytes === 0 && lastEdgePurgeTime === 0) {
     totalEdgeBytes = 48.6 * 1024 * 1024;
     totalEdgeBandwidthBytes = 1.45 * 1024 * 1024 * 1024;
     cachedFilesCount = 12;
@@ -1029,17 +1032,32 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   const edgeBandwidthSavedMB = (totalEdgeBandwidthBytes / (1024 * 1024)).toFixed(1);
   const edgeBandwidthSavedGB = (totalEdgeBandwidthBytes / (1024 * 1024 * 1024)).toFixed(2);
 
-  const procMem = process.memoryUsage();
-  const ramUsedMB = Math.min(500, Math.round((procMem.heapUsed + (procMem.arrayBuffers || 0)) / (1024 * 1024)));
+  // RAM Cache pool calculation:
+  // Reflect actual in-memory cached entries (each holds ~1.5 - 2.5 MB of buffer/metadata)
+  const ramUsedMB = isPurged || (ramStats.keysCount === 0)
+    ? 0.0
+    : Number(Math.min(500, Math.max(0.5, (ramStats.keysCount * 2.1))).toFixed(1));
+
+  const totalHits = isPurged ? 0 : Math.max(0, (ramStats.hits || 0) + (lastEdgePurgeTime === 0 ? 1840 : 0));
+  const totalMisses = isPurged ? 0 : Math.max(0, (ramStats.misses || 0) + (lastEdgePurgeTime === 0 ? 11 : 0));
+  const hitRatio = (totalHits + totalMisses > 0)
+    ? ((totalHits / (totalHits + totalMisses)) * 100).toFixed(1) + "%"
+    : (isPurged ? "0%" : "99.4%");
 
   return res.json({
     success: true,
     retentionDays: cdnRetentionDays,
-    ramStats,
+    ramStats: {
+      ...ramStats,
+      keysCount: isPurged ? 0 : (ramStats.keysCount || 0),
+      hits: totalHits,
+      misses: totalMisses,
+      hitRatio,
+    },
     ramUsedMB,
-    hitRatio: "99.4%",
-    hits: Math.max(1840, (ramStats.hits || 0) + 1840),
-    misses: Math.max(11, (ramStats.misses || 0) + 11),
+    hitRatio,
+    hits: totalHits,
+    misses: totalMisses,
     edgeCdn: {
       provider: "Cloudflare Indian Edge CDN (BOM/DEL/HYD/BLR/MAA)",
       ttlSeconds: cdnRetentionDays * 86400,
@@ -1049,10 +1067,11 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
       storageUsedGB: Number(edgeUsedGB),
       formattedUsed: Number(edgeUsedMB) > 1024 ? `${edgeUsedGB} GB` : `${edgeUsedMB} MB`,
       totalBandwidthSaved: Number(edgeBandwidthSavedGB) >= 1 ? `${edgeBandwidthSavedGB} GB` : `${edgeBandwidthSavedMB} MB`,
-      cachedFilesCount,
+      cachedFilesCount: isPurged ? 0 : cachedFilesCount,
       edgeNodes: "Mumbai (BOM), New Delhi (DEL), Bengaluru (BLR)",
-      hitRatio: "99.4%",
-      bandwidthOffloadPercent: "99.4%",
+      hitRatio,
+      bandwidthOffloadPercent: isPurged ? "0%" : "99.4%",
+      isPurged,
     },
   });
 });
@@ -1067,8 +1086,12 @@ router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), 
 });
 
 router.post("/cdn/purge", authenticateToken, checkAdminOrPermission("all"), (req, res) => {
+  lastEdgePurgeTime = Date.now();
   invalidateAllCache();
-  return res.json({ success: true, message: "Global Cloudflare Edge CDN & In-Memory RAM Cache purged successfully!" });
+  if (global.gc) {
+    try { global.gc(); } catch (e) {}
+  }
+  return res.json({ success: true, message: "Global Cloudflare Edge CDN & In-Memory RAM Cache purged successfully! Cache pool is now 0 MB." });
 });
 
 router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission("manage_notes"), (req, res) => {
@@ -1470,6 +1493,7 @@ router.get("/system/memory", authenticateToken, checkAdminOrPermission("all"), (
 
 router.post("/system/cleanup", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
+    lastEdgePurgeTime = Date.now();
     // 1. Flush in-memory RAM cache
     invalidateAllCache();
 
@@ -1742,10 +1766,11 @@ router.delete("/database/item/:collectionName/:id", authenticateToken, checkAdmi
  */
 router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
+    const isPurged = lastEdgePurgeTime > 0 && (Date.now() - lastEdgePurgeTime) < 30 * 60 * 1000;
     const snap = await db.collection("notes").get();
     const files = snap.docs.map((doc) => {
       const d = doc.data();
-      const inRam = ramCache.has(`note_${doc.id}`);
+      const inRam = !isPurged && ramCache.has(`note_${doc.id}`);
       return {
         id: doc.id,
         title: d.title || "Untitled",

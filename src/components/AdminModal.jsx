@@ -514,6 +514,7 @@ export default function AdminModal({
       await api.purgeCdn();
       alert("✅ Cloudflare Edge CDN & In-Memory RAM Cache purged globally!");
       loadCdnStats();
+      loadCdnFiles();
       loadStats();
     } catch (err) {
       alert("Purge failed: " + err.message);
@@ -2118,11 +2119,11 @@ export default function AdminModal({
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "var(--text-dim)" }}>In-Memory RAM Cache Pool:</span>
                         <span style={{ color: "#34d399", fontWeight: 700 }}>
-                          ~{(cdnStats?.ramUsedMB || 45).toFixed(1)} MB / 500 MB ({(((cdnStats?.ramUsedMB || 45) / 500) * 100).toFixed(0)}% used)
+                          ~{(cdnStats?.ramUsedMB ?? 0).toFixed(1)} MB / 500 MB ({(((cdnStats?.ramUsedMB ?? 0) / 500) * 100).toFixed(0)}% used)
                         </span>
                       </div>
                       <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: `${Math.min(100, Math.max(5, (((cdnStats?.ramUsedMB || 45) / 500) * 100)))}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
+                        <div style={{ width: `${Math.min(100, (((cdnStats?.ramUsedMB ?? 0) / 500) * 100))}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
                       </div>
                       <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
                         Dedicated 500 MB high-speed memory pool for microsecond document streaming without disk access.
@@ -2134,15 +2135,15 @@ export default function AdminModal({
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                         <span style={{ color: "var(--text-dim)" }}>Cloudflare Edge CDN Space Used:</span>
                         <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>
-                          {cdnStats?.edgeCdn?.formattedUsed || "48.6 MB"} Cached (Indian Anycast: BOM / DEL)
+                          {cdnStats?.edgeCdn?.formattedUsed || "0.0 MB"} Cached (Indian Anycast: BOM / DEL)
                         </span>
                       </div>
                       <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: "99.4%", height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", borderRadius: "999px" }} />
+                        <div style={{ width: `${(cdnStats?.edgeCdn?.storageUsedMB || 0) > 0 ? "99.4%" : "0%"}`, height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", borderRadius: "999px" }} />
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "3px" }}>
-                        <span>Capacity: Unlimited Dynamic NVMe SSD Pool ({cdnStats?.edgeCdn?.cachedFilesCount || 12} Vault PDFs)</span>
-                        <span style={{ color: "#34d399", fontWeight: 700 }}>Bandwidth Offload: {cdnStats?.edgeCdn?.totalBandwidthSaved || "1.45 GB"}</span>
+                        <span>Capacity: Unlimited Dynamic NVMe SSD Pool ({cdnStats?.edgeCdn?.cachedFilesCount ?? 0} Vault PDFs)</span>
+                        <span style={{ color: "#34d399", fontWeight: 700 }}>Bandwidth Offload: {cdnStats?.edgeCdn?.totalBandwidthSaved || "0.00 MB"}</span>
                       </div>
                     </div>
                   </div>
@@ -2204,27 +2205,27 @@ export default function AdminModal({
                 <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(6, 182, 212, 0.35)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <div style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase" }}>Edge CDN Space Used</div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--accent-cyan)", marginTop: "2px" }}>
-                    {cdnStats?.edgeCdn?.formattedUsed || "48.6 MB"}
+                    {cdnStats?.edgeCdn?.formattedUsed || "0.0 MB"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>
-                    Bandwidth Saved: {cdnStats?.edgeCdn?.totalBandwidthSaved || "1.45 GB"}
+                    Bandwidth Saved: {cdnStats?.edgeCdn?.totalBandwidthSaved || "0.00 MB"}
                   </div>
                 </div>
 
                 <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Edge Hit Ratio</div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#34d399", marginTop: "2px" }}>
-                    {cdnStats?.hitRatio || "99.4%"}
+                    {cdnStats?.hitRatio || "0%"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
-                    Hits: {cdnStats?.hits || 1840} • Misses: {cdnStats?.misses || 11}
+                    Hits: {cdnStats?.hits ?? 0} • Misses: {cdnStats?.misses ?? 0}
                   </div>
                 </div>
 
                 <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Cached Vault Documents</div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#a78bfa", marginTop: "2px" }}>
-                    {cdnStats?.edgeCdn?.cachedFilesCount || cdnStats?.keysCount || cdnFiles.length}
+                    {cdnStats?.edgeCdn?.cachedFilesCount ?? (cdnStats?.edgeCdn?.isPurged ? 0 : cdnFiles.length)}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
                     Active Across 300+ Edge Cities
