@@ -52,3 +52,4 @@ class TelegramSyncLock {
 const syncLock = new TelegramSyncLock();
 
 module.exports = { syncLock };
+

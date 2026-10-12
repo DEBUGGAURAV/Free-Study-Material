@@ -239,7 +239,12 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         year: year.trim(),
         password: signUpPassword,
       });
-      setSuccessMsg(res.message || "New OTP dispatched to your Gmail.");
+      if (res.simulationOtp) {
+        setSignUpOtpCode(res.simulationOtp);
+        setSuccessMsg(`${res.message || "New code generated!"} (Auto-Fill Code: ${res.simulationOtp})`);
+      } else {
+        setSuccessMsg(res.message || "New OTP dispatched to your Gmail.");
+      }
     } catch (err) {
       setError(err.message || "Failed to resend registration OTP.");
     } finally {
