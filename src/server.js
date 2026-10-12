@@ -11,7 +11,6 @@ const { globalLimiter } = require("./middleware/rateLimit");
 const { getClient, startAutoSyncWorker } = require("./telegram/mtproto");
 const { startBotPoller } = require("./telegram/botPoller");
 
-const { brotliCompression } = require("./middleware/brotli");
 
 const authRoutes = require("./routes/auth");
 const uploadRoutes = require("./routes/upload");
@@ -57,8 +56,17 @@ app.use(
   })
 );
 
-// High-Efficiency Unified Brotli (br) & Gzip Smart Compression Middleware
-app.use(brotliCompression);
+// High-Efficiency Smart Compression Middleware (bypasses binary download streams)
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.path.includes("/stream")) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  })
+);
 
 // Body Parsers
 app.use(express.json({ limit: "50mb" }));
