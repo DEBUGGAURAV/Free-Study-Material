@@ -23,31 +23,67 @@ async function calculateFileHash(filePath) {
  * @param {string} fileHash 
  * @returns {Promise<object|null>} Existing document data or null
  */
-async function findDuplicateNote(fileHash) {
-  if (!db || !fileHash) return null;
+async function findDuplicateNote(fileHash, fileName = null, fileSize = null) {
+  if (!db) return null;
 
   try {
-    const snapshot = await db
-      .collection("notes")
-      .where("fileHash", "==", fileHash)
-      .where("status", "==", "ready")
-      .limit(1)
-      .get();
+    // 1. By fileHash
+    if (fileHash) {
+      const snapshot = await db
+        .collection("notes")
+        .where("fileHash", "==", fileHash)
+        .limit(1)
+        .get();
 
-    if (!snapshot.empty) {
-      const doc = snapshot.docs[0];
-      const data = doc.data();
-      console.log(`[DEDUP] Duplicate match found! Hash: ${fileHash.substring(0, 12)}... (Existing Doc: ${doc.id})`);
-      return {
-        id: doc.id,
-        telegramMessageId: data.telegramMessageId,
-        telegramFileId: data.telegramFileId,
-        fileSize: data.fileSize,
-        compressedSize: data.compressedSize,
-        mimeType: data.mimeType,
-        thumbnailUrl: data.thumbnailUrl,
-        downloadUrl: data.downloadUrl,
-      };
+      if (!snapshot.empty) {
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+        console.log(`[DEDUP] Duplicate match found via SHA-256! (Existing Doc: ${doc.id})`);
+        return {
+          id: doc.id,
+          telegramMessageId: data.telegramMessageId,
+          telegramFileId: data.telegramFileId,
+          fileSize: data.fileSize,
+          compressedSize: data.compressedSize,
+          mimeType: data.mimeType,
+          thumbnailUrl: data.thumbnailUrl,
+          downloadUrl: data.downloadUrl,
+        };
+      }
+    }
+
+    // 2. By fileSize and fileName (detects notes synced from Telegram without prior SHA-256)
+    if (fileSize && Number(fileSize) > 0) {
+      const sizeSnap = await db
+        .collection("notes")
+        .where("fileSize", "==", Number(fileSize))
+        .limit(15)
+        .get();
+
+      if (!sizeSnap.empty) {
+        for (const doc of sizeSnap.docs) {
+          const data = doc.data();
+          const cleanInput = (fileName || "").toLowerCase().trim();
+          const cleanDoc = (data.originalName || data.title || "").toLowerCase().trim();
+
+          if (
+            cleanInput === cleanDoc ||
+            cleanInput.replace(/[^a-z0-9]/g, "") === cleanDoc.replace(/[^a-z0-9]/g, "")
+          ) {
+            console.log(`[DEDUP] Duplicate match found via File Signature! (Existing Doc: ${doc.id})`);
+            return {
+              id: doc.id,
+              telegramMessageId: data.telegramMessageId,
+              telegramFileId: data.telegramFileId,
+              fileSize: data.fileSize,
+              compressedSize: data.compressedSize,
+              mimeType: data.mimeType,
+              thumbnailUrl: data.thumbnailUrl,
+              downloadUrl: data.downloadUrl,
+            };
+          }
+        }
+      }
     }
   } catch (err) {
     console.error("[DEDUP] Error querying duplicates from Firestore:", err.message);

@@ -6,7 +6,9 @@ const { CustomFile } = require("telegram/client/uploads");
 const bigInt = require("big-integer");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
+const { syncLock } = require("../utils/telegramSyncLock");
 
 const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
 const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();
@@ -168,38 +170,78 @@ const processingMsgIds = new Set();
 
 /**
  * Checks if a note already exists in the Firestore database to prevent any duplicates
+ * Single-field queries with in-memory matching (Zero composite index requirement)
  */
-async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileSize }) {
+async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileSize, fileHash }) {
   if (!db) return null;
 
-  // 1. Check by telegramDocumentId (GramJS DC unique document ID)
-  if (docIdStr) {
-    const snap = await db.collection("notes").where("telegramDocumentId", "==", docIdStr.toString()).limit(1).get();
-    if (!snap.empty) return snap.docs[0];
-  }
+  try {
+    // 1. Check by telegramDocumentId (GramJS DC unique document ID)
+    if (docIdStr) {
+      const snap = await db.collection("notes").where("telegramDocumentId", "==", docIdStr.toString()).limit(1).get();
+      if (!snap.empty) return snap.docs[0];
+    }
 
-  // 2. Check by telegramMessageId
-  if (msgId && Number(msgId) > 0) {
-    const snap = await db.collection("notes").where("telegramMessageId", "==", Number(msgId)).limit(1).get();
-    if (!snap.empty) return snap.docs[0];
-  }
+    // 2. Check by telegramMessageId
+    if (msgId && Number(msgId) > 0) {
+      const snap = await db.collection("notes").where("telegramMessageId", "==", Number(msgId)).limit(1).get();
+      if (!snap.empty) return snap.docs[0];
+    }
 
-  // 3. Check by exact originalName and fileSize
-  if (originalName && fileSize && Number(fileSize) > 0) {
-    const snap = await db.collection("notes")
-      .where("originalName", "==", originalName)
-      .where("fileSize", "==", Number(fileSize))
-      .limit(1).get();
-    if (!snap.empty) return snap.docs[0];
-  }
+    // 3. Check by fileHash if provided
+    if (fileHash) {
+      const snap = await db.collection("notes").where("fileHash", "==", fileHash).limit(1).get();
+      if (!snap.empty) return snap.docs[0];
+    }
 
-  // 4. Check by exact title and fileSize
-  if (title && fileSize && Number(fileSize) > 0) {
-    const snap = await db.collection("notes")
-      .where("title", "==", title)
-      .where("fileSize", "==", Number(fileSize))
-      .limit(1).get();
-    if (!snap.empty) return snap.docs[0];
+    // 4. Single-field query by exact fileSize with in-memory name / title check (Zero composite index required)
+    if (fileSize && Number(fileSize) > 0) {
+      const snap = await db.collection("notes").where("fileSize", "==", Number(fileSize)).limit(10).get();
+      if (!snap.empty) {
+        const cleanName = (originalName || "").toLowerCase().trim();
+        const cleanTitle = (title || "").toLowerCase().trim();
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          const docOrig = (d.originalName || "").toLowerCase().trim();
+          const docTitle = (d.title || "").toLowerCase().trim();
+          if (
+            (cleanName && docOrig && cleanName === docOrig) ||
+            (cleanTitle && docTitle && cleanTitle === docTitle) ||
+            (cleanName && docTitle && (cleanName.includes(docTitle) || docTitle.includes(cleanName)))
+          ) {
+            return doc;
+          }
+        }
+      }
+    }
+
+    // 5. Single-field query by exact originalName with in-memory size verification
+    if (originalName) {
+      const snap = await db.collection("notes").where("originalName", "==", originalName).limit(5).get();
+      if (!snap.empty) {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+            return doc;
+          }
+        }
+      }
+    }
+
+    // 6. Single-field query by exact title with in-memory size verification
+    if (title) {
+      const snap = await db.collection("notes").where("title", "==", title).limit(5).get();
+      if (!snap.empty) {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+            return doc;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[MTProto] Duplicate check query warning:", err.message);
   }
 
   return null;
@@ -208,6 +250,10 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
 function setupChannelSyncListeners(c) {
   if (!storageChatId) return;
 
+  // 1. Direct Telegram Storage Channel Ingest (Vault Channel Only)
+  // Dedicated to indexing files uploaded directly to the central cloud storage channel.
+  // User interactions (DMs, Forum Topics, Groups) are exclusively handled by botPoller.js
+  // to guarantee EXACTLY ONE receipt and prevent duplicate ingestion races.
   c.addEventHandler(async (event) => {
     try {
       const message = event.message;
@@ -217,635 +263,121 @@ function setupChannelSyncListeners(c) {
       const docIdStr = doc.id?.toString();
       const msgId = Number(message.id);
 
-      // Instant deduplication gate
+      const targetStr = storageChatId ? storageChatId.toString().replace("-100", "") : "";
+      const chatStr = (message.chatId || message.peerId?.channelId || message.peerId?.chatId || "").toString().replace("-100", "");
+
+      // 🛡️ DUAL-LISTENER SUPPRESSION:
+      // If message did NOT originate directly in the storage channel, botPoller.js is the sole ingest handler.
+      if (!targetStr || !chatStr || targetStr !== chatStr) {
+        return;
+      }
+
+      // =========================================================================
+      // STORAGE CHANNEL INGEST:
+      // If forwarded from botPoller or locked in syncLock, SKIP!
+      // =========================================================================
+      if (message.fwdFrom) return;
+      if (msgId && !syncLock.canProcess(`msg_${msgId}`)) return;
+      if (msgId && !syncLock.canProcess(`stored_${msgId}`)) return;
+      if (docIdStr && !syncLock.canProcess(`doc_${docIdStr}`)) return;
+      if (processingMsgIds.has(msgId)) return;
       if (docIdStr && processingDocIds.has(docIdStr)) return;
-      if (msgId && processingMsgIds.has(msgId)) return;
 
       const db = getFirestoreDb();
       if (!db) return;
 
-      const targetStr = storageChatId ? storageChatId.toString().replace("-100", "") : "";
-      const chatStr = (message.chatId || message.peerId?.channelId || message.peerId?.chatId || "").toString().replace("-100", "");
+      const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
+      const originalName = docAttr?.fileName || `Material_${message.id}.pdf`;
+      const caption = message.message || "";
+      const fileSize = Number(doc.size || 0);
 
-      // =========================================================================
-      // PATH 1: DIRECT STORAGE CHANNEL INGEST (PRESERVED 100% UNTOUCHED)
-      // =========================================================================
-      if (targetStr && chatStr && targetStr === chatStr) {
-        if (docIdStr && processingDocIds.has(docIdStr)) return;
-        if (processingMsgIds.has(msgId)) return;
+      const sig = syncLock.getDocSignature(originalName, fileSize);
+      if (sig && !syncLock.canProcess(sig)) return;
 
-        const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
-        const originalName = docAttr?.fileName || `Material_${message.id}.pdf`;
-        const caption = message.message || "";
+      // Extract dynamic academic metadata from filename & caption
+      const meta = extractAcademicMetadata({ fileName: originalName, caption });
+      const { title, subject, branch, course, year } = meta;
+      const fileHash = crypto.createHash("sha256").update(`${originalName}_${fileSize}`).digest("hex");
 
-        // Extract dynamic academic metadata from filename & caption
-        const meta = extractAcademicMetadata({ fileName: originalName, caption });
-        const { title, subject, branch, course, year } = meta;
-
-        // Comprehensive duplicate prevention check
-        const dup = await isDuplicateNote(db, {
-          docIdStr,
-          msgId,
-          originalName,
-          title,
-          fileSize: Number(doc.size || 0),
-        });
-        if (dup) {
-          processingMsgIds.add(msgId);
-          if (docIdStr) processingDocIds.add(docIdStr);
-          console.log(`[MTProto SYNC] 🛡️ Duplicate note ignored in channel: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
-          return;
-        }
-
-        // Reserve immediately in memory
+      // Comprehensive duplicate prevention check (Single-field queries, zero composite index needed)
+      const dup = await isDuplicateNote(db, {
+        docIdStr,
+        msgId,
+        originalName,
+        title,
+        fileSize,
+        fileHash,
+      });
+      if (dup) {
         processingMsgIds.add(msgId);
         if (docIdStr) processingDocIds.add(docIdStr);
-
-        console.log(`[MTProto SYNC] 🚀 Direct Telegram note detected: "${originalName}" (Msg ID: ${message.id})`);
-
-
-        const noteRef = db.collection("notes").doc();
-        const noteData = {
-          id: noteRef.id,
-          title,
-          subject,
-          branch,
-          course,
-          year,
-          semester: year,
-          description: caption || "Directly synced from official repository vault.",
-          originalName,
-          mimeType: doc.mimeType || "application/pdf",
-          fileSize: Number(doc.size || 0),
-          compressedSize: Number(doc.size || 0),
-          savingsPercent: 0,
-          telegramMessageId: Number(message.id),
-          telegramDocumentId: doc.id?.toString() || null,
-          status: "ready",
-          uploadedBy: "telegram-channel-sync",
-          uploaderName: "Direct Sync",
-          viewsCount: 0,
-          downloadsCount: 0,
-          isVisible: true,
-          downloadUrl: `/api/notes/${noteRef.id}/stream`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          _sortTimestamp: Date.now(),
-        };
-
-        await noteRef.set(noteData);
-
-        // Auto-post to Notice Board
-        await db.collection("notices").add({
-          title: `📚 Cloud Vault: ${title}`,
-          content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
-          link: `/api/notes/${noteRef.id}/stream`,
-          linkText: "Click Here to Read Document",
-          type: "new_material",
-          isPinned: false,
-          createdBy: "Auto-Sync",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-
-        // Send Instant Receipt to Telegram Channel as reply to document
-        try {
-          const sizeMB = (Number(doc.size || 0) / (1024 * 1024)).toFixed(1);
-          const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-            `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-            `📄 <b>Title:</b> ${title}\n` +
-            `📚 <b>Subject:</b> ${subject}\n` +
-            `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-            `💾 <b>Size:</b> ${sizeMB} MB\n` +
-            `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-            `<i>Note is now live and accessible to registered students.</i>`;
-
-          try {
-            await c.sendMessage(storageChatId, {
-              message: receiptText,
-              replyTo: message.id,
-              parseMode: "html",
-            });
-          } catch {
-            await c.sendMessage(storageChatId, {
-              message: receiptText,
-              parseMode: "html",
-            });
-          }
-          console.log(`[MTProto SYNC] ✅ Receipt sent to channel for message ${message.id}`);
-        } catch (receiptErr) {
-          console.warn("[MTProto SYNC] Receipt reply error:", receiptErr.message);
-        }
-
-        clearCache();
-        console.log(`[MTProto SYNC] Note "${title}" successfully published to web platform!`);
+        console.log(`[MTProto SYNC] 🛡️ Duplicate note ignored in channel: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
         return;
       }
 
-      // =========================================================================
-      // PATH 2: DIRECT PRIVATE DM INGEST (ADMIN VERIFICATION)
-      // =========================================================================
-      const isPrivate = event.isPrivate || Boolean(message.peerId instanceof Api.PeerUser);
-      if (isPrivate) {
-        const senderId = message.senderId ? message.senderId.toString() : (message.peerId?.userId ? message.peerId.userId.toString() : null);
-        const isAdmin = await isUserAdmin(senderId, c);
-        if (!isAdmin) {
-          await c.sendMessage(message.chatId, {
-            message: "⛔ <b>Access Restricted: Unauthorized Vault Ingest</b>\n\nOnly verified Channel Administrators are authorized to upload study materials directly to the Academic Cloud.",
-            replyTo: message.id,
-            parseMode: "html",
-          }).catch(() => {});
-          return;
-        }
+      // Reserve immediately in memory & syncLock
+      processingMsgIds.add(msgId);
+      if (docIdStr) processingDocIds.add(docIdStr);
+      syncLock.lock(`msg_${msgId}`);
+      if (docIdStr) syncLock.lock(`doc_${docIdStr}`);
+      if (sig) syncLock.lock(sig);
 
-        console.log(`[MTProto SYNC] 🛡️ Direct Admin DM note received from user ${senderId}`);
+      console.log(`[MTProto SYNC] 🚀 Direct Telegram note detected in vault: "${originalName}" (Msg ID: ${message.id})`);
 
-        const doc = message.media.document;
-        const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
-        const originalName = docAttr?.fileName || `Material_${message.id}.pdf`;
-        const caption = message.message || "";
+      const noteRef = db.collection("notes").doc();
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const nowMs = now.getTime();
 
-        // Extract dynamic academic metadata from filename & caption
-        const meta2 = extractAcademicMetadata({ fileName: originalName, caption });
-        const { title, subject, branch, course, year } = meta2;
+      const noteData = {
+        id: noteRef.id,
+        title,
+        subject,
+        branch,
+        course,
+        year,
+        semester: year,
+        description: caption || "Directly synced from official repository vault.",
+        originalName,
+        fileHash,
+        mimeType: doc.mimeType || "application/pdf",
+        fileSize,
+        compressedSize: fileSize,
+        savingsPercent: 0,
+        telegramMessageId: Number(message.id),
+        telegramDocumentId: doc.id?.toString() || null,
+        status: "ready",
+        uploadedBy: "telegram-channel-sync",
+        uploaderName: "Direct Sync",
+        viewsCount: 0,
+        downloadsCount: 0,
+        isVisible: true,
+        downloadUrl: `/api/notes/${noteRef.id}/stream`,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        _sortTimestamp: nowMs,
+      };
 
-        const dup = await isDuplicateNote(db, {
-          docIdStr,
-          msgId,
-          originalName,
-          title,
-          fileSize: Number(doc.size || 0),
-        });
-        if (dup) {
-          processingMsgIds.add(msgId);
-          if (docIdStr) processingDocIds.add(docIdStr);
-          console.log(`[MTProto SYNC] 🛡️ Duplicate note in DM: "${title}"`);
-          const targetChat = message.chatId || message.peerId || event.chatId;
-          await c.sendMessage(targetChat, {
-            message: `⚡ <b>Free Study Material Vault</b>\n\nℹ️ <b>Note Already Exists in Academic Cloud!</b>\n📄 <b>Title:</b> ${title}\n🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n<i>This document was already indexed previously. No duplicate created.</i>`,
-            replyTo: message.id,
-            parseMode: "html",
-          }).catch(() => {});
-          return;
-        }
+      await noteRef.set(noteData);
 
-        // Reserve this document immediately so Path 1 ignores the forwarded message!
-        if (docIdStr) processingDocIds.add(docIdStr);
-        processingMsgIds.add(msgId);
+      // Auto-post to Notice Board
+      await db.collection("notices").add({
+        title: `📚 Cloud Vault: ${title}`,
+        content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
+        link: `/api/notes/${noteRef.id}/stream`,
+        linkText: "Click Here to Read Document",
+        type: "new_material",
+        isPinned: false,
+        createdBy: "Auto-Sync",
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }).catch(() => {});
 
-        // Forward document into Storage Channel via instant server-side pointer
-        let storedMsg = null;
-        try {
-          const fromPeer = message.peerId || (await event.getInputChat()) || message.chatId;
-          const forwarded = await c.forwardMessages(storageChatId, {
-            messages: [message.id],
-            fromPeer: fromPeer,
-          });
-          storedMsg = forwarded ? forwarded[0] : null;
-        } catch (fwdErr) {
-          console.warn("[MTProto SYNC] Forward message fallback:", fwdErr.message);
-          try {
-            const chatEntity = await c.getEntity(message.chatId || message.peerId);
-            const forwarded = await c.forwardMessages(storageChatId, {
-              messages: [message.id],
-              fromPeer: chatEntity,
-            });
-            storedMsg = forwarded ? forwarded[0] : null;
-          } catch (fwdErr2) {
-            console.error("[MTProto SYNC] Critical forward failure:", fwdErr2.message);
-          }
-        }
+      // NOTE: We intentionally DO NOT send receipts into storageChatId.
+      // storageChatId is an internal backend vault, receipts should never clutter it!
 
-        if (storedMsg && storedMsg.id) {
-          processingMsgIds.add(Number(storedMsg.id));
-        }
-
-        if (!storedMsg || !storedMsg.id) {
-          throw new Error("Could not transfer DM document to Storage Channel.");
-        }
-
-
-        const noteRef = db.collection("notes").doc();
-        const noteData = {
-          id: noteRef.id,
-          title,
-          subject,
-          branch,
-          course,
-          year,
-          semester: year,
-          description: caption || "Directly synced from Administrator Private DM.",
-          originalName,
-          mimeType: doc.mimeType || "application/pdf",
-          fileSize: Number(doc.size || 0),
-          compressedSize: Number(doc.size || 0),
-          savingsPercent: 0,
-          telegramMessageId: Number(storedMsg.id),
-          telegramDocumentId: doc.id?.toString() || null,
-          telegramOriginChatId: senderId ? senderId.toString() : null,
-          telegramOriginMessageId: Number(message.id),
-          status: "ready",
-          uploadedBy: "telegram-admin-dm",
-          uploaderName: "Admin Direct DM",
-          viewsCount: 0,
-          downloadsCount: 0,
-          isVisible: true,
-          downloadUrl: `/api/notes/${noteRef.id}/stream`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          _sortTimestamp: Date.now(),
-        };
-
-        await noteRef.set(noteData);
-
-        // Auto-post to Notice Board
-        await db.collection("notices").add({
-          title: `📚 Cloud Vault: ${title}`,
-          content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
-          link: `/api/notes/${noteRef.id}/stream`,
-          linkText: "Click Here to Read Document",
-          type: "new_material",
-          isPinned: false,
-          createdBy: "Auto-Sync",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-
-        // Send Instant Receipt to Admin's Private DM
-        const sizeMB = (Number(doc.size || 0) / (1024 * 1024)).toFixed(1);
-        const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-          `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-          `📄 <b>Title:</b> ${title}\n` +
-          `📚 <b>Subject:</b> ${subject}\n` +
-          `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-          `💾 <b>Size:</b> ${sizeMB} MB\n` +
-          `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-          `<i>Note is now live at #1 position and accessible to registered students.</i>`;
-
-        const targetChat = message.chatId || message.peerId || event.chatId;
-        try {
-          await c.sendMessage(targetChat, {
-            message: receiptText,
-            replyTo: message.id,
-            parseMode: "html",
-          });
-          console.log(`[MTProto SYNC] ✅ Receipt sent to DM ${targetChat}`);
-        } catch (rErr) {
-          try {
-            await c.sendMessage(targetChat, {
-              message: receiptText,
-              parseMode: "html",
-            });
-            console.log(`[MTProto SYNC] ✅ Receipt fallback sent to DM ${targetChat}`);
-          } catch (rErr2) {
-            console.warn("[MTProto SYNC] Failed to deliver DM receipt:", rErr2.message);
-          }
-        }
-
-        clearCache();
-        console.log(`[MTProto SYNC] Admin DM note "${title}" successfully published!`);
-        return;
-      }
-
-      // =========================================================================
-      // PATH 3: TOPIC-BASED GROUP INGEST (FORUM TOPICS AUTO-BRANCH)
-      // =========================================================================
-      const hasTopic = Boolean(message.replyTo?.forumTopic || message.replyTo?.replyToTopId || message.replyTo?.replyToMsgId);
-      if (hasTopic) {
-        const topicId = Number(message.replyTo?.replyToTopId || message.replyTo?.replyToMsgId);
-        console.log(`[MTProto SYNC] 🏷️ Topic-based note detected in chat ${chatStr}, Topic ID: ${topicId}`);
-
-        const doc = message.media.document;
-        const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
-        const originalName = docAttr?.fileName || `Material_${message.id}.pdf`;
-        const caption = message.message || "";
-
-        // Preliminary title for duplicate check (topic title not yet fetched)
-        const prelimMeta = extractAcademicMetadata({ fileName: originalName, caption });
-        const prelimTitle = prelimMeta.title;
-
-        const dup = await isDuplicateNote(db, {
-          docIdStr,
-          msgId,
-          originalName,
-          title: prelimTitle,
-          fileSize: Number(doc.size || 0),
-        });
-        if (dup) {
-          processingMsgIds.add(msgId);
-          if (docIdStr) processingDocIds.add(docIdStr);
-          console.log(`[MTProto SYNC] 🛡️ Duplicate note in Topic: "${prelimTitle}"`);
-          const targetChat = message.chatId || message.peerId || event.chatId;
-          await c.sendMessage(targetChat, {
-            message: `⚡ <b>Free Study Material Vault</b>\n\nℹ️ <b>Note Already Exists in Academic Cloud!</b>\n📄 <b>Title:</b> ${prelimTitle}\n🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n<i>This document was already indexed previously. No duplicate created.</i>`,
-            replyTo: message.id,
-            parseMode: "html",
-          }).catch(() => {});
-          return;
-        }
-
-        // Reserve this document immediately so Path 1 ignores the forwarded message!
-        if (docIdStr) processingDocIds.add(docIdStr);
-        processingMsgIds.add(msgId);
-
-        // Forward document into Storage Channel fast
-        let storedMsg = null;
-        try {
-          const fromPeer = message.peerId || (await event.getInputChat()) || message.chatId;
-          const forwarded = await c.forwardMessages(storageChatId, {
-            messages: [message.id],
-            fromPeer: fromPeer,
-          });
-          storedMsg = forwarded ? forwarded[0] : null;
-        } catch (fwdErr) {
-          console.warn("[MTProto SYNC] Topic forward fallback:", fwdErr.message);
-          try {
-            const chatEntity = await c.getEntity(message.chatId || message.peerId);
-            const forwarded = await c.forwardMessages(storageChatId, {
-              messages: [message.id],
-              fromPeer: chatEntity,
-            });
-            storedMsg = forwarded ? forwarded[0] : null;
-          } catch (fwdErr2) {
-            console.error("[MTProto SYNC] Topic forward error:", fwdErr2.message);
-          }
-        }
-
-        if (storedMsg && storedMsg.id) {
-          processingMsgIds.add(Number(storedMsg.id));
-        }
-
-        if (!storedMsg || !storedMsg.id) {
-          throw new Error("Could not transfer topic document to Storage Channel.");
-        }
-
-        // Detect topic title
-        let topicTitle = "";
-        try {
-          const topicMsgs = await c.getMessages(message.chatId, { ids: [topicId] });
-          if (topicMsgs && topicMsgs[0] && topicMsgs[0].action?.title) {
-            topicTitle = topicMsgs[0].action.title;
-          }
-        } catch {}
-
-        // Extract dynamic academic metadata — Topic title takes highest priority for subject
-        const meta3 = extractAcademicMetadata({ fileName: originalName, caption, threadTitle: topicTitle });
-        const { title, subject, branch, course, year } = meta3;
-
-
-        const noteRef = db.collection("notes").doc();
-        const noteData = {
-          id: noteRef.id,
-          title,
-          subject,
-          branch,
-          course,
-          year,
-          semester: year,
-          description: caption || `Synced from group topic: ${topicTitle || topicId}`,
-          originalName,
-          mimeType: doc.mimeType || "application/pdf",
-          fileSize: Number(doc.size || 0),
-          compressedSize: Number(doc.size || 0),
-          savingsPercent: 0,
-          telegramMessageId: Number(storedMsg.id),
-          telegramDocumentId: doc.id?.toString() || null,
-          telegramTopicId: topicId,
-          telegramTopicTitle: topicTitle || null,
-          telegramOriginChatId: (message.chatId || message.peerId?.channelId || message.peerId?.chatId || "").toString(),
-          telegramOriginMessageId: Number(message.id),
-          status: "ready",
-          uploadedBy: "telegram-topic-group",
-          uploaderName: `Topic: ${topicTitle || topicId}`,
-          viewsCount: 0,
-          downloadsCount: 0,
-          isVisible: true,
-          downloadUrl: `/api/notes/${noteRef.id}/stream`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          _sortTimestamp: Date.now(),
-        };
-
-        await noteRef.set(noteData);
-
-        // Auto-post to Notice Board
-        await db.collection("notices").add({
-          title: `📚 Cloud Vault: ${title}`,
-          content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
-          link: `/api/notes/${noteRef.id}/stream`,
-          linkText: "Click Here to Read Document",
-          type: "new_material",
-          isPinned: false,
-          createdBy: "Auto-Sync",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }).catch(() => {});
-
-        // Send Receipt directly into that specific topic thread
-        const sizeMB = (Number(doc.size || 0) / (1024 * 1024)).toFixed(1);
-        const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-          `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-          `📄 <b>Title:</b> ${title}\n` +
-          `📚 <b>Subject:</b> ${subject}\n` +
-          `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-          `💾 <b>Size:</b> ${sizeMB} MB\n` +
-          `🏷️ <b>Topic:</b> ${topicTitle || topicId}\n` +
-          `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-          `<i>Note is now live at #1 position and accessible to registered students.</i>`;
-
-        const targetChat = message.chatId || message.peerId || event.chatId;
-        try {
-          await c.sendMessage(targetChat, {
-            message: receiptText,
-            replyTo: message.id, // Replies inside the topic
-            parseMode: "html",
-          });
-          console.log(`[MTProto SYNC] ✅ Receipt sent to topic in ${targetChat}`);
-        } catch (rErr) {
-          try {
-            await c.sendMessage(targetChat, {
-              message: receiptText,
-              parseMode: "html",
-            });
-            console.log(`[MTProto SYNC] ✅ Receipt fallback sent to topic chat ${targetChat}`);
-          } catch (rErr2) {
-            console.warn("[MTProto SYNC] Failed to deliver topic receipt:", rErr2.message);
-          }
-        }
-
-        clearCache();
-        console.log(`[MTProto SYNC] Topic note "${title}" published under branch ${branch}!`);
-        return;
-      }
-
-      // =========================================================================
-      // PATH 4: DIRECT GROUP INGEST (GROUPS / CHANNELS WITHOUT TOPICS)
-      // =========================================================================
-      if (!isPrivate && !hasTopic && chatStr !== targetStr) {
-        console.log(`[MTProto SYNC] 👥 Direct Group note detected in chat ${chatStr} (Msg ID: ${message.id})`);
-
-        const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
-        const originalName = docAttr?.fileName || `Material_${message.id}.pdf`;
-        const caption = message.message || "";
-
-        // Preliminary extraction for dup check (group title not yet fetched)
-        const prelimMeta4 = extractAcademicMetadata({ fileName: originalName, caption });
-        const prelimTitle4 = prelimMeta4.title;
-
-        const dup = await isDuplicateNote(db, {
-          docIdStr,
-          msgId,
-          originalName,
-          title: prelimTitle4,
-          fileSize: Number(doc.size || 0),
-        });
-        if (dup) {
-          processingMsgIds.add(msgId);
-          if (docIdStr) processingDocIds.add(docIdStr);
-          console.log(`[MTProto SYNC] 🛡️ Duplicate note in Direct Group: "${prelimTitle4}"`);
-          const targetChat = message.chatId || message.peerId || event.chatId;
-          await c.sendMessage(targetChat, {
-            message: `⚡ <b>Free Study Material Vault</b>\n\nℹ️ <b>Note Already Exists in Academic Cloud!</b>\n📄 <b>Title:</b> ${prelimTitle4}\n🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n<i>This document was already indexed previously. No duplicate created.</i>`,
-            replyTo: message.id,
-            parseMode: "html",
-          }).catch(() => {});
-          return;
-        }
-
-        if (docIdStr) processingDocIds.add(docIdStr);
-        processingMsgIds.add(msgId);
-
-        // Forward document into Storage Channel
-        let storedMsg = null;
-        try {
-          const fromPeer = message.peerId || (await event.getInputChat()) || message.chatId;
-          const forwarded = await c.forwardMessages(storageChatId, {
-            messages: [message.id],
-            fromPeer: fromPeer,
-          });
-          storedMsg = forwarded ? forwarded[0] : null;
-        } catch (fwdErr) {
-          console.warn("[MTProto SYNC] Direct group forward fallback:", fwdErr.message);
-          try {
-            const chatEntity = await c.getEntity(message.chatId || message.peerId);
-            const forwarded = await c.forwardMessages(storageChatId, {
-              messages: [message.id],
-              fromPeer: chatEntity,
-            });
-            storedMsg = forwarded ? forwarded[0] : null;
-          } catch (fwdErr2) {
-            console.error("[MTProto SYNC] Direct group forward error:", fwdErr2.message);
-          }
-        }
-
-        if (storedMsg && storedMsg.id) {
-          processingMsgIds.add(Number(storedMsg.id));
-        }
-
-        if (!storedMsg || !storedMsg.id) {
-          throw new Error("Could not transfer direct group document to Storage Channel.");
-        }
-
-        // Detect group title
-        let groupTitle = "";
-        try {
-          const chatEntity = await c.getEntity(message.chatId || message.peerId);
-          if (chatEntity?.title) {
-            groupTitle = chatEntity.title;
-          }
-        } catch {}
-
-        // Extract dynamic academic metadata — group title used as chatTitle for subject resolution
-        const meta4 = extractAcademicMetadata({ fileName: originalName, caption, chatTitle: groupTitle });
-        const { title, subject, branch, course, year } = meta4;
-
-
-        const noteRef = db.collection("notes").doc();
-        const now = new Date();
-        const nowIso = now.toISOString();
-        const nowMs = now.getTime();
-
-        const noteData = {
-          id: noteRef.id,
-          title,
-          subject,
-          branch,
-          course,
-          year,
-          semester: year,
-          description: caption || `Directly synced from group: ${groupTitle || "Direct Group"}`,
-          originalName,
-          mimeType: doc.mimeType || "application/pdf",
-          fileSize: Number(doc.size || 0),
-          compressedSize: Number(doc.size || 0),
-          savingsPercent: 0,
-          telegramMessageId: Number(storedMsg.id),
-          telegramDocumentId: doc.id?.toString() || null,
-          telegramOriginChatId: (message.chatId || message.peerId?.channelId || message.peerId?.chatId || "").toString(),
-          telegramOriginMessageId: Number(message.id),
-          status: "ready",
-          uploadedBy: "telegram-direct-group",
-          uploaderName: groupTitle ? `Group: ${groupTitle}` : "Direct Group",
-          viewsCount: 0,
-          downloadsCount: 0,
-          isVisible: true,
-          downloadUrl: `/api/notes/${noteRef.id}/stream`,
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          _sortTimestamp: nowMs,
-        };
-
-        await noteRef.set(noteData);
-
-        // Auto-post to Notice Board
-        await db.collection("notices").add({
-          title: `📚 Cloud Vault: ${title}`,
-          content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
-          link: `/api/notes/${noteRef.id}/stream`,
-          linkText: "Click Here to Read Document",
-          type: "new_material",
-          isPinned: false,
-          createdBy: "Auto-Sync",
-          createdAt: nowIso,
-          updatedAt: nowIso,
-        }).catch(() => {});
-
-        // Send Instant Receipt to Direct Group as reply
-        const sizeMB = (Number(doc.size || 0) / (1024 * 1024)).toFixed(1);
-        const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-          `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-          `📄 <b>Title:</b> ${title}\n` +
-          `📚 <b>Subject:</b> ${subject}\n` +
-          `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-          `💾 <b>Size:</b> ${sizeMB} MB\n` +
-          `👥 <b>Source:</b> ${groupTitle || "Direct Group"}\n` +
-          `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-          `<i>Note is now live at #1 position and accessible to registered students.</i>`;
-
-        const targetChat = message.chatId || message.peerId || event.chatId;
-        try {
-          await c.sendMessage(targetChat, {
-            message: receiptText,
-            replyTo: message.id,
-            parseMode: "html",
-          });
-          console.log(`[MTProto SYNC] ✅ Receipt sent to direct group ${targetChat}`);
-        } catch (replyErr) {
-          try {
-            await c.sendMessage(targetChat, {
-              message: receiptText,
-              parseMode: "html",
-            });
-            console.log(`[MTProto SYNC] ✅ Receipt fallback sent to direct group ${targetChat}`);
-          } catch (sendErr) {
-            console.warn("[MTProto SYNC] Receipt delivery to direct group failed:", sendErr.message);
-          }
-        }
-
-        clearCache();
-        console.log(`[MTProto SYNC] Direct group note "${title}" successfully published to web platform!`);
-        return;
-      }
+      clearCache();
+      console.log(`[MTProto SYNC] Note "${title}" successfully published to web platform!`);
     } catch (err) {
       console.warn("[MTProto SYNC] Direct ingest error:", err.message);
     }
@@ -951,23 +483,22 @@ function setupChannelSyncListeners(c) {
 }
 
 /**
- * Reconciles and synchronizes notes between Telegram channel and website
- * Fully compatible with Telegram Bot accounts using channels.GetMessages (IDs array)
+ * Automated Database Deduplication Sweep
+ * Sweeps the entire notes collection and removes any duplicates based on:
+ * 1. telegramDocumentId (exact match)
+ * 2. fileHash (SHA-256 match)
+ * 3. telegramMessageId (exact match)
+ * 4. originalName / title + fileSize match
  */
-async function syncTelegramChannel() {
-  const c = await getClient();
-  if (!c) throw new Error("Cloud Storage client not connected");
+async function deduplicateDatabaseNotes() {
   const db = getFirestoreDb();
-  if (!db) throw new Error("Firestore DB not connected");
+  if (!db) return { success: false, cleanedCount: 0 };
 
-  console.log(`[MTProto RECONCILE] Initiating Bot-compatible channel synchronization...`);
-
-  // 1. Fetch all existing notes from Firestore and perform Automated Database Deduplication Sweep
   const snap = await db.collection("notes").get();
-  const existingNotesWithTg = [];
-  const knownMsgIds = new Set();
   const seenDocIds = new Map();
   const seenFileKeys = new Map();
+  const seenHashes = new Map();
+  const seenTgMsgIds = new Map();
   let duplicateCleanedCount = 0;
 
   for (const doc of snap.docs) {
@@ -977,6 +508,10 @@ async function syncTelegramChannel() {
 
     let isDup = false;
     if (docIdStr && seenDocIds.has(docIdStr)) {
+      isDup = true;
+    } else if (data.fileHash && seenHashes.has(data.fileHash)) {
+      isDup = true;
+    } else if (data.telegramMessageId && Number(data.telegramMessageId) > 0 && seenTgMsgIds.has(Number(data.telegramMessageId))) {
       isDup = true;
     } else if (data.fileSize && Number(data.fileSize) > 0 && seenFileKeys.has(fileKey)) {
       isDup = true;
@@ -991,18 +526,50 @@ async function syncTelegramChannel() {
         typeLabel: "Note (Duplicate Auto-Clean)",
         archivedAt: new Date().toISOString(),
         archivedBy: "Auto Deduplication Engine",
-      });
+      }).catch(() => {});
       await db.collection("notes").doc(doc.id).delete();
       duplicateCleanedCount++;
     } else {
       if (docIdStr) seenDocIds.set(docIdStr, doc.id);
+      if (data.fileHash) seenHashes.set(data.fileHash, doc.id);
+      if (data.telegramMessageId && Number(data.telegramMessageId) > 0) seenTgMsgIds.set(Number(data.telegramMessageId), doc.id);
       if (data.fileSize && Number(data.fileSize) > 0) seenFileKeys.set(fileKey, doc.id);
+    }
+  }
 
-      if (data.telegramMessageId && Number(data.telegramMessageId) > 0) {
-        const msgId = Number(data.telegramMessageId);
-        existingNotesWithTg.push({ docId: doc.id, msgId, title: data.title });
-        knownMsgIds.add(msgId);
-      }
+  if (duplicateCleanedCount > 0) {
+    clearCache();
+  }
+
+  return { success: true, cleanedCount: duplicateCleanedCount };
+}
+
+/**
+ * Reconciles and synchronizes notes between Telegram channel and website
+ * Fully compatible with Telegram Bot accounts using channels.GetMessages (IDs array)
+ */
+async function syncTelegramChannel() {
+  const c = await getClient();
+  if (!c) throw new Error("Cloud Storage client not connected");
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore DB not connected");
+
+  console.log(`[MTProto RECONCILE] Initiating Bot-compatible channel synchronization...`);
+
+  // 1. Run Automated Database Deduplication Sweep
+  const { cleanedCount: duplicateCleanedCount } = await deduplicateDatabaseNotes();
+
+  // 2. Map existing valid notes for reconciliation
+  const snap = await db.collection("notes").get();
+  const existingNotesWithTg = [];
+  const knownMsgIds = new Set();
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    if (data.telegramMessageId && Number(data.telegramMessageId) > 0) {
+      const msgId = Number(data.telegramMessageId);
+      existingNotesWithTg.push({ docId: doc.id, msgId, title: data.title });
+      knownMsgIds.add(msgId);
     }
   }
 
@@ -1010,7 +577,7 @@ async function syncTelegramChannel() {
   let importedCount = 0;
   let verifiedCount = 0;
 
-  // 2. Verify existing notes: if any were deleted on Telegram, purge them from Firestore
+  // 3. Verify existing notes: if any were deleted on Telegram, purge them from Firestore
   if (existingNotesWithTg.length > 0) {
     const idsToCheck = existingNotesWithTg.map((n) => n.msgId);
     for (let i = 0; i < idsToCheck.length; i += 100) {
@@ -1055,17 +622,20 @@ async function syncTelegramChannel() {
         const docAttr = doc.attributes?.find((a) => a instanceof Api.DocumentAttributeFilename);
         const originalName = docAttr?.fileName || `Material_${msg.id}.pdf`;
         const caption = msg.message || "";
+        const docSize = Number(doc.size || 0);
 
         // Comprehensive duplicate prevention check (title extracted via utility)
         const metaRec = extractAcademicMetadata({ fileName: originalName, caption });
         const { title, subject, branch, course, year } = metaRec;
+        const fileHash = crypto.createHash("sha256").update(`${originalName}_${docSize}`).digest("hex");
 
         const dup = await isDuplicateNote(db, {
           docIdStr,
           msgId,
           originalName,
           title,
-          fileSize: Number(doc.size || 0),
+          fileSize: docSize,
+          fileHash,
         });
 
         if (dup) {
@@ -1074,7 +644,6 @@ async function syncTelegramChannel() {
           console.log(`[MTProto RECONCILE] 🛡️ Duplicate suppressed: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
           continue;
         }
-
 
         const noteRef = db.collection("notes").doc();
         const now = new Date();
@@ -1091,9 +660,10 @@ async function syncTelegramChannel() {
           semester: year,
           description: caption || "Imported and synchronized from Cloud Storage Vault.",
           originalName,
+          fileHash,
           mimeType: doc.mimeType || "application/pdf",
-          fileSize: Number(doc.size || 0),
-          compressedSize: Number(doc.size || 0),
+          fileSize: docSize,
+          compressedSize: docSize,
           savingsPercent: 0,
           telegramMessageId: msgId,
           telegramDocumentId: doc.id?.toString() || null,
@@ -1113,29 +683,6 @@ async function syncTelegramChannel() {
         if (docIdStr) processingDocIds.add(docIdStr);
         importedCount++;
         console.log(`[MTProto RECONCILE] Imported new material "${title}" (Msg ID: ${msgId})`);
-
-        // Send confirmation receipt to channel as reply
-        try {
-          const sizeMB = (Number(doc.size || 0) / (1024 * 1024)).toFixed(1);
-          const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-            `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-            `📄 <b>Title:</b> ${title}\n` +
-            `📚 <b>Subject:</b> ${subject}\n` +
-            `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-            `💾 <b>Size:</b> ${sizeMB} MB\n` +
-            `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-            `<i>Note is now live at #1 position and accessible to registered students.</i>`;
-
-          await c.sendMessage(storageChatId, {
-            message: receiptText,
-            replyTo: msg.id,
-            parseMode: "html",
-          }).catch(async () => {
-            await c.sendMessage(storageChatId, { message: receiptText, parseMode: "html" });
-          });
-        } catch (rErr) {
-          console.warn("[MTProto RECONCILE] Receipt notice warning:", rErr.message);
-        }
       }
     }
   }
@@ -1431,6 +978,7 @@ module.exports = {
   uploadToStorageChannel,
   streamDocumentFromChannel,
   syncTelegramChannel,
+  deduplicateDatabaseNotes,
   deleteTelegramMessages,
   startAutoSyncWorker,
   stopAutoSyncWorker,

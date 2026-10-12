@@ -8,9 +8,11 @@
  * 6. Web Live Ingest at #1 Position with Automatic RAM Cache Purge
  */
 
+const crypto = require("crypto");
 const { db } = require("../firebase");
 const { invalidateAllCache } = require("../utils/ramCache");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
+const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -21,9 +23,9 @@ let currentOffset = 0;
 const inFlightKeys = new Set();
 
 /**
- * 4-Layer Duplicate Detection Engine
+ * Robust 4-Layer Single-Field Duplicate Detection Engine (Composite Index Free)
  */
-async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize }) {
+async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize, fileHash }) {
   if (!db) return null;
 
   try {
@@ -33,30 +35,57 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
       if (!snap.empty) return snap.docs[0];
     }
 
-    // 2. Check by exact fileName and byte size
-    if (fileName && fileSize && Number(fileSize) > 0) {
-      const snap = await db.collection("notes")
-        .where("originalName", "==", fileName)
-        .where("fileSize", "==", Number(fileSize))
-        .limit(1).get();
+    // 2. Check by fileHash if provided
+    if (fileHash) {
+      const snap = await db.collection("notes").where("fileHash", "==", fileHash).limit(1).get();
       if (!snap.empty) return snap.docs[0];
     }
 
-    // 3. Check by title and byte size
-    if (title && fileSize && Number(fileSize) > 0) {
-      const snap = await db.collection("notes")
-        .where("title", "==", title)
-        .where("fileSize", "==", Number(fileSize))
-        .limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+    // 3. Single-field query by exact fileSize with in-memory name / title check (Zero composite index required)
+    if (fileSize && Number(fileSize) > 0) {
+      const snap = await db.collection("notes").where("fileSize", "==", Number(fileSize)).limit(10).get();
+      if (!snap.empty) {
+        const cleanName = (fileName || "").toLowerCase().trim();
+        const cleanTitle = (title || "").toLowerCase().trim();
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          const docOrig = (d.originalName || "").toLowerCase().trim();
+          const docTitle = (d.title || "").toLowerCase().trim();
+          if (
+            (cleanName && docOrig && cleanName === docOrig) ||
+            (cleanTitle && docTitle && cleanTitle === docTitle) ||
+            (cleanName && docTitle && (cleanName.includes(docTitle) || docTitle.includes(cleanName)))
+          ) {
+            return doc;
+          }
+        }
+      }
     }
 
-    // 4. Check by exact byte size for large files (> 500KB)
-    if (fileSize && Number(fileSize) > 500000) {
-      const snap = await db.collection("notes")
-        .where("fileSize", "==", Number(fileSize))
-        .limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+    // 4. Single-field query by exact originalName with in-memory size verification
+    if (fileName) {
+      const snap = await db.collection("notes").where("originalName", "==", fileName).limit(5).get();
+      if (!snap.empty) {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+            return doc;
+          }
+        }
+      }
+    }
+
+    // 5. Single-field query by exact title with in-memory size verification
+    if (title) {
+      const snap = await db.collection("notes").where("title", "==", title).limit(5).get();
+      if (!snap.empty) {
+        for (const doc of snap.docs) {
+          const d = doc.data();
+          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+            return doc;
+          }
+        }
+      }
     }
   } catch (err) {
     console.warn("[BOT POLLER] Duplicate check query warning:", err.message);
@@ -192,12 +221,25 @@ async function processIncomingMessage(message) {
 
   console.log(`[BOT POLLER] 📄 Incoming Document: "${fileName}" (${(fileSize / 1024 / 1024).toFixed(1)} MB) from Chat: ${chatId} (${chatTitle || "DM"})${threadTitle ? ` [Topic: ${threadTitle}]` : ""}`);
 
-  // In-flight concurrency lock per message
-  const flightKey = `${chatId}_${messageId}`;
-  if (inFlightKeys.has(flightKey)) {
+  // In-flight concurrency lock & fingerprint check
+  const sig = syncLock.getDocSignature(fileName, fileSize);
+  const flightKey = `msg_${chatId}_${messageId}`;
+  const docKey = fileUniqueId ? `doc_${fileUniqueId}` : null;
+
+  if (
+    !syncLock.canProcess(flightKey) ||
+    (docKey && !syncLock.canProcess(docKey)) ||
+    (sig && !syncLock.canProcess(sig)) ||
+    inFlightKeys.has(flightKey)
+  ) {
+    console.log(`[BOT POLLER] 🛡️ Duplicate event ignored (In-flight / Locked): "${fileName}"`);
     return;
   }
+
   inFlightKeys.add(flightKey);
+  syncLock.lock(flightKey);
+  if (docKey) syncLock.lock(docKey);
+  if (sig) syncLock.lock(sig);
 
   try {
     // Extract Dynamic Academic Metadata
@@ -209,30 +251,34 @@ async function processIncomingMessage(message) {
     });
 
     const { title, subject, branch, course, year } = metadata;
+    const fileHash = crypto.createHash("sha256").update(`${fileName}_${fileSize}`).digest("hex");
 
-    // 🛡️ 4-Layer Duplicate Detection Check
+    // 🛡️ 4-Layer Single-Field Duplicate Detection Check
     const duplicateDoc = await checkDuplicateInDatabase({
       fileUniqueId,
       fileName,
       title,
       fileSize,
+      fileHash,
     });
 
     if (duplicateDoc) {
       const dupData = duplicateDoc.data();
-      console.log(`[BOT POLLER] 🛡️ Duplicate recognized: "${title}" (Already in vault: ${duplicateDoc.id}) - Delivering receipt to chat ${chatId}`);
+      console.log(`[BOT POLLER] 🛡️ Duplicate recognized: "${title}" (Already in vault: ${duplicateDoc.id})`);
 
-      const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
-      const dupNotice = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-        `✅ <b>Note Live on Academic Cloud Website!</b>\n` +
-        `📄 <b>Title:</b> ${dupData.title || title}\n` +
-        `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
-        `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
-        `💾 <b>Size:</b> ${sizeMB} MB\n` +
-        `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-        `<i>Note is live at #1 position and accessible to registered students. (Unified without duplication).</i>`;
+      if (syncLock.canSendReceipt(chatId, messageId)) {
+        const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+        const dupNotice = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
+          `✅ <b>Note Live on Academic Cloud Website!</b>\n` +
+          `📄 <b>Title:</b> ${dupData.title || title}\n` +
+          `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
+          `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
+          `💾 <b>Size:</b> ${sizeMB} MB\n` +
+          `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
+          `<i>Note is live at #1 position and accessible to registered students. (Unified without duplication).</i>`;
 
-      await sendTelegramMessage(chatId, dupNotice, messageId, threadId);
+        await sendTelegramMessage(chatId, dupNotice, messageId, threadId);
+      }
       return;
     }
 
@@ -245,6 +291,12 @@ async function processIncomingMessage(message) {
       if (!storedMsgId) {
         storedMsgId = messageId; // Fallback to original message pointer
       }
+    }
+
+    // Register stored message in syncLock so MTProto storage channel listener ignores it
+    if (storedMsgId) {
+      syncLock.lock(`msg_${storedMsgId}`);
+      syncLock.lock(`stored_${storedMsgId}`);
     }
 
     if (!db) {
@@ -267,6 +319,7 @@ async function processIncomingMessage(message) {
       semester: year,
       description: caption || `Synced from Telegram: ${chatTitle || (message.chat.type === "private" ? "Direct Bot DM" : "Telegram Group")}`,
       originalName: fileName,
+      fileHash,
       mimeType: doc.mime_type || "application/pdf",
       fileSize: fileSize,
       compressedSize: fileSize,
@@ -304,23 +357,28 @@ async function processIncomingMessage(message) {
       updatedAt: nowIso,
     }).catch(() => {});
 
-    // Send Instant Rich HTML Receipt back to Chat / Subgroup / DM
-    const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
-    const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
-      `✅ <b>Note Successfully Indexed to Website!</b>\n` +
-      `📄 <b>Title:</b> ${title}\n` +
-      `📚 <b>Subject:</b> ${subject}\n` +
-      `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-      `💾 <b>Size:</b> ${sizeMB} MB\n` +
-      `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
-      `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
+    // Send EXACTLY ONE Instant Rich HTML Receipt back to Chat / Subgroup / DM
+    if (syncLock.canSendReceipt(chatId, messageId)) {
+      const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+      const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
+        `✅ <b>Note Successfully Indexed to Website!</b>\n` +
+        `📄 <b>Title:</b> ${title}\n` +
+        `📚 <b>Subject:</b> ${subject}\n` +
+        `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
+        `💾 <b>Size:</b> ${sizeMB} MB\n` +
+        `🌐 <b>Live Web URL:</b> https://freestudymaterial.onrender.com\n\n` +
+        `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
-    await sendTelegramMessage(chatId, receiptText, messageId, threadId);
+      await sendTelegramMessage(chatId, receiptText, messageId, threadId);
+    }
 
     invalidateAllCache();
     console.log(`[BOT POLLER] ✅ Successfully published note "${title}" (#1 Position on Web)!`);
   } finally {
-    // Keep lock for 5 seconds to prevent near-instant re-postings
+    syncLock.unlock(flightKey);
+    if (docKey) syncLock.unlock(docKey);
+    if (sig) syncLock.unlock(sig);
+
     setTimeout(() => {
       inFlightKeys.delete(flightKey);
     }, 5000);

@@ -196,7 +196,7 @@ function enqueueUpload(task) {
         currentStage: "Checking Deduplication & Optimizing Streams",
       });
 
-      const duplicate = await findDuplicateNote(fileHash);
+      const duplicate = await findDuplicateNote(fileHash, originalName, originalSize);
 
       if (duplicate) {
         console.log(`[QUEUE] ⚡ Zero-Second Deduplication hit for ${noteId}! Reusing Telegram Ref.`);

@@ -1529,7 +1529,7 @@ router.post("/system/cleanup", authenticateToken, checkAdminOrPermission("all"),
    TELEGRAM CHANNEL TWO-WAY SYNC CONTROLS
    ========================================================================== */
 
-const { syncTelegramChannel } = require("../telegram/mtproto");
+const { syncTelegramChannel, deduplicateDatabaseNotes } = require("../telegram/mtproto");
 
 router.post("/telegram/sync", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
@@ -1537,6 +1537,15 @@ router.post("/telegram/sync", authenticateToken, checkAdminOrPermission("manage_
     return res.json(result);
   } catch (err) {
     return res.status(500).json({ success: false, message: "Telegram sync error: " + err.message });
+  }
+});
+
+router.post("/telegram/deduplicate", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+  try {
+    const result = await deduplicateDatabaseNotes();
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Deduplication sweep error: " + err.message });
   }
 });
 
