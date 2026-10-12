@@ -69,7 +69,7 @@ async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
         text,
         parse_mode: "HTML",
       }),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(8000),
     });
   } catch (err) {
     console.warn("[TELEGRAM-OTP] OTP bot notification notice:", err.message);
