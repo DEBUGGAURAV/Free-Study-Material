@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: Free Study Material
+    name: freestudymaterial
     runtime: node
     region: singapore
     plan: free
@@ -12,7 +12,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
-        value: https://free-study-material-1g0w.onrender.com
+        value: https://freestudymaterial.onrender.com
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID
