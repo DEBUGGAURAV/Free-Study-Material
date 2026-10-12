@@ -44,32 +44,36 @@ function getTransporter() {
 }
 
 /**
- * Realtime Telegram Bot OTP Delivery Backup
- * Dispatches an instant security notification to central Telegram storage vault
+ * Realtime Telegram Dedicated Security OTP Bot Delivery Engine
+ * Dispatches instant passcode alerts to dedicated security bot / private chat
  */
 async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
   try {
-    const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-    const storageChatId = (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
-    if (!botToken || !storageChatId) return;
+    // Dedicated OTP Bot Token (falls back to main bot token if not set)
+    const botToken = (process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    // Dedicated OTP Chat ID (falls back to storage chat id if not set)
+    const targetChatId = (process.env.TELEGRAM_OTP_CHAT_ID || process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
+    if (!botToken || !targetChatId) return;
 
-    const text = `🔐 <b>Academic Cloud Security Passcode</b>\n\n` +
+    const text = `🔐 <b>Free Study Material — Security Passcode Alert</b>\n\n` +
       `👤 <b>Student Email:</b> <code>${toEmail}</code>\n` +
-      `🔑 <b>${type} Code:</b> <code>${otp}</code>\n` +
+      `🔑 <b>${type} Passcode:</b> <code>${otp}</code>\n` +
       `⏱️ <b>Validity:</b> 10 Minutes\n` +
-      `🌐 <i>Auto-synced via Free Study Material Security Core</i>`;
+      `🌐 <i>Isolated Security Core Delivery</i>`;
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: storageChatId,
+        chat_id: targetChatId,
         text,
         parse_mode: "HTML",
       }),
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(3000),
     });
-  } catch {}
+  } catch (err) {
+    console.warn("[TELEGRAM-OTP] OTP bot notification notice:", err.message);
+  }
 }
 
 /**

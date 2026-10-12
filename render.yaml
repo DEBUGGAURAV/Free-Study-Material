@@ -17,6 +17,10 @@ services:
         sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID
         sync: false
+      - key: TELEGRAM_OTP_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_OTP_CHAT_ID
+        sync: false
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH
