@@ -55,9 +55,8 @@ async function verifyAdminPassword(user, password) {
   const isMainAdmin = user.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
   if (
     isMainAdmin &&
-    (password === "Admin@12345" ||
-      cleanPassword === "Admin@12345" ||
-      (process.env.ADMIN_PASSWORD && (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)))
+    process.env.ADMIN_PASSWORD &&
+    (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
   ) {
     return true;
   }

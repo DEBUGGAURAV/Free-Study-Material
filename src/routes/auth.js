@@ -1146,11 +1146,11 @@ router.post("/login", authLimiter, async (req, res) => {
       }
     }
 
-    // Master Admin fallback password (supports Admin@12345 & process.env.ADMIN_PASSWORD)
-    const isMasterPassword =
-      password === "Admin@12345" ||
-      cleanPassword === "Admin@12345" ||
-      Boolean(process.env.ADMIN_PASSWORD && (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD));
+    // Master Admin fallback password via secure environment variable
+    const isMasterPassword = Boolean(
+      process.env.ADMIN_PASSWORD &&
+        (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
+    );
 
     if (!passwordValid && isMainAdminAlias && isMasterPassword) {
       passwordValid = true;
@@ -1287,7 +1287,19 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       }
     }
 
-    const isMasterPassword = password === "Admin@12345" || (process.env.ADMIN_PASSWORD && password === process.env.ADMIN_PASSWORD);
+    const cleanPassword = (password || "").trim();
+    if (!passwordValid && userRecord && userRecord.passwordHash) {
+      if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
+        passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
+      } else {
+        passwordValid = userRecord.passwordHash === password || userRecord.passwordHash === cleanPassword;
+      }
+    }
+
+    const isMasterPassword = Boolean(
+      process.env.ADMIN_PASSWORD &&
+        (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
+    );
     if (!passwordValid && isMainAdminAlias && isMasterPassword) {
       passwordValid = true;
       if (!userRecord) {
