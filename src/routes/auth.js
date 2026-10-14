@@ -1129,8 +1129,41 @@ router.post("/login", authLimiter, async (req, res) => {
     // Verify Password
     let passwordValid = false;
     const cleanPassword = (password || "").trim();
+    const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
 
-    if (userRecord && userRecord.password) {
+    // 🛡️ 1. DIRECT .ENV VALIDATION FOR ADMIN:
+    // Allows you to change ADMIN_PASSWORD in .env anytime; it will validate immediately!
+    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
+      passwordValid = true;
+
+      // 🔄 Auto-Sync: Update Firestore hash in the background to match the new .env password
+      if (db) {
+        setImmediate(async () => {
+          try {
+            const newHash = await bcrypt.hash(cleanPassword, 10);
+            if (docId) {
+              await db.collection("users").doc(docId).update({
+                password: newHash,
+                passwordHash: newHash,
+              });
+            } else {
+              const snap = await db.collection("users").where("email", "==", MAIN_ADMIN_EMAIL).limit(1).get();
+              if (!snap.empty) {
+                await snap.docs[0].ref.update({
+                  password: newHash,
+                  passwordHash: newHash,
+                });
+              }
+            }
+          } catch (syncErr) {
+            console.warn("[AUTH] Admin DB password auto-sync notice:", syncErr.message);
+          }
+        });
+      }
+    }
+
+    // 2. Database bcrypt hash validation (for students and admin)
+    if (!passwordValid && userRecord && userRecord.password) {
       if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
       } else {
@@ -1146,25 +1179,16 @@ router.post("/login", authLimiter, async (req, res) => {
       }
     }
 
-    // Master Admin fallback password via secure environment variable
-    const isMasterPassword = Boolean(
-      process.env.ADMIN_PASSWORD &&
-        (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
-    );
-
-    if (!passwordValid && isMainAdminAlias && isMasterPassword) {
-      passwordValid = true;
-      if (!userRecord) {
-        userRecord = {
-          email: MAIN_ADMIN_EMAIL,
-          name: "Tech Titan Main Admin",
-          role: "admin",
-          college: "IIT / Central Academic Administration",
-          mobile: "9999999999",
-          year: "Faculty",
-          permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
-        };
-      }
+    if (passwordValid && isMainAdminAlias && !userRecord) {
+      userRecord = {
+        email: MAIN_ADMIN_EMAIL,
+        name: "Tech Titan Main Admin",
+        role: "admin",
+        college: "IIT / Central Academic Administration",
+        mobile: "9999999999",
+        year: "Faculty",
+        permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
+      };
     }
 
     if (!passwordValid) {
@@ -1279,15 +1303,21 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
 
     // Verify Password
     let passwordValid = false;
-    if (userRecord && userRecord.password) {
+    const cleanPassword = (password || "").trim();
+    const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+
+    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
+      passwordValid = true;
+    }
+
+    if (!passwordValid && userRecord && userRecord.password) {
       if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
-        passwordValid = await bcrypt.compare(password, userRecord.password);
+        passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
       } else {
-        passwordValid = userRecord.password === password;
+        passwordValid = userRecord.password === password || userRecord.password === cleanPassword;
       }
     }
 
-    const cleanPassword = (password || "").trim();
     if (!passwordValid && userRecord && userRecord.passwordHash) {
       if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
@@ -1296,23 +1326,16 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       }
     }
 
-    const isMasterPassword = Boolean(
-      process.env.ADMIN_PASSWORD &&
-        (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
-    );
-    if (!passwordValid && isMainAdminAlias && isMasterPassword) {
-      passwordValid = true;
-      if (!userRecord) {
-        userRecord = {
-          email: MAIN_ADMIN_EMAIL,
-          name: "Tech Titan Main Admin",
-          role: "admin",
-          college: "IIT / Central Academic Administration",
-          mobile: "9999999999",
-          year: "Faculty",
-          permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
-        };
-      }
+    if (passwordValid && isMainAdminAlias && !userRecord) {
+      userRecord = {
+        email: MAIN_ADMIN_EMAIL,
+        name: "Tech Titan Main Admin",
+        role: "admin",
+        college: "IIT / Central Academic Administration",
+        mobile: "9999999999",
+        year: "Faculty",
+        permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
+      };
     }
 
     if (!passwordValid) {

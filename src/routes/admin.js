@@ -52,11 +52,11 @@ const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
 async function verifyAdminPassword(user, password) {
   if (!password || !user) return false;
   const cleanPassword = password.trim();
-  const isMainAdmin = user.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
+  const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
   if (
     isMainAdmin &&
-    process.env.ADMIN_PASSWORD &&
-    (password === process.env.ADMIN_PASSWORD || cleanPassword === process.env.ADMIN_PASSWORD)
+    envAdminPassword &&
+    (password === envAdminPassword || cleanPassword === envAdminPassword)
   ) {
     return true;
   }
