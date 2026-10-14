@@ -36,7 +36,6 @@ app.use(
         scriptSrc: [
           "'self'",
           "'unsafe-inline'",
-          "'unsafe-eval'",
           "https://accounts.google.com",
           "https://apis.google.com",
           "https://cdnjs.cloudflare.com",
@@ -66,23 +65,22 @@ app.use(
   })
 );
 
-// Strict CORS Policy
+// Strict Production CORS Policy (No wildcards)
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "https://freestudymaterial.onrender.com",
   "https://freestudtmaterial.onrender.com",
-  "http://localhost:5173",
-  "http://localhost:5000",
+  ...(process.env.NODE_ENV !== "production"
+    ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
+    : []),
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. server-side keep-alive self-ping, mobile apps, curl)
       if (!origin) return callback(null, true);
-      const isAllowed =
-        allowedOrigins.includes(origin) ||
-        (typeof origin === "string" && (origin.endsWith(".onrender.com") || origin.includes("localhost")));
-      if (isAllowed) {
+      if (allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
@@ -108,31 +106,11 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
-// Real-Time Health & System Diagnostics (Excluded from rate limiter - Zero Database Quota Used)
+// Real-Time Health & Keep-Alive Endpoint (Zero Database Quota Used - Information Leakage Protected)
 app.get(["/health", "/api/health"], (req, res) => {
-  const mem = process.memoryUsage();
   res.json({
     status: "online",
-    engine: "Academic Cloud v3 (Ultra-Fast)",
     service: "freestudymaterial",
-    domain: "freestudymaterial.onrender.com",
-    features: [
-      "Brotli (br) Compression (15-25% Extra Bandwidth Saving)",
-      "WebRTC Peer-to-Peer Mesh (Campus Wi-Fi Direct Accelerator)",
-      "Mozilla PDF.js Virtual Range Streamer",
-      "Tesseract OCR Handwritten Text Extraction",
-      "SHA-256 Deduplication (0s Duplicate Reuse)",
-      "PDF Compressor (pdf-lib 75% Data Saver)",
-      "PassThrough Streaming (2x Fast IO)",
-      "Async Background Queue (< 2s Feedback)",
-      "Sharp WebP Thumbnails",
-      "Cloudflare CDN Edge LRU Caching",
-      "Multi-Gigabit Distributed Cloud Streaming",
-    ],
-    uptime: Math.floor(process.uptime()) + "s",
-    memoryUsageMB: Math.round(mem.rss / 1024 / 1024),
-    heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
-    cacheStats: ramCache.getStats(),
     timestamp: new Date().toISOString(),
   });
 });

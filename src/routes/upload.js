@@ -38,7 +38,7 @@ const ALLOWED_EXTENSIONS = [
 const upload = multer({
   storage,
   limits: {
-    fileSize: 2 * 1024 * 1024 * 1024, // 2GB Max Limit
+    fileSize: 200 * 1024 * 1024, // 200MB Max Limit (Protects 512MB RAM server from DoS / disk exhaustion)
   },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();

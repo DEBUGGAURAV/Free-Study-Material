@@ -36,16 +36,16 @@ let botSettings = {
   enableNoteUploadNotice: true,    // 📤 Alert on note upload (notice only, zero PDF file sent)
   enableNoteDownloadNotice: true,  // 📥 Alert on note download (full student & note details)
   enableAccountPurgeNotice: true,  // 🗑️ Alert on 90-day inactive account auto-purge
-  topicGroupChatId: "",        // Supergroup chat ID (e.g. -100...)
+  topicGroupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538",        // Supergroup chat ID (e.g. -100...)
   topics: {
-    newRegistration: "",       // 🟢 Topic ID for New Registrations
-    logins: "",                // 🔐 Topic ID for Logins
-    logouts: "",               // 🚪 Topic ID for Logouts
-    securityUpdates: "",       // 🚨 Topic ID for Security & Profile Updates
-    otpAudit: "",              // 🔑 Topic ID for OTP Audit Logs
-    notesActivity: "",         // 📚 Topic ID for Notes Activity (Uploads & Downloads)
-    userOtp: "",               // 🔑 Topic ID for Live Student OTP Feed
-    accountPurge: "",          // 🗑️ Topic ID for 90-Day Inactive Account Purges
+    newRegistration: process.env.TELEGRAM_TOPIC_REGISTRATION || "2",       // 🟢 Topic ID for New Registrations
+    logins: process.env.TELEGRAM_TOPIC_LOGIN || "3",                // 🔐 Topic ID for Logins
+    logouts: process.env.TELEGRAM_TOPIC_LOGOUT || "5",               // 🚪 Topic ID for Logouts
+    securityUpdates: process.env.TELEGRAM_TOPIC_SECURITY || "6",       // 🚨 Topic ID for Security & Profile Updates
+    otpAudit: process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7",              // 🔑 Topic ID for OTP Audit Logs
+    notesActivity: process.env.TELEGRAM_TOPIC_NOTES || "8",         // 📚 Topic ID for Notes Activity (Uploads & Downloads)
+    userOtp: process.env.TELEGRAM_TOPIC_USER_OTP || "55",               // 🔑 Topic ID for Live Student OTP Feed
+    accountPurge: process.env.TELEGRAM_TOPIC_PURGE || "59",          // 🗑️ Topic ID for 90-Day Inactive Account Purges
   },
   updatedAt: new Date().toISOString(),
 };

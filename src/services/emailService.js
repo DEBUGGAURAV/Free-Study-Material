@@ -274,24 +274,24 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
 
     let targetChatId = isNoteEvent
       ? (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim()
-      : (currentSettings?.topicGroupChatId || process.env.TELEGRAM_TOPIC_GROUP_ID || process.env.TELEGRAM_OTP_CHAT_ID || process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
+      : (currentSettings?.topicGroupChatId || process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538").trim();
     if (!botToken || !targetChatId) return;
 
-    // Resolve target message_thread_id for Topics
+    // Resolve target message_thread_id for Topics (Managed dynamically via Admin Studio)
     let threadId = null;
     const topics = currentSettings?.topics || {};
     if (event === "REGISTER") {
-      threadId = topics.newRegistration || process.env.TELEGRAM_TOPIC_REGISTRATION || null;
+      threadId = topics.newRegistration || process.env.TELEGRAM_TOPIC_REGISTRATION || "2";
     } else if (event === "LOGIN") {
-      threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || null;
+      threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || "3";
     } else if (event === "LOGOUT") {
-      threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || null;
+      threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
     } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
-      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || null;
+      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
     } else if (event === "OTP_AUDIT") {
-      threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || null;
+      threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
     } else if (event === "USER_OTP") {
-      threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || null;
+      threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
     } else if (event === "NOTE_UPLOAD") {
       // Auto-Topic Creation: Check if dedicated topic exists for this note's Subject or auto-create it!
       const subjectName = (note?.subject || "").trim();
@@ -483,8 +483,36 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `🌐 <i>Real-time Academic Vault Security Core</i>`;
     }
 
-    // 1. If photoUrl is available (from Google OAuth):
-    if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
+    // Helper to prevent Server-Side Request Forgery (SSRF)
+    function isSafePhotoUrl(urlStr) {
+      if (!urlStr || typeof urlStr !== "string") return false;
+      try {
+        const parsed = new URL(urlStr);
+        if (parsed.protocol !== "https:") return false;
+        const hostname = parsed.hostname.toLowerCase();
+        // Strictly block private, loopback, link-local, and raw IP addresses
+        if (
+          hostname === "localhost" ||
+          hostname.endsWith(".local") ||
+          hostname.endsWith(".internal") ||
+          /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) ||
+          hostname.includes(":")
+        ) {
+          return false;
+        }
+        // Only allow trusted Google CDN avatar domains
+        return (
+          hostname.endsWith(".googleusercontent.com") ||
+          hostname.endsWith(".gstatic.com") ||
+          hostname.endsWith(".googleapis.com")
+        );
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // 1. If photoUrl is available & verified safe (from Google OAuth):
+    if (isSafePhotoUrl(photoUrl)) {
       let photoDelivered = false;
 
       // Method A: Download photo buffer on server with browser User-Agent and dispatch binary file to Telegram
