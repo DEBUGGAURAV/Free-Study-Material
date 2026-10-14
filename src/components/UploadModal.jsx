@@ -306,7 +306,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                     Choose a document or drag & drop here
                   </div>
                   <div style={{ color: "var(--text-dim)", fontSize: "0.8rem", marginTop: "4px" }}>
-                    PDF, DOCX, ZIP, or Images up to 200MB
+                    PDF, DOCX, ZIP, or Images up to 2GB (Files &gt;50MB stream async)
                   </div>
                 </div>
               )}

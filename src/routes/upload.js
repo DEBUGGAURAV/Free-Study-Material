@@ -8,7 +8,7 @@ const { db } = require("../firebase");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
-const { invalidateAllCache } = require("../utils/ramCache");
+const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 
 // Ensure temp directory exists
@@ -38,7 +38,7 @@ const ALLOWED_EXTENSIONS = [
 const upload = multer({
   storage,
   limits: {
-    fileSize: 200 * 1024 * 1024, // 200MB Max Limit (Protects 512MB RAM server from DoS / disk exhaustion)
+    fileSize: 2 * 1024 * 1024 * 1024, // 2GB Max Limit (Files >50MB streamed directly via async MTProto)
   },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -151,6 +151,14 @@ router.post(
 
         await docRef.set(noteData);
         invalidateAllCache();
+
+        // 🧠 Smart Caching: Under 50MB cached in RAM for 0ms latency; >50MB bypasses RAM cache to protect 512MB limit
+        if (file.size <= 50 * 1024 * 1024) {
+          ramCache.set(`note_${noteId}`, noteData, 1800);
+          console.log(`[UPLOAD] 🧠 Note ${noteId} (${formatRealSize(file.size)}) cached in RAM Cache (Under 50MB Tier).`);
+        } else {
+          console.log(`[UPLOAD] ⚡ Note ${noteId} (${formatRealSize(file.size)}) > 50MB: Bypassing RAM Cache, streaming direct async to Telegram.`);
+        }
 
         // Auto-create notice on the Notice Board with direct click link!
         await db.collection("notices").add({

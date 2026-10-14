@@ -7,6 +7,7 @@ const { generateWebPThumbnail } = require("./thumbnailService");
 const { extractOcrText } = require("./ocrService");
 const { uploadToStorageChannel } = require("../telegram/mtproto");
 const { invalidateAllCache } = require("../utils/ramCache");
+const { shouldYieldForWebTraffic } = require("../utils/selfHealingWatchdog");
 
 // In-memory queue state for ultra-fast polling
 const jobStatusMap = new Map();
@@ -270,6 +271,11 @@ function enqueueUpload(task) {
       }
 
       // Stage 2: PDF Compression (pdf-lib)
+      // ⏱️ Yield momentarily if event loop is congested to prioritize live student requests
+      if (shouldYieldForWebTraffic()) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+
       let compressedSize = originalSize;
       let savingsPercent = 0;
       const ext = path.extname(originalName).toLowerCase();

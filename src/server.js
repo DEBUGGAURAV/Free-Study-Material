@@ -13,6 +13,19 @@ const { getClient, startAutoSyncWorker } = require("./telegram/mtproto");
 const { startBotPoller } = require("./telegram/botPoller");
 const { startSecurityBotPoller, loadBotSettings } = require("./services/securityBotService");
 const { purgeInactiveAccounts } = require("./services/accountPurgeService");
+const {
+  initProcessImmortalityShield,
+  startRamBufferGuard,
+  startTelegramHeartbeat,
+  startEventLoopLagDetector,
+  getWatchdogStats,
+} = require("./utils/selfHealingWatchdog");
+
+// 🚀 3. Global Process Immortality Shield (Zero-Downtime Protection: Intercepts & Isolates Unhandled Errors)
+initProcessImmortalityShield();
+
+// ⏱️ 5. Event-Loop Lag Detector (Monitors Event Loop Lag to Prevent Web Freeze)
+startEventLoopLagDetector();
 
 const authRoutes = require("./routes/auth");
 const uploadRoutes = require("./routes/upload");
@@ -221,6 +234,28 @@ app.listen(PORT, async () => {
     }, 24 * 60 * 60 * 1000);
   } catch (e) {
     console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
+  }
+
+  // 🧹 2. Smart RAM Buffer Guard & Auto-Garbage Collection (380MB threshold on Render 512MB RAM)
+  try {
+    const tempDir = path.join(__dirname, "../temp");
+    startRamBufferGuard(tempDir, 380);
+    console.log("[SELF-HEALING-GUARD] 🧹 Smart RAM Buffer Guard active (380MB Auto-Purge Threshold).");
+  } catch (guardErr) {
+    console.warn("[SELF-HEALING-GUARD] Init warning:", guardErr.message);
+  }
+
+  // 📡 4. Network & Telegram Bot Auto-Reconnection Pulse (20s pulse with exponential backoff)
+  try {
+    startTelegramHeartbeat(async () => {
+      try {
+        await getClient();
+        startBotPoller();
+      } catch (_) {}
+    }, 20000);
+    console.log("[SELF-HEALING-PULSE] 📡 Network & Telegram Bot Auto-Reconnection Pulse active.");
+  } catch (pulseErr) {
+    console.warn("[SELF-HEALING-PULSE] Init warning:", pulseErr.message);
   }
 
   // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)

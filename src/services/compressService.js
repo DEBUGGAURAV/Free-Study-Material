@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { Worker } = require("worker_threads");
+const { attachWorkerWatchdog } = require("../utils/selfHealingWatchdog");
 
 /**
  * Optimizes and compresses a PDF document using an isolated background Worker Thread.
@@ -19,27 +20,12 @@ async function compressPdf(inputFilePath) {
       workerData: { inputFilePath },
     });
 
-    let isDone = false;
-
-    // Safety timeout: if worker takes longer than 25 seconds, terminate and keep original
-    const timer = setTimeout(() => {
-      if (!isDone) {
-        isDone = true;
-        console.warn(`[PDF-WORKER] Compression timed out after 25s for ${path.basename(inputFilePath)}. Using original file.`);
-        worker.terminate().catch(() => {});
-        resolve({
-          compressedPath: inputFilePath,
-          originalSize,
-          compressedSize: originalSize,
-          savingsPercent: 0,
-        });
-      }
-    }, 25000);
+    // 🛡️ Watchdog supervision: Auto-recycle hung threads and reclaim memory buffers after 25s
+    const watchdog = attachWorkerWatchdog(worker, inputFilePath, originalSize, 25000);
 
     worker.on("message", (msg) => {
-      if (!isDone) {
-        isDone = true;
-        clearTimeout(timer);
+      if (!watchdog.isDone()) {
+        watchdog.finish();
         if (msg.success) {
           if (msg.savingsPercent > 0) {
             console.log(`[PDF-WORKER] 🧵 Background Worker Thread saved ${msg.savingsPercent}%: ${msg.originalSize} -> ${msg.compressedSize} bytes`);
@@ -65,10 +51,9 @@ async function compressPdf(inputFilePath) {
     });
 
     worker.on("error", (err) => {
-      if (!isDone) {
-        isDone = true;
-        clearTimeout(timer);
-        console.warn(`[PDF-WORKER] Worker thread error (falling back to original):`, err.message);
+      if (!watchdog.isDone()) {
+        watchdog.finish();
+        console.warn(`[PDF-WORKER] Worker thread error (falling back to original safely):`, err.message);
         resolve({
           compressedPath: inputFilePath,
           originalSize,
@@ -79,9 +64,8 @@ async function compressPdf(inputFilePath) {
     });
 
     worker.on("exit", (code) => {
-      if (!isDone) {
-        isDone = true;
-        clearTimeout(timer);
+      if (!watchdog.isDone()) {
+        watchdog.finish();
         if (code !== 0) {
           console.warn(`[PDF-WORKER] Worker stopped with exit code ${code}`);
         }
