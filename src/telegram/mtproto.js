@@ -999,6 +999,10 @@ function startAutoSyncWorker(intervalMs = 30 * 60 * 1000) {
     try {
       console.log("[MTProto AUTOSYNC] 🔄 Executing 30-minute periodic two-way sync cycle...");
       await syncTelegramChannel();
+      recordSyncEvent({
+        trigger: "30-Minute Quota-Saver Auto-Sync",
+        details: "Auto-Sync Cycle Verified (Database & Telegram Online)",
+      });
     } catch (e) {
       console.warn("[MTProto AUTOSYNC] Periodic sync notice:", e.message);
       recordSyncEvent({

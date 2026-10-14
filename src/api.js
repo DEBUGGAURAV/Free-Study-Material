@@ -289,6 +289,14 @@ export const api = {
     return res;
   },
 
+  getSyncStatus: async () => {
+    try {
+      return await request("/notes/sync-status");
+    } catch {
+      return null;
+    }
+  },
+
   getNotes: async (params = {}) => {
     const query = new URLSearchParams();
     if (params.branch && params.branch !== "All") query.append("branch", params.branch);

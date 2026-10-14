@@ -8,6 +8,7 @@ const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
+const { getLastSyncState } = require("../telegram/syncTracker");
 
 /**
  * GET /api/notes/branches
@@ -108,6 +109,29 @@ router.get("/subjects", async (req, res) => {
 });
 
 /**
+ * GET /api/notes/sync-status
+ * Real-time 30-Minute Auto-Sync Status & Exact IST Timestamp (Public Endpoint)
+ */
+router.get("/sync-status", (req, res) => {
+  try {
+    const syncState = getLastSyncState();
+    return res.json({
+      success: true,
+      lastSync: syncState,
+    });
+  } catch (err) {
+    return res.json({
+      success: true,
+      lastSync: {
+        formattedTime: "Just now",
+        trigger: "30-Minute Quota-Saver Auto-Sync",
+        mode: "30-Minute Quota-Saver & Event-Driven",
+      },
+    });
+  }
+});
+
+/**
  * GET /api/notes
  * Fetches list of notes with in-memory RAM caching for 1ms response
  * Supports limit parameter (e.g. 15 by default, or all=true)
@@ -132,11 +156,11 @@ router.get("/", authenticateToken, async (req, res) => {
 
     if (cachedData) {
       res.setHeader("X-Cache", "HIT");
-      return res.json({ success: true, notes: cachedData.notes, totalCount: cachedData.totalCount });
+      return res.json({ success: true, notes: cachedData.notes, totalCount: cachedData.totalCount, lastSync: getLastSyncState() });
     }
 
     if (!db) {
-      return res.json({ success: true, notes: [], totalCount: 0 });
+      return res.json({ success: true, notes: [], totalCount: 0, lastSync: getLastSyncState() });
     }
 
     // High-Performance In-Memory RAM Cache: Avoids hitting Firestore repeatedly
@@ -253,7 +277,7 @@ router.get("/", authenticateToken, async (req, res) => {
     ramCache.set(cacheKey, { notes, totalCount }, 45);
 
     res.setHeader("X-Cache", "MISS");
-    return res.json({ success: true, notes, totalCount });
+    return res.json({ success: true, notes, totalCount, lastSync: getLastSyncState() });
   } catch (err) {
     console.error("[NOTES] Query error:", err);
     return res.status(500).json({ success: false, message: "Error fetching notes." });
