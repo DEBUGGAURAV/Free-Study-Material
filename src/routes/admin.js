@@ -1423,13 +1423,42 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       };
     }
 
-    // 7. Database Status
+    // 7. Database Status (Live Real-Time Connectivity Check)
+    let isDbConnected = false;
+    let dbPingMs = "Offline";
+    let dbStatus = "OFFLINE (DISCONNECTED)";
+    let dbPower = "OFF";
+
+    if (db) {
+      try {
+        const pingStart = Date.now();
+        await db.collection("settings").limit(1).get();
+        const latency = Date.now() - pingStart;
+        isDbConnected = true;
+        dbPower = "ON";
+        dbStatus = "ONLINE & CONNECTED";
+        dbPingMs = `${latency}ms`;
+      } catch (err) {
+        console.warn("[ADMIN TELEMETRY] Database ping warning:", err.message);
+        isDbConnected = false;
+        dbPower = "OFF";
+        dbStatus = "OFFLINE (" + (err.message || "Disconnected") + ")";
+        dbPingMs = "Timeout / Unreachable";
+      }
+    }
+
     const database = {
       provider: "Google Cloud Firestore (Enterprise Multi-Region - Mumbai asia-south1)",
-      status: db ? "CONNECTED & HEALTHY" : "ONLINE",
+      projectId: process.env.FIREBASE_PROJECT_ID || "tech-titan-team",
+      status: dbStatus,
+      power: dbPower,
+      connection: isDbConnected ? "CONNECTED" : "DISCONNECTED",
+      isConnected: isDbConnected,
       transport: "gRPC HTTP/2 Streamed RPC",
-      collections: ["notes", "users", "notices", "deleted_records", "deleted_notes"],
-      pingMs: "< 15ms",
+      collections: ["notes", "users", "notices", "deleted_records", "deleted_notes", "purged_accounts", "settings"],
+      pingMs: dbPingMs,
+      ssl: "TLS 1.3 End-to-End Encrypted",
+      mode: "Production NoSQL Cloud Document Store",
     };
 
     // 8. Brevo SMTP Telemetry
