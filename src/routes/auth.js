@@ -84,6 +84,32 @@ const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
 const ADMIN_ALIASES = ["admin", "jnplotus", "mainadmin", "admin@gmail.com", "administrator", "root"];
 
 /**
+ * Robust Admin Password Resolver
+ * Reads from process.env.ADMIN_PASSWORD and raw .env file directly,
+ * preventing special characters (like # or !) from being cut off as comments.
+ */
+function getAdminPassword() {
+  let pass = (process.env.ADMIN_PASSWORD || "").trim();
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf8");
+      const match = content.match(/^ADMIN_PASSWORD\s*=\s*(.+)$/m);
+      if (match) {
+        let val = match[1].trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (val) pass = val;
+      }
+    }
+  } catch {}
+  return pass;
+}
+
+/**
  * Helper: Validates that an email ends with @gmail.com
  */
 function isGmail(email) {
@@ -1129,7 +1155,7 @@ router.post("/login", authLimiter, async (req, res) => {
     // Verify Password
     let passwordValid = false;
     const cleanPassword = (password || "").trim();
-    const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+    const envAdminPassword = getAdminPassword();
 
     // 🛡️ 1. DIRECT .ENV VALIDATION FOR ADMIN:
     // Allows you to change ADMIN_PASSWORD in .env anytime; it will validate immediately!
@@ -1304,7 +1330,7 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     // Verify Password
     let passwordValid = false;
     const cleanPassword = (password || "").trim();
-    const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+    const envAdminPassword = getAdminPassword();
 
     if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
       passwordValid = true;

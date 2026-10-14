@@ -47,12 +47,39 @@ const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../ser
 const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
 
 /**
+ * Robust Admin Password Resolver
+ * Reads from process.env.ADMIN_PASSWORD and raw .env file directly,
+ * preventing special characters (like # or !) from being cut off as comments.
+ */
+function getAdminPassword() {
+  let pass = (process.env.ADMIN_PASSWORD || "").trim();
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const envPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, "utf8");
+      const match = content.match(/^ADMIN_PASSWORD\s*=\s*(.+)$/m);
+      if (match) {
+        let val = match[1].trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (val) pass = val;
+      }
+    }
+  } catch {}
+  return pass;
+}
+
+/**
  * Helper: Securely verify Administrator's password for sensitive purge actions
  */
 async function verifyAdminPassword(user, password) {
   if (!password || !user) return false;
   const cleanPassword = password.trim();
-  const envAdminPassword = (process.env.ADMIN_PASSWORD || "").trim();
+  const envAdminPassword = getAdminPassword();
+  const isMainAdmin = user.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
   if (
     isMainAdmin &&
     envAdminPassword &&
