@@ -95,7 +95,7 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
 }
 
 /**
- * Sends a message via Telegram Bot HTTP API with GramJS MTProto direct delivery fallback
+ * Sends a message via Telegram Bot HTTP API with clean auto-retry and GramJS fallback
  */
 async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId = null) {
   if (!chatId || !text) return null;
@@ -109,7 +109,7 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
         parse_mode: "HTML",
       };
       if (replyToMsgId) body.reply_to_message_id = replyToMsgId;
-      if (threadId) body.message_thread_id = threadId;
+      if (threadId && !isNaN(Number(threadId))) body.message_thread_id = Number(threadId);
 
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
@@ -117,9 +117,31 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.ok) return data;
+      if (data.ok) {
+        console.log(`[BOT POLLER] ✅ Receipt delivered to Chat: ${chatId}${threadId ? ` [Thread: ${threadId}]` : ""}`);
+        return data;
+      }
+
+      console.warn(`[BOT POLLER] sendMessage error (${data.description}), retrying clean send to Chat ${chatId}...`);
+
+      // Fallback 1: If threadId or reply_to_message_id caused 400 error, retry with clean payload to chatId
+      const cleanRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          parse_mode: "HTML",
+        }),
+      });
+      const cleanData = await cleanRes.json();
+      if (cleanData.ok) {
+        console.log(`[BOT POLLER] ✅ Receipt successfully delivered via clean fallback to Chat: ${chatId}`);
+        return cleanData;
+      }
+      console.warn(`[BOT POLLER] Clean sendMessage failed: ${cleanData.description}`);
     } catch (httpErr) {
-      // Windows ECONNRESET / fetch error - proceed to GramJS MTProto
+      console.warn("[BOT POLLER] HTTP error during sendMessage:", httpErr.message);
     }
   }
 
@@ -200,7 +222,41 @@ async function forwardToStorageChannel(fromChatId, messageId) {
  * Processes an individual incoming message from Telegram
  */
 async function processIncomingMessage(message) {
-  if (!message || !message.document) return;
+  if (!message) return;
+
+  // Handle Real-time Telegram Forum Topic Creation & Editing for Subjects via @TechTitanNotesBot
+  if (message.forum_topic_created || message.forum_topic_edited) {
+    try {
+      const topicInfo = message.forum_topic_created || message.forum_topic_edited;
+      const topicName = (topicInfo.name || "").trim();
+      const threadId = message.message_thread_id;
+      if (topicName && threadId) {
+        const cleanSubject = topicName.replace(/^[^\w\s]+/, "").trim();
+        const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+
+        if (db && cleanSubject) {
+          await db.collection("subject_forum_topics").doc(normalizedKey).set(
+            {
+              subject: cleanSubject,
+              normalizedKey,
+              threadId: Number(threadId),
+              name: topicName,
+              chatId: message.chat.id.toString(),
+              botUsername: "TechTitanNotesBot",
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+          console.log(`[BOT POLLER] 🔄 Telegram Forum Topic synced to Subjects: "${cleanSubject}" (Thread ID: ${threadId})`);
+        }
+      }
+    } catch (topicErr) {
+      console.warn("[BOT POLLER] Forum topic sync warning:", topicErr.message);
+    }
+    return;
+  }
+
+  if (!message.document) return;
 
   const doc = message.document;
   const fileName = doc.file_name || `Study_Material_${message.message_id}.pdf`;
@@ -267,18 +323,40 @@ async function processIncomingMessage(message) {
       console.log(`[BOT POLLER] 🛡️ Duplicate recognized: "${title}" (Already in vault: ${duplicateDoc.id})`);
 
       if (syncLock.canSendReceipt(chatId, messageId)) {
-        const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+        function formatRealSize(bytes) {
+          const num = Number(bytes || 0);
+          if (!num || num <= 0) return "0.01 MB (10 KB)";
+          const mb = num / (1024 * 1024);
+          const kb = num / 1024;
+          if (mb < 0.1) {
+            return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+          }
+          return `${mb.toFixed(2)} MB`;
+        }
+        const realSize = formatRealSize(fileSize);
+
         const dupNotice = `♻️ <b>Free Study Material — Duplicate Notice Receipt</b>\n\n` +
           `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
           `📄 <b>Title:</b> ${dupData.title || title}\n` +
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
           `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
-          `💾 <b>Size:</b> ${sizeMB} MB\n` +
+          `💾 <b>Size:</b> ${realSize}\n` +
           `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${duplicateDoc.id}/stream\n` +
           `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
           `<i>🛡️ <b>Deduplication Shield:</b> This document is already indexed and live on the website. Duplicate re-upload was safely prevented to conserve cloud storage. Students can access it directly.</i>`;
 
+        // 1. Send receipt directly to the chat where the student sent the message
         await sendTelegramMessage(chatId, dupNotice, messageId, threadId);
+
+        // 2. Also publish duplicate notice into subject topic in storage supergroup if different chat
+        try {
+          const { getOrCreateSubjectForumTopic } = require("../services/emailService");
+          const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, botToken);
+          const storageChat = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+          if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
+            await sendTelegramMessage(storageChat, dupNotice, null, topicThreadId).catch(() => {});
+          }
+        } catch {}
       }
       return;
     }
@@ -360,18 +438,42 @@ async function processIncomingMessage(message) {
 
     // Send EXACTLY ONE Instant Rich HTML Receipt back to Chat / Subgroup / DM
     if (syncLock.canSendReceipt(chatId, messageId)) {
-      const sizeMB = (fileSize / (1024 * 1024)).toFixed(1);
+      function formatRealSize(bytes) {
+        const num = Number(bytes || 0);
+        if (!num || num <= 0) return "0.01 MB (10 KB)";
+        const mb = num / (1024 * 1024);
+        const kb = num / 1024;
+        if (mb < 0.1) {
+          return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+        }
+        return `${mb.toFixed(2)} MB`;
+      }
+      const realSize = formatRealSize(fileSize);
+
       const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
         `✅ <b>Note Successfully Indexed to Website!</b>\n` +
         `📄 <b>Title:</b> ${title}\n` +
         `📚 <b>Subject:</b> ${subject}\n` +
         `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-        `💾 <b>Size:</b> ${sizeMB} MB\n` +
+        `💾 <b>Size:</b> ${realSize}\n` +
         `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${noteRef.id}/stream\n` +
         `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
         `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
+      // 1. Send receipt directly to the chat where the student uploaded the note
       await sendTelegramMessage(chatId, receiptText, messageId, threadId);
+
+      // 2. Also publish receipt into the subject forum topic in central storage supergroup
+      try {
+        const { getOrCreateSubjectForumTopic } = require("../services/emailService");
+        const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, botToken);
+        const storageChat = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+        if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
+          await sendTelegramMessage(storageChat, receiptText, null, topicThreadId).catch(() => {});
+        }
+      } catch (topicNoticeErr) {
+        console.warn("[BOT POLLER] Subject topic receipt notice warning:", topicNoticeErr.message);
+      }
     }
 
     invalidateAllCache();

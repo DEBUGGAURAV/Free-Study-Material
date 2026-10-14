@@ -7,6 +7,7 @@ const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
+const { sendTelegramAuthNotice } = require("../services/emailService");
 
 /**
  * GET /api/notes/branches
@@ -42,6 +43,71 @@ router.get("/branches", async (req, res) => {
 });
 
 /**
+ * GET /api/notes/subjects
+ * Returns all dynamically existing subjects from:
+ * 1. Telegram Supergroup Forum Topics (subject_forum_topics)
+ * 2. Uploaded notes in database
+ * 3. Curated default university subjects
+ */
+router.get("/subjects", async (req, res) => {
+  const defaultSubjects = [
+    "Operating Systems",
+    "Data Structures & Algorithms",
+    "Database Management Systems",
+    "Computer Networks",
+    "Web Design & Development",
+    "Machine Learning",
+    "Artificial Intelligence",
+    "Software Engineering",
+    "Theory of Computation",
+    "Compiler Design",
+    "Computer Organization & Architecture",
+    "Object Oriented Programming (OOP)",
+    "Cyber Security & Cryptography",
+    "Cloud Computing",
+    "Discrete Mathematics",
+    "Digital Electronics",
+    "Computer Graphics",
+  ];
+
+  try {
+    const cachedSubjects = ramCache.get("subjects_list");
+    if (cachedSubjects) {
+      return res.json({ success: true, subjects: cachedSubjects });
+    }
+
+    const subjectSet = new Set(defaultSubjects);
+
+    if (db) {
+      // 1. Fetch from Telegram Supergroup Forum Topics
+      try {
+        const topicsSnap = await db.collection("subject_forum_topics").get();
+        topicsSnap.forEach((doc) => {
+          const s = doc.data()?.subject;
+          if (s && s.trim()) subjectSet.add(s.trim());
+        });
+      } catch (_) {}
+
+      // 2. Fetch from existing notes in database
+      try {
+        const snap = await db.collection("notes").select("subject").limit(300).get();
+        snap.forEach((doc) => {
+          const s = doc.data()?.subject;
+          if (s && s.trim()) subjectSet.add(s.trim());
+        });
+      } catch (_) {}
+    }
+
+    const subjectList = Array.from(subjectSet).sort((a, b) => a.localeCompare(b));
+    ramCache.set("subjects_list", subjectList, 30); // 30s cache for fast live updates
+
+    return res.json({ success: true, subjects: subjectList });
+  } catch (err) {
+    return res.json({ success: true, subjects: defaultSubjects });
+  }
+});
+
+/**
  * GET /api/notes
  * Fetches list of notes with in-memory RAM caching for 1ms response
  * Supports limit parameter (e.g. 15 by default, or all=true)
@@ -72,33 +138,42 @@ router.get("/", authenticateToken, async (req, res) => {
       return res.json({ success: true, notes: [], totalCount: 0 });
     }
 
-    const snapshot = await db.collection("notes").get();
-    let notes = [];
+    // High-Performance In-Memory RAM Cache: Avoids hitting Firestore repeatedly
+    let rawNotes = ramCache.get("all_raw_notes");
+    if (!rawNotes) {
+      const snapshot = await db.collection("notes").get();
+      rawNotes = [];
 
-    const getNoteTimestamp = (val) => {
-      if (!val) return 0;
-      if (typeof val === "number") return val;
-      if (typeof val.toDate === "function") return val.toDate().getTime();
-      if (val._seconds !== undefined) return val._seconds * 1000 + Math.floor((val._nanoseconds || 0) / 1000000);
-      if (val.seconds !== undefined) return val.seconds * 1000;
-      const parsed = new Date(val).getTime();
-      return isNaN(parsed) ? 0 : parsed;
-    };
+      const getNoteTimestamp = (val) => {
+        if (!val) return 0;
+        if (typeof val === "number") return val;
+        if (typeof val.toDate === "function") return val.toDate().getTime();
+        if (val._seconds !== undefined) return val._seconds * 1000 + Math.floor((val._nanoseconds || 0) / 1000000);
+        if (val.seconds !== undefined) return val.seconds * 1000;
+        const parsed = new Date(val).getTime();
+        return isNaN(parsed) ? 0 : parsed;
+      };
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const createdMs = getNoteTimestamp(data.createdAt);
-      const updatedMs = getNoteTimestamp(data.updatedAt);
-      const effectiveMs = Math.max(createdMs, updatedMs);
-      const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const createdMs = getNoteTimestamp(data.createdAt);
+        const updatedMs = getNoteTimestamp(data.updatedAt);
+        const effectiveMs = Math.max(createdMs, updatedMs);
+        const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
 
-      notes.push({
-        id: doc.id,
-        ...data,
-        createdAt: createdAtIso,
-        _sortTimestamp: effectiveMs,
+        rawNotes.push({
+          id: doc.id,
+          ...data,
+          createdAt: createdAtIso,
+          _sortTimestamp: effectiveMs,
+        });
       });
-    });
+
+      // Cache in Node.js RAM for 180 seconds (3 minutes)
+      ramCache.set("all_raw_notes", rawNotes, 180);
+    }
+
+    let notes = [...rawNotes];
 
     // Only exclude notes that an admin has explicitly marked hidden (isVisible: false)
     if (!isAdmin) {
@@ -443,9 +518,9 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
 
     const note = doc.data();
 
-    // Verify requesting user token
+    // Verify requesting user token (cookie, query, or auth header)
     let requestingUser = null;
-    const token = req.query.token || req.headers["authorization"]?.split(" ")[1];
+    const token = req.cookies?.fsm_token || req.cookies?.token || req.query.token || req.headers["authorization"]?.split(" ")[1];
     if (token) {
       try {
         requestingUser = jwt.verify(token, JWT_SECRET);
@@ -475,6 +550,9 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
       if (note.driveLink) {
         return res.redirect(note.driveLink);
       }
+      if (note.fileUrl) {
+        return res.redirect(note.fileUrl);
+      }
       return res.status(400).json({
         success: false,
         message: note.status === "processing" 
@@ -483,8 +561,9 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
       });
     }
 
-    // Asynchronously record download event in student's profile
-    if (requestingUser && requestingUser.id && requestingUser.id !== "admin-root") {
+    // Asynchronously record download event in student's profile & dispatch Telegram security notice
+    if (requestingUser) {
+      const isStudent = requestingUser.id && requestingUser.id !== "admin-root";
       const downloadEvent = {
         id: crypto.randomUUID(),
         type: "download",
@@ -492,9 +571,78 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
         noteId: id,
         timestamp: new Date().toISOString(),
       };
-      db.collection("users").doc(requestingUser.id).update({
-        activities: ((await db.collection("users").doc(requestingUser.id).get()).data()?.activities || []).concat(downloadEvent).slice(-100),
-      }).catch(() => {});
+
+      if (isStudent && db) {
+        db.collection("users").doc(requestingUser.id).get().then((uDoc) => {
+          const uData = uDoc.exists ? uDoc.data() : {};
+          const activities = (uData.activities || []).concat(downloadEvent).slice(-100);
+          db.collection("users").doc(requestingUser.id).update({ activities }).catch(() => {});
+
+          sendTelegramAuthNotice({
+            event: "NOTE_DOWNLOAD",
+            user: {
+              id: requestingUser.id,
+              name: requestingUser.name || uData.name || "Student Scholar",
+              email: requestingUser.email || uData.email,
+              mobile: requestingUser.mobile || uData.mobile,
+              college: requestingUser.college || uData.college,
+              year: requestingUser.year || uData.year,
+            },
+            note: {
+              id: note.id || id,
+              title: note.title,
+              subject: note.subject,
+              course: note.course,
+              branch: note.branch,
+              downloadsCount: note.downloadsCount || 0,
+            },
+            method: "Cloudflare CDN Edge Stream",
+          }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
+        }).catch(() => {
+          sendTelegramAuthNotice({
+            event: "NOTE_DOWNLOAD",
+            user: {
+              id: requestingUser.id,
+              name: requestingUser.name || "Student Scholar",
+              email: requestingUser.email,
+              mobile: requestingUser.mobile,
+              college: requestingUser.college,
+              year: requestingUser.year,
+            },
+            note: {
+              id: note.id || id,
+              title: note.title,
+              subject: note.subject,
+              course: note.course,
+              branch: note.branch,
+              downloadsCount: note.downloadsCount || 0,
+            },
+            method: "Cloudflare CDN Edge Stream",
+          }).catch(() => {});
+        });
+      } else {
+        // Admin or staff stream
+        sendTelegramAuthNotice({
+          event: "NOTE_DOWNLOAD",
+          user: {
+            id: requestingUser.id,
+            name: requestingUser.name || "Administrator",
+            email: requestingUser.email,
+            mobile: requestingUser.mobile || "Admin Session",
+            college: requestingUser.college || "Central Administration",
+            year: requestingUser.year || "Master Admin",
+          },
+          note: {
+            id: note.id || id,
+            title: note.title,
+            subject: note.subject,
+            course: note.course,
+            branch: note.branch,
+            downloadsCount: note.downloadsCount || 0,
+          },
+          method: "Admin Direct Stream",
+        }).catch(() => {});
+      }
     }
 
     // Cloudflare Edge Cache & Browser Cache Headers (Unlimited LRU Cache)
@@ -525,7 +673,12 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
           const fileMetaData = await fileMetaRes.json();
           if (fileMetaData.ok && fileMetaData.result?.file_path) {
             const rawFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileMetaData.result.file_path}`;
-            return res.redirect(rawFileUrl);
+            const fileStreamRes = await fetch(rawFileUrl);
+            if (fileStreamRes.ok && fileStreamRes.body) {
+              const { Readable } = require("stream");
+              const nodeReadable = Readable.fromWeb ? Readable.fromWeb(fileStreamRes.body) : fileStreamRes.body;
+              return nodeReadable.pipe(res);
+            }
           }
         } catch (botErr) {
           console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);

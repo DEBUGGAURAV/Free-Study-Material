@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield } from "lucide-react";
 import { api } from "../api";
 
 export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUpdated }) {
@@ -8,8 +8,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   // Profile fields
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
+  const [initialMobile, setInitialMobile] = useState("");
   const [college, setCollege] = useState("");
   const [year, setYear] = useState("1st Year");
+
+  // Mobile change re-verification state
+  const [mobileOtp, setMobileOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
 
   // Password fields
   const [currentPassword, setCurrentPassword] = useState("");
@@ -23,18 +29,48 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     if (currentUser) {
       setName(currentUser.name || "");
       setMobile(currentUser.mobile || "");
+      setInitialMobile(currentUser.mobile || "");
       setCollege(currentUser.college || "");
       setYear(currentUser.year || "1st Year");
+      setMobileOtp("");
+      setOtpSent(false);
     }
     setMsg(null);
   }, [currentUser, isOpen]);
 
   if (!isOpen || !currentUser) return null;
 
+  const isMobileChanged = mobile.trim() !== (initialMobile || "").trim();
+
+  const handleSendMobileOtp = async () => {
+    if (!mobile.trim() || mobile.trim().length !== 10) {
+      return setMsg({ type: "error", text: "Please enter a valid 10-digit mobile number first." });
+    }
+    try {
+      setSendingOtp(true);
+      setMsg(null);
+      const res = await api.requestProfileMobileOtp(mobile.trim());
+      setOtpSent(true);
+      setMsg({ type: "success", text: res.message || `Verification OTP sent to ${currentUser.email}!` });
+    } catch (err) {
+      setMsg({ type: "error", text: err.message || "Failed to send verification OTP." });
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
+
+    if (isMobileChanged && !mobileOtp.trim()) {
+      setLoading(false);
+      return setMsg({
+        type: "error",
+        text: "Changing your mobile number requires Email verification. Please click 'Send OTP to Email' and enter the 6-digit code.",
+      });
+    }
 
     try {
       const res = await api.updateProfile({
@@ -42,9 +78,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
         mobile: mobile.trim(),
         college: college.trim(),
         year: year.trim(),
+        otp: mobileOtp.trim(),
       });
 
       setMsg({ type: "success", text: "Profile details updated successfully!" });
+      setInitialMobile(mobile.trim());
+      setMobileOtp("");
+      setOtpSent(false);
       if (onProfileUpdated) {
         onProfileUpdated(res.user);
       }
@@ -207,6 +247,50 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </select>
               </div>
             </div>
+
+            {/* Mobile Number Change Security Re-Verification Box */}
+            {isMobileChanged && (
+              <div
+                style={{
+                  background: "rgba(99, 102, 241, 0.08)",
+                  border: "1px solid rgba(99, 102, 241, 0.28)",
+                  borderRadius: "10px",
+                  padding: "14px",
+                  marginBottom: "16px",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Shield size={16} style={{ color: "var(--accent-cyan)" }} />
+                    <span style={{ fontWeight: 700, color: "var(--accent-cyan)", fontSize: "0.82rem" }}>
+                      Security Verification Required
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSendMobileOtp}
+                    disabled={sendingOtp}
+                    className="btn-secondary"
+                    style={{ fontSize: "0.74rem", padding: "5px 12px", borderRadius: "6px" }}
+                  >
+                    {sendingOtp ? "Sending..." : otpSent ? "Resend OTP" : "Send OTP to Email"}
+                  </button>
+                </div>
+                <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", margin: "0 0 10px 0", lineHeight: "1.4" }}>
+                  To prevent unauthorized number hijacking, a 6-digit authorization code must be sent to your registered email (<strong>{currentUser.email}</strong>).
+                </p>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={mobileOtp}
+                  onChange={(e) => setMobileOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="Enter 6-Digit Email Verification Code"
+                  maxLength={6}
+                  style={{ letterSpacing: "3px", fontWeight: 700, textAlign: "center", fontSize: "0.95rem" }}
+                  required={isMobileChanged}
+                />
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">College / University Name</label>

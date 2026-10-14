@@ -26,6 +26,22 @@ try {
   getPipelineList = queueService.getPipelineList;
 } catch {}
 
+let getBotSettings = null;
+let updateBotSettings = null;
+let BOT_USERNAME = "fsm_security_otp_bot";
+let pendingRegistrations = null;
+let pendingPasswordResets = null;
+try {
+  const secBot = require("../services/securityBotService");
+  getBotSettings = secBot.getBotSettings;
+  updateBotSettings = secBot.updateBotSettings;
+  BOT_USERNAME = secBot.BOT_USERNAME;
+  pendingRegistrations = secBot.pendingRegistrations;
+  pendingPasswordResets = secBot.pendingPasswordResets;
+} catch {}
+
+const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
+
 
 
 const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
@@ -36,7 +52,7 @@ const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
 async function verifyAdminPassword(user, password) {
   if (!password || !user) return false;
   const isMainAdmin = user.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
-  if (isMainAdmin && (password === "Admin@12345" || password === process.env.ADMIN_PASSWORD)) {
+  if (isMainAdmin && process.env.ADMIN_PASSWORD && password === process.env.ADMIN_PASSWORD) {
     return true;
   }
 
@@ -994,8 +1010,18 @@ router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("
 
 let cdnRetentionDays = 7; // Default 7 days retention
 let lastEdgePurgeTime = 0;
+let cdnSettingsLoaded = false;
 
 router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  if (!cdnSettingsLoaded && db) {
+    try {
+      const cdnDoc = await db.collection("settings").doc("cdn").get();
+      if (cdnDoc.exists && cdnDoc.data()?.retentionDays) {
+        cdnRetentionDays = Number(cdnDoc.data().retentionDays) || 7;
+      }
+      cdnSettingsLoaded = true;
+    } catch (_) {}
+  }
   const ramStats = ramCache.getStats();
 
   const isPurged = lastEdgePurgeTime > 0 && (Date.now() - lastEdgePurgeTime) < 30 * 60 * 1000;
@@ -1076,13 +1102,21 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   });
 });
 
-router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), (req, res) => {
+router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   const { days } = req.body;
   const parsed = parseInt(days, 10);
   if (!isNaN(parsed) && parsed >= 1) {
-    cdnRetentionDays = parsed;
+    cdnRetentionDays = Math.min(365, parsed);
+    cdnSettingsLoaded = true;
+    if (db) {
+      await db.collection("settings").doc("cdn").set({
+        retentionDays: cdnRetentionDays,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true }).catch(() => {});
+    }
   }
-  return res.json({ success: true, retentionDays: cdnRetentionDays, message: `CDN Cache retention set to ${cdnRetentionDays} days.` });
+  const label = cdnRetentionDays >= 365 ? "365 days (1 Full Year)" : `${cdnRetentionDays} days`;
+  return res.json({ success: true, retentionDays: cdnRetentionDays, message: `CDN Cache retention set to ${label}.` });
 });
 
 router.post("/cdn/purge", authenticateToken, checkAdminOrPermission("all"), (req, res) => {
@@ -1793,6 +1827,288 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
     return res.json({ success: true, files });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/security-bot/settings
+ * Retrieves active Security Bot toggles and live polling stats
+ */
+router.get("/security-bot/settings", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const settings = getBotSettings ? getBotSettings() : {
+      enableOtp: true,
+      enableRegisterNotice: true,
+      enableLoginNotice: true,
+      enableLogoutNotice: true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    return res.json({
+      success: true,
+      settings,
+      stats: {
+        botUsername: BOT_USERNAME,
+        botTokenConfigured: Boolean(process.env.TELEGRAM_OTP_BOT_TOKEN),
+        chatIdConfigured: Boolean(process.env.TELEGRAM_OTP_CHAT_ID),
+        pendingRegistrationsCount: pendingRegistrations ? pendingRegistrations.size : 0,
+        pendingPasswordResetsCount: pendingPasswordResets ? pendingPasswordResets.size : 0,
+        storageMode: "Single-Document Commit (settings/security_bot) - Quota Optimized",
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/security-bot/subject-topics
+ * Returns list of all dynamically created Telegram Forum Topics for subjects
+ */
+router.get("/security-bot/subject-topics", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    if (!db) return res.json({ success: true, topics: [] });
+    const snap = await db.collection("subject_forum_topics").orderBy("createdAt", "desc").limit(100).get();
+    const topics = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return res.json({ success: true, topics, totalCount: topics.length });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/security-bot/test-create-topic
+ * Tests and verifies Forum Topic creation via @TechTitanNotesBot
+ */
+router.post("/security-bot/test-create-topic", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const { subject = "Cloud Computing & DevOps" } = req.body;
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ success: false, message: "Subject is required." });
+    }
+
+    const threadId = await getOrCreateSubjectForumTopic(subject.trim());
+    if (threadId) {
+      return res.json({
+        success: true,
+        message: `Topic for "${subject}" verified/created successfully via @TechTitanNotesBot!`,
+        subject: subject.trim(),
+        threadId,
+        botUsername: "TechTitanNotesBot",
+      });
+    } else {
+      return res.status(500).json({
+        success: false,
+        message: `Failed to create topic for "${subject}". Ensure @TechTitanNotesBot is Administrator in the supergroup with "Manage Topics" enabled.`,
+      });
+    }
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/security-bot/settings
+ * Updates Security Bot controls in memory and commits to single document in Firestore
+ */
+router.post("/security-bot/settings", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const {
+      enableOtp,
+      enableRegisterNotice,
+      enableLoginNotice,
+      enableLogoutNotice,
+      enableSecurityNotice,
+      enableOtpAuditNotice,
+      enableUserOtpNotice,
+      enableNoteUploadNotice,
+      enableNoteDownloadNotice,
+      topicGroupChatId,
+      topics,
+    } = req.body;
+
+    if (!updateBotSettings) {
+      return res.status(500).json({ success: false, message: "Security bot service unavailable." });
+    }
+
+    const payload = {};
+    if (typeof enableOtp === "boolean") payload.enableOtp = enableOtp;
+    if (typeof enableRegisterNotice === "boolean") payload.enableRegisterNotice = enableRegisterNotice;
+    if (typeof enableLoginNotice === "boolean") payload.enableLoginNotice = enableLoginNotice;
+    if (typeof enableLogoutNotice === "boolean") payload.enableLogoutNotice = enableLogoutNotice;
+    if (typeof enableSecurityNotice === "boolean") payload.enableSecurityNotice = enableSecurityNotice;
+    if (typeof enableOtpAuditNotice === "boolean") payload.enableOtpAuditNotice = enableOtpAuditNotice;
+    if (typeof enableUserOtpNotice === "boolean") payload.enableUserOtpNotice = enableUserOtpNotice;
+    if (typeof enableNoteUploadNotice === "boolean") payload.enableNoteUploadNotice = enableNoteUploadNotice;
+    if (typeof enableNoteDownloadNotice === "boolean") payload.enableNoteDownloadNotice = enableNoteDownloadNotice;
+    if (typeof enableAccountPurgeNotice === "boolean") payload.enableAccountPurgeNotice = enableAccountPurgeNotice;
+    if (typeof topicGroupChatId === "string") payload.topicGroupChatId = topicGroupChatId.trim();
+    if (topics && typeof topics === "object") payload.topics = topics;
+
+    const updated = await updateBotSettings(payload);
+
+    return res.json({
+      success: true,
+      message: "Security Bot settings & Topic Routing committed to database successfully!",
+      settings: updated,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to update security bot settings: " + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/security-bot/test-alert
+ * Dispatches an instant test notice to @fsm_security_otp_bot or specific Topic
+ */
+router.post("/security-bot/test-alert", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const { event = "LOGIN" } = req.body;
+    const cleanEvent = event.toUpperCase();
+
+    let testUser = {
+      name: req.user.name || "Administrator Diagnostic",
+      email: req.user.email || "admin@freestudymaterial.com",
+      mobile: "9876543210",
+      college: "Security Control Studio",
+      year: "Faculty / Staff",
+    };
+    let testMethod = "Admin Diagnostic Verification";
+    let testDetail = "";
+    let testNote = null;
+
+    if (cleanEvent === "REGISTER") {
+      testUser = {
+        name: "Rahul Sharma (Rahul / @rahul_tg)",
+        userInputName: "Rahul Sharma",
+        telegramName: "Rahul / @rahul_tg",
+        email: "rahul.sharma@gmail.com",
+        mobile: "9876543210",
+        college: "Delhi Technological University",
+        year: "3rd Year",
+      };
+      testMethod = "Telegram Bot Verification";
+    } else if (cleanEvent === "LOGOUT") {
+      testMethod = "Manual Session Termination";
+    } else if (cleanEvent === "PROFILE_UPDATE" || cleanEvent === "SECURITY_ALERT") {
+      testUser = {
+        name: req.user.name || "Student User",
+        email: req.user.email || "student@gmail.com",
+        oldMobile: "9876543210",
+        newMobile: "9123456780",
+        college: "IIT Bombay",
+      };
+      testMethod = "Brevo Email OTP Challenge Passed";
+    } else if (cleanEvent === "OTP_AUDIT") {
+      testMethod = "Telegram Bot Core";
+      testDetail = "Student Registration 6-Digit Verification Code Dispatched";
+    } else if (cleanEvent === "USER_OTP") {
+      testUser = {
+        name: req.user.name || "Aman Gupta (Aman / @aman_scholar)",
+        email: req.user.email || "aman.gupta@gmail.com",
+        mobile: "9876543210",
+        college: "Delhi Technological University",
+        year: "3rd Year",
+      };
+      testMethod = "Student Registration Passcode";
+      testDetail = "Live 6-Digit Passcode (Admin Manual Share Support)";
+      const testOtp = String(Math.floor(100000 + Math.random() * 900000));
+      await sendTelegramAuthNotice({
+        event: cleanEvent,
+        user: testUser,
+        photoUrl: null,
+        method: testMethod,
+        detail: testDetail,
+        otp: testOtp,
+      });
+      return res.json({
+        success: true,
+        message: `Test [USER_OTP] live passcode alert dispatched successfully with OTP: ${testOtp}! Check Topic #55 (Live Student OTP Feed).`,
+      });
+    } else if (cleanEvent === "NOTE_UPLOAD") {
+      testUser = {
+        name: req.user.name || "Aman Verma (Aman / @aman_eng)",
+        email: req.user.email || "aman.verma@gmail.com",
+        mobile: "9876543210",
+        college: "Delhi Technological University",
+        year: "3rd Year",
+      };
+      testNote = {
+        id: "note-diag-101",
+        title: "Compiler Design Unit 3 & 4 Handwritten Notes",
+        subject: "Compiler Design",
+        course: "B.Tech",
+        branch: "CSE",
+        year: "3rd Year",
+        fileSize: 14.8 * 1024 * 1024,
+        originalName: "Compiler_Design_Unit3_4_Final.pdf",
+      };
+      testMethod = "Student Web Portal Upload";
+    } else if (cleanEvent === "NOTE_DOWNLOAD") {
+      testUser = {
+        name: req.user.name || "Priya Sharma (Priya / @priya_tech)",
+        email: req.user.email || "priya.sharma@gmail.com",
+        mobile: "9123456780",
+        college: "IIT Bombay",
+        year: "2nd Year",
+      };
+      testNote = {
+        id: "note-diag-102",
+        title: "Data Structures & Algorithms Complete Guide",
+        subject: "Data Structures",
+        course: "B.Tech",
+        branch: "CSE",
+        downloadsCount: 42,
+      };
+      testMethod = "Cloudflare CDN Edge Stream";
+    } else if (cleanEvent === "ACCOUNT_PURGE") {
+      testUser = {
+        name: "Rahul Sharma (Rahul / @rahul_tg)",
+        email: "rahul.sharma@gmail.com",
+        mobile: "9876543210",
+        college: "Delhi Technological University (DTU)",
+        year: "3rd Year",
+        registeredDate: "15 Jan 2026",
+        lastLoginDate: "12 Jul 2026",
+        inactivityDays: 94,
+        uploadedNotes: [
+          { id: "note_diag_1", title: "Operating Systems Lecture Notes", course: "B.Tech", branch: "CSE", fileSize: 18.4 * 1024 * 1024 },
+          { id: "note_diag_2", title: "Compiler Design Lab Manual", course: "B.Tech", branch: "CSE", fileSize: 7.2 * 1024 * 1024 },
+        ],
+        downloadsCount: 14,
+      };
+      testMethod = "90-Day Automated Lifecycle Sweeper (Diagnostic)";
+    }
+
+    await sendTelegramAuthNotice({
+      event: cleanEvent,
+      user: testUser,
+      photoUrl: null,
+      method: testMethod,
+      detail: testDetail,
+      note: testNote,
+    });
+
+    return res.json({
+      success: true,
+      message: `Test [${cleanEvent}] notice dispatched successfully! Check Telegram topic/group.`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to send test alert: " + err.message });
+  }
+});
+
+/**
+ * POST /api/admin/run-inactivity-purge
+ * Manually executes the 90-day inactive student account auto-purge sweeper
+ */
+router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const { purgeInactiveAccounts } = require("../services/accountPurgeService");
+    const result = await purgeInactiveAccounts();
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Purge error: " + err.message });
   }
 });
 

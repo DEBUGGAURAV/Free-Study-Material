@@ -11,8 +11,9 @@ import AuthModal from "./components/AuthModal";
 import ProfileModal from "./components/ProfileModal";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
+import { formatFileSize } from "./utils/formatUtils";
 
 export default function App() {
   const [notes, setNotes] = useState([]);
@@ -37,6 +38,7 @@ export default function App() {
   // User & Notices
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
   const [notices, setNotices] = useState([]);
+  const [hideSecurityBanner, setHideSecurityBanner] = useState(false);
 
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
@@ -58,6 +60,18 @@ export default function App() {
     if (authAction && !currentUser) {
       openAuth(authAction === "signup" ? "signup" : "signin");
     }
+
+    // Verify session cookie via httpOnly cookie
+    api.getMe().then((res) => {
+      if (res && res.user) {
+        setCurrentUser(res.user);
+      }
+    }).catch((err) => {
+      if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required"))) {
+        setCurrentUser(null);
+        api.logout();
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -90,7 +104,9 @@ export default function App() {
       return;
     }
     try {
-      setLoading(true);
+      if (notes.length === 0) {
+        setLoading(true);
+      }
       const res = await api.getNotes({
         branch: selectedBranch,
         course: selectedCourse,
@@ -366,8 +382,8 @@ export default function App() {
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, textAlign: "center", marginBottom: "20px", color: "#fff" }}>
                 🚀 Exclusive Benefits Inside The Vault
               </h3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+              <div className="tech-hud-grid">
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <Zap size={22} style={{ color: "var(--accent-cyan)" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Ultra-Fast Academic Cloud Engine</strong>
@@ -377,7 +393,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <Share2 size={22} style={{ color: "var(--accent-indigo)" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>WebRTC P2P Mesh Network</strong>
@@ -387,7 +403,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <FileText size={22} style={{ color: "#34d399" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Mozilla PDF.js Virtual Reader</strong>
@@ -397,7 +413,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <ShieldCheck size={22} style={{ color: "#fbbf24" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Tesseract OCR Deep Search</strong>
@@ -407,7 +423,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <Cpu size={22} style={{ color: "#a855f7" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>In-Memory LRU RAM &amp; Brotli Booster</strong>
@@ -417,7 +433,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <Database size={22} style={{ color: "#38bdf8" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Distributed Multi-Worker Vault &amp; Zero-Loss Archiving</strong>
@@ -427,7 +443,7 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <ShieldCheck size={22} style={{ color: "#10b981" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Brevo SMTP &amp; Zero-Threat Security Shield</strong>
@@ -437,13 +453,23 @@ export default function App() {
                   </p>
                 </div>
 
-                <div style={{ background: "var(--bg-glass-card)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "20px" }}>
+                <div className="vault-benefit-card">
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
                     <Zap size={22} style={{ color: "#f59e0b" }} />
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Real-Time Bot Poller &amp; Fast Ingest</strong>
                   </div>
                   <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
                     Snappy 5s Telegram long-polling &amp; SHA-256 deduplication for instant study material publishing.
+                  </p>
+                </div>
+
+                <div className="vault-benefit-card">
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                    <Lock size={22} style={{ color: "#ec4899" }} />
+                    <strong style={{ fontSize: "0.95rem", color: "#fff" }}>100% Autonomous &amp; Zero Data Sharing</strong>
+                  </div>
+                  <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
+                    This platform operates completely autonomously with zero human intervention. All student data, credentials, and activity logs are strictly private and will never be shared, sold, or tracked.
                   </p>
                 </div>
               </div>
@@ -460,7 +486,7 @@ export default function App() {
                 </span>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+              <div className="tech-hud-grid">
                 {[
                   { title: "Engineering Mathematics III", subject: "Linear Algebra & Transforms", branch: "CSE / IT", size: "18.4 MB" },
                   { title: "Operating Systems & Kernel Architecture", subject: "Process Sync & Memory Virtualization", branch: "CSE / BCA", size: "24.1 MB" },
@@ -501,6 +527,91 @@ export default function App() {
           </div>
         ) : (
           <>
+            {/* Account Lifecycle Security Policy Banner (Front Page After Login) */}
+            {!hideSecurityBanner && (
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.9))",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  borderRadius: "12px",
+                  padding: "14px 18px",
+                  marginBottom: "20px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+                  backdropFilter: "blur(10px)",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
+                  <div
+                    style={{
+                      width: "38px",
+                      height: "38px",
+                      borderRadius: "10px",
+                      background: "rgba(56, 189, 248, 0.12)",
+                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "1.2rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                    🛡️
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>Account Security Policy: Active Student Protection</span>
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          background: "rgba(16, 185, 129, 0.15)",
+                          color: "#34d399",
+                          fontWeight: 600,
+                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                        }}
+                      >
+                        Active &amp; Safe
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "2px", lineHeight: "1.4" }}>
+                      To protect student privacy and university resources, accounts that do not log in for <strong>90 consecutive days</strong> are automatically deleted. Simply sign in once every 90 days to keep your student account active.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 600 }}>
+                    Logged in as {currentUser?.name || currentUser?.email}
+                  </span>
+                  <button
+                    onClick={() => setHideSecurityBanner(true)}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      color: "var(--text-dim)",
+                      borderRadius: "6px",
+                      padding: "4px 8px",
+                      cursor: "pointer",
+                      fontSize: "0.72rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title="Dismiss notice"
+                  >
+                    <X size={13} />
+                    <span>Dismiss</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Hero Banner with Tech Architecture */}
             <HeroBanner totalNotes={notes.length} />
 
@@ -567,7 +678,7 @@ export default function App() {
                               <span className="tech-pill branch">{note.branch}</span> {note.course || "B.Tech"} • {note.year || note.semester || "All"}
                             </td>
                             <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>
-                              {(note.compressedSize ? note.compressedSize / (1024 * 1024) : (note.fileSize / (1024 * 1024))).toFixed(1)} MB
+                              {formatFileSize(note.compressedSize || note.fileSize)}
                               {note.savingsPercent > 0 && <span style={{ color: "#34d399", fontSize: "0.72rem", marginLeft: "6px" }}>(-{note.savingsPercent}%)</span>}
                             </td>
                             <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>

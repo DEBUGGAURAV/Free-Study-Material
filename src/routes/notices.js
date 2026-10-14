@@ -3,28 +3,59 @@ const router = express.Router();
 const { db } = require("../firebase");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
 
+// Notice Board Lifetime Retention Policy (Default: 7 Days)
+const NOTICE_RETENTION_DAYS = parseInt(process.env.NOTICE_RETENTION_DAYS || "7", 10);
+
 /**
  * GET /api/notices
- * Fetches all active notices (ordered by pinned first, then newest)
+ * Fetches all active notices within retention days (ordered by pinned first, then newest)
+ * Automatically purges and archives notices older than NOTICE_RETENTION_DAYS to Restore Vault.
  */
 router.get("/", async (req, res) => {
   try {
     if (!db) return res.json({ success: true, notices: [] });
 
     const snap = await db.collection("notices").orderBy("createdAt", "desc").limit(50).get();
-    const notices = [];
+    const cutoffTime = Date.now() - NOTICE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+    const activeNotices = [];
+    const expiredDocs = [];
 
     snap.forEach((doc) => {
-      notices.push({
-        id: doc.id,
-        ...doc.data(),
-      });
+      const data = doc.data();
+      const createdTime = data.createdAt ? new Date(data.createdAt).getTime() : 0;
+
+      // Check if notice has exceeded retention days (unpinned notices auto-expire)
+      if (createdTime > 0 && createdTime < cutoffTime && !data.isPinned) {
+        expiredDocs.push({ id: doc.id, ...data });
+      } else {
+        activeNotices.push({ id: doc.id, ...data });
+      }
     });
 
-    // Sort: pinned notices first
-    notices.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+    // Auto-delete / auto-archive expired notices in background to prevent DB bloat
+    if (expiredDocs.length > 0) {
+      Promise.all(
+        expiredDocs.map(async (item) => {
+          try {
+            await db.collection("deleted_records").doc(`notices_${item.id}`).set({
+              ...item,
+              originalId: item.id,
+              collectionName: "notices",
+              typeLabel: "Notice",
+              archivedAt: new Date().toISOString(),
+              archivedReason: `Auto-deleted: Exceeded ${NOTICE_RETENTION_DAYS}-day notice board retention policy`,
+            });
+            await db.collection("notices").doc(item.id).delete();
+          } catch {}
+        })
+      ).catch(() => {});
+    }
 
-    return res.json({ success: true, notices });
+    // Sort: pinned notices first
+    activeNotices.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+
+    return res.json({ success: true, notices: activeNotices, retentionDays: NOTICE_RETENTION_DAYS });
   } catch (err) {
     console.error("[NOTICES] Fetch error:", err);
     return res.status(500).json({ success: false, message: "Error fetching notices." });

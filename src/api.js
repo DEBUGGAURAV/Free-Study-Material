@@ -5,6 +5,13 @@
 
 const API_BASE = "/api";
 
+// Clean up any legacy exposed JWT token from localStorage (now strictly protected in httpOnly cookie)
+try {
+  if (typeof window !== "undefined" && window.localStorage) {
+    localStorage.removeItem("vault_token");
+  }
+} catch {}
+
 export function getAuthToken() {
   return localStorage.getItem("vault_token") || null;
 }
@@ -53,12 +60,16 @@ async function request(endpoint, options = {}) {
 
   const res = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
+    credentials: "include",
     headers,
   });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.message || `Request failed with status ${res.status}`);
+    const err = new Error(data.message || `Request failed with status ${res.status}`);
+    err.data = data;
+    err.status = res.status;
+    throw err;
   }
 
   return data;
@@ -71,12 +82,52 @@ export const api = {
       method: "POST",
       body: JSON.stringify(userData),
     });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
     if (data.token) {
       setAuthToken(data.token);
-      setCurrentUser(data.user);
     }
     return data;
   },
+
+  registerTelegramInitiate: (userData) =>
+    request("/auth/register-telegram-initiate", {
+      method: "POST",
+      body: JSON.stringify(userData),
+    }),
+
+  registerTelegramVerify: async (verifyData) => {
+    const data = await request("/auth/register-telegram-verify", {
+      method: "POST",
+      body: JSON.stringify(verifyData),
+    });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
+    if (data.token) {
+      setAuthToken(data.token);
+    }
+    return data;
+  },
+
+  pollTelegramRegisterStatus: (regToken) =>
+    request(`/auth/register-telegram-poll?regToken=${encodeURIComponent(regToken)}`),
+
+  forgotTelegramInitiate: (data) =>
+    request("/auth/forgot-telegram-initiate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  forgotTelegramVerify: (data) =>
+    request("/auth/forgot-telegram-verify", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  pollTelegramResetStatus: (resetToken) =>
+    request(`/auth/forgot-telegram-poll?resetToken=${encodeURIComponent(resetToken)}`),
 
   requestRegisterOtp: (userData) =>
     request("/auth/register-request-otp", {
@@ -89,9 +140,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, otp }),
     });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
     if (data.token) {
       setAuthToken(data.token);
-      setCurrentUser(data.user);
     }
     return data;
   },
@@ -101,16 +154,50 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ identifier, password }),
     });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
     if (data.token) {
       setAuthToken(data.token);
+    }
+    return data;
+  },
+
+  googleLogin: async (googleData) => {
+    const data = await request("/auth/google", {
+      method: "POST",
+      body: JSON.stringify(googleData),
+    });
+    if (data.user) {
       setCurrentUser(data.user);
+    }
+    if (data.token) {
+      setAuthToken(data.token);
+    }
+    return data;
+  },
+
+  googleCompleteProfile: async (profileData) => {
+    const data = await request("/auth/google-complete-profile", {
+      method: "POST",
+      body: JSON.stringify(profileData),
+    });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
+    if (data.token) {
+      setAuthToken(data.token);
     }
     return data;
   },
 
   logout: async () => {
     try {
-      await request("/auth/logout", { method: "POST" });
+      const u = getCurrentUser();
+      await request("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ user: u }),
+      });
     } catch {}
     setAuthToken(null);
     setCurrentUser(null);
@@ -128,6 +215,12 @@ export const api = {
     }
     return data;
   },
+
+  requestProfileMobileOtp: (newMobile) =>
+    request("/auth/profile/request-mobile-otp", {
+      method: "POST",
+      body: JSON.stringify({ newMobile }),
+    }),
 
   changePassword: (passwordData) =>
     request("/auth/change-password", {
@@ -184,9 +277,23 @@ export const api = {
     return res;
   },
 
+  getSubjects: async () => {
+    const cached = clientMemoryCache.get("subjects");
+    if (cached) {
+      // Async revalidate
+      request("/notes/subjects").then((r) => clientMemoryCache.set("subjects", r)).catch(() => {});
+      return cached;
+    }
+    const res = await request("/notes/subjects");
+    clientMemoryCache.set("subjects", res);
+    return res;
+  },
+
   getNotes: async (params = {}) => {
     const query = new URLSearchParams();
     if (params.branch && params.branch !== "All") query.append("branch", params.branch);
+    if (params.course && params.course !== "All" && params.course !== "All Courses") query.append("course", params.course);
+    if (params.year && params.year !== "All" && params.year !== "All Years") query.append("year", params.year);
     if (params.semester && params.semester !== "All") query.append("semester", params.semester);
     if (params.subject && params.subject !== "All") query.append("subject", params.subject);
     if (params.search) query.append("search", params.search);
@@ -194,7 +301,27 @@ export const api = {
     if (params.all) query.append("all", "true");
 
     const queryString = query.toString() ? `?${query.toString()}` : "";
-    return request(`/notes${queryString}`);
+    const cacheKey = `notes_${queryString}`;
+    const cached = clientMemoryCache.get(cacheKey);
+
+    if (cached) {
+      // ⚡ Return instant cached data from client memory (0ms!)
+      // Silently revalidate in background without blocking UI
+      request(`/notes${queryString}`)
+        .then((fresh) => {
+          if (fresh && fresh.notes) {
+            clientMemoryCache.set(cacheKey, fresh);
+          }
+        })
+        .catch(() => {});
+      return cached;
+    }
+
+    const res = await request(`/notes${queryString}`);
+    if (res && res.notes) {
+      clientMemoryCache.set(cacheKey, res);
+    }
+    return res;
   },
 
   getNoteById: (id) => request(`/notes/${id}`),
@@ -250,8 +377,8 @@ export const api = {
             onProgress({
               percent,
               speed: speedFormatted,
-              loadedMB: (e.loaded / (1024 * 1024)).toFixed(1),
-              totalMB: (e.total / (1024 * 1024)).toFixed(1),
+              loadedMB: (e.loaded / (1024 * 1024)).toFixed(2),
+              totalMB: (e.total / (1024 * 1024)).toFixed(2),
               timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s remaining` : "Completing...",
             });
           }
@@ -275,6 +402,7 @@ export const api = {
       xhr.addEventListener("abort", () => reject(new Error("Upload cancelled.")));
 
       xhr.open("POST", `${API_BASE}/upload`);
+      xhr.withCredentials = true;
       if (token) {
         xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       }
@@ -292,7 +420,7 @@ export const api = {
     let prevLoaded = 0;
     let prevTime = startTime;
 
-    const res = await fetch(url, { signal });
+    const res = await fetch(url, { signal, credentials: "include" });
     const contentType = res.headers.get("Content-Type") || "";
     if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
       let errMessage = `Document is unavailable (${res.status})`;
@@ -343,8 +471,8 @@ export const api = {
         onProgress({
           percent,
           speed: speedFormatted,
-          loadedMB: (loaded / (1024 * 1024)).toFixed(1),
-          totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(1) : (loaded / (1024 * 1024)).toFixed(1),
+          loadedMB: (loaded / (1024 * 1024)).toFixed(2),
+          totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(2) : (loaded / (1024 * 1024)).toFixed(2),
           timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s left` : "Ready",
         });
       }
@@ -478,4 +606,19 @@ export const api = {
     const token = getAuthToken();
     return `/api/admin/database/export?token=${token || ""}`;
   },
+
+  // Security Bot Controls
+  getSecurityBotSettings: () => request("/admin/security-bot/settings"),
+  getSubjectForumTopics: () => request("/admin/security-bot/subject-topics"),
+  updateSecurityBotSettings: (settings) =>
+    request("/admin/security-bot/settings", {
+      method: "POST",
+      body: JSON.stringify(settings),
+    }),
+  testSecurityBotAlert: (event) =>
+    request("/admin/security-bot/test-alert", {
+      method: "POST",
+      body: JSON.stringify({ event }),
+    }),
+  runInactivityPurge: () => request("/admin/run-inactivity-purge", { method: "POST" }),
 };

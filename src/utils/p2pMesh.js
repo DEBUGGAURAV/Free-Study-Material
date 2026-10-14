@@ -101,8 +101,8 @@ export async function downloadFromPeerMesh(noteId, onProgress) {
       onProgress({
         percent: 100,
         speed: "120 MB/s (Instant Local RAM/Disk Cache)",
-        loadedMB: (localCached.byteLength / (1024 * 1024)).toFixed(1),
-        totalMB: (localCached.byteLength / (1024 * 1024)).toFixed(1),
+        loadedMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
+        totalMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
         timeRemaining: "0s (Instant)",
         isP2P: true,
       });
@@ -179,8 +179,8 @@ export async function downloadFromPeerMesh(noteId, onProgress) {
           onProgress({
             percent,
             speed: `⚡ ${speedMBps} MB/s (Local Wi-Fi P2P Mesh)`,
-            loadedMB: (receivedBytes / (1024 * 1024)).toFixed(1),
-            totalMB: (totalExpectedBytes / (1024 * 1024)).toFixed(1),
+            loadedMB: (receivedBytes / (1024 * 1024)).toFixed(2),
+            totalMB: (totalExpectedBytes / (1024 * 1024)).toFixed(2),
             timeRemaining: "Fast LAN Direct",
             isP2P: true,
           });

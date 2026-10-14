@@ -72,12 +72,8 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
       return;
     }
 
-    // External link: append token if pointing to notes API, else open cleanly
-    const token = localStorage.getItem("vault_token");
-    let targetUrl = n.link;
-    if (token && targetUrl.includes("/api/notes/")) {
-      targetUrl += (targetUrl.includes("?") ? "&" : "?") + `token=${token}`;
-    }
+    // Open link cleanly without leaking credentials in URL
+    const targetUrl = n.link;
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   };
 

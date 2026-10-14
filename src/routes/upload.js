@@ -5,10 +5,11 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const { db } = require("../firebase");
-const { authenticateToken } = require("../middleware/auth");
+const { authenticateToken, requireAuth } = require("../middleware/auth");
 const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
 const { invalidateAllCache } = require("../utils/ramCache");
+const { sendTelegramAuthNotice } = require("../services/emailService");
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, "../../temp");
@@ -28,12 +29,41 @@ const storage = multer.diskStorage({
   },
 });
 
+const ALLOWED_EXTENSIONS = [
+  ".pdf", ".doc", ".docx", ".ppt", ".pptx", ".txt", ".rtf", ".odt", ".csv",
+  ".jpg", ".jpeg", ".png", ".webp",
+  ".zip", ".rar", ".7z"
+];
+
 const upload = multer({
   storage,
   limits: {
     fileSize: 2 * 1024 * 1024 * 1024, // 2GB Max Limit
   },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      return cb(new Error(`File format '${ext}' is not permitted. Only academic study documents (.pdf, .doc, .docx, .ppt, .pptx, .txt, .zip, images) are allowed.`));
+    }
+    const blockedMimes = ["application/x-msdownload", "application/x-sh", "text/html", "image/svg+xml", "application/javascript"];
+    if (blockedMimes.includes(file.mimetype?.toLowerCase())) {
+      return cb(new Error("Executable and script files are strictly prohibited."));
+    }
+    cb(null, true);
+  },
 });
+
+function formatRealSize(bytes) {
+  const num = Number(bytes || 0);
+  if (!num || num <= 0) return "PDF";
+  if (num < 1024) return `${num} B`;
+  const kb = num / 1024;
+  const mb = num / (1024 * 1024);
+  if (mb < 0.1) {
+    return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+  }
+  return `${mb.toFixed(2)} MB`;
+}
 
 /**
  * POST /api/upload
@@ -43,7 +73,15 @@ router.post(
   "/",
   uploadLimiter,
   authenticateToken,
-  upload.single("file"),
+  requireAuth,
+  (req, res, next) => {
+    upload.single("file")(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({ success: false, message: err.message });
+      }
+      next();
+    });
+  },
   async (req, res) => {
     try {
       if (!req.file) {
@@ -140,6 +178,31 @@ router.post(
             activities: ((await db.collection("users").doc(req.user.id).get()).data()?.activities || []).concat(uploadEvent).slice(-100),
           }).catch(() => {});
         }
+
+        // Real-time Telegram Notice to Security Bot (Notice text only, strictly zero PDF file attached)
+        sendTelegramAuthNotice({
+          event: "NOTE_UPLOAD",
+          user: {
+            id: req.user?.id,
+            name: req.user?.name || "Student Contributor",
+            email: req.user?.email,
+            mobile: req.user?.mobile,
+            college: req.user?.college,
+            year: req.user?.year,
+          },
+          note: {
+            id: noteId,
+            title: noteTitle,
+            subject: noteSubject,
+            course: finalCourse,
+            branch: finalBranch,
+            year: noteYear,
+            fileSize: file.size,
+            originalName: file.originalname,
+            filePath: tempFilePath,
+          },
+          method: "Student Web Portal Upload",
+        }).catch((err) => console.warn("[UPLOAD-TELEGRAM-NOTICE] Dispatch error:", err.message));
       } else {
         noteId = `note-${Date.now()}`;
       }
@@ -150,7 +213,7 @@ router.post(
         title: noteTitle,
         originalName: file.originalname,
         fileSize: file.size,
-        formattedSize: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+        formattedSize: formatRealSize(file.size),
         mimeType: file.mimetype,
         branch: finalBranch,
         subject: noteSubject,

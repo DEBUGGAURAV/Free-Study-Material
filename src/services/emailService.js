@@ -4,6 +4,7 @@
  */
 
 const nodemailer = require("nodemailer");
+const { ramCache } = require("../utils/ramCache");
 
 // Configuration from environment variables
 const SMTP_HOST = (process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com").trim();
@@ -73,6 +74,493 @@ async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
     });
   } catch (err) {
     console.warn("[TELEGRAM-OTP] OTP bot notification notice:", err.message);
+  }
+}
+
+let getBotSettings = null;
+try {
+  const secBot = require("./securityBotService");
+  getBotSettings = secBot.getBotSettings;
+} catch {}
+
+/**
+ * Auto-creates or retrieves dedicated Telegram Forum Topic for a Subject
+ * When a student uploads a note, the bot automatically checks if a topic exists.
+ * If not, it calls Telegram createForumTopic and saves the thread ID in Firestore.
+ */
+async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, botToken = null) {
+  if (!subjectName) return null;
+  let cleanSubject = subjectName.trim();
+  if (!cleanSubject) return null;
+
+  const lowerSub = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (lowerSub === "ai" || lowerSub === "artificialintelligence") {
+    cleanSubject = "Artificial Intelligence";
+  }
+
+  // Prioritize @TechTitanNotesBot token specifically for topic operations
+  const effectiveBotToken = (process.env.TELEGRAM_BOT_TOKEN || botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
+  let effectiveChatId = (targetChatId || process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").toString().trim();
+  if (!effectiveBotToken) return null;
+
+  const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+
+  // 1. Check RAM Cache (Instant 0ms lookup)
+  if (ramCache) {
+    const cachedThreadId = ramCache.get("tg_sub_topic_" + normalizedKey);
+    if (cachedThreadId) return Number(cachedThreadId);
+  }
+
+  // 2. Check Firestore Database
+  try {
+    const { db } = require("../firebase");
+    if (db) {
+      const docRef = db.collection("subject_forum_topics").doc(normalizedKey);
+      const docSnap = await docRef.get();
+      if (docSnap.exists) {
+        const data = docSnap.data();
+        if (data && data.threadId) {
+          if (ramCache) ramCache.set("tg_sub_topic_" + normalizedKey, data.threadId, 86400);
+          return Number(data.threadId);
+        }
+      }
+    }
+  } catch (dbErr) {
+    console.warn("[SUBJECT-TOPIC] Firestore read error:", dbErr.message);
+  }
+
+  // 3. Auto-create Forum Topic via Telegram Bot API with @TechTitanNotesBot
+  try {
+    const colors = [7322096, 16766590, 13338331, 9367192, 16749490, 16478047];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    const topicName = `📚 ${cleanSubject.slice(0, 120)}`;
+
+    let createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: effectiveChatId,
+        name: topicName,
+        icon_color: randomColor,
+      }),
+    });
+
+    let createData = await createRes.json();
+
+    // Fallback: If primary effectiveChatId failed or bot is not in that chat, try storage supergroup (-1004387181748)
+    const storageSupergroup = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+    if (!createData.ok && storageSupergroup && effectiveChatId !== storageSupergroup) {
+      effectiveChatId = storageSupergroup;
+      createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: effectiveChatId,
+          name: topicName,
+          icon_color: randomColor,
+        }),
+      });
+      createData = await createRes.json();
+    }
+
+    if (createData.ok && createData.result?.message_thread_id) {
+      const newThreadId = createData.result.message_thread_id;
+      console.log(`[TELEGRAM TOPIC AUTO-CREATE] Successfully created new topic "${topicName}" via @TechTitanNotesBot (Thread ID: ${newThreadId}, Chat: ${effectiveChatId})`);
+
+      // Save in Firestore database for persistent routing across all future notes
+      try {
+        const { db } = require("../firebase");
+        if (db) {
+          await db.collection("subject_forum_topics").doc(normalizedKey).set({
+            subject: cleanSubject,
+            normalizedKey,
+            threadId: newThreadId,
+            name: topicName,
+            chatId: effectiveChatId,
+            botUsername: "TechTitanNotesBot",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      } catch (saveErr) {
+        console.warn("[SUBJECT-TOPIC] Firestore save warning:", saveErr.message);
+      }
+
+      if (ramCache) ramCache.set("tg_sub_topic_" + normalizedKey, newThreadId, 86400);
+
+      // Post introductory message in pure English
+      const introText =
+        `📌 <b>Free Study Material — Subject Forum Initialized</b>\n\n` +
+        `📚 <b>Subject:</b> <code>${cleanSubject}</code>\n` +
+        `📁 <i>All academic lecture notes, documents, and syllabus updates for <b>${cleanSubject}</b> will be automatically organized here.</i>\n\n` +
+        `🤖 <b>Managed by:</b> <code>@TechTitanNotesBot</code>\n` +
+        `🌐 <b>Academic Cloud Engine:</b> <code>Live Automated Topic Routing</code>`;
+
+      fetch(`https://api.telegram.org/bot${effectiveBotToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: effectiveChatId,
+          message_thread_id: newThreadId,
+          text: introText,
+          parse_mode: "HTML",
+        }),
+      }).catch(() => {});
+
+      return newThreadId;
+    } else {
+      console.warn(
+        `[TELEGRAM TOPIC AUTO-CREATE] Notice: Could not auto-create topic for "${cleanSubject}". Telegram response: ${createData.description || "Unknown error"}. (Ensure @TechTitanNotesBot is Administrator with 'Manage Topics' permission).`
+      );
+      return null;
+    }
+  } catch (netErr) {
+    console.warn("[TELEGRAM TOPIC AUTO-CREATE] Network error:", netErr.message);
+    return null;
+  }
+}
+
+/**
+ * Realtime Telegram Security Bot Activity Notifier
+ * Alerts Master Admin on EVERY Login, Logout, and Registration!
+ * If Google Sign-In with photo: Dispatches photo directly to Telegram, but NEVER saves photo in DB.
+ */
+async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "" }) {
+  try {
+    let currentSettings = null;
+    if (getBotSettings) {
+      currentSettings = getBotSettings();
+      if (event === "REGISTER" && currentSettings.enableRegisterNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ REGISTER alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "LOGIN" && currentSettings.enableLoginNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ LOGIN alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "LOGOUT" && currentSettings.enableLogoutNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ LOGOUT alert suppressed by admin setting.");
+        return;
+      }
+      if ((event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") && currentSettings.enableSecurityNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ SECURITY_ALERT suppressed by admin setting.");
+        return;
+      }
+      if (event === "OTP_AUDIT" && currentSettings.enableOtpAuditNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ OTP_AUDIT alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "USER_OTP" && currentSettings.enableUserOtpNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ USER_OTP alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "NOTE_UPLOAD" && currentSettings.enableNoteUploadNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ NOTE_UPLOAD alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "NOTE_DOWNLOAD" && currentSettings.enableNoteDownloadNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ NOTE_DOWNLOAD alert suppressed by admin setting.");
+        return;
+      }
+      if (event === "ACCOUNT_PURGE" && currentSettings.enableAccountPurgeNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ ACCOUNT_PURGE alert suppressed by admin setting.");
+        return;
+      }
+    }
+
+    const isNoteEvent = (event === "NOTE_UPLOAD" || event === "NOTE_DOWNLOAD");
+    const botToken = isNoteEvent
+      ? (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim()
+      : (process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
+
+    let targetChatId = isNoteEvent
+      ? (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim()
+      : (currentSettings?.topicGroupChatId || process.env.TELEGRAM_TOPIC_GROUP_ID || process.env.TELEGRAM_OTP_CHAT_ID || process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
+    if (!botToken || !targetChatId) return;
+
+    // Resolve target message_thread_id for Topics
+    let threadId = null;
+    const topics = currentSettings?.topics || {};
+    if (event === "REGISTER") {
+      threadId = topics.newRegistration || process.env.TELEGRAM_TOPIC_REGISTRATION || null;
+    } else if (event === "LOGIN") {
+      threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || null;
+    } else if (event === "LOGOUT") {
+      threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || null;
+    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
+      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || null;
+    } else if (event === "OTP_AUDIT") {
+      threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || null;
+    } else if (event === "USER_OTP") {
+      threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || null;
+    } else if (event === "NOTE_UPLOAD") {
+      // Auto-Topic Creation: Check if dedicated topic exists for this note's Subject or auto-create it!
+      const subjectName = (note?.subject || "").trim();
+      if (subjectName) {
+        threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
+      }
+      if (!threadId) {
+        threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
+      }
+    } else if (event === "NOTE_DOWNLOAD") {
+      const subjectName = (note?.subject || "").trim();
+      if (subjectName) {
+        threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
+      }
+      if (!threadId) {
+        threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
+      }
+    } else if (event === "ACCOUNT_PURGE") {
+      threadId = topics.accountPurge || topics.securityUpdates || process.env.TELEGRAM_TOPIC_PURGE || null;
+    }
+
+    const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    let titleIcon = "🔔";
+    let eventTitle = "User Activity";
+
+    if (event === "REGISTER") {
+      titleIcon = "🟢";
+      eventTitle = "New Student Registration";
+    } else if (event === "LOGIN") {
+      titleIcon = "🔐";
+      eventTitle = "Student Session Login";
+    } else if (event === "LOGOUT") {
+      titleIcon = "🚪";
+      eventTitle = "Student Session Logout";
+    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
+      titleIcon = "🚨";
+      eventTitle = "Security & Profile Update";
+    } else if (event === "OTP_AUDIT") {
+      titleIcon = "🔑";
+      eventTitle = "OTP Dispatch Audit Log";
+    } else if (event === "USER_OTP") {
+      titleIcon = "🔑";
+      eventTitle = "Live Student OTP Feed";
+    } else if (event === "NOTE_UPLOAD") {
+      titleIcon = "📤";
+      eventTitle = "New Document Uploaded";
+    } else if (event === "NOTE_DOWNLOAD") {
+      titleIcon = "📥";
+      eventTitle = "Document Download Stream";
+    } else if (event === "ACCOUNT_PURGE") {
+      titleIcon = "🗑️";
+      eventTitle = "90-Day Inactive Account Purged";
+    }
+
+    function formatRealSize(bytes) {
+      const num = Number(bytes || 0);
+      if (!num || num <= 0) return "0.01 MB (10 KB)";
+      const mb = num / (1024 * 1024);
+      const kb = num / 1024;
+      if (mb < 0.1) {
+        return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+      }
+      return `${mb.toFixed(2)} MB`;
+    }
+
+    let caption = "";
+    if (event === "USER_OTP") {
+      const displayOtp = otp || user.otp || "";
+      caption = `🔐 <b>Free Study Material — Live Student OTP Feed</b>\n\n` +
+        `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
+        (user.mobile ? `📱 <b>Mobile Number:</b> <code>${user.mobile}</code>\n` : "") +
+        (user.email ? `📧 <b>Email Address:</b> <code>${user.email}</code>\n` : "") +
+        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+        (user.year ? `📚 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
+        `🎯 <b>Purpose:</b> <code>${detail || "Account Verification Passcode"}</code>\n` +
+        `🛡️ <b>Auth Method:</b> <code>${method || "Live OTP"}</code>\n\n` +
+        `🔑 <b>6-Digit Live Student OTP:</b>\n` +
+        `👉 <pre style="font-size: 26px;">${displayOtp}</pre>\n\n` +
+        `⏰ <b>Generated At:</b> <code>${timeStr} IST</code>\n` +
+        `🛡️ <i>Admin Manual Support: You can copy and share this OTP with the student if needed.</i>`;
+    } else if (event === "OTP_AUDIT") {
+      caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
+        `👤 <b>Student Name:</b> <code>${user.name || "Student"}</code>\n` +
+        `📱 <b>Mobile Number:</b> <code>${user.mobile || "N/A"}</code>\n` +
+        `📧 <b>Email Address:</b> <code>${user.email || "N/A"}</code>\n` +
+        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+        `🛡️ <b>Action:</b> <code>${detail || method}</code>\n` +
+        `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+        `🔒 <i>Student real OTP delivered strictly to student's personal private chat (1-on-1 DM).</i>`;
+    } else if (event === "NOTE_UPLOAD") {
+      const realSizeStr = formatRealSize(note?.fileSize);
+      caption = `⚡ <b>Free Study Material — Vault Indexing Receipt</b>\n\n` +
+        `✅ <b>Note Successfully Indexed to Website & Supergroup!</b>\n` +
+        `📄 <b>Document Title:</b> <code>${note?.title || "Academic Document"}</code>\n` +
+        `📚 <b>Subject:</b> <code>${note?.subject || "General"}</code>\n` +
+        `🎓 <b>Program:</b> <code>${note?.course || ""} - ${note?.branch || ""} (${note?.year || ""})</code>\n` +
+        `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
+        `👤 <b>Uploaded By:</b> <code>${user.name || "Student Contributor"}</code>\n` +
+        (user.email ? `📧 <b>Email:</b> <code>${user.email}</code>\n` : "") +
+        `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${note?.id}/stream\n` +
+        `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+        `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
+    } else if (event === "NOTE_DOWNLOAD") {
+      const realSizeStr = formatRealSize(note?.fileSize);
+      caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
+        `👤 <b>Student Downloader:</b> <code>${user.name || "Student"}</code>\n` +
+        (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "") +
+        `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
+        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+        (user.year ? `🎓 <b>Student Year:</b> <code>${user.year}</code>\n\n` : "\n") +
+        `📄 <b>Document Title:</b> <code>${note?.title || "Academic Document"}</code>\n` +
+        `📚 <b>Subject:</b> <code>${note?.subject || "General"}</code>\n` +
+        `🏛️ <b>Course & Branch:</b> <code>${note?.course || ""} - ${note?.branch || ""}</code>\n` +
+        (note?.fileSize ? `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` : "") +
+        (note?.downloadsCount !== undefined ? `📊 <b>Download Stream:</b> <code>#${note.downloadsCount + 1}</code>\n` : "") +
+        `⚡ <b>Stream Method:</b> <code>${method || "Cloudflare CDN Edge Stream"}</code>\n` +
+        `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+        `🌐 <i>Real-time Academic Vault Streaming Monitor</i>`;
+    } else if (event === "ACCOUNT_PURGE") {
+      let notesSnippet = "  • <i>No study notes uploaded by this student.</i>";
+      if (user.uploadedNotes && user.uploadedNotes.length > 0) {
+        notesSnippet = user.uploadedNotes
+          .map((n, i) => `  • ${i + 1}. 📄 <b>${n.title}</b> (${n.course || "Course"} • ${n.branch || "Branch"} • ${formatRealSize(n.fileSize)})`)
+          .join("\n");
+      }
+
+      caption = `🗑️ <b>Free Study Material — 90-Day Inactive Account Purged</b>\n\n` +
+        `Dear Admin, this student account was inactive for over 90 days with no login. To keep the database fast, clean, and safe, this account has been automatically deleted from the database.\n\n` +
+        `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
+        `📧 <b>Email Address:</b> <code>${user.email}</code>\n` +
+        (user.mobile ? `📱 <b>Mobile Number:</b> <code>${user.mobile}</code>\n` : "") +
+        (user.college ? `🏛️ <b>College / Institute:</b> <code>${user.college}</code>\n` : "") +
+        (user.year ? `🎓 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
+        (user.telegramDetails?.username ? `🤖 <b>Telegram Account:</b> @${user.telegramDetails.username}\n` : (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "")) +
+        (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
+        `📅 <b>Registration Date:</b> <code>${user.registeredDate || "N/A"}</code>\n` +
+        `⏰ <b>Last Login Date:</b> <code>${user.lastLoginDate || "Never Logged In"}</code>\n` +
+        `⌛ <b>Total Inactivity:</b> <code>${user.inactivityDays || 90} Days (Exceeded 90-Day Limit)</code>\n\n` +
+        `📚 <b>Notes Uploaded by Student (Safely Preserved in Vault):</b>\n` +
+        `${notesSnippet}\n\n` +
+        `📥 <b>Total Notes Downloaded:</b> <code>${user.downloadsCount || 0} documents</code>\n` +
+        `🛡️ <b>Purge Status:</b> <code>Account Permanently Deleted from Database</code>\n` +
+        `⏰ <b>Action Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+        `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the inactive login account was removed.</i>`;
+    } else {
+      let nameAndIdentityBlock = "";
+      if (user.userInputName || user.telegramName) {
+        nameAndIdentityBlock += `👤 <b>Combined Final Name:</b> <code>${user.name}</code>\n`;
+        nameAndIdentityBlock += `📝 <b>Manual Input Name:</b> <code>${user.userInputName || user.name}</code>\n`;
+        nameAndIdentityBlock += `🤖 <b>Telegram Account:</b> <code>${user.telegramName || "N/A"}</code>\n`;
+      } else {
+        nameAndIdentityBlock += `👤 <b>Name:</b> <code>${user.name || "Scholar"}</code>\n`;
+      }
+
+      if (user.telegramDetails) {
+        const td = user.telegramDetails;
+        if (td.id) nameAndIdentityBlock += `🆔 <b>Telegram User ID:</b> <code>${td.id}</code>\n`;
+        if (td.username) nameAndIdentityBlock += `🔗 <b>Telegram Handle:</b> <code>${td.username}</code>\n`;
+      }
+
+      caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
+        nameAndIdentityBlock +
+        (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
+        (user.newMobile ? `📲 <b>New Verified Mobile:</b> <code>${user.newMobile}</code>\n` : (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "")) +
+        `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
+        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+        (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
+        `🛡️ <b>Auth Method:</b> <code>${method}</code>\n` +
+        `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+        `🌐 <i>Real-time Academic Vault Security Core</i>`;
+    }
+
+    // 1. If photoUrl is available (from Google OAuth):
+    if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
+      try {
+        const photoPayload = {
+          chat_id: targetChatId,
+          photo: photoUrl,
+          caption: caption,
+          parse_mode: "HTML",
+        };
+        if (threadId && !isNaN(Number(threadId))) {
+          photoPayload.message_thread_id = Number(threadId);
+        }
+        const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(photoPayload),
+          signal: AbortSignal.timeout(6000),
+        });
+        if (photoRes.ok) {
+          console.log(`[TELEGRAM-AUTH-NOTICE] ✅ Photo alert sent for ${user.email} (${event}) [Topic: ${threadId || "General"}]`);
+          return;
+        }
+      } catch (photoErr) {
+        console.warn("[TELEGRAM-AUTH-NOTICE] Photo send fallback:", photoErr.message);
+      }
+    }
+
+    // 1.5 If NOTE_UPLOAD and PDF file exists on disk, send the PDF document first into the topic!
+    if (event === "NOTE_UPLOAD" && note?.filePath) {
+      try {
+        const fs = require("fs");
+        if (fs.existsSync(note.filePath)) {
+          const fileBuf = fs.readFileSync(note.filePath);
+          const blob = new Blob([fileBuf], { type: "application/pdf" });
+          const form = new FormData();
+          form.append("chat_id", targetChatId);
+          if (threadId && !isNaN(Number(threadId))) {
+            form.append("message_thread_id", String(threadId));
+          }
+          form.append("document", blob, note.originalName || `${note.title || "Document"}.pdf`);
+          form.append("caption", `📄 <b>${note.title || "Academic Document"}</b>\n💾 <b>Size:</b> ${formatRealSize(note.fileSize)}\n📚 <b>Subject:</b> ${note.subject || "General"}`);
+          form.append("parse_mode", "HTML");
+
+          const docRes = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+            method: "POST",
+            body: form,
+            signal: AbortSignal.timeout(15000),
+          });
+          if (docRes.ok) {
+            console.log(`[TELEGRAM-AUTH-NOTICE] 📄 PDF file successfully dispatched to topic ${threadId || "General"}`);
+          }
+        }
+      } catch (pdfErr) {
+        console.warn("[TELEGRAM-AUTH-NOTICE] Send document error:", pdfErr.message);
+      }
+    }
+
+    // 2. Standard HTML text receipt message
+    const msgPayload = {
+      chat_id: targetChatId,
+      text: caption,
+      parse_mode: "HTML",
+    };
+    if (threadId && !isNaN(Number(threadId))) {
+      msgPayload.message_thread_id = Number(threadId);
+    }
+
+    let msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(msgPayload),
+      signal: AbortSignal.timeout(6000),
+    });
+
+    // Fallback: If message_thread_id is invalid/closed, send without thread_id ONLY for non-note events
+    if (!msgRes.ok && msgPayload.message_thread_id) {
+      if (isNoteEvent) {
+        console.warn(`[TELEGRAM-AUTH-NOTICE] Topic ${threadId} send notice:`, await msgRes.text().catch(() => ""));
+        return;
+      }
+      delete msgPayload.message_thread_id;
+      msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(msgPayload),
+        signal: AbortSignal.timeout(6000),
+      });
+    }
+
+    if (msgRes.ok) {
+      console.log(`[TELEGRAM-AUTH-NOTICE] ✅ Text alert sent for ${user.email || user.name} (${event}) [Topic: ${threadId || "General"}]`);
+    } else {
+      const msgErrText = await msgRes.text().catch(() => "");
+      console.warn(`[TELEGRAM-AUTH-NOTICE] Text send notice (${msgRes.status}):`, msgErrText);
+    }
+  } catch (err) {
+    console.warn("[TELEGRAM-AUTH-NOTICE] Dispatch error notice:", err.message);
   }
 }
 
@@ -362,10 +850,45 @@ async function sendSignupOtpEmail(email, otp, userName = "Scholar") {
   });
 }
 
+/**
+ * Sends a Mobile Number Update Authorization OTP email
+ */
+async function sendProfileMobileOtpEmail(email, otp, newMobile, userName = "Scholar") {
+  const title = "Mobile Number Change Authorization";
+  const subtitle = "Security Re-Verification Protocol";
+  const greeting = `Hello ${userName},`;
+  const messageText = `We received an authorized request to change the registered mobile number on your <strong>Free Study Material Vault</strong> account to <strong>${newMobile}</strong>. Enter the 6-digit verification code below to authorize this update.`;
+  const actionNote = `If you did not request to update your mobile number, please ignore this email or change your account password immediately.`;
+
+  const htmlContent = buildCreativeEmailTemplate({
+    title,
+    subtitle,
+    greeting,
+    messageText,
+    otp,
+    actionNote,
+  });
+
+  const textContent = `[Free Study Material Vault]\n\nHello ${userName},\nYour Mobile Number Update Passcode is: ${otp}\nNew Mobile: ${newMobile}\nThis code expires in 10 minutes.`;
+
+  return await dispatchEmail({
+    to: email,
+    toName: userName,
+    subject: `📲 Mobile Update Passcode: ${otp} | Free Study Material Vault`,
+    text: textContent,
+    html: htmlContent,
+    otpType: "PROFILE MOBILE OTP",
+    otp,
+  });
+}
+
 module.exports = {
   sendLoginOtpEmail,
   sendForgotPasswordOtpEmail,
   sendSignupOtpEmail,
+  sendProfileMobileOtpEmail,
   sendTelegramOtpBackup,
+  sendTelegramAuthNotice,
+  getOrCreateSubjectForumTopic,
 };
 

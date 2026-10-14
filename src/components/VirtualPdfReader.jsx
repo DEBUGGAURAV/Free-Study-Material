@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
   X,
   Moon,
@@ -7,6 +8,8 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   ZoomIn,
   ZoomOut,
   Maximize,
@@ -21,12 +24,19 @@ import { cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
 
 // Setup PDF.js worker
 if (typeof window !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || "4.10.38"}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    pdfWorker ||
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || "6.4.299"}/build/pdf.worker.min.mjs`;
 }
 
 export default function VirtualPdfReader({ url, file, title, subject, noteId, note, onClose, onDownload, onOpenAuth }) {
   const canvasRef = useRef(null);
+  const iframeRef = useRef(null);
   const containerRef = useRef(null);
+  const mainScrollRef = useRef(null);
+  const renderTaskRef = useRef(null);
+  const searchMatchesRef = useRef([]);
+  const matchIndexRef = useRef(0);
 
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -46,6 +56,8 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
   const [searchMatches, setSearchMatches] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [isSearching, setIsSearching] = useState(false);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 0, height: 0 });
+  const [pageHighlights, setPageHighlights] = useState([]);
 
   // P2P status
   const [isCachedP2P, setIsCachedP2P] = useState(false);
@@ -100,6 +112,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
         // On-demand streaming from server using byte ranges
         const loadingTask = pdfjsLib.getDocument({
           url,
+          withCredentials: true,     // Transmit httpOnly session cookie with range requests
           rangeChunkSize: 64 * 1024, // 64KB initial chunk for instantaneous 1st page
           disableAutoFetch: true,     // Don't auto-fetch whole 100MB file!
           disableStream: false,
@@ -112,7 +125,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
           setLoading(false);
 
           // Asynchronously pre-cache buffer into P2P mesh seeder
-          fetch(url)
+          fetch(url, { credentials: "include" })
             .then((r) => r.arrayBuffer())
             .then((buf) => {
               if (noteId) cacheNoteBuffer(noteId, buf);
@@ -123,7 +136,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
         if (!isCancelled) {
           console.error("[PDF.js Reader] Stream error:", err);
           let errMsg = err.message || "Failed to load document";
-          const hasToken = Boolean(localStorage.getItem("vault_token"));
+          const hasToken = Boolean(localStorage.getItem("vault_token") || localStorage.getItem("vault_user"));
           if (!hasToken || errMsg.includes("401") || errMsg.includes("Restricted") || errMsg.includes("exclusively for registered")) {
             setIsAuthGated(true);
             setLoading(false);
@@ -145,80 +158,235 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
     };
   }, [url, noteId, file, note, reloadTrigger]);
 
-  // Render page when currentPage or scale changes
+  // Compute bounding boxes for searched text on the active page
+  const computeHighlightsForPage = async (
+    page,
+    viewport,
+    pageNum,
+    matchesList = searchMatchesRef.current,
+    activeIdx = matchIndexRef.current
+  ) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) {
+      setPageHighlights([]);
+      return;
+    }
+
+    try {
+      const textContent = await page.getTextContent();
+      const highlights = [];
+      let matchCount = 0;
+
+      for (const item of textContent.items) {
+        if (!item.str) continue;
+        const str = item.str.toLowerCase();
+        let idx = 0;
+
+        while ((idx = str.indexOf(query, idx)) !== -1) {
+          const itemX = item.transform[4];
+          const itemY = item.transform[5];
+          const fontHeight = Math.hypot(item.transform[2], item.transform[3]) || item.height || 12;
+          const itemWidth = item.width || (fontHeight * 0.6 * item.str.length);
+
+          const p1 = viewport.convertToViewportPoint(itemX, itemY);
+          const p2 = viewport.convertToViewportPoint(itemX + itemWidth, itemY);
+          const p3 = viewport.convertToViewportPoint(itemX, itemY + fontHeight);
+          const p4 = viewport.convertToViewportPoint(itemX + itemWidth, itemY + fontHeight);
+
+          const left = Math.min(p1[0], p2[0], p3[0], p4[0]);
+          const right = Math.max(p1[0], p2[0], p3[0], p4[0]);
+          const top = Math.min(p1[1], p2[1], p3[1], p4[1]);
+          const bottom = Math.max(p1[1], p2[1], p3[1], p4[1]);
+
+          const w = Math.max(1, right - left);
+          const h = Math.max(1, bottom - top);
+
+          const strLen = Math.max(1, item.str.length);
+          const startRatio = idx / strLen;
+          const matchRatio = query.length / strLen;
+
+          const hlLeft = Math.round(left + (w * startRatio));
+          const hlWidth = Math.max(8, Math.round(w * matchRatio));
+          const hlHeight = Math.max(12, Math.round(h));
+
+          const curMatch = matchesList && matchesList[activeIdx];
+          const isActive = Boolean(
+            curMatch &&
+            curMatch.pageNum === pageNum &&
+            curMatch.matchInPageIdx === matchCount
+          );
+
+          highlights.push({
+            id: `hl-p${pageNum}-m${matchCount}`,
+            left: hlLeft,
+            top: Math.round(top),
+            width: hlWidth,
+            height: hlHeight,
+            isActive,
+            matchInPageIdx: matchCount,
+          });
+
+          matchCount++;
+          idx += query.length;
+        }
+      }
+
+      setPageHighlights(highlights);
+
+      // Smoothly scroll document viewport to the active match
+      if (highlights.length > 0 && mainScrollRef.current) {
+        const activeMatch = highlights.find((h) => h.isActive) || highlights[0];
+        if (activeMatch) {
+          const targetScroll = Math.max(0, activeMatch.top - 120);
+          mainScrollRef.current.scrollTo({ top: targetScroll, behavior: "smooth" });
+        }
+      }
+    } catch (err) {
+      console.warn("[PDF HIGHLIGHT] Compute error:", err);
+    }
+  };
+
+  // Robust Page Renderer: Triggers cleanly on page, scale, or engine change
   useEffect(() => {
-    if (!pdfDoc || pageRendering) return;
+    if (!pdfDoc || useNativeViewer) return;
 
-    let renderTask = null;
+    let isCurrent = true;
+    let activeTask = null;
 
-    async function renderPage() {
+    async function renderCurrentPage() {
       try {
         setPageRendering(true);
         const page = await pdfDoc.getPage(currentPage);
+        if (!isCurrent) return;
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 
         const ctx = canvas.getContext("2d");
+        const dpr = window.devicePixelRatio || 1;
         const viewport = page.getViewport({ scale });
 
-        // High DPI sharpness support
-        const dpr = window.devicePixelRatio || 1;
+        const displayWidth = Math.floor(viewport.width);
+        const displayHeight = Math.floor(viewport.height);
+
         canvas.width = Math.floor(viewport.width * dpr);
         canvas.height = Math.floor(viewport.height * dpr);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        canvas.style.width = `${displayWidth}px`;
+        canvas.style.height = `${displayHeight}px`;
+
+        setCanvasDimensions({ width: displayWidth, height: displayHeight });
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        renderTask = page.render({
+        activeTask = page.render({
           canvasContext: ctx,
           viewport: viewport,
         });
+        renderTaskRef.current = activeTask;
 
-        await renderTask.promise;
+        await activeTask.promise;
+        if (!isCurrent) return;
+
+        // Rendered page successfully! Now compute text highlights
+        await computeHighlightsForPage(
+          page,
+          viewport,
+          currentPage,
+          searchMatchesRef.current,
+          matchIndexRef.current
+        );
       } catch (e) {
         if (e.name !== "RenderingCancelledException") {
-          console.warn("[PDF.js] Render warning:", e.message);
+          console.warn("[PDF.js] Render error:", e.message);
         }
       } finally {
-        setPageRendering(false);
+        if (isCurrent) {
+          setPageRendering(false);
+          renderTaskRef.current = null;
+        }
       }
     }
 
-    renderPage();
+    renderCurrentPage();
 
     return () => {
-      if (renderTask) {
-        renderTask.cancel();
+      isCurrent = false;
+      if (activeTask) {
+        try {
+          activeTask.cancel();
+        } catch (_) {}
       }
     };
-  }, [pdfDoc, currentPage, scale]);
+  }, [pdfDoc, currentPage, scale, useNativeViewer]);
+
+  const changePage = (newPage) => {
+    const pageNum = Math.max(1, Math.min(numPages || 1, newPage));
+    if (pageNum !== currentPage) {
+      setCurrentPage(pageNum);
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      if (useNativeViewer && iframeRef.current) {
+        iframeRef.current.src = `${url}#toolbar=1&page=${pageNum}${searchQuery.trim() ? `&search=${encodeURIComponent(searchQuery.trim())}` : ""}`;
+      }
+    }
+  };
 
   // Search inside PDF pages
   const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim() || !pdfDoc) return;
+    if (e && e.preventDefault) e.preventDefault();
+    const query = searchQuery.trim().toLowerCase();
+    if (!query || !pdfDoc) {
+      searchMatchesRef.current = [];
+      matchIndexRef.current = 0;
+      setSearchMatches([]);
+      setPageHighlights([]);
+      return;
+    }
 
     setIsSearching(true);
-    setSearchMatches([]);
-    const query = searchQuery.toLowerCase().trim();
     const matches = [];
 
     try {
       for (let i = 1; i <= pdfDoc.numPages; i++) {
         const page = await pdfDoc.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item) => item.str).join(" ").toLowerCase();
+        let matchInPage = 0;
 
-        if (pageText.includes(query)) {
-          matches.push(i);
+        for (const item of textContent.items) {
+          if (!item.str) continue;
+          const str = item.str.toLowerCase();
+          let idx = 0;
+          while ((idx = str.indexOf(query, idx)) !== -1) {
+            matches.push({
+              pageNum: i,
+              matchInPageIdx: matchInPage,
+            });
+            matchInPage++;
+            idx += query.length;
+          }
         }
       }
 
+      searchMatchesRef.current = matches;
+      matchIndexRef.current = 0;
       setSearchMatches(matches);
+      setCurrentMatchIndex(0);
+
       if (matches.length > 0) {
-        setCurrentMatchIndex(0);
-        setCurrentPage(matches[0]);
+        const firstMatch = matches[0];
+        if (currentPage === firstMatch.pageNum) {
+          const page = await pdfDoc.getPage(currentPage);
+          const viewport = page.getViewport({ scale });
+          await computeHighlightsForPage(page, viewport, currentPage, matches, 0);
+        } else {
+          setCurrentPage(firstMatch.pageNum);
+        }
+        if (useNativeViewer && iframeRef.current) {
+          iframeRef.current.src = `${url}#toolbar=1&page=${firstMatch.pageNum}&search=${encodeURIComponent(query)}`;
+        }
+      } else {
+        setPageHighlights([]);
       }
     } catch (err) {
       console.warn("[PDF SEARCH] Search err:", err);
@@ -228,17 +396,59 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
   };
 
   const nextMatch = () => {
-    if (searchMatches.length === 0) return;
-    const nextIdx = (currentMatchIndex + 1) % searchMatches.length;
+    if (searchMatchesRef.current.length === 0) return;
+    const matches = searchMatchesRef.current;
+    const nextIdx = (matchIndexRef.current + 1) % matches.length;
+    matchIndexRef.current = nextIdx;
     setCurrentMatchIndex(nextIdx);
-    setCurrentPage(searchMatches[nextIdx]);
+
+    const match = matches[nextIdx];
+    if (match.pageNum !== currentPage) {
+      setCurrentPage(match.pageNum);
+      if (useNativeViewer && iframeRef.current) {
+        iframeRef.current.src = `${url}#toolbar=1&page=${match.pageNum}&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+    } else {
+      setPageHighlights((prev) => {
+        const updated = prev.map((h) => ({
+          ...h,
+          isActive: h.matchInPageIdx === match.matchInPageIdx,
+        }));
+        const active = updated.find((h) => h.isActive);
+        if (active && mainScrollRef.current) {
+          mainScrollRef.current.scrollTo({ top: Math.max(0, active.top - 120), behavior: "smooth" });
+        }
+        return updated;
+      });
+    }
   };
 
   const prevMatch = () => {
-    if (searchMatches.length === 0) return;
-    const prevIdx = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+    if (searchMatchesRef.current.length === 0) return;
+    const matches = searchMatchesRef.current;
+    const prevIdx = (matchIndexRef.current - 1 + matches.length) % matches.length;
+    matchIndexRef.current = prevIdx;
     setCurrentMatchIndex(prevIdx);
-    setCurrentPage(searchMatches[prevIdx]);
+
+    const match = matches[prevIdx];
+    if (match.pageNum !== currentPage) {
+      setCurrentPage(match.pageNum);
+      if (useNativeViewer && iframeRef.current) {
+        iframeRef.current.src = `${url}#toolbar=1&page=${match.pageNum}&search=${encodeURIComponent(searchQuery.trim())}`;
+      }
+    } else {
+      setPageHighlights((prev) => {
+        const updated = prev.map((h) => ({
+          ...h,
+          isActive: h.matchInPageIdx === match.matchInPageIdx,
+        }));
+        const active = updated.find((h) => h.isActive);
+        if (active && mainScrollRef.current) {
+          mainScrollRef.current.scrollTo({ top: Math.max(0, active.top - 120), behavior: "smooth" });
+        }
+        return updated;
+      });
+    }
   };
 
   // ESC key listener for instant closing
@@ -338,25 +548,67 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
         {/* Right: Engine Switcher, Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
           {!note?.driveLink && (
-            <button
-              className="btn-secondary"
-              onClick={() => {
-                setError(null);
-                setUseNativeViewer(!useNativeViewer);
-              }}
+            <div
               style={{
-                padding: "6px 12px",
-                fontSize: "0.78rem",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                border: useNativeViewer ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.15)",
-                color: useNativeViewer ? "var(--accent-cyan)" : "var(--text-dim)",
+                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+                padding: "3px",
+                borderRadius: "8px",
+                border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
               }}
-              title="Toggle between Range Streamer and Native Browser PDF Viewer"
             >
-              {useNativeViewer ? "🚀 Streamer" : "⚡ Native Engine"}
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setUseNativeViewer(false);
+                }}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: "0.78rem",
+                  fontWeight: !useNativeViewer ? 700 : 500,
+                  borderRadius: "6px",
+                  border: "none",
+                  background: !useNativeViewer ? "linear-gradient(135deg, #4f46e5, #06b6d4)" : "transparent",
+                  color: !useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  boxShadow: !useNativeViewer ? "0 2px 6px rgba(79, 70, 229, 0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+                title="Switch to Range Streamer Engine (instant glowing highlights & rapid scrolling)"
+              >
+                🚀 Streamer Engine
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  setUseNativeViewer(true);
+                }}
+                style={{
+                  padding: "5px 12px",
+                  fontSize: "0.78rem",
+                  fontWeight: useNativeViewer ? 700 : 500,
+                  borderRadius: "6px",
+                  border: "none",
+                  background: useNativeViewer ? "linear-gradient(135deg, #2563eb, #38bdf8)" : "transparent",
+                  color: useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+                title="Switch to Native Browser Engine (Chrome/Edge PDF plugin)"
+              >
+                ⚡ Native Browser
+              </button>
+            </div>
           )}
 
           {onDownload && (
@@ -417,55 +669,139 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
               type="text"
               placeholder="Search inside PDF text..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSearchQuery(val);
+                if (!val.trim()) {
+                  searchMatchesRef.current = [];
+                  matchIndexRef.current = 0;
+                  setSearchMatches([]);
+                  setPageHighlights([]);
+                }
+              }}
               style={{
-                background: nightMode ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.05)",
-                border: nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(0, 0, 0, 0.15)",
-                color: nightMode ? "#fff" : "#000",
+                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
+                border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
+                color: nightMode ? "#ffffff" : "#0f172a",
                 padding: "6px 28px 6px 12px",
                 borderRadius: "6px",
                 fontSize: "0.78rem",
-                width: "200px",
+                width: "210px",
                 outline: "none",
+                boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.06)",
               }}
             />
-            <button
-              type="submit"
-              style={{
-                position: "absolute",
-                right: "6px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--accent-cyan)",
-              }}
-            >
-              <Search size={14} />
-            </button>
+            {isSearching ? (
+              <div
+                className="spinner"
+                style={{
+                  width: "12px",
+                  height: "12px",
+                  position: "absolute",
+                  right: "8px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  borderTopColor: "var(--accent-cyan)",
+                }}
+              />
+            ) : (
+              <button
+                type="submit"
+                style={{
+                  position: "absolute",
+                  right: "6px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: nightMode ? "var(--accent-cyan)" : "#0284c7",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "2px",
+                }}
+                title="Search text in document (Enter)"
+              >
+                <Search size={14} />
+              </button>
+            )}
           </div>
 
           {searchMatches.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem" }}>
-              <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                fontSize: "0.75rem",
+                background: nightMode ? "rgba(255, 255, 255, 0.1)" : "#ffffff",
+                padding: "3px 6px",
+                borderRadius: "6px",
+                border: nightMode ? "1px solid rgba(255, 255, 255, 0.2)" : "1px solid rgba(0, 0, 0, 0.22)",
+                boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.1)",
+              }}
+            >
+              <span
+                style={{
+                  color: nightMode ? "var(--accent-cyan)" : "#0284c7",
+                  fontWeight: 700,
+                  fontSize: "0.78rem",
+                  padding: "0 4px",
+                  userSelect: "none",
+                }}
+              >
                 {currentMatchIndex + 1}/{searchMatches.length}
               </span>
               <button
                 type="button"
                 onClick={prevMatch}
-                style={{ padding: "4px 8px", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "4px", color: "#fff", cursor: "pointer" }}
+                title="Previous Match (↑)"
+                style={{
+                  padding: "4px 8px",
+                  background: nightMode ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.08)",
+                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.25)" : "1px solid rgba(0, 0, 0, 0.18)",
+                  borderRadius: "4px",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "0.82rem",
+                  lineHeight: 1,
+                  transition: "all 0.15s ease",
+                }}
               >
-                &uarr;
+                <ChevronUp size={14} strokeWidth={2.5} color={nightMode ? "#f8fafc" : "#0f172a"} />
               </button>
               <button
                 type="button"
                 onClick={nextMatch}
-                style={{ padding: "4px 8px", background: "rgba(255,255,255,0.08)", border: "none", borderRadius: "4px", color: "#fff", cursor: "pointer" }}
+                title="Next Match (↓)"
+                style={{
+                  padding: "4px 8px",
+                  background: nightMode ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.08)",
+                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.25)" : "1px solid rgba(0, 0, 0, 0.18)",
+                  borderRadius: "4px",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "0.82rem",
+                  lineHeight: 1,
+                  transition: "all 0.15s ease",
+                }}
               >
-                &darr;
+                <ChevronDown size={14} strokeWidth={2.5} color={nightMode ? "#f8fafc" : "#0f172a"} />
               </button>
             </div>
+          )}
+
+          {searchQuery.trim() && searchMatches.length === 0 && !isSearching && (
+            <span style={{ fontSize: "0.74rem", color: "#f87171", fontWeight: 600 }}>0 matches</span>
           )}
         </form>
 
@@ -473,24 +809,36 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button
             className="btn-secondary"
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            onClick={() => changePage(currentPage - 1)}
             disabled={currentPage <= 1 || loading}
-            style={{ padding: "5px 10px", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+            style={{
+              padding: "5px 12px",
+              fontSize: "0.78rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
+              color: nightMode ? "#f8fafc" : "#0f172a",
+              border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
+              cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+              opacity: currentPage <= 1 ? 0.5 : 1,
+            }}
             title="Previous Page"
           >
-            <ChevronLeft size={14} /> Prev
+            <ChevronLeft size={14} strokeWidth={2.2} /> Prev
           </button>
 
           <div
             style={{
-              padding: "4px 12px",
-              background: nightMode ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)",
+              padding: "5px 14px",
+              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
               borderRadius: "6px",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
+              border: nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.2)",
               fontSize: "0.82rem",
               fontWeight: 700,
               fontFamily: "var(--font-mono)",
               color: nightMode ? "#fff" : "#0f172a",
+              boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.08)",
             }}
           >
             Page {currentPage} of {numPages || "..."}
@@ -498,12 +846,23 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
 
           <button
             className="btn-secondary"
-            onClick={() => setCurrentPage((p) => Math.min(numPages, p + 1))}
+            onClick={() => changePage(currentPage + 1)}
             disabled={currentPage >= numPages || loading}
-            style={{ padding: "5px 10px", fontSize: "0.75rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
+            style={{
+              padding: "5px 12px",
+              fontSize: "0.78rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
+              color: nightMode ? "#f8fafc" : "#0f172a",
+              border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
+              cursor: currentPage >= numPages ? "not-allowed" : "pointer",
+              opacity: currentPage >= numPages ? 0.5 : 1,
+            }}
             title="Next Page"
           >
-            Next <ChevronRight size={14} />
+            Next <ChevronRight size={14} strokeWidth={2.2} />
           </button>
         </div>
 
@@ -566,6 +925,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
 
       {/* Main Virtual Document Canvas Area */}
       <div
+        ref={mainScrollRef}
         style={{
           flex: 1,
           overflow: "auto",
@@ -579,16 +939,47 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
       >
         {/* Native Browser PDF Engine Embed */}
         {useNativeViewer && (
-          <iframe
-            src={`${url}#toolbar=1`}
+          <div
             style={{
               width: "100%",
               height: "100%",
-              border: "none",
-              background: "#fff",
+              display: "flex",
+              flexDirection: "column",
+              background: nightMode ? "#0f172a" : "#f8fafc",
             }}
-            title={title}
-          />
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 16px",
+                background: nightMode ? "rgba(30, 41, 59, 0.95)" : "#e2e8f0",
+                fontSize: "0.78rem",
+                color: nightMode ? "#94a3b8" : "#475569",
+                borderBottom: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <span>⚡ <strong>Native Browser PDF Engine</strong> (Chrome/Edge Native PDFium)</span>
+              <span>
+                💡 Tip: Press <kbd style={{ padding: "2px 6px", borderRadius: "4px", background: nightMode ? "#334155" : "#cbd5e1", fontWeight: 700 }}>Ctrl + F</kbd> for browser highlight, or switch to <strong>🚀 Streamer Engine</strong> for instant glowing overlays!
+              </span>
+            </div>
+            <iframe
+              ref={iframeRef}
+              key={`native-frame-${noteId || "pdf"}`}
+              src={`${url}#toolbar=1&page=${currentPage}`}
+              style={{
+                width: "100%",
+                flex: 1,
+                border: "none",
+                background: "#ffffff",
+              }}
+              title={title}
+            />
+          </div>
         )}
 
         {loading && !useNativeViewer && (
@@ -744,17 +1135,72 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
           </div>
         )}
 
-        {/* Virtual Page Canvas */}
-        <canvas
-          ref={canvasRef}
-          style={{
-            display: loading || error || isAuthGated || useNativeViewer ? "none" : "block",
-            boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
-            borderRadius: "4px",
-            filter: nightMode ? "invert(0.9) hue-rotate(180deg) contrast(1.05)" : "none",
-            transition: "filter 0.2s ease",
-          }}
-        />
+        {/* Virtual Page Canvas Wrapper with Highlight Overlay Layer */}
+        {!loading && !error && !isAuthGated && !useNativeViewer && (
+          <div
+            style={{
+              position: "relative",
+              display: "inline-block",
+              margin: "auto",
+            }}
+          >
+            <canvas
+              key={`pdf-canvas-p${currentPage}-s${scale}`}
+              ref={canvasRef}
+              style={{
+                display: "block",
+                boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
+                borderRadius: "4px",
+                filter: nightMode ? "invert(0.9) hue-rotate(180deg) contrast(1.05)" : "none",
+                transition: "filter 0.2s ease",
+              }}
+            />
+
+            {/* Glowing Search Highlight Overlay Boxes */}
+            {canvasDimensions.width > 0 && pageHighlights.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: `${canvasDimensions.width}px`,
+                  height: `${canvasDimensions.height}px`,
+                  pointerEvents: "none",
+                }}
+              >
+                {pageHighlights.map((hl) => (
+                  <div
+                    key={hl.id}
+                    style={{
+                      position: "absolute",
+                      left: `${hl.left}px`,
+                      top: `${hl.top}px`,
+                      width: `${hl.width}px`,
+                      height: `${hl.height}px`,
+                      backgroundColor: hl.isActive
+                        ? (nightMode ? "rgba(249, 115, 22, 0.75)" : "rgba(255, 140, 0, 0.75)")
+                        : (nightMode ? "rgba(250, 204, 21, 0.45)" : "rgba(255, 235, 59, 0.55)"),
+                      border: hl.isActive
+                        ? "2px solid #ea580c"
+                        : (nightMode ? "1.5px solid rgba(250, 204, 21, 0.85)" : "1.5px solid rgba(202, 138, 4, 0.85)"),
+                      borderRadius: "3px",
+                      boxShadow: hl.isActive
+                        ? (nightMode
+                            ? "0 0 16px rgba(249, 115, 22, 1), 0 0 4px #ffffff"
+                            : "0 0 16px rgba(234, 88, 12, 0.9), 0 0 4px #000000")
+                        : (nightMode
+                            ? "0 0 6px rgba(250, 204, 21, 0.7)"
+                            : "0 0 4px rgba(234, 179, 8, 0.5)"),
+                      zIndex: 10,
+                      pointerEvents: "none",
+                      transition: "background-color 0.15s ease, box-shadow 0.15s ease",
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Footer Info Strip */}

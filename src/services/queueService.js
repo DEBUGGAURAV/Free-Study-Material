@@ -12,6 +12,18 @@ const { invalidateAllCache } = require("../utils/ramCache");
 const jobStatusMap = new Map();
 const pipelineTrackerMap = new Map();
 
+function formatRealSize(bytes) {
+  const num = Number(bytes || 0);
+  if (!num || num <= 0) return "PDF";
+  if (num < 1024) return `${num} B`;
+  const kb = num / 1024;
+  const mb = num / (1024 * 1024);
+  if (mb < 0.1) {
+    return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+  }
+  return `${mb.toFixed(2)} MB`;
+}
+
 /**
  * Initialize a new Pipeline Lifecycle Record
  */
@@ -39,7 +51,7 @@ function recordPipelineStart(info) {
     title: title || originalName || "Untitled Note",
     originalName: originalName || "Document.pdf",
     fileSize: fileSize || 0,
-    formattedSize: formattedSize || ((fileSize || 0) / (1024 * 1024)).toFixed(2) + " MB",
+    formattedSize: formattedSize || formatRealSize(fileSize),
     mimeType: mimeType || "application/pdf",
     branch: branch || "CSE",
     subject: subject || "General",
@@ -62,7 +74,7 @@ function recordPipelineStart(info) {
         id: 1,
         name: "Client -> Server Transfer",
         status: "completed",
-        detail: `100% Ingested at ${clientSpeed || "High Speed"} (${((fileSize || 0) / (1024 * 1024)).toFixed(2)} MB)`,
+        detail: `100% Ingested at ${clientSpeed || "High Speed"} (${formatRealSize(fileSize)})`,
         timestamp: new Date().toISOString(),
       },
       {
@@ -196,7 +208,7 @@ function enqueueUpload(task) {
         currentStage: "Checking Deduplication & Optimizing Streams",
       });
 
-      const duplicate = await findDuplicateNote(fileHash, originalName, originalSize);
+      const duplicate = await findDuplicateNote(fileHash, originalName, originalSize, noteId);
 
       if (duplicate) {
         console.log(`[QUEUE] ⚡ Zero-Second Deduplication hit for ${noteId}! Reusing Telegram Ref.`);
@@ -207,6 +219,8 @@ function enqueueUpload(task) {
             status: "ready",
             telegramMessageId: duplicate.telegramMessageId || null,
             telegramFileId: duplicate.telegramFileId || null,
+            driveLink: duplicate.driveLink || null,
+            fileUrl: duplicate.fileUrl || null,
             fileHash: fileHash,
             fileSize: duplicate.fileSize || originalSize,
             compressedSize: duplicate.compressedSize || originalSize,
@@ -272,7 +286,7 @@ function enqueueUpload(task) {
         compressedSize = compResult.compressedSize;
         savingsPercent = compResult.savingsPercent;
 
-        updatePipelineStage(noteId, 3, "completed", `Compressed with pdf-lib (${savingsPercent}% saved, ${(compressedSize / (1024 * 1024)).toFixed(2)} MB)`, {
+        updatePipelineStage(noteId, 3, "completed", `Compressed with pdf-lib (${savingsPercent}% saved, ${formatRealSize(compressedSize)})`, {
           progress: 55,
           currentStage: "Syncing to Telegram Storage Channel (MTProto)",
         });

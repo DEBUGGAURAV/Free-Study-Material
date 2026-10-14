@@ -683,6 +683,52 @@ async function syncTelegramChannel() {
         if (docIdStr) processingDocIds.add(docIdStr);
         importedCount++;
         console.log(`[MTProto RECONCILE] Imported new material "${title}" (Msg ID: ${msgId})`);
+
+        // Dispatch receipt directly into the channel replying to the uploaded message
+        try {
+          if (syncLock.canSendReceipt(storageChatId, msgId)) {
+            const formatMb = (docSize / (1024 * 1024)).toFixed(2);
+            const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
+              `✅ <b>Note Successfully Indexed to Website!</b>\n` +
+              `📄 <b>Title:</b> ${title}\n` +
+              `📚 <b>Subject:</b> ${subject}\n` +
+              `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
+              `💾 <b>Size:</b> ${formatMb} MB\n` +
+              `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${noteRef.id}/stream\n` +
+              `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
+              `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
+
+            const activeBotToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+            if (activeBotToken && storageChatId) {
+              fetch(`https://api.telegram.org/bot${activeBotToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: storageChatId,
+                  text: receiptText,
+                  reply_to_message_id: msgId,
+                  parse_mode: "HTML",
+                }),
+              }).then(async (r) => {
+                const resJson = await r.json();
+                if (!resJson.ok) {
+                  // Fallback without reply_to_message_id
+                  fetch(`https://api.telegram.org/bot${activeBotToken}/sendMessage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      chat_id: storageChatId,
+                      text: receiptText,
+                      parse_mode: "HTML",
+                    }),
+                  }).catch(() => {});
+                }
+              }).catch(() => {});
+            }
+          }
+        } catch (rcptErr) {
+          console.warn("[MTProto RECONCILE] Channel receipt warning:", rcptErr.message);
+        }
       }
     }
   }
@@ -922,7 +968,7 @@ let isAutoSyncing = false;
  * Periodically reconciles channel uploads, deletions, and forum topic removals
  * without waiting for manual admin clicks.
  */
-function startAutoSyncWorker(intervalMs = 15000) {
+function startAutoSyncWorker(intervalMs = 10 * 60 * 1000) {
   if (autoSyncTimer) return;
   console.log(`[MTProto AUTOSYNC] ⚡ High-Speed Continuous Auto-Sync active (Interval: ${intervalMs / 1000}s).`);
 
@@ -969,7 +1015,7 @@ function getMTProtoDetails() {
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,
     autoSyncActive: !!autoSyncTimer,
-    autoSyncInterval: "15s Continuous",
+    autoSyncInterval: "10m Periodic",
   };
 }
 

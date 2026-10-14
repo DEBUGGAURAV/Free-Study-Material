@@ -4,13 +4,15 @@ const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
+const cookieParser = require("cookie-parser");
 const os = require("os");
 
 const { ramCache } = require("./utils/ramCache");
 const { globalLimiter } = require("./middleware/rateLimit");
 const { getClient, startAutoSyncWorker } = require("./telegram/mtproto");
 const { startBotPoller } = require("./telegram/botPoller");
-
+const { startSecurityBotPoller, loadBotSettings } = require("./services/securityBotService");
+const { purgeInactiveAccounts } = require("./services/accountPurgeService");
 
 const authRoutes = require("./routes/auth");
 const uploadRoutes = require("./routes/upload");
@@ -25,18 +27,49 @@ const PORT = process.env.PORT || 5000;
 // Trust reverse proxy (Cloudflare / Render)
 app.set("trust proxy", 1);
 
-// Security & Header Protection
+// Security & Header Protection with Production Content Security Policy (CSP)
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://accounts.google.com",
+          "https://apis.google.com",
+          "https://cdnjs.cloudflare.com",
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+        imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+        connectSrc: [
+          "'self'",
+          "https://accounts.google.com",
+          "https://oauth2.googleapis.com",
+          "https://api.telegram.org",
+          "https://*.firebaseio.com",
+          "https://*.googleapis.com",
+          "blob:",
+          "data:",
+          "ws:",
+          "wss:",
+        ],
+        workerSrc: ["'self'", "blob:"],
+        frameSrc: ["'self'", "https://accounts.google.com"],
+        objectSrc: ["'none'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   })
 );
 
-// CORS Policy
+// Strict CORS Policy
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "https://freestudymaterial.onrender.com",
+  "https://freestudtmaterial.onrender.com",
   "http://localhost:5173",
   "http://localhost:5000",
 ].filter(Boolean);
@@ -44,10 +77,14 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin) return callback(null, true);
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        (typeof origin === "string" && (origin.endsWith(".onrender.com") || origin.includes("localhost")));
+      if (isAllowed) {
         return callback(null, true);
       }
-      return callback(null, true); // Allow flexible access
+      return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
     },
     credentials: true,
   })
@@ -65,9 +102,10 @@ app.use(
   })
 );
 
-// Body Parsers
+// Body & Cookie Parsers
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(cookieParser());
 
 // Real-Time Health & System Diagnostics (Excluded from rate limiter)
 app.get("/api/health", (req, res) => {
@@ -173,11 +211,37 @@ app.listen(PORT, async () => {
     console.warn("[BOT POLLER] Poller start deferred:", e.message);
   }
 
-  // Start Periodic Background Auto-Sync (every 30 minutes to conserve Firestore quota)
+  // Start Periodic Background Auto-Sync (every 10 minutes: fast, zero data loss, safe database quota)
   try {
-    startAutoSyncWorker(30 * 60 * 1000);
+    startAutoSyncWorker(10 * 60 * 1000);
   } catch (e) {
     console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
+  }
+
+  // Load Security Bot Single-Document Settings
+  try {
+    if (loadBotSettings) await loadBotSettings();
+  } catch (e) {
+    console.warn("[SECURITY BOT] Settings load notice:", e.message);
+  }
+
+  // Start Dedicated Security OTP Bot Poller (@fsm_security_otp_bot)
+  try {
+    if (startSecurityBotPoller) startSecurityBotPoller();
+  } catch (e) {
+    console.warn("[SECURITY BOT] Poller start deferred:", e.message);
+  }
+
+  // Periodic 90-Day Inactive Account Purge (Daily sweep + 30s initial warmup)
+  try {
+    setTimeout(() => {
+      purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Initial sweep error:", e.message));
+    }, 30000);
+    setInterval(() => {
+      purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Daily sweep error:", e.message));
+    }, 24 * 60 * 60 * 1000);
+  } catch (e) {
+    console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
   }
 });
 

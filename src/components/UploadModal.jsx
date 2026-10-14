@@ -1,6 +1,18 @@
-import React, { useState, useRef } from "react";
-import { X, UploadCloud, CheckCircle2, AlertCircle, Sparkles, Activity } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  X,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  Activity,
+  Search,
+  ChevronDown,
+  Plus,
+  BookOpen,
+} from "lucide-react";
 import { api } from "../api";
+import { formatFileSize, formatMB } from "../utils/formatUtils";
 
 export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {
   const [file, setFile] = useState(null);
@@ -12,6 +24,11 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
   const [course, setCourse] = useState("B.Tech");
   const [year, setYear] = useState("All Years / General");
   const [description, setDescription] = useState("");
+
+  // Searchable Subject Combobox with Live Telegram Topic Sync
+  const [subjectOptions, setSubjectOptions] = useState([]);
+  const [isSubjectDropdownOpen, setIsSubjectDropdownOpen] = useState(false);
+  const subjectDropdownRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -29,6 +46,36 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
 
   const fileInputRef = useRef(null);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    api.getSubjects()
+      .then((res) => {
+        if (isMounted && res && Array.isArray(res.subjects)) {
+          setSubjectOptions(res.subjects);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch subjects:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !isSubjectDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (subjectDropdownRef.current && !subjectDropdownRef.current.contains(e.target)) {
+        setIsSubjectDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen, isSubjectDropdownOpen]);
+
   if (!isOpen) return null;
 
   const defaultBranchOptions = [
@@ -42,6 +89,15 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
     "AI/ML",
     ...existingBranches.filter((b) => !["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"].includes(b)),
   ];
+
+  const trimmedSubject = subject.trim();
+  const filteredSubjects = subjectOptions.filter((s) =>
+    s.toLowerCase().includes(trimmedSubject.toLowerCase())
+  );
+  const isExactMatch = subjectOptions.some(
+    (s) => s.toLowerCase() === trimmedSubject.toLowerCase()
+  );
+  const showCreateOption = trimmedSubject.length > 0 && !isExactMatch;
 
   const handleFileSelect = (selected) => {
     if (selected) {
@@ -81,7 +137,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
       percent: 5,
       speed: "Starting...",
       loadedMB: "0",
-      totalMB: (file.size / (1024 * 1024)).toFixed(1),
+      totalMB: formatMB(file.size),
       timeRemaining: "Estimating...",
     });
 
@@ -241,7 +297,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                     {file.name}
                   </div>
                   <div style={{ color: "var(--accent-cyan)", fontSize: "0.8rem", marginTop: "4px" }}>
-                    {(file.size / (1024 * 1024)).toFixed(2)} MB • Ready for High-Speed Transfer
+                    {formatFileSize(file.size)} • Ready for High-Speed Transfer
                   </div>
                 </div>
               ) : (
@@ -320,15 +376,136 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-                <div className="form-group">
+                <div className="form-group" ref={subjectDropdownRef} style={{ position: "relative" }}>
                   <label className="form-label">Subject</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Operating Systems"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                  />
+
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ paddingRight: "36px" }}
+                      placeholder="Search or enter subject..."
+                      value={subject}
+                      onFocus={() => setIsSubjectDropdownOpen(true)}
+                      onChange={(e) => {
+                        setSubject(e.target.value);
+                        setIsSubjectDropdownOpen(true);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsSubjectDropdownOpen((prev) => !prev)}
+                      tabIndex={-1}
+                      style={{
+                        position: "absolute",
+                        right: "8px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        background: "transparent",
+                        border: "none",
+                        color: "var(--text-muted)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "4px",
+                      }}
+                    >
+                      <ChevronDown size={16} />
+                    </button>
+                  </div>
+
+                  {isSubjectDropdownOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 4px)",
+                        left: 0,
+                        right: 0,
+                        zIndex: 60,
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                        background: "var(--bg-surface-elevated, #12192e)",
+                        border: "1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))",
+                        borderRadius: "10px",
+                        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.6)",
+                        padding: "6px",
+                      }}
+                    >
+                      {/* Create New Option if typed and not an exact match */}
+                      {showCreateOption && (
+                        <div
+                          onClick={() => {
+                            setIsSubjectDropdownOpen(false);
+                          }}
+                          style={{
+                            padding: "8px 10px",
+                            borderRadius: "6px",
+                            background: "rgba(6, 182, 212, 0.12)",
+                            border: "1px dashed var(--accent-cyan, #06b6d4)",
+                            color: "var(--accent-cyan, #06b6d4)",
+                            fontSize: "0.82rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            marginBottom: "6px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          <Plus size={15} />
+                          <span>Create & Auto-Topic: "{trimmedSubject}"</span>
+                        </div>
+                      )}
+
+                      {/* Filtered subjects list */}
+                      {filteredSubjects.length > 0 ? (
+                        filteredSubjects.map((s) => {
+                          const isSelected = s.toLowerCase() === trimmedSubject.toLowerCase();
+                          return (
+                            <div
+                              key={s}
+                              onClick={() => {
+                                setSubject(s);
+                                setIsSubjectDropdownOpen(false);
+                              }}
+                              style={{
+                                padding: "8px 10px",
+                                borderRadius: "6px",
+                                fontSize: "0.83rem",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                color: isSelected ? "var(--accent-cyan)" : "var(--text-main)",
+                                background: isSelected ? "rgba(6, 182, 212, 0.15)" : "transparent",
+                                transition: "background 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isSelected) e.currentTarget.style.background = "transparent";
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <BookOpen size={14} style={{ opacity: 0.7, color: "var(--accent-indigo)" }} />
+                                <span>{s}</span>
+                              </div>
+                              {isSelected && (
+                                <span style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 600 }}>Selected</span>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        !showCreateOption && (
+                          <div style={{ padding: "10px 12px", fontSize: "0.82rem", color: "var(--text-muted)", textAlign: "center" }}>
+                            No subjects found
+                          </div>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">

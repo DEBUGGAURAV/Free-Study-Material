@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { FileText, Download, Eye, Share2, Check, Activity } from "lucide-react";
 import { api } from "../api";
 import { downloadFromPeerMesh, cacheNoteBuffer } from "../utils/p2pMesh";
+import { formatFileSize, formatMB } from "../utils/formatUtils";
 
 export default function NoteCard({ note, onPreview, currentUser, onRequireAuth }) {
   const [copied, setCopied] = useState(false);
@@ -15,11 +16,7 @@ export default function NoteCard({ note, onPreview, currentUser, onRequireAuth }
     timeRemaining: "",
   });
 
-  const formattedSize = note.compressedSize
-    ? (note.compressedSize / (1024 * 1024)).toFixed(1) + " MB"
-    : note.fileSize
-    ? (note.fileSize / (1024 * 1024)).toFixed(1) + " MB"
-    : "PDF";
+  const formattedSize = formatFileSize(note.compressedSize || note.fileSize);
 
   const directDownloadUrl = api.getDownloadUrl(note.id);
 
@@ -57,7 +54,7 @@ export default function NoteCard({ note, onPreview, currentUser, onRequireAuth }
       percent: 5,
       speed: "Checking Local Wi-Fi Peers...",
       loadedMB: "0",
-      totalMB: (note.compressedSize ? note.compressedSize / (1024 * 1024) : 1).toFixed(1),
+      totalMB: formatMB(note.compressedSize || note.fileSize || 1048576),
       timeRemaining: "Estimating...",
     });
 

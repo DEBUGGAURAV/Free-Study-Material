@@ -337,12 +337,12 @@ body {
   line-height: 1.6;
 }
 
-/* Technology HUD Grid */
+/* Technology HUD Grid (Strict 3 Cards Per Row: 3x3 Grid) */
 .tech-hud-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 14px;
-  max-width: 1200px;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
@@ -350,11 +350,11 @@ body {
   background: var(--bg-glass-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 16px 20px;
+  padding: 14px 16px;
   text-align: left;
   display: flex;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -391,6 +391,23 @@ body {
   font-size: 0.74rem;
   color: var(--text-dim);
   line-height: 1.35;
+}
+
+.vault-benefit-card {
+  background: var(--bg-glass-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.vault-benefit-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-highlight);
+  box-shadow: var(--shadow-glow);
 }
 
 /* ---------------- Filter & Control Bar ---------------- */
@@ -855,7 +872,8 @@ body {
     padding: 0 16px 60px;
   }
   .tech-hud-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
   }
   .hero-title {
     font-size: 2.3rem;
@@ -893,8 +911,21 @@ body {
     font-size: 0.95rem;
   }
   .tech-hud-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .tech-hud-card {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .tech-hud-name {
+    font-size: 0.78rem;
+  }
+  .tech-hud-desc {
+    font-size: 0.68rem;
+  }
+  .vault-benefit-card {
+    padding: 12px 14px;
   }
   .notes-grid {
     grid-template-columns: 1fr;
@@ -915,6 +946,13 @@ body {
     display: block;
     overflow-x: auto;
     white-space: nowrap;
+  }
+}
+
+@media (max-width: 580px) {
+  .tech-hud-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 
