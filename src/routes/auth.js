@@ -232,14 +232,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const userId = db.collection("users").doc().id;
-    const initialActivity = {
-      id: crypto.randomUUID(),
-      type: "registered",
-      detail: `Student registered via Telegram Bot Verification from ${college}`,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Store both manual input name and automatic Telegram name in database
+    // Store both manual input name and automatic Telegram name in database (Zero bloated activities in DB)
     const newUser = {
       id: userId,
       name: finalName,
@@ -255,7 +248,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : ["upload_notes", "download_notes"],
-      activities: [initialActivity],
+      activities: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -460,20 +453,9 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    const resetEvent = {
-      id: crypto.randomUUID(),
-      type: "password_reset",
-      detail: "Account password reset via Telegram Bot Verification",
-      timestamp: new Date().toISOString(),
-    };
-
     const userDocRef = db.collection("users").doc(userId);
-    const userSnap = await userDocRef.get();
-    const existingActivities = userSnap.exists ? (userSnap.data().activities || []) : [];
-
     await userDocRef.update({
       password: hashedPassword,
-      activities: existingActivities.concat(resetEvent).slice(-100),
       updatedAt: new Date().toISOString(),
     });
 
@@ -604,13 +586,6 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const userId = db.collection("users").doc().id;
-    const initialActivity = {
-      id: crypto.randomUUID(),
-      type: "registered",
-      detail: `Student registered from ${college}`,
-      timestamp: new Date().toISOString(),
-    };
-
     const newUser = {
       id: userId,
       name,
@@ -623,7 +598,7 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : ["upload_notes", "download_notes"],
-      activities: [initialActivity],
+      activities: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -736,13 +711,6 @@ router.post("/register", authLimiter, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const userId = db.collection("users").doc().id;
-    const initialActivity = {
-      id: crypto.randomUUID(),
-      type: "registered",
-      detail: `Student registered from ${college.trim()}`,
-      timestamp: new Date().toISOString(),
-    };
-
     const newUser = {
       id: userId,
       name: name.trim(),
@@ -755,7 +723,7 @@ router.post("/register", authLimiter, async (req, res) => {
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : ["upload_notes", "download_notes"],
-      activities: [initialActivity],
+      activities: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -924,14 +892,7 @@ router.post("/google", authLimiter, async (req, res) => {
       // Record login event in background (Zero blocking delay for instant fast login)
       setImmediate(async () => {
         try {
-          const loginEvent = {
-            id: crypto.randomUUID(),
-            type: "login",
-            detail: "User logged in via Google Sign-In",
-            timestamp: new Date().toISOString(),
-          };
           await db.collection("users").doc(doc.id).update({
-            activities: (userData.activities || []).concat(loginEvent).slice(-100),
             lastLoginAt: new Date().toISOString(),
             authProvider: "google",
           });
@@ -1062,12 +1023,6 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
     }
 
     const userId = db.collection("users").doc().id;
-    const initialActivity = {
-      id: crypto.randomUUID(),
-      type: "registered",
-      detail: `Student registered via Google Sign-In from ${cleanCollege}`,
-      timestamp: new Date().toISOString(),
-    };
 
     // CRITICAL CONSTRAINT: DO NOT SAVE ANY PHOTO IN FIRESTORE DATABASE!
     const newUser = {
@@ -1083,7 +1038,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : ["upload_notes", "download_notes"],
-      activities: [initialActivity],
+      activities: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -1269,14 +1224,7 @@ router.post("/login", authLimiter, async (req, res) => {
     if (db && docId) {
       setImmediate(async () => {
         try {
-          const loginEvent = {
-            id: crypto.randomUUID(),
-            type: "login",
-            detail: "User logged into Free Study Material Vault",
-            timestamp: new Date().toISOString(),
-          };
           await db.collection("users").doc(docId).update({
-            activities: (userRecord.activities || []).concat(loginEvent).slice(-100),
             lastLoginAt: new Date().toISOString(),
           });
         } catch (_) {}
@@ -1462,16 +1410,9 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
 
     const { userRecord, docId, inputIdentity } = verification.data;
 
-    // Record login activity in user's history
+    // Record login activity in user's history (Zero bloated activities in DB)
     if (db && docId) {
-      const loginEvent = {
-        id: crypto.randomUUID(),
-        type: "login",
-        detail: "User logged in via Brevo Email OTP verification",
-        timestamp: new Date().toISOString(),
-      };
       await db.collection("users").doc(docId).update({
-        activities: (userRecord.activities || []).concat(loginEvent).slice(-100),
         lastLoginAt: new Date().toISOString(),
       }).catch(() => {});
     }
@@ -1620,20 +1561,9 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    const resetEvent = {
-      id: crypto.randomUUID(),
-      type: "password_reset",
-      detail: "Account password reset via Brevo Email OTP verification",
-      timestamp: new Date().toISOString(),
-    };
-
     const userDocRef = db.collection("users").doc(userId);
-    const userSnap = await userDocRef.get();
-    const existingActivities = userSnap.exists ? (userSnap.data().activities || []) : [];
-
     await userDocRef.update({
       password: hashedPassword,
-      activities: existingActivities.concat(resetEvent).slice(-100),
       updatedAt: new Date().toISOString(),
     });
 
@@ -1832,18 +1762,6 @@ router.put("/profile", authenticateToken, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    const updateEvent = {
-      id: crypto.randomUUID(),
-      type: "profile_update",
-      detail: cleanNewMobile !== oldMobile
-        ? `Updated profile details & re-verified mobile to ${cleanNewMobile}`
-        : "Updated profile details",
-      timestamp: new Date().toISOString(),
-    };
-
-    const existingActivities = existingData.activities || [];
-    updateData.activities = existingActivities.concat(updateEvent).slice(-100);
-
     await userDocRef.update(updateData);
 
     const updatedUser = {
@@ -1911,17 +1829,8 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
     const salt = await bcrypt.genSalt(10);
     const hashedNewPassword = await bcrypt.hash(newPassword, salt);
 
-    const pwEvent = {
-      id: crypto.randomUUID(),
-      type: "password_change",
-      detail: "Account password changed",
-      timestamp: new Date().toISOString(),
-    };
-
-    const existingActivities = userData.activities || [];
     await userDocRef.update({
       password: hashedNewPassword,
-      activities: existingActivities.concat(pwEvent).slice(-100),
       updatedAt: new Date().toISOString(),
     });
 
@@ -1948,23 +1857,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
 
     if (activeUser) {
       setImmediate(async () => {
-        try {
-          if (db && activeUser.id && activeUser.id !== "admin-root") {
-            const logoutEvent = {
-              id: crypto.randomUUID(),
-              type: "logout",
-              detail: isAutoLogout
-                ? "Session auto-terminated after 30 minutes of web inactivity"
-                : "User logged out safely",
-              timestamp: new Date().toISOString(),
-            };
-            await db.collection("users").doc(activeUser.id).update({
-              activities: ((await db.collection("users").doc(activeUser.id).get()).data()?.activities || []).concat(logoutEvent).slice(-100),
-            });
-          }
-        } catch (_) {}
-
-        // Send Real-time Telegram Security Notice to Security Bot
+        // Send Real-time Telegram Security Notice to Security Bot (Zero DB operations needed)
         sendTelegramAuthNotice({
           event: "LOGOUT",
           user: {

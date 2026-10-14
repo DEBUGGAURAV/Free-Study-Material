@@ -165,20 +165,6 @@ router.post(
           updatedAt: new Date().toISOString(),
         }).catch((e) => console.warn("[UPLOAD] Notice creation notice:", e.message));
 
-        // Log upload activity in student's profile
-        if (req.user?.id && req.user.id !== "admin-root") {
-          const uploadEvent = {
-            id: crypto.randomUUID(),
-            type: "upload",
-            detail: `Uploaded note: "${noteTitle}" (${finalCourse} - ${finalBranch})`,
-            noteId: noteId,
-            timestamp: new Date().toISOString(),
-          };
-          db.collection("users").doc(req.user.id).update({
-            activities: ((await db.collection("users").doc(req.user.id).get()).data()?.activities || []).concat(uploadEvent).slice(-100),
-          }).catch(() => {});
-        }
-
         // Real-time Telegram Notice to Security Bot (Notice text only, strictly zero PDF file attached)
         sendTelegramAuthNotice({
           event: "NOTE_UPLOAD",

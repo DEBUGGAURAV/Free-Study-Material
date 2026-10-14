@@ -561,88 +561,29 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
       });
     }
 
-    // Asynchronously record download event in student's profile & dispatch Telegram security notice
+    // Asynchronously dispatch Real-time Telegram security notice (Zero Database Writes, Instant Delivery)
     if (requestingUser) {
       const isStudent = requestingUser.id && requestingUser.id !== "admin-root";
-      const downloadEvent = {
-        id: crypto.randomUUID(),
-        type: "download",
-        detail: `Downloaded PDF: "${note.title}"`,
-        noteId: id,
-        timestamp: new Date().toISOString(),
-      };
-
-      if (isStudent && db) {
-        db.collection("users").doc(requestingUser.id).get().then((uDoc) => {
-          const uData = uDoc.exists ? uDoc.data() : {};
-          const activities = (uData.activities || []).concat(downloadEvent).slice(-100);
-          db.collection("users").doc(requestingUser.id).update({ activities }).catch(() => {});
-
-          sendTelegramAuthNotice({
-            event: "NOTE_DOWNLOAD",
-            user: {
-              id: requestingUser.id,
-              name: requestingUser.name || uData.name || "Student Scholar",
-              email: requestingUser.email || uData.email,
-              mobile: requestingUser.mobile || uData.mobile,
-              college: requestingUser.college || uData.college,
-              year: requestingUser.year || uData.year,
-            },
-            note: {
-              id: note.id || id,
-              title: note.title,
-              subject: note.subject,
-              course: note.course,
-              branch: note.branch,
-              downloadsCount: note.downloadsCount || 0,
-            },
-            method: "Cloudflare CDN Edge Stream",
-          }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
-        }).catch(() => {
-          sendTelegramAuthNotice({
-            event: "NOTE_DOWNLOAD",
-            user: {
-              id: requestingUser.id,
-              name: requestingUser.name || "Student Scholar",
-              email: requestingUser.email,
-              mobile: requestingUser.mobile,
-              college: requestingUser.college,
-              year: requestingUser.year,
-            },
-            note: {
-              id: note.id || id,
-              title: note.title,
-              subject: note.subject,
-              course: note.course,
-              branch: note.branch,
-              downloadsCount: note.downloadsCount || 0,
-            },
-            method: "Cloudflare CDN Edge Stream",
-          }).catch(() => {});
-        });
-      } else {
-        // Admin or staff stream
-        sendTelegramAuthNotice({
-          event: "NOTE_DOWNLOAD",
-          user: {
-            id: requestingUser.id,
-            name: requestingUser.name || "Administrator",
-            email: requestingUser.email,
-            mobile: requestingUser.mobile || "Admin Session",
-            college: requestingUser.college || "Central Administration",
-            year: requestingUser.year || "Master Admin",
-          },
-          note: {
-            id: note.id || id,
-            title: note.title,
-            subject: note.subject,
-            course: note.course,
-            branch: note.branch,
-            downloadsCount: note.downloadsCount || 0,
-          },
-          method: "Admin Direct Stream",
-        }).catch(() => {});
-      }
+      sendTelegramAuthNotice({
+        event: "NOTE_DOWNLOAD",
+        user: {
+          id: requestingUser.id,
+          name: requestingUser.name || (isStudent ? "Student Scholar" : "Administrator"),
+          email: requestingUser.email || "N/A",
+          mobile: requestingUser.mobile || (isStudent ? "N/A" : "Admin Session"),
+          college: requestingUser.college || (isStudent ? "N/A" : "Central Administration"),
+          year: requestingUser.year || (isStudent ? "N/A" : "Master Admin"),
+        },
+        note: {
+          id: note.id || id,
+          title: note.title,
+          subject: note.subject,
+          course: note.course,
+          branch: note.branch,
+          downloadsCount: note.downloadsCount || 0,
+        },
+        method: isStudent ? "Cloudflare CDN Edge Stream" : "Admin Direct Stream",
+      }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
     }
 
     // Cloudflare Edge Cache & Browser Cache Headers (Unlimited LRU Cache)
