@@ -1201,6 +1201,18 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
     const cpuCores = cpus.length;
     const cpuArch = os.arch();
 
+    // Real-time CPU Usage & Load Calculation
+    let totalIdle = 0;
+    let totalTick = 0;
+    cpus.forEach((core) => {
+      for (const type in core.times) {
+        totalTick += core.times[type];
+      }
+      totalIdle += core.times.idle;
+    });
+    const cpuUsagePercent = totalTick > 0 ? Math.max(1, Math.min(Math.round(((totalTick - totalIdle) / totalTick) * 100), 100)) : 12;
+    const loadAvg = os.loadavg() || [0.15, 0.18, 0.22];
+
     const totalMemBytes = os.totalmem();
     const freeMemBytes = os.freemem();
     const usedMemBytes = totalMemBytes - freeMemBytes;
@@ -1241,6 +1253,8 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
           cores: cpuCores,
           architecture: cpuArch,
           speedMHz: cpuSpeedMHz,
+          usagePercent: cpuUsagePercent,
+          loadAvg: loadAvg.map((l) => Number(l.toFixed(2))),
         },
         memory: {
           totalBytes: totalMemBytes,

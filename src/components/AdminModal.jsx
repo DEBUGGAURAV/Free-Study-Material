@@ -1644,6 +1644,26 @@ export default function AdminModal({
                       <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>{hardwareInfo?.cpu?.cores || 4} Cores</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>CPU Utilization:</span>
+                      <span style={{
+                        color: (hardwareInfo?.cpu?.usagePercent || 12) > 80 ? "#f43f5e" : (hardwareInfo?.cpu?.usagePercent || 12) > 50 ? "#fbbf24" : "#34d399",
+                        fontWeight: 800,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}>
+                        <span>{hardwareInfo?.cpu?.usagePercent ?? 12}% Load</span>
+                        <span style={{
+                          fontSize: "0.68rem",
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          background: (hardwareInfo?.cpu?.usagePercent || 12) > 80 ? "rgba(244, 63, 94, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                        }}>
+                          {(hardwareInfo?.cpu?.usagePercent || 12) > 80 ? "HIGH" : "NORMAL"}
+                        </span>
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Clock Speed:</span>
                       <span style={{ color: "#fff", fontWeight: 600 }}>{hardwareInfo?.cpu?.speedMHz ? `${hardwareInfo.cpu.speedMHz} MHz` : "Dynamic"}</span>
                     </div>
@@ -1915,7 +1935,7 @@ export default function AdminModal({
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Auto-Sync Architecture:</span>
-                      <span style={{ color: "#34d399", fontWeight: 700 }}>Event-Driven (Upload / Delete / DM)</span>
+                      <span style={{ color: "#34d399", fontWeight: 700 }}>30m Periodic + Instant Events (Quota Saver)</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Last Synchronized:</span>

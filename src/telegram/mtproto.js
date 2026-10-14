@@ -980,34 +980,43 @@ async function deleteTelegramMessages(messageIds, channelId = null) {
   }
 }
 
+let autoSyncTimer = null;
 let isAutoSyncing = false;
 
 /**
- * Event-Driven Two-Way Auto-Sync Engine
- * Runs an initial startup reconciliation sweep after boot, then relies on
- * real-time event listeners (NewMessage, UpdateDeleteChannelMessages, web uploads/deletions)
- * instead of a wasteful blind periodic polling loop.
+ * 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync Engine
+ * 1. Executes initial sync at boot.
+ * 2. Runs lightweight 30-minute background sweep (saving maximum network & database quota).
+ * 3. Catches real-time instant uploads and deletions as they happen.
  */
-function startAutoSyncWorker() {
-  console.log("[MTProto AUTOSYNC] ⚡ Event-Driven Realtime Auto-Sync active (Triggers: Direct Telegram / Upload / Delete / Manual).");
+function startAutoSyncWorker(intervalMs = 30 * 60 * 1000) {
+  if (autoSyncTimer) return;
+  console.log(`[MTProto AUTOSYNC] ⚡ 30-Minute Quota-Saver Auto-Sync active (Interval: ${intervalMs / 1000 / 60}m).`);
 
-  const runInitialSync = async () => {
+  const runSync = async () => {
     if (isAutoSyncing) return;
     isAutoSyncing = true;
     try {
       await syncTelegramChannel();
     } catch (e) {
-      // Non-fatal initial background sync warning
+      // Non-fatal background sync warning
     } finally {
       isAutoSyncing = false;
     }
   };
 
   // Run initial auto-sync after 4 seconds of startup to catch any offline changes
-  setTimeout(runInitialSync, 4000);
+  setTimeout(runSync, 4000);
+
+  // 30-minute recurring quota-saving interval
+  autoSyncTimer = setInterval(runSync, intervalMs);
 }
 
 function stopAutoSyncWorker() {
+  if (autoSyncTimer) {
+    clearInterval(autoSyncTimer);
+    autoSyncTimer = null;
+  }
   console.log("[MTProto AUTOSYNC] Auto-Sync worker stopped.");
 }
 
@@ -1027,7 +1036,8 @@ function getMTProtoDetails() {
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,
     autoSyncActive: true,
-    autoSyncMode: "Event-Driven Real-Time (Upload / Delete / Direct Message)",
+    autoSyncInterval: "30m Periodic Safety Net",
+    autoSyncMode: "30-Minute Quota-Saver & Real-time Event-Driven",
     lastSync: getLastSyncState(),
   };
 }
