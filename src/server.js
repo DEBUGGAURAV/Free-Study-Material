@@ -211,9 +211,9 @@ app.listen(PORT, async () => {
     console.warn("[BOT POLLER] Poller start deferred:", e.message);
   }
 
-  // Start Periodic Background Auto-Sync (every 10 minutes: fast, zero data loss, safe database quota)
+  // Start Event-Driven Two-Way Auto-Sync (Real-time triggers on Telegram DM/Upload, Telegram Delete, Website Upload/Delete)
   try {
-    startAutoSyncWorker(10 * 60 * 1000);
+    startAutoSyncWorker();
   } catch (e) {
     console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
   }

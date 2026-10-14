@@ -126,6 +126,7 @@ export default function AdminModal({
   const [collectionLoading, setCollectionLoading] = useState(false);
   const [collectionSearch, setCollectionSearch] = useState("");
   const [syncingTelegram, setSyncingTelegram] = useState(false);
+  const [lastSyncInfo, setLastSyncInfo] = useState(null);
 
   // Student Registry
   const [students, setStudents] = useState([]);
@@ -244,6 +245,7 @@ export default function AdminModal({
       ]);
       setStats(s?.stats || null);
       setHealth(h || null);
+      if (s?.lastSync) setLastSyncInfo(s.lastSync);
     } catch {}
   };
 
@@ -263,7 +265,10 @@ export default function AdminModal({
     try {
       setSoftwareLoading(true);
       const res = await api.getSoftwareSpecs();
-      if (res?.software) setSoftwareInfo(res.software);
+      if (res?.software) {
+        setSoftwareInfo(res.software);
+        if (res.software.lastSync) setLastSyncInfo(res.software.lastSync);
+      }
     } catch (err) {
       console.warn("[ADMIN] Software specs load error:", err.message);
     } finally {
@@ -545,6 +550,7 @@ export default function AdminModal({
     try {
       setSyncingTelegram(true);
       const res = await api.syncTelegram();
+      if (res?.lastSync) setLastSyncInfo(res.lastSync);
       const msg = res.message || `✅ Telegram Sync Complete: Verified ${res.verifiedCount || 0} documents, Imported ${res.importedCount || 0} new notes, Cleaned ${res.duplicateCleanedCount || 0} duplicates, Purged ${res.purgedCount || 0} deleted items.`;
       alert(msg);
       if (onRefreshNotes) onRefreshNotes();
@@ -1213,7 +1219,7 @@ export default function AdminModal({
                   />
                 </div>
 
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                   <button
                     onClick={handleTelegramSync}
                     className="btn-secondary"
@@ -1224,6 +1230,32 @@ export default function AdminModal({
                     {syncingTelegram ? <RefreshCw size={14} className="spinner" /> : <RefreshCw size={14} />}
                     <span>{syncingTelegram ? "Syncing..." : "Sync Telegram Channel"}</span>
                   </button>
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "0.75rem",
+                      background: "rgba(15, 23, 42, 0.6)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      color: "var(--text-dim)",
+                    }}
+                    title="Real-Time Event-Driven Sync Status"
+                  >
+                    <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
+                    <span>Last Synced:</span>
+                    <strong style={{ color: "#fff" }}>
+                      {lastSyncInfo?.formattedTime || stats?.lastSync?.formattedTime || "Live Real-Time"}
+                    </strong>
+                    {(lastSyncInfo?.trigger || stats?.lastSync?.trigger) && (
+                      <span style={{ color: "#34d399", fontWeight: 600, fontSize: "0.72rem" }}>
+                        • {lastSyncInfo?.trigger || stats?.lastSync?.trigger}
+                      </span>
+                    )}
+                  </div>
 
                   {!isHalfAdmin && (
                     <button
@@ -1881,9 +1913,21 @@ export default function AdminModal({
                       <span style={{ color: "var(--text-dim)" }}>Vault Storage Channel:</span>
                       <span style={{ color: "#fbbf24", fontWeight: 700 }}>-1004387181748</span>
                     </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Auto-Sync Architecture:</span>
+                      <span style={{ color: "#34d399", fontWeight: 700 }}>Event-Driven (Upload / Delete / DM)</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Last Synchronized:</span>
+                      <span style={{ color: "#fff", fontWeight: 700 }}>
+                        {lastSyncInfo?.formattedTime || softwareInfo?.telegramMTProto?.lastSync?.formattedTime || "Live Real-Time"}
+                      </span>
+                    </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ color: "var(--text-dim)" }}>Bot Auto-Sync Poller:</span>
-                      <span style={{ color: "#34d399", fontWeight: 700 }}>{softwareInfo?.botPoller?.active ? "Active (15s Loop)" : "Active"}</span>
+                      <span style={{ color: "var(--text-dim)" }}>Last Event Trigger:</span>
+                      <span style={{ color: "var(--accent-cyan)", fontWeight: 600, fontSize: "0.75rem" }}>
+                        {lastSyncInfo?.trigger || softwareInfo?.telegramMTProto?.lastSync?.trigger || "Server Boot"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2720,6 +2764,27 @@ export default function AdminModal({
                     <RefreshCw size={14} className={syncingTelegram ? "spinner" : ""} />
                     <span>Sync Channel</span>
                   </button>
+
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      fontSize: "0.75rem",
+                      background: "rgba(15, 23, 42, 0.6)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      color: "var(--text-dim)",
+                    }}
+                    title="Real-Time Event-Driven Sync Status"
+                  >
+                    <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
+                    <span>Last Synced:</span>
+                    <strong style={{ color: "#fff" }}>
+                      {lastSyncInfo?.formattedTime || stats?.lastSync?.formattedTime || "Live"}
+                    </strong>
+                  </div>
                 </div>
               </div>
 

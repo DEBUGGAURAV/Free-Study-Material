@@ -9,6 +9,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
+const { recordSyncEvent, getLastSyncState } = require("./syncTracker");
 
 const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
 const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();
@@ -378,6 +379,11 @@ function setupChannelSyncListeners(c) {
 
       clearCache();
       console.log(`[MTProto SYNC] Note "${title}" successfully published to web platform!`);
+      recordSyncEvent({
+        trigger: `Direct Telegram Vault Upload: "${title}"`,
+        details: `Indexed into website (#1 Position)`,
+        importedCount: 1,
+      });
     } catch (err) {
       console.warn("[MTProto SYNC] Direct ingest error:", err.message);
     }
@@ -397,6 +403,11 @@ function setupChannelSyncListeners(c) {
         if (!db) return;
 
         console.log(`[MTProto SYNC] 🗑️ Telegram deletion detected for message/topic IDs:`, deletedIds);
+        recordSyncEvent({
+          trigger: `Telegram Deletion Event (IDs: ${deletedIds.join(", ")})`,
+          details: `Auto-purged ${deletedIds.length} message(s) from website`,
+          purgedCount: deletedIds.length,
+        });
 
         for (const delId of deletedIds) {
           // A. Purge note by telegramMessageId (Storage Channel message)
@@ -749,6 +760,14 @@ async function syncTelegramChannel() {
 
   clearCache();
 
+  recordSyncEvent({
+    trigger: "Two-Way Channel Reconcile",
+    details: `Verified ${verifiedCount}, Imported ${importedCount}, Purged ${purgedCount}`,
+    verifiedCount,
+    importedCount,
+    purgedCount,
+  });
+
   return {
     success: true,
     scannedRange: `IDs 1 to ${probeMax}`,
@@ -756,6 +775,7 @@ async function syncTelegramChannel() {
     importedCount,
     duplicateCleanedCount,
     purgedCount,
+    lastSync: getLastSyncState(),
     message: `Telegram Two-Way Sync complete! Verified ${verifiedCount} documents, imported ${importedCount} new notes, cleaned ${duplicateCleanedCount} duplicate records, and purged ${purgedCount} deleted items.`,
   };
 }
@@ -960,43 +980,35 @@ async function deleteTelegramMessages(messageIds, channelId = null) {
   }
 }
 
-let autoSyncTimer = null;
 let isAutoSyncing = false;
 
 /**
- * High-Speed Continuous Background Auto-Sync Engine
- * Periodically reconciles channel uploads, deletions, and forum topic removals
- * without waiting for manual admin clicks.
+ * Event-Driven Two-Way Auto-Sync Engine
+ * Runs an initial startup reconciliation sweep after boot, then relies on
+ * real-time event listeners (NewMessage, UpdateDeleteChannelMessages, web uploads/deletions)
+ * instead of a wasteful blind periodic polling loop.
  */
-function startAutoSyncWorker(intervalMs = 10 * 60 * 1000) {
-  if (autoSyncTimer) return;
-  console.log(`[MTProto AUTOSYNC] ⚡ High-Speed Continuous Auto-Sync active (Interval: ${intervalMs / 1000}s).`);
+function startAutoSyncWorker() {
+  console.log("[MTProto AUTOSYNC] ⚡ Event-Driven Realtime Auto-Sync active (Triggers: Direct Telegram / Upload / Delete / Manual).");
 
-  const runSync = async () => {
+  const runInitialSync = async () => {
     if (isAutoSyncing) return;
     isAutoSyncing = true;
     try {
       await syncTelegramChannel();
     } catch (e) {
-      // Non-fatal background sync warning
+      // Non-fatal initial background sync warning
     } finally {
       isAutoSyncing = false;
     }
   };
 
-  // Run initial auto-sync after 4 seconds of startup
-  setTimeout(runSync, 4000);
-
-  // High-frequency recurring background interval
-  autoSyncTimer = setInterval(runSync, intervalMs);
+  // Run initial auto-sync after 4 seconds of startup to catch any offline changes
+  setTimeout(runInitialSync, 4000);
 }
 
 function stopAutoSyncWorker() {
-  if (autoSyncTimer) {
-    clearInterval(autoSyncTimer);
-    autoSyncTimer = null;
-    console.log("[MTProto AUTOSYNC] Auto-Sync worker stopped.");
-  }
+  console.log("[MTProto AUTOSYNC] Auto-Sync worker stopped.");
 }
 
 function getMTProtoDetails() {
@@ -1014,8 +1026,9 @@ function getMTProtoDetails() {
     deviceModel: "AcademicCloud-v3",
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,
-    autoSyncActive: !!autoSyncTimer,
-    autoSyncInterval: "10m Periodic",
+    autoSyncActive: true,
+    autoSyncMode: "Event-Driven Real-Time (Upload / Delete / Direct Message)",
+    lastSync: getLastSyncState(),
   };
 }
 
@@ -1029,5 +1042,7 @@ module.exports = {
   startAutoSyncWorker,
   stopAutoSyncWorker,
   getMTProtoDetails,
+  getLastSyncState,
+  recordSyncEvent,
 };
 

@@ -5,6 +5,7 @@ const os = require("os");
 const { db } = require("../firebase");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
+const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
 
 let deleteTelegramMessages = null;
 let getMTProtoDetails = null;
@@ -241,6 +242,7 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
         formattedSaved: (totalSavedBytes / (1024 * 1024)).toFixed(2) + " MB",
         formattedOriginal: (totalOriginalBytes / (1024 * 1024)).toFixed(2) + " MB",
       },
+      lastSync: getLastSyncState(),
     });
   } catch (err) {
     console.error("[ADMIN] Stats error:", err);
@@ -642,6 +644,12 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
       if (noteData.telegramOriginMessageId && noteData.telegramOriginChatId && deleteTelegramMessages) {
         deleteTelegramMessages([noteData.telegramOriginMessageId], noteData.telegramOriginChatId).catch(() => {});
       }
+
+      recordSyncEvent({
+        trigger: `Website Admin Delete: "${noteData.title || "Note"}"`,
+        details: "Moved to Restore Vault and removed from Telegram",
+        purgedCount: 1,
+      });
     }
 
     invalidateAllCache();
@@ -1640,10 +1648,20 @@ const { syncTelegramChannel, deduplicateDatabaseNotes } = require("../telegram/m
 router.post("/telegram/sync", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
     const result = await syncTelegramChannel();
-    return res.json(result);
+    return res.json({
+      ...result,
+      lastSync: getLastSyncState(),
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Telegram sync error: " + err.message });
   }
+});
+
+router.get("/telegram/sync-status", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+  return res.json({
+    success: true,
+    lastSync: getLastSyncState(),
+  });
 });
 
 router.post("/telegram/deduplicate", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {

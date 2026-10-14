@@ -386,6 +386,15 @@ function enqueueUpload(task) {
           downloadUrl: `/api/notes/${noteId}/stream`,
           updatedAt: new Date().toISOString(),
         });
+
+        try {
+          const { recordSyncEvent } = require("../telegram/syncTracker");
+          recordSyncEvent({
+            trigger: `Website Upload: "${title}"`,
+            details: "Uploaded to web and synchronized to Telegram Vault",
+            importedCount: 1,
+          });
+        } catch {}
       }
 
       // Clean up server temp file (100% Zero Persistent Server Disk Usage)

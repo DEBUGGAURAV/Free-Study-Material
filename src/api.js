@@ -579,6 +579,7 @@ export const api = {
   getUploadPipelines: () => request("/admin/upload-pipeline"),
   cleanupSystem: () => request("/admin/system/cleanup", { method: "POST" }),
   syncTelegram: () => request("/admin/telegram/sync", { method: "POST" }),
+  getTelegramSyncStatus: () => request("/admin/telegram/sync-status"),
   testSmtp: () => request("/admin/smtp/test", { method: "POST" }),
   getDatabaseOverview: () => request("/admin/database/overview"),
   getDatabaseCollection: (collectionName) => request(`/admin/database/collection/${collectionName}`),

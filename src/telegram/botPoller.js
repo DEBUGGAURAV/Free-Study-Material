@@ -14,6 +14,7 @@ const { invalidateAllCache } = require("../utils/ramCache");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
+const { recordSyncEvent } = require("./syncTracker");
 
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const storageChatId = process.env.TELEGRAM_STORAGE_CHAT_ID;
@@ -256,6 +257,28 @@ async function processIncomingMessage(message) {
     return;
   }
 
+  // Handle /sync command directly from Telegram chat
+  if (message.text && message.text.trim().toLowerCase().startsWith("/sync")) {
+    try {
+      const { syncTelegramChannel } = require("./mtproto");
+      const res = await syncTelegramChannel();
+      await sendTelegramMessage(
+        message.chat.id,
+        `⚡ <b>Two-Way Sync Complete!</b>\n\n` +
+        `✅ <b>Verified:</b> ${res.verifiedCount} documents\n` +
+        `📥 <b>Imported:</b> ${res.importedCount} new notes\n` +
+        `🗑️ <b>Purged:</b> ${res.purgedCount} deleted items\n` +
+        `🕒 <b>Synced At:</b> ${res.lastSync?.formattedTime || "Just now"}\n\n` +
+        `<i>Website database is fully up to date.</i>`,
+        message.message_id,
+        message.message_thread_id
+      );
+    } catch (e) {
+      await sendTelegramMessage(message.chat.id, `⚠️ <b>Sync Error:</b> ${e.message}`, message.message_id, message.message_thread_id);
+    }
+    return;
+  }
+
   if (!message.document) return;
 
   const doc = message.document;
@@ -478,6 +501,11 @@ async function processIncomingMessage(message) {
 
     invalidateAllCache();
     console.log(`[BOT POLLER] ✅ Successfully published note "${title}" (#1 Position on Web)!`);
+    recordSyncEvent({
+      trigger: `Direct Telegram ${message.chat.type === "private" ? "DM" : "Message"}: "${title}"`,
+      details: `Indexed into website (#1 Position)`,
+      importedCount: 1,
+    });
   } finally {
     syncLock.unlock(flightKey);
     if (docKey) syncLock.unlock(docKey);
