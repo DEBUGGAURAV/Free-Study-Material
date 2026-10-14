@@ -276,7 +276,28 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     try {
       const res = await api.googleLogin(googlePayload);
       if (res.isNewUser) {
-        setGoogleUser(res.googleUser || googlePayload);
+        const gUser = {
+          email: res.googleUser?.email || "",
+          name: res.googleUser?.name || "",
+          picture: res.googleUser?.picture || "",
+        };
+        if (!gUser.picture && googlePayload?.credential) {
+          try {
+            const base64Url = googlePayload.credential.split(".")[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+              atob(base64)
+                .split("")
+                .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+                .join("")
+            );
+            const decoded = JSON.parse(jsonPayload);
+            if (decoded?.picture) gUser.picture = decoded.picture;
+            if (!gUser.name && decoded?.name) gUser.name = decoded.name;
+            if (!gUser.email && decoded?.email) gUser.email = decoded.email;
+          } catch (_) {}
+        }
+        setGoogleUser(gUser);
         setIsGoogleOnboarding(true);
         setSuccessMsg("Google account verified! Please enter your mobile number and college to finish registration.");
       } else if (res.user) {

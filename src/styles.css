@@ -39,6 +39,15 @@
   --shadow-card-hover: 0 20px 40px -12px rgba(0, 0, 0, 0.7), 0 0 25px -5px rgba(99, 102, 241, 0.25);
 }
 
+html {
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  font-size: 16px;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -50,6 +59,9 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-main);
   min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
+  max-width: 100vw;
   overflow-x: hidden;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -58,6 +70,17 @@ body {
     radial-gradient(circle at 90% 20%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
     radial-gradient(circle at 50% 90%, rgba(139, 92, 246, 0.08) 0%, transparent 55%);
   background-attachment: fixed;
+  position: relative;
+}
+
+img, svg, video, canvas, iframe {
+  max-width: 100%;
+  height: auto;
+}
+
+p, span, h1, h2, h3, h4, h5, h6, label, td, th {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
 }
 
 /* Custom Sleek Scrollbar */
@@ -78,9 +101,11 @@ body {
 
 /* ---------------- Layout & Container ---------------- */
 .app-container {
+  width: 100%;
   max-width: 1400px;
   margin: 0 auto;
-  padding: 0 24px 80px;
+  padding: 0 clamp(10px, 3vw, 24px) 80px;
+  box-sizing: border-box;
 }
 
 /* ---------------- Top Navbar ---------------- */
@@ -90,9 +115,12 @@ body {
   z-index: 100;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  background: rgba(6, 9, 17, 0.82);
+  background: rgba(6, 9, 17, 0.88);
   border-bottom: 1px solid var(--border-subtle);
-  padding: 14px 24px;
+  padding: clamp(10px, 1.8vw, 14px) clamp(10px, 2.5vw, 24px);
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 .navbar-content {
@@ -101,7 +129,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: clamp(8px, 1.5vw, 18px);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .brand-section {
@@ -177,9 +207,11 @@ body {
 /* ---------------- Universal Search Bar ---------------- */
 .search-wrapper {
   position: relative;
-  min-width: 320px;
+  min-width: 0;
+  width: 100%;
   max-width: 440px;
-  flex: 1;
+  flex: 1 1 200px;
+  box-sizing: border-box;
 }
 
 .search-input {
@@ -337,13 +369,15 @@ body {
   line-height: 1.6;
 }
 
-/* Technology HUD Grid (Strict 3 Cards Per Row: 3x3 Grid) */
+/* Technology HUD Grid (Strict 3 Cards Per Row on Large, Fluid Responsive Architecture) */
 .tech-hud-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  gap: clamp(10px, 1.5vw, 14px);
   max-width: 1240px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .tech-hud-card {
@@ -495,8 +529,10 @@ body {
 /* ---------------- Notes Grid (Cards View) ---------------- */
 .notes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: clamp(14px, 2vw, 22px);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .note-card {
@@ -706,14 +742,18 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 1000;
   background: rgba(3, 5, 10, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: clamp(8px, 2vw, 20px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
   animation: fadeIn 0.2s ease-out;
 }
 
@@ -723,14 +763,17 @@ body {
 }
 
 .modal-content {
+  margin: auto;
   background: var(--bg-surface);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-lg);
-  max-width: 620px;
+  max-width: min(620px, calc(100vw - 16px));
   width: 100%;
-  max-height: 90vh;
+  max-height: calc(100dvh - 24px);
   overflow-y: auto;
-  padding: 28px;
+  overflow-x: hidden;
+  padding: clamp(16px, 3vw, 28px);
+  box-sizing: border-box;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75), var(--shadow-glow);
   animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
@@ -864,112 +907,174 @@ body {
 }
 
 /* ==========================================================================
-   Comprehensive Responsive System (Mobile, Tablet, Desktop)
-   Guarantees zero overlapping across all viewport sizes
+   Comprehensive Universal Responsive System (Mobile, Tablet, Desktop, 4K)
+   Guarantees zero overlapping & zero edge cutoff across all display resolutions & zooms
    ========================================================================== */
-@media (max-width: 1024px) {
+
+/* Universal modal max-width safety: No modal will ever cut off or overflow any screen */
+[class*="modal-content"] {
+  max-width: min(100%, calc(100vw - 16px)) !important;
+  box-sizing: border-box !important;
+}
+
+@media (min-width: 1441px) {
   .app-container {
-    padding: 0 16px 60px;
+    max-width: 1440px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .navbar-content {
+    flex-wrap: wrap;
+    gap: 12px;
   }
   .tech-hud-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
   .hero-title {
-    font-size: 2.3rem;
+    font-size: clamp(2rem, 3.8vw, 2.6rem);
   }
 }
 
 @media (max-width: 768px) {
   .navbar-wrapper {
-    padding: 12px 16px;
+    padding: 10px 14px;
   }
   .navbar-content {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
   }
   .brand-section {
     justify-content: space-between;
+    width: 100%;
   }
   .search-wrapper {
     max-width: 100%;
-    min-width: 100%;
+    min-width: 0;
+    width: 100%;
   }
   .nav-actions {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
+    width: 100%;
   }
   .hero-section {
-    padding: 32px 0 20px;
+    padding: 24px 0 16px;
   }
   .hero-title {
-    font-size: 1.85rem;
+    font-size: clamp(1.6rem, 5vw, 2.1rem);
   }
   .hero-subtitle {
-    font-size: 0.95rem;
+    font-size: 0.92rem;
+    margin-bottom: 24px;
   }
   .tech-hud-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
   .tech-hud-card {
     padding: 10px 12px;
-    gap: 8px;
+    gap: 10px;
   }
   .tech-hud-name {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
   }
   .tech-hud-desc {
-    font-size: 0.68rem;
-  }
-  .vault-benefit-card {
-    padding: 12px 14px;
+    font-size: 0.72rem;
   }
   .notes-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 14px;
+  }
+  .modal-overlay {
+    padding: 8px;
   }
   .modal-content {
-    padding: 20px 16px;
-    max-height: 94vh;
+    padding: 18px 14px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
     border-radius: var(--radius-md);
   }
   .floating-queue-pill {
-    bottom: 14px;
-    right: 14px;
-    left: 14px;
+    bottom: 10px;
+    right: 10px;
+    left: 10px;
     justify-content: center;
   }
   table {
     display: block;
+    width: 100%;
+    max-width: 100%;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     white-space: nowrap;
   }
 }
 
-@media (max-width: 580px) {
+@media (max-width: 640px) {
   .tech-hud-grid {
     grid-template-columns: 1fr;
     gap: 10px;
   }
+  .brand-title {
+    font-size: 1.1rem;
+  }
+  .brand-status-tag {
+    font-size: 0.6rem;
+  }
+  .card-thumbnail-box {
+    height: 125px;
+  }
 }
 
 @media (max-width: 480px) {
+  .app-container {
+    padding: 0 10px 60px;
+  }
   .hero-title {
-    font-size: 1.55rem;
+    font-size: 1.45rem;
+    line-height: 1.25;
+  }
+  .hero-badge-pill {
+    font-size: 0.7rem;
+    padding: 4px 10px;
   }
   .btn-primary, .btn-secondary {
-    font-size: 0.8rem;
-    padding: 8px 14px;
+    font-size: 0.78rem;
+    padding: 7px 12px;
   }
   .filter-tab {
-    padding: 6px 12px;
-    font-size: 0.78rem;
+    padding: 5px 10px;
+    font-size: 0.74rem;
   }
   .branch-chip {
-    padding: 5px 10px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  .note-card {
+    padding: 14px;
+  }
+  .modal-content {
+    padding: 16px 12px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+@media (max-width: 360px) {
+  .app-container {
+    padding: 0 6px 50px;
+  }
+  .navbar-wrapper {
+    padding: 8px 10px;
+  }
+  .hero-title {
+    font-size: 1.3rem;
+  }
+  .btn-primary, .btn-secondary {
     font-size: 0.72rem;
+    padding: 6px 10px;
   }
 }

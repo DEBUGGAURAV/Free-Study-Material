@@ -437,6 +437,23 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `🛡️ <b>Purge Status:</b> <code>Account Permanently Deleted from Database</code>\n` +
         `⏰ <b>Action Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the inactive login account was removed.</i>`;
+    } else if (event === "REGISTER") {
+      const isGoogle = String(method).toLowerCase().includes("google");
+      caption = `🟢 <b>Free Study Material — New Student Registration</b>\n\n` +
+        `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
+        (user.userInputName && user.userInputName !== user.name ? `📝 <b>Manual Input Name:</b> <code>${user.userInputName}</code>\n` : "") +
+        `📧 <b>Email Address:</b> <code>${user.email || "N/A"}</code>\n` +
+        `📱 <b>Mobile Number:</b> <code>${user.mobile || user.newMobile || "N/A"}</code>\n` +
+        `🏛️ <b>College / University:</b> <code>${user.college || "N/A"}</code>\n` +
+        `📚 <b>Academic Year:</b> <code>${user.year || "1st Year"}</code>\n` +
+        (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "") +
+        (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
+        (user.telegramDetails?.username ? `🔗 <b>Telegram Handle:</b> @${user.telegramDetails.username}\n` : "") +
+        `🛡️ <b>Auth Method:</b> <code>${method || (isGoogle ? "Google Sign-In (1-Click)" : "Standard Registration")}</code>\n` +
+        `⚡ <b>Account Status:</b> <code>✅ Active & Verified Student (Vault Access Granted)</code>\n` +
+        (isGoogle ? `✨ <b>Google Verification:</b> <code>100% Cryptographically Verified by Google</code>\n` : "") +
+        `⏰ <b>Registered At:</b> <code>${timeStr} IST</code>\n\n` +
+        `🌐 <i>Real-time Academic Vault Security & Registration Feed</i>`;
     } else {
       let nameAndIdentityBlock = "";
       if (user.userInputName || user.telegramName) {
@@ -468,28 +485,79 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
 
     // 1. If photoUrl is available (from Google OAuth):
     if (photoUrl && (photoUrl.startsWith("http://") || photoUrl.startsWith("https://"))) {
+      let photoDelivered = false;
+
+      // Method A: Download photo buffer on server with browser User-Agent and dispatch binary file to Telegram
+      // This solves Google's CDN blocking Telegram server crawlers with 403 Forbidden!
       try {
-        const photoPayload = {
-          chat_id: targetChatId,
-          photo: photoUrl,
-          caption: caption,
-          parse_mode: "HTML",
-        };
-        if (threadId && !isNaN(Number(threadId))) {
-          photoPayload.message_thread_id = Number(threadId);
-        }
-        const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(photoPayload),
-          signal: AbortSignal.timeout(6000),
+        const photoFetch = await fetch(photoUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+          },
+          signal: AbortSignal.timeout(5000),
         });
-        if (photoRes.ok) {
-          console.log(`[TELEGRAM-AUTH-NOTICE] ✅ Photo alert sent for ${user.email} (${event}) [Topic: ${threadId || "General"}]`);
-          return;
+
+        if (photoFetch.ok) {
+          const arrayBuffer = await photoFetch.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          if (buffer.length > 100) {
+            const form = new FormData();
+            form.append("chat_id", targetChatId);
+            if (threadId && !isNaN(Number(threadId))) {
+              form.append("message_thread_id", String(threadId));
+            }
+            form.append("photo", new Blob([buffer], { type: "image/jpeg" }), "student_avatar.jpg");
+            form.append("caption", caption.slice(0, 1024));
+            form.append("parse_mode", "HTML");
+
+            const directPhotoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+              method: "POST",
+              body: form,
+              signal: AbortSignal.timeout(8000),
+            });
+
+            if (directPhotoRes.ok) {
+              console.log(`[TELEGRAM-AUTH-NOTICE] ✅ Direct buffer photo alert dispatched for ${user.email} (${event}) [Topic: ${threadId || "General"}]`);
+              photoDelivered = true;
+              return;
+            } else {
+              const directErrText = await directPhotoRes.text().catch(() => "");
+              console.warn(`[TELEGRAM-AUTH-NOTICE] Direct buffer sendPhoto notice (${directPhotoRes.status}):`, directErrText);
+            }
+          }
         }
-      } catch (photoErr) {
-        console.warn("[TELEGRAM-AUTH-NOTICE] Photo send fallback:", photoErr.message);
+      } catch (directErr) {
+        console.warn("[TELEGRAM-AUTH-NOTICE] Direct photo buffer fetch error:", directErr.message);
+      }
+
+      // Method B: Pass photoUrl directly to Telegram sendPhoto API (if Method A didn't complete)
+      if (!photoDelivered) {
+        try {
+          const photoPayload = {
+            chat_id: targetChatId,
+            photo: photoUrl,
+            caption: caption.slice(0, 1024),
+            parse_mode: "HTML",
+          };
+          if (threadId && !isNaN(Number(threadId))) {
+            photoPayload.message_thread_id = Number(threadId);
+          }
+          const photoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(photoPayload),
+            signal: AbortSignal.timeout(6000),
+          });
+          if (photoRes.ok) {
+            console.log(`[TELEGRAM-AUTH-NOTICE] ✅ Photo URL alert sent for ${user.email} (${event}) [Topic: ${threadId || "General"}]`);
+            return;
+          } else {
+            console.warn(`[TELEGRAM-AUTH-NOTICE] Photo URL send notice:`, await photoRes.text().catch(() => ""));
+          }
+        } catch (photoErr) {
+          console.warn("[TELEGRAM-AUTH-NOTICE] Photo send fallback:", photoErr.message);
+        }
       }
     }
 
