@@ -128,6 +128,20 @@ export default function AdminModal({
   const [syncingTelegram, setSyncingTelegram] = useState(false);
   const [lastSyncInfo, setLastSyncInfo] = useState(null);
 
+  const formatSyncTime = (syncObj) => {
+    if (!syncObj) return "Live Real-Time";
+    const raw = syncObj.timestamp || syncObj.isoTime;
+    if (raw) {
+      try {
+        const d = new Date(raw);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+        }
+      } catch {}
+    }
+    return syncObj.formattedTime || "Live Real-Time";
+  };
+
   // Student Registry
   const [students, setStudents] = useState([]);
   const [studentsTotal, setStudentsTotal] = useState(0);
@@ -267,7 +281,8 @@ export default function AdminModal({
       const res = await api.getSoftwareSpecs();
       if (res?.software) {
         setSoftwareInfo(res.software);
-        if (res.software.lastSync) setLastSyncInfo(res.software.lastSync);
+        const sLast = res.software.lastSync || res.software.telegramMTProto?.lastSync;
+        if (sLast) setLastSyncInfo(sLast);
       }
     } catch (err) {
       console.warn("[ADMIN] Software specs load error:", err.message);
@@ -1248,13 +1263,32 @@ export default function AdminModal({
                     <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
                     <span>Last Synced:</span>
                     <strong style={{ color: "#fff" }}>
-                      {lastSyncInfo?.formattedTime || stats?.lastSync?.formattedTime || "Live Real-Time"}
+                      {formatSyncTime(lastSyncInfo || stats?.lastSync)}
                     </strong>
                     {(lastSyncInfo?.trigger || stats?.lastSync?.trigger) && (
                       <span style={{ color: "#34d399", fontWeight: 600, fontSize: "0.72rem" }}>
                         • {lastSyncInfo?.trigger || stats?.lastSync?.trigger}
                       </span>
                     )}
+                    <button
+                      type="button"
+                      onClick={handleTelegramSync}
+                      disabled={syncingTelegram}
+                      style={{
+                        background: "rgba(6, 182, 212, 0.15)",
+                        border: "1px solid rgba(6, 182, 212, 0.35)",
+                        color: "var(--accent-cyan)",
+                        borderRadius: "6px",
+                        padding: "2px 8px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        marginLeft: "6px",
+                      }}
+                      title="Run Two-Way Sync Now"
+                    >
+                      {syncingTelegram ? "Syncing..." : "🔄 Sync Now"}
+                    </button>
                   </div>
 
                   {!isHalfAdmin && (
@@ -1937,11 +1971,31 @@ export default function AdminModal({
                       <span style={{ color: "var(--text-dim)" }}>Auto-Sync Architecture:</span>
                       <span style={{ color: "#34d399", fontWeight: 700 }}>30m Periodic + Instant Events (Quota Saver)</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px", alignItems: "center" }}>
                       <span style={{ color: "var(--text-dim)" }}>Last Synchronized:</span>
-                      <span style={{ color: "#fff", fontWeight: 700 }}>
-                        {lastSyncInfo?.formattedTime || softwareInfo?.telegramMTProto?.lastSync?.formattedTime || "Live Real-Time"}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ color: "#fff", fontWeight: 700 }}>
+                          {formatSyncTime(lastSyncInfo || softwareInfo?.telegramMTProto?.lastSync)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleTelegramSync}
+                          disabled={syncingTelegram}
+                          style={{
+                            background: "rgba(6, 182, 212, 0.15)",
+                            border: "1px solid rgba(6, 182, 212, 0.35)",
+                            color: "var(--accent-cyan)",
+                            borderRadius: "4px",
+                            padding: "1px 6px",
+                            fontSize: "0.68rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                          title="Run Telegram Two-Way Sync Now"
+                        >
+                          {syncingTelegram ? "..." : "🔄 Sync"}
+                        </button>
+                      </div>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Last Event Trigger:</span>
@@ -2802,7 +2856,7 @@ export default function AdminModal({
                     <Clock size={13} style={{ color: "var(--accent-cyan)" }} />
                     <span>Last Synced:</span>
                     <strong style={{ color: "#fff" }}>
-                      {lastSyncInfo?.formattedTime || stats?.lastSync?.formattedTime || "Live"}
+                      {formatSyncTime(lastSyncInfo || stats?.lastSync)}
                     </strong>
                   </div>
                 </div>
@@ -3316,15 +3370,18 @@ export default function AdminModal({
                     </div>
                   </div>
                   <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", lineHeight: "1.4" }}>
-                    Last Synchronized: <strong style={{ color: "#fff" }}>{(() => {
+                    Bot Config Saved: <strong style={{ color: "#fff" }}>{(() => {
                       try {
                         const d = new Date(botSettings?.updatedAt);
-                        return isNaN(d.getTime()) ? "Boot Time" : d.toLocaleTimeString();
+                        return isNaN(d.getTime()) ? "Boot Time" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
                       } catch {
                         return "Boot Time";
                       }
                     })()}</strong><br />
                     Storage Footprint: <span style={{ color: "#34d399", fontWeight: 700 }}>1 Document (&lt; 1 KB)</span>
+                    <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "3px" }}>
+                      💡 <i>Bot settings config in Firestore. (Note: Telegram Notes 2-Way Sync is live in Tab 2 &amp; Tab 3).</i>
+                    </div>
                   </div>
                 </div>
               </div>

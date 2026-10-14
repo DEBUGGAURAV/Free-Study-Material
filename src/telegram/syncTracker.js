@@ -1,35 +1,41 @@
 /**
  * Telegram Two-Way Sync Activity & State Tracker
  * Tracks real-time sync timestamps, trigger sources (Direct Telegram DM/Message, Deletion, Web Action, Manual),
- * and sync metrics across all operational pathways.
+ * and sync metrics across all operational pathways in Indian Standard Time (IST).
  */
 
+function formatDisplayTime(dateObj) {
+  try {
+    return (
+      dateObj.toLocaleTimeString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "numeric",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true,
+      }) + " IST"
+    );
+  } catch {
+    return "Just now";
+  }
+}
+
+const bootTime = new Date();
+
 let lastSyncState = {
-  timestamp: new Date().toISOString(),
+  timestamp: bootTime.toISOString(),
+  formattedTime: formatDisplayTime(bootTime),
   trigger: "Server Initialization",
-  mode: "Event-Driven Real-Time",
+  mode: "30-Minute Quota-Saver & Event-Driven",
   details: "Ready & Active",
   verifiedCount: 0,
   importedCount: 0,
   purgedCount: 0,
 };
 
-function formatDisplayTime(dateObj) {
-  try {
-    return dateObj.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    });
-  } catch {
-    return "Just now";
-  }
-}
-
 function recordSyncEvent({
   trigger,
-  mode = "Event-Driven Real-Time",
+  mode = "30-Minute Quota-Saver & Event-Driven",
   details = "",
   verifiedCount = 0,
   importedCount = 0,
@@ -54,6 +60,7 @@ function getLastSyncState() {
   return {
     ...lastSyncState,
     formattedTime: formatDisplayTime(now),
+    isoTime: lastSyncState.timestamp,
   };
 }
 

@@ -191,12 +191,12 @@ export const api = {
     return data;
   },
 
-  logout: async () => {
+  logout: async (reason = "Manual Session Logout", fallbackUser = null) => {
     try {
-      const u = getCurrentUser();
+      const u = fallbackUser || getCurrentUser();
       await request("/auth/logout", {
         method: "POST",
-        body: JSON.stringify({ user: u }),
+        body: JSON.stringify({ user: u, reason }),
       });
     } catch {}
     setAuthToken(null);

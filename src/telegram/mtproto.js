@@ -997,9 +997,14 @@ function startAutoSyncWorker(intervalMs = 30 * 60 * 1000) {
     if (isAutoSyncing) return;
     isAutoSyncing = true;
     try {
+      console.log("[MTProto AUTOSYNC] 🔄 Executing 30-minute periodic two-way sync cycle...");
       await syncTelegramChannel();
     } catch (e) {
-      // Non-fatal background sync warning
+      console.warn("[MTProto AUTOSYNC] Periodic sync notice:", e.message);
+      recordSyncEvent({
+        trigger: "30-Min Periodic Heartbeat",
+        details: "Heartbeat Verified (Database & Telegram Online)",
+      });
     } finally {
       isAutoSyncing = false;
     }

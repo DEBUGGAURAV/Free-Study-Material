@@ -324,8 +324,9 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       titleIcon = "🔐";
       eventTitle = "Student Session Login";
     } else if (event === "LOGOUT") {
-      titleIcon = "🚪";
-      eventTitle = "Student Session Logout";
+      const isAuto = String(method || detail || "").toLowerCase().includes("inactivity") || String(method || detail || "").toLowerCase().includes("30 min");
+      titleIcon = isAuto ? "⏱️" : "🚪";
+      eventTitle = isAuto ? "Auto-Logout (30 Min Inactivity)" : "Student Session Logout";
     } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
       titleIcon = "🚨";
       eventTitle = "Security & Profile Update";
@@ -460,6 +461,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
         (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
         `🛡️ <b>Auth Method:</b> <code>${method}</code>\n` +
+        (detail ? `⚠️ <b>Note:</b> <code>${detail}</code>\n` : "") +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🌐 <i>Real-time Academic Vault Security Core</i>`;
     }

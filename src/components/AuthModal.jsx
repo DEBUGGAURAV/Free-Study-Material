@@ -138,26 +138,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const [googleCollege, setGoogleCollege] = useState("");
   const [googleYear, setGoogleYear] = useState("1st Year");
 
-  useEffect(() => {
-    if (isOpen) {
-      setTab(initialTab);
-      setError(null);
-      setFieldErrors({});
-      setSuccessMsg(null);
-      setLoginOtpStep(false);
-      setForgotOtpStep(false);
-      setForgotTgOtpStep(false);
-      setSignUpOtpStep(false);
-      setSignUpOtpCode("");
-      setRegTgStep(false);
-      setRegTgOtpCode("");
-      setRegTgToken("");
-      setForgotTgToken("");
-      setIsGoogleOnboarding(false);
-      setGoogleUser(null);
-    }
-  }, [isOpen, initialTab]);
-
   // Sign In Form State
   const [signInIdentifier, setSignInIdentifier] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
@@ -192,12 +172,95 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const [regTgStep, setRegTgStep] = useState(false);
   const [regTgOtpCode, setRegTgOtpCode] = useState("");
 
+  // Reset all fields across all forms (Sign In, Sign Up, Forgot Password, Google Onboarding)
+  const resetAllFormFields = () => {
+    setSignInIdentifier("");
+    setSignInPassword("");
+    setLoginOtpStep(false);
+    setLoginOtpCode("");
+    setLoginTargetEmail("");
+
+    setName("");
+    setMobile("");
+    setEmail("");
+    setCollege("");
+    setYear("1st Year");
+    setSignUpPassword("");
+    setSignUpOtpStep(false);
+    setSignUpOtpCode("");
+    setRegTgStep(false);
+    setRegTgOtpCode("");
+    setRegTgToken("");
+    setRegTgBotLink("");
+
+    setForgotMobile("");
+    setForgotEmail("");
+    setForgotOtpStep(false);
+    setForgotOtpCode("");
+    setForgotNewPassword("");
+    setForgotTgOtpStep(false);
+    setForgotTgOtpCode("");
+    setForgotTgToken("");
+    setForgotTgBotLink("");
+
+    setIsGoogleOnboarding(false);
+    setGoogleUser(null);
+    setGoogleMobile("");
+    setGoogleCollege("");
+    setGoogleYear("1st Year");
+
+    setError(null);
+    setSuccessMsg(null);
+    setFieldErrors({});
+    setPurgedAccountNotice(false);
+  };
+
+  // Reset Sign Up form fields when user switches between Tele Bot and Email
+  const resetSignUpFields = () => {
+    setName("");
+    setMobile("");
+    setEmail("");
+    setCollege("");
+    setYear("1st Year");
+    setSignUpPassword("");
+    setSignUpOtpStep(false);
+    setSignUpOtpCode("");
+    setRegTgStep(false);
+    setRegTgOtpCode("");
+    setRegTgToken("");
+    setRegTgBotLink("");
+    setError(null);
+    setSuccessMsg(null);
+    setFieldErrors({});
+  };
+
+  // Reset Forgot Password form fields when user switches between Tele Bot and Email
+  const resetForgotFields = () => {
+    setForgotMobile("");
+    setForgotEmail("");
+    setForgotOtpStep(false);
+    setForgotOtpCode("");
+    setForgotNewPassword("");
+    setForgotTgOtpStep(false);
+    setForgotTgOtpCode("");
+    setForgotTgToken("");
+    setForgotTgBotLink("");
+    setError(null);
+    setSuccessMsg(null);
+    setFieldErrors({});
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      resetAllFormFields();
+      setTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
   // Clear any legacy session storage on mount to guarantee fresh forms
   useEffect(() => {
     try { sessionStorage.removeItem("fsm_pending_tg_reg"); } catch {}
   }, []);
-
-
 
   if (!isOpen) return null;
 
@@ -217,11 +280,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         setIsGoogleOnboarding(true);
         setSuccessMsg("Google account verified! Please enter your mobile number and college to finish registration.");
       } else if (res.user) {
-        setSuccessMsg("Signed in with Google successfully! Welcome back.");
-        setTimeout(() => {
-          onAuthSuccess(res.user);
-          onClose();
-        }, 150);
+        onAuthSuccess(res.user);
+        onClose();
       }
     } catch (err) {
       setError(err.message || "Failed to authenticate with Google.");
@@ -230,21 +290,48 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     }
   };
 
+  // Ensure GIS script is fully loaded
+  const ensureGoogleScript = () => {
+    return new Promise((resolve) => {
+      if (window.google?.accounts) return resolve(true);
+      let script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (!script) {
+        script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.defer = true;
+        document.body.appendChild(script);
+      }
+      const onLoad = () => resolve(true);
+      const onError = () => resolve(false);
+      script.addEventListener("load", onLoad, { once: true });
+      script.addEventListener("error", onError, { once: true });
+      setTimeout(() => resolve(Boolean(window.google?.accounts)), 3000);
+    });
+  };
+
   // Google 1-Click Trigger: Directly opens the Google Account Chooser popup
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setError(null);
     setSuccessMsg(null);
 
-    const googleClientId = (typeof import.meta !== "undefined" && import.meta.env?.VITE_GOOGLE_CLIENT_ID) || "";
+    const googleClientId =
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_GOOGLE_CLIENT_ID) ||
+      "15016303838-caotog5g4dmemicenukuqsed89mu0ej1.apps.googleusercontent.com";
 
     if (!googleClientId) {
       return setError(
-        "Google Client ID is missing. Please add VITE_GOOGLE_CLIENT_ID=<your_id>.apps.googleusercontent.com in your .env file to enable Google Account selection."
+        "Google Client ID is missing. Please add VITE_GOOGLE_CLIENT_ID in your .env file to enable Google Account selection."
       );
     }
 
     if (!window.google?.accounts) {
-      return setError("Google Identity Services script is loading. Please check your connection and try again in a few seconds.");
+      setLoading(true);
+      const ready = await ensureGoogleScript();
+      setLoading(false);
+      if (!ready || !window.google?.accounts) {
+        return setError("Google Identity Services script failed to load. Please check your internet connection or ad-blocker.");
+      }
     }
 
     try {
@@ -254,12 +341,18 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
       if (window.google.accounts.oauth2) {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
-          scope: "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile openid",
-          prompt: "select_account",
+          scope: "email profile openid",
           callback: async (tokenResponse) => {
             if (tokenResponse.error) {
               setLoading(false);
-              return setError("Google Sign-In canceled or failed: " + tokenResponse.error);
+              const err = tokenResponse.error_description || tokenResponse.error;
+              if (err === "popup_closed_by_user") {
+                return setError("Google Sign-In popup was closed before completion.");
+              }
+              if (err === "access_denied") {
+                return setError("Google account access was denied.");
+              }
+              return setError("Google Sign-In failed: " + err);
             }
             if (tokenResponse.access_token) {
               await processGoogleLogin({ accessToken: tokenResponse.access_token });
@@ -269,7 +362,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             }
           },
         });
-        tokenClient.requestAccessToken({ prompt: "select_account" });
+        tokenClient.requestAccessToken();
         return;
       }
 
@@ -323,11 +416,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         picture: googleUser.picture || "",
       });
 
-      setSuccessMsg("Registration completed successfully! Welcome to Free Study Material.");
-      setTimeout(() => {
-        onAuthSuccess(res.user);
-        onClose();
-      }, 150);
+      onAuthSuccess(res.user);
+      onClose();
     } catch (err) {
       setFormError(err.message || "Failed to complete profile.");
     } finally {
@@ -710,11 +800,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             <button
               className={`filter-tab ${tab === "signin" ? "active" : ""}`}
               onClick={() => {
+                resetAllFormFields();
                 setTab("signin");
-                setError(null);
-                setSuccessMsg(null);
-                setLoginOtpStep(false);
-                setSignUpOtpStep(false);
               }}
               type="button"
             >
@@ -724,11 +811,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             <button
               className={`filter-tab ${tab === "signup" ? "active" : ""}`}
               onClick={() => {
+                resetAllFormFields();
                 setTab("signup");
-                setError(null);
-                setSuccessMsg(null);
-                setSignUpOtpStep(false);
-                setSignUpOtpCode("");
               }}
               type="button"
             >
@@ -783,10 +867,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             <button
               type="button"
               onClick={() => {
+                resetAllFormFields();
                 setTab("signup");
-                setError(null);
-                setPurgedAccountNotice(false);
-                setSuccessMsg(null);
               }}
               className="btn-primary"
               style={{
@@ -960,9 +1042,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                 <button
                   type="button"
                   onClick={() => {
-                    setIsGoogleOnboarding(false);
-                    setGoogleUser(null);
-                    setError(null);
+                    resetAllFormFields();
+                    setTab("signin");
                   }}
                   style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
                 >
@@ -1042,12 +1123,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                 <span
                   style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                   onClick={() => {
+                    resetAllFormFields();
                     setTab("forgot");
-                    setError(null);
-                    setFieldErrors({});
-                    setSuccessMsg(null);
-                    setForgotEmail(signInIdentifier.includes("@") ? signInIdentifier : "");
-                    setForgotOtpStep(false);
                   }}
                 >
                   Forgot password?
@@ -1093,9 +1170,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <span
                 style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                 onClick={() => {
+                  resetAllFormFields();
                   setTab("signup");
-                  setError(null);
-                  setSuccessMsg(null);
                 }}
               >
                 Create Account
@@ -1133,10 +1209,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <button
                 type="button"
                 onClick={() => {
-                  setForgotMode("telebot");
-                  setForgotTgOtpStep(false);
-                  setError(null);
-                  setSuccessMsg(null);
+                  if (forgotMode !== "telebot") {
+                    resetForgotFields();
+                    setForgotMode("telebot");
+                  }
                 }}
                 style={{
                   display: "flex",
@@ -1161,10 +1237,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <button
                 type="button"
                 onClick={() => {
-                  setForgotMode("email");
-                  setForgotOtpStep(false);
-                  setError(null);
-                  setSuccessMsg(null);
+                  if (forgotMode !== "email") {
+                    resetForgotFields();
+                    setForgotMode("email");
+                  }
                 }}
                 style={{
                   display: "flex",
@@ -1271,9 +1347,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                       <button
                         type="button"
                         onClick={() => {
+                          resetAllFormFields();
                           setTab("signin");
-                          setError(null);
-                          setSuccessMsg(null);
                         }}
                         style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
                       >
@@ -1466,10 +1541,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                       <button
                         type="button"
                         onClick={() => {
+                          resetAllFormFields();
                           setTab("signin");
-                          setError(null);
-                          setFieldErrors({});
-                          setSuccessMsg(null);
                         }}
                         style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.8rem", display: "inline-flex", alignItems: "center", gap: "4px" }}
                       >
@@ -1618,10 +1691,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <button
                 type="button"
                 onClick={() => {
-                  setRegMode("telebot");
-                  setRegTgStep(false);
-                  setError(null);
-                  setSuccessMsg(null);
+                  if (regMode !== "telebot") {
+                    resetSignUpFields();
+                    setRegMode("telebot");
+                  }
                 }}
                 style={{
                   display: "flex",
@@ -1646,10 +1719,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <button
                 type="button"
                 onClick={() => {
-                  setRegMode("email");
-                  setSignUpOtpStep(false);
-                  setError(null);
-                  setSuccessMsg(null);
+                  if (regMode !== "email") {
+                    resetSignUpFields();
+                    setRegMode("email");
+                  }
                 }}
                 style={{
                   display: "flex",
@@ -2165,12 +2238,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <span
                 style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                 onClick={() => {
+                  resetAllFormFields();
                   setTab("signin");
-                  setError(null);
-                  setSuccessMsg(null);
-                  setLoginOtpStep(false);
-                  setSignUpOtpStep(false);
-                  setRegTgStep(false);
                 }}
               >
                 Sign In

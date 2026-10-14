@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "./components/Navbar";
 import HeroBanner from "./components/HeroBanner";
 import CategoryFilter from "./components/CategoryFilter";
@@ -11,7 +11,7 @@ import AuthModal from "./components/AuthModal";
 import ProfileModal from "./components/ProfileModal";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize } from "./utils/formatUtils";
 
@@ -40,6 +40,12 @@ export default function App() {
   const [notices, setNotices] = useState([]);
   const [hideSecurityBanner, setHideSecurityBanner] = useState(false);
 
+  // Inactivity Auto-Logout State (30 Minutes = 1,800,000 ms)
+  const [autoLogoutNotice, setAutoLogoutNotice] = useState(null);
+  const currentUserRef = useRef(currentUser);
+  const lastActivityRef = useRef(Date.now());
+  const lastStorageSyncRef = useRef(Date.now());
+
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
 
@@ -47,6 +53,92 @@ export default function App() {
     setAuthInitialTab(tab);
     setIsAuthOpen(true);
   };
+
+  // Keep ref updated to avoid stale state in async timers
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+    if (currentUser) {
+      lastActivityRef.current = Date.now();
+      localStorage.setItem("vault_last_active", String(Date.now()));
+    } else {
+      localStorage.removeItem("vault_last_active");
+    }
+  }, [currentUser]);
+
+  // 30-Minute Inactivity Auto-Logout Handler
+  const triggerAutoLogout = useCallback(async () => {
+    const userToLogout = currentUserRef.current;
+    if (!userToLogout) return;
+
+    // Immediately revoke local session
+    setCurrentUser(null);
+    setIsUploadOpen(false);
+    setIsAdminOpen(false);
+    setIsProfileOpen(false);
+    setPreviewNote(null);
+    localStorage.removeItem("vault_last_active");
+
+    const timeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    setAutoLogoutNotice({
+      time: timeString,
+      userEmail: userToLogout.email || "",
+      userName: userToLogout.name || "Student",
+    });
+
+    // Notify backend to clear auth cookies and dispatch real-time Telegram security alert
+    try {
+      await api.logout("Auto-Logout (30 Min Inactivity)", userToLogout);
+    } catch (e) {
+      console.warn("[AUTO-LOGOUT] Logout dispatch notice:", e.message);
+    }
+  }, []);
+
+  // Track Inactivity (30 min = 1,800,000 ms)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const recordUserActivity = () => {
+      const now = Date.now();
+      lastActivityRef.current = now;
+      if (now - lastStorageSyncRef.current > 5000) {
+        lastStorageSyncRef.current = now;
+        try {
+          localStorage.setItem("vault_last_active", String(now));
+        } catch (_) {}
+      }
+    };
+
+    const checkInactivity = () => {
+      if (!currentUserRef.current) return;
+      const storedLast = parseInt(localStorage.getItem("vault_last_active") || "0", 10);
+      const effectiveLastActive = Math.max(lastActivityRef.current, storedLast);
+      if (Date.now() - effectiveLastActive >= 30 * 60 * 1000) {
+        triggerAutoLogout();
+      }
+    };
+
+    const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+    activityEvents.forEach((evt) => {
+      window.addEventListener(evt, recordUserActivity, { passive: true });
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkInactivity();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const intervalId = setInterval(checkInactivity, 10000);
+
+    return () => {
+      activityEvents.forEach((evt) => {
+        window.removeEventListener(evt, recordUserActivity);
+      });
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearInterval(intervalId);
+    };
+  }, [currentUser, triggerAutoLogout]);
 
   useEffect(() => {
     fetchBranches();
@@ -64,7 +156,22 @@ export default function App() {
     // Verify session cookie via httpOnly cookie
     api.getMe().then((res) => {
       if (res && res.user) {
+        // Check if session has exceeded 30-min inactivity from previous visit
+        const storedLast = parseInt(localStorage.getItem("vault_last_active") || "0", 10);
+        if (storedLast > 0 && Date.now() - storedLast >= 30 * 60 * 1000) {
+          api.logout("Auto-Logout (30 Min Inactivity)", res.user);
+          setCurrentUser(null);
+          localStorage.removeItem("vault_last_active");
+          setAutoLogoutNotice({
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            userEmail: res.user.email || "",
+            userName: res.user.name || "Student",
+          });
+          return;
+        }
         setCurrentUser(res.user);
+        lastActivityRef.current = Date.now();
+        localStorage.setItem("vault_last_active", String(Date.now()));
       }
     }).catch((err) => {
       if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required"))) {
@@ -146,8 +253,11 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await api.logout();
+    const user = currentUser;
+    localStorage.removeItem("vault_last_active");
+    setAutoLogoutNotice(null);
     setCurrentUser(null);
+    await api.logout("Manual Session Logout", user);
   };
 
   const handleOpenNoteFromNotice = async (noteIdOrUrl) => {
@@ -211,6 +321,90 @@ export default function App() {
       />
 
       <main className="app-container" style={{ flex: 1 }}>
+        {/* 30-Minute Inactivity Auto-Logout Alert Banner */}
+        {autoLogoutNotice && (
+          <div
+            style={{
+              margin: "16px 0 14px",
+              padding: "14px 18px",
+              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.08) 100%)",
+              border: "1px solid rgba(239, 68, 68, 0.35)",
+              borderRadius: "var(--radius-md)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "14px",
+              boxShadow: "0 4px 20px rgba(239, 68, 68, 0.15)",
+              backdropFilter: "blur(10px)",
+              animation: "fadeIn 0.3s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: "rgba(239, 68, 68, 0.2)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Clock size={18} style={{ color: "#ef4444" }} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fca5a5", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span>Session Auto-Terminated (30 Min Inactivity)</span>
+                  <span style={{ fontSize: "0.7rem", background: "rgba(239, 68, 68, 0.25)", border: "1px solid rgba(239, 68, 68, 0.35)", padding: "1px 7px", borderRadius: "10px", color: "#fca5a5" }}>
+                    Security Bot Notice Sent ⏱️
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "3px" }}>
+                  Logged out automatically at <strong>{autoLogoutNotice.time}</strong> due to 30 minutes of web inactivity. Your academic vault session and credentials remain safeguarded.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  setAutoLogoutNotice(null);
+                  openAuth("signin");
+                }}
+                style={{
+                  fontSize: "0.8rem",
+                  padding: "7px 14px",
+                  background: "linear-gradient(135deg, #ef4444, #dc2626)",
+                  boxShadow: "0 2px 8px rgba(239, 68, 68, 0.3)",
+                }}
+              >
+                Sign In Again
+              </button>
+              <button
+                onClick={() => setAutoLogoutNotice(null)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  cursor: "pointer",
+                  padding: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "6px",
+                }}
+                title="Dismiss Alert"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Notice Board Ticker Bar (if notices exist) */}
         {notices.length > 0 && (
           <div
@@ -820,7 +1014,9 @@ export default function App() {
         onClose={() => setIsAdminOpen(false)}
         currentUser={currentUser}
         onLoginSuccess={(user) => {
+          setAutoLogoutNotice(null);
           setCurrentUser(user);
+          localStorage.setItem("vault_last_active", String(Date.now()));
           fetchNotes();
         }}
         notes={notes}
@@ -844,7 +1040,9 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         initialTab={authInitialTab}
         onAuthSuccess={(user) => {
+          setAutoLogoutNotice(null);
           setCurrentUser(user);
+          localStorage.setItem("vault_last_active", String(Date.now()));
           fetchNotes();
         }}
       />

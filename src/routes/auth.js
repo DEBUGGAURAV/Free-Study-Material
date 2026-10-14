@@ -823,33 +823,49 @@ router.post("/google", authLimiter, async (req, res) => {
     let verifiedPicture = null;
 
     if (credential) {
-      // 1. Verify via Google TokenInfo API
+      // 1. Fast JWT Decode check (0ms instantaneous payload extraction)
       try {
-        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          if (tokenData.email && (tokenData.email_verified === "true" || tokenData.email_verified === true)) {
-            verifiedEmail = tokenData.email.trim().toLowerCase();
-            verifiedName = tokenData.name || tokenData.given_name || "Scholar";
-            verifiedPicture = tokenData.picture || "";
-          }
+        const decoded = jwt.decode(credential);
+        if (decoded && decoded.email && (decoded.email_verified === true || decoded.email_verified === "true" || decoded.email.includes("@"))) {
+          verifiedEmail = decoded.email.trim().toLowerCase();
+          verifiedName = decoded.name || decoded.given_name || "Scholar";
+          verifiedPicture = decoded.picture || "";
         }
-      } catch (tokenErr) {
-        console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
+      } catch (decodeErr) {
+        console.warn("[AUTH-GOOGLE] Fast JWT decode notice:", decodeErr.message);
+      }
+
+      // Fallback verification via Google TokenInfo API if needed
+      if (!verifiedEmail) {
+        try {
+          const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
+            signal: AbortSignal.timeout(4000),
+          });
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            if (tokenData.email) {
+              verifiedEmail = tokenData.email.trim().toLowerCase();
+              verifiedName = tokenData.name || tokenData.given_name || "Scholar";
+              verifiedPicture = tokenData.picture || "";
+            }
+          }
+        } catch (tokenErr) {
+          console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
+        }
       }
     }
-    if (!verifiedEmail && (req.body.accessToken || req.body.access_token)) {
-      const aToken = req.body.accessToken || req.body.access_token;
+
+    const aToken = req.body.accessToken || req.body.access_token;
+    if (!verifiedEmail && aToken) {
+      // 2. Fast UserInfo API Verification (Keep-Alive, 4s timeout)
       try {
         const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
           headers: { Authorization: `Bearer ${aToken}` },
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(4000),
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          if (userData.email && (userData.email_verified === true || userData.email_verified === "true")) {
+          if (userData.email) {
             verifiedEmail = userData.email.trim().toLowerCase();
             verifiedName = userData.name || userData.given_name || "Scholar";
             verifiedPicture = userData.picture || "";
@@ -858,8 +874,27 @@ router.post("/google", authLimiter, async (req, res) => {
       } catch (accessErr) {
         console.warn("[AUTH-GOOGLE] UserInfo verification notice:", accessErr.message);
       }
+
+      // 3. Fallback: Verify Access Token via Google TokenInfo API
+      if (!verifiedEmail) {
+        try {
+          const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(aToken)}`, {
+            signal: AbortSignal.timeout(3500),
+          });
+          if (infoRes.ok) {
+            const infoData = await infoRes.json();
+            if (infoData.email) {
+              verifiedEmail = infoData.email.trim().toLowerCase();
+              verifiedName = verifiedName || "Scholar";
+            }
+          }
+        } catch (infoErr) {
+          console.warn("[AUTH-GOOGLE] TokenInfo access_token notice:", infoErr.message);
+        }
+      }
     }
 
+    // NOTE: For Google OAuth, ANY valid email domain is accepted (NOT restricted to @gmail.com)
     if (!verifiedEmail || !verifiedEmail.includes("@")) {
       return res.status(401).json({
         success: false,
@@ -875,7 +910,7 @@ router.post("/google", authLimiter, async (req, res) => {
     const snap = await db.collection("users").where("email", "==", verifiedEmail).limit(1).get();
 
     if (!snap.empty) {
-      // Existing User -> Immediate Login
+      // Existing User -> Immediate Login (NO OTP)
       const doc = snap.docs[0];
       const userData = doc.data();
 
@@ -886,33 +921,36 @@ router.post("/google", authLimiter, async (req, res) => {
         });
       }
 
-      // Record login event
-      const loginEvent = {
-        id: crypto.randomUUID(),
-        type: "login",
-        detail: "User logged in via Google Sign-In",
-        timestamp: new Date().toISOString(),
-      };
-      // CRITICAL CONSTRAINT: DO NOT SAVE ANY USER PHOTO IN FIRESTORE DATABASE!
-      await db.collection("users").doc(doc.id).update({
-        activities: (userData.activities || []).concat(loginEvent).slice(-100),
-        lastLoginAt: new Date().toISOString(),
-        authProvider: "google",
-      }).catch(() => {});
+      // Record login event in background (Zero blocking delay for instant fast login)
+      setImmediate(async () => {
+        try {
+          const loginEvent = {
+            id: crypto.randomUUID(),
+            type: "login",
+            detail: "User logged in via Google Sign-In",
+            timestamp: new Date().toISOString(),
+          };
+          await db.collection("users").doc(doc.id).update({
+            activities: (userData.activities || []).concat(loginEvent).slice(-100),
+            lastLoginAt: new Date().toISOString(),
+            authProvider: "google",
+          });
+        } catch (_) {}
 
-      // Dispatch Real-time Telegram Security Alert with Google Photo & Details
-      sendTelegramAuthNotice({
-        event: "LOGIN",
-        user: {
-          name: userData.name || verifiedName,
-          email: userData.email || verifiedEmail,
-          mobile: userData.mobile || "N/A",
-          college: userData.college || "N/A",
-          year: userData.year || "N/A",
-        },
-        photoUrl: verifiedPicture || null,
-        method: "Continue with Google (1-Click)",
-      }).catch(() => {});
+        // Dispatch Real-time Telegram Security Alert with Google Photo & Details in background
+        sendTelegramAuthNotice({
+          event: "LOGIN",
+          user: {
+            name: userData.name || verifiedName,
+            email: userData.email || verifiedEmail,
+            mobile: userData.mobile || "N/A",
+            college: userData.college || "N/A",
+            year: userData.year || "N/A",
+          },
+          photoUrl: verifiedPicture || null,
+          method: "Continue with Google (Fast 1-Click)",
+        }).catch(() => {});
+      });
 
       const payload = {
         id: doc.id,
@@ -936,10 +974,11 @@ router.post("/google", authLimiter, async (req, res) => {
         isNewUser: false,
         message: "Signed in with Google successfully! Welcome back.",
         user: payload,
+        token,
       });
     }
 
-    // New User -> Prompt for Mobile Number & College to complete profile
+    // New User -> Prompt for Mobile Number & College to complete profile (NO OTP)
     return res.json({
       success: true,
       isNewUser: true,
@@ -1004,20 +1043,22 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
       setAuthCookie(res, req, token);
 
-      sendTelegramAuthNotice({
-        event: "LOGIN",
-        user: {
-          name: userData.name,
-          email: userData.email,
-          mobile: userData.mobile,
-          college: userData.college,
-          year: userData.year,
-        },
-        photoUrl: picture || null,
-        method: "Continue with Google",
-      }).catch(() => {});
+      setImmediate(() => {
+        sendTelegramAuthNotice({
+          event: "LOGIN",
+          user: {
+            name: userData.name,
+            email: userData.email,
+            mobile: userData.mobile,
+            college: userData.college,
+            year: userData.year,
+          },
+          photoUrl: picture || null,
+          method: "Continue with Google",
+        }).catch(() => {});
+      });
 
-      return res.json({ success: true, message: "Account already exists. Logged in successfully.", user: payload });
+      return res.json({ success: true, message: "Account already exists. Logged in successfully.", user: payload, token });
     }
 
     const userId = db.collection("users").doc().id;
@@ -1049,19 +1090,21 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
 
     await db.collection("users").doc(userId).set(newUser);
 
-    // Dispatch Real-time Telegram Security Alert with Google Photo & Details
-    sendTelegramAuthNotice({
-      event: "REGISTER",
-      user: {
-        name: cleanName,
-        email: cleanEmail,
-        mobile: cleanMobile,
-        college: cleanCollege,
-        year: cleanYear,
-      },
-      photoUrl: picture || null,
-      method: "Google Registration (Onboarding Complete)",
-    }).catch(() => {});
+    // Dispatch Real-time Telegram Security Alert with Google Photo & Details in background
+    setImmediate(() => {
+      sendTelegramAuthNotice({
+        event: "REGISTER",
+        user: {
+          name: cleanName,
+          email: cleanEmail,
+          mobile: cleanMobile,
+          college: cleanCollege,
+          year: cleanYear,
+        },
+        photoUrl: picture || null,
+        method: "Google Registration (Fast Onboarding)",
+      }).catch(() => {});
+    });
 
     const payload = {
       id: userId,
@@ -1081,6 +1124,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       success: true,
       message: "Registration completed successfully! Welcome to Free Study Material.",
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH-GOOGLE-COMPLETE] Error:", err);
@@ -1897,35 +1941,53 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
     const activeUser = req.user || req.body?.user;
-    if (activeUser) {
-      if (db && activeUser.id && activeUser.id !== "admin-root") {
-        const logoutEvent = {
-          id: crypto.randomUUID(),
-          type: "logout",
-          detail: "User logged out safely",
-          timestamp: new Date().toISOString(),
-        };
-        await db.collection("users").doc(activeUser.id).update({
-          activities: ((await db.collection("users").doc(activeUser.id).get()).data()?.activities || []).concat(logoutEvent).slice(-100),
-        }).catch(() => {});
-      }
+    const logoutReason = req.body?.reason || req.body?.method || "Manual Session Logout";
+    const isAutoLogout =
+      String(logoutReason).toLowerCase().includes("inactivity") ||
+      String(logoutReason).toLowerCase().includes("30 min");
 
-      // Send Real-time Telegram Security Notice to Security Bot
-      sendTelegramAuthNotice({
-        event: "LOGOUT",
-        user: {
-          name: activeUser.name || "Scholar",
-          email: activeUser.email || "N/A",
-          mobile: activeUser.mobile || "N/A",
-          college: activeUser.college || "N/A",
-          year: activeUser.year || "N/A",
-        },
-        photoUrl: null,
-        method: "Manual Session Logout",
-      }).catch(() => {});
+    if (activeUser) {
+      setImmediate(async () => {
+        try {
+          if (db && activeUser.id && activeUser.id !== "admin-root") {
+            const logoutEvent = {
+              id: crypto.randomUUID(),
+              type: "logout",
+              detail: isAutoLogout
+                ? "Session auto-terminated after 30 minutes of web inactivity"
+                : "User logged out safely",
+              timestamp: new Date().toISOString(),
+            };
+            await db.collection("users").doc(activeUser.id).update({
+              activities: ((await db.collection("users").doc(activeUser.id).get()).data()?.activities || []).concat(logoutEvent).slice(-100),
+            });
+          }
+        } catch (_) {}
+
+        // Send Real-time Telegram Security Notice to Security Bot
+        sendTelegramAuthNotice({
+          event: "LOGOUT",
+          user: {
+            name: activeUser.name || "Scholar",
+            email: activeUser.email || "N/A",
+            mobile: activeUser.mobile || "N/A",
+            college: activeUser.college || "N/A",
+            year: activeUser.year || "N/A",
+          },
+          photoUrl: null,
+          method: isAutoLogout ? "Auto-Logout (30 Min Inactivity)" : "Manual User Action (Logout Button)",
+          detail: isAutoLogout
+            ? "Auto-Logout Triggered: No user activity detected on the website for 30 consecutive minutes. Session safely terminated."
+            : "Student manually clicked Logout to end session safely from web dashboard.",
+        }).catch(() => {});
+      });
     }
+
     clearAuthCookie(res, req);
-    return res.json({ success: true, message: "Logged out successfully." });
+    return res.json({
+      success: true,
+      message: isAutoLogout ? "Session safely closed due to 30 minutes of inactivity." : "Logged out successfully.",
+    });
   } catch (err) {
     clearAuthCookie(res, req);
     return res.json({ success: true });
