@@ -108,8 +108,8 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
-// Real-Time Health & System Diagnostics (Excluded from rate limiter)
-app.get("/api/health", (req, res) => {
+// Real-Time Health & System Diagnostics (Excluded from rate limiter - Zero Database Quota Used)
+app.get(["/health", "/api/health"], (req, res) => {
   const mem = process.memoryUsage();
   res.json({
     status: "online",
