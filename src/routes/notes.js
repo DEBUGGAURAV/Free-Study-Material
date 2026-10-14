@@ -124,7 +124,8 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     const { branch, course, year, semester, subject, search, limit, all } = req.query;
-    const isAdmin = req.user?.role === "admin" || req.user?.email === "jnplotus@gmail.com";
+    const adminEmail = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
+    const isAdmin = req.user?.role === "admin" || (req.user?.email && req.user.email.toLowerCase().trim() === adminEmail);
 
     const cacheKey = `notes_${branch || "all"}_${course || "all"}_${year || "all"}_${semester || "all"}_${subject || "all"}_${search || "none"}_${limit || "all"}_${isAdmin ? "admin" : "public"}`;
     const cachedData = ramCache.get(cacheKey);

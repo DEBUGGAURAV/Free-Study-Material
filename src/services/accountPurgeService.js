@@ -1,7 +1,7 @@
 const { db } = require("../firebase");
 const { sendTelegramAuthNotice } = require("./emailService");
 
-const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
+const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
 const INACTIVITY_DAYS = 90;
 const INACTIVITY_MS = INACTIVITY_DAYS * 24 * 60 * 60 * 1000;
 

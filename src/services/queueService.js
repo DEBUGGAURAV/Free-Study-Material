@@ -291,9 +291,10 @@ function enqueueUpload(task) {
           currentStage: "Syncing to Telegram Storage Channel (MTProto)",
         });
       } else {
-        updatePipelineStage(noteId, 3, "completed", "Stream verified • Direct binary pass-through", {
+        const isLarge = originalSize > 50 * 1024 * 1024;
+        updatePipelineStage(noteId, 3, "completed", isLarge ? "Large File (>50MB): Direct Async MTProto Transfer (Zero RAM Cache)" : "Stream verified • Direct binary pass-through", {
           progress: 55,
-          currentStage: "Syncing to Telegram Storage Channel (MTProto)",
+          currentStage: isLarge ? "Direct Async MTProto Cloud Transfer (>50MB)" : "Syncing to Telegram Storage Channel (MTProto)",
         });
       }
 

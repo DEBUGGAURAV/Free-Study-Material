@@ -80,7 +80,7 @@ function verifyOtp(type, email, inputOtp) {
   return { valid: true, data: record };
 }
 
-const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
+const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
 const ADMIN_ALIASES = ["admin", "jnplotus", "mainadmin", "admin@gmail.com", "administrator", "root"];
 
 /**
@@ -1187,20 +1187,16 @@ router.post("/login", authLimiter, async (req, res) => {
       }
     }
 
-    // 2. Database bcrypt hash validation (for students and admin)
+    // 2. Database bcrypt hash validation (for students and admin - strict cryptographic verification)
     if (!passwordValid && userRecord && userRecord.password) {
       if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
-      } else {
-        passwordValid = userRecord.password === password || userRecord.password === cleanPassword;
       }
     }
 
     if (!passwordValid && userRecord && userRecord.passwordHash) {
       if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
-      } else {
-        passwordValid = userRecord.passwordHash === password || userRecord.passwordHash === cleanPassword;
       }
     }
 

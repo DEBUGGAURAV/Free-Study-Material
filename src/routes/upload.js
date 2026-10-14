@@ -185,13 +185,15 @@ router.post(
             year: noteYear,
             fileSize: file.size,
             originalName: file.originalname,
-            filePath: tempFilePath,
+            filePath: file.path,
           },
-          method: "Student Web Portal Upload",
+          method: file.size > 50 * 1024 * 1024 ? "Direct Async MTProto (>50MB)" : "Student Web Portal Upload",
         }).catch((err) => console.warn("[UPLOAD-TELEGRAM-NOTICE] Dispatch error:", err.message));
       } else {
         noteId = `note-${Date.now()}`;
       }
+
+      const isLargeFile = file.size > 50 * 1024 * 1024; // Files >50MB bypass memory cache and stream directly via async MTProto
 
       // Initialize Realtime Pipeline Tracking
       recordPipelineStart({
@@ -208,7 +210,7 @@ router.post(
         uploaderEmail: req.user?.email || "student@freestudymaterial.com",
         uploaderName: req.user?.name || "Student Contributor",
         uploaderIp: req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1",
-        clientSpeed: req.body.clientSpeed || "High Speed Direct Transfer",
+        clientSpeed: req.body.clientSpeed || (isLargeFile ? "Async MTProto Direct Stream (>50MB)" : "High Speed Direct Transfer"),
         clientElapsed: req.body.clientElapsed || "1.2s",
       });
 
@@ -218,6 +220,7 @@ router.post(
         tempFilePath: file.path,
         originalName: file.originalname,
         mimeType: file.mimetype,
+        isLargeFile,
         meta: {
           title: noteTitle,
           subject: noteSubject,

@@ -45,7 +45,7 @@ const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../ser
 
 
 
-const MAIN_ADMIN_EMAIL = "jnplotus@gmail.com";
+const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
 
 /**
  * Robust Admin Password Resolver
@@ -103,8 +103,6 @@ async function verifyAdminPassword(user, password) {
     if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
       const match = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
       if (match) return true;
-    } else if (userRecord.password === password || userRecord.password === cleanPassword) {
-      return true;
     }
   }
 
@@ -112,8 +110,6 @@ async function verifyAdminPassword(user, password) {
     if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
       const match = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
       if (match) return true;
-    } else if (userRecord.passwordHash === password || userRecord.passwordHash === cleanPassword) {
-      return true;
     }
   }
 
