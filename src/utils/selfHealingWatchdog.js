@@ -65,18 +65,30 @@ function startRamBufferGuard(tempDir, thresholdMb = 380) {
       if (rssMb >= thresholdMb) {
         console.warn(`[SELF-HEALING-GUARD] ⚠️ High RAM Alert: RSS is ${rssMb}MB (Threshold: ${thresholdMb}MB / 512MB). Initiating aggressive auto-purge...`);
 
-        // A. Purge stale temporary files (>15 mins old) from temp/ directory
+        // A. Purge stale temporary files (>1 hour old) from temp/ directory, NEVER deleting active uploads!
         if (tempDir && fs.existsSync(tempDir)) {
           try {
             const files = fs.readdirSync(tempDir);
             const now = Date.now();
             let purgedCount = 0;
 
+            let isTempActiveFn = null;
+            try {
+              const qs = require("../services/queueService");
+              isTempActiveFn = qs.isTempFileActive;
+            } catch (_) {}
+
             for (const file of files) {
               const fullPath = path.join(tempDir, file);
               try {
+                // 🛡️ Active Upload Immunity Lock: If file is actively uploading to Telegram, NEVER touch it!
+                if (isTempActiveFn && isTempActiveFn(fullPath)) {
+                  continue;
+                }
+
                 const stats = fs.statSync(fullPath);
-                if (now - stats.mtimeMs > 15 * 60 * 1000) {
+                // ⏱️ Safe 1-Hour Threshold (60 Minutes) for truly abandoned zombie chunks
+                if (now - stats.mtimeMs > 60 * 60 * 1000) {
                   fs.unlinkSync(fullPath);
                   purgedCount++;
                 }
@@ -84,7 +96,7 @@ function startRamBufferGuard(tempDir, thresholdMb = 380) {
             }
 
             if (purgedCount > 0) {
-              console.log(`[SELF-HEALING-GUARD] 🧹 Purged ${purgedCount} stale temporary upload chunk files from disk.`);
+              console.log(`[SELF-HEALING-GUARD] 🧹 Purged ${purgedCount} abandoned temporary upload chunk files (>1 hour old) from disk.`);
             }
           } catch (dirErr) {
             console.warn("[SELF-HEALING-GUARD] Temp sweep notice:", dirErr.message);

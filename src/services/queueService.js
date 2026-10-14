@@ -12,6 +12,18 @@ const { shouldYieldForWebTraffic } = require("../utils/selfHealingWatchdog");
 // In-memory queue state for ultra-fast polling
 const jobStatusMap = new Map();
 const pipelineTrackerMap = new Map();
+const activeUploadFiles = new Set();
+
+/**
+ * 🛡️ Active Upload Immunity Guard:
+ * Checks if a file in temp/ is currently being processed or uploaded to Telegram MTProto.
+ * Active files receive 100% immunity and will NEVER be deleted by watchdog.
+ */
+function isTempFileActive(filePath) {
+  if (!filePath) return false;
+  const normalized = path.resolve(filePath);
+  return activeUploadFiles.has(filePath) || activeUploadFiles.has(normalized);
+}
 
 function formatRealSize(bytes) {
   const num = Number(bytes || 0);
@@ -178,6 +190,11 @@ async function getPipelineList() {
  */
 function enqueueUpload(task) {
   const { noteId, tempFilePath, originalName, mimeType, meta } = task;
+
+  // 🛡️ Register active file in immunity list
+  if (tempFilePath) {
+    activeUploadFiles.add(path.resolve(tempFilePath));
+  }
 
   jobStatusMap.set(noteId, {
     noteId,
@@ -454,6 +471,10 @@ function enqueueUpload(task) {
       if (fs.existsSync(tempFilePath)) {
         await fs.promises.unlink(tempFilePath).catch(() => {});
       }
+    } finally {
+      if (tempFilePath) {
+        activeUploadFiles.delete(path.resolve(tempFilePath));
+      }
     }
   });
 }
@@ -468,6 +489,7 @@ module.exports = {
   recordPipelineStart,
   updatePipelineStage,
   getPipelineList,
+  isTempFileActive,
 };
 
 
