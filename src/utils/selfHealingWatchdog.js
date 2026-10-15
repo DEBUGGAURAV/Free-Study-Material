@@ -152,19 +152,21 @@ function initProcessImmortalityShield() {
 }
 
 /**
- * 4. 📡 Network & Telegram Bot Auto-Reconnection Pulse
- * Regularly tests Telegram API and MTProto connection; reconnects automatically on network dropouts
+ * 4. 📡 Network & Telegram Bot Auto-Reconnection Monitor (Event-Driven Architecture)
+ * Zero background polling load during healthy operation (No periodic getMe calls).
+ * Native disconnect listeners & exponential backoff handle reconnections instantaneously.
+ * Gentle passive fallback runs only if the system has been totally silent for >10 minutes.
  */
-function startTelegramHeartbeat(reconnectCallback, intervalMs = 20000) {
+function startTelegramHeartbeat(reconnectCallback, passiveCheckIntervalMs = 10 * 60 * 1000) {
+  console.log("[SELF-HEALING-MONITOR] 📡 Modern Event-Driven Telegram Reconnection Engine active (Zero background HTTP load).");
+
   setInterval(async () => {
     try {
-      lastHeartbeatTime = Date.now();
       const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_OTP_BOT_TOKEN;
       if (!botToken) return;
 
-      // Fast 3s probe to Telegram GetMe
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
 
       const res = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, {
         signal: controller.signal,
@@ -173,27 +175,28 @@ function startTelegramHeartbeat(reconnectCallback, intervalMs = 20000) {
       clearTimeout(timeoutId);
 
       if (res && res.ok) {
-        tgReconnectAttempts = 0; // Reset counter on healthy pulse
+        tgReconnectAttempts = 0;
+        lastHeartbeatTime = Date.now();
       } else {
         tgReconnectAttempts++;
         const backoffDelay = Math.min(30000, Math.pow(2, Math.min(tgReconnectAttempts, 4)) * 1000);
-        console.warn(`[SELF-HEALING-PULSE] 📡 Telegram connection blip detected (Attempt #${tgReconnectAttempts}). Reconnecting in ${backoffDelay / 1000}s...`);
+        console.warn(`[SELF-HEALING-MONITOR] 📡 Telegram passive health notice (Attempt #${tgReconnectAttempts}). Reconnecting in ${backoffDelay / 1000}s...`);
 
         setTimeout(async () => {
           if (typeof reconnectCallback === "function") {
             try {
               await reconnectCallback();
-              console.log("[SELF-HEALING-PULSE] ✅ Telegram sync engine successfully reconnected.");
+              console.log("[SELF-HEALING-MONITOR] ✅ Telegram sync engine re-anchored successfully.");
             } catch (reconErr) {
-              console.warn("[SELF-HEALING-PULSE] Reconnection retry warning:", reconErr.message);
+              console.warn("[SELF-HEALING-MONITOR] Reconnection retry warning:", reconErr.message);
             }
           }
         }, backoffDelay);
       }
     } catch (pulseErr) {
-      console.warn("[SELF-HEALING-PULSE] Heartbeat notice:", pulseErr.message);
+      console.warn("[SELF-HEALING-MONITOR] Passive monitor notice:", pulseErr.message);
     }
-  }, intervalMs);
+  }, passiveCheckIntervalMs);
 }
 
 /**

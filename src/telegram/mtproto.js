@@ -896,8 +896,10 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
   const contentLength = end - start + 1;
 
   // Cloudflare CDN & Fast Download Acceleration Headers
-  res.setHeader("Accept-Ranges", "bytes");
-  res.setHeader("Content-Type", doc.mimeType || "application/pdf");
+  const docMime = (doc.mimeType || "").toLowerCase();
+  const isPdf = !docMime || docMime === "application/octet-stream" || docMime.includes("pdf");
+  const finalMime = isPdf ? "application/pdf" : (doc.mimeType || "application/pdf");
+  res.setHeader("Content-Type", finalMime);
   res.setHeader("X-Accel-Buffering", "no");
   res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
   res.setHeader("CDN-Cache-Control", "public, max-age=31536000");

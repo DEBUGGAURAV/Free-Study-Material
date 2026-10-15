@@ -5,12 +5,6 @@
 
 const API_BASE = "/api";
 
-// Clean up any legacy exposed JWT token from localStorage (now strictly protected in httpOnly cookie)
-try {
-  if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.removeItem("vault_token");
-  }
-} catch {}
 
 export function getAuthToken() {
   return localStorage.getItem("vault_token") || null;

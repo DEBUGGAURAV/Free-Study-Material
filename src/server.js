@@ -69,8 +69,16 @@ app.use(
           "wss:",
         ],
         workerSrc: ["'self'", "blob:"],
-        frameSrc: ["'self'", "https://accounts.google.com"],
-        objectSrc: ["'none'"],
+        frameSrc: [
+          "'self'",
+          "blob:",
+          "data:",
+          "https://accounts.google.com",
+          "https://drive.google.com",
+          "https://*.google.com",
+        ],
+        frameAncestors: ["'self'"],
+        objectSrc: ["'self'", "blob:"],
       },
     },
     crossOriginEmbedderPolicy: false,
@@ -245,17 +253,17 @@ app.listen(PORT, async () => {
     console.warn("[SELF-HEALING-GUARD] Init warning:", guardErr.message);
   }
 
-  // 📡 4. Network & Telegram Bot Auto-Reconnection Pulse (20s pulse with exponential backoff)
+  // 📡 4. Network & Telegram Bot Auto-Reconnection Engine (Modern Event-Driven + Smart Exponential Backoff)
   try {
     startTelegramHeartbeat(async () => {
       try {
         await getClient();
         startBotPoller();
       } catch (_) {}
-    }, 20000);
-    console.log("[SELF-HEALING-PULSE] 📡 Network & Telegram Bot Auto-Reconnection Pulse active.");
+    });
+    console.log("[SELF-HEALING-MONITOR] 📡 Event-Driven Auto-Reconnection Monitor registered.");
   } catch (pulseErr) {
-    console.warn("[SELF-HEALING-PULSE] Init warning:", pulseErr.message);
+    console.warn("[SELF-HEALING-MONITOR] Init warning:", pulseErr.message);
   }
 
   // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)

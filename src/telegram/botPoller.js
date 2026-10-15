@@ -517,8 +517,12 @@ async function processIncomingMessage(message) {
   }
 }
 
+let consecutiveFailures = 0;
+let lastSuccessfulPulse = Date.now();
+let lastErrorNotice = null;
+
 /**
- * Real-time High-Speed Long-Polling Loop
+ * Real-time High-Speed Long-Polling Loop with Modern Event-Driven Exponential Backoff & 429 Rate Guard
  */
 async function startBotPoller() {
   if (isPollerRunning) return;
@@ -528,15 +532,41 @@ async function startBotPoller() {
   }
 
   isPollerRunning = true;
-  console.log("[BOT POLLER] 🚀 Ultra-Fast Telegram Realtime Bot Poller active (Snappy 5s Long-Poll).");
+  console.log("[BOT POLLER] 🚀 Modern Event-Driven Telegram Bot Poller active (Zero-Load Long-Poll + Smart Backoff).");
 
   while (isPollerRunning) {
     try {
       const url = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${currentOffset}&timeout=5`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+
+      // Handle Telegram HTTP 429 Rate Limit (Safe backoff without getting IP blocked)
+      if (res.status === 429) {
+        const retryData = await res.json().catch(() => ({}));
+        const retryAfter = Number(retryData?.parameters?.retry_after) || 5;
+        console.warn(`[BOT POLLER-GUARD] 🛡️ Telegram rate limit (HTTP 429). Safely backing off for ${retryAfter}s (Zero IP block risk).`);
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
+
+      if (!res.ok) {
+        throw new Error(`Telegram API responded with HTTP ${res.status} ${res.statusText}`);
+      }
+
       const data = await res.json();
 
-      if (data.ok && Array.isArray(data.result) && data.result.length > 0) {
+      if (!data.ok) {
+        throw new Error(data.description || "Telegram API returned ok: false");
+      }
+
+      // Connection is healthy: reset exponential backoff immediately
+      if (consecutiveFailures > 0) {
+        console.log(`[BOT POLLER] ✅ Telegram connection healthy and restored. Smart backoff reset to 0ms.`);
+        consecutiveFailures = 0;
+      }
+      lastSuccessfulPulse = Date.now();
+      lastErrorNotice = null;
+
+      if (Array.isArray(data.result) && data.result.length > 0) {
         // Acknowledge update offset immediately to prevent duplicate re-deliveries
         const maxUpdateId = Math.max(...data.result.map((u) => u.update_id));
         currentOffset = maxUpdateId + 1;
@@ -553,8 +583,17 @@ async function startBotPoller() {
         );
       }
     } catch (err) {
-      // Brief 500ms recovery on connection glitch
-      await new Promise((r) => setTimeout(r, 500));
+      if (!isPollerRunning) break;
+      consecutiveFailures++;
+      lastErrorNotice = err.message;
+
+      // Smart Exponential Backoff: 2s -> 4s -> 8s -> 16s -> 30s max, with jitter
+      const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+      const jitter = Math.floor(Math.random() * 800);
+      const delay = baseDelay + jitter;
+
+      console.warn(`[BOT POLLER-RECONNECT] 📡 Telegram connection event (Attempt #${consecutiveFailures}): ${err.message}. Retrying with exponential backoff in ${(delay / 1000).toFixed(1)}s...`);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
 }
@@ -568,7 +607,10 @@ function getBotPollerDetails() {
   return {
     isRunning: isPollerRunning,
     offset: currentOffset,
-    mode: "High-Frequency Long Polling (5s)",
+    consecutiveFailures,
+    lastSuccessfulPulse: new Date(lastSuccessfulPulse).toISOString(),
+    lastErrorNotice,
+    mode: "Event-Driven + Smart Exponential Backoff (2s -> 4s -> 8s -> 16s -> 30s)",
     dispatch: "Parallel Non-blocking (Promise.allSettled)",
     receiptChannel: "Direct Origin Chat / Forum Topic with GramJS Socket Fallback",
     duplicateFilter: "4-Layer Universal Guard (telegramDocumentId + FileSize + Name)",

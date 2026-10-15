@@ -68,7 +68,7 @@ function setAuthCookie(res, req, token) {
   res.cookie("fsm_token", token, {
     httpOnly: true,
     secure: secure,
-    sameSite: secure ? "strict" : "lax",
+    sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     path: "/",
   });

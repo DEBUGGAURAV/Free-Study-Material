@@ -573,7 +573,12 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
     }
     if (!note.telegramMessageId) {
       if (note.driveLink) {
-        return res.redirect(note.driveLink);
+        let driveUrl = note.driveLink;
+        const driveMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (driveMatch && driveMatch[1]) {
+          driveUrl = `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+        }
+        return res.redirect(driveUrl);
       }
       if (note.fileUrl) {
         return res.redirect(note.fileUrl);
@@ -611,9 +616,19 @@ router.get("/:id/stream", downloadLimiter, async (req, res) => {
       }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
     }
 
-    // Cloudflare Edge Cache & Browser Cache Headers (Unlimited LRU Cache)
-    const sanitizedName = (note.originalName || `${note.title}.pdf`).replace(/"/g, "");
-    res.setHeader("Content-Disposition", `inline; filename="${sanitizedName}"`);
+    // Explicit PDF Content-Type & RFC-compliant Content-Disposition for Native PDFium Embedding
+    const rawFileName = note.originalName || `${note.title}.pdf`;
+    const sanitizedName = rawFileName.replace(/["\r\n\\]/g, "_");
+    const isPdf =
+      (note.mimeType && note.mimeType.toLowerCase().includes("pdf")) ||
+      sanitizedName.toLowerCase().endsWith(".pdf") ||
+      !note.mimeType ||
+      note.mimeType === "application/octet-stream";
+    const contentType = isPdf ? "application/pdf" : (note.mimeType || "application/pdf");
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `inline; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     res.setHeader("CDN-Cache-Control", "public, max-age=31536000");
     res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=31536000");

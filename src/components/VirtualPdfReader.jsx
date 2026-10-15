@@ -50,6 +50,7 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
   const [reloadTrigger, setReloadTrigger] = useState(0);
   const [isAuthGated, setIsAuthGated] = useState(false);
   const [useNativeViewer, setUseNativeViewer] = useState(false);
+  const [nativeSrc, setNativeSrc] = useState("");
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -61,6 +62,38 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
 
   // P2P status
   const [isCachedP2P, setIsCachedP2P] = useState(false);
+
+  // Compute robust native iframe embed source
+  useEffect(() => {
+    let objectUrl = null;
+
+    if (file) {
+      try {
+        objectUrl = URL.createObjectURL(file);
+        setNativeSrc(objectUrl);
+      } catch {}
+    } else if (note?.driveLink && !note?.telegramMessageId) {
+      let dLink = note.driveLink;
+      const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        dLink = `https://drive.google.com/file/d/${match[1]}/preview`;
+      }
+      setNativeSrc(dLink);
+    } else if (url) {
+      let finalUrl = url;
+      const token = typeof window !== "undefined" ? localStorage.getItem("vault_token") : null;
+      if (token && !finalUrl.includes("token=")) {
+        finalUrl += `${finalUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
+      }
+      setNativeSrc(finalUrl);
+    }
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [file, url, note]);
 
   // Load document on-demand (streaming range requests or local file)
   useEffect(() => {
@@ -970,7 +1003,13 @@ export default function VirtualPdfReader({ url, file, title, subject, noteId, no
             <iframe
               ref={iframeRef}
               key={`native-frame-${noteId || "pdf"}`}
-              src={`${url}#toolbar=1&page=${currentPage}`}
+              src={
+                !nativeSrc
+                  ? (url ? `${url}#toolbar=1&page=${currentPage}` : undefined)
+                  : nativeSrc.startsWith("https://drive.google.com")
+                  ? nativeSrc
+                  : `${nativeSrc}#toolbar=1&page=${currentPage}`
+              }
               style={{
                 width: "100%",
                 flex: 1,
