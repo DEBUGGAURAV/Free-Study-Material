@@ -714,12 +714,12 @@ async function generateMasterArchitecturePdf() {
   const signOff = [
     "SYSTEM: Academic Cloud Enterprise Engine v3.5 (freestudymaterial.onrender.com)",
     "AUDIT STATUS: PASSED - 0 npm audit vulnerabilities, 0 compilation errors, clean linting.",
-    "PERFORMANCE: Origin CPU: ~0% Idle | Hit Ratio: 99.4% | Telegram DC-4: 16 Workers | In-Memory RAM: 500 MB",
+    "PERFORMANCE: Origin CPU: ~0% Idle | Hit Ratio: 99.4% | Telegram DC-5: Direct Sockets | In-Memory RAM: 500 MB",
     "DATABASE: Google Cloud Firestore Mumbai (asia-south1) - User accounts, collections, and TTL logs.",
-    "STORAGE: Telegram MTProto DC-4 Amsterdam - Unlimited Academic Cloud Storage Channel (-1004387181748).",
-    "EMAIL: Brevo Enterprise SMTP (Port 587 STARTTLS) - Dual Login & Password Recovery OTP verification.",
-    "SECURITY: Helmet Suite + CORS Preflight Caching + Tiered Proxy-Safe Rate Limiters + Bcrypt Salting.",
-    "DATE OF ISSUE: October 12, 2026 | Technical Architecture & System Specification Manual (8 Pages).",
+    "STORAGE: Telegram MTProto DC-5 Singapore (91.108.56.104:443) - Unlimited Storage Channel (-1001887463691).",
+    "EDGE CDN: Cloudflare Anycast Worker (fsm-edge.jnplotus.workers.dev) - Global BOM/DEL/HYD/SIN Edge Caching.",
+    "SECURITY: Helmet CSP + Rate Limiters + Bcrypt + 90-Day Inactivity Purge with Main Admin Immunity Shield.",
+    "DATE OF ISSUE: October 15, 2026 | Technical Architecture & System Specification Manual (8 Pages).",
   ];
   let soy = 224;
   for (const so of signOff) {
