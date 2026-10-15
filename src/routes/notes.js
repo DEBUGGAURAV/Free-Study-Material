@@ -285,7 +285,7 @@ router.get("/", authenticateToken, async (req, res) => {
     return res.json({ success: true, notes, totalCount, lastSync: getLastSyncState() });
   } catch (err) {
     console.error("[NOTES] Query error:", err);
-    return res.status(500).json({ success: false, message: "Error fetching notes." });
+    return res.status(500).json({ success: false, message: "Error fetching notes: " + (err.message || String(err)) });
   }
 });
 
