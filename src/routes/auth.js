@@ -1853,22 +1853,51 @@ router.post("/logout", authenticateToken, async (req, res) => {
 
     if (activeUser) {
       setImmediate(async () => {
-        // Send Real-time Telegram Security Notice to Security Bot (Zero DB operations needed)
+        let fullUser = { ...activeUser };
+        let isNewStudent = false;
+
+        if (db && activeUser.email && activeUser.email !== "N/A") {
+          try {
+            const uSnap = await db.collection("users").where("email", "==", activeUser.email.toLowerCase().trim()).limit(1).get();
+            if (!uSnap.empty) {
+              const uData = uSnap.docs[0].data();
+              fullUser.name = fullUser.name || uData.name;
+              fullUser.mobile = uData.mobile || fullUser.mobile;
+              fullUser.college = uData.college || fullUser.college;
+              fullUser.year = uData.year || fullUser.year;
+
+              // Check if user registered within last 24 hours
+              if (uData.createdAt) {
+                const createdTime = new Date(uData.createdAt).getTime();
+                if (Date.now() - createdTime < 24 * 60 * 60 * 1000) {
+                  isNewStudent = true;
+                }
+              }
+            }
+          } catch (fetchErr) {
+            console.warn("[LOGOUT-NOTICE] User detail lookup notice:", fetchErr.message);
+          }
+        }
+
+        const studentBadge = isNewStudent ? "🟢 Newly Registered Student" : "Student Scholar";
+        const detailMessage = isAutoLogout
+          ? `Auto-Logout Triggered: No user activity detected for 30 consecutive minutes. Student (${studentBadge}) session safely terminated.`
+          : `Student (${studentBadge}) manually clicked Logout to end session safely from web dashboard.`;
+
+        // Send Real-time Telegram Security Notice to FSM Bot & Security Topics
         sendTelegramAuthNotice({
           event: "LOGOUT",
           user: {
-            name: activeUser.name || "Scholar",
-            email: activeUser.email || "N/A",
-            mobile: activeUser.mobile || "N/A",
-            college: activeUser.college || "N/A",
-            year: activeUser.year || "N/A",
+            name: fullUser.name || "Scholar",
+            email: fullUser.email || "N/A",
+            mobile: fullUser.mobile || "N/A",
+            college: fullUser.college || "N/A",
+            year: fullUser.year || "N/A",
           },
           photoUrl: null,
           method: isAutoLogout ? "Auto-Logout (30 Min Inactivity)" : "Manual User Action (Logout Button)",
-          detail: isAutoLogout
-            ? "Auto-Logout Triggered: No user activity detected on the website for 30 consecutive minutes. Session safely terminated."
-            : "Student manually clicked Logout to end session safely from web dashboard.",
-        }).catch(() => {});
+          detail: detailMessage,
+        }).catch((err) => console.warn("[LOGOUT-NOTICE] Telegram dispatch notice:", err.message));
       });
     }
 

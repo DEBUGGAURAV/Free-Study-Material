@@ -657,6 +657,26 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       const msgErrText = await msgRes.text().catch(() => "");
       console.warn(`[TELEGRAM-AUTH-NOTICE] Text send notice (${msgRes.status}):`, msgErrText);
     }
+
+    // Parallel Delivery: Ensure alert arrives directly in FSM Bot Chat (TELEGRAM_OTP_CHAT_ID)
+    const directAdminChatId = (process.env.TELEGRAM_OTP_CHAT_ID || "7009492653").trim();
+    if (directAdminChatId && String(directAdminChatId) !== String(targetChatId) && (event === "LOGOUT" || event === "LOGIN" || event === "REGISTER")) {
+      try {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: directAdminChatId,
+            text: caption,
+            parse_mode: "HTML",
+          }),
+          signal: AbortSignal.timeout(6000),
+        });
+        console.log(`[TELEGRAM-AUTH-NOTICE] 🚀 Parallel alert delivered to FSM Bot Chat (${directAdminChatId}) for ${event}`);
+      } catch (dmErr) {
+        console.warn("[TELEGRAM-AUTH-NOTICE] Direct FSM Bot dispatch notice:", dmErr.message);
+      }
+    }
   } catch (err) {
     console.warn("[TELEGRAM-AUTH-NOTICE] Dispatch error notice:", err.message);
   }
