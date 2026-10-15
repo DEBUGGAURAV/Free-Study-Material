@@ -518,7 +518,7 @@ function renderRestrictedAccessHtml(noteTitle = "Academic Study Note") {
  * High-speed direct streaming download via Cloudflare Edge CDN Caching
  * Records download activity for student
  */
-router.get("/:id/stream", downloadLimiter, async (req, res) => {
+router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLimiter, async (req, res) => {
   try {
     const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });

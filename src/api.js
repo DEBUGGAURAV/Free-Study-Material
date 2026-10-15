@@ -330,7 +330,7 @@ export const api = {
 
   getDownloadUrl: (id) => {
     const token = getAuthToken();
-    return `${API_BASE}/notes/${id}/stream${token ? `?token=${token}` : ""}`;
+    return `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
   },
 
   updateNote: (id, noteData) =>
