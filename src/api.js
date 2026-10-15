@@ -417,7 +417,7 @@ export const api = {
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null) => {
     const token = getAuthToken();
-    const url = `${API_BASE}/notes/${id}/stream${token ? `?token=${token}` : ""}`;
+    const url = `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
     const startTime = performance.now();
     let prevLoaded = 0;
     let prevTime = startTime;
