@@ -8,6 +8,7 @@ const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
+const { getLastSyncState } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 
 let getCdnRetentionSeconds = null;
