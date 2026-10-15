@@ -49,9 +49,6 @@ export default function App() {
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
 
-  // 🔄 Real-time 30-Minute Quota-Saver Auto-Sync State
-  const [syncState, setSyncState] = useState(null);
-
   const openAuth = (tab = "signin") => {
     setAuthInitialTab(tab);
     setIsAuthOpen(true);
@@ -182,21 +179,7 @@ export default function App() {
         api.logout();
       }
     });
-
-    // 🔄 Initial 30-min Auto-Sync status check & periodic refresh
-    fetchSyncStatus();
-    const syncInterval = setInterval(fetchSyncStatus, 45000);
-    return () => clearInterval(syncInterval);
   }, []);
-
-  const fetchSyncStatus = async () => {
-    try {
-      const res = await api.getSyncStatus();
-      if (res && res.lastSync) {
-        setSyncState(res.lastSync);
-      }
-    } catch {}
-  };
 
   useEffect(() => {
     if (currentUser) {
@@ -237,9 +220,6 @@ export default function App() {
         year: selectedYear,
         search: searchTerm,
       });
-      if (res && res.lastSync) {
-        setSyncState(res.lastSync);
-      }
       const getNoteTs = (n) => {
         if (!n) return 0;
         if (n._sortTimestamp) return n._sortTimestamp;
@@ -1005,42 +985,6 @@ export default function App() {
         <div style={{ maxWidth: "1380px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
           <div>
             Free Study Material Vault • Domain: <strong>freestudymaterial.onrender.com</strong>
-          </div>
-
-          {/* 🔄 30-Minute Quota-Saver Auto-Sync Live Status Monitor */}
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              background: "rgba(16, 185, 129, 0.08)",
-              border: "1px solid rgba(16, 185, 129, 0.25)",
-              padding: "6px 14px",
-              borderRadius: "100px",
-              fontSize: "0.78rem",
-              color: "#34d399",
-              fontWeight: 600,
-            }}
-          >
-            <span
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 10px #10b981",
-                display: "inline-block",
-              }}
-            ></span>
-            <span>
-              ⚡ 30-Min Auto-Sync: <strong style={{ color: "#fff" }}>Active</strong> • Last Run:{" "}
-              <span style={{ color: "var(--accent-cyan)", textDecoration: "underline", fontWeight: 700 }}>
-                {syncState?.formattedTime || "Just now"}
-              </span>{" "}
-              <span style={{ opacity: 0.8, fontSize: "0.72rem", color: "var(--text-dim)" }}>
-                ({syncState?.trigger?.includes("30") ? "30-Min Cycle" : (syncState?.trigger || "Live Sync")})
-              </span>
-            </span>
           </div>
 
           <div>
