@@ -365,7 +365,17 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function renderRestrictedAccessHtml(noteTitle = "Academic Study Note") {
+  const safeTitle = escapeHtml(noteTitle);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -496,7 +506,7 @@ function renderRestrictedAccessHtml(noteTitle = "Academic Study Note") {
       🔒 Registered Student Access Only
     </div>
     <h1>Free Study Material Vault</h1>
-    <div class="note-name">📄 ${noteTitle}</div>
+    <div class="note-name">📄 ${safeTitle}</div>
     <p>
       This academic document is exclusively available to registered college students. 
       Please create a <strong>Free Student Account</strong> or Sign In to unlock instant reading and high-speed downloads.
