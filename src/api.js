@@ -5,6 +5,15 @@
 
 const API_BASE = "/api";
 
+// High-Speed Global Cloudflare Edge CDN Worker for Instant Cached Streaming
+const EDGE_WORKER_URL = "https://fsm-edge.jnplotus.workers.dev/api";
+
+const isLocalhost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
+export const STREAM_BASE = isLocalhost ? "/api" : EDGE_WORKER_URL;
+
 
 export function getAuthToken() {
   return localStorage.getItem("vault_token") || null;
@@ -330,7 +339,7 @@ export const api = {
 
   getDownloadUrl: (id) => {
     const token = getAuthToken();
-    return `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
+    return `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
   },
 
   updateNote: (id, noteData) =>
@@ -417,12 +426,20 @@ export const api = {
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null) => {
     const token = getAuthToken();
-    const url = `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
+    const url = `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
     const startTime = performance.now();
     let prevLoaded = 0;
     let prevTime = startTime;
 
-    const res = await fetch(url, { signal, credentials: "include" });
+    let res;
+    try {
+      res = await fetch(url, { signal, credentials: "include" });
+    } catch (edgeErr) {
+      if (signal?.aborted) throw edgeErr;
+      console.warn("[EDGE STREAM] Cloudflare Worker fallback to Render origin:", edgeErr.message);
+      const fallbackUrl = `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
+      res = await fetch(fallbackUrl, { signal, credentials: "include" });
+    }
     const contentType = res.headers.get("Content-Type") || "";
     if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
       let errMessage = `Document is unavailable (${res.status})`;
