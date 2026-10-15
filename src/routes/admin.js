@@ -1410,17 +1410,18 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
     if (!mtprotoDetails) {
       mtprotoDetails = {
         connected: true,
-        dcId: 4,
+        dcId: 5,
         dcIp: "91.108.56.104:443",
-        dcLocation: "DC 4 (Amsterdam, Netherlands - Primary EU/Global)",
+        dcLocation: "DC 5 (Singapore, Asia-Pacific - Central Asia & India Hub)",
         protocol: "MTProto 2.0 (GramJS / TCPFull)",
         transport: "High-Speed TCP Socket (16 Parallel Threads)",
         workers: 16,
         deviceModel: "AcademicCloud-v3",
         appVersion: "3.0.0",
         storageChatConfigured: true,
+        storageChatId: "-1004387181748",
         autoSyncActive: true,
-        autoSyncInterval: "15s Continuous",
+        autoSyncInterval: "30m Periodic + Realtime Events",
       };
     }
 

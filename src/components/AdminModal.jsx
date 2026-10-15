@@ -1950,14 +1950,14 @@ export default function AdminModal({
                     </div>
                     <div>
                       <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Telegram MTProto DC Engine</div>
-                      <div style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700 }}>● {softwareInfo?.mtproto?.connected ? "CONNECTED (DC 4 ACTIVE)" : "ONLINE"}</div>
+                      <div style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700 }}>● {softwareInfo?.mtproto?.connected ? `CONNECTED (DC ${softwareInfo?.mtproto?.dcId || 5} ACTIVE • SINGAPORE)` : "ONLINE"}</div>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Telegram Data Center:</span>
-                      <span style={{ color: "#fff", fontWeight: 600 }}>DC #{softwareInfo?.mtproto?.dcId || 4} ({softwareInfo?.mtproto?.dcIp || "91.108.56.104:443"})</span>
+                      <span style={{ color: "#fff", fontWeight: 600 }}>DC #{softwareInfo?.mtproto?.dcId || 5} • {softwareInfo?.mtproto?.dcLocation || "Singapore Asia Hub"} ({softwareInfo?.mtproto?.dcIp || "91.108.56.104:443"})</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Worker Socket Pool:</span>
@@ -2348,7 +2348,7 @@ export default function AdminModal({
                                   Telegram MTProto Cloud Storage Push
                                 </span>
                                 <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
-                                  (Channel: -1004387181748 • DC 4)
+                                  (Channel: -1004387181748 • DC {softwareInfo?.mtproto?.dcId || 5} Singapore)
                                 </span>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

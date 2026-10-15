@@ -1032,20 +1032,28 @@ function stopAutoSyncWorker() {
 }
 
 function getMTProtoDetails() {
-  const dcId = client?.session?.dcId || 4;
-  const serverAddress = client?.session?.serverAddress || (dcId === 4 ? "91.108.56.104" : dcId === 2 ? "149.154.167.50" : "149.154.167.40");
+  const dcId = client?.session?.dcId || 5;
+  const serverAddress = client?.session?.serverAddress || (dcId === 5 ? "91.108.56.104" : dcId === 4 ? "149.154.167.91" : dcId === 2 ? "149.154.167.50" : "91.108.56.104");
   const port = client?.session?.port || 443;
+  const dcLocationMap = {
+    1: "DC 1 (Miami, Florida, USA - Americas Hub)",
+    2: "DC 2 (Amsterdam, Netherlands - EU Hub)",
+    3: "DC 3 (Miami, Florida, USA - Americas Secondary)",
+    4: "DC 4 (Amsterdam, Netherlands - EU Secondary)",
+    5: "DC 5 (Singapore, Asia-Pacific - Central Asia & India Hub)",
+  };
   return {
     connected: isConnected || (client && client.connected),
     dcId,
     dcIp: `${serverAddress}:${port}`,
-    dcLocation: dcId === 4 ? "DC 4 (Amsterdam, Netherlands - Primary EU/Global)" : dcId === 2 ? "DC 2 (Amsterdam, Netherlands)" : `DC ${dcId}`,
+    dcLocation: dcLocationMap[dcId] || `DC ${dcId} (Singapore, Asia-Pacific Hub)`,
     protocol: "MTProto 2.0 (GramJS / TCPFull)",
     transport: "High-Speed TCP Socket (16 Parallel Threads)",
     workers: 16,
     deviceModel: "AcademicCloud-v3",
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,
+    storageChatId: storageChatId || "-1004387181748",
     autoSyncActive: true,
     autoSyncInterval: "30m Periodic Safety Net",
     autoSyncMode: "30-Minute Quota-Saver & Real-time Event-Driven",
