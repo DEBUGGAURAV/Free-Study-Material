@@ -2,6 +2,7 @@ const { db } = require("../firebase");
 const { sendTelegramAuthNotice } = require("./emailService");
 
 const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
+const ADMIN_ALIASES = ["admin", "jnplotus", "mainadmin", "admin@gmail.com", "administrator", "root"];
 const INACTIVITY_DAYS = 90;
 const INACTIVITY_MS = INACTIVITY_DAYS * 24 * 60 * 60 * 1000;
 
@@ -28,8 +29,16 @@ async function purgeInactiveAccounts({ force = false } = {}) {
       const u = doc.data();
       const email = (u.email || "").toLowerCase().trim();
 
-      // 🛡️ PERMANENT IMMUNITY: Never purge master admin or full admin accounts!
-      if (email === MAIN_ADMIN_EMAIL || u.role === "admin" || u.role === "half_admin") {
+      // 🛡️ PERMANENT IMMUNITY SHIELD: Never purge master admin, full admin, or sub-admin accounts!
+      if (
+        email === MAIN_ADMIN_EMAIL ||
+        ADMIN_ALIASES.includes(email) ||
+        doc.id === "admin-root" ||
+        doc.id === "admin" ||
+        u.role === "admin" ||
+        u.role === "half_admin" ||
+        u.isAdmin === true
+      ) {
         return;
       }
 
