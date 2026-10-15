@@ -20,6 +20,7 @@ const {
   startEventLoopLagDetector,
   getWatchdogStats,
 } = require("./utils/selfHealingWatchdog");
+const { warmCacheOnBoot } = require("./utils/cacheWarmer");
 
 // 🚀 3. Global Process Immortality Shield (Zero-Downtime Protection: Intercepts & Isolates Unhandled Errors)
 initProcessImmortalityShield();
@@ -264,6 +265,15 @@ app.listen(PORT, async () => {
     console.log("[SELF-HEALING-MONITOR] 📡 Event-Driven Auto-Reconnection Monitor registered.");
   } catch (pulseErr) {
     console.warn("[SELF-HEALING-MONITOR] Init warning:", pulseErr.message);
+  }
+
+  // 🏎️ Cold-Start Cache Warmer (Pre-warms top notes into RAM 4s after boot for 0ms initial load)
+  try {
+    setTimeout(() => {
+      warmCacheOnBoot().catch((e) => console.warn("[CACHE-WARMER] Boot warmup warning:", e.message));
+    }, 4000);
+  } catch (warmerErr) {
+    console.warn("[CACHE-WARMER] Init warning:", warmerErr.message);
   }
 
   // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)

@@ -9,6 +9,7 @@ const { streamDocumentFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { getLastSyncState } = require("../telegram/syncTracker");
+const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 
 /**
  * GET /api/notes/branches
@@ -523,25 +524,28 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
 
-    const doc = await db.collection("notes").doc(id).get();
-    if (!doc.exists) {
-      console.warn(`[STREAM] Note ID not found in live collection: "${id}"`);
-      const [delNote, delRec] = await Promise.all([
-        db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
-        db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
-      ]);
-      if (delNote.exists || delRec.exists) {
-        const archivedData = delNote.exists ? delNote.data() : delRec.data();
-        return res.status(404).json({
-          success: false,
-          message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,
-          inRecycleBin: true,
-        });
+    let note = ramCache.get(`note_${id}`);
+    if (!note) {
+      const doc = await db.collection("notes").doc(id).get();
+      if (!doc.exists) {
+        console.warn(`[STREAM] Note ID not found in live collection: "${id}"`);
+        const [delNote, delRec] = await Promise.all([
+          db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
+          db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
+        ]);
+        if (delNote.exists || delRec.exists) {
+          const archivedData = delNote.exists ? delNote.data() : delRec.data();
+          return res.status(404).json({
+            success: false,
+            message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,
+            inRecycleBin: true,
+          });
+        }
+        return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
       }
-      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+      note = { id: doc.id, ...doc.data() };
+      ramCache.set(`note_${id}`, note, 3 * 3600);
     }
-
-    const note = doc.data();
 
     // Verify requesting user token (cookie, query, or auth header)
     let requestingUser = null;
@@ -639,32 +643,45 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       downloadsCount: (note.downloadsCount || 0) + 1,
     }).catch(() => {});
 
-    // Stream directly from Telegram DC via MTProto 16-Worker engine
+    // Stream directly from Telegram DC via MTProto 16-Worker engine guarded by Circuit Breaker
     try {
-      await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
-    } catch (streamErr) {
-      console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
+      await telegramCircuitBreaker.execute(
+        async () => {
+          return await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+        },
+        async (breakerErr) => {
+          console.warn(`[STREAM-BREAKER] Triggering resilient fallback for note ${id}:`, breakerErr.message);
 
-      // Secondary Failover: Telegram Bot API direct stream (if bot file ID exists)
-      const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-      const botFileId = note.telegramBotFileId || note.telegramFileId;
-      if (botFileId && botToken) {
-        try {
-          const fileMetaRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`);
-          const fileMetaData = await fileMetaRes.json();
-          if (fileMetaData.ok && fileMetaData.result?.file_path) {
-            const rawFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileMetaData.result.file_path}`;
-            const fileStreamRes = await fetch(rawFileUrl);
-            if (fileStreamRes.ok && fileStreamRes.body) {
-              const { Readable } = require("stream");
-              const nodeReadable = Readable.fromWeb ? Readable.fromWeb(fileStreamRes.body) : fileStreamRes.body;
-              return nodeReadable.pipe(res);
+          // Secondary Failover: Telegram Bot API direct stream (if bot file ID exists)
+          const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+          const botFileId = note.telegramBotFileId || note.telegramFileId;
+          if (botFileId && botToken) {
+            try {
+              const fileMetaRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`);
+              const fileMetaData = await fileMetaRes.json();
+              if (fileMetaData.ok && fileMetaData.result?.file_path) {
+                const rawFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileMetaData.result.file_path}`;
+                const fileStreamRes = await fetch(rawFileUrl);
+                if (fileStreamRes.ok && fileStreamRes.body) {
+                  const { Readable } = require("stream");
+                  const nodeReadable = Readable.fromWeb ? Readable.fromWeb(fileStreamRes.body) : fileStreamRes.body;
+                  return nodeReadable.pipe(res);
+                }
+              }
+            } catch (botErr) {
+              console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
             }
           }
-        } catch (botErr) {
-          console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
+
+          if (note.driveLink) {
+            return res.redirect(note.driveLink);
+          }
+
+          throw breakerErr;
         }
-      }
+      );
+    } catch (streamErr) {
+      console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
 
       if (note.driveLink) {
         return res.redirect(note.driveLink);

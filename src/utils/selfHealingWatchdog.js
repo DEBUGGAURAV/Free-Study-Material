@@ -13,6 +13,16 @@ const fs = require("fs");
 const path = require("path");
 const { ramCache } = require("./ramCache");
 
+// Dynamically hook V8 Garbage Collector at runtime (No external CLI flags needed)
+try {
+  const v8 = require("v8");
+  const vm = require("vm");
+  v8.setFlagsFromString("--expose_gc");
+  if (!global.gc) {
+    global.gc = vm.runInNewContext("gc");
+  }
+} catch (_) {}
+
 // State trackers
 let isEventLoopCongested = false;
 let currentEventLoopLag = 0;
