@@ -59,6 +59,8 @@ app.use(
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         connectSrc: [
           "'self'",
+          "https://fsm-edge.jnplotus.workers.dev",
+          "https://*.workers.dev",
           "https://accounts.google.com",
           "https://oauth2.googleapis.com",
           "https://api.telegram.org",
@@ -87,11 +89,12 @@ app.use(
   })
 );
 
-// Strict Production CORS Policy (No wildcards)
+// Strict Production CORS Policy (Supports Render & Cloudflare Worker Edge)
 const allowedOrigins = [
   process.env.CLIENT_URL,
   "https://freestudymaterial.onrender.com",
   "https://freestudtmaterial.onrender.com",
+  "https://fsm-edge.jnplotus.workers.dev",
   ...(process.env.NODE_ENV !== "production"
     ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
     : []),
@@ -102,7 +105,7 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g. server-side keep-alive self-ping, mobile apps, curl)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.includes(origin) || origin.endsWith(".workers.dev")) {
         return callback(null, true);
       }
       return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
