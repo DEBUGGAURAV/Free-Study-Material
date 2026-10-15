@@ -5,14 +5,8 @@
 
 const API_BASE = "/api";
 
-// High-Speed Global Cloudflare Edge CDN Worker for Instant Cached Streaming
-const EDGE_WORKER_URL = "https://fsm-edge.jnplotus.workers.dev/api";
-
-const isLocalhost =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-
-export const STREAM_BASE = isLocalhost ? "/api" : EDGE_WORKER_URL;
+// Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
+export const STREAM_BASE = "/api";
 
 
 export function getAuthToken() {
@@ -431,15 +425,7 @@ export const api = {
     let prevLoaded = 0;
     let prevTime = startTime;
 
-    let res;
-    try {
-      res = await fetch(url, { signal, credentials: "include" });
-    } catch (edgeErr) {
-      if (signal?.aborted) throw edgeErr;
-      console.warn("[EDGE STREAM] Cloudflare Worker fallback to Render origin:", edgeErr.message);
-      const fallbackUrl = `${API_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
-      res = await fetch(fallbackUrl, { signal, credentials: "include" });
-    }
+    const res = await fetch(url, { signal, credentials: "include" });
     const contentType = res.headers.get("Content-Type") || "";
     if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
       let errMessage = `Document is unavailable (${res.status})`;
