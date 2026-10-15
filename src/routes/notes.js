@@ -8,8 +8,12 @@ const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
-const { getLastSyncState } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
+
+let getCdnRetentionSeconds = null;
+try {
+  getCdnRetentionSeconds = require("./admin").getCdnRetentionSeconds;
+} catch {}
 
 /**
  * GET /api/notes/branches
@@ -634,9 +638,11 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     res.setHeader("Content-Disposition", `inline; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.setHeader("CDN-Cache-Control", "public, max-age=31536000");
-    res.setHeader("Cloudflare-CDN-Cache-Control", "max-age=31536000");
+    const retentionSeconds = (typeof getCdnRetentionSeconds === "function" ? getCdnRetentionSeconds() : 365 * 86400);
+
+    res.setHeader("Cache-Control", `public, max-age=${retentionSeconds}, immutable`);
+    res.setHeader("CDN-Cache-Control", `public, max-age=${retentionSeconds}`);
+    res.setHeader("Cloudflare-CDN-Cache-Control", `max-age=${retentionSeconds}`);
     res.setHeader("ETag", `W/"${note.fileHash || note.id}"`);
 
     // Asynchronously increment download count

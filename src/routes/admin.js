@@ -2258,4 +2258,15 @@ router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission("
   }
 });
 
+function getCdnRetentionSeconds() {
+  return (cdnRetentionDays || 7) * 86400;
+}
+
+function getCdnRetentionDays() {
+  return cdnRetentionDays || 7;
+}
+
+router.getCdnRetentionSeconds = getCdnRetentionSeconds;
+router.getCdnRetentionDays = getCdnRetentionDays;
+
 module.exports = router;
