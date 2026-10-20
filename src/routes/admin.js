@@ -1548,9 +1548,11 @@ router.post("/cdn/purge", authenticateToken, checkAdminOrPermission("all"), asyn
 
   // Purge Cloudflare Worker CDN edge
   try {
-    const cfWorker = process.env.VITE_CF_WORKER_URL || process.env.CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev";
-    fetch(`${cfWorker}/api/admin/cdn/purge?purge_all=1`, { method: "PURGE" }).catch(() => {});
-    fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
+    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) {
+      fetch(`${cfWorker}/api/admin/cdn/purge?purge_all=1`, { method: "PURGE" }).catch(() => {});
+      fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
+    }
   } catch (_) {}
 
   return res.json({ success: true, message: "Global Cloudflare Edge CDN, Worker & In-Memory RAM Cache purged globally! Cache pool is now 0 MB." });
@@ -1590,9 +1592,11 @@ router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission("all"),
 
   // Purge Cloudflare Worker CDN edge
   try {
-    const cfWorker = process.env.VITE_CF_WORKER_URL || process.env.CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev";
-    fetch(`${cfWorker}/api/admin/cdn/purge?purge_all=1`, { method: "PURGE" }).catch(() => {});
-    fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
+    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) {
+      fetch(`${cfWorker}/api/admin/cdn/purge?purge_all=1`, { method: "PURGE" }).catch(() => {});
+      fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
+    }
   } catch (_) {}
 
   return res.json({ success: true, message: "Cloudflare Edge CDN, Worker & Disk Cache purged globally! Edge caches are now cleared." });
@@ -1673,9 +1677,11 @@ router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission("man
 
   // Evict from Cloudflare Worker edge cache asynchronously
   try {
-    const cfWorker = process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev";
-    fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
-    fetch(`${cfWorker}/api/notes/${noteId}/stream.pdf?purge=1`, { method: "PURGE" }).catch(() => {});
+    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) {
+      fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+      fetch(`${cfWorker}/api/notes/${noteId}/stream.pdf?purge=1`, { method: "PURGE" }).catch(() => {});
+    }
   } catch (_) {}
 
   invalidateAllCache();
@@ -2948,7 +2954,7 @@ router.get("/tech-controls", authenticateToken, checkAdminOrPermission("all"), a
         dbWritesSaved,
         activeTechnologiesCount: 15,
         serverUptimeSeconds: Math.floor(process.uptime()),
-        edgeWorkerEndpoint: process.env.CF_WORKER_URL || "https://fsm-edge.workers.dev",
+        edgeWorkerEndpoint: (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim(),
       },
     });
   } catch (err) {

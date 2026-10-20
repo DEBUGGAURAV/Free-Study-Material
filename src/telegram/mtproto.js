@@ -67,8 +67,8 @@ function purgeNoteFromWebAndCdn(noteId) {
 
   // 4. Purge from Cloudflare Edge Worker worldwide POP cache
   try {
-    const cfWorker = process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev";
-    fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
   } catch (_) {}
 }
 

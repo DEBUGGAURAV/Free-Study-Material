@@ -74,9 +74,9 @@ services:
       - key: TURSO_CACHE_AUTH_TOKEN
         sync: false
       - key: CF_WORKER_URL
-        value: https://fsm-edge.jnplotus.workers.dev
+        sync: false
       - key: VITE_CF_WORKER_URL
-        value: https://fsm-edge.jnplotus.workers.dev
+        sync: false
       - key: BREVO_SMTP_HOST
         value: smtp-relay.brevo.com
       - key: BREVO_SMTP_PORT

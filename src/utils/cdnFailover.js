@@ -6,12 +6,12 @@
 
 const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "https://fsm-edge.jnplotus.workers.dev";
+const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "";
 
 export const CDN_ENDPOINTS = [
   CF_WORKER,
   typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000",
-];
+].filter(Boolean);
 
 let activeCdnIndex = 0;
 let lastFailoverTimestamp = 0;

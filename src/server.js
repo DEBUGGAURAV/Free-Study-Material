@@ -85,7 +85,7 @@ app.use(
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         connectSrc: [
           "'self'",
-          process.env.CF_WORKER_URL || "https://fsm-edge.workers.dev",
+          process.env.CF_WORKER_URL,
           "https://*.workers.dev",
           "https://accounts.google.com",
           "https://oauth2.googleapis.com",
@@ -123,7 +123,6 @@ const allowedOrigins = [
   "https://freestudymaterial.onrender.com",
   "https://freestudtmaterial.onrender.com",
   process.env.CF_WORKER_URL,
-  "https://fsm-edge.workers.dev",
   ...(process.env.NODE_ENV !== "production"
     ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
     : []),
