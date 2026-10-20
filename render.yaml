@@ -48,21 +48,21 @@ services:
       - key: TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID
         sync: false
       - key: TELEGRAM_CHAT_TOPIC_POD_AUDITS
-        value: "31"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_MEDIA_VAULT
-        value: "33"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_DELETED
-        value: "35"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT
-        value: "35"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE
-        value: "72"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_PRESENCE
-        value: "37"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT
-        value: "39"
+        sync: false
       - key: TELEGRAM_CHAT_TOPIC_STEALTH
-        value: "35"
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: TURSO_DATABASE_URL
