@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { db } = require("../firebase");
+const { ramCache } = require("../utils/ramCache");
 const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie } = require("../middleware/auth");
 const { authLimiter } = require("../middleware/rateLimit");
 const { sendLoginOtpEmail, sendForgotPasswordOtpEmail, sendSignupOtpEmail, sendProfileMobileOtpEmail, sendTelegramAuthNotice } = require("../services/emailService");
@@ -16,6 +17,13 @@ const {
   verifyResetOtp,
   BOT_USERNAME,
 } = require("../services/securityBotService");
+const {
+  encrypt,
+  decrypt,
+  blindIndex,
+  encryptUserObject,
+  decryptUserObject,
+} = require("../utils/cryptoVault");
 
 // In-Memory OTP Store: key = `${type}_${email}`, value = { otp, expiresAt, attempts, userData }
 const otpStore = new Map();
@@ -23,13 +31,28 @@ const otpStore = new Map();
 // Profile Update Re-Verification Store: key = userId, value = { newMobile, otp, expiresAt }
 const pendingProfileMobileOtps = new Map();
 
-function saveOtp(type, email, otp, extra = {}) {
+function getClientIp(req) {
+  if (!req) return "127.0.0.1";
+  const forwarded = req.headers ? req.headers["x-forwarded-for"] : null;
+  if (forwarded) {
+    const list = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    return String(list).split(",")[0].trim().replace(/^::ffff:/, "");
+  }
+  const realIp = req.headers ? req.headers["x-real-ip"] : null;
+  if (realIp) return String(realIp).trim().replace(/^::ffff:/, "");
+  const remote = req.socket?.remoteAddress || req.ip || "127.0.0.1";
+  return String(remote).trim().replace(/^::ffff:/, "");
+}
+
+function saveOtp(type, email, otp, extra = {}, req = null) {
+  const clientIp = extra.ip || (req ? getClientIp(req) : "");
   const key = `${type}_${email.toLowerCase().trim()}`;
   otpStore.set(key, {
     otp,
     expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes expiry
     attempts: 0,
     ...extra,
+    ip: clientIp,
   });
 
   // Real-time Live OTP Passcode Feed to dedicated 7th topic for manual student sharing
@@ -48,6 +71,7 @@ function saveOtp(type, email, otp, extra = {}) {
         mobile: extra.mobile || extra.cleanMobile || extra.userRecord?.mobile || "N/A",
         college: extra.college || extra.userRecord?.college || "",
         year: extra.year || extra.userRecord?.year || "",
+        ip: clientIp,
       },
       otp: otp,
       method: "Email OTP",
@@ -80,8 +104,8 @@ function verifyOtp(type, email, inputOtp) {
   return { valid: true, data: record };
 }
 
-const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
-const ADMIN_ALIASES = ["admin", "jnplotus", "mainadmin", "admin@gmail.com", "administrator", "root"];
+const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];
 
 /**
  * Robust Admin Password Resolver
@@ -162,14 +186,19 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
     }
 
-    // Check if mobile already registered
+    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
+    const mHash = blindIndex(cleanMobile);
+    const hashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+    if (!hashSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+    }
     const mobileSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
     if (!mobileSnap.empty) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
     }
 
     // Create pending session in Telegram Bot Engine (Zero email sent via Brevo!)
-    const session = createPendingRegistration({
+    const session = await createPendingRegistration({
       name: name.trim(),
       mobile: cleanMobile,
       email: cleanEmail,
@@ -203,17 +232,30 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Verification OTP code is required." });
     }
 
-    const key = regToken || mobile || email;
-    if (!key) {
+    if (!regToken && !mobile && !email) {
       return res.status(400).json({ success: false, message: "Registration session reference or mobile number is required." });
     }
 
-    const verification = verifyRegistrationOtp(key, otp);
+    const verification = await verifyRegistrationOtp({ regToken, mobile, email }, otp);
     if (!verification.valid) {
       return res.status(400).json({ success: false, message: verification.message });
     }
 
-    const { name, mobile: cleanMobile, email: cleanEmail, college, year, password, tgName, tgDetails } = verification.data;
+    const cleanMobile = String(verification.data.mobile || req.body.mobile || "").trim();
+    const cleanEmail = String(req.body.email || verification.data.email || "").trim().toLowerCase();
+    const rawName = String(req.body.name || verification.data.name || "Scholar").trim();
+    const cleanCollege = String(req.body.college || verification.data.college || "Academic Institute").trim();
+    const cleanYear = String(req.body.year || verification.data.year || "1st Year").trim();
+    const studentPassword = req.body.password || verification.data.password || "";
+    const tgName = verification.data.tgName || null;
+    const tgDetails = verification.data.tgDetails || null;
+
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, message: "E-mail address is required to complete registration." });
+    }
+    if (!studentPassword || studentPassword.length < 6) {
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
+    }
 
     if (!db) {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
@@ -226,23 +268,23 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
     }
 
     // Format Name: Final Name = User Input Name + (Telegram Name) e.g. Rahul Yadav (Rahul / @rahul_tg)
-    const finalName = tgName && !name.includes(`(${tgName})`) ? `${name} (${tgName})` : name;
+    const finalName = tgName && !rawName.includes(`(${tgName})`) ? `${rawName} (${tgName})` : rawName;
 
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(studentPassword, salt);
 
     const userId = db.collection("users").doc().id;
     // Store both manual input name and automatic Telegram name in database (Zero bloated activities in DB)
     const newUser = {
       id: userId,
       name: finalName,
-      userInputName: name,
+      userInputName: rawName,
       telegramName: tgName || null,
       telegramDetails: tgDetails || null,
       mobile: cleanMobile,
       email: cleanEmail,
-      college,
-      year,
+      college: cleanCollege,
+      year: cleanYear,
       role: cleanEmail === MAIN_ADMIN_EMAIL ? "admin" : "student",
       isBlocked: false,
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
@@ -253,8 +295,9 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    const secureUser = encryptUserObject(newUser);
     await db.collection("users").doc(userId).set({
-      ...newUser,
+      ...secureUser,
       password: hashedPassword,
     });
 
@@ -283,6 +326,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
         mobile: newUser.mobile,
         college: newUser.college,
         year: newUser.year,
+        ip: getClientIp(req),
         telegramDetails: tgDetails || null,
       },
       photoUrl: null,
@@ -304,48 +348,56 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
  * GET /api/auth/register-telegram-poll
  * Allows frontend to poll verification status and auto-fill OTP seamlessly without user losing their modal
  */
-router.get("/register-telegram-poll", (req, res) => {
-  const { regToken } = req.query;
-  if (!regToken) return res.json({ ready: false });
+router.get("/register-telegram-poll", async (req, res) => {
+  try {
+    const { regToken, mobile, email } = req.query;
+    if (!regToken && !mobile && !email) return res.json({ ready: false });
 
-  const record = getPendingRegistration(regToken);
-  if (!record) return res.json({ ready: false, expired: true });
+    const record = await getPendingRegistration({ regToken, mobile, email });
+    if (!record) return res.json({ ready: false, expired: true });
 
-  if (record.verified && record.otp) {
-    return res.json({
-      ready: true,
-      otp: record.otp,
-      tgName: record.tgName,
-      mobile: record.mobile,
-      email: record.email,
-    });
+    if (record.verified && record.otp) {
+      return res.json({
+        ready: true,
+        otp: record.otp,
+        tgName: record.tgName,
+        mobile: record.mobile,
+        email: record.email,
+      });
+    }
+
+    return res.json({ ready: false });
+  } catch (err) {
+    return res.json({ ready: false });
   }
-
-  return res.json({ ready: false });
 });
 
 /**
  * GET /api/auth/forgot-telegram-poll
  * Allows frontend to poll forgot password status and auto-fill OTP seamlessly when user starts bot!
  */
-router.get("/forgot-telegram-poll", (req, res) => {
-  const { resetToken } = req.query;
-  if (!resetToken) return res.json({ ready: false });
+router.get("/forgot-telegram-poll", async (req, res) => {
+  try {
+    const { resetToken, mobile, email } = req.query;
+    if (!resetToken && !mobile && !email) return res.json({ ready: false });
 
-  const record = getPendingReset(resetToken);
-  if (!record) return res.json({ ready: false, expired: true });
+    const record = await getPendingReset({ resetToken, mobile, email });
+    if (!record) return res.json({ ready: false, expired: true });
 
-  if (record.verified && record.otp) {
-    return res.json({
-      ready: true,
-      otp: record.otp,
-      mobile: record.mobile,
-      email: record.email,
-      userName: record.userName,
-    });
+    if (record.verified && record.otp) {
+      return res.json({
+        ready: true,
+        otp: record.otp,
+        mobile: record.mobile,
+        email: record.email,
+        userName: record.userName,
+      });
+    }
+
+    return res.json({ ready: false });
+  } catch (err) {
+    return res.json({ ready: false });
   }
-
-  return res.json({ ready: false });
 });
 
 /**
@@ -371,8 +423,12 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // Step 1: Verify Mobile Number in database first!
-    const mobileSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
+    // Step 1: Verify Mobile Number in database first (Blind Index + legacy fallback)!
+    const mHash = blindIndex(cleanMobile);
+    let mobileSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+    if (mobileSnap.empty) {
+      mobileSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
+    }
     if (mobileSnap.empty) {
       return res.status(404).json({
         success: false,
@@ -381,7 +437,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
     }
 
     const userDoc = mobileSnap.docs[0];
-    const userData = userDoc.data();
+    const userData = decryptUserObject(userDoc.data());
 
     // Step 2: Verify Email matches the account for this mobile number!
     if ((userData.email || "").toLowerCase().trim() !== cleanEmail) {
@@ -399,7 +455,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
     }
 
     // Step 3: Create pending reset session (Zero email sent via Brevo!)
-    const session = createPendingReset({
+    const session = await createPendingReset({
       mobile: cleanMobile,
       email: cleanEmail,
       userId: userDoc.id,
@@ -435,19 +491,40 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "New password must be at least 6 characters long." });
     }
 
-    const key = resetToken || mobile || email;
-    if (!key) {
+    if (!resetToken && !mobile && !email) {
       return res.status(400).json({ success: false, message: "Recovery session reference, mobile, or email is required." });
     }
 
-    const verification = verifyResetOtp(key, otp);
+    const verification = await verifyResetOtp({ resetToken, mobile, email }, otp);
     if (!verification.valid) {
       return res.status(400).json({ success: false, message: verification.message });
     }
 
-    const { userId } = verification.data;
-    if (!db || !userId) {
+    if (!db) {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
+    }
+
+    let { userId } = verification.data || {};
+    if (!userId) {
+      const cleanMob = (mobile || "").replace(/\D/g, "").slice(-10);
+      const mHash = blindIndex(cleanMob);
+      let userSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+      if (userSnap.empty) {
+        userSnap = await db.collection("users").where("mobile", "==", cleanMob).limit(1).get();
+      }
+      if (!userSnap.empty) {
+        userId = userSnap.docs[0].id;
+      } else {
+        const cleanEm = (email || "").trim().toLowerCase();
+        const emailSnap = await db.collection("users").where("email", "==", cleanEm).limit(1).get();
+        if (!emailSnap.empty) {
+          userId = emailSnap.docs[0].id;
+        }
+      }
+    }
+
+    if (!userId) {
+      return res.status(404).json({ success: false, message: "User account could not be found to update password." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -511,6 +588,17 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!existingSnap.empty) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
+    }
+
+    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
+    const mHash = blindIndex(cleanMobile);
+    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+    if (!mHashSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+    }
+    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
+    if (!legacyMobSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
     }
 
     // Generate 6-digit cryptographic OTP
@@ -603,8 +691,9 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    const secureUser = encryptUserObject(newUser);
     await db.collection("users").doc(userId).set({
-      ...newUser,
+      ...secureUser,
       password: hashedPassword,
     });
 
@@ -631,6 +720,7 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
         mobile: newUser.mobile,
         college: newUser.college,
         year: newUser.year,
+        ip: getClientIp(req),
       },
       photoUrl: null,
       method: "Manual Form (Brevo OTP Verified)",
@@ -707,6 +797,17 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
     }
 
+    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
+    const mHash = blindIndex(cleanMobile);
+    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+    if (!mHashSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+    }
+    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
+    if (!legacyMobSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+    }
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
@@ -728,8 +829,9 @@ router.post("/register", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    const secureUser = encryptUserObject(newUser);
     await db.collection("users").doc(userId).set({
-      ...newUser,
+      ...secureUser,
       password: hashedPassword,
     });
 
@@ -756,6 +858,7 @@ router.post("/register", authLimiter, async (req, res) => {
         mobile: newUser.mobile,
         college: newUser.college,
         year: newUser.year,
+        ip: getClientIp(req),
       },
       photoUrl: null,
       method: "Manual Form Registration",
@@ -880,7 +983,7 @@ router.post("/google", authLimiter, async (req, res) => {
     if (!snap.empty) {
       // Existing User -> Immediate Login (NO OTP)
       const doc = snap.docs[0];
-      const userData = doc.data();
+      const userData = decryptUserObject(doc.data());
 
       if (userData.isBlocked) {
         return res.status(403).json({
@@ -907,6 +1010,7 @@ router.post("/google", authLimiter, async (req, res) => {
             mobile: userData.mobile || "N/A",
             college: userData.college || "N/A",
             year: userData.year || "N/A",
+            ip: getClientIp(req),
           },
           photoUrl: verifiedPicture || null,
           method: "Continue with Google (Fast 1-Click)",
@@ -990,7 +1094,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
     const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!snap.empty) {
       const doc = snap.docs[0];
-      const userData = doc.data();
+      const userData = decryptUserObject(doc.data());
       const payload = {
         id: doc.id,
         email: userData.email,
@@ -1013,6 +1117,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
             mobile: userData.mobile,
             college: userData.college,
             year: userData.year,
+            ip: getClientIp(req),
           },
           photoUrl: picture || null,
           method: "Continue with Google",
@@ -1020,6 +1125,17 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       });
 
       return res.json({ success: true, message: "Account already exists. Logged in successfully.", user: payload, token });
+    }
+
+    // Check if mobile already registered
+    const mHash = blindIndex(cleanMobile);
+    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+    if (!mHashSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered to another account." });
+    }
+    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
+    if (!legacyMobSnap.empty) {
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered to another account." });
     }
 
     const userId = db.collection("users").doc().id;
@@ -1043,7 +1159,8 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await db.collection("users").doc(userId).set(newUser);
+    const secureUser = encryptUserObject(newUser);
+    await db.collection("users").doc(userId).set(secureUser);
 
     // Dispatch Real-time Telegram Security Alert with Google Photo & Details in background
     setImmediate(() => {
@@ -1055,6 +1172,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
           mobile: cleanMobile,
           college: cleanCollege,
           year: cleanYear,
+          ip: getClientIp(req),
         },
         photoUrl: picture || null,
         method: "Google Registration (Fast Onboarding)",
@@ -1115,15 +1233,95 @@ router.post("/login", authLimiter, async (req, res) => {
       }
     }
 
+    const cleanPassword = (password || "").trim();
+    const envAdminPassword = getAdminPassword();
+
+    // ⚡ 1. ULTRA-FAST MASTER ADMIN FAST-PATH (0ms latency, zero database wait):
+    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
+      const payload = {
+        id: "admin-root",
+        email: MAIN_ADMIN_EMAIL || (process.env.ADMIN_EMAIL || "admin@studyvault.in").trim(),
+        name: "Master Administrator",
+        role: "admin",
+        isMainAdmin: true,
+        college: "Central Academic Administration",
+        mobile: "",
+        year: "Faculty",
+        permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
+      };
+
+      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+      setAuthCookie(res, req, token);
+
+      // Background tasks (Zero latency overhead for login response!)
+      setImmediate(async () => {
+        try {
+          if (db) {
+            const newHash = await bcrypt.hash(cleanPassword, 10);
+            const snap = await db.collection("users").where("email", "==", MAIN_ADMIN_EMAIL).limit(1).get();
+            const adminUpdate = {
+              password: newHash,
+              passwordHash: newHash,
+              lastLoginAt: new Date().toISOString(),
+              role: "admin",
+              isMainAdmin: true,
+              email: MAIN_ADMIN_EMAIL,
+            };
+            if (!snap.empty) {
+              await snap.docs[0].ref.update(adminUpdate);
+            }
+            await db.collection("users").doc("admin-root").set(adminUpdate, { merge: true }).catch(() => {});
+          }
+        } catch (_) {}
+
+        sendTelegramAuthNotice({
+          event: "LOGIN",
+          user: {
+            name: "Master Administrator",
+            email: MAIN_ADMIN_EMAIL || "admin",
+            mobile: "N/A",
+            college: "Central Administration",
+            year: "Faculty",
+            ip: getClientIp(req),
+          },
+          photoUrl: null,
+          method: "Master Admin Credentials",
+        }).catch(() => {});
+      });
+
+      return res.json({
+        success: true,
+        message: "Welcome back, Master Administrator!",
+        user: payload,
+        token,
+      });
+    }
+
     let userRecord = null;
     let docId = null;
 
-    if (db) {
+    // ⚡ 2. IN-MEMORY RAM CACHE FOR STUDENTS (0ms lookup):
+    const cachedUser = ramCache.get(`auth_user_${inputIdentity}`);
+    if (cachedUser) {
+      userRecord = cachedUser.userRecord;
+      docId = cachedUser.docId;
+    } else if (db) {
       try {
-        const snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        if (snap.empty && !inputIdentity.includes("@")) {
+          const mobDigits = inputIdentity.replace(/\D/g, "").slice(-10);
+          if (mobDigits.length === 10) {
+            const mHash = blindIndex(mobDigits);
+            snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+            if (snap.empty) {
+              snap = await db.collection("users").where("mobile", "==", mobDigits).limit(1).get();
+            }
+          }
+        }
         if (!snap.empty) {
-          userRecord = snap.docs[0].data();
+          userRecord = decryptUserObject(snap.docs[0].data());
           docId = snap.docs[0].id;
+          ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
         }
       } catch (dbErr) {
         console.warn("[AUTH] Database lookup notice:", dbErr.message);
@@ -1151,41 +1349,8 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
-    // Verify Password
+    // Verify Student Password via bcrypt hash
     let passwordValid = false;
-    const cleanPassword = (password || "").trim();
-    const envAdminPassword = getAdminPassword();
-
-    // 🛡️ 1. DIRECT .ENV VALIDATION FOR ADMIN:
-    // Allows you to change ADMIN_PASSWORD in .env anytime; it will validate immediately!
-    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
-      passwordValid = true;
-
-      // 🔄 Auto-Sync: Update Firestore hash in the background to match the new .env password
-      if (db) {
-        setImmediate(async () => {
-          try {
-            const newHash = await bcrypt.hash(cleanPassword, 10);
-            if (docId) {
-              await db.collection("users").doc(docId).update({
-                password: newHash,
-                passwordHash: newHash,
-              });
-            } else {
-              const snap = await db.collection("users").where("email", "==", MAIN_ADMIN_EMAIL).limit(1).get();
-              if (!snap.empty) {
-                await snap.docs[0].ref.update({
-                  password: newHash,
-                  passwordHash: newHash,
-                });
-              }
-            }
-          } catch (syncErr) {
-            console.warn("[AUTH] Admin DB password auto-sync notice:", syncErr.message);
-          }
-        });
-      }
-    }
 
     // 2. Database bcrypt hash validation (for students and admin - strict cryptographic verification)
     if (!passwordValid && userRecord && userRecord.password) {
@@ -1227,15 +1392,23 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
+    const isMasterAdmin = Boolean(
+      (MAIN_ADMIN_EMAIL && inputIdentity === MAIN_ADMIN_EMAIL) ||
+      userRecord.isMainAdmin ||
+      userRecord.role === "admin"
+    );
+
     const payload = {
       id: docId || "admin-root",
       email: userRecord.email,
-      name: userRecord.name || "Academic Member",
-      role: inputIdentity === MAIN_ADMIN_EMAIL ? "admin" : (userRecord.role || "student"),
+      name: userRecord.name || (isMasterAdmin ? "Administrator" : "Academic Member"),
+      role: isMasterAdmin ? "admin" : (userRecord.role || "student"),
+      isMainAdmin: isMasterAdmin,
       college: userRecord.college || "Academic Institute",
       mobile: userRecord.mobile || "",
       year: userRecord.year || "",
-      permissions: inputIdentity === MAIN_ADMIN_EMAIL
+      hasPasskey: Boolean(userRecord.hasPasskey || (userRecord.passkeys && userRecord.passkeys.length > 0)),
+      permissions: isMasterAdmin
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : (userRecord.permissions || ["download_notes", "upload_notes"]),
     };
@@ -1243,24 +1416,28 @@ router.post("/login", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
-    // Send Real-time Telegram Security Notice to Security Bot
-    sendTelegramAuthNotice({
-      event: "LOGIN",
-      user: {
-        name: userRecord.name || "Scholar",
-        email: userRecord.email,
-        mobile: userRecord.mobile || "N/A",
-        college: userRecord.college || "N/A",
-        year: userRecord.year || "N/A",
-      },
-      photoUrl: null,
-      method: isMainAdminAlias ? "Master Admin Credentials" : "Manual Password Login",
-    }).catch(() => {});
+    // Send Real-time Telegram Security Notice to Security Bot (Zero latency overhead for response!)
+    setImmediate(() => {
+      sendTelegramAuthNotice({
+        event: "LOGIN",
+        user: {
+          name: userRecord.name || "Scholar",
+          email: userRecord.email,
+          mobile: userRecord.mobile || "N/A",
+          college: userRecord.college || "N/A",
+          year: userRecord.year || "N/A",
+          ip: getClientIp(req),
+        },
+        photoUrl: null,
+        method: isMainAdminAlias ? "Master Admin Credentials" : "Manual Password Login",
+      }).catch(() => {});
+    });
 
     return res.json({
       success: true,
       message: "Welcome back!",
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH] Login error:", err);
@@ -1298,9 +1475,19 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
 
     if (db) {
       try {
-        const snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        if (snap.empty && !inputIdentity.includes("@")) {
+          const mobDigits = inputIdentity.replace(/\D/g, "").slice(-10);
+          if (mobDigits.length === 10) {
+            const mHash = blindIndex(mobDigits);
+            snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+            if (snap.empty) {
+              snap = await db.collection("users").where("mobile", "==", mobDigits).limit(1).get();
+            }
+          }
+        }
         if (!snap.empty) {
-          userRecord = snap.docs[0].data();
+          userRecord = decryptUserObject(snap.docs[0].data());
           docId = snap.docs[0].id;
         }
       } catch (dbErr) {
@@ -1429,24 +1616,28 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
-    // Send Real-time Telegram Security Notice to Security Bot
-    sendTelegramAuthNotice({
-      event: "LOGIN",
-      user: {
-        name: userRecord.name || "Scholar",
-        email: userRecord.email,
-        mobile: userRecord.mobile || "N/A",
-        college: userRecord.college || "N/A",
-        year: userRecord.year || "N/A",
-      },
-      photoUrl: null,
-      method: "Manual Form (Brevo Email OTP Verified)",
-    }).catch(() => {});
+    // Send Real-time Telegram Security Notice to Security Bot (Zero latency overhead)
+    setImmediate(() => {
+      sendTelegramAuthNotice({
+        event: "LOGIN",
+        user: {
+          name: userRecord.name || "Scholar",
+          email: userRecord.email,
+          mobile: userRecord.mobile || "N/A",
+          college: userRecord.college || "N/A",
+          year: userRecord.year || "N/A",
+          ip: getClientIp(req),
+        },
+        photoUrl: null,
+        method: "Manual Form (Brevo Email OTP Verified)",
+      }).catch(() => {});
+    });
 
     return res.json({
       success: true,
       message: "Login verified successfully! Welcome back.",
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH] Login OTP Verify error:", err);
@@ -1625,6 +1816,11 @@ router.post("/profile/request-mobile-otp", authLimiter, authenticateToken, async
 
     // Check duplicate mobile across other accounts
     if (db) {
+      const mHash = blindIndex(cleanMobile);
+      const hashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+      if (!hashSnap.empty && hashSnap.docs[0].id !== req.user.id) {
+        return res.status(400).json({ success: false, message: "This mobile number is already registered to another student account." });
+      }
       const dupSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
       if (!dupSnap.empty && dupSnap.docs[0].id !== req.user.id) {
         return res.status(400).json({ success: false, message: "This mobile number is already registered to another student account." });
@@ -1677,18 +1873,46 @@ router.put("/profile", authenticateToken, async (req, res) => {
       return res.status(401).json({ success: false, message: "Authentication required." });
     }
 
-    const { name, mobile, college, year, otp } = req.body;
+    const { name, username, photoUrl, mobile, college, year, otp } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: "Full Name is required." });
     }
 
     if (!db) return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
 
+    const isAdmin = req.user.id === "admin-root" || req.user.role === "admin" || (req.user.email && req.user.email.toLowerCase() === MAIN_ADMIN_EMAIL);
+
+    // 🛡️ RESERVED NAMES SHIELD: Strictly prevent non-admins from claiming admin or platform names
+    const RESERVED_NAMES = [
+      "admin", "administrator", "root", "staff", "mod", "moderator",
+      "fsm", "freestudymaterial", "fsmadmin", "fsm_admin", "official", "support",
+      "helpdesk", "system", "security", "owner", "superuser", "founder",
+      "coreconcepts", "bot", "ai", "team", "securitybot", "fsmchat"
+    ];
+
+    const cleanUsername = (username || "").trim().toLowerCase().replace(/^@/, "").replace(/[^a-z0-9_.]/g, "");
+    const cleanName = name.trim();
+
+    if (!isAdmin) {
+      const normalizedName = cleanName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const normalizedUser = cleanUsername.replace(/[^a-z0-9]/g, "");
+
+      const hasReservedInName = RESERVED_NAMES.some((res) => normalizedName.includes(res));
+      const hasReservedInUser = cleanUsername && RESERVED_NAMES.some((res) => normalizedUser.includes(res));
+
+      if (hasReservedInName || hasReservedInUser) {
+        return res.status(400).json({
+          success: false,
+          message: "Reserved keyword detected: Display names and usernames cannot contain administrative titles (Admin, FSM, Official, System, Staff, Support, Moderator). Please choose an academic nickname.",
+        });
+      }
+    }
+
     if (req.user.id === "admin-root") {
       return res.json({
         success: true,
         message: "Master Admin profile active.",
-        user: { ...req.user, name: name.trim(), mobile, college, year },
+        user: { ...req.user, name: cleanName, username: cleanUsername || "admin", photoUrl, mobile, college, year },
       });
     }
 
@@ -1698,7 +1922,18 @@ router.put("/profile", authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: "User account not found." });
     }
 
-    const existingData = snap.data();
+    // Check unique username if user provided or changed it
+    if (cleanUsername) {
+      const existingUserSnap = await db.collection("users").where("username", "==", cleanUsername).limit(1).get();
+      if (!existingUserSnap.empty && existingUserSnap.docs[0].id !== req.user.id) {
+        return res.status(400).json({
+          success: false,
+          message: `The username "@${cleanUsername}" is already taken by another student. Please pick a unique handle.`,
+        });
+      }
+    }
+
+    const existingData = decryptUserObject(snap.data());
     const oldMobile = (existingData.mobile || "").trim();
     const cleanNewMobile = (mobile || "").replace(/\D/g, "").slice(-10);
 
@@ -1738,7 +1973,7 @@ router.put("/profile", authenticateToken, async (req, res) => {
       sendTelegramAuthNotice({
         event: "PROFILE_UPDATE",
         user: {
-          name: name.trim(),
+          name: cleanName,
           email: req.user.email,
           oldMobile: oldMobile || "None",
           newMobile: cleanNewMobile,
@@ -1750,19 +1985,43 @@ router.put("/profile", authenticateToken, async (req, res) => {
       }).catch(() => {});
     }
 
+    const finalPlainMobile = cleanNewMobile || oldMobile;
     const updateData = {
-      name: name.trim(),
-      mobile: cleanNewMobile || oldMobile,
+      name: cleanName,
+      username: cleanUsername || existingData.username || "",
+      mobile: finalPlainMobile ? encrypt(finalPlainMobile) : "",
+      mobileHash: finalPlainMobile ? blindIndex(finalPlainMobile) : "",
       college: (college || "").trim(),
       year: (year || "Not Specified").trim(),
       updatedAt: new Date().toISOString(),
     };
+
+    // 📸 DP HISTORY: Preserve previous avatars so all versions are audited in private chat reports
+    if (photoUrl !== undefined && photoUrl !== existingData.photoUrl) {
+      const avatarHistory = Array.isArray(existingData.avatarHistory) ? [...existingData.avatarHistory] : [];
+      if (existingData.photoUrl) {
+        avatarHistory.push({
+          photoUrl: existingData.photoUrl,
+          changedAt: new Date().toISOString(),
+        });
+      }
+      updateData.photoUrl = photoUrl;
+      updateData.avatarHistory = avatarHistory;
+
+      if (tursoClient) {
+        tursoClient.execute({
+          sql: "UPDATE users SET avatar = ?, name = ?, updatedAt = ? WHERE id = ?",
+          args: [String(photoUrl || "").slice(0, 1000), cleanName, new Date().toISOString(), String(req.user.id)],
+        }).catch(() => {});
+      }
+    }
 
     await userDocRef.update(updateData);
 
     const updatedUser = {
       ...req.user,
       ...updateData,
+      mobile: finalPlainMobile,
     };
 
     return res.json({
@@ -1860,7 +2119,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
           try {
             const uSnap = await db.collection("users").where("email", "==", activeUser.email.toLowerCase().trim()).limit(1).get();
             if (!uSnap.empty) {
-              const uData = uSnap.docs[0].data();
+              const uData = decryptUserObject(uSnap.docs[0].data());
               fullUser.name = fullUser.name || uData.name;
               fullUser.mobile = uData.mobile || fullUser.mobile;
               fullUser.college = uData.college || fullUser.college;
@@ -1893,6 +2152,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
             mobile: fullUser.mobile || "N/A",
             college: fullUser.college || "N/A",
             year: fullUser.year || "N/A",
+            ip: getClientIp(req),
           },
           photoUrl: null,
           method: isAutoLogout ? "Auto-Logout (30 Min Inactivity)" : "Manual User Action (Logout Button)",
@@ -1923,7 +2183,7 @@ router.get("/me", authenticateToken, async (req, res) => {
   if (db && req.user.id && req.user.id !== "admin-root") {
     const snap = await db.collection("users").doc(req.user.id).get().catch(() => null);
     if (snap && snap.exists) {
-      const data = snap.data();
+      const data = decryptUserObject(snap.data());
       return res.json({
         success: true,
         user: {
@@ -1936,6 +2196,7 @@ router.get("/me", authenticateToken, async (req, res) => {
           role: data.email === MAIN_ADMIN_EMAIL ? "admin" : data.role,
           permissions: data.permissions || [],
           isBlocked: data.isBlocked || false,
+          hasPasskey: Boolean(data.hasPasskey || (data.passkeys && data.passkeys.length > 0)),
         },
       });
     }

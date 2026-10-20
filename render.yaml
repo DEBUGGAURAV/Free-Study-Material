@@ -4,15 +4,29 @@ services:
     runtime: node
     region: singapore
     plan: free
-    buildCommand: npm install --include=dev && npm run build
+    buildCommand: npm install && npm run build
     startCommand: node src/server.js
     envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
       - key: PORT
         value: 5000
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
         value: https://freestudymaterial.onrender.com
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID
@@ -21,22 +35,52 @@ services:
         sync: false
       - key: TELEGRAM_OTP_CHAT_ID
         sync: false
+      - key: TELEGRAM_TOPIC_GROUP_ID
+        sync: false
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH
         sync: false
-      - key: FIREBASE_PROJECT_ID
+      - key: TELEGRAM_CHAT_AUDIT_BOT_TOKEN
         sync: false
-      - key: FIREBASE_CLIENT_EMAIL
+      - key: TELEGRAM_CHAT_AUDIT_ADMIN_ID
         sync: false
-      - key: FIREBASE_PRIVATE_KEY
+      - key: TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID
         sync: false
-      - key: JWT_SECRET
+      - key: TELEGRAM_CHAT_TOPIC_POD_AUDITS
+        value: "31"
+      - key: TELEGRAM_CHAT_TOPIC_MEDIA_VAULT
+        value: "33"
+      - key: TELEGRAM_CHAT_TOPIC_DELETED
+        value: "35"
+      - key: TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT
+        value: "35"
+      - key: TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE
+        value: "72"
+      - key: TELEGRAM_CHAT_TOPIC_PRESENCE
+        value: "37"
+      - key: TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT
+        value: "39"
+      - key: TELEGRAM_CHAT_TOPIC_STEALTH
+        value: "35"
+      - key: GOOGLE_CLIENT_ID
         sync: false
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: TURSO_CACHE_DATABASE_URL
+        sync: false
+      - key: TURSO_CACHE_AUTH_TOKEN
+        sync: false
+      - key: CF_WORKER_URL
+        value: https://fsm-edge.jnplotus.workers.dev
+      - key: VITE_CF_WORKER_URL
+        value: https://fsm-edge.jnplotus.workers.dev
       - key: BREVO_SMTP_HOST
         value: smtp-relay.brevo.com
       - key: BREVO_SMTP_PORT
-        value: 587
+        value: "587"
       - key: BREVO_SMTP_USER
         sync: false
       - key: BREVO_SMTP_KEY

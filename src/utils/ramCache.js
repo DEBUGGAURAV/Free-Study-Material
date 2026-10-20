@@ -72,6 +72,10 @@ const ramCache = new MemoryCache();
 
 function invalidateAllCache() {
   ramCache.clear();
+  try {
+    const { invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+    invalidateTursoNotesCache();
+  } catch (_) {}
   console.log("[RAM CACHE] Cache invalidated.");
 }
 

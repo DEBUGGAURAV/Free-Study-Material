@@ -9,6 +9,7 @@
 
 const crypto = require("crypto");
 const { db } = require("../firebase");
+const { blindIndex, decryptUserObject } = require("../utils/cryptoVault");
 
 const botToken = (process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
 const BOT_USERNAME = "fsm_security_otp_bot";
@@ -36,14 +37,15 @@ let botSettings = {
   enableNoteUploadNotice: true,    // 📤 Alert on note upload (notice only, zero PDF file sent)
   enableNoteDownloadNotice: true,  // 📥 Alert on note download (full student & note details)
   enableAccountPurgeNotice: true,  // 🗑️ Alert on 90-day inactive account auto-purge
-  topicGroupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538",        // Supergroup chat ID (e.g. -100...)
+  topicGroupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "",        // Supergroup chat ID (e.g. -100...)
   topics: {
     newRegistration: process.env.TELEGRAM_TOPIC_REGISTRATION || "2",       // 🟢 Topic ID for New Registrations
     logins: process.env.TELEGRAM_TOPIC_LOGIN || "3",                // 🔐 Topic ID for Logins
     logouts: process.env.TELEGRAM_TOPIC_LOGOUT || "5",               // 🚪 Topic ID for Logouts
     securityUpdates: process.env.TELEGRAM_TOPIC_SECURITY || "6",       // 🚨 Topic ID for Security & Profile Updates
     otpAudit: process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7",              // 🔑 Topic ID for OTP Audit Logs
-    notesActivity: process.env.TELEGRAM_TOPIC_NOTES || "8",         // 📚 Topic ID for Notes Activity (Uploads & Downloads)
+    notesActivity: process.env.TELEGRAM_TOPIC_NOTES || "8",         // 📚 Topic ID for Notes Activity (Uploads)
+    downloadManager: process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8", // 📥 Topic ID for Notes Downloads (https://t.me/c/3943130538/8)
     userOtp: process.env.TELEGRAM_TOPIC_USER_OTP || "55",               // 🔑 Topic ID for Live Student OTP Feed
     accountPurge: process.env.TELEGRAM_TOPIC_PURGE || "59",          // 🗑️ Topic ID for 90-Day Inactive Account Purges
   },
@@ -119,79 +121,326 @@ async function loadBotSettings() {
 }
 
 /**
+ * Helper to extract all possible search keys from any string or object
+ */
+function extractCandidateKeys(input) {
+  const keys = new Set();
+  if (!input) return [];
+
+  const addKey = (val) => {
+    if (!val || typeof val !== "string") return;
+    const trimmed = val.trim();
+    if (!trimmed) return;
+    keys.add(trimmed);
+    keys.add(trimmed.toLowerCase());
+    const digits = trimmed.replace(/\D/g, "").slice(-10);
+    if (digits && digits.length >= 10) {
+      keys.add(digits);
+      keys.add(`+91${digits}`);
+      keys.add(`91${digits}`);
+    }
+    if (trimmed.startsWith("reg_")) {
+      keys.add(trimmed.replace(/^reg_/, ""));
+    }
+    if (trimmed.startsWith("reset_")) {
+      keys.add(trimmed.replace(/^reset_/, ""));
+    }
+  };
+
+  if (typeof input === "string") {
+    addKey(input);
+  } else if (typeof input === "number") {
+    addKey(String(input));
+  } else if (typeof input === "object") {
+    const { regToken, resetToken, mobile, email, key, identifier, digits } = input;
+    [regToken, resetToken, key, identifier, digits].forEach(addKey);
+    if (mobile) addKey(String(mobile));
+    if (email) addKey(String(email));
+  }
+
+  return Array.from(keys);
+}
+
+/**
+ * Strips undefined properties recursively so Firestore writes never fail
+ */
+function sanitizeForFirestore(obj) {
+  if (obj === null || obj === undefined) return null;
+  if (typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  const clean = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) {
+      clean[k] = null;
+    } else {
+      clean[k] = sanitizeForFirestore(v);
+    }
+  }
+  return clean;
+}
+
+/**
+ * Stores a registration record in RAM Map under all aliases
+ */
+function storeRegistrationInRam(record) {
+  if (!record) return;
+  const cleanMobile = String(record.mobile || "").trim();
+  const cleanEmail = String(record.email || "").trim().toLowerCase();
+  const digits = cleanMobile.replace(/\D/g, "").slice(-10);
+
+  if (record.regToken) pendingRegistrations.set(record.regToken, record);
+  if (cleanMobile) pendingRegistrations.set(cleanMobile, record);
+  if (digits) pendingRegistrations.set(digits, record);
+  if (cleanEmail) pendingRegistrations.set(cleanEmail, record);
+}
+
+/**
+ * Stores a password reset record in RAM Map under all aliases
+ */
+function storeResetInRam(record) {
+  if (!record) return;
+  const cleanMobile = String(record.mobile || "").trim();
+  const cleanEmail = String(record.email || "").trim().toLowerCase();
+  const digits = cleanMobile.replace(/\D/g, "").slice(-10);
+
+  if (record.resetToken) pendingPasswordResets.set(record.resetToken, record);
+  if (cleanMobile) pendingPasswordResets.set(cleanMobile, record);
+  if (digits) pendingPasswordResets.set(digits, record);
+  if (cleanEmail) pendingPasswordResets.set(cleanEmail, record);
+}
+
+/**
+ * Retrieve record from in-memory Map using candidate keys
+ */
+function getPendingFromMemory(store, candidateKeys) {
+  for (const k of candidateKeys) {
+    const record = store.get(k);
+    if (record) {
+      if (Date.now() > record.expiresAt) {
+        store.delete(k);
+      } else {
+        return record;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Persist verification session to Firestore to survive server restarts / multi-process
+ */
+async function saveVerificationToFirestore(type, record) {
+  if (!db || !record) return;
+  try {
+    const digits = String(record.mobile || "").replace(/\D/g, "").slice(-10);
+    const token = record.regToken || record.resetToken || "";
+    const cleanEmail = String(record.email || "").toLowerCase().trim();
+    const docData = sanitizeForFirestore({
+      type,
+      token: token || null,
+      mobile: record.mobile || null,
+      digits: digits || null,
+      email: cleanEmail || null,
+      otp: String(record.otp || "").trim(),
+      data: record,
+      expiresAt: record.expiresAt || (Date.now() + 15 * 60 * 1000),
+      createdAt: record.createdAt || Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    const batch = db.batch();
+    if (digits && digits.length >= 10) {
+      batch.set(db.collection("pending_verifications").doc(`${type}_digits_${digits}`), docData);
+    }
+    if (token) {
+      batch.set(db.collection("pending_verifications").doc(`${type}_token_${token}`), docData);
+      if (token.startsWith(`${type}_`)) {
+        const rawToken = token.replace(`${type}_`, "");
+        batch.set(db.collection("pending_verifications").doc(`${type}_token_${rawToken}`), docData);
+      }
+    }
+    if (cleanEmail && cleanEmail.includes("@")) {
+      const safeEmailKey = cleanEmail.replace(/[^a-zA-Z0-9]/g, "_");
+      batch.set(db.collection("pending_verifications").doc(`${type}_email_${safeEmailKey}`), docData);
+    }
+    await batch.commit();
+  } catch (err) {
+    console.warn(`[SECURITY-BOT] Failed to save ${type} verification to Firestore:`, err.message);
+  }
+}
+
+/**
+ * Retrieve verification record from Firestore if server restarted
+ */
+async function getVerificationFromFirestore(type, candidateKeys) {
+  if (!db) return null;
+  try {
+    for (const k of candidateKeys) {
+      const digits = k.replace(/\D/g, "").slice(-10);
+      const safeEmailKey = k.replace(/[^a-zA-Z0-9]/g, "_");
+      const docIds = [
+        `${type}_token_${k}`,
+        digits && digits.length >= 10 ? `${type}_digits_${digits}` : null,
+        k.includes("@") ? `${type}_email_${safeEmailKey}` : null,
+      ].filter(Boolean);
+
+      for (const docId of docIds) {
+        const snap = await db.collection("pending_verifications").doc(docId).get();
+        if (snap.exists) {
+          const doc = snap.data();
+          if (doc && doc.expiresAt && Date.now() <= doc.expiresAt && doc.data) {
+            return doc.data;
+          }
+        }
+      }
+    }
+
+    // Secondary fallback: Query by digits in pending_verifications
+    for (const k of candidateKeys) {
+      const digits = k.replace(/\D/g, "").slice(-10);
+      if (digits && digits.length >= 10) {
+        const snap = await db.collection("pending_verifications")
+          .where("type", "==", type)
+          .where("digits", "==", digits)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          const doc = snap.docs[0].data();
+          if (doc && doc.expiresAt && Date.now() <= doc.expiresAt && doc.data) {
+            return doc.data;
+          }
+        }
+      }
+      if (k && (k.startsWith("reg_") || k.startsWith("reset_"))) {
+        const snap = await db.collection("pending_verifications")
+          .where("type", "==", type)
+          .where("token", "==", k)
+          .limit(1)
+          .get();
+        if (!snap.empty) {
+          const doc = snap.docs[0].data();
+          if (doc && doc.expiresAt && Date.now() <= doc.expiresAt && doc.data) {
+            return doc.data;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[SECURITY-BOT] Firestore ${type} verification lookup notice:`, err.message);
+  }
+  return null;
+}
+
+/**
+ * Delete verification session on completion or expiry
+ */
+async function deleteVerificationRecord(type, record) {
+  if (!record) return;
+  const store = type === "reg" ? pendingRegistrations : pendingPasswordResets;
+  const token = record.regToken || record.resetToken;
+  const cleanMobile = (record.mobile || "").trim();
+  const digits = cleanMobile.replace(/\D/g, "").slice(-10);
+  const cleanEmail = (record.email || "").toLowerCase().trim();
+
+  if (token) store.delete(token);
+  if (cleanMobile) store.delete(cleanMobile);
+  if (digits) store.delete(digits);
+  if (cleanEmail) store.delete(cleanEmail);
+
+  if (!db) return;
+  try {
+    const batch = db.batch();
+    if (digits) batch.delete(db.collection("pending_verifications").doc(`${type}_digits_${digits}`));
+    if (token) batch.delete(db.collection("pending_verifications").doc(`${type}_token_${token}`));
+    if (cleanEmail) {
+      const safeEmailKey = cleanEmail.replace(/[^a-zA-Z0-9]/g, "_");
+      batch.delete(db.collection("pending_verifications").doc(`${type}_email_${safeEmailKey}`));
+    }
+    await batch.commit().catch(() => {});
+  } catch {}
+}
+
+/**
  * Creates or updates a pending registration session
  */
-function createPendingRegistration({ name, mobile, email, college, year, password }) {
+async function createPendingRegistration({ name, mobile, email, college, year, password }) {
   if (!botSettings.enableOtp) {
     throw new Error("Telegram Bot OTP verification is currently disabled by administrator. Please use Email OTP or Google Sign-In.");
   }
-  const regToken = "reg_" + crypto.randomBytes(6).toString("hex");
-  const otp = crypto.randomInt(100000, 999999).toString();
-  const cleanMobile = mobile.trim();
-  const cleanEmail = email.trim().toLowerCase();
+  const cleanMobile = String(mobile || "").trim();
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  const digits = cleanMobile.replace(/\D/g, "").slice(-10);
+  const candidateKeys = extractCandidateKeys({ mobile: cleanMobile, email: cleanEmail });
+
+  // Check RAM and Firestore for unexpired session
+  let existingReg = getPendingFromMemory(pendingRegistrations, candidateKeys);
+  if (!existingReg) {
+    existingReg = await getVerificationFromFirestore("reg", candidateKeys);
+  }
+
+  // Preserve existing unexpired OTP and token so multiple triggers keep the exact same OTP
+  const otp = (existingReg && Date.now() < existingReg.expiresAt && existingReg.otp)
+    ? existingReg.otp
+    : crypto.randomInt(100000, 999999).toString();
+
+  const regToken = existingReg?.regToken || ("reg_" + crypto.randomBytes(6).toString("hex"));
 
   const record = {
     regToken,
-    name: name.trim(),
-    mobile: cleanMobile,
-    email: cleanEmail,
-    college: (college || "Academic Institute").trim(),
-    year: (year || "1st Year").trim(),
-    password,
+    name: (name || existingReg?.name || "Scholar").trim(),
+    mobile: cleanMobile || (digits ? `+91${digits}` : ""),
+    email: cleanEmail || existingReg?.email || "",
+    college: (college || existingReg?.college || "Academic Institute").trim(),
+    year: (year || existingReg?.year || "1st Year").trim(),
+    password: password || existingReg?.password || "",
     otp,
-    tgName: null,
-    tgChatId: null,
-    createdAt: Date.now(),
+    tgName: existingReg?.tgName || null,
+    tgChatId: existingReg?.tgChatId || null,
+    createdAt: existingReg?.createdAt || Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000, // 15 mins validity
     attempts: 0,
+    verified: existingReg?.verified || false,
   };
 
-  // Map by regToken, mobile, and email
-  pendingRegistrations.set(regToken, record);
-  pendingRegistrations.set(cleanMobile, record);
-  pendingRegistrations.set(cleanEmail, record);
+  storeRegistrationInRam(record);
+  await saveVerificationToFirestore("reg", record);
 
   return { regToken, otp, botUsername: BOT_USERNAME, botLink: `https://t.me/${BOT_USERNAME}?start=${regToken}` };
 }
 
-function getPendingRegistration(key) {
-  if (!key) return null;
-  const cleanKey = String(key).trim().toLowerCase();
-  const record = pendingRegistrations.get(cleanKey);
-  if (!record) return null;
-  if (Date.now() > record.expiresAt) {
-    pendingRegistrations.delete(cleanKey);
-    return null;
+async function getPendingRegistration(keyOrObj) {
+  if (!keyOrObj) return null;
+  const candidateKeys = extractCandidateKeys(keyOrObj);
+  let record = getPendingFromMemory(pendingRegistrations, candidateKeys);
+  if (!record) {
+    record = await getVerificationFromFirestore("reg", candidateKeys);
+    if (record) {
+      storeRegistrationInRam(record);
+    }
   }
   return record;
 }
 
-function verifyRegistrationOtp(key, inputOtp) {
-  const record = getPendingRegistration(key);
+async function verifyRegistrationOtp(keyOrObj, inputOtp) {
+  const record = await getPendingRegistration(keyOrObj);
   if (!record) {
     return { valid: false, message: "No active registration request found or session expired. Please try again." };
   }
   record.attempts = (record.attempts || 0) + 1;
   if (record.attempts > 6) {
-    pendingRegistrations.delete(record.regToken);
-    pendingRegistrations.delete(record.mobile);
-    pendingRegistrations.delete(record.email);
+    await deleteVerificationRecord("reg", record);
     return { valid: false, message: "Too many incorrect attempts. Please initiate a new verification." };
   }
-  if (!record.verified) {
-    return {
-      valid: false,
-      message: "Security check failed: Mobile number has not been verified via Telegram. Please open @fsm_security_otp_bot and tap [ 📲 Verify & Share My Telegram Number ] to authenticate your number first.",
-    };
-  }
-  if (record.otp !== String(inputOtp).trim()) {
+
+  const cleanInput = String(inputOtp || "").replace(/\D/g, "");
+  const cleanStored = String(record.otp || "").replace(/\D/g, "");
+
+  if (cleanInput.length !== 6 || cleanInput !== cleanStored) {
     return { valid: false, message: "Invalid 6-digit OTP code. Please check your Telegram chat." };
   }
 
-  // Success -> clean up keys
-  pendingRegistrations.delete(record.regToken);
-  pendingRegistrations.delete(record.mobile);
-  pendingRegistrations.delete(record.email);
+  record.verified = true;
+  await deleteVerificationRecord("reg", record);
 
   return { valid: true, data: record };
 }
@@ -199,76 +448,82 @@ function verifyRegistrationOtp(key, inputOtp) {
 /**
  * Creates or updates a pending password reset session
  */
-function createPendingReset({ mobile, email, userId, userName, college }) {
+async function createPendingReset({ mobile, email, userId, userName, college }) {
   if (!botSettings.enableOtp) {
     throw new Error("Telegram Bot OTP verification is currently disabled by administrator. Please use Email OTP recovery.");
   }
-  const resetToken = "reset_" + crypto.randomBytes(6).toString("hex");
-  const otp = crypto.randomInt(100000, 999999).toString();
   const cleanMobile = String(mobile || "").trim();
   const cleanEmail = String(email || "").trim().toLowerCase();
+  const digits = cleanMobile.replace(/\D/g, "").slice(-10);
+  const candidateKeys = extractCandidateKeys({ mobile: cleanMobile, email: cleanEmail });
+
+  let existingRecord = getPendingFromMemory(pendingPasswordResets, candidateKeys);
+  if (!existingRecord) {
+    existingRecord = await getVerificationFromFirestore("reset", candidateKeys);
+  }
+
+  const otp = (existingRecord && Date.now() < existingRecord.expiresAt && existingRecord.otp)
+    ? existingRecord.otp
+    : crypto.randomInt(100000, 999999).toString();
+
+  const resetToken = existingRecord?.resetToken || ("reset_" + crypto.randomBytes(6).toString("hex"));
 
   const record = {
     resetToken,
-    mobile: cleanMobile,
-    email: cleanEmail,
-    userId,
-    userName: userName || "Scholar",
-    college: college && college !== "Academic Institute" ? college : "",
+    mobile: cleanMobile || (digits ? `+91${digits}` : ""),
+    email: cleanEmail || existingRecord?.email || "",
+    userId: userId || existingRecord?.userId || null,
+    userName: (userName || existingRecord?.userName || "Scholar").trim(),
+    college: college && college !== "Academic Institute" ? college : (existingRecord?.college || ""),
     otp,
-    tgChatId: null,
-    createdAt: Date.now(),
+    tgChatId: existingRecord?.tgChatId || null,
+    createdAt: existingRecord?.createdAt || Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000,
     attempts: 0,
-    verified: false,
+    verified: existingRecord?.verified || false,
     botUsername: BOT_USERNAME,
     botLink: `https://t.me/${BOT_USERNAME}?start=${resetToken}`,
   };
 
-  pendingPasswordResets.set(resetToken, record);
-  pendingPasswordResets.set(cleanMobile, record);
-  pendingPasswordResets.set(cleanEmail, record);
+  storeResetInRam(record);
+  await saveVerificationToFirestore("reset", record);
 
   return record;
 }
 
-function getPendingReset(key) {
-  if (!key) return null;
-  const cleanKey = String(key).trim().toLowerCase();
-  const record = pendingPasswordResets.get(cleanKey);
-  if (!record) return null;
-  if (Date.now() > record.expiresAt) {
-    pendingPasswordResets.delete(cleanKey);
-    return null;
+async function getPendingReset(keyOrObj) {
+  if (!keyOrObj) return null;
+  const candidateKeys = extractCandidateKeys(keyOrObj);
+  let record = getPendingFromMemory(pendingPasswordResets, candidateKeys);
+  if (!record) {
+    record = await getVerificationFromFirestore("reset", candidateKeys);
+    if (record) {
+      storeResetInRam(record);
+    }
   }
   return record;
 }
 
-function verifyResetOtp(key, inputOtp) {
-  const record = getPendingReset(key);
+async function verifyResetOtp(keyOrObj, inputOtp) {
+  const record = await getPendingReset(keyOrObj);
   if (!record) {
     return { valid: false, message: "No active password recovery request found or code expired." };
   }
   record.attempts = (record.attempts || 0) + 1;
   if (record.attempts > 6) {
-    pendingPasswordResets.delete(record.resetToken);
-    pendingPasswordResets.delete(record.mobile);
-    pendingPasswordResets.delete(record.email);
+    await deleteVerificationRecord("reset", record);
     return { valid: false, message: "Too many incorrect attempts. Please request a new recovery code." };
   }
-  if (!record.verified) {
-    return {
-      valid: false,
-      message: "Security check failed: Identity has not been verified via Telegram. Please open @fsm_security_otp_bot and tap [ 📲 Verify & Share My Telegram Number ] first.",
-    };
-  }
-  if (record.otp !== String(inputOtp).trim()) {
+
+  const cleanInput = String(inputOtp || "").replace(/\D/g, "");
+  const cleanStored = String(record.otp || "").replace(/\D/g, "");
+
+  if (cleanInput.length !== 6 || cleanInput !== cleanStored) {
     return { valid: false, message: "Invalid 6-digit recovery code. Please check your Telegram chat." };
   }
 
-  pendingPasswordResets.delete(record.resetToken);
-  pendingPasswordResets.delete(record.mobile);
-  pendingPasswordResets.delete(record.email);
+  record.verified = true;
+  await deleteVerificationRecord("reset", record);
 
   return { valid: true, data: record };
 }
@@ -324,24 +579,37 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
   record.verified = true;
   record.verifiedAt = Date.now();
 
+  storeRegistrationInRam(record);
+  await saveVerificationToFirestore("reg", record);
+
   userBotStates.set(chatId, {
+    action: "otp_dispatched_reg",
+    regRecord: record,
     lastInteraction: Date.now(),
-    expiresAt: Date.now() + 10 * 60 * 1000,
+    expiresAt: Date.now() + 15 * 60 * 1000,
   });
 
-  const combinedName = `${record.name} (${tgDisplayName})`;
+  const studentName = record.name || "Scholar";
+  const combinedName = tgDisplayName && !studentName.includes(`(${tgDisplayName})`)
+    ? `${studentName} (${tgDisplayName})`
+    : studentName;
+
+  const displayMobile = record.mobile || "Verified Telegram Number";
+  const displayEmail = record.email || "Pending Website Confirmation";
+  const displayCollege = record.college && record.college !== "Academic Institute" ? record.college : "";
+  const displayYear = record.year || "1st Year";
 
   const message = `🎓 <b>Free Study Material — Student Registration Passcode</b>\n\n` +
     `👤 <b>Student Name:</b> <code>${combinedName}</code>\n` +
-    `📱 <b>Mobile Number:</b> <code>${record.mobile}</code>\n` +
-    `📧 <b>Email Address:</b> <code>${record.email}</code>\n` +
-    `🏛️ <b>College:</b> <code>${record.college}</code>\n` +
-    `📚 <b>Academic Year:</b> <code>${record.year}</code>\n\n` +
+    `📱 <b>Mobile Number:</b> <code>${displayMobile}</code>\n` +
+    (record.email ? `📧 <b>Email Address:</b> <code>${displayEmail}</code>\n` : "") +
+    (displayCollege ? `🏛️ <b>College:</b> <code>${displayCollege}</code>\n` : "") +
+    (displayYear ? `📚 <b>Academic Year:</b> <code>${displayYear}</code>\n\n` : "\n") +
     `🔑 <b>Your 6-Digit Verification Code:</b>\n` +
-    `👉 <pre style="font-size: 24px;">${record.otp}</pre>\n\n` +
-    `⏱️ <b>Validity:</b> 10 Minutes\n` +
-    `🛡️ <i>Enter this code into the registration prompt on the website to activate your account.</i>\n` +
-    `⚡ <i>Delivered securely via Telegram Bot Core (Zero Email Quota Used).</i>`;
+    `👉 <pre style="font-size: 26px; font-weight: bold; letter-spacing: 2px;">${record.otp}</pre>\n\n` +
+    `⏱️ <b>Validity:</b> 15 Minutes\n` +
+    `🛡️ <i>Enter this 6-digit code in the registration form on our website to verify your mobile and activate your account.</i>\n` +
+    `⚡ <i>Delivered securely via Telegram Security Bot Core (Zero Email Quota Used).</i>`;
 
   const restartKeyboard = {
     keyboard: [
@@ -361,23 +629,23 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
       user: {
         name: combinedName,
         mobile: record.mobile,
-        email: record.email,
-        college: record.college,
-        year: record.year,
+        email: record.email || "",
+        college: record.college || "",
+        year: record.year || "",
       },
       method: "Telegram Bot DM",
       detail: "Student Registration Verification Passcode",
     }).catch(() => {});
 
-    // 2. Real-time Live OTP Passcode Feed to dedicated 7th topic for manual student sharing
+    // 2. Real-time Live OTP Passcode Feed to dedicated topic for manual student sharing
     sendTelegramAuthNotice({
       event: "USER_OTP",
       user: {
         name: combinedName,
         mobile: record.mobile,
-        email: record.email,
-        college: record.college,
-        year: record.year,
+        email: record.email || "",
+        college: record.college || "",
+        year: record.year || "",
       },
       otp: record.otp,
       method: "Telegram Bot DM",
@@ -394,6 +662,8 @@ async function dispatchPasswordResetOtp(chatId, record) {
   record.tgChatId = chatId;
   record.verified = true;
   record.verifiedAt = Date.now();
+  storeResetInRam(record);
+  saveVerificationToFirestore("reset", record).catch(() => {});
 
   userBotStates.set(chatId, {
     lastInteraction: Date.now(),
@@ -406,7 +676,8 @@ async function dispatchPasswordResetOtp(chatId, record) {
   const displayOtp = record.otp || "";
   const displayCollege = record.college && record.college !== "Academic Institute" ? record.college : "";
 
-  const message = `🔑 <b>Free Study Material — Password Recovery Passcode</b>\n\n` +
+  const message = `✅ <b>Email Address Verified Successfully!</b>\n\n` +
+    `🔑 <b>Free Study Material — Password Recovery Passcode</b>\n\n` +
     `👤 <b>Account Holder:</b> <code>${displayName}</code>\n` +
     `📱 <b>Registered Mobile:</b> <code>${displayMobile}</code>\n` +
     `📧 <b>Registered Email:</b> <code>${displayEmail}</code>\n` +
@@ -415,7 +686,7 @@ async function dispatchPasswordResetOtp(chatId, record) {
     `👉 <pre style="font-size: 24px;">${displayOtp}</pre>\n\n` +
     `⏱️ <b>Validity:</b> 10 Minutes\n` +
     `🛡️ <i>Enter this code and your new password on the website to update your credentials safely.</i>\n` +
-    `⚡ <i>Delivered securely via Telegram Bot Core (Zero Email Quota Used).</i>`;
+    `⚡ <i>Delivered securely via Telegram Security Bot Core (Zero Email Quota Used).</i>`;
 
   const resetRestartKeyboard = {
     keyboard: [
@@ -461,31 +732,15 @@ async function dispatchPasswordResetOtp(chatId, record) {
 let isSecurityPollerActive = false;
 let securityPollerOffset = 0;
 
-// Proactive 10-minute inactivity session sweeper
-setInterval(async () => {
-  if (!botToken) return;
+// Proactive 15-minute inactivity session memory cleanup (silent without user notification)
+setInterval(() => {
   const now = Date.now();
   for (const [chatId, state] of userBotStates.entries()) {
     if (state && state.expiresAt && now > state.expiresAt) {
       userBotStates.delete(chatId);
-      const initialOptionsKeyboard = {
-        keyboard: [
-          [{ text: "1️⃣ Student Registration" }],
-          [{ text: "2️⃣ Forgot Password" }],
-        ],
-        resize_keyboard: true,
-        one_time_keyboard: false,
-      };
-      await sendTelegramDirect(
-        chatId,
-        `⏱️ <b>Session Expired (10-Minute Inactivity Timeout)</b>\n\n` +
-          `You have been inactive for more than 10 minutes. For security reasons, your previous session has been automatically closed.\n\n` +
-          `👇 Please select an option below to start a new session:`,
-        initialOptionsKeyboard
-      ).catch(() => {});
     }
   }
-}, 15 * 1000);
+}, 60 * 1000);
 
 /**
  * Main Long-Polling Worker for @fsm_security_otp_bot
@@ -558,34 +813,17 @@ async function startSecurityBotPoller() {
           }
         }
 
-        // 10-minute inactivity timeout check on incoming user interaction
+        // Inactivity timeout cleanup on incoming user interaction (silently reset without jarring blocker)
         const activeState = userBotStates.get(chatId);
-        if (activeState && activeState.expiresAt && Date.now() > activeState.expiresAt && !text.startsWith("/start")) {
+        if (activeState && activeState.expiresAt && Date.now() > activeState.expiresAt) {
           userBotStates.delete(chatId);
-          const initialOptionsKeyboard = {
-            keyboard: [
-              [{ text: "1️⃣ Student Registration" }],
-              [{ text: "2️⃣ Forgot Password" }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-          await sendTelegramDirect(
-            chatId,
-            `⏱️ <b>Session Expired (10-Minute Inactivity Timeout)</b>\n\n` +
-              `You have been inactive for more than 10 minutes. For security reasons, your previous session has been automatically closed.\n\n` +
-              `👇 Please select an option below to start a new session:`,
-            initialOptionsKeyboard
-          );
-          continue;
         }
 
         // Refresh user interaction activity timer on incoming message
         userBotStates.set(chatId, {
           ...(activeState || {}),
           lastInteraction: Date.now(),
-          expiresAt: Date.now() + 10 * 60 * 1000,
+          expiresAt: Date.now() + 15 * 60 * 1000,
         });
 
         // Check if admin paused OTP delivery
@@ -603,13 +841,13 @@ async function startSecurityBotPoller() {
           const param = parts[1] ? parts[1].trim() : "";
 
           if (param.startsWith("reg_")) {
-            const regRecord = getPendingRegistration(param);
+            const regRecord = await getPendingRegistration(param);
             if (regRecord) {
               userBotStates.set(chatId, {
                 action: "waiting_verified_contact_reg",
                 regRecord,
                 lastInteraction: Date.now(),
-                expiresAt: Date.now() + 10 * 60 * 1000,
+                expiresAt: Date.now() + 15 * 60 * 1000,
               });
 
               const contactKeyboard = {
@@ -626,36 +864,51 @@ async function startSecurityBotPoller() {
                 `🎓 <b>Student Registration Security Check</b>\n\n` +
                   `👤 <b>Student Name:</b> <code>${regRecord.name}</code>\n` +
                   `📱 <b>Website Mobile:</b> <code>${regRecord.mobile}</code>\n` +
-                  `📧 <b>Website Email:</b> <code>${regRecord.email}</code>\n\n` +
-                  `🛡️ <b>Security Rule:</b> To confirm you are the true owner of mobile number <code>${regRecord.mobile}</code>, please tap the button below to share your verified Telegram contact:`,
+                  `📧 <b>Website Email:</b> <code>${regRecord.email}</code>\n` +
+                  (regRecord.college ? `🏛️ <b>College:</b> <code>${regRecord.college}</code>\n` : "") +
+                  (regRecord.year ? `📚 <b>Academic Year:</b> <code>${regRecord.year}</code>\n\n` : "\n") +
+                  `🛡️ <b>Step 1: Mobile Ownership Verification</b>\n` +
+                  `To verify that you own mobile number <code>${regRecord.mobile}</code> and receive your 6-digit registration OTP, please tap the button below:`,
                 contactKeyboard
               );
               continue;
             } else {
-              const restartKeyboard = {
+              userBotStates.set(chatId, {
+                action: "waiting_verified_contact_reg_generic",
+                lastInteraction: Date.now(),
+                expiresAt: Date.now() + 15 * 60 * 1000,
+              });
+
+              const contactKeyboard = {
                 keyboard: [
+                  [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+                  [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
                   [{ text: "🔄 Restart Bot" }],
                 ],
                 resize_keyboard: true,
                 one_time_keyboard: false,
               };
+
               await sendTelegramDirect(
                 chatId,
-                `⚠️ <b>Session Expired or Not Found</b>\n\nPlease fill the registration form on the website again and click <i>Get OTP via Telegram Bot</i>.`,
-                restartKeyboard
+                `🎓 <b>Student Registration & Passcode Delivery</b>\n\n` +
+                  `Welcome! To verify your phone and receive your 6-digit registration OTP code:\n\n` +
+                  `📲 Tap <b>[ 📲 Verify & Share My Telegram Number ]</b> below, or send your 10-digit registered mobile number.\n\n` +
+                  `Your passcode will be generated and delivered right here!`,
+                contactKeyboard
               );
               continue;
             }
           }
 
           if (param.startsWith("reset_")) {
-            const resetRecord = getPendingReset(param);
+            const resetRecord = await getPendingReset(param);
             if (resetRecord) {
               userBotStates.set(chatId, {
                 action: "waiting_verified_contact_reset",
                 resetRecord,
                 lastInteraction: Date.now(),
-                expiresAt: Date.now() + 10 * 60 * 1000,
+                expiresAt: Date.now() + 15 * 60 * 1000,
               });
 
               const contactKeyboard = {
@@ -669,26 +922,40 @@ async function startSecurityBotPoller() {
 
               await sendTelegramDirect(
                 chatId,
-                `🔑 <b>Password Reset Security Check</b>\n\n` +
+                `🔑 <b>Password Reset Security Check (2-Step Verification)</b>\n\n` +
                   `👤 <b>Account Holder:</b> <code>${resetRecord.userName || "Scholar"}</code>\n` +
-                  `📱 <b>Website Mobile:</b> <code>${resetRecord.mobile}</code>\n` +
-                  `📧 <b>Website Email:</b> <code>${resetRecord.email}</code>\n\n` +
-                  `🛡️ <b>Security Rule:</b> To confirm you are the true owner of mobile number <code>${resetRecord.mobile}</code>, please tap the button below to share your verified Telegram contact:`,
+                  `📱 <b>Registered Mobile:</b> <code>${resetRecord.mobile}</code>\n\n` +
+                  `🛡️ <b>Security Rule:</b>\n` +
+                  `1️⃣ <b>Step 1:</b> Tap the button below to share your verified Telegram contact.\n` +
+                  `2️⃣ <b>Step 2:</b> Enter your registered Email address to verify ownership.\n\n` +
+                  `👇 <i>Please tap the button below for Step 1:</i>`,
                 contactKeyboard
               );
               continue;
             } else {
-              const restartKeyboard = {
+              userBotStates.set(chatId, {
+                action: "waiting_verified_contact_reset_generic",
+                lastInteraction: Date.now(),
+                expiresAt: Date.now() + 15 * 60 * 1000,
+              });
+
+              const contactKeyboard = {
                 keyboard: [
+                  [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+                  [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
                   [{ text: "🔄 Restart Bot" }],
                 ],
                 resize_keyboard: true,
                 one_time_keyboard: false,
               };
+
               await sendTelegramDirect(
                 chatId,
-                `⚠️ <b>Password Reset Request Expired</b>\n\nPlease enter your Mobile Number and Email on the website to request a fresh password recovery code.`,
-                restartKeyboard
+                `🔑 <b>Password Reset & Account Recovery</b>\n\n` +
+                  `Welcome! To recover your account password and receive your reset passcode:\n\n` +
+                  `📲 Tap <b>[ 📲 Verify & Share My Telegram Number ]</b> below, or type your 10-digit registered mobile number.\n\n` +
+                  `Your recovery code will be dispatched securely!`,
+                contactKeyboard
               );
               continue;
             }
@@ -702,8 +969,8 @@ async function startSecurityBotPoller() {
 
           const initialOptionsKeyboard = {
             keyboard: [
-              [{ text: "1️⃣ Student Registration" }],
-              [{ text: "2️⃣ Forgot Password" }],
+              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
               [{ text: "🔄 Restart Bot" }],
             ],
             resize_keyboard: true,
@@ -714,8 +981,9 @@ async function startSecurityBotPoller() {
             chatId,
             `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
               `I can securely deliver your verification passcodes and assist with account access:\n\n` +
-              `1️⃣ <b>Student Registration:</b> Select this option to verify your student account.\n` +
-              `2️⃣ <b>Forgot Password:</b> Select this option to recover your account safely.`,
+              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
+              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
+              `2️⃣ <b>Forgot Password:</b> Recover your account access safely.`,
             initialOptionsKeyboard
           );
           continue;
@@ -801,8 +1069,8 @@ async function startSecurityBotPoller() {
           });
           const initialOptionsKeyboard = {
             keyboard: [
-              [{ text: "1️⃣ Student Registration" }],
-              [{ text: "2️⃣ Forgot Password" }],
+              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
               [{ text: "🔄 Restart Bot" }],
             ],
             resize_keyboard: true,
@@ -813,7 +1081,8 @@ async function startSecurityBotPoller() {
             chatId,
             `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
               `I can instantly generate and deliver your verification passcodes:\n\n` +
-              `1️⃣ <b>Student Registration:</b> Enter your details on our website and choose Telegram Bot Verification.\n` +
+              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
+              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
               `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
             initialOptionsKeyboard
           );
@@ -824,8 +1093,8 @@ async function startSecurityBotPoller() {
         if (text === "/help") {
           const initialOptionsKeyboard = {
             keyboard: [
-              [{ text: "1️⃣ Student Registration" }],
-              [{ text: "2️⃣ Forgot Password" }],
+              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
               [{ text: "🔄 Restart Bot" }],
             ],
             resize_keyboard: true,
@@ -835,7 +1104,8 @@ async function startSecurityBotPoller() {
             chatId,
             `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
               `I can instantly generate and deliver your verification passcodes:\n\n` +
-              `1️⃣ <b>Student Registration:</b> Enter your details on our website and choose Telegram Bot Verification.\n` +
+              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
+              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
               `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
             initialOptionsKeyboard
           );
@@ -885,12 +1155,7 @@ async function startSecurityBotPoller() {
               continue;
             }
 
-            // SUCCESS! Numbers match 100%!
-            await sendTelegramDirect(
-              chatId,
-              `✅ <b>Mobile Number Verified Successfully!</b>\nTelegram contact matches website form (<code>${formMobile}</code>).`,
-              { remove_keyboard: true }
-            );
+            // SUCCESS! Numbers match 100%! Single consolidated notification:
             await dispatchRegistrationOtp(chatId, currentState.regRecord, user);
             userBotStates.delete(chatId);
             continue;
@@ -921,13 +1186,36 @@ async function startSecurityBotPoller() {
             }
 
             // SUCCESS! Numbers match 100%!
+            // Transition to Step 2: Require registered Email address input to confirm identity
+            userBotStates.set(chatId, {
+              action: "waiting_email_reset",
+              mobile: verifiedTgMobile,
+              userId: currentState.resetRecord.userId,
+              resetRecord: currentState.resetRecord,
+              userData: {
+                email: currentState.resetRecord.email,
+                name: currentState.resetRecord.userName,
+                college: currentState.resetRecord.college,
+              },
+              expiresAt: Date.now() + 10 * 60 * 1000,
+            });
+
+            const restartKeyboard = {
+              keyboard: [
+                [{ text: "🔄 Restart Bot" }],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: false,
+            };
+
             await sendTelegramDirect(
               chatId,
-              `✅ <b>Mobile Number Verified Successfully!</b>`,
-              { remove_keyboard: true }
+              `✅ <b>Step 1 Verified: Mobile Number Confirmed!</b>\n\n` +
+                `👤 <b>Student Name:</b> <code>${currentState.resetRecord.userName || "Scholar"}</code>\n` +
+                `📱 <b>Verified Mobile:</b> <code>${verifiedTgMobile}</code>\n\n` +
+                `👉 <b>Step 2 (Email Ownership Check):</b>\nPlease type and send your registered <b>Email Address</b> to verify ownership and receive your password reset OTP:`,
+              restartKeyboard
             );
-            await dispatchPasswordResetOtp(chatId, currentState.resetRecord);
-            userBotStates.delete(chatId);
             continue;
           }
 
@@ -946,10 +1234,14 @@ async function startSecurityBotPoller() {
 
             if (db) {
               try {
-                const snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
+                const mHash = blindIndex(verifiedTgMobile);
+                let snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+                if (snap.empty) {
+                  snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
+                }
                 if (!snap.empty) {
                   const userDoc = snap.docs[0];
-                  const userData = userDoc.data();
+                  const userData = decryptUserObject(userDoc.data());
                   userBotStates.set(chatId, {
                     action: "waiting_email_reset",
                     mobile: verifiedTgMobile,
@@ -981,83 +1273,30 @@ async function startSecurityBotPoller() {
             }
           }
 
-          // Case C: Generic Student Registration (user clicked 1️⃣ Student Registration in bot)
-          if (
-            currentState &&
-            currentState.action === "waiting_verified_contact_reg_generic"
-          ) {
-            const restartKeyboard = {
-              keyboard: [
-                [{ text: "🔄 Restart Bot" }],
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: false,
-            };
-
-            const directPendingReg = getPendingRegistration(verifiedTgMobile);
-            if (directPendingReg) {
-              await sendTelegramDirect(
-                chatId,
-                `✅ <b>Mobile Number Verified!</b> Dispatched passcode for <code>${directPendingReg.name}</code>.`,
-                restartKeyboard
-              );
-              await dispatchRegistrationOtp(chatId, directPendingReg, user);
-              userBotStates.delete(chatId);
-              continue;
-            }
-
-            if (db) {
-              try {
-                const snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
-                if (!snap.empty) {
-                  await sendTelegramDirect(
-                    chatId,
-                    `ℹ️ <b>Mobile Number Already Registered</b>\n\n` +
-                      `Mobile <code>${verifiedTgMobile}</code> is already registered with a student account.\n\n` +
-                      `• If you forgot your password, please select <b>2️⃣ Forgot Password</b>.\n` +
-                      `• Or tap <b>[ 🔄 Restart Bot ]</b> below to start fresh.`,
-                    initialOptionsKeyboard
-                  );
-                  userBotStates.delete(chatId);
-                  continue;
-                }
-              } catch {}
-            }
-
-            await sendTelegramDirect(
-              chatId,
-              `✅ <b>Mobile Number Verified: <code>${verifiedTgMobile}</code></b>\n\n` +
-                `Your phone number has been verified successfully!\n\n` +
-                `👉 <b>Next Step:</b> Please open our website, fill out the <b>Student Sign Up</b> form using mobile number <code>${verifiedTgMobile}</code>, and choose <i>Telegram Bot Verification</i> to activate your account.`,
-              restartKeyboard
-            );
-            userBotStates.delete(chatId);
-            continue;
-          }
-
-          // Case D: Direct Pending Registration match
-          const directPendingReg = getPendingRegistration(verifiedTgMobile);
+          // Case C & D: Direct Pending Registration match
+          const directPendingReg = await getPendingRegistration(verifiedTgMobile);
           if (directPendingReg) {
-            const restartKeyboard = {
-              keyboard: [
-                [{ text: "🔄 Restart Bot" }],
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: false,
-            };
-            await sendTelegramDirect(
-              chatId,
-              `✅ <b>Mobile Number Verified!</b> Dispatched passcode for <code>${directPendingReg.name}</code>.`,
-              restartKeyboard
-            );
             await dispatchRegistrationOtp(chatId, directPendingReg, user);
             userBotStates.delete(chatId);
             continue;
           }
 
-          // Case E: Direct Pending Reset match
-          const directPendingReset = getPendingReset(verifiedTgMobile);
+          // Direct Pending Reset match
+          const directPendingReset = await getPendingReset(verifiedTgMobile);
           if (directPendingReset) {
+            userBotStates.set(chatId, {
+              action: "waiting_email_reset",
+              mobile: verifiedTgMobile,
+              userId: directPendingReset.userId,
+              resetRecord: directPendingReset,
+              userData: {
+                email: directPendingReset.email,
+                name: directPendingReset.userName,
+                college: directPendingReset.college,
+              },
+              expiresAt: Date.now() + 10 * 60 * 1000,
+            });
+
             const restartKeyboard = {
               keyboard: [
                 [{ text: "🔄 Restart Bot" }],
@@ -1065,23 +1304,29 @@ async function startSecurityBotPoller() {
               resize_keyboard: true,
               one_time_keyboard: false,
             };
+
             await sendTelegramDirect(
               chatId,
-              `✅ <b>Mobile Number Verified!</b> Dispatched password recovery code for <code>${directPendingReset.userName}</code>.`,
+              `✅ <b>Step 1 Verified: Mobile Number Confirmed!</b>\n\n` +
+                `👤 <b>Student Name:</b> <code>${directPendingReset.userName || "Scholar"}</code>\n` +
+                `📱 <b>Verified Mobile:</b> <code>${verifiedTgMobile}</code>\n\n` +
+                `👉 <b>Step 2 (Email Ownership Check):</b>\nPlease type and send your registered <b>Email Address</b> to verify ownership and receive your password reset OTP:`,
               restartKeyboard
             );
-            await dispatchPasswordResetOtp(chatId, directPendingReset);
-            userBotStates.delete(chatId);
             continue;
           }
 
-          // Case D: Default contact received without prior state
+          // Check if this mobile number already belongs to an existing student account in Firestore
           if (db) {
             try {
-              const snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
+              const mHash = blindIndex(verifiedTgMobile);
+              let snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+              if (snap.empty) {
+                snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
+              }
               if (!snap.empty) {
                 const userDoc = snap.docs[0];
-                const userData = userDoc.data();
+                const userData = decryptUserObject(userDoc.data());
                 userBotStates.set(chatId, {
                   action: "waiting_email_reset",
                   mobile: verifiedTgMobile,
@@ -1091,6 +1336,7 @@ async function startSecurityBotPoller() {
                 });
                 const restartKeyboard = {
                   keyboard: [
+                    [{ text: "2️⃣ Forgot Password" }],
                     [{ text: "🔄 Restart Bot" }],
                   ],
                   resize_keyboard: true,
@@ -1098,38 +1344,41 @@ async function startSecurityBotPoller() {
                 };
                 await sendTelegramDirect(
                   chatId,
-                  `👋 <b>Welcome back ${userData.name || "Scholar"}!</b>\n\n` +
-                    `Your mobile <code>${verifiedTgMobile}</code> is registered.\n` +
-                    `To reset your password, please enter your registered <b>Email Address</b>:`,
-                  restartKeyboard
-                );
-                continue;
-              } else {
-                const restartKeyboard = {
-                  keyboard: [
-                    [{ text: "🔄 Restart Bot" }],
-                  ],
-                  resize_keyboard: true,
-                  one_time_keyboard: false,
-                };
-                await sendTelegramDirect(
-                  chatId,
-                  `ℹ️ <b>No Pending Registration Found</b>\n\n` +
-                    `No pending registration found for <code>${verifiedTgMobile}</code>.\n` +
-                    `Please fill the registration form on our website first and choose <i>Telegram Bot Verification</i>.`,
+                  `ℹ️ <b>Mobile Number Already Registered</b>\n\n` +
+                    `Mobile <code>${verifiedTgMobile}</code> is already linked to student account: <b>${userData.name || "Scholar"}</b>.\n\n` +
+                    `• If you want to reset your password, please enter your registered <b>Email Address</b> or tap <b>[ 2️⃣ Forgot Password ]</b>.\n` +
+                    `• Or sign in directly on the website with your Passkey or Password.`,
                   restartKeyboard
                 );
                 continue;
               }
-            } catch {}
+            } catch (userErr) {
+              console.warn("[SECURITY-BOT] User lookup check error:", userErr.message);
+            }
           }
+
+          // New Student: ALWAYS generate registration OTP and dispatch immediately!
+          // NEVER show "No Pending Registration Found" error!
+          const tgFullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
+          const autoReg = await createPendingRegistration({
+            name: tgFullName || user.username || "Scholar",
+            mobile: verifiedTgMobile,
+            email: "",
+            college: "Academic Institute",
+            year: "1st Year",
+            password: "",
+          });
+          const freshRecord = await getPendingRegistration(verifiedTgMobile);
+          await dispatchRegistrationOtp(chatId, freshRecord || autoReg, user);
+          userBotStates.delete(chatId);
+          continue;
         }
 
         // 4. User sent a 10-digit Mobile Number via Plain Text:
         const digitsOnly = text.replace(/\D/g, "");
         if (digitsOnly.length === 10 && /^[6-9]\d{9}$/.test(digitsOnly)) {
-          const pendingReset = getPendingReset(digitsOnly);
-          const pendingReg = getPendingRegistration(digitsOnly);
+          const pendingReset = await getPendingReset(digitsOnly);
+          const pendingReg = await getPendingRegistration(digitsOnly);
 
           if (pendingReset) {
             userBotStates.set(chatId, {
@@ -1203,30 +1452,26 @@ async function startSecurityBotPoller() {
 
           // A. If user was waiting for email in Forgot Password flow (contact already verified):
           if (currentState && currentState.action === "waiting_email_reset") {
-            const expectedEmail = (currentState.userData?.email || "").toLowerCase().trim();
+            const expectedEmail = (
+              currentState.resetRecord?.email ||
+              currentState.userData?.email ||
+              ""
+            ).toLowerCase().trim();
 
             if (expectedEmail && cleanEmail === expectedEmail) {
-              // Matches! Generate Password Reset OTP!
-              const resetRecord = createPendingReset({
-                mobile: currentState.mobile,
-                email: expectedEmail,
-                userId: currentState.userId,
-                userName: currentState.userData?.name || "Scholar",
-                college: currentState.userData?.college || "Academic Institute",
-              });
+              // Matches! Use existing pending reset record or generate one
+              let resetRecord = currentState.resetRecord;
+              if (!resetRecord) {
+                resetRecord = await createPendingReset({
+                  mobile: currentState.mobile,
+                  email: expectedEmail,
+                  userId: currentState.userId,
+                  userName: currentState.userData?.name || "Scholar",
+                  college: currentState.userData?.college || "Academic Institute",
+                });
+              }
 
-              const restartKeyboard = {
-                keyboard: [
-                  [{ text: "🔄 Restart Bot" }],
-                ],
-                resize_keyboard: true,
-                one_time_keyboard: false,
-              };
-              await sendTelegramDirect(
-                chatId,
-                `✅ <b>Step 2 Verified: Email address confirmed!</b>\nDispatched password reset passcode.`,
-                restartKeyboard
-              );
+              // Single consolidated message: dispatchPasswordResetOtp delivers verified badge + details + OTP
               await dispatchPasswordResetOtp(chatId, resetRecord);
               userBotStates.delete(chatId);
               continue;
@@ -1240,7 +1485,7 @@ async function startSecurityBotPoller() {
               };
               await sendTelegramDirect(
                 chatId,
-                `❌ <b>Email Address Mismatch!</b>\n\nThe email address <code>${cleanEmail}</code> does not match the account registered with mobile <code>${currentState.mobile}</code>.\n\nPlease enter the correct registered email address or tap <b>[ 🔄 Restart Bot ]</b> below.`,
+                `❌ <b>Email Address Mismatch!</b>\n\nThe email address you entered (<code>${cleanEmail}</code>) does not match the account registered with mobile number <code>${currentState.mobile}</code>.\n\nPlease type your correct registered email address, or tap <b>[ 🔄 Restart Bot ]</b> below.`,
                 restartKeyboard
               );
               continue;
@@ -1285,8 +1530,9 @@ async function startSecurityBotPoller() {
         // Fallback friendly instruction
         const fallbackOptionsKeyboard = {
           keyboard: [
-            [{ text: "1️⃣ Student Registration" }],
-            [{ text: "2️⃣ Forgot Password" }],
+            [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
+            [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
+            [{ text: "🔄 Restart Bot" }],
           ],
           resize_keyboard: true,
           one_time_keyboard: false,
@@ -1295,9 +1541,9 @@ async function startSecurityBotPoller() {
           chatId,
           `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
             `I can instantly generate and deliver your verification passcodes:\n\n` +
-            `1️⃣ <b>Student Registration:</b> Enter your details on our website and choose Telegram Bot Verification.\n` +
-            `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.\n\n` +
-            `👇 <i>Please choose an option below:</i>`,
+            `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
+            `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
+            `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
           fallbackOptionsKeyboard
         );
       }

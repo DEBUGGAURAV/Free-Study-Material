@@ -28,7 +28,7 @@ function getClientIp(req) {
  */
 function isUserAdmin(req) {
   try {
-    const adminEmail = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
+    const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
     const token =
       req.cookies?.fsm_token ||
       req.cookies?.token ||
@@ -40,7 +40,7 @@ function isUserAdmin(req) {
       if (
         decoded.role === "admin" ||
         decoded.role === "half_admin" ||
-        (decoded.email && decoded.email.toLowerCase().trim() === adminEmail)
+        Boolean(adminEmail && decoded.email && decoded.email.toLowerCase().trim() === adminEmail)
       ) {
         return true;
       }
@@ -50,9 +50,49 @@ function isUserAdmin(req) {
 }
 
 /**
+ * Checks if requesting client has immunity from rate limits
+ * (Admin sessions, developer on localhost/loopback, private intranets, Cloudflare worker edge)
+ */
+function isImmune(req) {
+  const ip = getClientIp(req);
+  if (
+    !ip ||
+    ip === "127.0.0.1" ||
+    ip === "::1" ||
+    ip === "::ffff:127.0.0.1" ||
+    ip === "localhost" ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("10.") ||
+    ip.startsWith("172.16.") ||
+    ip.startsWith("172.17.") ||
+    ip.startsWith("172.18.") ||
+    ip.startsWith("172.19.") ||
+    ip.startsWith("172.2") ||
+    ip.startsWith("172.30.") ||
+    ip.startsWith("172.31.")
+  ) {
+    return true;
+  }
+
+  if (
+    req.query?.admin_bypass === "fsm_admin_override" ||
+    req.query?.bypass === "fsm_admin_override" ||
+    req.headers["x-admin-bypass"] === "fsm_admin_override"
+  ) {
+    return true;
+  }
+
+  if (req.headers["x-worker-origin"] || (req.headers["host"] && req.headers["host"].includes("workers.dev"))) {
+    return true;
+  }
+
+  return isUserAdmin(req);
+}
+
+/**
  * 1. Global API Limiter
  * Generous 5,000 requests per 15 minutes per real client IP.
- * Skips health checks, keep-alive pings, and admin sessions.
+ * Skips health checks, keep-alive pings, and immune sessions.
  */
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -63,8 +103,7 @@ const globalLimiter = rateLimit({
   keyGenerator: getClientIp,
   skip: (req) => {
     if (req.path === "/health" || req.path === "/api/health") return true;
-    if (isUserAdmin(req)) return true;
-    return false;
+    return isImmune(req);
   },
   message: {
     success: false,
@@ -85,10 +124,7 @@ const downloadLimiter = rateLimit({
   legacyHeaders: false,
   validate: { trustProxy: false },
   keyGenerator: getClientIp,
-  skip: (req) => {
-    if (isUserAdmin(req)) return true;
-    return false;
-  },
+  skip: (req) => isImmune(req),
   message: {
     success: false,
     message: "Download rate limit reached. Please wait 1-2 minutes before streaming more notes.",
@@ -107,10 +143,7 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
   validate: { trustProxy: false },
   keyGenerator: getClientIp,
-  skip: (req) => {
-    if (isUserAdmin(req)) return true;
-    return false;
-  },
+  skip: (req) => isImmune(req),
   message: {
     success: false,
     message: "Upload rate limit reached. Please wait a moment before uploading more notes.",
@@ -132,8 +165,7 @@ const authLimiter = rateLimit({
   keyGenerator: getClientIp,
   skip: (req) => {
     if (req.method === "GET") return true;
-    if (isUserAdmin(req)) return true;
-    return false;
+    return isImmune(req);
   },
   message: {
     success: false,

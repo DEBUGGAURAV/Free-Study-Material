@@ -10,6 +10,7 @@ const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { sendTelegramAuthNotice } = require("../services/emailService");
+const { upsertNoteToTurso } = require("../services/tursoService");
 
 // Ensure temp directory exists
 const tempDir = path.join(__dirname, "../../temp");
@@ -101,21 +102,24 @@ router.post(
         tags,
       } = req.body;
 
+      const sanitizeField = (str, maxLen = 150) => {
+        if (!str || typeof str !== "string") return "";
+        return str.replace(/<[^>]*>?/gm, "").replace(/["\r\n\\]/g, " ").trim().slice(0, maxLen);
+      };
+
       const file = req.file;
-      const noteTitle = (title || file.originalname).trim();
-      const noteSubject = (subject || "General Academic").trim();
+      const noteTitle = sanitizeField(title || file.originalname, 180);
+      const noteSubject = sanitizeField(subject || "General Academic", 100);
       
       // Determine final branch: customBranch takes precedence if provided!
-      const finalBranch = (customBranch && customBranch.trim() !== "") 
-        ? customBranch.trim().toUpperCase() 
-        : (branch || "CSE").trim();
+      const rawBranch = (customBranch && customBranch.trim() !== "") ? customBranch : (branch || "CSE");
+      const finalBranch = sanitizeField(rawBranch, 60).toUpperCase();
 
       // Determine course (e.g. B.Tech, BCA, MCA, Diploma, M.Tech, etc.)
-      const finalCourse = (customCourse && customCourse.trim() !== "")
-        ? customCourse.trim().toUpperCase()
-        : (course || "B.Tech").trim();
+      const rawCourse = (customCourse && customCourse.trim() !== "") ? customCourse : (course || "B.Tech");
+      const finalCourse = sanitizeField(rawCourse, 60).toUpperCase();
 
-      const noteYear = (year || semester || "All Years").trim();
+      const noteYear = sanitizeField(year || semester || "All Years", 40);
 
       // Create new document reference in Firestore
       let noteId = null;
@@ -151,6 +155,7 @@ router.post(
 
         await docRef.set(noteData);
         invalidateAllCache();
+        upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-UPLOAD] Sync notice:", e.message));
 
         // 🧠 Smart Caching: Under 50MB cached in RAM for 0ms latency; >50MB bypasses RAM cache to protect 512MB limit
         if (file.size <= 50 * 1024 * 1024) {

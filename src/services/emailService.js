@@ -44,44 +44,60 @@ function getTransporter() {
   return transporter;
 }
 
+let getBotSettings = null;
+try {
+  const secBot = require("./securityBotService");
+  getBotSettings = secBot.getBotSettings;
+} catch {}
+
 /**
  * Realtime Telegram Dedicated Security OTP Bot Delivery Engine
- * Dispatches instant passcode alerts to dedicated security bot / private chat
+ * Dispatches instant passcode alerts to dedicated security Supergroup topic (Topic 7)
  */
 async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
   try {
+    let currentSettings = null;
+    if (getBotSettings) {
+      currentSettings = getBotSettings();
+      if (currentSettings.enableOtpAuditNotice === false) return;
+    }
+
     // Dedicated OTP Bot Token (falls back to main bot token if not set)
     const botToken = (process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
-    // Dedicated OTP Chat ID (falls back to storage chat id if not set)
-    const targetChatId = (process.env.TELEGRAM_OTP_CHAT_ID || process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
+    const supergroupId = (process.env.TELEGRAM_TOPIC_GROUP_ID || "").trim();
+    let targetChatId = (currentSettings?.topicGroupChatId || "").trim();
+    if (!targetChatId || !targetChatId.startsWith("-100")) {
+      targetChatId = supergroupId;
+    }
     if (!botToken || !targetChatId) return;
+
+    const threadId = currentSettings?.topics?.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
 
     const text = `🔐 <b>Free Study Material — Security Passcode Alert</b>\n\n` +
       `👤 <b>Student Email:</b> <code>${toEmail}</code>\n` +
       `🔑 <b>${type} Passcode:</b> <code>${otp}</code>\n` +
       `⏱️ <b>Validity:</b> 10 Minutes\n` +
-      `🌐 <i>Isolated Security Core Delivery</i>`;
+      `🌐 <i>Isolated Security Core Delivery (Supergroup Topic #${threadId})</i>`;
+
+    const payload = {
+      chat_id: targetChatId,
+      text,
+      parse_mode: "HTML",
+    };
+    if (threadId && !isNaN(Number(threadId))) {
+      payload.message_thread_id = Number(threadId);
+    }
 
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: targetChatId,
-        text,
-        parse_mode: "HTML",
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(8000),
     });
   } catch (err) {
     console.warn("[TELEGRAM-OTP] OTP bot notification notice:", err.message);
   }
 }
-
-let getBotSettings = null;
-try {
-  const secBot = require("./securityBotService");
-  getBotSettings = secBot.getBotSettings;
-} catch {}
 
 /**
  * Auto-creates or retrieves dedicated Telegram Forum Topic for a Subject
@@ -100,7 +116,7 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
 
   // Prioritize @TechTitanNotesBot token specifically for topic operations
   const effectiveBotToken = (process.env.TELEGRAM_BOT_TOKEN || botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
-  let effectiveChatId = (targetChatId || process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").toString().trim();
+  let effectiveChatId = (targetChatId || process.env.TELEGRAM_STORAGE_CHAT_ID || "").toString().trim();
   if (!effectiveBotToken) return null;
 
   const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
@@ -147,8 +163,8 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
 
     let createData = await createRes.json();
 
-    // Fallback: If primary effectiveChatId failed or bot is not in that chat, try storage supergroup (-1004387181748)
-    const storageSupergroup = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+    // Fallback: If primary effectiveChatId failed or bot is not in that chat, try storage supergroup
+    const storageSupergroup = (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
     if (!createData.ok && storageSupergroup && effectiveChatId !== storageSupergroup) {
       effectiveChatId = storageSupergroup;
       createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
@@ -220,11 +236,19 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
 }
 
 /**
+ * Retrieves dedicated Telegram Forum Topic 8 for "📥 Download Manager" (https://t.me/c/3943130538/8)
+ * Routes all note download notifications into this single topic instead of separate subject threads.
+ */
+async function getOrCreateDownloadManagerForumTopic(targetChatId = null, botToken = null) {
+  return 8;
+}
+
+/**
  * Realtime Telegram Security Bot Activity Notifier
  * Alerts Master Admin on EVERY Login, Logout, and Registration!
  * If Google Sign-In with photo: Dispatches photo directly to Telegram, but NEVER saves photo in DB.
  */
-async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "" }) {
+async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "", admin = null }) {
   try {
     let currentSettings = null;
     if (getBotSettings) {
@@ -267,14 +291,20 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       }
     }
 
-    const isNoteEvent = (event === "NOTE_UPLOAD" || event === "NOTE_DOWNLOAD");
-    const botToken = isNoteEvent
+    const isNoteUpload = (event === "NOTE_UPLOAD");
+    const isNoteDownload = (event === "NOTE_DOWNLOAD");
+    const botToken = isNoteUpload
       ? (process.env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim()
       : (process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
 
-    let targetChatId = isNoteEvent
-      ? (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim()
-      : (currentSettings?.topicGroupChatId || process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538").trim();
+    const supergroupId = (process.env.TELEGRAM_TOPIC_GROUP_ID || "").trim();
+    let targetChatId = isNoteUpload
+      ? (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim()
+      : (supergroupId || currentSettings?.topicGroupChatId || "").trim();
+
+    if (!isNoteUpload && (!targetChatId || !targetChatId.startsWith("-100"))) {
+      targetChatId = supergroupId;
+    }
     if (!botToken || !targetChatId) return;
 
     // Resolve target message_thread_id for Topics (Managed dynamically via Admin Studio)
@@ -302,15 +332,13 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
       }
     } else if (event === "NOTE_DOWNLOAD") {
-      const subjectName = (note?.subject || "").trim();
-      if (subjectName) {
-        threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
-      }
+      // Route note downloads to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
+      threadId = await getOrCreateDownloadManagerForumTopic(targetChatId, botToken);
       if (!threadId) {
-        threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
+        threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
       }
     } else if (event === "ACCOUNT_PURGE") {
-      threadId = topics.accountPurge || topics.securityUpdates || process.env.TELEGRAM_TOPIC_PURGE || null;
+      threadId = topics.accountPurge || topics.securityUpdates || process.env.TELEGRAM_TOPIC_PURGE || "59";
     }
 
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -365,6 +393,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
         (user.mobile ? `📱 <b>Mobile Number:</b> <code>${user.mobile}</code>\n` : "") +
         (user.email ? `📧 <b>Email Address:</b> <code>${user.email}</code>\n` : "") +
+        (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
         (user.year ? `📚 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
         `🎯 <b>Purpose:</b> <code>${detail || "Account Verification Passcode"}</code>\n` +
@@ -378,6 +407,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `👤 <b>Student Name:</b> <code>${user.name || "Student"}</code>\n` +
         `📱 <b>Mobile Number:</b> <code>${user.mobile || "N/A"}</code>\n` +
         `📧 <b>Email Address:</b> <code>${user.email || "N/A"}</code>\n` +
+        (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
         `🛡️ <b>Action:</b> <code>${detail || method}</code>\n` +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
@@ -419,8 +449,28 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
           .join("\n");
       }
 
-      caption = `🗑️ <b>Free Study Material — 90-Day Inactive Account Purged</b>\n\n` +
-        `Dear Admin, this student account was inactive for over 90 days with no login. To keep the database fast, clean, and safe, this account has been automatically deleted from the database.\n\n` +
+      let downloadedNotesSnippet = "  • <i>No documents downloaded by this student.</i>";
+      if (user.downloadedNotes && user.downloadedNotes.length > 0) {
+        downloadedNotesSnippet = user.downloadedNotes
+          .slice(0, 20)
+          .map((d, i) => {
+            const extra = [d.subject, d.course, d.branch].filter(Boolean).join(" • ");
+            return `  • ${i + 1}. 📄 <b>${d.title}</b> (${extra || "General"})`;
+          })
+          .join("\n");
+        if (user.downloadedNotes.length > 20) {
+          downloadedNotesSnippet += `\n  • <i>...and ${user.downloadedNotes.length - 20} more documents</i>`;
+        }
+      }
+
+      const isAdminAction = Boolean(admin || user.actionType === "ADMIN_DELETE" || String(method || "").toLowerCase().includes("admin"));
+      const actionHeader = isAdminAction
+        ? `🗑️ <b>Free Study Material — Student Account Deleted & Database Cascade</b>\n\n` +
+          `Dear Admin, this student account has been removed. All user records have been automatically cascaded across Firebase Firestore and Turso database.\n\n`
+        : `🗑️ <b>Free Study Material — ${user.thresholdDays || 90}-Day Inactive Account Purged</b>\n\n` +
+          `Dear Admin, this student account was inactive for over ${user.thresholdDays || 90} days with no login. To keep the database fast, clean, and safe, this account has been automatically deleted.\n\n`;
+
+      caption = `${actionHeader}` +
         `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
         `📧 <b>Email Address:</b> <code>${user.email}</code>\n` +
         (user.mobile ? `📱 <b>Mobile Number:</b> <code>${user.mobile}</code>\n` : "") +
@@ -430,15 +480,35 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         `📅 <b>Registration Date:</b> <code>${user.registeredDate || "N/A"}</code>\n` +
         `⏰ <b>Last Login Date:</b> <code>${user.lastLoginDate || "Never Logged In"}</code>\n` +
-        `⌛ <b>Total Inactivity:</b> <code>${user.inactivityDays || 90} Days (Exceeded 90-Day Limit)</code>\n\n` +
-        `📚 <b>Notes Uploaded by Student (Safely Preserved in Vault):</b>\n` +
+        (user.inactivityDays !== undefined && !isAdminAction ? `⌛ <b>Total Inactivity:</b> <code>${user.inactivityDays} Days (Exceeded ${user.thresholdDays || 90}-Day Limit)</code>\n\n` : "\n") +
+        `📚 <b>Notes Uploaded by Student (Preserved in Vault):</b>\n` +
         `${notesSnippet}\n\n` +
-        `📥 <b>Total Notes Downloaded:</b> <code>${user.downloadsCount || 0} documents</code>\n` +
+        `📥 <b>Downloaded Notes Count:</b> <code>${user.downloadsCount || 0} documents</code>\n` +
+        `📑 <b>Documents Downloaded by Student:</b>\n` +
+        `${downloadedNotesSnippet}\n\n` +
+        `⚡ <b>Turso Database Status:</b> <code>100% Cascaded & Cleared (${user.tursoDeletedCount || 0} rows removed)</code>\n` +
         `🛡️ <b>Purge Status:</b> <code>Account Permanently Deleted from Database</code>\n` +
+        (admin ? `👮 <b>Action Executed By:</b> ${admin.name || "Admin"} (<code>${admin.email || "admin"}</code>)\n` : `⚙️ <b>Action Executed By:</b> <code>${method || "Automated Lifecycle Sweeper"}</code>\n`) +
         `⏰ <b>Action Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
-        `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the inactive login account was removed.</i>`;
+        `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the login account was removed.</i>`;
     } else if (event === "REGISTER") {
       const isGoogle = String(method).toLowerCase().includes("google");
+      let regMethodDisplay = method;
+      if (!regMethodDisplay) {
+        regMethodDisplay = isGoogle ? "Google Sign-In (1-Click OAuth)" : "Website Registration (Email & Password)";
+      } else {
+        const mLower = String(regMethodDisplay).toLowerCase();
+        if (mLower.includes("telegram")) {
+          regMethodDisplay = "🤖 Telegram Bot OTP Verification (@fsm_security_otp_bot)";
+        } else if (mLower.includes("brevo")) {
+          regMethodDisplay = "📧 Email OTP Verification (Brevo Cloud)";
+        } else if (mLower.includes("google")) {
+          regMethodDisplay = "🌐 Google OAuth (1-Click Registration)";
+        } else if (mLower.includes("manual form")) {
+          regMethodDisplay = "📝 Website Form Registration (Email & Password)";
+        }
+      }
+
       caption = `🟢 <b>Free Study Material — New Student Registration</b>\n\n` +
         `👤 <b>Student Name:</b> <code>${user.name || "Scholar"}</code>\n` +
         (user.userInputName && user.userInputName !== user.name ? `📝 <b>Manual Input Name:</b> <code>${user.userInputName}</code>\n` : "") +
@@ -446,10 +516,11 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `📱 <b>Mobile Number:</b> <code>${user.mobile || user.newMobile || "N/A"}</code>\n` +
         `🏛️ <b>College / University:</b> <code>${user.college || "N/A"}</code>\n` +
         `📚 <b>Academic Year:</b> <code>${user.year || "1st Year"}</code>\n` +
+        (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
         (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "") +
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         (user.telegramDetails?.username ? `🔗 <b>Telegram Handle:</b> @${user.telegramDetails.username}\n` : "") +
-        `🛡️ <b>Auth Method:</b> <code>${method || (isGoogle ? "Google Sign-In (1-Click)" : "Standard Registration")}</code>\n` +
+        `📝 <b>Registration Method:</b> <code>${regMethodDisplay}</code>\n` +
         `⚡ <b>Account Status:</b> <code>✅ Active & Verified Student (Vault Access Granted)</code>\n` +
         (isGoogle ? `✨ <b>Google Verification:</b> <code>100% Cryptographically Verified by Google</code>\n` : "") +
         `⏰ <b>Registered At:</b> <code>${timeStr} IST</code>\n\n` +
@@ -470,6 +541,32 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         if (td.username) nameAndIdentityBlock += `🔗 <b>Telegram Handle:</b> <code>${td.username}</code>\n`;
       }
 
+      let methodLabel = "🛡️ Auth Method";
+      let displayMethod = method || "Email & Password";
+
+      if (event === "LOGIN") {
+        methodLabel = "🔑 Login Method";
+        const mLower = String(displayMethod).toLowerCase();
+        if (mLower.includes("passkey") || mLower.includes("biometric")) {
+          const detail = displayMethod.replace(/^passkey\s*\/\s*biometric\s*/i, "").replace(/^\(|\)$/g, "").trim();
+          displayMethod = detail ? `🔑 Passkey / Biometrics (${detail})` : "🔑 Passkey / Biometrics (Device Sensor)";
+        } else if (mLower.includes("google")) {
+          displayMethod = "🌐 Google 1-Click Sign-In (OAuth 2.0)";
+        } else if (mLower.includes("master admin")) {
+          displayMethod = "👑 Master Admin Direct Authentication (Protected Alias)";
+        } else if (mLower.includes("telegram")) {
+          displayMethod = "🤖 Telegram Bot OTP Login (@fsm_security_otp_bot)";
+        } else if (mLower.includes("brevo") || mLower.includes("otp")) {
+          displayMethod = "✉️ Email One-Time Passcode (Brevo OTP Verified)";
+        } else if (mLower.includes("manual") || mLower.includes("password")) {
+          displayMethod = "🔐 Email & Password (Traditional Login)";
+        }
+      } else if (event === "LOGOUT") {
+        methodLabel = "🚪 Logout Method";
+      } else if (event === "REGISTER") {
+        methodLabel = "📝 Registration Method";
+      }
+
       caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
         nameAndIdentityBlock +
         (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
@@ -477,7 +574,8 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
         (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
-        `🛡️ <b>Auth Method:</b> <code>${method}</code>\n` +
+        (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
+        `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
         (detail ? `⚠️ <b>Note:</b> <code>${detail}</code>\n` : "") +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🌐 <i>Real-time Academic Vault Security Core</i>`;
@@ -656,26 +754,6 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
     } else {
       const msgErrText = await msgRes.text().catch(() => "");
       console.warn(`[TELEGRAM-AUTH-NOTICE] Text send notice (${msgRes.status}):`, msgErrText);
-    }
-
-    // Parallel Delivery: Ensure alert arrives directly in FSM Bot Chat (TELEGRAM_OTP_CHAT_ID)
-    const directAdminChatId = (process.env.TELEGRAM_OTP_CHAT_ID || "7009492653").trim();
-    if (directAdminChatId && String(directAdminChatId) !== String(targetChatId) && (event === "LOGOUT" || event === "LOGIN" || event === "REGISTER")) {
-      try {
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chat_id: directAdminChatId,
-            text: caption,
-            parse_mode: "HTML",
-          }),
-          signal: AbortSignal.timeout(6000),
-        });
-        console.log(`[TELEGRAM-AUTH-NOTICE] 🚀 Parallel alert delivered to FSM Bot Chat (${directAdminChatId}) for ${event}`);
-      } catch (dmErr) {
-        console.warn("[TELEGRAM-AUTH-NOTICE] Direct FSM Bot dispatch notice:", dmErr.message);
-      }
     }
   } catch (err) {
     console.warn("[TELEGRAM-AUTH-NOTICE] Dispatch error notice:", err.message);
@@ -1008,5 +1086,6 @@ module.exports = {
   sendTelegramOtpBackup,
   sendTelegramAuthNotice,
   getOrCreateSubjectForumTopic,
+  getOrCreateDownloadManagerForumTopic,
 };
 

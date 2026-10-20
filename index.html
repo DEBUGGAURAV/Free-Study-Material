@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <script>
+      if (window.location.pathname.startsWith('/dist')) {
+        window.location.replace('/');
+      }
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <meta name="theme-color" content="#080c16" />
     <meta name="description" content="Free Study Material — High performance university study notes, engineering blueprints, and cloud lecture archives." />
     <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
@@ -15,10 +20,100 @@
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     </noscript>
     <title>Free Study Material — Academic Cloud & Notes Vault</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/favicon.ico" />
   </head>
   <body>
     <div id="root"></div>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      function cacheAllActiveResources() {
+        if (!navigator.serviceWorker || !navigator.serviceWorker.controller || !navigator.onLine) return;
+        try {
+          const entries = performance.getEntriesByType('resource');
+          const urls = entries
+            .map(function(e) { return e.name; })
+            .filter(function(src) {
+              try {
+                var u = new URL(src);
+                return u.origin === window.location.origin && !u.pathname.startsWith('/api/') && !u.pathname.startsWith('/ws');
+              } catch (_) { return false; }
+            });
+
+          Array.from(document.querySelectorAll('link[rel="stylesheet"], script[src]')).forEach(function(el) {
+            var s = el.href || el.src;
+            if (s && s.startsWith(window.location.origin)) urls.push(s);
+          });
+
+          urls.push(window.location.origin + '/');
+          urls.push(window.location.origin + '/index.html');
+          urls.push(window.location.origin + '/manifest.json');
+
+          navigator.serviceWorker.controller.postMessage({
+            type: 'CACHE_APP_SHELL',
+            urls: Array.from(new Set(urls))
+          });
+        } catch (_) {}
+      }
+      window.cacheAllActiveResources = cacheAllActiveResources;
+
+      if ('serviceWorker' in navigator) {
+        var registerSW = function() {
+          navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function(reg) {
+            console.log('[PWA] Service Worker registered with scope:', reg.scope);
+            reg.update().catch(function() {});
+
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }
+
+            reg.addEventListener('updatefound', function() {
+              var newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', function() {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('[PWA] New Service Worker installed, activating immediately...');
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              }
+            });
+
+            // ⏰ Periodic Background Sync (6 AM Exam Pre-fetch)
+            if ('periodicSync' in reg) {
+              try {
+                navigator.permissions.query({ name: 'periodic-background-sync' }).then(function(status) {
+                  if (status.state === 'granted') {
+                    reg.periodicSync.register('fsm-exam-prefetch', {
+                      minInterval: 12 * 60 * 60 * 1000,
+                    }).then(function() { console.log('[PWA] ⏰ 6 AM Periodic Pre-fetch active!'); });
+                  }
+                }).catch(function() {});
+              } catch (_) {}
+            }
+
+            // Proactively cache all active app shell resources once loaded
+            setTimeout(cacheAllActiveResources, 1200);
+            window.addEventListener('load', function() {
+              setTimeout(cacheAllActiveResources, 1500);
+            });
+          }).catch(function(err) {
+            console.warn('[PWA] Service Worker registration failed:', err);
+          });
+        };
+
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+          registerSW();
+        } else {
+          document.addEventListener('DOMContentLoaded', registerSW);
+        }
+
+        navigator.serviceWorker.addEventListener('controllerchange', function() {
+          console.log('[PWA] Service Worker updated and claimed controller.');
+          setTimeout(cacheAllActiveResources, 500);
+        });
+      }
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

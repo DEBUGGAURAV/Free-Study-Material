@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 
-const JWT_SECRET = (process.env.JWT_SECRET || "79d90f07317c02202d9053a3ef04a94d92f39cc400e98a1b7fc5da25191260f6147a9eba87ef80839b1512ebae982d738c20f366ce7d8d480a94e57a2c852424").trim();
+const JWT_SECRET = (process.env.JWT_SECRET || crypto.randomBytes(64).toString("hex")).trim();
 
 function authenticateToken(req, res, next) {
   // 1. High-security httpOnly cookie (fsm_token)
@@ -40,11 +40,11 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ success: false, message: "Authentication required." });
   }
 
-  const adminEmail = (process.env.ADMIN_EMAIL || "jnplotus@gmail.com").toLowerCase().trim();
+  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
   const isAdmin =
     req.user.role === "admin" ||
     req.user.role === "half_admin" ||
-    (req.user.email && req.user.email.toLowerCase().trim() === adminEmail);
+    Boolean(adminEmail && req.user.email && req.user.email.toLowerCase().trim() === adminEmail);
   if (!isAdmin) {
     return res.status(403).json({ success: false, message: "Admin access required." });
   }

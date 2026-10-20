@@ -17,8 +17,13 @@ import {
   MessageSquare,
   Copy,
   Check,
+  Eye,
+  EyeOff,
+  Fingerprint,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../api";
+import { loginWithPasskey, registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 
 const TelegramIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -141,9 +146,95 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   // Sign In Form State
   const [signInIdentifier, setSignInIdentifier] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [loginOtpStep, setLoginOtpStep] = useState(false);
   const [loginOtpCode, setLoginOtpCode] = useState("");
   const [loginTargetEmail, setLoginTargetEmail] = useState("");
+
+  // Passkey Biometrics State
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [regPasskeyLoading, setRegPasskeyLoading] = useState(false);
+  const [supportsPasskey, setSupportsPasskey] = useState(true);
+  const [showPostRegPasskeyPrompt, setShowPostRegPasskeyPrompt] = useState(false);
+  const [postRegUser, setPostRegUser] = useState(null);
+
+  // Preferred login mode: prioritizes passkey if user has set it up or saved preference
+  const [loginViewMode, setLoginViewMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      const pref = localStorage.getItem("academic_vault_login_pref");
+      if (pref === "passkey") return "passkey";
+      if (pref === "password") return "password";
+      if (localStorage.getItem("academic_vault_has_passkey") === "true") return "passkey";
+    }
+    return "password";
+  });
+
+  useEffect(() => {
+    isPasskeySupported().then((supported) => setSupportsPasskey(supported));
+  }, []);
+
+  const handlePasskeySignIn = async () => {
+    try {
+      setPasskeyLoading(true);
+      setError(null);
+      setFieldErrors({});
+      setSuccessMsg(null);
+      const res = await loginWithPasskey(signInIdentifier?.trim() || "");
+      if (res && res.success) {
+        localStorage.setItem("academic_vault_has_passkey", "true");
+        localStorage.setItem("academic_vault_login_pref", "passkey");
+        setSuccessMsg(res.message || "Passkey biometric authentication successful!");
+        setTimeout(() => {
+          if (onAuthSuccess) onAuthSuccess(res.user, res.token);
+          onClose();
+        }, 400);
+      }
+    } catch (err) {
+      if (err.message && !err.message.includes("cancelled")) {
+        setFormError(err.message || "Biometric authentication failed. You can sign in with password below.");
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  // Register Passkey right after successful account signup
+  const handlePostRegEnablePasskey = async () => {
+    try {
+      setRegPasskeyLoading(true);
+      setError(null);
+      setFieldErrors({});
+      setSuccessMsg(null);
+      const res = await registerDevicePasskey();
+      localStorage.setItem("academic_vault_has_passkey", "true");
+      localStorage.setItem("academic_vault_login_pref", "passkey");
+      setLoginViewMode("passkey");
+      setSuccessMsg(res?.message || "🎉 Passkey registered successfully! 1-Click login is now active.");
+      setTimeout(() => {
+        if (onAuthSuccess && postRegUser) onAuthSuccess(postRegUser);
+        setShowPostRegPasskeyPrompt(false);
+        setPostRegUser(null);
+        onClose();
+      }, 750);
+    } catch (err) {
+      if (err.message && err.message.includes("cancelled")) {
+        setError("Biometric prompt was cancelled. You can retry or skip to continue.");
+      } else {
+        setError(err.message || "Failed to set up passkey on this device.");
+      }
+    } finally {
+      setRegPasskeyLoading(false);
+    }
+  };
+
+  const handlePostRegSkipPasskey = () => {
+    localStorage.setItem("academic_vault_login_pref", "password");
+    setLoginViewMode("password");
+    if (onAuthSuccess && postRegUser) onAuthSuccess(postRegUser);
+    setShowPostRegPasskeyPrompt(false);
+    setPostRegUser(null);
+    onClose();
+  };
 
   // Forgot Password State
   const [forgotMode, setForgotMode] = useState("telebot"); // "telebot" | "email"
@@ -152,6 +243,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const [forgotOtpStep, setForgotOtpStep] = useState(false);
   const [forgotOtpCode, setForgotOtpCode] = useState("");
   const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [showForgotNewPassword, setShowForgotNewPassword] = useState(false);
   const [forgotTgToken, setForgotTgToken] = useState("");
   const [forgotTgBotLink, setForgotTgBotLink] = useState("");
   const [forgotTgOtpStep, setForgotTgOtpStep] = useState(false);
@@ -165,6 +257,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const [college, setCollege] = useState("");
   const [year, setYear] = useState("1st Year");
   const [signUpPassword, setSignUpPassword] = useState("");
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
   const [signUpOtpStep, setSignUpOtpStep] = useState(false);
   const [signUpOtpCode, setSignUpOtpCode] = useState("");
   const [regTgToken, setRegTgToken] = useState("");
@@ -176,6 +269,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   const resetAllFormFields = () => {
     setSignInIdentifier("");
     setSignInPassword("");
+    setShowSignInPassword(false);
     setLoginOtpStep(false);
     setLoginOtpCode("");
     setLoginTargetEmail("");
@@ -186,6 +280,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setCollege("");
     setYear("1st Year");
     setSignUpPassword("");
+    setShowSignUpPassword(false);
     setSignUpOtpStep(false);
     setSignUpOtpCode("");
     setRegTgStep(false);
@@ -198,6 +293,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setForgotOtpStep(false);
     setForgotOtpCode("");
     setForgotNewPassword("");
+    setShowForgotNewPassword(false);
     setForgotTgOtpStep(false);
     setForgotTgOtpCode("");
     setForgotTgToken("");
@@ -208,6 +304,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setGoogleMobile("");
     setGoogleCollege("");
     setGoogleYear("1st Year");
+
+    setShowPostRegPasskeyPrompt(false);
+    setPostRegUser(null);
+    setRegPasskeyLoading(false);
+    setPasskeyLoading(false);
 
     setError(null);
     setSuccessMsg(null);
@@ -223,6 +324,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setCollege("");
     setYear("1st Year");
     setSignUpPassword("");
+    setShowSignUpPassword(false);
     setSignUpOtpStep(false);
     setSignUpOtpCode("");
     setRegTgStep(false);
@@ -241,6 +343,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setForgotOtpStep(false);
     setForgotOtpCode("");
     setForgotNewPassword("");
+    setShowForgotNewPassword(false);
     setForgotTgOtpStep(false);
     setForgotTgOtpCode("");
     setForgotTgToken("");
@@ -254,6 +357,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     if (isOpen) {
       resetAllFormFields();
       setTab(initialTab);
+      const hasPasskeyPref =
+        typeof window !== "undefined" &&
+        (localStorage.getItem("academic_vault_login_pref") === "passkey" ||
+          localStorage.getItem("academic_vault_has_passkey") === "true");
+      setLoginViewMode(hasPasskeyPref ? "passkey" : "password");
     }
   }, [isOpen, initialTab]);
 
@@ -261,6 +369,68 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   useEffect(() => {
     try { sessionStorage.removeItem("fsm_pending_tg_reg"); } catch {}
   }, []);
+
+  // Auto-poll Telegram password recovery status to auto-populate 6-digit OTP code (< 2s)
+  useEffect(() => {
+    if (!isOpen || tab !== "forgot" || !forgotTgOtpStep) return;
+    let isCancelled = false;
+
+    const checkResetStatus = async () => {
+      try {
+        const res = await api.pollTelegramResetStatus({
+          resetToken: forgotTgToken,
+          mobile: forgotMobile,
+          email: forgotEmail,
+        });
+        if (!isCancelled && res?.ready && res?.otp) {
+          setForgotTgOtpCode(String(res.otp).trim());
+          clearFieldError("forgotTgOtpCode");
+          setSuccessMsg(`✅ Passcode received from Telegram: ${res.otp}`);
+        }
+      } catch (_) {}
+    };
+
+    // Immediate initial check at 500ms, then every 1800ms (< 2 seconds)
+    const initialTimer = setTimeout(checkResetStatus, 500);
+    const intervalId = setInterval(checkResetStatus, 1800);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(intervalId);
+    };
+  }, [isOpen, tab, forgotTgOtpStep, forgotTgToken, forgotMobile, forgotEmail]);
+
+  // Auto-poll Telegram registration status to auto-populate 6-digit OTP code (< 2s)
+  useEffect(() => {
+    if (!isOpen || tab !== "signup" || !regTgStep) return;
+    let isCancelled = false;
+
+    const checkRegStatus = async () => {
+      try {
+        const res = await api.pollTelegramRegisterStatus({
+          regToken: regTgToken,
+          mobile: mobile,
+          email: email,
+        });
+        if (!isCancelled && res?.ready && res?.otp) {
+          setRegTgOtpCode(String(res.otp).trim());
+          clearFieldError("regTgOtpCode");
+          setSuccessMsg(`✅ Passcode received from Telegram: ${res.otp}`);
+        }
+      } catch (_) {}
+    };
+
+    // Immediate initial check at 500ms, then every 1800ms (< 2 seconds)
+    const initialTimer = setTimeout(checkRegStatus, 500);
+    const intervalId = setInterval(checkRegStatus, 1800);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(initialTimer);
+      clearInterval(intervalId);
+    };
+  }, [isOpen, tab, regTgStep, regTgToken, mobile, email]);
 
   if (!isOpen) return null;
 
@@ -280,6 +450,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
           email: res.googleUser?.email || "",
           name: res.googleUser?.name || "",
           picture: res.googleUser?.picture || "",
+          signupToken: res.signupToken || "",
         };
         if (!gUser.picture && googlePayload?.credential) {
           try {
@@ -435,10 +606,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         college: cleanCollege,
         year: googleYear,
         picture: googleUser.picture || "",
+        signupToken: googleUser.signupToken || "",
       });
 
-      onAuthSuccess(res.user);
-      onClose();
+      if (supportsPasskey) {
+        setPostRegUser(res.user);
+        setShowPostRegPasskeyPrompt(true);
+        setSuccessMsg(null);
+      } else {
+        onAuthSuccess(res.user);
+        onClose();
+      }
     } catch (err) {
       setFormError(err.message || "Failed to complete profile.");
     } finally {
@@ -463,6 +641,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
 
     try {
       const res = await api.login(signInIdentifier, signInPassword);
+      if (res.user?.hasPasskey) {
+        localStorage.setItem("academic_vault_has_passkey", "true");
+      }
       onAuthSuccess(res.user);
       onClose();
     } catch (err) {
@@ -684,11 +865,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         email: email.trim().toLowerCase(),
         otp: regTgOtpCode.trim(),
       });
-      setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-      setTimeout(() => {
-        onAuthSuccess(res.user);
-        onClose();
-      }, 150);
+      if (supportsPasskey) {
+        setPostRegUser(res.user);
+        setShowPostRegPasskeyPrompt(true);
+        setSuccessMsg(null);
+      } else {
+        setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
+        setTimeout(() => {
+          onAuthSuccess(res.user);
+          onClose();
+        }, 150);
+      }
     } catch (err) {
       setFormError(err.message || "Failed to verify Telegram OTP code.", "regTgOtpCode");
     } finally {
@@ -763,11 +950,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
 
     try {
       const res = await api.verifyRegisterOtp(email.trim().toLowerCase(), signUpOtpCode.trim());
-      setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-      setTimeout(() => {
-        onAuthSuccess(res.user);
-        onClose();
-      }, 150);
+      if (supportsPasskey) {
+        setPostRegUser(res.user);
+        setShowPostRegPasskeyPrompt(true);
+        setSuccessMsg(null);
+      } else {
+        setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
+        setTimeout(() => {
+          onAuthSuccess(res.user);
+          onClose();
+        }, 150);
+      }
     } catch (err) {
       setFormError(err.message || "Failed to verify registration OTP.", "signUpOtpCode");
     } finally {
@@ -812,49 +1005,62 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     >
       <div
         className="modal-content"
-        style={{ maxWidth: "490px" }}
+        style={{ maxWidth: "415px", width: "100%" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
         <div className="modal-header">
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            <button
-              className={`filter-tab ${tab === "signin" ? "active" : ""}`}
-              onClick={() => {
-                resetAllFormFields();
-                setTab("signin");
-              }}
-              type="button"
-            >
-              <LogIn size={15} style={{ marginRight: "4px" }} />
-              Sign In
-            </button>
-            <button
-              className={`filter-tab ${tab === "signup" ? "active" : ""}`}
-              onClick={() => {
-                resetAllFormFields();
-                setTab("signup");
-              }}
-              type="button"
-            >
-              <UserPlus size={15} style={{ marginRight: "4px" }} />
-              Student Sign Up
-            </button>
-            {tab === "forgot" && (
+          {showPostRegPasskeyPrompt ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#fff", fontSize: "0.95rem" }}>
+              <Fingerprint size={18} color="#38bdf8" />
+              <span>Biometric Passkey Setup</span>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
-                className="filter-tab active"
-                style={{ background: "rgba(139, 92, 246, 0.2)", borderColor: "rgba(139, 92, 246, 0.4)", color: "#a78bfa" }}
+                className={`filter-tab ${tab === "signin" ? "active" : ""}`}
+                onClick={() => {
+                  resetAllFormFields();
+                  setTab("signin");
+                }}
                 type="button"
               >
-                <KeyRound size={15} style={{ marginRight: "4px" }} />
-                Recovery
+                <LogIn size={15} style={{ marginRight: "4px" }} />
+                Sign In
               </button>
-            )}
-          </div>
+              <button
+                className={`filter-tab ${tab === "signup" ? "active" : ""}`}
+                onClick={() => {
+                  resetAllFormFields();
+                  setTab("signup");
+                }}
+                type="button"
+              >
+                <UserPlus size={15} style={{ marginRight: "4px" }} />
+                Student Sign Up
+              </button>
+              {!showPostRegPasskeyPrompt && tab === "forgot" && (
+                <button
+                  className="filter-tab active"
+                  style={{ background: "rgba(139, 92, 246, 0.2)", borderColor: "rgba(139, 92, 246, 0.4)", color: "#a78bfa" }}
+                  type="button"
+                >
+                  <KeyRound size={15} style={{ marginRight: "4px" }} />
+                  Recovery
+                </button>
+              )}
+            </div>
+          )}
 
           <button
             className="modal-close-btn"
-            onClick={onClose}
+            onClick={() => {
+              if (showPostRegPasskeyPrompt) {
+                handlePostRegSkipPasskey();
+              } else {
+                onClose();
+              }
+            }}
           >
             <X size={20} />
           </button>
@@ -949,8 +1155,117 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
           </div>
         )}
 
+        {/* ================= POST-REGISTRATION PASSKEY PROMPT ================= */}
+        {showPostRegPasskeyPrompt && postRegUser && (
+          <div style={{ textAlign: "center", padding: "10px 4px 6px" }}>
+            <div
+              style={{
+                width: "66px",
+                height: "66px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.22), rgba(99, 102, 241, 0.25))",
+                border: "2px solid rgba(56, 189, 248, 0.45)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px auto",
+                boxShadow: "0 0 24px rgba(56, 189, 248, 0.28)",
+              }}
+            >
+              <Fingerprint size={36} color="#38bdf8" />
+            </div>
+
+            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
+              Enable 1-Click Biometric Login?
+            </h3>
+            <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "18px" }}>
+              Would you like to activate a <strong>Passkey</strong> on this device? Next time, sign in instantly using <strong>Fingerprint</strong>, <strong>Face ID</strong>, or <strong>Windows Hello</strong> without typing any password!
+            </p>
+
+            <div
+              style={{
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                textAlign: "left",
+                marginBottom: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                fontSize: "0.78rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#38bdf8" }}>
+                <Sparkles size={15} style={{ flexShrink: 0 }} />
+                <span><strong>0-Second Sign In:</strong> Tap your sensor & enter immediately</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#34d399" }}>
+                <ShieldCheck size={15} style={{ flexShrink: 0 }} />
+                <span><strong>Hardware Security:</strong> Stored safely inside your device chip</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#a78bfa" }}>
+                <KeyRound size={15} style={{ flexShrink: 0 }} />
+                <span><strong>Password Optional:</strong> Password login remains available anytime</span>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handlePostRegEnablePasskey}
+                disabled={regPasskeyLoading}
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  padding: "12px",
+                  background: "linear-gradient(135deg, #0284c7, #6366f1)",
+                  boxShadow: "0 4px 14px rgba(2, 132, 199, 0.35)",
+                  fontSize: "0.9rem",
+                  fontWeight: 700,
+                }}
+              >
+                {regPasskeyLoading ? (
+                  <>
+                    <div className="spinner"></div>
+                    <span>Waiting for Fingerprint / Face ID...</span>
+                  </>
+                ) : (
+                  <>
+                    <Fingerprint size={18} />
+                    <span>⚡ Enable Passkey (Recommended)</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePostRegSkipPasskey}
+                disabled={regPasskeyLoading}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  background: "transparent",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  borderRadius: "8px",
+                  color: "var(--text-dim)",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => (e.target.style.color = "#fff")}
+                onMouseLeave={(e) => (e.target.style.color = "var(--text-dim)")}
+              >
+                Skip for Now (Sign In with Password)
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ================= GOOGLE ONBOARDING SCREEN ================= */}
-        {isGoogleOnboarding && (
+        {!showPostRegPasskeyPrompt && isGoogleOnboarding && (
           <div style={{ animation: "fadeIn 0.25s ease" }}>
             <div style={{ textAlign: "center", marginBottom: "18px" }}>
               <div style={{ width: "48px", height: "48px", borderRadius: "50%", background: "rgba(66, 133, 244, 0.15)", display: "inline-flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px" }}>
@@ -1077,45 +1392,278 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         )}
 
         {/* ================= TAB 1: SIGN IN ================= */}
-        {tab === "signin" && !isGoogleOnboarding && (
+        {!showPostRegPasskeyPrompt && tab === "signin" && !isGoogleOnboarding && (
           <div>
-            <button
-              type="button"
-              className="btn-google-auth"
-              onClick={handleGoogleSignIn}
-              disabled={loading}
-              style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "10px",
-                padding: "11px 16px",
-                background: "#ffffff",
-                color: "#1f2937",
-                border: "1px solid #e5e7eb",
-                borderRadius: "var(--radius-md)",
-                fontSize: "0.9rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                marginBottom: "16px",
-              }}
-            >
-              <GoogleIcon />
-              <span>Continue with Google</span>
-            </button>
+            {loginViewMode === "passkey" ? (
+              /* --- PASSKEY FIRST VIEW (If user setup passkey) --- */
+              <div>
+                <button
+                  type="button"
+                  className="btn-google-auth"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "10px",
+                    padding: "11px 16px",
+                    background: "#ffffff",
+                    color: "#1f2937",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    marginBottom: "14px",
+                  }}
+                >
+                  <GoogleIcon />
+                  <span>Continue with Google</span>
+                </button>
 
-            <div style={{ display: "flex", alignItems: "center", margin: "16px 0", gap: "10px" }}>
-              <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
-              <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                or sign in with password
-              </span>
-              <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
-            </div>
+                <div style={{ display: "flex", alignItems: "center", margin: "14px 0", gap: "10px" }}>
+                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
+                  <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    or fast biometric passkey
+                  </span>
+                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
+                </div>
 
-            <form onSubmit={handleSignIn} autoComplete="off">
+                {/* Hero Biometric Card */}
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(99, 102, 241, 0.1))",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    borderRadius: "12px",
+                    padding: "18px 16px",
+                    textAlign: "center",
+                    marginBottom: "14px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "56px",
+                      height: "56px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.25))",
+                      border: "1px solid rgba(56, 189, 248, 0.4)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      margin: "0 auto 12px auto",
+                      boxShadow: "0 0 16px rgba(56, 189, 248, 0.2)",
+                    }}
+                  >
+                    <Fingerprint size={30} color="#38bdf8" />
+                  </div>
+
+                  <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>
+                    Biometric Passkey Sign In
+                  </h4>
+                  <p style={{ fontSize: "0.82rem", color: "rgba(224, 242, 254, 0.8)", marginBottom: "18px", lineHeight: 1.5, maxWidth: "340px", margin: "0 auto 18px" }}>
+                    Touch your fingerprint sensor, look at Face ID, or use Windows Hello PIN to sign in securely.
+                  </p>
+
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handlePasskeySignIn}
+                    disabled={loading || passkeyLoading}
+                    style={{
+                      width: "100%",
+                      justifyContent: "center",
+                      padding: "13px 18px",
+                      borderRadius: "12px",
+                      background: "linear-gradient(135deg, #0284c7 0%, #6366f1 100%)",
+                      boxShadow: "0 6px 22px rgba(2, 132, 199, 0.4)",
+                      fontSize: "0.92rem",
+                      fontWeight: 800,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    {passkeyLoading ? (
+                      <>
+                        <div className="spinner"></div>
+                        <span>Authenticating with Biometrics...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Fingerprint size={20} />
+                        <span>Authenticate with Passkey</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Option to toggle to Password mode */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginViewMode("password");
+                    localStorage.setItem("academic_vault_login_pref", "password");
+                  }}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "8px",
+                    color: "var(--text-secondary)",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                    padding: "10px 14px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    marginBottom: "12px",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.background = "rgba(255, 255, 255, 0.08)")}
+                  onMouseLeave={(e) => (e.target.style.background = "rgba(255, 255, 255, 0.04)")}
+                >
+                  <KeyRound size={15} color="var(--accent-cyan)" />
+                  <span>🔑 Or Sign In with Password instead</span>
+                </button>
+
+                <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "14px", marginBottom: "8px" }}>
+                  New student?{" "}
+                  <span
+                    style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
+                    onClick={() => {
+                      resetAllFormFields();
+                      setTab("signup");
+                    }}
+                  >
+                    Create Account
+                  </span>
+                </p>
+              </div>
+            ) : (
+              /* --- PASSWORD FIRST VIEW --- */
+              <div>
+                {/* Premium Centered Passkey & Biometric Gateway */}
+                {supportsPasskey && (
+                  <button
+                    type="button"
+                    onClick={handlePasskeySignIn}
+                    disabled={loading || passkeyLoading}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "14px",
+                      padding: "14px 18px",
+                      background: "linear-gradient(135deg, rgba(14, 165, 233, 0.16) 0%, rgba(99, 102, 241, 0.18) 50%, rgba(168, 85, 247, 0.16) 100%)",
+                      border: "1px solid rgba(56, 189, 248, 0.45)",
+                      borderRadius: "14px",
+                      cursor: "pointer",
+                      marginBottom: "16px",
+                      boxShadow: "0 4px 20px rgba(14, 165, 233, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)",
+                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = "translateY(-1px)";
+                      e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.85)";
+                      e.currentTarget.style.boxShadow = "0 8px 26px rgba(14, 165, 233, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = "translateY(0)";
+                      e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.45)";
+                      e.currentTarget.style.boxShadow = "0 4px 20px rgba(14, 165, 233, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)";
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "10px",
+                        background: "linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(99, 102, 241, 0.35))",
+                        border: "1px solid rgba(56, 189, 248, 0.6)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
+                      }}
+                    >
+                      <Fingerprint size={22} color="#38bdf8" />
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", letterSpacing: "0.2px" }}>
+                          {passkeyLoading ? "Authenticating with Biometrics..." : "Sign In with Passkey / Biometrics"}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "0.65rem",
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.6px",
+                            background: "linear-gradient(135deg, #06b6d4, #6366f1)",
+                            color: "#ffffff",
+                            padding: "2px 7px",
+                            borderRadius: "6px",
+                            boxShadow: "0 2px 6px rgba(6, 182, 212, 0.3)",
+                          }}
+                        >
+                          Biometric
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "0.75rem", color: "rgba(224, 242, 254, 0.8)", marginTop: "2px" }}>
+                        Face ID, Fingerprint, or Windows Hello PIN
+                      </span>
+                    </div>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="btn-google-auth"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  style={{
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "10px",
+                    padding: "11px 16px",
+                    background: "#ffffff",
+                    color: "#1f2937",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "var(--radius-md)",
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                    marginBottom: "16px",
+                  }}
+                >
+                  <GoogleIcon />
+                  <span>Continue with Google</span>
+                </button>
+
+                <div style={{ display: "flex", alignItems: "center", margin: "16px 0", gap: "10px" }}>
+                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
+                  <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    or sign in with password
+                  </span>
+                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
+                </div>
+
+                <form onSubmit={handleSignIn} autoComplete="off">
             <div className="form-group" id="field-group-signInIdentifier">
               <label className="form-label">Gmail Address or Admin Alias *</label>
               <FieldNotice fieldKey="signInIdentifier" />
@@ -1152,19 +1700,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                 </span>
               </div>
               <FieldNotice fieldKey="signInPassword" />
-              <input
-                id="input-signInPassword"
-                type="password"
-                className="form-input"
-                style={fieldErrors.signInPassword ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                placeholder="Enter your password"
-                value={signInPassword}
-                onChange={(e) => {
-                  setSignInPassword(e.target.value);
-                  clearFieldError("signInPassword");
-                }}
-                required
-              />
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input
+                  id="input-signInPassword"
+                  type={showSignInPassword ? "text" : "password"}
+                  className="form-input"
+                  style={{
+                    width: "100%",
+                    paddingRight: "42px",
+                    borderColor: fieldErrors.signInPassword ? "#f43f5e" : undefined,
+                    boxShadow: fieldErrors.signInPassword ? "0 0 0 1px #f43f5e" : undefined,
+                  }}
+                  placeholder="Enter your password"
+                  value={signInPassword}
+                  onChange={(e) => {
+                    setSignInPassword(e.target.value);
+                    clearFieldError("signInPassword");
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSignInPassword(!showSignInPassword)}
+                  title={showSignInPassword ? "Hide password" : "Show password"}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    background: "none",
+                    border: "none",
+                    padding: "4px",
+                    color: showSignInPassword ? "#38bdf8" : "var(--text-dim)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "color 0.2s ease",
+                  }}
+                  tabIndex={-1}
+                >
+                  {showSignInPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -1220,6 +1796,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             </div>
           </form>
         </div>
+            )}
+          </div>
         )}
 
         {/* ================= TAB 2: FORGOT PASSWORD ================= */}
@@ -1409,7 +1987,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                         <span>Open Telegram Bot ↗</span>
                       </a>
                       <p style={{ margin: "10px 0 0", fontSize: "0.76rem", color: "#7dd3fc" }}>
-                        🛡️ In the bot, tap <strong>[ 📲 Verify & Share My Telegram Number ]</strong> to receive your 6-digit passcode.
+                        🛡️ In the bot: Tap <strong>[ 📲 Verify & Share My Telegram Number ]</strong>, then type your registered <strong>Email Address</strong> to receive your 6-digit passcode.
                       </p>
                     </div>
 
@@ -1449,19 +2027,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                     <div className="form-group" id="field-group-forgotNewPassword">
                       <label className="form-label">New Password * (Min 6 Characters)</label>
                       <FieldNotice fieldKey="forgotNewPassword" />
-                      <input
-                        id="input-forgotNewPassword"
-                        type="password"
-                        className="form-input"
-                        style={fieldErrors.forgotNewPassword ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="Enter your new secure password"
-                        value={forgotNewPassword}
-                        onChange={(e) => {
-                          setForgotNewPassword(e.target.value);
-                          clearFieldError("forgotNewPassword");
-                        }}
-                        required
-                      />
+                      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <input
+                          id="input-forgotNewPassword"
+                          type={showForgotNewPassword ? "text" : "password"}
+                          className="form-input"
+                          style={{
+                            width: "100%",
+                            paddingRight: "42px",
+                            borderColor: fieldErrors.forgotNewPassword ? "#f43f5e" : undefined,
+                            boxShadow: fieldErrors.forgotNewPassword ? "0 0 0 1px #f43f5e" : undefined,
+                          }}
+                          placeholder="Enter your new secure password"
+                          value={forgotNewPassword}
+                          onChange={(e) => {
+                            setForgotNewPassword(e.target.value);
+                            clearFieldError("forgotNewPassword");
+                          }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                          title={showForgotNewPassword ? "Hide password" : "Show password"}
+                          style={{
+                            position: "absolute",
+                            right: "12px",
+                            background: "none",
+                            border: "none",
+                            padding: "4px",
+                            color: showForgotNewPassword ? "#38bdf8" : "var(--text-dim)",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "color 0.2s ease",
+                          }}
+                          tabIndex={-1}
+                        >
+                          {showForgotNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
 
                     <button
@@ -1611,19 +2217,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                     <div className="form-group" id="field-group-forgotNewPassword">
                       <label className="form-label">New Password * (Min 6 Characters)</label>
                       <FieldNotice fieldKey="forgotNewPassword" />
-                      <input
-                        id="input-forgotNewPassword"
-                        type="password"
-                        className="form-input"
-                        style={fieldErrors.forgotNewPassword ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="Enter your new secure password"
-                        value={forgotNewPassword}
-                        onChange={(e) => {
-                          setForgotNewPassword(e.target.value);
-                          clearFieldError("forgotNewPassword");
-                        }}
-                        required
-                      />
+                      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                        <input
+                          id="input-forgotNewPassword"
+                          type={showForgotNewPassword ? "text" : "password"}
+                          className="form-input"
+                          style={{
+                            width: "100%",
+                            paddingRight: "42px",
+                            borderColor: fieldErrors.forgotNewPassword ? "#f43f5e" : undefined,
+                            boxShadow: fieldErrors.forgotNewPassword ? "0 0 0 1px #f43f5e" : undefined,
+                          }}
+                          placeholder="Enter your new secure password"
+                          value={forgotNewPassword}
+                          onChange={(e) => {
+                            setForgotNewPassword(e.target.value);
+                            clearFieldError("forgotNewPassword");
+                          }}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowForgotNewPassword(!showForgotNewPassword)}
+                          title={showForgotNewPassword ? "Hide password" : "Show password"}
+                          style={{
+                            position: "absolute",
+                            right: "12px",
+                            background: "none",
+                            border: "none",
+                            padding: "4px",
+                            color: showForgotNewPassword ? "#a78bfa" : "var(--text-dim)",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            transition: "color 0.2s ease",
+                          }}
+                          tabIndex={-1}
+                        >
+                          {showForgotNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                      </div>
                     </div>
 
                     <button
@@ -1667,7 +2301,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
         )}
 
         {/* ================= TAB 3: SIGN UP ================= */}
-        {tab === "signup" && !isGoogleOnboarding && (
+        {!showPostRegPasskeyPrompt && tab === "signup" && !isGoogleOnboarding && (
           <div>
             {/* 1. Continue with Google (Top Option 1) */}
             <button
@@ -1866,19 +2500,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                       <div className="form-group" id="field-group-signUpPassword">
                         <label className="form-label">Password * (Min 6 chars)</label>
                         <FieldNotice fieldKey="signUpPassword" />
-                        <input
-                          id="input-signUpPassword"
-                          type="password"
-                          className="form-input"
-                          style={fieldErrors.signUpPassword ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                          placeholder="Min 6 characters"
-                          value={signUpPassword}
-                          onChange={(e) => {
-                            setSignUpPassword(e.target.value);
-                            clearFieldError("signUpPassword");
-                          }}
-                          required
-                        />
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                          <input
+                            id="input-signUpPassword"
+                            type={showSignUpPassword ? "text" : "password"}
+                            className="form-input"
+                            style={{
+                              width: "100%",
+                              paddingRight: "42px",
+                              borderColor: fieldErrors.signUpPassword ? "#f43f5e" : undefined,
+                              boxShadow: fieldErrors.signUpPassword ? "0 0 0 1px #f43f5e" : undefined,
+                            }}
+                            placeholder="Min 6 characters"
+                            value={signUpPassword}
+                            onChange={(e) => {
+                              setSignUpPassword(e.target.value);
+                              clearFieldError("signUpPassword");
+                            }}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                            title={showSignUpPassword ? "Hide password" : "Show password"}
+                            style={{
+                              position: "absolute",
+                              right: "12px",
+                              background: "none",
+                              border: "none",
+                              padding: "4px",
+                              color: showSignUpPassword ? "#38bdf8" : "var(--text-dim)",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "color 0.2s ease",
+                            }}
+                            tabIndex={-1}
+                          >
+                            {showSignUpPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -2124,19 +2786,47 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                       <div className="form-group" id="field-group-signUpPassword-email">
                         <label className="form-label">Password * (Min 6 chars)</label>
                         <FieldNotice fieldKey="signUpPassword" />
-                        <input
-                          id="input-signUpPassword-email"
-                          type="password"
-                          className="form-input"
-                          style={fieldErrors.signUpPassword ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                          placeholder="Min 6 characters"
-                          value={signUpPassword}
-                          onChange={(e) => {
-                            setSignUpPassword(e.target.value);
-                            clearFieldError("signUpPassword");
-                          }}
-                          required
-                        />
+                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                          <input
+                            id="input-signUpPassword-email"
+                            type={showSignUpPassword ? "text" : "password"}
+                            className="form-input"
+                            style={{
+                              width: "100%",
+                              paddingRight: "42px",
+                              borderColor: fieldErrors.signUpPassword ? "#f43f5e" : undefined,
+                              boxShadow: fieldErrors.signUpPassword ? "0 0 0 1px #f43f5e" : undefined,
+                            }}
+                            placeholder="Min 6 characters"
+                            value={signUpPassword}
+                            onChange={(e) => {
+                              setSignUpPassword(e.target.value);
+                              clearFieldError("signUpPassword");
+                            }}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                            title={showSignUpPassword ? "Hide password" : "Show password"}
+                            style={{
+                              position: "absolute",
+                              right: "12px",
+                              background: "none",
+                              border: "none",
+                              padding: "4px",
+                              color: showSignUpPassword ? "#a78bfa" : "var(--text-dim)",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              transition: "color 0.2s ease",
+                            }}
+                            tabIndex={-1}
+                          >
+                            {showSignUpPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
                       </div>
                     </div>
 

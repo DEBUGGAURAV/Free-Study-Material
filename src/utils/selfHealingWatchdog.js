@@ -243,15 +243,166 @@ function shouldYieldForWebTraffic() {
 }
 
 function getWatchdogStats() {
-  const mem = process.memoryUsage();
   return {
     isEventLoopCongested,
-    currentEventLoopLagMs: currentEventLoopLag,
-    rssMb: Math.round(mem.rss / (1024 * 1024)),
-    heapUsedMb: Math.round(mem.heapUsed / (1024 * 1024)),
-    heapTotalMb: Math.round(mem.heapTotal / (1024 * 1024)),
-    uptimeHours: (process.uptime() / 3600).toFixed(2),
+    currentEventLoopLag,
+    lastHeartbeatTime,
+    lastActivityTimestamp,
   };
+}
+
+let lastActivityTimestamp = Date.now();
+
+function recordServerActivity() {
+  lastActivityTimestamp = Date.now();
+}
+
+/**
+ * 6. 🧹 Auto-Garbage Collector & Memory Flusher (Idle Cleaner)
+ * When server has been idle for 3 minutes, automatically flushes unused memory,
+ * clearing expired items from RAM cache and invoking V8 GC to bring RAM down to base level (~25-40MB).
+ */
+function startIdleMemoryCleaner(idleThresholdMs = 3 * 60 * 1000) {
+  setInterval(() => {
+    try {
+      const idleTime = Date.now() - lastActivityTimestamp;
+      if (idleTime >= idleThresholdMs) {
+        if (ramCache && typeof ramCache.clearExpired === "function") {
+          ramCache.clearExpired();
+        }
+        if (global.gc) {
+          try {
+            global.gc();
+            const mem = process.memoryUsage();
+            const rssMb = Math.round(mem.rss / (1024 * 1024));
+            console.log(`[SELF-HEALING-IDLE] 💤 Server idle for ${(idleTime / 60000).toFixed(1)}m. Flushed memory to base level: ${rssMb}MB RSS.`);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      console.warn("[SELF-HEALING-IDLE] Cleaner notice:", e.message);
+    }
+  }, 90 * 1000); // Sweep every 90 seconds
+}
+
+/**
+ * 7. 💾 Auto-Disk Quota Pruner
+ * Periodically inspects cache/cdn/ directory.
+ * If total cache folder exceeds maxBytes (default 1.5GB) or files are older than 30 days,
+ * safely prunes oldest files to prevent disk exhaustion.
+ */
+function startDiskQuotaPruner(cdnDir = path.join(process.cwd(), "cache", "cdn"), maxBytes = 1.5 * 1024 * 1024 * 1024, maxAgeMs = 30 * 86400 * 1000) {
+  const prune = () => {
+    try {
+      if (!fs.existsSync(cdnDir)) return;
+      const files = fs.readdirSync(cdnDir);
+      const now = Date.now();
+      let totalBytes = 0;
+      const fileStats = [];
+
+      for (const file of files) {
+        try {
+          const fullPath = path.join(cdnDir, file);
+          const st = fs.statSync(fullPath);
+          totalBytes += st.size;
+          fileStats.push({ file, fullPath, size: st.size, mtime: st.mtimeMs });
+        } catch (_) {}
+      }
+
+      // 1. Delete files older than 30 days
+      let prunedOldCount = 0;
+      for (const item of fileStats) {
+        if (now - item.mtime > maxAgeMs) {
+          try {
+            fs.unlinkSync(item.fullPath);
+            totalBytes -= item.size;
+            prunedOldCount++;
+          } catch (_) {}
+        }
+      }
+
+      // 2. If folder still exceeds maxBytes, delete oldest files first
+      if (totalBytes > maxBytes) {
+        fileStats.sort((a, b) => a.mtime - b.mtime);
+        let prunedQuotaCount = 0;
+        for (const item of fileStats) {
+          if (totalBytes <= maxBytes * 0.75) break;
+          if (fs.existsSync(item.fullPath)) {
+            try {
+              fs.unlinkSync(item.fullPath);
+              totalBytes -= item.size;
+              prunedQuotaCount++;
+            } catch (_) {}
+          }
+        }
+        if (prunedQuotaCount > 0) {
+          console.log(`[SELF-HEALING-DISK] 💾 Pruned ${prunedQuotaCount} cached files to keep disk within ${(maxBytes / (1024*1024)).toFixed(0)}MB quota.`);
+        }
+      }
+
+      if (prunedOldCount > 0) {
+        console.log(`[SELF-HEALING-DISK] 🧹 Pruned ${prunedOldCount} stale CDN files (>30 days old).`);
+      }
+    } catch (err) {
+      console.warn("[SELF-HEALING-DISK] Prune notice:", err.message);
+    }
+  };
+
+  // Run every 6 hours
+  setInterval(prune, 6 * 3600 * 1000);
+  // Also run 20 seconds after server boot
+  setTimeout(prune, 20 * 1000);
+}
+
+/**
+ * 8. 🧹 Auto-Temp Folder Pruner (1-Hour Strict Policy with Upload Immunity)
+ * Periodically inspects temp/ directory.
+ * Any orphaned chunk or file older than 1 hour (60 minutes) is safely unlinked.
+ * If a file is currently actively processing/uploading in queueService, it has 100% immunity and is NEVER touched.
+ */
+function startTempFolderPruner(tempDir = path.join(process.cwd(), "temp"), maxAgeMs = 60 * 60 * 1000) {
+  const sweepTemp = () => {
+    try {
+      if (!tempDir || !fs.existsSync(tempDir)) return;
+      const files = fs.readdirSync(tempDir);
+      const now = Date.now();
+      let purgedCount = 0;
+
+      let isTempActiveFn = null;
+      try {
+        const qs = require("../services/queueService");
+        isTempActiveFn = qs.isTempFileActive;
+      } catch (_) {}
+
+      for (const file of files) {
+        const fullPath = path.join(tempDir, file);
+        try {
+          // 🛡️ Active Upload Immunity Lock: If file is actively uploading, NEVER touch it!
+          if (isTempActiveFn && isTempActiveFn(fullPath)) {
+            continue;
+          }
+
+          const stats = fs.statSync(fullPath);
+          // ⏱️ Safe 1-Hour Threshold (60 Minutes) for abandoned temp files
+          if (now - stats.mtimeMs > maxAgeMs) {
+            fs.unlinkSync(fullPath);
+            purgedCount++;
+          }
+        } catch (_) {}
+      }
+
+      if (purgedCount > 0) {
+        console.log(`[SELF-HEALING-TEMP] 🧹 Purged ${purgedCount} abandoned temp upload files (>1 hour old) from disk.`);
+      }
+    } catch (dirErr) {
+      console.warn("[SELF-HEALING-TEMP] Temp sweep notice:", dirErr.message);
+    }
+  };
+
+  // Run 10 seconds after server boot
+  setTimeout(sweepTemp, 10 * 1000);
+  // Periodically sweep every 15 minutes
+  setInterval(sweepTemp, 15 * 60 * 1000);
 }
 
 module.exports = {
@@ -262,5 +413,9 @@ module.exports = {
   startEventLoopLagDetector,
   shouldYieldForWebTraffic,
   getWatchdogStats,
+  recordServerActivity,
+  startIdleMemoryCleaner,
+  startDiskQuotaPruner,
+  startTempFolderPruner,
 };
 

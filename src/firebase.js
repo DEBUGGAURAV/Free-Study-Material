@@ -25,6 +25,13 @@ if (!admin.apps.length) {
 }
 
 const db = admin.apps.length ? admin.firestore() : null;
+if (db) {
+  try {
+    db.settings({ ignoreUndefinedProperties: true });
+  } catch (e) {
+    // Already initialized or setting not supported
+  }
+}
 
 module.exports = { admin, db };
 

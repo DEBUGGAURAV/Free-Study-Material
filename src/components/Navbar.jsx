@@ -1,5 +1,5 @@
-import React from "react";
-import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare } from "lucide-react";
 
 export default function Navbar({
   searchTerm,
@@ -9,15 +9,127 @@ export default function Navbar({
   onOpenNotices,
   onOpenAuth,
   onOpenProfile,
+  onOpenChat,
   currentUser,
   onLogout,
   noticeCount = 0,
 }) {
-  const isAdminOrManager =
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const isStandaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)")?.matches : false;
+      const isNavStandalone = window.navigator?.standalone === true;
+      const isAndroidApp = typeof document !== "undefined" && Boolean(document.referrer?.includes("android-app://"));
+      return Boolean(isStandaloneMedia || isNavStandalone || isAndroidApp);
+    } catch (_) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const checkStandalone = () => {
+      try {
+        const isStandaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)")?.matches : false;
+        const isNavStandalone = window.navigator?.standalone === true;
+        const isAndroidApp = typeof document !== "undefined" && Boolean(document.referrer?.includes("android-app://"));
+        if (isStandaloneMedia || isNavStandalone || isAndroidApp) {
+          setIsInstalled(true);
+        }
+      } catch (_) {}
+    };
+    checkStandalone();
+    let mediaQuery = null;
+    try {
+      mediaQuery = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(display-mode: standalone)") : null;
+      if (mediaQuery && mediaQuery.addEventListener) {
+        mediaQuery.addEventListener("change", checkStandalone);
+      }
+    } catch (_) {}
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => {
+      setIsInstalled(true);
+      setInstallPrompt(null);
+    });
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      if (mediaQuery && mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", checkStandalone);
+      }
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      if (choice?.outcome === "accepted") {
+        setIsInstalled(true);
+      }
+      setInstallPrompt(null);
+    } else {
+      alert("📲 To Install FreeStudyMaterial App on Edge/Chrome:\n\n1. Look at Edge top-right: Click the 3 dots (...) menu.\n2. Click 'Apps' -> 'Install this site as an app'.\n\nOn Mobile: Tap 3 dots -> 'Add to Home screen'!");
+    }
+  };
+  const isAdminOrManager = Boolean(
+    currentUser?.isMainAdmin ||
+    currentUser?.isAdmin ||
     currentUser?.role === "admin" ||
-    currentUser?.email === "jnplotus@gmail.com" ||
-    currentUser?.permissions?.includes("all") ||
-    currentUser?.permissions?.includes("manage_notes");
+    currentUser?.role === "half_admin" ||
+    currentUser?.role === "sub_admin" ||
+    (Array.isArray(currentUser?.permissions) && (
+      currentUser.permissions.includes("all") ||
+      currentUser.permissions.includes("manage_notes") ||
+      currentUser.permissions.includes("manage_users") ||
+      currentUser.permissions.includes("manage_chat") ||
+      currentUser.permissions.includes("delete_records")
+    ))
+  );
+
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("🎙️ Voice search is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (_) {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-IN";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event) => {
+        const transcript = event?.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setSearchTerm(transcript);
+        }
+      };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (_) {
+      setIsListening(false);
+    }
+  };
 
   return (
     <header className="navbar-wrapper">
@@ -37,7 +149,7 @@ export default function Navbar({
         </div>
 
         {/* Universal Search */}
-        <div className="search-wrapper">
+        <div className="search-wrapper" style={{ position: "relative" }}>
           <Search size={18} className="search-icon" />
           <input
             type="text"
@@ -45,7 +157,32 @@ export default function Navbar({
             placeholder="Search notes, subjects, branch, or keywords..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ paddingRight: "40px" }}
           />
+          <button
+            type="button"
+            onClick={handleVoiceSearch}
+            style={{
+              position: "absolute",
+              right: "10px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: isListening ? "rgba(239, 68, 68, 0.25)" : "transparent",
+              border: isListening ? "1px solid #ef4444" : "none",
+              borderRadius: "50%",
+              width: "28px",
+              height: "28px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: isListening ? "#ef4444" : "var(--text-dim, #94a3b8)",
+              transition: "all 0.2s ease",
+            }}
+            title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
+          >
+            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+          </button>
         </div>
 
         {/* Actions */}
@@ -74,11 +211,53 @@ export default function Navbar({
             )}
           </button>
 
+          {/* Real-time Student Chat & Study Pods */}
+          <button
+            className="btn-secondary"
+            onClick={onOpenChat}
+            title="Student Hub & Study Pods (Live Chat)"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(99, 102, 241, 0.12)",
+              border: "1px solid rgba(99, 102, 241, 0.35)",
+              color: "#a5b4fc",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+            }}
+          >
+            <MessageSquare size={16} />
+            <span>Chat Hub</span>
+          </button>
+
           {/* Upload Button */}
           <button className="btn-primary" onClick={onOpenUpload}>
             <UploadCloud size={17} />
             <span>Upload Notes</span>
           </button>
+
+          {/* PWA Install App Button */}
+          {!isInstalled && (
+            <button
+              className="btn-secondary"
+              onClick={handleInstallClick}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(16, 185, 129, 0.12)",
+                border: "1px solid rgba(16, 185, 129, 0.35)",
+                color: "#34d399",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+              }}
+              title="Install Free Study Material as Desktop / Mobile App"
+            >
+              <Smartphone size={16} />
+              <span>📲 Install App</span>
+            </button>
+          )}
 
           {/* Admin Studio Button (if authorized) */}
           {isAdminOrManager && (

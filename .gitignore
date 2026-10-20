@@ -10,4 +10,14 @@ dist-ssr/
 temp/
 .telegram_session*
 *.pdf
+cache/
+*.traineddata
+!public/tesseract/**
+*.db
+*.sqlite
+serviceAccountKey*.json
+.env*.production
+scripts/
+generate_icons.js
+nodemon.json
 

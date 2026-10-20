@@ -15,9 +15,14 @@ const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
 const { recordSyncEvent } = require("./syncTracker");
+const { upsertNoteToTurso } = require("../services/tursoService");
 
-const botToken = process.env.TELEGRAM_BOT_TOKEN;
-const storageChatId = process.env.TELEGRAM_STORAGE_CHAT_ID;
+function getBotToken() {
+  return (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+}
+function getStorageChatId() {
+  return (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
+}
 
 let isPollerRunning = false;
 let currentOffset = 0;
@@ -102,7 +107,8 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
   if (!chatId || !text) return null;
 
   // 1. Primary Attempt: Telegram Bot HTTP API
-  if (botToken) {
+  const activeToken = getBotToken();
+  if (activeToken) {
     try {
       const body = {
         chat_id: chatId,
@@ -112,7 +118,7 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
       if (replyToMsgId) body.reply_to_message_id = replyToMsgId;
       if (threadId && !isNaN(Number(threadId))) body.message_thread_id = Number(threadId);
 
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      const res = await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -126,7 +132,7 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
       console.warn(`[BOT POLLER] sendMessage error (${data.description}), retrying clean send to Chat ${chatId}...`);
 
       // Fallback 1: If threadId or reply_to_message_id caused 400 error, retry with clean payload to chatId
-      const cleanRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      const cleanRes = await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -178,15 +184,17 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
  * Forwards a message to the Central Storage Channel (HTTP Bot API with GramJS fallback)
  */
 async function forwardToStorageChannel(fromChatId, messageId) {
-  if (!botToken || !storageChatId) return null;
+  const activeToken = getBotToken();
+  const activeStorage = getStorageChatId();
+  if (!activeToken || !activeStorage) return null;
 
   // Primary Path: Bot API forwardMessage
   try {
-    const res = await fetch(`https://api.telegram.org/bot${botToken}/forwardMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${activeToken}/forwardMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: storageChatId,
+        chat_id: activeStorage,
         from_chat_id: fromChatId,
         message_id: messageId,
       }),
@@ -204,7 +212,7 @@ async function forwardToStorageChannel(fromChatId, messageId) {
   try {
     const client = await getClient();
     if (client) {
-      const forwarded = await client.forwardMessages(storageChatId, {
+      const forwarded = await client.forwardMessages(activeStorage, {
         messages: [Number(messageId)],
         fromPeer: fromChatId,
       });
@@ -374,8 +382,8 @@ async function processIncomingMessage(message) {
         // 2. Also publish duplicate notice into subject topic in storage supergroup if different chat
         try {
           const { getOrCreateSubjectForumTopic } = require("../services/emailService");
-          const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, botToken);
-          const storageChat = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+          const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
+          const storageChat = getStorageChatId();
           if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
             await sendTelegramMessage(storageChat, dupNotice, null, topicThreadId).catch(() => {});
           }
@@ -386,7 +394,8 @@ async function processIncomingMessage(message) {
 
     // Forward document to Central Storage Vault
     let storedMsgId = null;
-    if (storageChatId && chatId.toString() === storageChatId.toString()) {
+    const activeStorage = getStorageChatId();
+    if (activeStorage && chatId.toString() === activeStorage.toString()) {
       storedMsgId = messageId;
     } else {
       storedMsgId = await forwardToStorageChannel(chatId, messageId);
@@ -445,6 +454,7 @@ async function processIncomingMessage(message) {
     };
 
     await noteRef.set(noteData);
+    upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-BOT] Sync notice:", e.message));
 
     // Auto-post to Notice Board
     await db.collection("notices").add({
@@ -489,8 +499,8 @@ async function processIncomingMessage(message) {
       // 2. Also publish receipt into the subject forum topic in central storage supergroup
       try {
         const { getOrCreateSubjectForumTopic } = require("../services/emailService");
-        const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, botToken);
-        const storageChat = (process.env.TELEGRAM_STORAGE_CHAT_ID || "-1004387181748").trim();
+        const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
+        const storageChat = getStorageChatId();
         if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
           await sendTelegramMessage(storageChat, receiptText, null, topicThreadId).catch(() => {});
         }
@@ -526,7 +536,8 @@ let lastErrorNotice = null;
  */
 async function startBotPoller() {
   if (isPollerRunning) return;
-  if (!botToken) {
+  const activeBotToken = getBotToken();
+  if (!activeBotToken) {
     console.warn("[BOT POLLER] TELEGRAM_BOT_TOKEN missing. Poller disabled.");
     return;
   }
@@ -536,7 +547,12 @@ async function startBotPoller() {
 
   while (isPollerRunning) {
     try {
-      const url = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${currentOffset}&timeout=5`;
+      const activeToken = getBotToken();
+      if (!activeToken) {
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      const url = `https://api.telegram.org/bot${activeToken}/getUpdates?offset=${currentOffset}&timeout=5`;
       const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
 
       // Handle Telegram HTTP 429 Rate Limit (Safe backoff without getting IP blocked)

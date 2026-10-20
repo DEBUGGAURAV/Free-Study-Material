@@ -9,11 +9,15 @@ import AdminModal from "./components/AdminModal";
 import NoticeBoardModal from "./components/NoticeBoardModal";
 import AuthModal from "./components/AuthModal";
 import ProfileModal from "./components/ProfileModal";
+import StudentChatModal from "./components/StudentChatModal";
+import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize } from "./utils/formatUtils";
+import { initTabLeaderElection } from "./utils/tabLeaderLock";
+import { syncStudentProfileContext } from "./utils/studentStudyContext";
 
 export default function App() {
   const [notes, setNotes] = useState([]);
@@ -33,7 +37,21 @@ export default function App() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authInitialTab, setAuthInitialTab] = useState("signin");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [previewNote, setPreviewNote] = useState(null);
+
+  useEffect(() => {
+    const handleOpenChat = () => setIsChatOpen(true);
+    window.addEventListener("open_student_chat", handleOpenChat);
+
+    // Auto-open chat if URL has chat or invite code parameter
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("chat") || params.get("code") || params.get("chat_join")) {
+      setIsChatOpen(true);
+    }
+
+    return () => window.removeEventListener("open_student_chat", handleOpenChat);
+  }, []);
 
   // User & Notices
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
@@ -49,6 +67,129 @@ export default function App() {
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
 
+  // 📴 PWA & Village/2G Resilience Offline State
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+
+  // 🛠️ Platform Maintenance Mode State (Live Host Pause)
+  const [maintenanceState, setMaintenanceState] = useState({
+    active: false,
+    title: "",
+    message: "",
+    estimatedEnd: "",
+  });
+
+  // 📥 Student Notes Download Master Control Flag
+  const [allowNotesDownload, setAllowNotesDownload] = useState(true);
+  const [downloadDisabledReason, setDownloadDisabledReason] = useState("");
+  const [tableDownloads, setTableDownloads] = useState({});
+
+  // 🛡️ Inactivity Session Guardian Setting ("auto", 15, 30, 60, 0)
+  const [inactivityTimeoutSetting, setInactivityTimeoutSetting] = useState("auto");
+  const inactivitySettingRef = useRef(inactivityTimeoutSetting);
+  useEffect(() => {
+    inactivitySettingRef.current = inactivityTimeoutSetting;
+  }, [inactivityTimeoutSetting]);
+
+  useEffect(() => {
+    async function checkMaintenanceStatus() {
+      try {
+        const res = await api.getPublicTechFlags();
+        if (res && res.flags) {
+          if (res.flags.inactivityTimeoutMinutes !== undefined) {
+            setInactivityTimeoutSetting(res.flags.inactivityTimeoutMinutes);
+          }
+          if (res.flags.allowNotesDownload !== undefined) {
+            setAllowNotesDownload(Boolean(res.flags.allowNotesDownload));
+          }
+          if (res.flags.downloadDisabledReason) {
+            setDownloadDisabledReason(res.flags.downloadDisabledReason);
+          }
+
+          if (res.flags.maintenanceMode) {
+            setMaintenanceState({
+              active: true,
+              title: res.flags.maintenanceTitle || "Scheduled System Upgrade in Progress",
+              message: res.flags.maintenanceMessage || "We are currently performing scheduled platform upgrades. Free Study Material will be back online shortly!",
+              estimatedEnd: res.flags.maintenanceEstimatedEnd || "",
+            });
+          } else {
+            setMaintenanceState((prev) => ({ ...prev, active: false }));
+          }
+        }
+      } catch (err) {
+        if (err.maintenance) {
+          setMaintenanceState({
+            active: true,
+            title: err.title || "Scheduled System Upgrade in Progress",
+            message: err.message || "We are currently performing scheduled platform upgrades.",
+            estimatedEnd: err.estimatedEnd || "",
+          });
+        }
+      }
+    }
+    checkMaintenanceStatus();
+    const interval = setInterval(checkMaintenanceStatus, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // 👑 Multi-Tab Leader Sync (Web Locks API + BroadcastChannel)
+    initTabLeaderElection(() => {
+      console.log("[FSM] 👑 Active tab elected as primary sync leader.");
+    });
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // 📴 Active Network & PWA Standalone Connectivity Probe
+    const probeConnectivity = async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setIsOffline(true);
+        return;
+      }
+      try {
+        const res = await fetch("/api/health", { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(2500) });
+        if (res.ok) {
+          setIsOffline(false);
+        } else {
+          setIsOffline(true);
+        }
+      } catch (_) {
+        setIsOffline(true);
+      }
+    };
+
+    probeConnectivity();
+    const probeTimer = setInterval(probeConnectivity, 6000);
+
+    // 📡 Listen for Service Worker Offline broadcasts
+    const handleSwMessage = (e) => {
+      if (e.data && e.data.type === "FSM_NETWORK_STATUS") {
+        setIsOffline(Boolean(e.data.isOffline));
+      }
+    };
+    if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", handleSwMessage);
+    }
+
+    if (typeof window !== "undefined" && typeof window.cacheAllActiveResources === "function") {
+      setTimeout(() => {
+        window.cacheAllActiveResources();
+      }, 2000);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      clearInterval(probeTimer);
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", handleSwMessage);
+      }
+    };
+  }, []);
+
   const openAuth = (tab = "signin") => {
     setAuthInitialTab(tab);
     setIsAuthOpen(true);
@@ -60,6 +201,7 @@ export default function App() {
     if (currentUser) {
       lastActivityRef.current = Date.now();
       localStorage.setItem("vault_last_active", String(Date.now()));
+      syncStudentProfileContext(currentUser);
     } else {
       localStorage.removeItem("vault_last_active");
     }
@@ -110,9 +252,22 @@ export default function App() {
 
     const checkInactivity = () => {
       if (!currentUserRef.current) return;
+      const setting = inactivitySettingRef.current;
+      if (setting === 0 || setting === "0") return; // Disabled
+
       const storedLast = parseInt(localStorage.getItem("vault_last_active") || "0", 10);
       const effectiveLastActive = Math.max(lastActivityRef.current, storedLast);
-      if (Date.now() - effectiveLastActive >= 30 * 60 * 1000) {
+
+      let timeoutMs = 30 * 60 * 1000;
+      if (setting === "auto" || !setting) {
+        timeoutMs = 30 * 60 * 1000; // ⚡ 100% Strictly 30 Minutes for Auto Mode
+      } else if (typeof setting === "number" && setting > 0) {
+        timeoutMs = setting * 60 * 1000;
+      } else if (typeof setting === "string" && !isNaN(parseInt(setting, 10)) && parseInt(setting, 10) > 0) {
+        timeoutMs = parseInt(setting, 10) * 60 * 1000;
+      }
+
+      if (Date.now() - effectiveLastActive >= timeoutMs) {
         triggerAutoLogout();
       }
     };
@@ -204,8 +359,53 @@ export default function App() {
     } catch {}
   };
 
-  const fetchNotes = async () => {
-    if (!currentUser) {
+  const handleToggleNoteDownloadInState = (noteOrId, allowDownload, reason) => {
+    const targetId = typeof noteOrId === "object" ? noteOrId?.id : noteOrId;
+    const targetTitle = typeof noteOrId === "object" ? (noteOrId?.title || "").toLowerCase().trim() : "";
+    const targetSubject = typeof noteOrId === "object" ? (noteOrId?.subject || "").toLowerCase().trim() : "";
+
+    setNotes((prevNotes) =>
+      prevNotes.map((n) => {
+        const isMatch =
+          n.id === targetId ||
+          (targetTitle && (n.title || "").toLowerCase().trim() === targetTitle && (!targetSubject || (n.subject || "").toLowerCase().trim() === targetSubject));
+        if (isMatch) {
+          return {
+            ...n,
+            allowDownload: Boolean(allowDownload),
+            downloadDisabledReason: allowDownload ? "" : (reason || n.downloadDisabledReason || ""),
+          };
+        }
+        return n;
+      })
+    );
+  };
+
+  useEffect(() => {
+    const handleNotesSynced = (e) => {
+      if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
+        const getNoteTs = (n) => {
+          if (!n) return 0;
+          if (n._sortTimestamp) return n._sortTimestamp;
+          const val = n.createdAt || n.updatedAt;
+          if (!val) return 0;
+          if (typeof val === "number") return val;
+          if (val._seconds !== undefined) return val._seconds * 1000;
+          const t = new Date(val).getTime();
+          return isNaN(t) ? 0 : t;
+        };
+        const sorted = e.detail.slice().sort((a, b) => getNoteTs(b) - getNoteTs(a));
+        if (sorted.length > 0) sorted[0].isLatest = true;
+        setNotes(sorted);
+      }
+    };
+    window.addEventListener("fsm:notes-synced", handleNotesSynced);
+    return () => window.removeEventListener("fsm:notes-synced", handleNotesSynced);
+  }, []);
+
+  const fetchNotes = async (activeUser = null, forceBypass = false) => {
+    const userToCheck = activeUser || currentUser;
+    if (!userToCheck) {
       setNotes([]);
       setLoading(false);
       return;
@@ -219,7 +419,13 @@ export default function App() {
         course: selectedCourse,
         year: selectedYear,
         search: searchTerm,
-      });
+        bypassCache: forceBypass,
+      }, forceBypass);
+      if (res && res.offline) {
+        setIsOffline(true);
+      } else if (res && Array.isArray(res.notes) && res.notes.length > 0) {
+        setIsOffline(false);
+      }
       const getNoteTs = (n) => {
         if (!n) return 0;
         if (n._sortTimestamp) return n._sortTimestamp;
@@ -289,8 +495,239 @@ export default function App() {
     }
   };
 
+  const handleTableDownload = async (note) => {
+    if (!currentUser) {
+      setAuthMode("signin");
+      setIsAuthOpen(true);
+      return;
+    }
+    if (!allowNotesDownload || note.allowDownload === false) {
+      const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (note.allowDownload === false ? "Downloads for this specific note have been disabled by the administrator. You can still read notes in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
+      if (isAdminUser) {
+        if (!window.confirm(`🛡️ Admin Inspection Notice:\n\nStudent downloads for "${note.title}" are currently DISABLED.\n\nReason: "${reasonMsg}"\n\nDo you want to download this document anyway as Administrator for inspection?`)) {
+          return;
+        }
+      } else {
+        alert(reasonMsg);
+        return;
+      }
+    }
+    if (note.driveLink && !note.telegramMessageId) {
+      window.open(note.driveLink, "_blank");
+      return;
+    }
+
+    const rawClean = (note.originalName || note.title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
+    const fileName = rawClean.toLowerCase().endsWith(".pdf") ? rawClean : `${rawClean}.pdf`;
+
+    let fileHandle = null;
+    if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
+        });
+      } catch (pickerErr) {
+        if (pickerErr.name === "AbortError") return;
+      }
+    }
+
+    setTableDownloads((prev) => ({ ...prev, [note.id]: { percent: 5, speed: "Connecting..." } }));
+    try {
+      await api.downloadNoteWithProgress(
+        note.id,
+        fileName,
+        (metrics) => {
+          setTableDownloads((prev) => ({ ...prev, [note.id]: metrics }));
+        },
+        null,
+        fileHandle
+      );
+    } catch (err) {
+      console.warn("Table download error, fallback to direct url:", err.message);
+      window.open(api.getDownloadUrl(note.id), "_blank");
+    } finally {
+      setTableDownloads((prev) => {
+        const copy = { ...prev };
+        delete copy[note.id];
+        return copy;
+      });
+    }
+  };
+
   // Rule: Display initial 15 notes, keep rest hidden until user clicks "Show All Notes"
   const displayedNotes = showAllNotes ? notes : notes.slice(0, 15);
+
+  const isAdminUser = currentUser?.role === "admin" || currentUser?.role === "half_admin" || currentUser?.email === "jnplotus@gmail.com";
+  const hasBypassParam =
+    typeof window !== "undefined" &&
+    (window.location.search.includes("admin_bypass") ||
+      window.location.search.includes("bypass") ||
+      (typeof sessionStorage !== "undefined" && Boolean(sessionStorage.getItem("admin_bypass"))));
+
+  // 🛠️ Full-Screen Maintenance Curtain: Site remains 100% hosted, public access paused, admin portal accessible
+  if (maintenanceState.active && !isAdminUser && !hasBypassParam) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "radial-gradient(ellipse at top, #0f172a 0%, #090d16 100%)",
+          color: "#fff",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            width: "500px",
+            height: "500px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(6, 182, 212, 0.12) 0%, transparent 70%)",
+            filter: "blur(60px)",
+            top: "20%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        <div
+          style={{
+            maxWidth: "600px",
+            width: "100%",
+            background: "rgba(15, 23, 42, 0.65)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: "20px",
+            padding: "36px 30px",
+            textAlign: "center",
+            boxShadow: "0 24px 64px rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(16px)",
+            position: "relative",
+            zIndex: 1,
+            animation: "fadeIn 0.4s ease",
+          }}
+        >
+          {/* Header Status Badge */}
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "6px 14px",
+              borderRadius: "999px",
+              background: "rgba(239, 68, 68, 0.15)",
+              border: "1px solid rgba(239, 68, 68, 0.4)",
+              color: "#f87171",
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              marginBottom: "20px",
+              letterSpacing: "0.5px",
+              textTransform: "uppercase",
+            }}
+          >
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444" }} />
+            <span>Platform Maintenance Mode Active</span>
+          </div>
+
+          <h2 style={{ fontSize: "1.75rem", fontWeight: 800, color: "#fff", marginBottom: "12px", letterSpacing: "-0.5px" }}>
+            {maintenanceState.title || "Scheduled System Upgrade"}
+          </h2>
+
+          <p style={{ fontSize: "0.92rem", color: "var(--text-muted)", lineHeight: "1.6", marginBottom: "24px" }}>
+            {maintenanceState.message || "We are currently performing scheduled platform upgrades to optimize performance, cloud CDN caching, and security. Free Study Material will be back online shortly!"}
+          </p>
+
+          {/* Estimated End Box */}
+          {maintenanceState.estimatedEnd && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                background: "rgba(6, 182, 212, 0.12)",
+                border: "1px solid rgba(6, 182, 212, 0.3)",
+                color: "var(--accent-cyan)",
+                fontSize: "0.84rem",
+                fontWeight: 600,
+                marginBottom: "24px",
+              }}
+            >
+              <Clock size={16} />
+              <span>Estimated Return: {maintenanceState.estimatedEnd}</span>
+            </div>
+          )}
+
+          {/* Status Checkpoints */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              textAlign: "left",
+              padding: "16px",
+              background: "rgba(255, 255, 255, 0.03)",
+              border: "1px solid rgba(255, 255, 255, 0.06)",
+              borderRadius: "12px",
+              marginBottom: "28px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "#34d399" }}>
+              <CheckCircle size={15} style={{ flexShrink: 0 }} />
+              <span>Server &amp; Cloudflare CDN Nodes 100% Online &amp; Hosted</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "#34d399" }}>
+              <CheckCircle size={15} style={{ flexShrink: 0 }} />
+              <span>All Academic Notes &amp; Student Accounts 100% Preserved</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "#34d399" }}>
+              <CheckCircle size={15} style={{ flexShrink: 0 }} />
+              <span>Upgrading Infrastructure &amp; Dynamic Network Adapters</span>
+            </div>
+          </div>
+
+          {/* Admin Login Portal Button */}
+          <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
+            <button
+              onClick={() => openAuth("signin")}
+              className="btn-secondary"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "0.84rem",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                borderColor: "rgba(255, 255, 255, 0.2)",
+              }}
+            >
+              <Lock size={15} color="var(--accent-cyan)" />
+              <span>Administrator Portal Access</span>
+            </button>
+          </div>
+        </div>
+
+        {isAuthOpen && (
+          <AuthModal
+            initialTab={authInitialTab}
+            onClose={() => setIsAuthOpen(false)}
+            onLoginSuccess={(user) => {
+              setCurrentUser(user);
+              setIsAuthOpen(false);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
@@ -313,6 +750,13 @@ export default function App() {
           }
         }}
         onOpenNotices={() => setIsNoticeBoardOpen(true)}
+        onOpenChat={() => {
+          if (!currentUser) {
+            openAuth("signin");
+          } else {
+            setIsChatOpen(true);
+          }
+        }}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
         currentUser={currentUser}
@@ -405,11 +849,41 @@ export default function App() {
           </div>
         )}
 
+        {/* Offline Mode Banner (Village / 2G Resilience) */}
+        {isOffline && (
+          <div
+            style={{
+              margin: "14px 0",
+              background: "rgba(245, 158, 11, 0.12)",
+              border: "1px solid rgba(245, 158, 11, 0.35)",
+              borderRadius: "var(--radius-md)",
+              padding: "10px 18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span style={{ fontSize: "1.1rem" }}>📴</span>
+              <span style={{ fontSize: "0.82rem", color: "#fbbf24", fontWeight: 700 }}>
+                Offline Mode Active (PWA):
+              </span>
+              <span style={{ fontSize: "0.8rem", color: "#cbd5e1" }}>
+                Reading cached notes from local device storage.
+              </span>
+            </div>
+            <span className="tech-pill dedup" style={{ fontSize: "0.68rem" }}>
+              ⚡ 100% Free Offline Vault
+            </span>
+          </div>
+        )}
+
         {/* Notice Board Ticker Bar (if notices exist) */}
         {notices.length > 0 && (
           <div
             style={{
-              margin: "16px 0 -8px",
+              margin: "16px 0 16px",
               background: "rgba(6, 182, 212, 0.08)",
               border: "1px solid rgba(6, 182, 212, 0.25)",
               borderRadius: "var(--radius-md)",
@@ -419,6 +893,8 @@ export default function App() {
               justifyContent: "space-between",
               gap: "12px",
               cursor: "pointer",
+              position: "relative",
+              zIndex: 1,
             }}
             onClick={() => setIsNoticeBoardOpen(true)}
           >
@@ -729,7 +1205,7 @@ export default function App() {
                   border: "1px solid rgba(56, 189, 248, 0.25)",
                   borderRadius: "12px",
                   padding: "14px 18px",
-                  marginBottom: "20px",
+                  margin: "0 0 20px 0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -737,6 +1213,8 @@ export default function App() {
                   boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
                   backdropFilter: "blur(10px)",
                   flexWrap: "wrap",
+                  position: "relative",
+                  zIndex: 1,
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
@@ -841,6 +1319,8 @@ export default function App() {
                         note={note}
                         onPreview={(n) => setPreviewNote(n)}
                         currentUser={currentUser}
+                        allowNotesDownload={allowNotesDownload}
+                        downloadDisabledReason={downloadDisabledReason}
                         onRequireAuth={(mode) => {
                           setAuthMode(mode || "signin");
                           setIsAuthOpen(true);
@@ -881,22 +1361,30 @@ export default function App() {
                             <td style={{ padding: "12px 16px", textAlign: "right" }}>
                               <div style={{ display: "inline-flex", gap: "6px" }}>
                                 <button
-                                  onClick={() => {
-                                    if (!currentUser) {
-                                      setAuthMode("signin");
-                                      setIsAuthOpen(true);
-                                      return;
-                                    }
-                                    if (note.driveLink && !note.telegramMessageId) {
-                                      window.open(note.driveLink, "_blank");
-                                      return;
-                                    }
-                                    window.open(api.getDownloadUrl(note.id), "_blank");
-                                  }}
+                                  onClick={() => handleTableDownload(note)}
                                   className="btn-card-download"
-                                  style={{ padding: "6px 12px", fontSize: "0.78rem" }}
+                                  disabled={Boolean(tableDownloads[note.id])}
+                                  style={{
+                                    padding: "6px 12px",
+                                    fontSize: "0.78rem",
+                                    opacity: (!allowNotesDownload || note.allowDownload === false) ? 0.75 : 1,
+                                    cursor: "pointer",
+                                    background: (!allowNotesDownload || note.allowDownload === false) ? "rgba(239, 68, 68, 0.15)" : undefined,
+                                    borderColor: (!allowNotesDownload || note.allowDownload === false) ? "rgba(239, 68, 68, 0.4)" : undefined,
+                                    color: (!allowNotesDownload || note.allowDownload === false) ? "#fca5a5" : undefined,
+                                  }}
+                                  title={(!allowNotesDownload || note.allowDownload === false) ? (note.allowDownload === false ? "Downloads disabled for this note. Online Reader active." : "Downloads paused by administrator. Online Reader active.") : "Download Document"}
                                 >
-                                  ⚡ Download
+                                  {(!allowNotesDownload || note.allowDownload === false) ? (
+                                    note.allowDownload === false ? "🔒 Disabled" : "🔒 Paused"
+                                  ) : tableDownloads[note.id] ? (
+                                    <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                                      <div className="spinner" style={{ width: "11px", height: "11px" }}></div>
+                                      <span>{tableDownloads[note.id].percent}%</span>
+                                    </span>
+                                  ) : (
+                                    "⚡ Download"
+                                  )}
                                 </button>
                                 <button
                                   className="btn-card-preview"
@@ -1004,6 +1492,9 @@ export default function App() {
       <PreviewModal
         note={previewNote}
         onClose={() => setPreviewNote(null)}
+        currentUser={currentUser}
+        allowNotesDownload={allowNotesDownload}
+        downloadDisabledReason={downloadDisabledReason}
         onOpenAuth={(mode) => {
           setPreviewNote(null);
           openAuth(mode || "signin");
@@ -1018,11 +1509,17 @@ export default function App() {
           setAutoLogoutNotice(null);
           setCurrentUser(user);
           localStorage.setItem("vault_last_active", String(Date.now()));
-          fetchNotes();
+          fetchNotes(user);
         }}
         notes={notes}
-        onRefreshNotes={fetchNotes}
+        onRefreshNotes={() => fetchNotes(null, true)}
         branches={branches}
+        allowNotesDownload={allowNotesDownload}
+        onToggleDownloadAllowed={(val, reason) => {
+          setAllowNotesDownload(Boolean(val));
+          if (reason) setDownloadDisabledReason(reason);
+        }}
+        onToggleNoteDownload={handleToggleNoteDownloadInState}
       />
 
       <NoticeBoardModal
@@ -1044,7 +1541,7 @@ export default function App() {
           setAutoLogoutNotice(null);
           setCurrentUser(user);
           localStorage.setItem("vault_last_active", String(Date.now()));
-          fetchNotes();
+          fetchNotes(user);
         }}
       />
 
@@ -1056,6 +1553,67 @@ export default function App() {
           setCurrentUser(updated);
         }}
       />
+
+      <GlobalErrorBoundary>
+        <StudentChatModal
+          isOpen={isChatOpen}
+          onClose={() => setIsChatOpen(false)}
+          currentUser={currentUser}
+          onPreviewNote={(note) => setPreviewNote(note)}
+          onOpenAuth={(mode) => openAuth(mode || "signin")}
+        />
+      </GlobalErrorBoundary>
+
+      {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
+      {!isChatOpen && (
+        <button
+          onClick={() => {
+            if (!currentUser) {
+              openAuth("signin");
+            } else {
+              setIsChatOpen(true);
+            }
+          }}
+          className="floating-chat-trigger"
+          title="Open Live Student Chat Hub & Study Pods"
+          style={{
+            position: "fixed",
+            bottom: activeJob ? "82px" : "24px",
+            right: "20px",
+            zIndex: 140,
+            background: "linear-gradient(135deg, #0284c7 0%, #3b82f6 50%, #6366f1 100%)",
+            color: "#fff",
+            border: "1px solid rgba(255, 255, 255, 0.25)",
+            borderRadius: "999px",
+            padding: "10px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: "0 10px 28px rgba(2, 132, 199, 0.4), 0 0 20px rgba(99, 102, 241, 0.25)",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: "0.85rem",
+            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <span style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <MessageSquare size={18} />
+            <span
+              style={{
+                position: "absolute",
+                top: "-2px",
+                right: "-2px",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#10b981",
+                boxShadow: "0 0 6px #10b981",
+              }}
+            />
+          </span>
+          <span className="floating-chat-text">Chat Hub</span>
+        </button>
+      )}
 
       <QueueStatusPill
         activeJob={activeJob}

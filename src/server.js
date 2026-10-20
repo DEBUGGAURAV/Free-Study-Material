@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
+const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
@@ -19,27 +20,50 @@ const {
   startTelegramHeartbeat,
   startEventLoopLagDetector,
   getWatchdogStats,
+  recordServerActivity,
+  startIdleMemoryCleaner,
+  startDiskQuotaPruner,
+  startTempFolderPruner,
 } = require("./utils/selfHealingWatchdog");
 const { warmCacheOnBoot } = require("./utils/cacheWarmer");
+const { ipJailFirewall } = require("./middleware/ipJail");
+const { globalSanitizer } = require("./middleware/sanitize");
+const { initTursoTables } = require("./services/tursoService");
 
-// 🚀 3. Global Process Immortality Shield (Zero-Downtime Protection: Intercepts & Isolates Unhandled Errors)
+// 🚀 Pillar 1: Autonomous Self-Healing, Idle Cleaner, 1-Hour Temp Pruner & Disk Pruner
 initProcessImmortalityShield();
-
-// ⏱️ 5. Event-Loop Lag Detector (Monitors Event Loop Lag to Prevent Web Freeze)
 startEventLoopLagDetector();
+startIdleMemoryCleaner(3 * 60 * 1000); // Purge idle memory after 3 min
+startDiskQuotaPruner(); // Auto-prune stale CDN files (>30 days / >1.5GB)
+startTempFolderPruner(path.join(__dirname, "../temp"), 60 * 60 * 1000); // Strict 1-Hour Temp Pruner (Upload Immunity Protected)
+startRamBufferGuard(path.join(__dirname, "../temp"), 380); // High-RAM Buffer Guard (380MB / 512MB threshold)
+
+// ⚡ Pillar 2: Turso (LibSQL / Edge SQLite) Cloud Initialization
+initTursoTables().catch((err) => console.warn("[TURSO] Boot init warning:", err.message));
 
 const authRoutes = require("./routes/auth");
+const passkeyRoutes = require("./routes/passkey");
 const uploadRoutes = require("./routes/upload");
 const notesRoutes = require("./routes/notes");
 const adminRoutes = require("./routes/admin");
 const noticesRoutes = require("./routes/notices");
 const p2pRoutes = require("./routes/p2p");
+const chatRoutes = require("./routes/chat");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Trust reverse proxy (Cloudflare / Render)
 app.set("trust proxy", 1);
+
+// Record server activity for idle flusher
+app.use((req, res, next) => {
+  recordServerActivity();
+  next();
+});
+
+// 🛡️ Pillar 2: Automated IP Jail & Anti-DDoS Firewall
+app.use(ipJailFirewall);
 
 // Security & Header Protection with Production Content Security Policy (CSP)
 app.use(
@@ -50,28 +74,32 @@ app.use(
         scriptSrc: [
           "'self'",
           "'unsafe-inline'",
+          "blob:",
           "https://accounts.google.com",
           "https://apis.google.com",
           "https://cdnjs.cloudflare.com",
+          "https://cdn.jsdelivr.net",
         ],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         connectSrc: [
           "'self'",
-          "https://fsm-edge.jnplotus.workers.dev",
+          process.env.CF_WORKER_URL || "https://fsm-edge.workers.dev",
           "https://*.workers.dev",
           "https://accounts.google.com",
           "https://oauth2.googleapis.com",
           "https://api.telegram.org",
           "https://*.firebaseio.com",
           "https://*.googleapis.com",
+          "https://cdn.jsdelivr.net",
+          "https://tessdata.projectnaptha.com",
           "blob:",
           "data:",
           "ws:",
           "wss:",
         ],
-        workerSrc: ["'self'", "blob:"],
+        workerSrc: ["'self'", "blob:", "https://cdn.jsdelivr.net"],
         frameSrc: [
           "'self'",
           "blob:",
@@ -94,7 +122,8 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   "https://freestudymaterial.onrender.com",
   "https://freestudtmaterial.onrender.com",
-  "https://fsm-edge.jnplotus.workers.dev",
+  process.env.CF_WORKER_URL,
+  "https://fsm-edge.workers.dev",
   ...(process.env.NODE_ENV !== "production"
     ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
     : []),
@@ -105,7 +134,14 @@ app.use(
     origin: (origin, callback) => {
       // Allow requests with no origin (e.g. server-side keep-alive self-ping, mobile apps, curl)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin) || origin.endsWith(".workers.dev")) {
+      const cfWorkerUrl = (process.env.CF_WORKER_URL || "").trim();
+      if (
+        allowedOrigins.includes(origin) ||
+        (cfWorkerUrl && origin === cfWorkerUrl) ||
+        origin.endsWith(".workers.dev") ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1")
+      ) {
         return callback(null, true);
       }
       return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
@@ -131,6 +167,9 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
+// 🛡️ Pillar 2: Global Input Sanitizer & Prototype Pollution Guard
+app.use(globalSanitizer);
+
 // Real-Time Health & Keep-Alive Endpoint (Zero Database Quota Used - Information Leakage Protected)
 app.get(["/health", "/api/health"], (req, res) => {
   res.json({
@@ -140,25 +179,46 @@ app.get(["/health", "/api/health"], (req, res) => {
   });
 });
 
+// Maintenance Mode Guard (Allows website to remain hosted while temporarily pausing public access)
+const { checkMaintenanceMode } = require("./middleware/maintenance");
+app.use(checkMaintenanceMode);
+
 // Rate limiter for standard API routes
 app.use("/api", globalLimiter);
 
 // API Routing
+app.use("/api/auth/passkey", passkeyRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/notes", notesRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notices", noticesRoutes);
 app.use("/api/p2p", p2pRoutes);
+app.use("/api/chat", chatRoutes);
 
-// Serve Client Web Application (Vite Dist) with immutable caching for hashed assets
+// Serve Client Web Application (Vite Dist) & Public Assets with proper PWA Cache-Control
 const distPath = path.join(__dirname, "../dist");
+const publicPath = path.join(__dirname, "../public");
+
+app.use(
+  express.static(publicPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.includes("tesseract")) {
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  })
+);
+
 app.use(
   express.static(distPath, {
-    maxAge: "1d",
     setHeaders: (res, filePath) => {
-      if (filePath.includes("/assets/")) {
+      if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.json")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      } else if (filePath.includes("tesseract")) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      } else if (filePath.includes("/assets/")) {
+        res.setHeader("Cache-Control", "public, max-age=86400");
       }
     },
   })
@@ -170,6 +230,7 @@ app.get("*", (req, res) => {
     return res.status(404).json({ success: false, message: "API endpoint not found" });
   }
   const indexPath = path.join(distPath, "index.html");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   res.sendFile(indexPath, (err) => {
     if (err) {
       res.status(200).send(`
@@ -189,8 +250,11 @@ app.get("*", (req, res) => {
   });
 });
 
-// Start Server
-app.listen(PORT, async () => {
+// Start Server with Real-Time WebSocket Support
+const server = http.createServer(app);
+chatRoutes.initChatWebSocket(server);
+
+server.listen(PORT, "0.0.0.0", async () => {
   console.log(`=======================================================`);
   console.log(`⚡ ACADEMIC CLOUD ENGINE RUNNING ON PORT ${PORT}`);
   console.log(`🌐 Domain: https://freestudymaterial.onrender.com`);
@@ -234,6 +298,22 @@ app.listen(PORT, async () => {
     if (startSecurityBotPoller) startSecurityBotPoller();
   } catch (e) {
     console.warn("[SECURITY BOT] Poller start deferred:", e.message);
+  }
+
+  // Start Dedicated Chat Audit & Forensic Bot Poller (@fsm_chat_bot)
+  try {
+    const { startChatAuditBotPoller } = require("./services/chatAuditBotService");
+    startChatAuditBotPoller();
+  } catch (e) {
+    console.warn("[CHAT AUDIT BOT] Poller start deferred:", e.message);
+  }
+
+  // Start Live Firebase User Deletion Watcher (Auto-cascades direct Firebase Console deletions)
+  try {
+    const { initFirebaseUserDeletionWatcher } = require("./services/userCascadeDeletionService");
+    if (initFirebaseUserDeletionWatcher) initFirebaseUserDeletionWatcher();
+  } catch (e) {
+    console.warn("[CASCADE-WATCHER] Start deferred:", e.message);
   }
 
   // Periodic 90-Day Inactive Account Purge (Daily sweep + 30s initial warmup)

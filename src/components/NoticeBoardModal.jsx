@@ -19,7 +19,7 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
 
   const canManageNotices =
     currentUser?.role === "admin" ||
-    currentUser?.email === "jnplotus@gmail.com" ||
+    currentUser?.isMainAdmin ||
     currentUser?.permissions?.includes("manage_notices") ||
     currentUser?.permissions?.includes("all");
 

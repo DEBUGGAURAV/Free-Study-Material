@@ -30,6 +30,48 @@ function getFirestoreDb() {
   }
 }
 
+function purgeNoteFromWebAndCdn(noteId) {
+  if (!noteId) return;
+
+  // 1. Purge from NVMe SSD Disk Cache and RAM Buffer
+  try {
+    const notesRouter = require("../routes/notes");
+    if (notesRouter && typeof notesRouter.purgeCdnDiskBuffer === "function") {
+      notesRouter.purgeCdnDiskBuffer(noteId);
+    }
+    if (notesRouter && notesRouter.noteBufferCache) {
+      notesRouter.noteBufferCache.delete(noteId);
+    }
+  } catch (_) {}
+
+  // 2. Invalidate RAM cache for note and all raw notes
+  try {
+    const { ramCache, invalidateAllCache } = require("../utils/ramCache");
+    if (ramCache) {
+      ramCache.delete(`note_${noteId}`);
+      ramCache.delete("all_raw_notes");
+    }
+    invalidateAllCache();
+  } catch (_) {}
+
+  // 3. Purge from Turso LibSQL Edge Database
+  try {
+    const { tursoClient } = require("../services/tursoService");
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: "DELETE FROM notes WHERE id = ?",
+        args: [noteId],
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 4. Purge from Cloudflare Edge Worker worldwide POP cache
+  try {
+    const cfWorker = process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev";
+    fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+  } catch (_) {}
+}
+
 function clearCache() {
   try {
     const { invalidateAllCache } = require("../utils/ramCache");
@@ -431,6 +473,7 @@ function setupChannelSyncListeners(c) {
                 archivedBy: "Telegram Two-Way Sync Deletion",
               });
               await db.collection("notes").doc(doc.id).delete();
+              purgeNoteFromWebAndCdn(doc.id);
             }
           }
 
@@ -455,6 +498,7 @@ function setupChannelSyncListeners(c) {
                 archivedBy: "Telegram Two-Way Sync Deletion",
               });
               await db.collection("notes").doc(doc.id).delete();
+              purgeNoteFromWebAndCdn(doc.id);
             }
           }
 
@@ -479,6 +523,7 @@ function setupChannelSyncListeners(c) {
                 archivedBy: "Telegram Two-Way Sync Deletion",
               });
               await db.collection("notes").doc(doc.id).delete();
+              purgeNoteFromWebAndCdn(doc.id);
             }
           }
         }
@@ -539,6 +584,7 @@ async function deduplicateDatabaseNotes() {
         archivedBy: "Auto Deduplication Engine",
       }).catch(() => {});
       await db.collection("notes").doc(doc.id).delete();
+      purgeNoteFromWebAndCdn(doc.id);
       duplicateCleanedCount++;
     } else {
       if (docIdStr) seenDocIds.set(docIdStr, doc.id);
@@ -561,7 +607,9 @@ async function deduplicateDatabaseNotes() {
  */
 async function syncTelegramChannel() {
   const c = await getClient();
-  if (!c) throw new Error("Cloud Storage client not connected");
+  if (!c) throw new Error("Cloud Storage Telegram client could not connect. Check TELEGRAM_BOT_TOKEN and TELEGRAM_API_ID/HASH in .env");
+  const targetStorageChatId = (process.env.TELEGRAM_STORAGE_CHAT_ID || storageChatId || "").trim();
+  if (!targetStorageChatId) throw new Error("TELEGRAM_STORAGE_CHAT_ID is not configured in .env");
   const db = getFirestoreDb();
   if (!db) throw new Error("Firestore DB not connected");
 
@@ -594,13 +642,14 @@ async function syncTelegramChannel() {
     for (let i = 0; i < idsToCheck.length; i += 100) {
       const batchIds = idsToCheck.slice(i, i + 100);
       const batchNotes = existingNotesWithTg.slice(i, i + 100);
-      const verifiedMsgs = await c.getMessages(storageChatId, { ids: batchIds });
+      const verifiedMsgs = await c.getMessages(targetStorageChatId, { ids: batchIds });
 
       for (let j = 0; j < batchNotes.length; j++) {
         const vMsg = verifiedMsgs[j];
         if (!vMsg || !vMsg.media || !vMsg.media.document) {
           console.log(`[MTProto RECONCILE] Purging orphaned note "${batchNotes[j].title}" (Msg ID ${batchNotes[j].msgId})`);
           await db.collection("notes").doc(batchNotes[j].docId).delete();
+          purgeNoteFromWebAndCdn(batchNotes[j].docId);
           purgedCount++;
         } else {
           verifiedCount++;
@@ -621,7 +670,7 @@ async function syncTelegramChannel() {
 
   for (let i = 0; i < probeIds.length; i += 100) {
     const chunk = probeIds.slice(i, i + 100);
-    const msgs = await c.getMessages(storageChatId, { ids: chunk });
+    const msgs = await c.getMessages(targetStorageChatId, { ids: chunk });
 
     for (const msg of msgs) {
       if (msg && msg.media && msg.media.document) {
@@ -753,6 +802,7 @@ async function syncTelegramChannel() {
       if (!topicMsgs || !topicMsgs[0]) {
         console.log(`[MTProto RECONCILE] Purging note "${data.title}" because its Topic ${data.telegramTopicId} was removed.`);
         await db.collection("notes").doc(tDoc.id).delete();
+        purgeNoteFromWebAndCdn(tDoc.id);
         purgedCount++;
       }
     } catch {}
@@ -951,6 +1001,75 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
 }
 
 /**
+ * Downloads and returns the entire document buffer from Telegram storage channel.
+ * Used for instant, permanent ingestion into Edge CDN, RAM buffer, and local SSD disk.
+ */
+async function getDocumentBufferFromChannel(messageId) {
+  let c = await getClient();
+  if (!c) {
+    console.log("[MTProto BUFFER] MTProto socket initializing, awaiting connection...");
+    await new Promise((r) => setTimeout(r, 2000));
+    c = await getClient();
+  }
+  if (!c) throw new Error("MTProto client not initialized. Telegram DC is reconnecting, please retry in a moment.");
+
+  const targetChannel = (process.env.TELEGRAM_STORAGE_CHAT_ID || storageChatId || "").trim();
+  const messages = await c.getMessages(targetChannel, { ids: [Number(messageId)] });
+  if (!messages || !messages[0] || !messages[0].media || !messages[0].media.document) {
+    throw new Error(`Document not found for message ID ${messageId}`);
+  }
+
+  const doc = messages[0].media.document;
+  const totalSize = Number(doc.size);
+  const docMime = (doc.mimeType || "").toLowerCase();
+  const isPdf = !docMime || docMime === "application/octet-stream" || docMime.includes("pdf");
+  const finalMime = isPdf ? "application/pdf" : (doc.mimeType || "application/pdf");
+
+  // Strategy 1: GramJS downloadMedia (Fast parallel worker pipeline)
+  try {
+    const downloadedBuf = await c.downloadMedia(messages[0], {
+      workers: 16,
+    });
+    if (downloadedBuf && Buffer.isBuffer(downloadedBuf) && downloadedBuf.length > 0) {
+      return {
+        buffer: downloadedBuf,
+        totalSize: downloadedBuf.length,
+        mimeType: finalMime,
+      };
+    }
+  } catch (dlErr) {
+    console.warn("[MTProto BUFFER] downloadMedia fallback to iterDownload:", dlErr.message);
+  }
+
+  // Strategy 2: Parallel 512KB chunk iteration via iterDownload
+  const chunkSize = 512 * 1024;
+  const location = new Api.InputDocumentFileLocation({
+    id: doc.id,
+    accessHash: doc.accessHash,
+    fileReference: doc.fileReference,
+    thumbSize: "",
+  });
+
+  const chunks = [];
+  for await (const chunk of c.iterDownload({
+    file: location,
+    offset: bigInt(0),
+    chunkSize: chunkSize,
+    requestSize: chunkSize,
+    workers: 16,
+  })) {
+    chunks.push(chunk);
+  }
+
+  const buffer = Buffer.concat(chunks);
+  return {
+    buffer,
+    totalSize: buffer.length || totalSize,
+    mimeType: finalMime,
+  };
+}
+
+/**
  * Deletes one or more messages from Telegram (Storage Channel or other chat)
  * Enables Two-Way Deletion Sync: Web deletion -> Telegram deletion
  */
@@ -1053,7 +1172,7 @@ function getMTProtoDetails() {
     deviceModel: "AcademicCloud-v3",
     appVersion: "3.0.0",
     storageChatConfigured: !!storageChatId,
-    storageChatId: storageChatId || "-1004387181748",
+    storageChatId: storageChatId || "",
     autoSyncActive: true,
     autoSyncInterval: "30m Periodic Safety Net",
     autoSyncMode: "30-Minute Quota-Saver & Real-time Event-Driven",
@@ -1065,6 +1184,7 @@ module.exports = {
   getClient,
   uploadToStorageChannel,
   streamDocumentFromChannel,
+  getDocumentBufferFromChannel,
   syncTelegramChannel,
   deduplicateDatabaseNotes,
   deleteTelegramMessages,

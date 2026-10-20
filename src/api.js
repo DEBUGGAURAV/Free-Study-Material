@@ -7,6 +7,8 @@ const API_BASE = "/api";
 
 // Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
 export const STREAM_BASE = "/api";
+import { fetchWithCdnFailover, parseSourceFromHeaders } from "./utils/cdnFailover";
+import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
 
 
 export function getAuthToken() {
@@ -41,6 +43,19 @@ export function setCurrentUser(user) {
 // Client Stale-While-Revalidate Memory Cache for 0ms Reload Performance
 const clientMemoryCache = new Map();
 
+export function invalidateClientNotesCache() {
+  for (const key of clientMemoryCache.keys()) {
+    if (key.startsWith("notes_") || key === "branches" || key === "subjects") {
+      clientMemoryCache.delete(key);
+    }
+  }
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("fsm_offline_notes");
+    }
+  } catch (_) {}
+}
+
 async function request(endpoint, options = {}) {
   const token = getAuthToken();
   const headers = {
@@ -49,6 +64,18 @@ async function request(endpoint, options = {}) {
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // Emergency Admin Bypass Support (allows admin to access platform during maintenance or IP restrictions)
+  if (typeof window !== "undefined") {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const bypass = urlParams.get("admin_bypass") || urlParams.get("bypass") || sessionStorage.getItem("admin_bypass");
+      if (bypass) {
+        sessionStorage.setItem("admin_bypass", bypass);
+        headers["x-admin-bypass"] = bypass;
+      }
+    } catch (_) {}
   }
 
   if (!(options.body instanceof FormData) && !headers["Content-Type"]) {
@@ -66,6 +93,11 @@ async function request(endpoint, options = {}) {
     const err = new Error(data.message || `Request failed with status ${res.status}`);
     err.data = data;
     err.status = res.status;
+    if (data.maintenance || res.status === 503) {
+      err.maintenance = Boolean(data.maintenance);
+      err.title = data.title;
+      err.estimatedEnd = data.estimatedEnd;
+    }
     throw err;
   }
 
@@ -108,8 +140,19 @@ export const api = {
     return data;
   },
 
-  pollTelegramRegisterStatus: (regToken) =>
-    request(`/auth/register-telegram-poll?regToken=${encodeURIComponent(regToken)}`),
+  pollTelegramRegisterStatus: (params) => {
+    let q = "";
+    if (typeof params === "string") {
+      q = `regToken=${encodeURIComponent(params)}`;
+    } else if (params && typeof params === "object") {
+      const parts = [];
+      if (params.regToken) parts.push(`regToken=${encodeURIComponent(params.regToken)}`);
+      if (params.mobile) parts.push(`mobile=${encodeURIComponent(params.mobile)}`);
+      if (params.email) parts.push(`email=${encodeURIComponent(params.email)}`);
+      q = parts.join("&");
+    }
+    return request(`/auth/register-telegram-poll?${q}`);
+  },
 
   forgotTelegramInitiate: (data) =>
     request("/auth/forgot-telegram-initiate", {
@@ -123,8 +166,19 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  pollTelegramResetStatus: (resetToken) =>
-    request(`/auth/forgot-telegram-poll?resetToken=${encodeURIComponent(resetToken)}`),
+  pollTelegramResetStatus: (params) => {
+    let q = "";
+    if (typeof params === "string") {
+      q = `resetToken=${encodeURIComponent(params)}`;
+    } else if (params && typeof params === "object") {
+      const parts = [];
+      if (params.resetToken) parts.push(`resetToken=${encodeURIComponent(params.resetToken)}`);
+      if (params.mobile) parts.push(`mobile=${encodeURIComponent(params.mobile)}`);
+      if (params.email) parts.push(`email=${encodeURIComponent(params.email)}`);
+      q = parts.join("&");
+    }
+    return request(`/auth/forgot-telegram-poll?${q}`);
+  },
 
   requestRegisterOtp: (userData) =>
     request("/auth/register-request-otp", {
@@ -189,15 +243,16 @@ export const api = {
   },
 
   logout: async (reason = "Manual Session Logout", fallbackUser = null) => {
-    try {
-      const u = fallbackUser || getCurrentUser();
-      await request("/auth/logout", {
-        method: "POST",
-        body: JSON.stringify({ user: u, reason }),
-      });
-    } catch {}
+    const u = fallbackUser || getCurrentUser();
+    // Instant 0ms local session revocation for immediate UI logout
     setAuthToken(null);
     setCurrentUser(null);
+    try {
+      request("/auth/logout", {
+        method: "POST",
+        body: JSON.stringify({ user: u, reason }),
+      }).catch(() => {});
+    } catch {}
   },
 
   getMe: () => request("/auth/me"),
@@ -265,25 +320,55 @@ export const api = {
   getBranches: async () => {
     const cached = clientMemoryCache.get("branches");
     if (cached) {
-      // Async revalidate
-      request("/notes/branches").then((r) => clientMemoryCache.set("branches", r)).catch(() => {});
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        request("/notes/branches")
+          .then((r) => {
+            clientMemoryCache.set("branches", r);
+            try { localStorage.setItem("fsm_offline_branches", JSON.stringify(r)); } catch (_) {}
+          })
+          .catch(() => {});
+      }
       return cached;
     }
-    const res = await request("/notes/branches");
-    clientMemoryCache.set("branches", res);
-    return res;
+    try {
+      const res = await request("/notes/branches");
+      clientMemoryCache.set("branches", res);
+      try { localStorage.setItem("fsm_offline_branches", JSON.stringify(res)); } catch (_) {}
+      return res;
+    } catch (err) {
+      try {
+        const local = localStorage.getItem("fsm_offline_branches");
+        if (local) return JSON.parse(local);
+      } catch (_) {}
+      return { branches: ["Computer Science", "Information Technology", "Mechanical", "Civil", "Electrical", "Electronics"] };
+    }
   },
 
   getSubjects: async () => {
     const cached = clientMemoryCache.get("subjects");
     if (cached) {
-      // Async revalidate
-      request("/notes/subjects").then((r) => clientMemoryCache.set("subjects", r)).catch(() => {});
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        request("/notes/subjects")
+          .then((r) => {
+            clientMemoryCache.set("subjects", r);
+            try { localStorage.setItem("fsm_offline_subjects", JSON.stringify(r)); } catch (_) {}
+          })
+          .catch(() => {});
+      }
       return cached;
     }
-    const res = await request("/notes/subjects");
-    clientMemoryCache.set("subjects", res);
-    return res;
+    try {
+      const res = await request("/notes/subjects");
+      clientMemoryCache.set("subjects", res);
+      try { localStorage.setItem("fsm_offline_subjects", JSON.stringify(res)); } catch (_) {}
+      return res;
+    } catch (err) {
+      try {
+        const local = localStorage.getItem("fsm_offline_subjects");
+        if (local) return JSON.parse(local);
+      } catch (_) {}
+      return { subjects: [] };
+    }
   },
 
   getSyncStatus: async () => {
@@ -294,7 +379,8 @@ export const api = {
     }
   },
 
-  getNotes: async (params = {}) => {
+  getNotes: async (params = {}, bypassCache = false) => {
+    const shouldBypass = Boolean(bypassCache || params.bypassCache);
     const query = new URLSearchParams();
     if (params.branch && params.branch !== "All") query.append("branch", params.branch);
     if (params.course && params.course !== "All" && params.course !== "All Courses") query.append("course", params.course);
@@ -307,40 +393,72 @@ export const api = {
 
     const queryString = query.toString() ? `?${query.toString()}` : "";
     const cacheKey = `notes_${queryString}`;
-    const cached = clientMemoryCache.get(cacheKey);
+    const cached = shouldBypass ? null : clientMemoryCache.get(cacheKey);
 
     if (cached) {
-      // ⚡ Return instant cached data from client memory (0ms!)
-      // Silently revalidate in background without blocking UI
-      request(`/notes${queryString}`)
-        .then((fresh) => {
-          if (fresh && fresh.notes) {
-            clientMemoryCache.set(cacheKey, fresh);
-          }
-        })
-        .catch(() => {});
+      if (typeof navigator === "undefined" || navigator.onLine) {
+        request(`/notes${queryString}`)
+          .then((fresh) => {
+            if (fresh && fresh.notes) {
+              clientMemoryCache.set(cacheKey, fresh);
+              try {
+                if (!queryString || queryString === "?all=true") {
+                  localStorage.setItem("fsm_offline_notes", JSON.stringify(fresh));
+                }
+              } catch (_) {}
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(new CustomEvent("fsm:notes-synced", { detail: fresh.notes }));
+              }
+            }
+          })
+          .catch(() => {});
+      }
       return cached;
     }
 
-    const res = await request(`/notes${queryString}`);
-    if (res && res.notes) {
-      clientMemoryCache.set(cacheKey, res);
+    try {
+      const res = await request(`/notes${queryString}`);
+      if (res && res.notes) {
+        clientMemoryCache.set(cacheKey, res);
+        try {
+          if (!queryString || queryString === "?all=true") {
+            localStorage.setItem("fsm_offline_notes", JSON.stringify(res));
+          }
+        } catch (_) {}
+      }
+      return res;
+    } catch (err) {
+      try {
+        const local = localStorage.getItem("fsm_offline_notes");
+        if (local) {
+          const parsed = JSON.parse(local);
+          console.log("[API] 📴 Offline Vault: Serving cached notes from persistent local storage");
+          parsed.offline = true;
+          return parsed;
+        }
+      } catch (_) {}
+      return { success: true, notes: [], offline: true };
     }
-    return res;
   },
 
   getNoteById: (id) => request(`/notes/${id}`),
 
-  getDownloadUrl: (id) => {
+  getDownloadUrl: (id, fileName = null) => {
     const token = getAuthToken();
-    return `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
+    const tokenParam = token ? `token=${token}&` : "";
+    const nameParam = fileName ? `&filename=${encodeURIComponent(fileName)}` : "";
+    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}download=1${nameParam}`;
   },
 
-  updateNote: (id, noteData) =>
-    request(`/notes/${id}`, {
+  updateNote: async (id, noteData) => {
+    invalidateClientNotesCache();
+    const res = await request(`/notes/${id}`, {
       method: "PUT",
       body: JSON.stringify(noteData),
-    }),
+    });
+    invalidateClientNotesCache();
+    return res;
+  },
 
   /**
    * Upload Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
@@ -418,14 +536,15 @@ export const api = {
   /**
    * Download Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
    */
-  downloadNoteWithProgress: async (id, fileName, onProgress, signal = null) => {
+  downloadNoteWithProgress: async (id, fileName, onProgress, signal = null, fileHandle = null) => {
     const token = getAuthToken();
     const url = `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
     const startTime = performance.now();
     let prevLoaded = 0;
     let prevTime = startTime;
 
-    const res = await fetch(url, { signal, credentials: "include" });
+    // Resilient Multi-Tier CDN auto-failover fetch (Zero-Downtime Guarantee)
+    const res = await fetchWithCdnFailover(id, { signal, isDownload: true, token });
     const contentType = res.headers.get("Content-Type") || "";
     if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
       let errMessage = `Document is unavailable (${res.status})`;
@@ -438,6 +557,8 @@ export const api = {
 
     const contentLengthHeader = res.headers.get("Content-Length");
     const total = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
+    const realSourceInfo = parseSourceFromHeaders(res.headers);
+    const dataSource = realSourceInfo.id;
     let loaded = 0;
 
     const reader = res.body.getReader();
@@ -479,12 +600,39 @@ export const api = {
           loadedMB: (loaded / (1024 * 1024)).toFixed(2),
           totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(2) : (loaded / (1024 * 1024)).toFixed(2),
           timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s left` : "Ready",
+          source: dataSource,
+          realSource: realSourceInfo,
+          realSourceLabel: realSourceInfo.label,
         });
       }
     }
 
+    if (typeof window !== "undefined") {
+      try {
+        if (realSourceInfo.id === "worker" || realSourceInfo.id === "ram" || realSourceInfo.id === "disk") {
+          localStorage.setItem(`fsm_cdn_${id}`, "1");
+        } else {
+          localStorage.removeItem(`fsm_cdn_${id}`);
+        }
+      } catch (_) {}
+    }
+
     // Convert streamed chunks into downloadable blob
     const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "application/pdf" });
+
+    // 🌟 Native File System Access API: Save directly into student's chosen folder
+    if (fileHandle) {
+      try {
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return blob;
+      } catch (writeErr) {
+        console.warn("[NATIVE-FS] Direct write fallback to anchor download:", writeErr.message);
+      }
+    }
+
+    // Standard fallback download via anchor tag
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = downloadUrl;
@@ -493,6 +641,7 @@ export const api = {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(downloadUrl);
+    return blob;
   },
 
   getUploadStatus: (noteId) => request(`/upload/status/${noteId}`),
@@ -564,10 +713,24 @@ export const api = {
       body: JSON.stringify({ isVisible }),
     }),
 
-  deleteNote: (noteId) =>
-    request(`/admin/notes/${noteId}`, {
+  toggleNoteDownload: async (noteId, allowDownload, downloadDisabledReason) => {
+    invalidateClientNotesCache();
+    const res = await request(`/admin/notes/${noteId}/allow-download`, {
+      method: "PATCH",
+      body: JSON.stringify({ allowDownload, downloadDisabledReason }),
+    });
+    invalidateClientNotesCache();
+    return res;
+  },
+
+  deleteNote: async (noteId) => {
+    invalidateClientNotesCache();
+    const res = await request(`/admin/notes/${noteId}`, {
       method: "DELETE",
-    }),
+    });
+    invalidateClientNotesCache();
+    return res;
+  },
 
   getHealth: () => request("/health"),
 
@@ -575,8 +738,27 @@ export const api = {
   deleteAllStudents: () => request("/admin/users-all-students", { method: "DELETE" }),
   getCdnStats: () => request("/admin/cdn/stats"),
   setCdnRetention: (days) => request("/admin/cdn/retention", { method: "POST", body: JSON.stringify({ days }) }),
-  purgeCdn: () => request("/admin/cdn/purge", { method: "POST" }),
-  purgeNoteCdn: (noteId) => request(`/admin/cdn/purge/${noteId}`, { method: "POST" }),
+  purgeCdn: async () => {
+    invalidateClientNotesCache();
+    const res = await request("/admin/cdn/purge", { method: "POST" });
+    invalidateClientNotesCache();
+    return res;
+  },
+  purgeCdnEdge: async () => {
+    invalidateClientNotesCache();
+    const res = await request("/admin/cdn/purge-edge", { method: "POST" });
+    invalidateClientNotesCache();
+    return res;
+  },
+  purgeNoteCdn: async (noteId) => {
+    invalidateClientNotesCache();
+    if (typeof localStorage !== "undefined") {
+      try { localStorage.removeItem(`fsm_cdn_${noteId}`); } catch (_) {}
+    }
+    const res = await request(`/admin/cdn/purge/${noteId}`, { method: "POST" });
+    invalidateClientNotesCache();
+    return res;
+  },
   getSystemMemory: () => request("/admin/system/memory"),
   getHardwareSpecs: () => request("/admin/system/hardware"),
   getSoftwareSpecs: () => request("/admin/system/software"),
@@ -627,4 +809,221 @@ export const api = {
       body: JSON.stringify({ event }),
     }),
   runInactivityPurge: () => request("/admin/run-inactivity-purge", { method: "POST" }),
+  adjustUserInactivity: (userId, payload) =>
+    request(`/admin/users/${userId}/inactivity-days`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getInactivitySettings: () => request("/admin/inactivity-settings"),
+  updateInactivitySettings: (days) =>
+    request("/admin/inactivity-settings", {
+      method: "POST",
+      body: JSON.stringify({ days }),
+    }),
+
+  // Next-Gen Technology Nexus Controls
+  getTechControls: () => request("/admin/tech-controls"),
+  updateTechControls: (settings) =>
+    request("/admin/tech-controls", {
+      method: "POST",
+      body: JSON.stringify(settings),
+    }),
+  purgeCdnMemory: () => request("/admin/cdn/purge-memory", { method: "POST" }),
+  prewarmPopularNotes: (limit = 10) =>
+    request("/admin/cdn/prewarm-popular", {
+      method: "POST",
+      body: JSON.stringify({ limit }),
+    }),
+  getPublicTechFlags: async () => {
+    try {
+      const res = await request("/admin/tech-flags");
+      if (res && res.flags) {
+        res.effective = getEffectiveTechConfig(res.flags);
+        res.deviceAdaptive = true;
+      }
+      try { localStorage.setItem("fsm_offline_flags", JSON.stringify(res)); } catch (_) {}
+      return res;
+    } catch (err) {
+      try {
+        const local = localStorage.getItem("fsm_offline_flags");
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed && parsed.flags) parsed.effective = getEffectiveTechConfig(parsed.flags);
+          return parsed;
+        }
+      } catch (_) {}
+      return { flags: { maintenanceMode: false, allowNotesDownload: true } };
+    }
+  },
+  toggleMaintenanceMode: (payload = {}) =>
+    request("/admin/maintenance/toggle", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  toggleDownloadAllowed: async (allowDownload, reason, schedule) => {
+    invalidateClientNotesCache();
+    const res = await request("/admin/download/toggle", {
+      method: "POST",
+      body: JSON.stringify({ allowDownload, reason, schedule }),
+    });
+    invalidateClientNotesCache();
+    return res;
+  },
+
+  // 💬 Student Chat & Private Pods API
+  getChatRooms: () => request("/chat/rooms"),
+  createChatRoom: (name, secretCode, description) =>
+    request("/chat/rooms/create", {
+      method: "POST",
+      body: JSON.stringify({ name, secretCode, description }),
+    }),
+  joinChatRoom: (secretCode, roomId) =>
+    request("/chat/rooms/join", {
+      method: "POST",
+      body: JSON.stringify({ secretCode, roomId }),
+    }),
+  leaveChatRoom: (roomId) =>
+    request("/chat/rooms/leave", {
+      method: "POST",
+      body: JSON.stringify({ roomId }),
+    }),
+  closeChatRoom: (roomId) =>
+    request("/chat/rooms/close", {
+      method: "POST",
+      body: JSON.stringify({ roomId }),
+    }),
+  getChatMessages: (roomId) => request(`/chat/messages/${roomId}`),
+  uploadChatMedia: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request("/chat/upload", {
+      method: "POST",
+      body: formData,
+    });
+  },
+  purgeChatRoom: (roomId) =>
+    request(`/chat/admin/purge/${roomId}`, {
+      method: "POST",
+    }),
+  deleteUserChatMessages: (targetUserId, roomId) =>
+    request("/chat/admin/delete-user-messages", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId, roomId }),
+    }),
+  blockChatUser: (targetUserId, block) =>
+    request("/chat/admin/block-user", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId, block }),
+    }),
+  getBlockedChatUsers: () => request("/chat/admin/blocked-users"),
+  searchChatStudents: (search = "") =>
+    request(`/chat/admin/users?search=${encodeURIComponent(search)}`),
+  updateChatNotice: (text) =>
+    request("/chat/notice", {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+  getChatProfile: () => request("/chat/profile"),
+  updateChatProfile: async ({ username, avatarFile, photoUrl }) => {
+    if (avatarFile) {
+      const formData = new FormData();
+      if (username) formData.append("username", username);
+      formData.append("avatar", avatarFile);
+      return request("/chat/profile", {
+        method: "POST",
+        body: formData,
+      });
+    }
+    return request("/chat/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, photoUrl }),
+    });
+  },
+
+  // 🚀 Turso (LibSQL / Edge SQLite) API Alias
+  syncTursoDatabase: () =>
+    request("/admin/turso/sync", {
+      method: "POST",
+    }),
+
+  // 🛡️ Real-Time Zero-Threat Radar & Anti-DDoS API
+  getRealtimeThreats: () => request("/admin/threats/realtime"),
+  unjailThreatIp: (ip, clearAll = false) =>
+    request("/admin/threats/unjail", {
+      method: "POST",
+      body: JSON.stringify({ ip, clearAll }),
+    }),
+  runThreatScan: () =>
+    request("/admin/threats/scan", {
+      method: "POST",
+    }),
+
+  // 🤖 Dedicated Chatbot Controller & Software Telemetry (@fsm_chat_bot & Turso)
+  getChatBotSettings: () => request("/admin/chat-bot/settings"),
+  updateChatBotSettings: (data) =>
+    request("/admin/chat-bot/settings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getChatBotTelemetry: () => request("/admin/chat-bot/telemetry"),
+  purgeInactiveChatRooms: (days) =>
+    request("/admin/chat-bot/purge-inactive", {
+      method: "POST",
+      body: JSON.stringify({ days }),
+    }),
+  pruneOldChatMessages: (days) =>
+    request("/admin/chat-bot/prune-messages", {
+      method: "POST",
+      body: JSON.stringify({ days }),
+    }),
+  testChatBotAlert: () =>
+    request("/admin/chat-bot/test-alert", {
+      method: "POST",
+    }),
+
+  // 🔑 Passkey / WebAuthn Biometrics (Face ID, Fingerprint, Windows Hello)
+  getPasskeyRegisterOptions: () => request("/auth/passkey/register-options"),
+  verifyPasskeyRegister: (credential, deviceName) =>
+    request("/auth/passkey/register-verify", {
+      method: "POST",
+      body: JSON.stringify({ credential, deviceName }),
+    }),
+  getPasskeyLoginOptions: (email = "") =>
+    request("/auth/passkey/login-options", {
+      method: "POST",
+      body: JSON.stringify({ email: email || "" }),
+    }),
+  verifyPasskeyLogin: async (credential, challenge) => {
+    const data = await request("/auth/passkey/login-verify", {
+      method: "POST",
+      body: JSON.stringify({ credential, challenge }),
+    });
+    if (data.user) {
+      setCurrentUser(data.user);
+    }
+    if (data.token) {
+      setAuthToken(data.token);
+    }
+    return data;
+  },
+  getPasskeysList: () => request("/auth/passkey/list"),
+  deletePasskey: (id) => request(`/auth/passkey/${id}`, { method: "DELETE" }),
+
+  // ⚡ Dedicated Turso Notes Cache Stats
+  getNotesCacheStats: () => request("/notes/cache-stats"),
+
+  // 🚀 Turso LibSQL Database & Edge Cache Management
+  getTursoStatus: () => request("/admin/turso/status"),
+  syncTurso: () => request("/admin/turso/sync", { method: "POST" }),
+  refreshTursoCache: () => request("/admin/turso/refresh-cache", { method: "POST" }),
+  getTursoAudits: (limit = 100) => request(`/admin/turso/audits?limit=${limit}`),
+  pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
+  runSecurityScan: async () => {
+    try {
+      return await request("/admin/security/scan");
+    } catch {
+      return await request("/admin/threats/scan", { method: "POST" });
+    }
+  },
 };

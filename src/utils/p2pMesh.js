@@ -78,11 +78,87 @@ export async function announceAsSeeder(noteId) {
   }
 }
 
-// Check for active local peers on Wi-Fi
+/**
+ * Detects device hardware profile (RAM, CPU Cores, Battery)
+ * Dynamically scales peer limits so 2GB RAM phones never crash even when Admin sets 20 peers
+ * @param {string|number} adminMaxPeers Admin configured max peers ("auto" | 3 | 5 | 10 | 20)
+ * @param {boolean} autoHardwareGuard Enable auto-scale down for low-end phones (default: true)
+ * @returns {{maxPeers: number, isAutoScaled: boolean, reason: string, ramGB: number}}
+ */
+export function getDeviceAdaptiveMaxPeers(adminMaxPeers = "auto", autoHardwareGuard = true) {
+  let ramGB = 4;
+  if (typeof navigator !== "undefined" && typeof navigator.deviceMemory === "number") {
+    ramGB = navigator.deviceMemory;
+  }
+
+  const cores = typeof navigator !== "undefined" && typeof navigator.hardwareConcurrency === "number" ? navigator.hardwareConcurrency : 4;
+  const isLowEndPhone = ramGB <= 2 || cores <= 2;
+  const isMidRange = !isLowEndPhone && (ramGB <= 4 || cores <= 4);
+
+  // If Admin set 'auto'
+  if (adminMaxPeers === "auto" || !adminMaxPeers) {
+    if (isLowEndPhone) {
+      return {
+        maxPeers: 3,
+        isAutoScaled: true,
+        reason: `⚡ Low-End Phone (${ramGB}GB RAM): Capped to 3 Peers (Conservative) for 0% lag`,
+        ramGB,
+      };
+    }
+    if (isMidRange) {
+      return {
+        maxPeers: 5,
+        isAutoScaled: true,
+        reason: `⚡ Mid-Range Phone (${ramGB}GB RAM): Capped to 5 Peers (Standard)`,
+        ramGB,
+      };
+    }
+    return {
+      maxPeers: 10,
+      isAutoScaled: false,
+      reason: `⚡ High-Performance Device (${ramGB}GB RAM): 10 Peers (High Speed Mesh)`,
+      ramGB,
+    };
+  }
+
+  const requestedPeers = parseInt(adminMaxPeers, 10) || 10;
+
+  // Auto Hardware Guard: If Admin selected 10 or 20, but client is a 2GB phone:
+  if (autoHardwareGuard && isLowEndPhone && requestedPeers > 3) {
+    return {
+      maxPeers: 3,
+      isAutoScaled: true,
+      originalPeers: requestedPeers,
+      reason: `🛡️ Low-RAM Hardware Shield: Phone has ${ramGB}GB RAM. Safely scaled from ${requestedPeers} to 3 Peers to prevent freeze.`,
+      ramGB,
+    };
+  }
+
+  if (autoHardwareGuard && isMidRange && requestedPeers > 8) {
+    return {
+      maxPeers: 5,
+      isAutoScaled: true,
+      originalPeers: requestedPeers,
+      reason: `🛡️ Mid-Range Hardware Shield: Scaled from ${requestedPeers} to 5 Peers for smooth performance.`,
+      ramGB,
+    };
+  }
+
+  return {
+    maxPeers: requestedPeers,
+    isAutoScaled: false,
+    reason: `Configured ${requestedPeers} Peers active.`,
+    ramGB,
+  };
+}
+
+// Check for active local peers on Wi-Fi with hardware-adaptive peer limit
 export async function findPeersForNote(noteId) {
   const peerId = getPeerId();
+  const savedPeersPref = typeof localStorage !== "undefined" ? localStorage.getItem("vault_p2p_max_peers") || "auto" : "auto";
+  const { maxPeers } = getDeviceAdaptiveMaxPeers(savedPeersPref, true);
   try {
-    const res = await fetch(`/api/p2p/peers/${noteId}?peerId=${peerId}`);
+    const res = await fetch(`/api/p2p/peers/${noteId}?peerId=${peerId}&limit=${maxPeers}`);
     const data = await res.json();
     return data;
   } catch {

@@ -39,23 +39,40 @@ setInterval(() => {
 router.post("/announce", (req, res) => {
   try {
     const { peerId, noteId, meta } = req.body;
-    if (!peerId || !noteId) {
-      return res.status(400).json({ success: false, message: "peerId and noteId required" });
+    if (!peerId || !noteId || typeof peerId !== "string" || typeof noteId !== "string") {
+      return res.status(400).json({ success: false, message: "Valid peerId and noteId required" });
     }
 
-    const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1";
+    // Security: Input length bounds
+    if (peerId.length > 100 || noteId.length > 100) {
+      return res.status(400).json({ success: false, message: "Identifier exceeds permitted length" });
+    }
+
+    const clientIp = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "127.0.0.1";
     const subnet = clientIp.split(".").slice(0, 3).join("."); // Group by local subnet / Wi-Fi range
 
     if (!meshSeeders.has(noteId)) {
+      if (meshSeeders.size >= 1000) {
+        // Evict oldest note pool
+        const oldestNote = meshSeeders.keys().next().value;
+        meshSeeders.delete(oldestNote);
+      }
       meshSeeders.set(noteId, new Map());
     }
 
-    meshSeeders.get(noteId).set(peerId, {
+    const notePeers = meshSeeders.get(noteId);
+    if (notePeers.size >= 200) {
+      // Evict oldest peer in this note
+      const oldestPeer = notePeers.keys().next().value;
+      notePeers.delete(oldestPeer);
+    }
+
+    notePeers.set(peerId, {
       peerId,
       noteId,
       ip: clientIp,
       subnet,
-      meta: meta || {},
+      meta: (meta && typeof meta === "object") ? meta : {},
       lastSeen: Date.now(),
     });
 
@@ -101,11 +118,24 @@ router.get("/peers/:noteId", (req, res) => {
     // Sort: same Wi-Fi subnet peers first!
     activePeers.sort((a, b) => (b.isLocalWifi ? 1 : 0) - (a.isLocalWifi ? 1 : 0));
 
+    let limit = parseInt(req.query.limit, 10);
+    if (!limit || isNaN(limit)) {
+      let adminRouter = null;
+      try {
+        adminRouter = require("./admin");
+      } catch {}
+      const techSettings = adminRouter && adminRouter.getTechSettings ? adminRouter.getTechSettings() : null;
+      const cfgPeers = techSettings?.p2pMaxPeers;
+      limit = cfgPeers && cfgPeers !== "auto" ? parseInt(cfgPeers, 10) : 10;
+    }
+    limit = Math.min(Math.max(limit, 1), 20);
+
     return res.json({
       success: true,
-      peers: activePeers.slice(0, 5), // Max 5 candidate peers
+      peers: activePeers.slice(0, limit),
       isLocalAvailable: activePeers.some((p) => p.isLocalWifi),
       totalPeers: activePeers.length,
+      limit,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -119,16 +149,29 @@ router.get("/peers/:noteId", (req, res) => {
 router.post("/signal", (req, res) => {
   try {
     const { fromPeerId, toPeerId, signal } = req.body;
-    if (!toPeerId || !signal) {
-      return res.status(400).json({ success: false, message: "toPeerId and signal required" });
+    if (!toPeerId || !signal || typeof toPeerId !== "string") {
+      return res.status(400).json({ success: false, message: "Valid toPeerId and signal required" });
+    }
+
+    if (toPeerId.length > 100 || (fromPeerId && fromPeerId.length > 100)) {
+      return res.status(400).json({ success: false, message: "Peer ID exceeds permitted length" });
     }
 
     if (!signalQueue.has(toPeerId)) {
+      if (signalQueue.size >= 2000) {
+        const oldestQueue = signalQueue.keys().next().value;
+        signalQueue.delete(oldestQueue);
+      }
       signalQueue.set(toPeerId, []);
     }
 
-    signalQueue.get(toPeerId).push({
-      fromPeerId,
+    const queue = signalQueue.get(toPeerId);
+    if (queue.length >= 50) {
+      queue.shift(); // Evict oldest signal to protect server RAM against flood
+    }
+
+    queue.push({
+      fromPeerId: String(fromPeerId || ""),
       signal,
       timestamp: Date.now(),
     });
