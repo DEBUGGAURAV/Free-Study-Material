@@ -81,7 +81,15 @@ export default function AdminModal({
   const [activeTab, setActiveTab] = useState("notes");
   const isHalfAdmin = currentUser?.role === "half_admin";
 
-    // Dashboard Slides Catalog (1 to 12)
+  // Platform Maintenance Mode State (Declared before DASHBOARD_TABS)
+  const [maintenanceMode, setMaintenanceMode] = useState(maintenanceState?.active || false);
+  const [maintenanceTitle, setMaintenanceTitle] = useState(maintenanceState?.title || "Scheduled System Upgrade in Progress");
+  const [maintenanceMessage, setMaintenanceMessage] = useState(maintenanceState?.message || "We are currently performing scheduled platform upgrades. Free Study Material will be back online shortly!");
+  const [maintenanceEstimatedEnd, setMaintenanceEstimatedEnd] = useState(maintenanceState?.estimatedEnd || "15 minutes");
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [maintenanceFeedback, setMaintenanceFeedback] = useState("");
+
+  // Dashboard Slides Catalog (1 to 12)
   const DASHBOARD_TABS = [
     { id: "notes", num: 1, label: "1. 📚 Notes Vault", title: "Notes Vault" },
     { id: "students", num: 2, label: "2. 👥 Student Registry", title: "Student Registry" },
@@ -149,14 +157,6 @@ export default function AdminModal({
   const [systemMemory, setSystemMemory] = useState(null);
   const [cleaningUp, setCleaningUp] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
-
-  // Platform Maintenance Mode State
-  const [maintenanceMode, setMaintenanceMode] = useState(maintenanceState?.active || false);
-  const [maintenanceTitle, setMaintenanceTitle] = useState(maintenanceState?.title || "Scheduled System Upgrade in Progress");
-  const [maintenanceMessage, setMaintenanceMessage] = useState(maintenanceState?.message || "We are currently performing scheduled platform upgrades. Free Study Material will be back online shortly!");
-  const [maintenanceEstimatedEnd, setMaintenanceEstimatedEnd] = useState(maintenanceState?.estimatedEnd || "15 minutes");
-  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
-  const [maintenanceFeedback, setMaintenanceFeedback] = useState("");
 
   useEffect(() => {
     if (maintenanceState) {
