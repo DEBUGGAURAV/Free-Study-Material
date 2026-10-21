@@ -1516,6 +1516,8 @@ export default function App() {
           if (reason) setDownloadDisabledReason(reason);
         }}
         onToggleNoteDownload={handleToggleNoteDownloadInState}
+        maintenanceState={maintenanceState}
+        onMaintenanceChange={setMaintenanceState}
       />
 
       <NoticeBoardModal

@@ -2106,9 +2106,26 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       tursoNotesCache = { connected: false, error: err.message, latencyMs: 0 };
     }
 
+    let isMaintActive = false;
+    try {
+      const { isMaintenanceActive } = require("../middleware/maintenance");
+      isMaintActive = isMaintenanceActive();
+    } catch (_) {
+      isMaintActive = Boolean(techSettings.maintenanceMode);
+    }
+
+    const maintenance = {
+      active: isMaintActive,
+      title: techSettings.maintenanceTitle || "Scheduled System Upgrade in Progress",
+      message: techSettings.maintenanceMessage || "We are currently performing scheduled platform upgrades. Free Study Material will be back online shortly!",
+      estimatedEnd: techSettings.maintenanceEstimatedEnd || "",
+      bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
+    };
+
     return res.json({
       success: true,
       software: {
+        maintenance,
         nodeRuntime,
         serverStatus,
         geographical,
