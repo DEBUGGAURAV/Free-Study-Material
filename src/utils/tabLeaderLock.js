@@ -26,21 +26,29 @@ export function initTabLeaderElection(onBecameLeader = () => {}) {
   }
 
   // Request persistent lock across tabs
-  navigator.locks.request("fsm_leader_lock", async () => {
+  try {
+    navigator.locks.request("fsm_leader_lock", async () => {
+      isCurrentTabLeader = true;
+      console.log("[WEB-LOCKS] 👑 This tab elected as Leader Tab. Handling all background sync.");
+      onBecameLeader();
+
+      // Notify other tabs that leader is active
+      if (broadcastChannel) {
+        broadcastChannel.postMessage({ type: "LEADER_ELECTED", tabId: Date.now() });
+      }
+
+      // Keep the lock alive as long as this tab is open
+      await new Promise(() => {});
+    }).catch((err) => {
+      console.debug("[WEB-LOCKS] Lock negotiation notice:", err.message);
+      isCurrentTabLeader = true;
+      onBecameLeader();
+    });
+  } catch (err) {
+    console.debug("[WEB-LOCKS] Sync fallback active:", err.message);
     isCurrentTabLeader = true;
-    console.log("[WEB-LOCKS] 👑 This tab elected as Leader Tab. Handling all background sync.");
     onBecameLeader();
-
-    // Notify other tabs that leader is active
-    if (broadcastChannel) {
-      broadcastChannel.postMessage({ type: "LEADER_ELECTED", tabId: Date.now() });
-    }
-
-    // Keep the lock alive as long as this tab is open
-    await new Promise(() => {});
-  }).catch((err) => {
-    console.debug("[WEB-LOCKS] Lock negotiation notice:", err.message);
-  });
+  }
 }
 
 /**

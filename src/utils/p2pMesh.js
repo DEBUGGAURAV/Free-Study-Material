@@ -7,13 +7,22 @@
 const DB_NAME = "fsm_p2p_cache_v1";
 const STORE_NAME = "note_chunks";
 
+let memoryPeerId = null;
+
 // Generate unique persistent peer ID for this device
 function getPeerId() {
-  let id = sessionStorage.getItem("fsm_peer_id");
+  if (memoryPeerId) return memoryPeerId;
+  let id = null;
+  try {
+    id = sessionStorage.getItem("fsm_peer_id");
+  } catch (_) {}
   if (!id) {
     id = "peer_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now().toString(36);
-    sessionStorage.setItem("fsm_peer_id", id);
+    try {
+      sessionStorage.setItem("fsm_peer_id", id);
+    } catch (_) {}
   }
+  memoryPeerId = id;
   return id;
 }
 

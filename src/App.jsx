@@ -19,6 +19,26 @@ import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 
+const safeStorage = {
+  getItem: (key) => {
+    try {
+      return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+    } catch (_) {
+      return null;
+    }
+  },
+  setItem: (key, val) => {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.setItem(key, val);
+    } catch (_) {}
+  },
+  removeItem: (key) => {
+    try {
+      if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+    } catch (_) {}
+  },
+};
+
 export default function App() {
   const [notes, setNotes] = useState([]);
   const [branches, setBranches] = useState([]);
@@ -200,10 +220,12 @@ export default function App() {
     currentUserRef.current = currentUser;
     if (currentUser) {
       lastActivityRef.current = Date.now();
-      localStorage.setItem("vault_last_active", String(Date.now()));
-      syncStudentProfileContext(currentUser);
+      safeStorage.setItem("vault_last_active", String(Date.now()));
+      try {
+        syncStudentProfileContext(currentUser);
+      } catch (_) {}
     } else {
-      localStorage.removeItem("vault_last_active");
+      safeStorage.removeItem("vault_last_active");
     }
   }, [currentUser]);
 
@@ -218,7 +240,7 @@ export default function App() {
     setIsAdminOpen(false);
     setIsProfileOpen(false);
     setPreviewNote(null);
-    localStorage.removeItem("vault_last_active");
+    safeStorage.removeItem("vault_last_active");
 
     const timeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     setAutoLogoutNotice({
@@ -244,9 +266,7 @@ export default function App() {
       lastActivityRef.current = now;
       if (now - lastStorageSyncRef.current > 5000) {
         lastStorageSyncRef.current = now;
-        try {
-          localStorage.setItem("vault_last_active", String(now));
-        } catch (_) {}
+        safeStorage.setItem("vault_last_active", String(now));
       }
     };
 
@@ -255,7 +275,7 @@ export default function App() {
       const setting = inactivitySettingRef.current;
       if (setting === 0 || setting === "0") return; // Disabled
 
-      const storedLast = parseInt(localStorage.getItem("vault_last_active") || "0", 10);
+      const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);
       const effectiveLastActive = Math.max(lastActivityRef.current, storedLast);
 
       let timeoutMs = 30 * 60 * 1000;
@@ -312,11 +332,11 @@ export default function App() {
     api.getMe().then((res) => {
       if (res && res.user) {
         // Check if session has exceeded 30-min inactivity from previous visit
-        const storedLast = parseInt(localStorage.getItem("vault_last_active") || "0", 10);
+        const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);
         if (storedLast > 0 && Date.now() - storedLast >= 30 * 60 * 1000) {
           api.logout("Auto-Logout (30 Min Inactivity)", res.user);
           setCurrentUser(null);
-          localStorage.removeItem("vault_last_active");
+          safeStorage.removeItem("vault_last_active");
           setAutoLogoutNotice({
             time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             userEmail: res.user.email || "",
@@ -326,7 +346,7 @@ export default function App() {
         }
         setCurrentUser(res.user);
         lastActivityRef.current = Date.now();
-        localStorage.setItem("vault_last_active", String(Date.now()));
+        safeStorage.setItem("vault_last_active", String(Date.now()));
       }
     }).catch((err) => {
       if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required"))) {
@@ -337,12 +357,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (currentUser) {
-      fetchNotes();
-    } else {
-      setNotes([]);
-      setLoading(false);
-    }
+    fetchNotes();
   }, [currentUser, selectedCourse, selectedYear, selectedBranch, searchTerm]);
 
   const fetchBranches = async () => {
@@ -425,12 +440,6 @@ export default function App() {
   }, []);
 
   const fetchNotes = async (activeUser = null, forceBypass = false) => {
-    const userToCheck = activeUser || currentUser;
-    if (!userToCheck) {
-      setNotes([]);
-      setLoading(false);
-      return;
-    }
     try {
       if (notes.length === 0) {
         setLoading(true);
@@ -481,7 +490,7 @@ export default function App() {
 
   const handleLogout = async () => {
     const user = currentUser;
-    localStorage.removeItem("vault_last_active");
+    safeStorage.removeItem("vault_last_active");
     setAutoLogoutNotice(null);
     setCurrentUser(null);
     await api.logout("Manual Session Logout", user);
@@ -518,8 +527,7 @@ export default function App() {
 
   const handleTableDownload = async (note) => {
     if (!currentUser) {
-      setAuthMode("signin");
-      setIsAuthOpen(true);
+      openAuth("signin");
       return;
     }
     const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
@@ -734,9 +742,10 @@ export default function App() {
 
         {isAuthOpen && (
           <AuthModal
+            isOpen={isAuthOpen}
             initialTab={authInitialTab}
             onClose={() => setIsAuthOpen(false)}
-            onLoginSuccess={(user) => {
+            onAuthSuccess={(user) => {
               setCurrentUser(user);
               setIsAuthOpen(false);
             }}
@@ -1340,8 +1349,7 @@ export default function App() {
                         downloadDisabledReason={downloadDisabledReason}
                         onToggleNoteDownload={handleQuickToggleNoteDownload}
                         onRequireAuth={(mode) => {
-                          setAuthMode(mode || "signin");
-                          setIsAuthOpen(true);
+                          openAuth(mode || "signin");
                         }}
                       />
                     ))}
@@ -1428,8 +1436,7 @@ export default function App() {
                                   style={{ width: "32px", height: "32px" }}
                                   onClick={() => {
                                     if (!currentUser) {
-                                      setAuthMode("signin");
-                                      setIsAuthOpen(true);
+                                      openAuth("signin");
                                       return;
                                     }
                                     setPreviewNote(note);
@@ -1545,7 +1552,7 @@ export default function App() {
         onLoginSuccess={(user) => {
           setAutoLogoutNotice(null);
           setCurrentUser(user);
-          localStorage.setItem("vault_last_active", String(Date.now()));
+          safeStorage.setItem("vault_last_active", String(Date.now()));
           fetchNotes(user);
         }}
         notes={notes}
@@ -1579,7 +1586,7 @@ export default function App() {
         onAuthSuccess={(user) => {
           setAutoLogoutNotice(null);
           setCurrentUser(user);
-          localStorage.setItem("vault_last_active", String(Date.now()));
+          safeStorage.setItem("vault_last_active", String(Date.now()));
           fetchNotes(user);
         }}
       />
