@@ -20,4 +20,5 @@ serviceAccountKey*.json
 scripts/
 generate_icons.js
 nodemon.json
+.vscode/
 
