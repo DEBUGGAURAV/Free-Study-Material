@@ -13,6 +13,7 @@ export default function NoteCard({
   onRequireAuth,
   allowNotesDownload = true,
   downloadDisabledReason = "",
+  onToggleNoteDownload,
 }) {
   const isAdmin =
     currentUser?.role === "admin" ||
@@ -260,7 +261,33 @@ export default function NoteCard({
             {note.branch && (
               <span className="tech-pill branch">{note.branch}</span>
             )}
-            {isSingleNoteDisabled && (
+            {isAdmin && onToggleNoteDownload && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onToggleNoteDownload(note);
+                }}
+                className="tech-pill"
+                title={isSingleNoteDisabled ? "Admin: Click to ENABLE downloads for this note" : "Admin: Click to LOCK / DISABLE downloads for this note"}
+                style={{
+                  background: isSingleNoteDisabled ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
+                  color: isSingleNoteDisabled ? "#fca5a5" : "#6ee7b7",
+                  border: isSingleNoteDisabled ? "1px solid rgba(239, 68, 68, 0.5)" : "1px solid rgba(16, 185, 129, 0.45)",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  fontSize: "0.68rem",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {isSingleNoteDisabled ? "🔒 Downloads: Locked" : "🟢 Downloads: Active"}
+              </button>
+            )}
+            {(!isAdmin || !onToggleNoteDownload) && isSingleNoteDisabled && (
               <span
                 className="tech-pill"
                 title={note.downloadDisabledReason || "Download disabled for this note (Online preview available)"}

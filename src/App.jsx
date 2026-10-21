@@ -381,6 +381,27 @@ export default function App() {
     );
   };
 
+  const handleQuickToggleNoteDownload = async (note) => {
+    const isUserAdmin = currentUser?.role === "admin" || currentUser?.role === "half_admin" || currentUser?.email === "jnplotus@gmail.com";
+    if (!isUserAdmin) return;
+    const isCurrentlyAllowed = note.allowDownload !== false && String(note.allowDownload) !== "false" && note.allowDownload !== 0 && String(note.allowDownload) !== "0";
+    const newAllowed = !isCurrentlyAllowed;
+    const reason = note.downloadDisabledReason || (newAllowed ? "" : "Downloads for this note are paused. You can study in the Online Reader.");
+
+    // Optimistic instant state update in App
+    handleToggleNoteDownloadInState(note, newAllowed, reason);
+
+    try {
+      const res = await api.toggleNoteDownload(note.id, newAllowed, reason);
+      if (!res || !res.success) {
+        throw new Error(res?.message || "Failed to toggle download permission");
+      }
+    } catch (err) {
+      handleToggleNoteDownloadInState(note, isCurrentlyAllowed, note.downloadDisabledReason);
+      alert("Failed to update download permission: " + err.message);
+    }
+  };
+
   useEffect(() => {
     const handleNotesSynced = (e) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
@@ -1317,6 +1338,7 @@ export default function App() {
                         currentUser={currentUser}
                         allowNotesDownload={allowNotesDownload}
                         downloadDisabledReason={downloadDisabledReason}
+                        onToggleNoteDownload={handleQuickToggleNoteDownload}
                         onRequireAuth={(mode) => {
                           setAuthMode(mode || "signin");
                           setIsAuthOpen(true);
@@ -1355,7 +1377,26 @@ export default function App() {
                               {note.downloadsCount || 0}
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                              <div style={{ display: "inline-flex", gap: "6px" }}>
+                              <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                                {isAdminUser && (
+                                  <button
+                                    onClick={() => handleQuickToggleNoteDownload(note)}
+                                    style={{
+                                      padding: "5px 9px",
+                                      fontSize: "0.74rem",
+                                      fontWeight: 700,
+                                      borderRadius: "var(--radius-sm)",
+                                      border: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(52, 211, 153, 0.45)",
+                                      background: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.18)" : "rgba(52, 211, 153, 0.15)",
+                                      color: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "#fca5a5" : "#6ee7b7",
+                                      cursor: "pointer",
+                                      transition: "all 0.15s ease",
+                                    }}
+                                    title={(note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "Admin: Downloads Locked. Click to Enable." : "Admin: Downloads Active. Click to Lock."}
+                                  >
+                                    {(note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "🔒 Locked" : "🟢 Active"}
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleTableDownload(note)}
                                   className="btn-card-download"

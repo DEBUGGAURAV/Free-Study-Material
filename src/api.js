@@ -723,6 +723,16 @@ export const api = {
     return res;
   },
 
+  bulkToggleNotesDownload: async (noteIds, allowDownload, downloadDisabledReason) => {
+    invalidateClientNotesCache();
+    const res = await request("/admin/notes/bulk-allow-download", {
+      method: "POST",
+      body: JSON.stringify({ noteIds, allowDownload, downloadDisabledReason }),
+    });
+    invalidateClientNotesCache();
+    return res;
+  },
+
   deleteNote: async (noteId) => {
     invalidateClientNotesCache();
     const res = await request(`/admin/notes/${noteId}`, {

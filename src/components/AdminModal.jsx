@@ -212,6 +212,8 @@ export default function AdminModal({
 
   // Note Editing
   const [editingNote, setEditingNote] = useState(null);
+  const [noteDownloadFilter, setNoteDownloadFilter] = useState("all"); // "all" | "active" | "locked"
+  const [bulkDownloadLoading, setBulkDownloadLoading] = useState(false);
   const [noteForm, setNoteForm] = useState({
     title: "",
     subject: "",
@@ -219,6 +221,8 @@ export default function AdminModal({
     course: "B.Tech",
     year: "All Years",
     description: "",
+    allowDownload: true,
+    downloadDisabledReason: "",
   });
 
   // Restore Vault (Universal Recycle Bin)
@@ -1226,6 +1230,10 @@ export default function AdminModal({
 
   // Note Action Handlers
   const handleStartEditNote = (note) => {
+    const currentOverride = noteOverrides[note.id]?.allowDownload;
+    const currentVal = currentOverride !== undefined ? currentOverride : note.allowDownload;
+    const isCurrentlyAllowed = currentVal !== false && String(currentVal) !== "false" && currentVal !== 0 && String(currentVal) !== "0";
+
     setEditingNote(note);
     setNoteForm({
       title: note.title || "",
@@ -1234,6 +1242,8 @@ export default function AdminModal({
       course: note.course || "B.Tech",
       year: note.year || note.semester || "All Years",
       description: note.description || "",
+      allowDownload: isCurrentlyAllowed,
+      downloadDisabledReason: noteOverrides[note.id]?.downloadDisabledReason || note.downloadDisabledReason || "",
     });
   };
 
@@ -1242,6 +1252,23 @@ export default function AdminModal({
     if (!editingNote) return;
     try {
       await api.updateNote(editingNote.id, noteForm);
+      // Instant optimistic UI update for download status
+      const cleanTitle = (editingNote.title || "").toLowerCase().trim();
+      setNoteOverrides((prev) => {
+        const next = { ...prev };
+        notes.forEach((n) => {
+          if (n.id === editingNote.id || (cleanTitle && (n.title || "").toLowerCase().trim() === cleanTitle)) {
+            next[n.id] = {
+              allowDownload: Boolean(noteForm.allowDownload),
+              downloadDisabledReason: noteForm.downloadDisabledReason || "",
+            };
+          }
+        });
+        return next;
+      });
+      if (typeof onToggleNoteDownload === "function") {
+        onToggleNoteDownload(editingNote, Boolean(noteForm.allowDownload), noteForm.downloadDisabledReason || "");
+      }
       alert("✅ Note successfully updated in vault!");
       setEditingNote(null);
       if (onRefreshNotes) onRefreshNotes();
@@ -1288,18 +1315,20 @@ export default function AdminModal({
     }
   };
 
-  const handleToggleNoteDownload = async (note) => {
+  const handleToggleNoteDownload = async (note, skipConfirm = true) => {
     const currentOverride = noteOverrides[note.id]?.allowDownload;
     const currentVal = currentOverride !== undefined ? currentOverride : note.allowDownload;
     const isCurrentlyAllowed = currentVal !== false && String(currentVal) !== "false" && currentVal !== 0 && String(currentVal) !== "0";
     const newAllowed = !isCurrentlyAllowed;
-    const promptMsg = newAllowed
-      ? `Enable student downloads for "${note.title}"?`
-      : `Disable student downloads for "${note.title}"?\n\nStudents will only be able to read this note in the Online Reader. Direct PDF download will be locked.`;
 
-    if (!window.confirm(promptMsg)) return;
+    if (!skipConfirm) {
+      const promptMsg = newAllowed
+        ? `Enable student downloads for "${note.title}"?`
+        : `Disable student downloads for "${note.title}"?\n\nStudents will only be able to read this note in the Online Reader. Direct PDF download will be locked.`;
+      if (!window.confirm(promptMsg)) return;
+    }
 
-    const reason = note.downloadDisabledReason || "Downloads for this note are paused. You can study in the Online Reader.";
+    const reason = note.downloadDisabledReason || (newAllowed ? "" : "Downloads for this note are paused. You can study in the Online Reader.");
 
     // Instant optimistic UI toggle for this note and all duplicate copies in AdminModal
     const cleanTitle = (note.title || "").toLowerCase().trim();
@@ -1340,6 +1369,51 @@ export default function AdminModal({
         onToggleNoteDownload(note, isCurrentlyAllowed, note.downloadDisabledReason);
       }
       alert("Failed to toggle note download: " + err.message);
+    }
+  };
+
+  const handleBulkToggleDownload = async (targetAllowed) => {
+    const targetNotes = filteredNotes;
+    if (!targetNotes || targetNotes.length === 0) {
+      alert("No notes found matching your current filter.");
+      return;
+    }
+
+    const actionText = targetAllowed ? "ENABLE" : "LOCK / PAUSE";
+    const confirmMsg = `${actionText} student PDF downloads for all ${targetNotes.length} matching document(s)?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const noteIds = targetNotes.map((n) => n.id);
+    const reason = targetAllowed ? "" : "Downloads for this document have been temporarily locked by the administrator.";
+
+    // Optimistic UI updates
+    setNoteOverrides((prev) => {
+      const next = { ...prev };
+      noteIds.forEach((id) => {
+        next[id] = { allowDownload: targetAllowed, downloadDisabledReason: reason };
+      });
+      return next;
+    });
+
+    if (typeof onToggleNoteDownload === "function") {
+      targetNotes.forEach((n) => {
+        onToggleNoteDownload(n, targetAllowed, reason);
+      });
+    }
+
+    try {
+      setBulkDownloadLoading(true);
+      const res = await api.bulkToggleNotesDownload(noteIds, targetAllowed, reason);
+      if (res && res.success) {
+        if (onRefreshNotes) onRefreshNotes();
+      } else {
+        throw new Error(res?.message || "Bulk download toggle failed");
+      }
+    } catch (err) {
+      alert("Bulk download toggle failed: " + err.message);
+      if (onRefreshNotes) onRefreshNotes();
+    } finally {
+      setBulkDownloadLoading(false);
     }
   };
 
@@ -1796,6 +1870,13 @@ export default function AdminModal({
 
   // Filter Notes Vault
   const filteredNotes = notes.filter((n) => {
+    const override = noteOverrides[n.id];
+    const currentAllow = override?.allowDownload !== undefined ? override.allowDownload : n.allowDownload;
+    const isLocked = currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0";
+
+    if (noteDownloadFilter === "active" && isLocked) return false;
+    if (noteDownloadFilter === "locked" && !isLocked) return false;
+
     const q = adminNoteSearch.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -1806,6 +1887,15 @@ export default function AdminModal({
       (n.id || "").toLowerCase().includes(q)
     );
   });
+
+  // Calculate download stats across all vault notes
+  const activeDownloadsCount = notes.filter((n) => {
+    const override = noteOverrides[n.id];
+    const currentAllow = override?.allowDownload !== undefined ? override.allowDownload : n.allowDownload;
+    return !(currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0");
+  }).length;
+
+  const lockedDownloadsCount = notes.length - activeDownloadsCount;
 
   // Filter Recycle Bin Items
   const filteredRecycleItems = recycleBinItems.filter((item) => {
@@ -2326,6 +2416,135 @@ export default function AdminModal({
                 </div>
               </div>
 
+              {/* Note Download Permissions Filter & Bulk Actions Bar */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  padding: "10px 14px",
+                  background: "rgba(15, 23, 42, 0.65)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "var(--radius-md)",
+                  marginBottom: "14px",
+                }}
+              >
+                {/* Download Filter Pills */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Filter By Download:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setNoteDownloadFilter("all")}
+                    style={{
+                      background: noteDownloadFilter === "all" ? "rgba(99, 102, 241, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                      border: `1px solid ${noteDownloadFilter === "all" ? "#818cf8" : "rgba(255, 255, 255, 0.08)"}`,
+                      color: noteDownloadFilter === "all" ? "#c7d2fe" : "var(--text-muted)",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    All ({notes.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoteDownloadFilter("active")}
+                    style={{
+                      background: noteDownloadFilter === "active" ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                      border: `1px solid ${noteDownloadFilter === "active" ? "#34d399" : "rgba(255, 255, 255, 0.08)"}`,
+                      color: noteDownloadFilter === "active" ? "#6ee7b7" : "var(--text-muted)",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#34d399" }}></span>
+                    Downloads Active ({activeDownloadsCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoteDownloadFilter("locked")}
+                    style={{
+                      background: noteDownloadFilter === "locked" ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                      border: `1px solid ${noteDownloadFilter === "locked" ? "#f87171" : "rgba(255, 255, 255, 0.08)"}`,
+                      color: noteDownloadFilter === "locked" ? "#fca5a5" : "var(--text-muted)",
+                      padding: "4px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <Lock size={11} style={{ color: "#f87171" }} />
+                    Downloads Locked ({lockedDownloadsCount})
+                  </button>
+                </div>
+
+                {/* Bulk Actions for Filtered Notes */}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleDownload(false)}
+                    disabled={bulkDownloadLoading || filteredNotes.length === 0}
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      color: "#f87171",
+                      padding: "5px 12px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: (bulkDownloadLoading || filteredNotes.length === 0) ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      opacity: (bulkDownloadLoading || filteredNotes.length === 0) ? 0.5 : 1,
+                    }}
+                    title={`Lock/Pause downloads for all ${filteredNotes.length} matching notes`}
+                  >
+                    <Lock size={12} />
+                    <span>{bulkDownloadLoading ? "Updating..." : `Lock Filtered (${filteredNotes.length})`}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkToggleDownload(true)}
+                    disabled={bulkDownloadLoading || filteredNotes.length === 0}
+                    style={{
+                      background: "rgba(16, 185, 129, 0.15)",
+                      border: "1px solid rgba(16, 185, 129, 0.35)",
+                      color: "#34d399",
+                      padding: "5px 12px",
+                      borderRadius: "6px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      cursor: (bulkDownloadLoading || filteredNotes.length === 0) ? "not-allowed" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      opacity: (bulkDownloadLoading || filteredNotes.length === 0) ? 0.5 : 1,
+                    }}
+                    title={`Enable downloads for all ${filteredNotes.length} matching notes`}
+                  >
+                    <Download size={12} />
+                    <span>{bulkDownloadLoading ? "Updating..." : `Enable Filtered (${filteredNotes.length})`}</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Notes Table */}
               <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
@@ -2388,35 +2607,38 @@ export default function AdminModal({
                               {(() => {
                                 const currentAllow = noteOverrides[note.id]?.allowDownload !== undefined ? noteOverrides[note.id].allowDownload : note.allowDownload;
                                 const isLocked = currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0";
-                                return isLocked ? (
-                                  <span
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleNoteDownload(note)}
                                     style={{
-                                      fontSize: "0.65rem",
-                                      padding: "1px 5px",
+                                      fontSize: "0.68rem",
+                                      padding: "2px 7px",
                                       borderRadius: "4px",
-                                      background: "rgba(239, 68, 68, 0.2)",
-                                      color: "#f87171",
-                                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                                      background: isLocked ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.15)",
+                                      color: isLocked ? "#f87171" : "#34d399",
+                                      border: isLocked ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(34, 197, 94, 0.35)",
                                       fontWeight: 700,
+                                      cursor: "pointer",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                      transition: "all 0.15s ease",
                                     }}
-                                    title={noteOverrides[note.id]?.downloadDisabledReason || note.downloadDisabledReason || "Downloads paused for this specific note"}
+                                    title={isLocked ? "Downloads Locked for this note. Click to Enable!" : "Downloads Active for this note. Click to Lock!"}
                                   >
-                                    🔒 Locked
-                                  </span>
-                                ) : (
-                                  <span
-                                    style={{
-                                      fontSize: "0.65rem",
-                                      padding: "1px 5px",
-                                      borderRadius: "4px",
-                                      background: "rgba(34, 197, 94, 0.15)",
-                                      color: "#34d399",
-                                      border: "1px solid rgba(34, 197, 94, 0.3)",
-                                      fontWeight: 700,
-                                    }}
-                                  >
-                                    Active
-                                  </span>
+                                    {isLocked ? (
+                                      <>
+                                        <Lock size={10} />
+                                        <span>Locked</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span style={{ width: "5px", height: "5px", borderRadius: "50%", background: "#34d399" }}></span>
+                                        <span>Active</span>
+                                      </>
+                                    )}
+                                  </button>
                                 );
                               })()}
                             </div>
@@ -2433,13 +2655,13 @@ export default function AdminModal({
                                     style={{
                                       width: "32px",
                                       height: "32px",
-                                      background: isLocked ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.12)",
+                                      background: isLocked ? "rgba(239, 68, 68, 0.18)" : "rgba(34, 197, 94, 0.14)",
                                       color: isLocked ? "#f87171" : "#34d399",
-                                      border: `1px solid ${isLocked ? "rgba(239, 68, 68, 0.35)" : "rgba(34, 197, 94, 0.25)"}`,
+                                      border: `1px solid ${isLocked ? "rgba(239, 68, 68, 0.4)" : "rgba(34, 197, 94, 0.3)"}`,
                                     }}
                                     title={isLocked ? "Downloads Paused for this note. Click to Enable." : "Downloads Active for this note. Click to Pause."}
                                   >
-                                    <Download size={14} />
+                                    {isLocked ? <Lock size={14} /> : <Download size={14} />}
                                   </button>
                                 );
                               })()}
@@ -9695,6 +9917,74 @@ export default function AdminModal({
                     value={noteForm.description}
                     onChange={(e) => setNoteForm({ ...noteForm, description: e.target.value })}
                   />
+                </div>
+
+                {/* Single Note Download Permissions Toggle */}
+                <div
+                  style={{
+                    padding: "12px",
+                    borderRadius: "var(--radius-md)",
+                    background: noteForm.allowDownload ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+                    border: `1px solid ${noteForm.allowDownload ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                        {noteForm.allowDownload ? (
+                          <>
+                            <Download size={15} style={{ color: "#34d399" }} />
+                            <span>Student PDF Downloads: Enabled</span>
+                          </>
+                        ) : (
+                          <>
+                            <Lock size={15} style={{ color: "#f87171" }} />
+                            <span>Student PDF Downloads: Locked / Read-Only</span>
+                          </>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        {noteForm.allowDownload
+                          ? "Students can download the original PDF file."
+                          : "Direct PDF download is locked. Students can only read via the Online Reader."}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setNoteForm((prev) => ({ ...prev, allowDownload: !prev.allowDownload }))}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "6px",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        border: noteForm.allowDownload ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
+                        background: noteForm.allowDownload ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                        color: noteForm.allowDownload ? "#fca5a5" : "#6ee7b7",
+                      }}
+                    >
+                      {noteForm.allowDownload ? "🔒 Pause Downloads" : "🟢 Enable Downloads"}
+                    </button>
+                  </div>
+
+                  {!noteForm.allowDownload && (
+                    <div className="form-group" style={{ marginTop: "4px" }}>
+                      <label className="form-label" style={{ fontSize: "0.75rem", color: "#fca5a5" }}>
+                        Notice / Reason Shown to Students (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g., Downloads paused for this document. Online preview is active."
+                        value={noteForm.downloadDisabledReason || ""}
+                        onChange={(e) => setNoteForm((prev) => ({ ...prev, downloadDisabledReason: e.target.value }))}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>

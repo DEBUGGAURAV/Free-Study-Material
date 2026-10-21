@@ -586,6 +586,15 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
     await db.collection("notes").doc(id).update(updateData);
     invalidateAllCache();
 
+    try {
+      const { refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      if (typeof refreshCacheFromFirestore === "function") {
+        await refreshCacheFromFirestore().catch(() => {});
+      } else if (typeof invalidateTursoNotesCache === "function") {
+        invalidateTursoNotesCache();
+      }
+    } catch (_) {}
+
     return res.json({ success: true, message: "Note updated successfully in vault!" });
   } catch (err) {
     console.error("[NOTES] Update error:", err);

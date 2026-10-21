@@ -896,6 +896,61 @@ router.patch("/notes/:id/allow-download", authenticateToken, checkAdminOrPermiss
   }
 });
 
+/**
+ * POST /api/admin/notes/bulk-allow-download
+ * Bulk Toggle Downloads for Multiple Notes
+ */
+router.post("/notes/bulk-allow-download", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+  try {
+    const { noteIds, allowDownload, downloadDisabledReason } = req.body || {};
+    if (!Array.isArray(noteIds) || noteIds.length === 0) {
+      return res.status(400).json({ success: false, message: "Valid noteIds array required" });
+    }
+    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+
+    const isAllowed = Boolean(allowDownload);
+    const updateData = {
+      allowDownload: isAllowed,
+      updatedAt: new Date().toISOString(),
+    };
+    if (downloadDisabledReason !== undefined) {
+      updateData.downloadDisabledReason = String(downloadDisabledReason || "").trim();
+    }
+
+    // Process in batches of 400
+    const chunkSize = 400;
+    for (let i = 0; i < noteIds.length; i += chunkSize) {
+      const chunk = noteIds.slice(i, i + chunkSize);
+      const batch = db.batch();
+      for (const id of chunk) {
+        batch.set(db.collection("notes").doc(String(id)), updateData, { merge: true });
+      }
+      await batch.commit();
+    }
+
+    // Synchronize Turso Notes Edge Cache
+    try {
+      const { refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      if (typeof refreshCacheFromFirestore === "function") {
+        await refreshCacheFromFirestore().catch(() => {});
+      } else if (typeof invalidateTursoNotesCache === "function") {
+        invalidateTursoNotesCache();
+      }
+    } catch (_) {}
+
+    invalidateAllCache();
+
+    return res.json({
+      success: true,
+      updatedCount: noteIds.length,
+      allowDownload: isAllowed,
+      message: `Downloads successfully ${isAllowed ? "ENABLED" : "PAUSED"} for ${noteIds.length} notes!`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
     const { id } = req.params;
