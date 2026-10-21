@@ -854,11 +854,30 @@ router.patch("/notes/:id/allow-download", authenticateToken, checkAdminOrPermiss
     } catch (_) {}
 
     try {
-      const { refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      const { upsertNoteInCache, refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      if (typeof upsertNoteInCache === "function") {
+        await upsertNoteInCache({ id: targetDocId, ...updateData }).catch(() => {});
+      }
       if (typeof refreshCacheFromFirestore === "function") {
         await refreshCacheFromFirestore().catch(() => {});
       } else if (typeof invalidateTursoNotesCache === "function") {
         invalidateTursoNotesCache();
+      }
+    } catch (_) {}
+
+    // 7. Evict from Cloudflare Worker edge cache & local buffers
+    try {
+      const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+      if (cfWorker) {
+        fetch(`${cfWorker}/api/notes/${targetDocId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+        fetch(`${cfWorker}/api/notes/${targetDocId}/stream.pdf?purge=1`, { method: "PURGE" }).catch(() => {});
+      }
+    } catch (_) {}
+
+    try {
+      const notesRouter = require("./notes");
+      if (notesRouter && typeof notesRouter.purgeCdnDiskBuffer === "function") {
+        notesRouter.purgeCdnDiskBuffer(targetDocId);
       }
     } catch (_) {}
 

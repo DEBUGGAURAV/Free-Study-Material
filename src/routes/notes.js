@@ -1195,7 +1195,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const contentType = isPdf ? "application/pdf" : (note.mimeType || "application/pdf");
 
     const isDownload = req.query.download === "1" || req.query.attachment === "1";
-    const isNoteDownloadDisabled = note.allowDownload === false;
+    const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+    const isNoteDownloadDisabled = Boolean(isSingleNoteDisabled);
 
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
     const isAdminUser = requestingUser && (
@@ -1203,6 +1204,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       requestingUser.role === "half_admin" ||
       Boolean(adminEmail && requestingUser.email && requestingUser.email.toLowerCase().trim() === adminEmail)
     );
+    const isAdminInspectBypass = isAdminUser && req.query.admin_inspect === "1";
 
     // 🔒 Master & Per-Note Download Gate Protection
     if (isDownload) {
@@ -1221,7 +1223,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
       const effectiveReason = note.downloadDisabledReason || pauseReason;
 
-      if ((!downloadAllowed || isNoteDownloadDisabled) && !isAdminUser) {
+      if ((!downloadAllowed || isNoteDownloadDisabled) && !isAdminInspectBypass) {
         const isHtmlRequest =
           req.headers["sec-fetch-dest"] === "document" ||
           req.headers["sec-fetch-mode"] === "navigate" ||
@@ -1240,7 +1242,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    const dispositionType = (isDownload && (!isNoteDownloadDisabled || isAdminUser)) ? "attachment" : "inline";
+    const dispositionType = (isDownload && (!isNoteDownloadDisabled || isAdminInspectBypass)) ? "attachment" : "inline";
 
     res.setHeader("Content-Type", contentType);
     res.setHeader("Content-Disposition", `${dispositionType}; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);

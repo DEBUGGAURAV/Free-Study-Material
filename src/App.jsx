@@ -501,16 +501,12 @@ export default function App() {
       setIsAuthOpen(true);
       return;
     }
-    if (!allowNotesDownload || note.allowDownload === false) {
-      const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (note.allowDownload === false ? "Downloads for this specific note have been disabled by the administrator. You can still read notes in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
-      if (isAdminUser) {
-        if (!window.confirm(`🛡️ Admin Inspection Notice:\n\nStudent downloads for "${note.title}" are currently DISABLED.\n\nReason: "${reasonMsg}"\n\nDo you want to download this document anyway as Administrator for inspection?`)) {
-          return;
-        }
-      } else {
-        alert(reasonMsg);
-        return;
-      }
+    const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+    const isNoteDownloadBlocked = Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
+    if (isNoteDownloadBlocked) {
+      const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still read notes in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
+      alert(reasonMsg);
+      return;
     }
     if (note.driveLink && !note.telegramMessageId) {
       window.open(note.driveLink, "_blank");
@@ -1367,16 +1363,16 @@ export default function App() {
                                   style={{
                                     padding: "6px 12px",
                                     fontSize: "0.78rem",
-                                    opacity: (!allowNotesDownload || note.allowDownload === false) ? 0.75 : 1,
+                                    opacity: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? 0.75 : 1,
                                     cursor: "pointer",
-                                    background: (!allowNotesDownload || note.allowDownload === false) ? "rgba(239, 68, 68, 0.15)" : undefined,
-                                    borderColor: (!allowNotesDownload || note.allowDownload === false) ? "rgba(239, 68, 68, 0.4)" : undefined,
-                                    color: (!allowNotesDownload || note.allowDownload === false) ? "#fca5a5" : undefined,
+                                    background: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.15)" : undefined,
+                                    borderColor: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.4)" : undefined,
+                                    color: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "#fca5a5" : undefined,
                                   }}
-                                  title={(!allowNotesDownload || note.allowDownload === false) ? (note.allowDownload === false ? "Downloads disabled for this note. Online Reader active." : "Downloads paused by administrator. Online Reader active.") : "Download Document"}
+                                  title={(!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? ((note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "Downloads disabled for this note. Online Reader active." : "Downloads paused by administrator. Online Reader active.") : "Download Document"}
                                 >
-                                  {(!allowNotesDownload || note.allowDownload === false) ? (
-                                    note.allowDownload === false ? "🔒 Disabled" : "🔒 Paused"
+                                  {(!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? (
+                                    (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "🔒 Disabled" : "🔒 Paused"
                                   ) : tableDownloads[note.id] ? (
                                     <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                                       <div className="spinner" style={{ width: "11px", height: "11px" }}></div>

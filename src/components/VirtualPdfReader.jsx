@@ -64,8 +64,9 @@ export default function VirtualPdfReader({
   isDownloadBlocked = false,
   downloadDisabledReason = "",
 }) {
-  const isBlocked = Boolean(isDownloadBlocked || note?.allowDownload === false);
-  const effectiveReason = downloadDisabledReason || note?.downloadDisabledReason || "Downloads and printing are disabled for this note by the administrator. Online reading is active.";
+  const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
+  const isBlocked = Boolean(isDownloadBlocked || isSingleNoteDisabled);
+  const effectiveReason = downloadDisabledReason || note?.downloadDisabledReason || (isSingleNoteDisabled ? "Downloads and printing are disabled for this specific note by the administrator. Online reading is active." : "Downloads and printing are temporarily paused by the administrator. Online reading is active.");
 
   const getNativeToolbarParams = (pageNum = 1, search = "") => {
     const toolbarVal = isBlocked ? "0" : "1";
@@ -551,16 +552,18 @@ export default function VirtualPdfReader({
               warmupClientOcr();
             }, 800);
 
-            // Asynchronously pre-cache buffer into P2P mesh seeder & IndexedDB Offline Vault
-            fetch(fallbackSameOrigin, { credentials: "include" })
-              .then((r) => r.arrayBuffer())
-              .then((buf) => {
-                if (noteId) {
-                  cacheNoteBuffer(noteId, buf);
-                  saveNoteOffline(note || { id: noteId, title }, buf);
-                }
-              })
-              .catch(() => {});
+            // Asynchronously pre-cache buffer into P2P mesh seeder & IndexedDB Offline Vault ONLY if not blocked
+            if (!isBlocked) {
+              fetch(fallbackSameOrigin, { credentials: "include" })
+                .then((r) => r.arrayBuffer())
+                .then((buf) => {
+                  if (noteId) {
+                    cacheNoteBuffer(noteId, buf);
+                    saveNoteOffline(note || { id: noteId, title }, buf);
+                  }
+                })
+                .catch(() => {});
+            }
 
             // ⚡ AUTOMATIC: Bring file to Edge CDN cache in background (Zero manual clicking!)
             bringFileToCdn();

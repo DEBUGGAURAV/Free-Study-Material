@@ -32,6 +32,9 @@ export default function NoteCard({
 
   const formattedSize = formatFileSize(note.compressedSize || note.fileSize);
 
+  const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+  const isNoteDownloadBlocked = Boolean(isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false");
+
   const directDownloadUrl = api.getDownloadUrl(note.id);
 
   // 1. One-Tap Native Web Share API (WhatsApp/Telegram/System Sheet)
@@ -103,17 +106,10 @@ export default function NoteCard({
       if (onRequireAuth) onRequireAuth("signin");
       return;
     }
-    const isNoteDownloadBlocked = (note.allowDownload === false || !allowNotesDownload);
     if (isNoteDownloadBlocked) {
-      const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (note.allowDownload === false ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
-      if (isAdmin) {
-        if (!window.confirm(`🛡️ Admin Inspection Notice:\n\nStudent downloads for "${note.title}" are currently DISABLED.\n\nReason: "${reasonMsg}"\n\nDo you want to download this document anyway as Administrator for inspection?`)) {
-          return;
-        }
-      } else {
-        alert(reasonMsg);
-        return;
-      }
+      const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
+      alert(reasonMsg);
+      return;
     }
     if (downloading) return;
 
@@ -264,7 +260,7 @@ export default function NoteCard({
             {note.branch && (
               <span className="tech-pill branch">{note.branch}</span>
             )}
-            {note.allowDownload === false && (
+            {isSingleNoteDisabled && (
               <span
                 className="tech-pill"
                 title={note.downloadDisabledReason || "Download disabled for this note (Online preview available)"}
@@ -499,22 +495,16 @@ export default function NoteCard({
         )}
 
         <div className="card-action-bar">
-          {(!allowNotesDownload || note.allowDownload === false) ? (
+          {isNoteDownloadBlocked ? (
             <button
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (note.allowDownload === false ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
-                if (isAdmin) {
-                  if (window.confirm(`🛡️ Admin Inspection Notice:\n\nStudent downloads for "${note.title}" are currently DISABLED.\n\nReason given to students:\n"${reasonMsg}"\n\nWould you like to bypass and download this document anyway as Administrator for inspection?`)) {
-                    handleTrackedDownload(e);
-                  }
-                } else {
-                  alert(reasonMsg);
-                }
+                const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
+                alert(reasonMsg);
               }}
               className="btn-card-download"
-              title={note.allowDownload === false ? "Downloads disabled for this note. Online Reader is active. Click to view notice." : "Downloads paused by administrator. Online Reader is active. Click to view notice."}
+              title={isSingleNoteDisabled ? "Downloads disabled for this note. Online Reader is active. Click to view notice." : "Downloads paused by administrator. Online Reader is active. Click to view notice."}
               style={{
                 opacity: 0.9,
                 cursor: "pointer",
@@ -524,7 +514,7 @@ export default function NoteCard({
               }}
             >
               <Download size={14} style={{ opacity: 0.8 }} />
-              <span>{note.allowDownload === false ? "🔒 Download Disabled" : "🔒 Downloads Paused"}</span>
+              <span>{isSingleNoteDisabled ? "🔒 Download Disabled" : "🔒 Downloads Paused"}</span>
             </button>
           ) : (
             <button

@@ -18,9 +18,9 @@ export default function PreviewModal({
     currentUser?.role === "half_admin" ||
     currentUser?.isMainAdmin;
 
-  const isNoteDownloadDisabled = note.allowDownload === false;
-  const isBlocked = (!allowNotesDownload || isNoteDownloadDisabled);
-  const effectiveReason = note.downloadDisabledReason || downloadDisabledReason || "Download for this particular note is disabled by the administrator. You can still read and study all pages here in the Online Reader!";
+  const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+  const isBlocked = Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
+  const effectiveReason = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Download for this specific note has been disabled by the administrator. You can still read and study all pages here in the Online Reader!" : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
 
   // Stream through Cloudflare Global Edge CDN with resilient auto-failover (using httpOnly session cookie)
   const streamUrl = getSmartStreamUrl(note.id);
@@ -31,14 +31,8 @@ export default function PreviewModal({
 
   const handleDownload = () => {
     if (isBlocked) {
-      if (isAdmin) {
-        if (!window.confirm(`🛡️ Admin Inspection Notice:\n\nStudent downloads for "${note.title}" are currently DISABLED.\n\nReason: "${effectiveReason}"\n\nWould you like to download anyway as Administrator for inspection?`)) {
-          return;
-        }
-      } else {
-        alert(effectiveReason);
-        return;
-      }
+      alert(effectiveReason);
+      return;
     }
     const rawName = (note.originalName || note.title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
     const finalFileName = rawName.toLowerCase().endsWith(".pdf") ? rawName : `${rawName}.pdf`;

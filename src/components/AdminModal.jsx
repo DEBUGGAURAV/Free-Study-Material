@@ -1256,7 +1256,9 @@ export default function AdminModal({
   };
 
   const handleToggleNoteDownload = async (note) => {
-    const isCurrentlyAllowed = note.allowDownload !== false;
+    const currentOverride = noteOverrides[note.id]?.allowDownload;
+    const currentVal = currentOverride !== undefined ? currentOverride : note.allowDownload;
+    const isCurrentlyAllowed = currentVal !== false && String(currentVal) !== "false" && currentVal !== 0 && String(currentVal) !== "0";
     const newAllowed = !isCurrentlyAllowed;
     const promptMsg = newAllowed
       ? `Enable student downloads for "${note.title}"?`
@@ -2289,54 +2291,64 @@ export default function AdminModal({
                           <td style={{ padding: "12px 16px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                               <span style={{ color: "var(--text-dim)", fontWeight: 700 }}>{note.downloadsCount || 0}</span>
-                              {note.allowDownload === false ? (
-                                <span
-                                  style={{
-                                    fontSize: "0.65rem",
-                                    padding: "1px 5px",
-                                    borderRadius: "4px",
-                                    background: "rgba(239, 68, 68, 0.2)",
-                                    color: "#f87171",
-                                    border: "1px solid rgba(239, 68, 68, 0.4)",
-                                    fontWeight: 700,
-                                  }}
-                                  title={note.downloadDisabledReason || "Downloads paused for this specific note"}
-                                >
-                                  🔒 Locked
-                                </span>
-                              ) : (
-                                <span
-                                  style={{
-                                    fontSize: "0.65rem",
-                                    padding: "1px 5px",
-                                    borderRadius: "4px",
-                                    background: "rgba(34, 197, 94, 0.15)",
-                                    color: "#34d399",
-                                    border: "1px solid rgba(34, 197, 94, 0.3)",
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  Active
-                                </span>
-                              )}
+                              {(() => {
+                                const currentAllow = noteOverrides[note.id]?.allowDownload !== undefined ? noteOverrides[note.id].allowDownload : note.allowDownload;
+                                const isLocked = currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0";
+                                return isLocked ? (
+                                  <span
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      padding: "1px 5px",
+                                      borderRadius: "4px",
+                                      background: "rgba(239, 68, 68, 0.2)",
+                                      color: "#f87171",
+                                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                                      fontWeight: 700,
+                                    }}
+                                    title={noteOverrides[note.id]?.downloadDisabledReason || note.downloadDisabledReason || "Downloads paused for this specific note"}
+                                  >
+                                    🔒 Locked
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: "0.65rem",
+                                      padding: "1px 5px",
+                                      borderRadius: "4px",
+                                      background: "rgba(34, 197, 94, 0.15)",
+                                      color: "#34d399",
+                                      border: "1px solid rgba(34, 197, 94, 0.3)",
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    Active
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
                           <td style={{ padding: "12px 16px", textAlign: "right" }}>
                             <div style={{ display: "inline-flex", gap: "6px" }}>
-                              <button
-                                onClick={() => handleToggleNoteDownload(note)}
-                                className="btn-icon"
-                                style={{
-                                  width: "32px",
-                                  height: "32px",
-                                  background: note.allowDownload === false ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.12)",
-                                  color: note.allowDownload === false ? "#f87171" : "#34d399",
-                                  border: `1px solid ${note.allowDownload === false ? "rgba(239, 68, 68, 0.35)" : "rgba(34, 197, 94, 0.25)"}`,
-                                }}
-                                title={note.allowDownload === false ? "Downloads Paused for this note. Click to Enable." : "Downloads Active for this note. Click to Pause."}
-                              >
-                                <Download size={14} />
-                              </button>
+                              {(() => {
+                                const currentAllow = noteOverrides[note.id]?.allowDownload !== undefined ? noteOverrides[note.id].allowDownload : note.allowDownload;
+                                const isLocked = currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0";
+                                return (
+                                  <button
+                                    onClick={() => handleToggleNoteDownload(note)}
+                                    className="btn-icon"
+                                    style={{
+                                      width: "32px",
+                                      height: "32px",
+                                      background: isLocked ? "rgba(239, 68, 68, 0.15)" : "rgba(34, 197, 94, 0.12)",
+                                      color: isLocked ? "#f87171" : "#34d399",
+                                      border: `1px solid ${isLocked ? "rgba(239, 68, 68, 0.35)" : "rgba(34, 197, 94, 0.25)"}`,
+                                    }}
+                                    title={isLocked ? "Downloads Paused for this note. Click to Enable." : "Downloads Active for this note. Click to Pause."}
+                                  >
+                                    <Download size={14} />
+                                  </button>
+                                );
+                              })()}
 
                               <button
                                 onClick={() => handleToggleVisibility(note.id, note.isVisible !== false)}
