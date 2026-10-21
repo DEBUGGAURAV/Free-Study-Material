@@ -565,21 +565,49 @@ async function pruneChatMessagesOlderThan(days = 7) {
 
 /**
  * Prune private room forensic audits older than specified days
+ * (days <= 0 wipes all audits completely)
  */
 async function prunePrivateRoomAuditsOlderThan(days = 30) {
   if (!client) return { success: false, deletedCount: 0 };
   try {
-    const cutoffMs = Date.now() - Number(days) * 86400000;
-    const cutoffIso = new Date(cutoffMs).toISOString();
-    const res = await client.execute({
-      sql: `DELETE FROM private_room_audits WHERE createdAtTimestamp < ? OR closedAt < ?`,
-      args: [cutoffMs, cutoffIso],
-    });
+    const numDays = Number(days);
+    let res;
+    if (isNaN(numDays) || numDays <= 0) {
+      res = await client.execute({
+        sql: `DELETE FROM private_room_audits`,
+      });
+    } else {
+      const cutoffMs = Date.now() - numDays * 86400000;
+      const cutoffIso = new Date(cutoffMs).toISOString();
+      res = await client.execute({
+        sql: `DELETE FROM private_room_audits WHERE createdAtTimestamp < ? OR closedAt < ?`,
+        args: [cutoffMs, cutoffIso],
+      });
+    }
     const deletedCount = res.rowsAffected || 0;
-    console.log(`[TURSO-AUDIT-PRUNER] 🧹 Pruned ${deletedCount} private room audits older than ${days} days`);
-    return { success: true, deletedCount, cutoffIso };
+    console.log(`[TURSO-AUDIT-PRUNER] 🧹 Pruned ${deletedCount} private room audits (retention days: ${numDays})`);
+    return { success: true, deletedCount };
   } catch (err) {
     console.warn("[TURSO-AUDIT-PRUNER] Error during audit pruning:", err.message);
+    return { success: false, deletedCount: 0, error: err.message };
+  }
+}
+
+/**
+ * Delete a single private room audit by its roomId
+ */
+async function deleteSinglePrivateRoomAudit(roomId) {
+  if (!client || !roomId) return { success: false, deletedCount: 0 };
+  try {
+    const res = await client.execute({
+      sql: `DELETE FROM private_room_audits WHERE roomId = ?`,
+      args: [String(roomId)],
+    });
+    const deletedCount = res.rowsAffected || 0;
+    console.log(`[TURSO-AUDIT-PRUNER] 🗑️ Deleted single audit for room "${roomId}" (deleted: ${deletedCount})`);
+    return { success: true, deletedCount };
+  } catch (err) {
+    console.warn(`[TURSO-AUDIT-PRUNER] Error deleting audit for room "${roomId}":`, err.message);
     return { success: false, deletedCount: 0, error: err.message };
   }
 }
@@ -840,6 +868,7 @@ module.exports = {
   getPrivateRoomAudits,
   pruneChatMessagesOlderThan,
   prunePrivateRoomAuditsOlderThan,
+  deleteSinglePrivateRoomAudit,
   getTursoChatTelemetry,
   getChatUserProfile,
   isChatUsernameTaken,

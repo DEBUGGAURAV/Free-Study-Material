@@ -3305,7 +3305,7 @@ function isDownloadAllowed() {
 // ============================================================================
 // 🚀 TURSO (LIBSQL / EDGE SQLITE) DATABASE ENDPOINTS FOR RENDER
 // ============================================================================
-const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan } = require("../services/tursoService");
+const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan, deleteSinglePrivateRoomAudit } = require("../services/tursoService");
 const { getTursoNotesCacheStats, refreshCacheFromFirestore } = require("../services/tursoNotesCacheService");
 
 router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) => {
@@ -3359,12 +3359,29 @@ router.get("/turso/audits", authenticateToken, requireAdmin, async (req, res) =>
 
 router.post("/turso/audits/prune", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const days = parseInt(req.body.days || req.query.days || 30, 10);
+    const daysRaw = req.body?.days !== undefined ? req.body.days : (req.query?.days !== undefined ? req.query.days : 30);
+    const days = parseInt(daysRaw, 10);
     const result = await prunePrivateRoomAuditsOlderThan(days);
     return res.json({
       success: true,
       ...result,
-      message: `Audit pruner executed! ${result.deletedCount || 0} pod audits older than ${days} days permanently cleaned.`,
+      message: days <= 0
+        ? `Audit pruner executed! ${result.deletedCount || 0} pod audits permanently deleted.`
+        : `Audit pruner executed! ${result.deletedCount || 0} pod audits older than ${days} days permanently cleaned.`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.delete("/turso/audits/:roomId", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const result = await deleteSinglePrivateRoomAudit(roomId);
+    return res.json({
+      success: true,
+      ...result,
+      message: `Audit transcript for room "${roomId}" permanently deleted!`,
     });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

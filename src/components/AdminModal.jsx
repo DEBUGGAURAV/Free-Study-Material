@@ -1181,8 +1181,12 @@ export default function AdminModal({
   };
 
   const handleTursoPruneAudits = async (days = 30) => {
-    const pruneDays = Number(days || tursoPruneDays || 30);
-    if (!window.confirm(`🧹 AUDIT RETENTION PURGE (Turso Vault)\n\nDelete all private study pod forensic compliance transcripts older than ${pruneDays} days from Turso LibSQL database?\nTranscripts older than ${pruneDays} days will be permanently wiped.`)) {
+    const pruneDays = Number(days !== undefined ? days : (tursoPruneDays !== undefined ? tursoPruneDays : 30));
+    const confirmPrompt = pruneDays <= 0
+      ? `🧹 CLEAR ALL FORENSIC AUDITS (Turso Vault)\n\nPermanently delete ALL private study pod forensic compliance transcripts from Turso LibSQL database?\n\nThis will instantly empty the audit list and cannot be undone.`
+      : `🧹 AUDIT RETENTION PURGE (Turso Vault)\n\nDelete all private study pod forensic compliance transcripts older than ${pruneDays} days from Turso LibSQL database?\nTranscripts older than ${pruneDays} days will be permanently wiped.`;
+
+    if (!window.confirm(confirmPrompt)) {
       return;
     }
     try {
@@ -1192,8 +1196,14 @@ export default function AdminModal({
       if (res && res.success) {
         setTursoActionMsg({
           type: "success",
-          text: res.message || `Cleaned pod audits older than ${pruneDays} days.`,
+          text: res.message || (pruneDays <= 0 ? "All pod forensic audits deleted." : `Cleaned pod audits older than ${pruneDays} days.`),
         });
+        if (pruneDays <= 0) {
+          setTursoAudits([]);
+        } else {
+          const cutoff = Date.now() - pruneDays * 86400000;
+          setTursoAudits((prev) => prev.filter((a) => (a.createdAtTimestamp || 0) >= cutoff));
+        }
         loadTursoAudits();
         loadTursoData();
       } else {
@@ -1209,6 +1219,27 @@ export default function AdminModal({
       });
     } finally {
       setTursoPruning(false);
+    }
+  };
+
+  const handleDeleteSingleAudit = async (roomId, name) => {
+    if (!window.confirm(`Permanently delete forensic audit transcript for pod "${name || roomId}" from Turso database?`)) return;
+    try {
+      setTursoAudits((prev) => prev.filter((a) => a.roomId !== roomId));
+      const res = await api.deleteTursoAudit(roomId);
+      if (res && res.success) {
+        setTursoActionMsg({
+          type: "success",
+          text: res.message || `Deleted pod audit "${name || roomId}".`,
+        });
+        loadTursoAudits();
+        loadTursoData();
+      } else {
+        throw new Error(res?.message || "Delete failed");
+      }
+    } catch (err) {
+      alert("Failed to delete audit: " + err.message);
+      loadTursoAudits();
     }
   };
 
@@ -9550,11 +9581,31 @@ export default function AdminModal({
                         color: "var(--text-dim)",
                         background: "rgba(255, 255, 255, 0.03)",
                         border: "1px solid rgba(255, 255, 255, 0.08)",
-                        padding: "4px 8px",
+                        padding: "3px 8px",
                         borderRadius: "6px",
                       }}
                     >
-                      <span>Retention: <strong>{tursoPruneDays} Days</strong></span>
+                      <span>Retention:</span>
+                      <select
+                        value={tursoPruneDays}
+                        onChange={(e) => setTursoPruneDays(Number(e.target.value))}
+                        style={{
+                          background: "rgba(0, 0, 0, 0.5)",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          color: "#38bdf8",
+                          borderRadius: "4px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          padding: "2px 6px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <option value={0}>All Audits (0 Days / Clear Everything)</option>
+                        <option value={1}>Older than 1 Day (&gt;1d)</option>
+                        <option value={3}>Older than 3 Days (&gt;3d)</option>
+                        <option value={7}>Older than 7 Days (&gt;7d)</option>
+                        <option value={30}>Older than 30 Days (&gt;30d)</option>
+                      </select>
                     </div>
 
                     <button
@@ -9562,11 +9613,33 @@ export default function AdminModal({
                       disabled={tursoPruning}
                       className="btn-danger"
                       style={{ fontSize: "0.74rem", padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                      title={`Delete transcripts older than ${tursoPruneDays} days`}
+                      title={tursoPruneDays === 0 ? "Delete all pod transcripts immediately" : `Delete transcripts older than ${tursoPruneDays} days`}
                     >
                       <Trash2 size={12} />
-                      <span>{tursoPruning ? "Pruning..." : `Prune >${tursoPruneDays}d Audits`}</span>
+                      <span>{tursoPruning ? "Pruning..." : tursoPruneDays === 0 ? "Wipe All Audits" : `Prune >${tursoPruneDays}d Audits`}</span>
                     </button>
+
+                    {tursoPruneDays !== 0 && (
+                      <button
+                        onClick={() => handleTursoPruneAudits(0)}
+                        disabled={tursoPruning || tursoAudits.length === 0}
+                        className="btn-danger"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "5px 10px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          background: "rgba(239, 68, 68, 0.2)",
+                          border: "1px solid rgba(239, 68, 68, 0.4)",
+                          color: "#fca5a5",
+                        }}
+                        title="Delete all pod transcripts right now"
+                      >
+                        <Trash2 size={12} />
+                        <span>Clear All</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={loadTursoAudits}
@@ -9640,6 +9713,7 @@ export default function AdminModal({
                           <th style={{ padding: "8px 10px" }}>Messages</th>
                           <th style={{ padding: "8px 10px" }}>Archived At</th>
                           <th style={{ padding: "8px 10px" }}>Telegram Audit</th>
+                          <th style={{ padding: "8px 10px", textAlign: "right" }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -9706,6 +9780,28 @@ export default function AdminModal({
                               >
                                 {a.telegramSent ? "✅ Sent (@fsm_chat_bot)" : "🕒 Stored in LibSQL"}
                               </span>
+                            </td>
+                            <td style={{ padding: "10px", textAlign: "right" }}>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSingleAudit(a.roomId, a.name)}
+                                className="btn-icon"
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  background: "rgba(239, 68, 68, 0.15)",
+                                  color: "#f87171",
+                                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                                  borderRadius: "6px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  cursor: "pointer",
+                                }}
+                                title={`Delete audit transcript for "${a.name || a.roomId}"`}
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </td>
                           </tr>
                         ))}
