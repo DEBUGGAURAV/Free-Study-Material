@@ -15,6 +15,8 @@ export default function NoteCard({
   downloadDisabledReason = "",
   onToggleNoteDownload,
 }) {
+  if (!note || !note.id) return null;
+
   const isAdmin =
     currentUser?.role === "admin" ||
     currentUser?.role === "half_admin" ||
@@ -31,12 +33,12 @@ export default function NoteCard({
     timeRemaining: "",
   });
 
-  const formattedSize = formatFileSize(note.compressedSize || note.fileSize);
+  const formattedSize = formatFileSize(note?.compressedSize || note?.fileSize);
 
-  const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
+  const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
   const isNoteDownloadBlocked = Boolean(isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false");
 
-  const directDownloadUrl = api.getDownloadUrl(note.id);
+  const directDownloadUrl = api.getDownloadUrl(note?.id);
 
   // 1. One-Tap Native Web Share API (WhatsApp/Telegram/System Sheet)
   const handleShareNote = async (e) => {

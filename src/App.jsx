@@ -1330,7 +1330,7 @@ export default function App() {
               <>
                 {viewMode === "grid" ? (
                   <div className="notes-grid">
-                    {displayedNotes.map((note) => (
+                    {displayedNotes.filter(Boolean).map((note) => (
                       <NoteCard
                         key={note.id}
                         note={note}
@@ -1360,7 +1360,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedNotes.map((note) => (
+                        {displayedNotes.filter(Boolean).map((note) => (
                           <tr key={note.id} style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
                             <td style={{ padding: "12px 16px", color: "#fff", fontWeight: 600 }}>
                               <div>{note.title}</div>
@@ -1386,15 +1386,15 @@ export default function App() {
                                       fontSize: "0.74rem",
                                       fontWeight: 700,
                                       borderRadius: "var(--radius-sm)",
-                                      border: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(52, 211, 153, 0.45)",
-                                      background: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.18)" : "rgba(52, 211, 153, 0.15)",
-                                      color: (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "#fca5a5" : "#6ee7b7",
+                                      border: (note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(52, 211, 153, 0.45)",
+                                      background: (note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "rgba(239, 68, 68, 0.18)" : "rgba(52, 211, 153, 0.15)",
+                                      color: (note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "#fca5a5" : "#6ee7b7",
                                       cursor: "pointer",
                                       transition: "all 0.15s ease",
                                     }}
-                                    title={(note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "Admin: Downloads Locked. Click to Enable." : "Admin: Downloads Active. Click to Lock."}
+                                    title={(note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "Admin: Downloads Locked. Click to Enable." : "Admin: Downloads Active. Click to Lock."}
                                   >
-                                    {(note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "🔒 Locked" : "🟢 Active"}
+                                    {(note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "🔒 Locked" : "🟢 Active"}
                                   </button>
                                 )}
                                 <button
@@ -1404,16 +1404,16 @@ export default function App() {
                                   style={{
                                     padding: "6px 12px",
                                     fontSize: "0.78rem",
-                                    opacity: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? 0.75 : 1,
+                                    opacity: (!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? 0.75 : 1,
                                     cursor: "pointer",
-                                    background: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.15)" : undefined,
-                                    borderColor: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "rgba(239, 68, 68, 0.4)" : undefined,
-                                    color: (!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "#fca5a5" : undefined,
+                                    background: (!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "rgba(239, 68, 68, 0.15)" : undefined,
+                                    borderColor: (!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "rgba(239, 68, 68, 0.4)" : undefined,
+                                    color: (!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "#fca5a5" : undefined,
                                   }}
-                                  title={(!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? ((note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "Downloads disabled for this note. Online Reader active." : "Downloads paused by administrator. Online Reader active.") : "Download Document"}
+                                  title={(!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? ((note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "Downloads disabled for this note. Online Reader active." : "Downloads paused by administrator. Online Reader active.") : "Download Document"}
                                 >
-                                  {(!allowNotesDownload || allowNotesDownload === "false" || note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? (
-                                    (note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0") ? "🔒 Disabled" : "🔒 Paused"
+                                  {(!allowNotesDownload || allowNotesDownload === "false" || note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? (
+                                    (note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0") ? "🔒 Disabled" : "🔒 Paused"
                                   ) : tableDownloads[note.id] ? (
                                     <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                                       <div className="spinner" style={{ width: "11px", height: "11px" }}></div>

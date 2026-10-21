@@ -274,15 +274,6 @@ router.get("/cache-stats", (req, res) => {
  */
 router.get("/", authenticateToken, async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "Platform access restricted: Only registered students can access Free Study Material Vault.",
-        notes: [],
-        totalCount: 0,
-      });
-    }
-
     const { branch, course, year, semester, subject, search, limit, all } = req.query;
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
     const isAdmin = req.user?.role === "admin" || Boolean(adminEmail && req.user?.email && req.user.email.toLowerCase().trim() === adminEmail);
