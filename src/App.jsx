@@ -351,7 +351,7 @@ export default function App() {
     }).catch((err) => {
       if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required"))) {
         setCurrentUser(null);
-        api.logout();
+        safeStorage.removeItem("vault_last_active");
       }
     });
   }, []);

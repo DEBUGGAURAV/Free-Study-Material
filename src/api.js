@@ -247,6 +247,14 @@ export const api = {
     // Instant 0ms local session revocation for immediate UI logout
     setAuthToken(null);
     setCurrentUser(null);
+    if (typeof window !== "undefined") {
+      const now = Date.now();
+      const lastLogout = Number(sessionStorage.getItem("fsm_last_logout_ts") || "0");
+      if (now - lastLogout < 5000) {
+        return; // Suppress duplicate logout calls within 5s window
+      }
+      sessionStorage.setItem("fsm_last_logout_ts", String(now));
+    }
     try {
       request("/auth/logout", {
         method: "POST",
@@ -881,6 +889,7 @@ export const api = {
   },
 
   // 💬 Student Chat & Private Pods API
+  getChatWsToken: () => request("/chat/ws-token"),
   getChatRooms: () => request("/chat/rooms"),
   createChatRoom: (name, secretCode, description) =>
     request("/chat/rooms/create", {

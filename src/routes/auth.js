@@ -2099,18 +2099,42 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
   }
 });
 
+// Logout Notification Deduplication Lock (Prevents duplicate alerts within 15 seconds)
+const recentLogoutNotices = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, exp] of recentLogoutNotices.entries()) {
+    if (now > exp) recentLogoutNotices.delete(k);
+  }
+}, 30000);
+
 /**
  * POST /api/auth/logout
  */
 router.post("/logout", authenticateToken, async (req, res) => {
   try {
     const activeUser = req.user || req.body?.user;
+    const userIdentifier = (activeUser?.email || activeUser?.id || "").toLowerCase().trim();
     const logoutReason = req.body?.reason || req.body?.method || "Manual Session Logout";
     const isAutoLogout =
       String(logoutReason).toLowerCase().includes("inactivity") ||
       String(logoutReason).toLowerCase().includes("30 min");
 
-    if (activeUser) {
+    // Deduplication Lock: Prevent duplicate logout alerts within 15 seconds for the same user
+    let shouldSendTelegramNotice = false;
+    if (userIdentifier) {
+      const existingExp = recentLogoutNotices.get(userIdentifier);
+      if (!existingExp || Date.now() > existingExp) {
+        recentLogoutNotices.set(userIdentifier, Date.now() + 15000); // 15-second debounce window
+        shouldSendTelegramNotice = true;
+      } else {
+        console.log(`[LOGOUT-NOTICE] ⚡ Suppressed duplicate logout alert for ${userIdentifier} (within 15s debounce window)`);
+      }
+    } else if (activeUser) {
+      shouldSendTelegramNotice = true;
+    }
+
+    if (activeUser && shouldSendTelegramNotice) {
       setImmediate(async () => {
         let fullUser = { ...activeUser };
         let isNewStudent = false;

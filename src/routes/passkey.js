@@ -295,6 +295,23 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
 
     console.log(`[PASSKEY] ✅ Passkey registered in Firebase for ${req.user.email || existingData.email} (${newPasskey.deviceName})`);
 
+    // 🚀 Send Real-time Security Notification to FSM Security Supergroup Topic 6
+    sendTelegramAuthNotice({
+      event: "PASSKEY_REGISTER",
+      user: {
+        id: effectiveUserId,
+        name: req.user.name || existingData.name || "Scholar",
+        email: (req.user.email || existingData.email || "N/A").toLowerCase().trim(),
+        mobile: req.user.mobile || existingData.mobile || "N/A",
+        college: req.user.college || existingData.college || "N/A",
+        year: req.user.year || existingData.year || "N/A",
+        ip: getClientIp(req),
+      },
+      photoUrl: null,
+      method: `Biometric Passkey (${newPasskey.deviceName})`,
+      detail: `Student successfully registered & activated FIDO2 / WebAuthn Biometric Passkey (${newPasskey.deviceName}) for instant 0ms fingerprint/Face ID sign-in.`,
+    }).catch((err) => console.warn("[PASSKEY-NOTICE] Telegram dispatch notice:", err.message));
+
     return res.json({
       success: true,
       message: "Passkey registered successfully! You can now sign in with Fingerprint, Face ID, or Windows Hello.",
@@ -584,6 +601,23 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     try {
       await db.collection("passkeys").doc(credId).delete();
     } catch (_) {}
+
+    // 🚀 Send Real-time Security Notification to FSM Security Supergroup Topic 6
+    sendTelegramAuthNotice({
+      event: "PASSKEY_DELETE",
+      user: {
+        id: effectiveUserId,
+        name: req.user.name || data.name || "Scholar",
+        email: (req.user.email || data.email || "N/A").toLowerCase().trim(),
+        mobile: req.user.mobile || data.mobile || "N/A",
+        college: req.user.college || data.college || "N/A",
+        year: req.user.year || data.year || "N/A",
+        ip: getClientIp(req),
+      },
+      photoUrl: null,
+      method: "Passkey Revocation",
+      detail: `Student removed a Biometric Passkey credential (${credId}) from account.`,
+    }).catch((err) => console.warn("[PASSKEY-DELETE-NOTICE] Telegram dispatch notice:", err.message));
 
     return res.json({ success: true, message: "Passkey removed from account." });
   } catch (err) {

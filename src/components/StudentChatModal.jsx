@@ -518,31 +518,46 @@ export default function StudentChatModal({
 
     loadRoomsAndNotice();
 
-    const token = getAuthToken() || "";
+    let isCancelled = false;
+    let ws = null;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/chat?token=${encodeURIComponent(token)}`;
+    const establishWebSocket = async () => {
+      let token = getAuthToken() || "";
+      if (!token) {
+        try {
+          const res = await api.getChatWsToken();
+          if (res?.token) {
+            token = res.token;
+            setAuthToken(token);
+          }
+        } catch (_) {}
+      }
 
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
+      if (isCancelled) return;
 
-    ws.onopen = () => {
-      // Automatically join current room on connect
-      ws.send(
-        JSON.stringify({
-          type: "join_room",
-          roomId: currentRoom.id,
-          secretCode: currentRoom.secretCode || "",
-        })
-      );
-    };
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/ws/chat?token=${encodeURIComponent(token || "")}`;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
+      ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
 
-        if (data.type === "room_joined") {
+      ws.onopen = () => {
+        // Automatically join current room on connect
+        ws.send(
+          JSON.stringify({
+            type: "join_room",
+            roomId: currentRoom.id,
+            secretCode: currentRoom.secretCode || "",
+          })
+        );
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (data.type === "room_joined") {
           setMessages(data.messages || []);
           if (data.room) {
             setOnlineCount(data.room.membersCount || 1);
@@ -701,12 +716,16 @@ export default function StudentChatModal({
       }
     };
 
-    ws.onerror = (err) => {
-      console.warn("[CHAT-WS] Socket error:", err);
+      ws.onerror = (err) => {
+        console.warn("[CHAT-WS] Socket error:", err);
+      };
     };
 
+    establishWebSocket();
+
     return () => {
-      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+      isCancelled = true;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         ws.close();
       }
     };

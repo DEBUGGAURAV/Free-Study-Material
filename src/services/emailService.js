@@ -316,7 +316,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || "3";
     } else if (event === "LOGOUT") {
       threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
-    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
+    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
       threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
     } else if (event === "OTP_AUDIT") {
       threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
@@ -355,6 +355,12 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       const isAuto = String(method || detail || "").toLowerCase().includes("inactivity") || String(method || detail || "").toLowerCase().includes("30 min");
       titleIcon = isAuto ? "⏱️" : "🚪";
       eventTitle = isAuto ? "Auto-Logout (30 Min Inactivity)" : "Student Session Logout";
+    } else if (event === "PASSKEY_REGISTER") {
+      titleIcon = "🔑";
+      eventTitle = "Biometric Passkey Enrolled (FIDO2 / WebAuthn)";
+    } else if (event === "PASSKEY_DELETE") {
+      titleIcon = "🛡️";
+      eventTitle = "Biometric Passkey Revoked";
     } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
       titleIcon = "🚨";
       eventTitle = "Security & Profile Update";
@@ -563,6 +569,10 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         }
       } else if (event === "LOGOUT") {
         methodLabel = "🚪 Logout Method";
+      } else if (event === "PASSKEY_REGISTER") {
+        methodLabel = "📲 Biometric Credential";
+      } else if (event === "PASSKEY_DELETE") {
+        methodLabel = "🛡️ Security Action";
       } else if (event === "REGISTER") {
         methodLabel = "📝 Registration Method";
       }
