@@ -158,6 +158,16 @@ export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwit
 
       // Explicit authentication or permission failure (e.g. downloads paused by admin)
       if (response.status === 403 || response.status === 401) {
+        try {
+          const bodyClone = await response.clone().json();
+          if (bodyClone?.downloadsDisabled || bodyClone?.authRequired) {
+            return response;
+          }
+        } catch (_) {}
+        if (i < CDN_ENDPOINTS.length - 1) {
+          console.warn(`[CDN-FAILOVER] Tier ${candidateBase} returned 403/401, attempting fallback tier...`);
+          continue;
+        }
         return response;
       }
 

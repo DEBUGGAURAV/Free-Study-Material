@@ -132,6 +132,10 @@ export default {
         const forwardHeaders = new Headers(request.headers);
         forwardHeaders.set('Origin', originBase); // Ensure Render server CORS always accepts the worker's proxy request
         forwardHeaders.set('X-Forwarded-Host', url.host);
+        forwardHeaders.set('X-Via-Worker', 'true');
+        forwardHeaders.set('CF-Worker', 'true');
+        forwardHeaders.delete('Sec-Fetch-Site');
+        forwardHeaders.delete('sec-fetch-site');
 
         // 🚨 CRITICAL: Remove Range header when fetching from Origin so Origin returns the FULL file (HTTP 200)!
         // Cloudflare caches.default requires a 200 OK status to cache (206 Partial Content cannot be cached).

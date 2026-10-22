@@ -1060,9 +1060,30 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       ramCache.set(`note_${id}`, note, 3 * 3600);
     }
 
-    // 🛡️ ANTI-CONSOLE-COPY & ANTI-HOTLINKING SECURITY SHIELD
+    // 🛡️ ANTI-CONSOLE-COPY & ANTI-HOTLINKING SECURITY SHIELD: Block unauthorized third-party cross-site embeds
     const secFetchSite = req.headers["sec-fetch-site"];
-    if (secFetchSite === "cross-site") {
+    const originHeader = (req.headers["origin"] || req.headers["referer"] || "").toLowerCase();
+    const hostHeader = (req.headers["host"] || "").toLowerCase();
+
+    // Check if the request is from our own trusted origins or Edge Worker CDN
+    const isTrustedOrigin =
+      !originHeader ||
+      originHeader.includes("onrender.com") ||
+      originHeader.includes("localhost") ||
+      originHeader.includes("127.0.0.1") ||
+      originHeader.includes("workers.dev") ||
+      (hostHeader && originHeader.includes(hostHeader));
+
+    const isWorkerProxy = Boolean(
+      req.headers["x-via-worker"] ||
+      req.headers["cf-worker"] ||
+      req.headers["cf-ray"] ||
+      (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+    );
+
+    // Only block if an untrusted third-party site is explicitly attempting cross-site hotlinking
+    if (secFetchSite === "cross-site" && !isTrustedOrigin && !isWorkerProxy) {
+      console.warn(`[SECURITY] Blocked third-party cross-site hotlinking from: ${originHeader || "unknown"}`);
       return res.status(403).json({
         success: false,
         message: "Direct cross-site hotlinking blocked. Documents are protected by Free Study Material Cloud.",
@@ -1106,7 +1127,13 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       const isDocumentNav = req.headers["sec-fetch-dest"] === "document" || req.headers["sec-fetch-mode"] === "navigate";
       const referer = req.headers["referer"] || "";
       const host = req.headers["host"] || "";
-      const isSameOriginReferer = referer && (referer.includes(host) || referer.includes("localhost") || referer.includes("127.0.0.1"));
+      const isSameOriginReferer =
+        !referer ||
+        referer.includes(host) ||
+        referer.includes("localhost") ||
+        referer.includes("127.0.0.1") ||
+        referer.includes("onrender.com") ||
+        referer.includes("workers.dev");
 
       // If someone copied the raw query link into another browser / external tool without cookie:
       if (!cookieToken && isDocumentNav && !isSameOriginReferer) {
