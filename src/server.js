@@ -36,7 +36,7 @@ startEventLoopLagDetector();
 startIdleMemoryCleaner(3 * 60 * 1000); // Purge idle memory after 3 min
 startDiskQuotaPruner(); // Auto-prune stale CDN files (>30 days / >1.5GB)
 startTempFolderPruner(path.join(__dirname, "../temp"), 60 * 60 * 1000); // Strict 1-Hour Temp Pruner (Upload Immunity Protected)
-startRamBufferGuard(path.join(__dirname, "../temp"), 380); // High-RAM Buffer Guard (380MB / 512MB threshold)
+startRamBufferGuard(path.join(__dirname, "../temp")); // Dynamic Self-Adapting RAM Guard (Auto-scales to 512MB, 1GB, 2GB, 4GB, 8GB)
 
 // ⚡ Pillar 2: Turso (LibSQL / Edge SQLite) Cloud Initialization
 initTursoTables().catch((err) => console.warn("[TURSO] Boot init warning:", err.message));
@@ -327,11 +327,10 @@ server.listen(PORT, "0.0.0.0", async () => {
     console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
   }
 
-  // 🧹 2. Smart RAM Buffer Guard & Auto-Garbage Collection (380MB threshold on Render 512MB RAM)
+  // 🧹 2. Smart Dynamic RAM Buffer Guard & Multi-Tier Auto-Purge
   try {
     const tempDir = path.join(__dirname, "../temp");
-    startRamBufferGuard(tempDir, 380);
-    console.log("[SELF-HEALING-GUARD] 🧹 Smart RAM Buffer Guard active (380MB Auto-Purge Threshold).");
+    startRamBufferGuard(tempDir);
   } catch (guardErr) {
     console.warn("[SELF-HEALING-GUARD] Init warning:", guardErr.message);
   }

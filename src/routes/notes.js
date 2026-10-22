@@ -982,8 +982,9 @@ router.post("/:id/cache-to-cdn", async (req, res) => {
       return res.status(500).json({ success: false, message: "Could not fetch document buffer from storage node." });
     }
 
-    // High-capacity RAM pool: Retain up to 100 active notes in memory
-    if (noteBufferCache.size >= 100) {
+    // High-capacity Dynamic RAM pool: Scales with server total RAM (e.g. 25 on 512MB, 50 on 1GB, 100 on 2GB, 200 on 4GB)
+    const maxRamPool = getMaxRamBufferItems();
+    if (noteBufferCache.size >= maxRamPool) {
       const oldestKey = noteBufferCache.keys().next().value;
       noteBufferCache.delete(oldestKey);
     }
@@ -1533,6 +1534,38 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 /**
  * Edge CDN Memory Cache & Telemetry Helpers
  */
+function getMaxRamBufferItems() {
+  let ceilingMb = 512;
+  try {
+    const watchdog = require("../utils/selfHealingWatchdog");
+    if (typeof watchdog.getSystemMemoryCeilingMb === "function") {
+      ceilingMb = watchdog.getSystemMemoryCeilingMb();
+    }
+  } catch (_) {}
+
+  // Allocate ~25% of server RAM to in-memory PDF buffers (avg 5MB per note)
+  // 512MB RAM -> ~25 items (~125MB)
+  // 1GB RAM -> ~50 items (~250MB)
+  // 2GB RAM -> ~100 items (~500MB)
+  // 4GB RAM -> ~200 items (~1000MB)
+  // 8GB+ RAM -> ~400 items (~2000MB)
+  const items = Math.floor((ceilingMb * 0.25) / 5);
+  return Math.max(20, Math.min(items, 600));
+}
+
+function trimMemoryCache(keepRatio = 0.6) {
+  const currentSize = noteBufferCache.size;
+  const keepCount = Math.floor(currentSize * keepRatio);
+  const removeCount = currentSize - keepCount;
+  let removed = 0;
+  for (const key of noteBufferCache.keys()) {
+    if (removed >= removeCount) break;
+    noteBufferCache.delete(key);
+    removed++;
+  }
+  return { removed, remaining: noteBufferCache.size };
+}
+
 function getMemoryCacheInfo() {
   let totalBytes = 0;
   const items = [];
@@ -1548,9 +1581,10 @@ function getMemoryCacheInfo() {
       ageSeconds: Math.round((Date.now() - (entry.cachedAt || Date.now())) / 1000),
     });
   }
+  const dynamicMax = getMaxRamBufferItems();
   return {
     itemCount: noteBufferCache.size,
-    maxItems: 50,
+    maxItems: dynamicMax,
     totalBytes,
     totalMB: (totalBytes / (1024 * 1024)).toFixed(2),
     items: items.slice(0, 25),
@@ -1575,6 +1609,7 @@ async function prewarmPopularNotes(limit = 10) {
     snap = await db.collection("notes").limit(finalLimit).get();
   }
   let prewarmed = 0;
+  const dynamicMax = getMaxRamBufferItems();
   for (const doc of snap.docs) {
     const note = doc.data();
     if (!noteBufferCache.has(doc.id)) {
@@ -1599,7 +1634,7 @@ async function prewarmPopularNotes(limit = 10) {
         try {
           const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
           if (docData && docData.buffer) {
-            if (noteBufferCache.size >= 100) {
+            if (noteBufferCache.size >= dynamicMax) {
               const oldestKey = noteBufferCache.keys().next().value;
               noteBufferCache.delete(oldestKey);
             }
@@ -1648,5 +1683,7 @@ router.saveCdnBuffer = saveCdnBuffer;
 router.prewarmPopularNotes = prewarmPopularNotes;
 router.getDbWritesPreventedCount = () => dbWritesPreventedCount;
 router.noteBufferCache = noteBufferCache;
+router.getMaxRamBufferItems = getMaxRamBufferItems;
+router.trimMemoryCache = trimMemoryCache;
 
 module.exports = router;

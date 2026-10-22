@@ -55,8 +55,11 @@ try {
 } catch {}
 
 let getWatchdogStats = null;
+let getMemoryGuardStats = null;
 try {
-  getWatchdogStats = require("../utils/selfHealingWatchdog").getWatchdogStats;
+  const watchdog = require("../utils/selfHealingWatchdog");
+  getWatchdogStats = watchdog.getWatchdogStats;
+  getMemoryGuardStats = watchdog.getMemoryGuardStats;
 } catch {}
 
 let getThreatIntelligence = null;
@@ -1867,6 +1870,7 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
           port: process.env.PORT || 5000,
         },
         ramCache: ramCache.getStats(),
+        ramGuard: getMemoryGuardStats ? getMemoryGuardStats() : null,
       },
     });
   } catch (err) {
@@ -2277,6 +2281,7 @@ router.get("/system/memory", authenticateToken, checkAdminOrPermission("all"), (
       systemMemUsagePercent: Math.round(((totalMem - freeMem) / totalMem) * 100),
     },
     ramCache: ramCache.getStats(),
+    ramGuard: getMemoryGuardStats ? getMemoryGuardStats() : null,
   });
 });
 

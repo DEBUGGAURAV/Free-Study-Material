@@ -11,6 +11,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { ramCache } = require("./ramCache");
 
 // Dynamically hook V8 Garbage Collector at runtime (No external CLI flags needed)
@@ -22,6 +23,71 @@ try {
     global.gc = vm.runInNewContext("gc");
   }
 } catch (_) {}
+
+// Dynamic RAM Ceiling Discovery (Auto-adapts whether on 512MB, 1GB, 2GB, 4GB, 8GB, VPS, or Docker container)
+function getSystemMemoryCeilingMb() {
+  // 1. Explicit Environment Variable Override (e.g. set by Render, Docker, or User)
+  const envLimit = process.env.RAM_LIMIT_MB || process.env.RENDER_MEMORY_MB || process.env.MEMORY_LIMIT_MB || process.env.WEB_MEMORY;
+  if (envLimit && !isNaN(Number(envLimit)) && Number(envLimit) > 50) {
+    return Number(envLimit);
+  }
+
+  // 2. Linux cgroup v2 container limit (Modern Docker & Render Linux container runtime)
+  try {
+    if (fs.existsSync("/sys/fs/cgroup/memory.max")) {
+      const val = fs.readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim();
+      if (val !== "max" && !isNaN(Number(val))) {
+        const mb = Math.round(Number(val) / (1024 * 1024));
+        if (mb > 50 && mb < 1000000) return mb;
+      }
+    }
+  } catch (_) {}
+
+  // 3. Linux cgroup v1 container limit (Legacy Docker / LXC container)
+  try {
+    if (fs.existsSync("/sys/fs/cgroup/memory/memory.limit_in_bytes")) {
+      const val = fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8").trim();
+      if (!isNaN(Number(val))) {
+        const mb = Math.round(Number(val) / (1024 * 1024));
+        if (mb > 50 && mb < 1000000) return mb;
+      }
+    }
+  } catch (_) {}
+
+  // 4. Host OS Physical Memory (Fallback for bare-metal VPS, local dev, or unlimited containers)
+  const osMb = Math.round(os.totalmem() / (1024 * 1024));
+  return osMb > 0 ? osMb : 512;
+}
+
+// Calculate dynamic protection thresholds based on effective ceiling
+function getMemoryThresholds(manualCeilingMb = null) {
+  const ceilingMb = manualCeilingMb || getSystemMemoryCeilingMb();
+  
+  // Warning threshold: ~75% of total RAM (e.g. ~384MB for 512MB, ~768MB for 1GB, ~1536MB for 2GB, ~3072MB for 4GB)
+  const warningMb = Math.round(ceilingMb * 0.75);
+  
+  // Critical emergency threshold: ~88% of total RAM (e.g. ~450MB for 512MB, ~900MB for 1GB, ~1800MB for 2GB, ~3600MB for 4GB)
+  const criticalMb = Math.round(ceilingMb * 0.88);
+
+  return {
+    ceilingMb,
+    warningMb: Math.max(250, warningMb),
+    criticalMb: Math.max(350, criticalMb),
+  };
+}
+
+// Auto-Purge Telemetry Trackers
+const autoPurgeStats = {
+  warningCount: 0,
+  criticalCount: 0,
+  lastPurgeTime: null,
+  lastPurgeType: null,
+  lastRssBefore: 0,
+  lastRssAfter: 0,
+  lastFreedMb: 0,
+};
+
+let ramBufferGuardRunning = false;
 
 // State trackers
 let isEventLoopCongested = false;
@@ -62,20 +128,50 @@ function attachWorkerWatchdog(worker, inputFilePath, originalSize, timeoutMs = 2
 }
 
 /**
- * 2. 🧹 Smart RAM Buffer Guard & Auto-Garbage Collection
- * Protects Render Free Tier 512MB RAM limit from Out-Of-Memory (SIGKILL 137)
+ * 2. 🧹 Smart Dynamic RAM Buffer Guard & Multi-Tier Auto-Purge
+ * Self-Adapting OOM Protection: Dynamically scales thresholds to actual server RAM
+ * (512MB Render -> ~384MB / ~450MB, 1GB -> ~768MB / ~900MB, 2GB -> ~1536MB / ~1800MB, 4GB -> ~3072MB / ~3600MB)
  */
-function startRamBufferGuard(tempDir, thresholdMb = 380) {
+let cachedNotesRouter = null;
+function getNotesRouterSafe() {
+  if (!cachedNotesRouter) {
+    try {
+      cachedNotesRouter = require("../routes/notes");
+    } catch (_) {}
+  }
+  return cachedNotesRouter;
+}
+
+function startRamBufferGuard(tempDir, manualThresholdMb = null) {
+  if (ramBufferGuardRunning) return;
+  ramBufferGuardRunning = true;
+
+  const { ceilingMb, warningMb, criticalMb } = getMemoryThresholds(manualThresholdMb);
+  console.log(
+    `[SELF-HEALING-GUARD] 🛡️ Dynamic RAM Protection Engine Online! Total RAM: ${ceilingMb}MB | Warning Threshold: ${warningMb}MB (75%) | Critical Emergency: ${criticalMb}MB (88%)`
+  );
+
   const checkMemory = () => {
     try {
       const mem = process.memoryUsage();
       const rssMb = Math.round(mem.rss / (1024 * 1024));
       const heapUsedMb = Math.round(mem.heapUsed / (1024 * 1024));
 
-      if (rssMb >= thresholdMb) {
-        console.warn(`[SELF-HEALING-GUARD] ⚠️ High RAM Alert: RSS is ${rssMb}MB (Threshold: ${thresholdMb}MB / 512MB). Initiating aggressive auto-purge...`);
+      const thresholds = getMemoryThresholds(manualThresholdMb);
+      const effectiveWarningMb = manualThresholdMb || thresholds.warningMb;
+      const effectiveCriticalMb = manualThresholdMb ? Math.round(manualThresholdMb * 1.15) : thresholds.criticalMb;
 
-        // A. Purge stale temporary files (>1 hour old) from temp/ directory, NEVER deleting active uploads!
+      if (rssMb >= effectiveWarningMb) {
+        const isCritical = rssMb >= effectiveCriticalMb;
+        const purgeType = isCritical ? "CRITICAL_EMERGENCY" : "PROACTIVE_WARNING";
+
+        console.warn(
+          `[SELF-HEALING-GUARD] ⚠️ High RAM Alert (${purgeType}): RSS is ${rssMb}MB / ${thresholds.ceilingMb}MB (Threshold: ${
+            isCritical ? effectiveCriticalMb : effectiveWarningMb
+          }MB). Initiating dynamic auto-purge...`
+        );
+
+        // A. Sweep stale temporary upload chunks from disk, respecting Active Upload Immunity
         if (tempDir && fs.existsSync(tempDir)) {
           try {
             const files = fs.readdirSync(tempDir);
@@ -91,14 +187,15 @@ function startRamBufferGuard(tempDir, thresholdMb = 380) {
             for (const file of files) {
               const fullPath = path.join(tempDir, file);
               try {
-                // 🛡️ Active Upload Immunity Lock: If file is actively uploading to Telegram, NEVER touch it!
+                // 🛡️ Active Upload Immunity Lock: Never touch actively uploading chunks!
                 if (isTempActiveFn && isTempActiveFn(fullPath)) {
                   continue;
                 }
 
                 const stats = fs.statSync(fullPath);
-                // ⏱️ Safe 1-Hour Threshold (60 Minutes) for truly abandoned zombie chunks
-                if (now - stats.mtimeMs > 60 * 60 * 1000) {
+                // On warning: 30 minutes; On critical: 10 minutes for abandoned zombie chunks
+                const maxAgeMs = isCritical ? 10 * 60 * 1000 : 30 * 60 * 1000;
+                if (now - stats.mtimeMs > maxAgeMs) {
                   fs.unlinkSync(fullPath);
                   purgedCount++;
                 }
@@ -106,38 +203,114 @@ function startRamBufferGuard(tempDir, thresholdMb = 380) {
             }
 
             if (purgedCount > 0) {
-              console.log(`[SELF-HEALING-GUARD] 🧹 Purged ${purgedCount} abandoned temporary upload chunk files (>1 hour old) from disk.`);
+              console.log(`[SELF-HEALING-GUARD] 🧹 Purged ${purgedCount} abandoned temporary upload chunk files from disk.`);
             }
           } catch (dirErr) {
             console.warn("[SELF-HEALING-GUARD] Temp sweep notice:", dirErr.message);
           }
         }
 
-        // B. Clear volatile RAM cache entries to release heap
-        if (ramCache && typeof ramCache.clear === "function") {
-          ramCache.clear();
-          console.log("[SELF-HEALING-GUARD] ⚡ Cleared RAM Cache to relieve memory pressure.");
+        // B. Purge / LRU Trim in-memory PDF Stream Buffer Cache
+        try {
+          const nr = getNotesRouterSafe();
+          if (nr && nr.noteBufferCache) {
+            const currentItems = nr.noteBufferCache.size;
+            if (isCritical) {
+              // Critical: Evict ALL buffer entries to immediately free large Node Buffers
+              if (typeof nr.purgeMemoryCache === "function") {
+                nr.purgeMemoryCache();
+              } else {
+                nr.noteBufferCache.clear();
+              }
+              console.log(`[SELF-HEALING-GUARD] 🚨 Critical Emergency: Fully purged all ${currentItems} in-memory PDF stream buffers.`);
+            } else if (currentItems > 5) {
+              // Warning: LRU trim oldest 40% of buffered notes, retaining top hot active notes
+              if (typeof nr.trimMemoryCache === "function") {
+                const res = nr.trimMemoryCache(0.6);
+                console.log(`[SELF-HEALING-GUARD] ⚡ Proactive Warning: LRU-trimmed ${res.removed} cold stream buffers (retained ${res.remaining} hot items).`);
+              } else {
+                const toRemove = Math.ceil(currentItems * 0.4);
+                let removed = 0;
+                for (const key of nr.noteBufferCache.keys()) {
+                  if (removed >= toRemove) break;
+                  nr.noteBufferCache.delete(key);
+                  removed++;
+                }
+                console.log(`[SELF-HEALING-GUARD] ⚡ Proactive Warning: Trimmed ${removed} cold stream buffers.`);
+              }
+            }
+          }
+        } catch (bufErr) {
+          console.warn("[SELF-HEALING-GUARD] Buffer cache purge notice:", bufErr.message);
         }
 
-        // C. Trigger Node.js V8 Garbage Collector if exposed
+        // C. Clear volatile RAM cache entries (clear all on Critical, clear expired on Warning)
+        if (ramCache) {
+          if (isCritical && typeof ramCache.clear === "function") {
+            ramCache.clear();
+            console.log("[SELF-HEALING-GUARD] ⚡ Cleared entire volatile RAM Cache to relieve memory pressure.");
+          } else if (typeof ramCache.clearExpired === "function") {
+            const clearedCount = ramCache.clearExpired();
+            if (clearedCount > 0) {
+              console.log(`[SELF-HEALING-GUARD] ⚡ Cleared ${clearedCount} expired volatile RAM Cache entries.`);
+            }
+          }
+        }
+
+        // D. Trigger Node.js V8 Garbage Collector
         if (global.gc) {
           try {
             global.gc();
-            const afterMem = process.memoryUsage();
-            const afterRss = Math.round(afterMem.rss / (1024 * 1024));
-            console.log(`[SELF-HEALING-GUARD] ✅ Garbage Collection completed. RSS lowered from ${rssMb}MB to ${afterRss}MB.`);
           } catch (gcErr) {
             console.warn("[SELF-HEALING-GUARD] GC notice:", gcErr.message);
           }
         }
+
+        const afterMem = process.memoryUsage();
+        const afterRss = Math.round(afterMem.rss / (1024 * 1024));
+        const freedMb = Math.max(0, rssMb - afterRss);
+
+        if (isCritical) {
+          autoPurgeStats.criticalCount++;
+        } else {
+          autoPurgeStats.warningCount++;
+        }
+        autoPurgeStats.lastPurgeTime = new Date().toISOString();
+        autoPurgeStats.lastPurgeType = purgeType;
+        autoPurgeStats.lastRssBefore = rssMb;
+        autoPurgeStats.lastRssAfter = afterRss;
+        autoPurgeStats.lastFreedMb = freedMb;
+
+        console.log(
+          `[SELF-HEALING-GUARD] ✅ Dynamic Auto-Purge completed (${purgeType}). RSS dropped from ${rssMb}MB to ${afterRss}MB (Reclaimed ${freedMb}MB). System 100% stable.`
+        );
       }
     } catch (e) {
       console.warn("[SELF-HEALING-GUARD] Memory check notice:", e.message);
     }
   };
 
-  // Inspect RAM every 60 seconds
-  setInterval(checkMemory, 60 * 1000);
+  // Inspect RAM every 30 seconds for rapid, responsive auto-purge
+  setInterval(checkMemory, 30 * 1000);
+  // Initial check 5s after server boot
+  setTimeout(checkMemory, 5000);
+}
+
+function getMemoryGuardStats() {
+  const thresholds = getMemoryThresholds();
+  const mem = process.memoryUsage();
+  const rssMb = Math.round(mem.rss / (1024 * 1024));
+  const heapUsedMb = Math.round(mem.heapUsed / (1024 * 1024));
+  return {
+    ceilingMb: thresholds.ceilingMb,
+    warningThresholdMb: thresholds.warningMb,
+    criticalThresholdMb: thresholds.criticalMb,
+    currentRssMb: rssMb,
+    heapUsedMb,
+    usageOfCeilingPercent: Math.min(100, Math.round((rssMb / thresholds.ceilingMb) * 100)),
+    status: rssMb >= thresholds.criticalMb ? "CRITICAL" : rssMb >= thresholds.warningMb ? "WARNING" : "HEALTHY",
+    autoPurgeStats,
+  };
 }
 
 /**
@@ -248,6 +421,7 @@ function getWatchdogStats() {
     currentEventLoopLag,
     lastHeartbeatTime,
     lastActivityTimestamp,
+    ramGuard: getMemoryGuardStats(),
   };
 }
 
@@ -417,5 +591,8 @@ module.exports = {
   startIdleMemoryCleaner,
   startDiskQuotaPruner,
   startTempFolderPruner,
+  getSystemMemoryCeilingMb,
+  getMemoryThresholds,
+  getMemoryGuardStats,
 };
 

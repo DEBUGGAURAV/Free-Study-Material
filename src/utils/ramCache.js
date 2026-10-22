@@ -56,6 +56,18 @@ class MemoryCache {
     this.misses = 0;
   }
 
+  clearExpired() {
+    const now = Date.now();
+    let count = 0;
+    for (const [key, item] of this.cache.entries()) {
+      if (item && item.expiresAt && now > item.expiresAt) {
+        this.cache.delete(key);
+        count++;
+      }
+    }
+    return count;
+  }
+
   getStats() {
     return {
       keysCount: this.cache.size,
