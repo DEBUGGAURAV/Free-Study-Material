@@ -100,7 +100,7 @@ export default function AdminModal({
     { id: "database", num: 7, label: isHalfAdmin ? "7. 🔒 Database (Restricted)" : "7. 🗄️ Database Studio", title: "Database Studio" },
     { id: "recycle_bin", num: 8, label: "8. ♻️ Restore Vault", title: "Restore Vault" },
     { id: "security_bot", num: 9, label: "9. 🤖 Security Bot", title: "Security Bot Controls" },
-    { id: "tech_nexus", num: 10, label: "10. 🧬 Next-Gen Tech", title: "Next-Gen Tech Nexus" },
+    { id: "tech_nexus", num: 10, label: maintenanceMode ? "10. 🧬 Tech Nexus (PAUSED)" : "10. 🧬 Next-Gen Tech", title: "Next-Gen Tech Nexus" },
     { id: "community_chat", num: 11, label: "11. 💬 Community Chat", title: "Live Community Chat & Moderation Hub" },
     { id: "turso", num: 12, label: "12. ⚡ Turso Database", title: "Turso LibSQL Edge Database" },
   ];
@@ -1778,6 +1778,215 @@ export default function AdminModal({
     }
   };
 
+  // 🛠️ Shared Pure English Server Maintenance Mode Control Card (Used in Tab 4 & Tab 10)
+  const renderMaintenanceControlCard = (locationTag = "Tab 4") => (
+    <div
+      style={{
+        background: maintenanceMode
+          ? "linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(245, 158, 11, 0.12) 100%)"
+          : "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.08) 100%)",
+        border: maintenanceMode ? "2px solid rgba(239, 68, 68, 0.6)" : "1.5px solid rgba(16, 185, 129, 0.35)",
+        borderRadius: "var(--radius-lg)",
+        padding: "18px 20px",
+        marginBottom: "18px",
+        boxShadow: maintenanceMode ? "0 8px 30px rgba(239, 68, 68, 0.22)" : "0 6px 24px rgba(0, 0, 0, 0.35)",
+        transition: "all 0.3s ease",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div
+            style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "12px",
+              background: maintenanceMode ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
+              color: maintenanceMode ? "#f87171" : "#34d399",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: maintenanceMode ? "0 0 16px rgba(239, 68, 68, 0.35)" : "none",
+              flexShrink: 0,
+            }}
+          >
+            {maintenanceMode ? <ShieldAlert size={24} /> : <ShieldCheck size={24} />}
+          </div>
+          <div>
+            <div style={{ fontSize: "1.08rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+              <span>Server Maintenance Mode (Emergency Server Maintenance Control)</span>
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  padding: "3px 9px",
+                  borderRadius: "999px",
+                  background: maintenanceMode ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
+                  color: maintenanceMode ? "#fca5a5" : "#6ee7b7",
+                  border: `1px solid ${maintenanceMode ? "rgba(239, 68, 68, 0.5)" : "rgba(16, 185, 129, 0.4)"}`,
+                }}
+              >
+                ● {maintenanceMode ? "MAINTENANCE ACTIVE (STUDENTS PAUSED)" : "PLATFORM LIVE (100% PUBLIC ACCESS)"}
+              </span>
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "3px" }}>
+              One-click platform shield: pauses student traffic with a professional maintenance screen while keeping Render, LibSQL, MTProto, and Admin Studio 100% operational in the background.
+            </div>
+          </div>
+        </div>
+
+        {/* Master 1-Click Action Button */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            type="button"
+            onClick={() => handleToggleMaintenanceMode()}
+            disabled={maintenanceLoading}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 18px",
+              borderRadius: "10px",
+              fontWeight: 800,
+              fontSize: "0.88rem",
+              cursor: maintenanceLoading ? "not-allowed" : "pointer",
+              border: "none",
+              color: "#fff",
+              background: maintenanceMode
+                ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                : "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
+              boxShadow: maintenanceMode
+                ? "0 4px 16px rgba(16, 185, 129, 0.4)"
+                : "0 4px 16px rgba(239, 68, 68, 0.4)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <Power size={16} className={maintenanceLoading ? "spinner" : ""} />
+            <span>
+              {maintenanceLoading
+                ? "Switching..."
+                : maintenanceMode
+                ? "🟢 TURN OFF MAINTENANCE (GO LIVE)"
+                : "🔒 ACTIVATE MAINTENANCE MODE"}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Safety Info Pills */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
+          <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase" }}>🛡️ Admin Studio Bypass</div>
+          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Unrestricted Admin Access</div>
+          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Admins &amp; Half-Admins always pass through via session token</div>
+        </div>
+        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
+          <div style={{ fontSize: "0.7rem", color: "#34d399", fontWeight: 700, textTransform: "uppercase" }}>⚡ Zero Server Downtime</div>
+          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Daemon Kept 100% Online</div>
+          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Render daemon, Express, MTProto &amp; LibSQL remain connected</div>
+        </div>
+        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
+          <div style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 700, textTransform: "uppercase" }}>🚀 Instant Restoration</div>
+          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Sub-Second Live Unpause</div>
+          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Turning off instantly restores public browsing with zero build delays</div>
+        </div>
+      </div>
+
+      {/* Maintenance Customization Drawer */}
+      <div style={{ background: "rgba(11, 19, 43, 0.65)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "10px", padding: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
+          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+            <Sliders size={14} style={{ color: "var(--accent-cyan)" }} />
+            <span>Maintenance Screen Display Notice (Custom Message for Students)</span>
+          </span>
+          {maintenanceFeedback && (
+            <span style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700 }}>
+              {maintenanceFeedback}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px", marginBottom: "10px" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
+              Notice Title:
+            </label>
+            <input
+              type="text"
+              value={maintenanceTitle}
+              onChange={(e) => setMaintenanceTitle(e.target.value)}
+              placeholder="e.g. Scheduled System Upgrade in Progress"
+              style={{
+                width: "100%",
+                background: "rgba(15, 23, 42, 0.8)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: "6px",
+                color: "#fff",
+                padding: "8px 10px",
+                fontSize: "0.78rem",
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
+              Estimated Completion / Return Time:
+            </label>
+            <input
+              type="text"
+              value={maintenanceEstimatedEnd}
+              onChange={(e) => setMaintenanceEstimatedEnd(e.target.value)}
+              placeholder="e.g. 15 minutes, 11:30 PM, or 1 hour"
+              style={{
+                width: "100%",
+                background: "rgba(15, 23, 42, 0.8)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: "6px",
+                color: "#fff",
+                padding: "8px 10px",
+                fontSize: "0.78rem",
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: "10px" }}>
+          <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
+            Notice Message (Shown on Student Screen):
+          </label>
+          <textarea
+            rows={2}
+            value={maintenanceMessage}
+            onChange={(e) => setMaintenanceMessage(e.target.value)}
+            placeholder="We are currently upgrading server engines and running cloud migrations. Free Study Material will be back online shortly!"
+            style={{
+              width: "100%",
+              background: "rgba(15, 23, 42, 0.8)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              borderRadius: "6px",
+              color: "#fff",
+              padding: "8px 10px",
+              fontSize: "0.78rem",
+              resize: "vertical",
+            }}
+          />
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={handleUpdateMaintenanceNotice}
+            disabled={maintenanceLoading}
+            className="btn-secondary"
+            style={{ fontSize: "0.74rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <Save size={13} />
+            <span>Save Notice Changes</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Database Handlers
   const handleDeleteCollectionDoc = async (docId) => {
     if (!window.confirm(`Move document "${docId}" from "${selectedCollection}" to the Restore Vault?`)) return;
@@ -3154,212 +3363,8 @@ export default function AdminModal({
                 </button>
               </div>
 
-              {/* 🛠️ SERVER MAINTENANCE MODE EMERGENCY CONTROL CARD */}
-              <div
-                style={{
-                  background: maintenanceMode
-                    ? "linear-gradient(135deg, rgba(239, 68, 68, 0.16) 0%, rgba(245, 158, 11, 0.12) 100%)"
-                    : "linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(6, 182, 212, 0.08) 100%)",
-                  border: maintenanceMode ? "2px solid rgba(239, 68, 68, 0.6)" : "1.5px solid rgba(16, 185, 129, 0.35)",
-                  borderRadius: "var(--radius-lg)",
-                  padding: "18px 20px",
-                  marginBottom: "18px",
-                  boxShadow: maintenanceMode ? "0 8px 30px rgba(239, 68, 68, 0.22)" : "0 6px 24px rgba(0, 0, 0, 0.35)",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", flexWrap: "wrap", gap: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div
-                      style={{
-                        width: "42px",
-                        height: "42px",
-                        borderRadius: "12px",
-                        background: maintenanceMode ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
-                        color: maintenanceMode ? "#f87171" : "#34d399",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: maintenanceMode ? "0 0 16px rgba(239, 68, 68, 0.35)" : "none",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {maintenanceMode ? <ShieldAlert size={24} /> : <ShieldCheck size={24} />}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "1.08rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                        <span>Server Maintenance Mode (इमरजेंसी सर्वर मेंटेनेंस कंट्रोल)</span>
-                        <span
-                          style={{
-                            fontSize: "0.72rem",
-                            fontWeight: 800,
-                            padding: "3px 9px",
-                            borderRadius: "999px",
-                            background: maintenanceMode ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
-                            color: maintenanceMode ? "#fca5a5" : "#6ee7b7",
-                            border: `1px solid ${maintenanceMode ? "rgba(239, 68, 68, 0.5)" : "rgba(16, 185, 129, 0.4)"}`,
-                          }}
-                        >
-                          ● {maintenanceMode ? "MAINTENANCE ACTIVE (STUDENTS PAUSED)" : "PLATFORM LIVE (100% PUBLIC ACCESS)"}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "3px" }}>
-                        1-Click platform shield: pauses student traffic with a professional maintenance screen while keeping Render, LibSQL, MTProto, and Admin Studio 100% operational in the background.
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Master 1-Click Action Button */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleMaintenanceMode()}
-                      disabled={maintenanceLoading}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "10px 18px",
-                        borderRadius: "10px",
-                        fontWeight: 800,
-                        fontSize: "0.88rem",
-                        cursor: maintenanceLoading ? "not-allowed" : "pointer",
-                        border: "none",
-                        color: "#fff",
-                        background: maintenanceMode
-                          ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                          : "linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)",
-                        boxShadow: maintenanceMode
-                          ? "0 4px 16px rgba(16, 185, 129, 0.4)"
-                          : "0 4px 16px rgba(239, 68, 68, 0.4)",
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      <Power size={16} className={maintenanceLoading ? "spinner" : ""} />
-                      <span>
-                        {maintenanceLoading
-                          ? "Switching..."
-                          : maintenanceMode
-                          ? "🟢 TURN OFF MAINTENANCE (GO LIVE)"
-                          : "🔒 ACTIVATE MAINTENANCE MODE"}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Quick Safety Info Pills */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px", marginBottom: "14px" }}>
-                  <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-                    <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase" }}>🛡️ Admin Studio Bypass</div>
-                    <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Unrestricted Admin Access</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Admins &amp; Half-Admins always pass through via session token</div>
-                  </div>
-                  <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-                    <div style={{ fontSize: "0.7rem", color: "#34d399", fontWeight: 700, textTransform: "uppercase" }}>⚡ Zero Server Downtime</div>
-                    <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Daemon Kept 100% Online</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Render daemon, Express, MTProto &amp; LibSQL remain connected</div>
-                  </div>
-                  <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-                    <div style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 700, textTransform: "uppercase" }}>🚀 Instant Restoration</div>
-                    <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Sub-Second Live Unpause</div>
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Turning off instantly restores public browsing with zero build delays</div>
-                  </div>
-                </div>
-
-                {/* Maintenance Customization Drawer */}
-                <div style={{ background: "rgba(11, 19, 43, 0.65)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "10px", padding: "14px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", flexWrap: "wrap", gap: "8px" }}>
-                    <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Sliders size={14} style={{ color: "var(--accent-cyan)" }} />
-                      <span>Maintenance Screen Display Notice (Custom Message for Students)</span>
-                    </span>
-                    {maintenanceFeedback && (
-                      <span style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700 }}>
-                        {maintenanceFeedback}
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "10px", marginBottom: "10px" }}>
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
-                        Notice Title:
-                      </label>
-                      <input
-                        type="text"
-                        value={maintenanceTitle}
-                        onChange={(e) => setMaintenanceTitle(e.target.value)}
-                        placeholder="e.g. Scheduled System Upgrade in Progress"
-                        style={{
-                          width: "100%",
-                          background: "rgba(15, 23, 42, 0.8)",
-                          border: "1px solid rgba(255, 255, 255, 0.12)",
-                          borderRadius: "6px",
-                          color: "#fff",
-                          padding: "8px 10px",
-                          fontSize: "0.78rem",
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
-                        Estimated Completion / Return Time:
-                      </label>
-                      <input
-                        type="text"
-                        value={maintenanceEstimatedEnd}
-                        onChange={(e) => setMaintenanceEstimatedEnd(e.target.value)}
-                        placeholder="e.g. 15 minutes, 11:30 PM IST, or 1 hour"
-                        style={{
-                          width: "100%",
-                          background: "rgba(15, 23, 42, 0.8)",
-                          border: "1px solid rgba(255, 255, 255, 0.12)",
-                          borderRadius: "6px",
-                          color: "#fff",
-                          padding: "8px 10px",
-                          fontSize: "0.78rem",
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: "10px" }}>
-                    <label style={{ display: "block", fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "4px", fontWeight: 600 }}>
-                      Notice Message (Shown on Student Screen):
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={maintenanceMessage}
-                      onChange={(e) => setMaintenanceMessage(e.target.value)}
-                      placeholder="We are currently upgrading server engines and running cloud migrations. Free Study Material will be back online shortly!"
-                      style={{
-                        width: "100%",
-                        background: "rgba(15, 23, 42, 0.8)",
-                        border: "1px solid rgba(255, 255, 255, 0.12)",
-                        borderRadius: "6px",
-                        color: "#fff",
-                        padding: "8px 10px",
-                        fontSize: "0.78rem",
-                        resize: "vertical",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", alignItems: "center" }}>
-                    <button
-                      type="button"
-                      onClick={handleUpdateMaintenanceNotice}
-                      disabled={maintenanceLoading}
-                      className="btn-secondary"
-                      style={{ fontSize: "0.74rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                    >
-                      <Save size={13} />
-                      <span>Save Notice Changes</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* 🛠️ SERVER MAINTENANCE MODE EMERGENCY CONTROL CARD (PURE ENGLISH) */}
+              {renderMaintenanceControlCard("Tab 4")}
 
               {/* 🔥 DUAL TURSO LIB-SQL EDGE DATABASES (LIVE STATUS & SPEED TELEMETRY) */}
               <div
@@ -6912,6 +6917,21 @@ export default function AdminModal({
                     >
                       🚀 Edge CDN 1ms Ready
                     </span>
+                    {maintenanceMode && (
+                      <span
+                        style={{
+                          background: "rgba(239, 68, 68, 0.2)",
+                          border: "1px solid rgba(239, 68, 68, 0.5)",
+                          color: "#f87171",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                        }}
+                      >
+                        🛑 MAINTENANCE ENGAGED
+                      </span>
+                    )}
                   </div>
                   <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
                     Real-time operational cockpit for Edge CDN caching, P2P AirDrop mesh, In-Browser Neural AI, Client WASM OCR, and Database Quota Shields.
@@ -7079,6 +7099,9 @@ export default function AdminModal({
                   </div>
                 );
               })()}
+
+              {/* 🛠️ SERVER MAINTENANCE MODE EMERGENCY CONTROL CARD (PURE ENGLISH - MIRRORED FROM TAB 4) */}
+              {renderMaintenanceControlCard("Tab 10")}
 
               {/* Top 4 Live Telemetry HUD Cards */}
               <div
