@@ -1003,10 +1003,10 @@ export const api = {
 
   // 🔑 Passkey / WebAuthn Biometrics (Face ID, Fingerprint, Windows Hello)
   getPasskeyRegisterOptions: () => request("/auth/passkey/register-options"),
-  verifyPasskeyRegister: (credential, deviceName) =>
+  verifyPasskeyRegister: (credential, deviceName, context = "") =>
     request("/auth/passkey/register-verify", {
       method: "POST",
-      body: JSON.stringify({ credential, deviceName }),
+      body: JSON.stringify({ credential, deviceName, context }),
     }),
   getPasskeyLoginOptions: (email = "") =>
     request("/auth/passkey/login-options", {

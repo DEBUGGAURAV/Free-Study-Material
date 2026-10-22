@@ -35,7 +35,7 @@ export async function isPasskeySupported() {
  * Register a new Passkey on the current device (Face ID, Touch ID, Windows Hello)
  * Stored in OLD Firebase!
  */
-export async function registerDevicePasskey(customDeviceName = "") {
+export async function registerDevicePasskey(customDeviceName = "", context = "") {
   try {
     // 1. Get Registration Options from server
     const optionsRes = await api.getPasskeyRegisterOptions();
@@ -69,7 +69,7 @@ export async function registerDevicePasskey(customDeviceName = "") {
     }
 
     // 4. Send to server for verification & save in OLD Firebase
-    const verifyRes = await api.verifyPasskeyRegister(attResp, deviceLabel);
+    const verifyRes = await api.verifyPasskeyRegister(attResp, deviceLabel, context);
     return verifyRes;
   } catch (err) {
     console.error("[PASSKEY-REGISTER-ERROR]", err);

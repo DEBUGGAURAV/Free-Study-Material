@@ -205,7 +205,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
       setError(null);
       setFieldErrors({});
       setSuccessMsg(null);
-      const res = await registerDevicePasskey();
+      const res = await registerDevicePasskey("", "registration");
       localStorage.setItem("academic_vault_has_passkey", "true");
       localStorage.setItem("academic_vault_login_pref", "passkey");
       setLoginViewMode("passkey");

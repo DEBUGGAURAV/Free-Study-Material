@@ -248,7 +248,7 @@ async function getOrCreateDownloadManagerForumTopic(targetChatId = null, botToke
  * Alerts Master Admin on EVERY Login, Logout, and Registration!
  * If Google Sign-In with photo: Dispatches photo directly to Telegram, but NEVER saves photo in DB.
  */
-async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "", admin = null }) {
+async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "", admin = null, context = "" }) {
   try {
     let currentSettings = null;
     if (getBotSettings) {
@@ -585,6 +585,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
         (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
         (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
+        (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
         `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
         (detail ? `⚠️ <b>Note:</b> <code>${detail}</code>\n` : "") +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +

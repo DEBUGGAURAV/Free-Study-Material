@@ -201,7 +201,7 @@ router.get("/register-options", authenticateToken, async (req, res) => {
  */
 router.post("/register-verify", authenticateToken, async (req, res) => {
   try {
-    const { credential, deviceName } = req.body;
+    const { credential, deviceName, context } = req.body;
     if (!credential || !credential.id) {
       return res.status(400).json({ success: false, message: "Missing credential response from biometric device." });
     }
@@ -295,6 +295,15 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
 
     console.log(`[PASSKEY] ✅ Passkey registered in Firebase for ${req.user.email || existingData.email} (${newPasskey.deviceName})`);
 
+    const isRegOnboarding =
+      String(context || "").toLowerCase().includes("reg") ||
+      String(context || "").toLowerCase().includes("signup") ||
+      (existingData?.createdAt && Date.now() - new Date(existingData.createdAt).getTime() < 30 * 60 * 1000);
+
+    const enrollTiming = isRegOnboarding
+      ? "🎯 Registration Onboarding (Setup directly during account signup)"
+      : "🛡️ Account Security Center / Dashboard Setup";
+
     // 🚀 Send Real-time Security Notification to FSM Security Supergroup Topic 6
     sendTelegramAuthNotice({
       event: "PASSKEY_REGISTER",
@@ -309,7 +318,10 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       },
       photoUrl: null,
       method: `Biometric Passkey (${newPasskey.deviceName})`,
-      detail: `Student successfully registered & activated FIDO2 / WebAuthn Biometric Passkey (${newPasskey.deviceName}) for instant 0ms fingerprint/Face ID sign-in.`,
+      detail: isRegOnboarding
+        ? `Student enrolled a new FIDO2 Biometric Passkey (${newPasskey.deviceName}) directly during account registration onboarding!`
+        : `Student successfully registered & activated FIDO2 / WebAuthn Biometric Passkey (${newPasskey.deviceName}) for instant 0ms fingerprint/Face ID sign-in.`,
+      context: enrollTiming,
     }).catch((err) => console.warn("[PASSKEY-NOTICE] Telegram dispatch notice:", err.message));
 
     return res.json({
