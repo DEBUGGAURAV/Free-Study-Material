@@ -458,6 +458,13 @@ export const api = {
     return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}download=1${nameParam}`;
   },
 
+  getStreamUrl: (id, fileName = null) => {
+    const token = getAuthToken();
+    const tokenParam = token ? `token=${token}&` : "";
+    const nameParam = fileName ? `&filename=${encodeURIComponent(fileName)}` : "";
+    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}${nameParam}`;
+  },
+
   updateNote: async (id, noteData) => {
     invalidateClientNotesCache();
     const res = await request(`/notes/${id}`, {

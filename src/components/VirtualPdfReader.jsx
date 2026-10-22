@@ -420,7 +420,7 @@ export default function VirtualPdfReader({
             const parsedSource = parseSourceFromHeaders(r.headers);
             setRealSourceInfo(parsedSource);
 
-            const isEdgeHit = parsedSource.id === "worker" || parsedSource.id === "ram" || parsedSource.id === "disk";
+            const isEdgeHit = parsedSource.id === "worker" || parsedSource.id === "ram" || parsedSource.id === "disk" || Boolean(note?.isCdnCached);
             if (isEdgeHit) {
               setStreamSource("cdn");
               setIsCachingToCdn(false);
@@ -433,8 +433,13 @@ export default function VirtualPdfReader({
             }
           })
           .catch(() => {
-            setStreamSource("storage");
-            setIsCachingToCdn(true);
+            if (note?.isCdnCached) {
+              setStreamSource("cdn");
+              setIsCachingToCdn(false);
+            } else {
+              setStreamSource("storage");
+              setIsCachingToCdn(true);
+            }
           });
 
         // ⚡ Dynamic Chunk Size: 128KB for High-Speed (HQ default), 32KB for Data Saver Lite
@@ -3693,8 +3698,8 @@ export default function VirtualPdfReader({
               </div>
             )}
 
-            {/* Real-Time Storage-to-CDN Transfer Progress Meter (Shown when pulling from Cloud Storage to CDN) */}
-            {(isCachingToCdn || streamSource === "storage") && (
+            {/* Real-Time Storage-to-CDN Transfer Progress Meter (Shown ONLY when pulling uncached file from Cloud Storage to CDN) */}
+            {(isCachingToCdn || streamSource === "storage") && !note?.isCdnCached && (
               <div
                 style={{
                   display: "flex",
@@ -4096,8 +4101,8 @@ export default function VirtualPdfReader({
             />
           </div>
 
-          {/* Storage to CDN Cache Transfer Meter inside Download HUD */}
-          {isCachingToCdn && (
+          {/* Storage to CDN Cache Transfer Meter inside Download HUD (Uncached files only) */}
+          {isCachingToCdn && !note?.isCdnCached && (
             <div
               style={{
                 display: "flex",

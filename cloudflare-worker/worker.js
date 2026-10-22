@@ -12,7 +12,9 @@ export default {
 
     // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains
     const originHeader = request.headers.get('Origin') || request.headers.get('Referer') || '';
+    const isDocNav = request.headers.get('Sec-Fetch-Mode') === 'navigate' || request.headers.get('Sec-Fetch-Dest') === 'document';
     const isAllowedClient = !originHeader || 
+      isDocNav ||
       originHeader.includes('onrender.com') || 
       originHeader.includes('localhost') || 
       originHeader.includes('127.0.0.1') || 

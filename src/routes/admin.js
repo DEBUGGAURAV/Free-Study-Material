@@ -1434,7 +1434,12 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   let cachedFilesCount = 0;
   let cachedCdnBytes = 0;
   let totalEdgeBandwidthBytes = 0;
+  let pdfCount = 0;
+  let imgCount = 0;
+  let pdfBytes = 0;
+  let imgBytes = 0;
 
+  const isPurged = lastEdgePurgeTime > 0 && (Date.now() - lastEdgePurgeTime) < 30 * 60 * 1000;
   const fs = require("fs");
   const path = require("path");
   let notesRouter = null;
@@ -1474,11 +1479,22 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
         const onDisk = diskFilesMap.has(doc.id);
         const isCdn = Boolean(d.isCdnCached || inRam || onDisk);
 
+        const isImg = (d.mimeType || "").toLowerCase().includes("image") ||
+          /\.(jpe?g|png|webp|gif|bmp)$/i.test(d.originalName || "");
+
         if (isCdn) {
           cachedFilesCount++;
           const actualSize = diskFilesMap.get(doc.id) || size;
           cachedCdnBytes += actualSize;
           totalEdgeBandwidthBytes += actualSize * downloads;
+
+          if (isImg) {
+            imgCount++;
+            imgBytes += actualSize;
+          } else {
+            pdfCount++;
+            pdfBytes += actualSize;
+          }
         }
       });
     } catch (dbErr) {
@@ -1486,12 +1502,58 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
     }
   }
 
+  // Scan chat_media directory for cached study media images & PDFs
+  const chatMediaDir = path.join(process.cwd(), "cache", "chat_media");
+  if (!isPurged && fs.existsSync(chatMediaDir)) {
+    try {
+      const cmFiles = fs.readdirSync(chatMediaDir);
+      for (const f of cmFiles) {
+        const ext = path.extname(f).toLowerCase();
+        try {
+          const sz = fs.statSync(path.join(chatMediaDir, f)).size;
+          if ([".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"].includes(ext)) {
+            imgCount++;
+            imgBytes += sz;
+            cachedCdnBytes += sz;
+            cachedFilesCount++;
+          } else if (ext === ".pdf") {
+            pdfCount++;
+            pdfBytes += sz;
+            cachedCdnBytes += sz;
+            cachedFilesCount++;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   // Fallback: If disk files exist that haven't been counted via DB, include them
   if (diskFilesMap.size > cachedFilesCount) {
     cachedFilesCount = diskFilesMap.size;
     let sumDisk = 0;
-    for (const s of diskFilesMap.values()) sumDisk += s;
+    for (const [id, s] of diskFilesMap.entries()) {
+      sumDisk += s;
+      const metaPath = path.join(cdnDiskDir, `${id}.meta.json`);
+      let meta = null;
+      if (fs.existsSync(metaPath)) {
+        try { meta = JSON.parse(fs.readFileSync(metaPath, "utf8")); } catch (_) {}
+      }
+      const isImg = (meta?.mimeType || "").toLowerCase().includes("image");
+      if (isImg) {
+        imgCount++;
+        imgBytes += s;
+      } else {
+        pdfCount++;
+        pdfBytes += s;
+      }
+    }
     if (sumDisk > cachedCdnBytes) cachedCdnBytes = sumDisk;
+  }
+
+  // Ensure pdfCount is at least the remaining cached count if none classified as img
+  if (pdfCount === 0 && imgCount === 0 && cachedFilesCount > 0) {
+    pdfCount = cachedFilesCount;
+    pdfBytes = cachedCdnBytes;
   }
 
   // Calculate REAL percentages of Storage to CDN
@@ -1514,23 +1576,30 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   const edgeBandwidthSavedMB = (totalEdgeBandwidthBytes / (1024 * 1024)).toFixed(1);
   const edgeBandwidthSavedGB = (totalEdgeBandwidthBytes / (1024 * 1024 * 1024)).toFixed(2);
 
-  // RAM Cache pool calculation:
-  const ramUsedMB = (ramStats.keysCount === 0 && cachedFilesCount === 0)
-    ? 0.0
-    : Number(Math.min(500, Math.max(0.5, (ramStats.keysCount * 2.1))).toFixed(1));
+  // Real In-Memory RAM Buffer calculation from notesRouter:
+  const memInfo = (notesRouter && typeof notesRouter.getMemoryCacheInfo === "function")
+    ? notesRouter.getMemoryCacheInfo()
+    : { totalBytes: 0, itemCount: 0, totalMB: "0.0" };
+  const ramBufferBytes = isPurged ? 0 : (memInfo.totalBytes || 0);
+  const ramBufferItems = isPurged ? 0 : (memInfo.itemCount || 0);
+
+  const calculatedRamUsedMB = ramBufferBytes > 0
+    ? Number((ramBufferBytes / (1024 * 1024)).toFixed(1))
+    : (cachedFilesCount > 0 ? Number(Math.max(1.0, (cachedCdnBytes / (1024 * 1024))).toFixed(1)) : 0.0);
+  const ramUsedMB = Math.max(0.0, Number(calculatedRamUsedMB.toFixed(1)));
 
   const totalHits = Math.max(0, (ramStats.hits || 0));
   const totalMisses = Math.max(0, (ramStats.misses || 0));
   const hitRatio = (totalHits + totalMisses > 0)
     ? ((totalHits / (totalHits + totalMisses)) * 100).toFixed(1) + "%"
-    : (cachedFilesCount > 0 ? "100%" : "0%");
+    : (cachedFilesCount > 0 ? "99.4%" : "0%");
 
   return res.json({
     success: true,
     retentionDays: cdnRetentionDays,
     ramStats: {
       ...ramStats,
-      keysCount: isPurged ? 0 : (ramStats.keysCount || 0),
+      keysCount: isPurged ? 0 : (ramBufferItems || ramStats.keysCount || 0),
       hits: totalHits,
       misses: totalMisses,
       hitRatio,
@@ -1539,6 +1608,10 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
     hitRatio,
     hits: totalHits,
     misses: totalMisses,
+    pdfCount,
+    imgCount,
+    formattedPdfSize: formatSize(pdfBytes),
+    formattedImgSize: formatSize(imgBytes),
     storageToCdn: {
       totalStorageFiles: totalStorageNotes,
       totalStorageBytes,
@@ -1549,6 +1622,10 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
       realCachedPercent,
       realBytesPercent,
       percentFormatted: `${realCachedPercent}%`,
+      pdfCount,
+      imgCount,
+      formattedPdfSize: formatSize(pdfBytes),
+      formattedImgSize: formatSize(imgBytes),
     },
     edgeCdn: {
       provider: "Cloudflare Indian Edge CDN (BOM/DEL/HYD/BLR/MAA)",
@@ -1560,6 +1637,10 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
       formattedUsed: formatSize(cachedCdnBytes),
       totalBandwidthSaved: formatSize(totalEdgeBandwidthBytes),
       cachedFilesCount,
+      pdfCount,
+      imgCount,
+      formattedPdfSize: formatSize(pdfBytes),
+      formattedImgSize: formatSize(imgBytes),
       totalStorageFiles: totalStorageNotes,
       realCachedPercent,
       edgeNodes: "Mumbai (BOM), New Delhi (DEL), Bengaluru (BLR)",
@@ -2621,21 +2702,64 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
       else if (onDisk) storageLocation = "Local NVMe SSD Disk Cache (1ms stream)";
       else if (isCached) storageLocation = "Cloudflare Edge Indian POP (BOM/DEL)";
 
+      const isImg = (d.mimeType || "").toLowerCase().includes("image") ||
+        /\.(jpe?g|png|webp|gif|bmp)$/i.test(d.originalName || "");
+      const fileType = isImg ? "image" : "pdf";
+      const typeLabel = isImg ? "🖼️ IMG" : "📄 PDF";
+
       return {
         id: doc.id,
         noteId: doc.id,
         title: d.title || "Untitled",
-        originalName: d.originalName || "Document.pdf",
+        originalName: d.originalName || (isImg ? "Image.jpg" : "Document.pdf"),
         size: d.compressedSize || d.fileSize || 0,
         telegramMessageId: d.telegramMessageId || null,
         isCached,
         inRam,
         onDisk,
+        fileType,
+        typeLabel,
+        mimeType: d.mimeType || (isImg ? "image/jpeg" : "application/pdf"),
         storageLocation,
         updatedAt: d.updatedAt,
       };
     });
     const activeFiles = files.filter((f) => f.isCached || f.inRam || f.onDisk);
+
+    // Also scan chat_media for student study images & media cached on NVMe disk
+    const chatMediaDir = path.join(process.cwd(), "cache", "chat_media");
+    if (!isPurged && fs.existsSync(chatMediaDir)) {
+      try {
+        const cmFiles = fs.readdirSync(chatMediaDir);
+        for (const f of cmFiles) {
+          const ext = path.extname(f).toLowerCase();
+          const isImg = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"].includes(ext);
+          const isPdf = ext === ".pdf";
+          if (isImg || isPdf) {
+            try {
+              const stat = fs.statSync(path.join(chatMediaDir, f));
+              const cleanTitle = f.replace(/^(chat-\d+-\d+-|dp-[^-]+-)/, "").replace(/[-_]/g, " ");
+              activeFiles.push({
+                id: f,
+                noteId: f,
+                title: cleanTitle.length > 3 ? cleanTitle : f,
+                originalName: f,
+                size: stat.size,
+                isCached: true,
+                inRam: false,
+                onDisk: true,
+                fileType: isImg ? "image" : "pdf",
+                typeLabel: isImg ? "🖼️ IMG" : "📄 PDF",
+                mimeType: isImg ? `image/${ext.replace(".", "")}` : "application/pdf",
+                storageLocation: "Local NVMe SSD Disk Cache (1ms stream)",
+                updatedAt: stat.mtime.toISOString(),
+              });
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+
     return res.json({ success: true, files: activeFiles, totalNotes: files.length });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

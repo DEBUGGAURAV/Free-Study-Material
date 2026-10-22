@@ -428,7 +428,7 @@ export default function NoteCard({
                     <span>💽</span>
                     <span>SSD Cache (1ms)</span>
                   </span>
-                ) : (downloadProgress.realSource?.id === "storage" || (!note.isCdnCached && downloadProgress.percent < 90)) ? (
+                ) : (downloadProgress.realSource?.id === "storage" || (!note.isCdnCached && !downloadProgress.realSource && downloadProgress.percent < 90)) ? (
                   <span
                     style={{
                       fontSize: "0.62rem",

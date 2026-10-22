@@ -108,6 +108,33 @@ function getCdnBuffer(id) {
   return null;
 }
 
+function loadDiskCacheIntoMemory() {
+  try {
+    if (!fs.existsSync(CDN_CACHE_DIR)) return;
+    const files = fs.readdirSync(CDN_CACHE_DIR);
+    let loaded = 0;
+    const maxItems = getMaxRamBufferItems();
+    for (const f of files) {
+      if (noteBufferCache.size >= maxItems) break;
+      if (f.endsWith(".bin")) {
+        const id = f.replace(".bin", "");
+        if (!noteBufferCache.has(id)) {
+          const item = getCdnBuffer(id);
+          if (item) loaded++;
+        }
+      }
+    }
+    if (loaded > 0) {
+      console.log(`[CDN-PREWARM] 🚀 Pre-warmed ${loaded} document(s) from NVMe disk into LRU RAM Cache Pool (${(getMemoryCacheInfo().totalBytes / 1048576).toFixed(1)} MB).`);
+    }
+  } catch (err) {
+    console.warn("[CDN-PREWARM] Disk-to-RAM prewarm notice:", err.message);
+  }
+}
+
+// Immediately load disk cache into high-speed LRU RAM on module init
+loadDiskCacheIntoMemory();
+
 function purgeCdnDiskBuffer(noteId) {
   try {
     if (noteId) {
@@ -1061,36 +1088,6 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       ramCache.set(`note_${id}`, note, 3 * 3600);
     }
 
-    // 🛡️ ANTI-CONSOLE-COPY & ANTI-HOTLINKING SECURITY SHIELD: Block unauthorized third-party cross-site embeds
-    const secFetchSite = req.headers["sec-fetch-site"];
-    const originHeader = (req.headers["origin"] || req.headers["referer"] || "").toLowerCase();
-    const hostHeader = (req.headers["host"] || "").toLowerCase();
-
-    // Check if the request is from our own trusted origins or Edge Worker CDN
-    const isTrustedOrigin =
-      !originHeader ||
-      originHeader.includes("onrender.com") ||
-      originHeader.includes("localhost") ||
-      originHeader.includes("127.0.0.1") ||
-      originHeader.includes("workers.dev") ||
-      (hostHeader && originHeader.includes(hostHeader));
-
-    const isWorkerProxy = Boolean(
-      req.headers["x-via-worker"] ||
-      req.headers["cf-worker"] ||
-      req.headers["cf-ray"] ||
-      (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
-    );
-
-    // Only block if an untrusted third-party site is explicitly attempting cross-site hotlinking
-    if (secFetchSite === "cross-site" && !isTrustedOrigin && !isWorkerProxy) {
-      console.warn(`[SECURITY] Blocked third-party cross-site hotlinking from: ${originHeader || "unknown"}`);
-      return res.status(403).json({
-        success: false,
-        message: "Direct cross-site hotlinking blocked. Documents are protected by Free Study Material Cloud.",
-      });
-    }
-
     const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
 
     // Verify requesting user token (cookie, ephemeral ticket, query token, or auth header)
@@ -1145,6 +1142,38 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       try {
         requestingUser = jwt.verify(queryToken, JWT_SECRET);
       } catch {}
+    }
+
+    // 🛡️ ANTI-CONSOLE-COPY & ANTI-HOTLINKING SECURITY SHIELD: Block unauthorized third-party cross-site embeds
+    // Only check if user is NOT authenticated (authenticated students are always permitted)
+    if (!requestingUser) {
+      const secFetchSite = req.headers["sec-fetch-site"];
+      const originHeader = (req.headers["origin"] || req.headers["referer"] || "").toLowerCase();
+      const hostHeader = (req.headers["host"] || "").toLowerCase();
+
+      const isTrustedOrigin =
+        !originHeader ||
+        originHeader.includes("onrender.com") ||
+        originHeader.includes("localhost") ||
+        originHeader.includes("127.0.0.1") ||
+        originHeader.includes("workers.dev") ||
+        (hostHeader && originHeader.includes(hostHeader));
+
+      const isWorkerProxy = Boolean(
+        req.headers["x-via-worker"] ||
+        req.headers["cf-worker"] ||
+        req.headers["cf-ray"] ||
+        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+      );
+
+      // Only block if an untrusted third-party site is explicitly attempting cross-site hotlinking
+      if (secFetchSite === "cross-site" && !isTrustedOrigin && !isWorkerProxy) {
+        console.warn(`[SECURITY] Blocked third-party cross-site hotlinking from: ${originHeader || "unknown"}`);
+        return res.status(403).json({
+          success: false,
+          message: "Direct cross-site hotlinking blocked. Documents are protected by Free Study Material Cloud.",
+        });
+      }
     }
 
     // Gated Student Access: If not logged in, prompt user to Sign In / Register
@@ -1327,6 +1356,15 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const isRamCached = Boolean(noteBufferCache.has(id));
 
     if (isDiskCached || cached) {
+      // ⚡ If found on disk or RAM, make sure Firestore has isCdnCached: true
+      if (db && !note.isCdnCached) {
+        db.collection("notes").doc(id).update({
+          isCdnCached: true,
+          cdnCachedAt: new Date().toISOString(),
+        }).catch(() => {});
+        note.isCdnCached = true;
+      }
+
       if (isRamCached) {
         res.setHeader("X-Real-Source", "RAM_BUFFER");
         res.setHeader("X-Source-Label", "In-Memory RAM Buffer (0ms Microsecond)");
