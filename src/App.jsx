@@ -10,10 +10,11 @@ import NoticeBoardModal from "./components/NoticeBoardModal";
 import AuthModal from "./components/AuthModal";
 import ProfileModal from "./components/ProfileModal";
 import StudentChatModal from "./components/StudentChatModal";
+import HelpCenterModal from "./components/HelpCenterModal";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
@@ -58,19 +59,28 @@ export default function App() {
   const [authInitialTab, setAuthInitialTab] = useState("signin");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [previewNote, setPreviewNote] = useState(null);
 
   useEffect(() => {
     const handleOpenChat = () => setIsChatOpen(true);
+    const handleOpenHelp = () => setIsHelpOpen(true);
     window.addEventListener("open_student_chat", handleOpenChat);
+    window.addEventListener("open_help_desk", handleOpenHelp);
 
-    // Auto-open chat if URL has chat or invite code parameter
+    // Auto-open chat or help if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
     if (params.get("chat") || params.get("code") || params.get("chat_join")) {
       setIsChatOpen(true);
     }
+    if (params.get("help") || params.get("ticket") || params.get("support")) {
+      setIsHelpOpen(true);
+    }
 
-    return () => window.removeEventListener("open_student_chat", handleOpenChat);
+    return () => {
+      window.removeEventListener("open_student_chat", handleOpenChat);
+      window.removeEventListener("open_help_desk", handleOpenHelp);
+    };
   }, []);
 
   // User & Notices
@@ -719,7 +729,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Admin Login Portal Button */}
+          {/* Admin Login Portal & Help Buttons */}
           <div style={{ display: "flex", justifyContent: "center", gap: "12px", flexWrap: "wrap" }}>
             <button
               onClick={() => openAuth("signin")}
@@ -737,8 +747,32 @@ export default function App() {
               <Lock size={15} color="var(--accent-cyan)" />
               <span>Administrator Portal Access</span>
             </button>
+
+            <button
+              onClick={() => setIsHelpOpen(true)}
+              className="btn-secondary"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                fontSize: "0.84rem",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                borderColor: "rgba(56, 189, 248, 0.3)",
+                color: "#38bdf8",
+              }}
+            >
+              <HelpCircle size={15} color="#38bdf8" />
+              <span>Need Help? / Ask Admin</span>
+            </button>
           </div>
         </div>
+
+        <HelpCenterModal
+          isOpen={isHelpOpen}
+          onClose={() => setIsHelpOpen(false)}
+          currentUser={currentUser}
+        />
 
         {isAuthOpen && (
           <AuthModal
@@ -784,6 +818,7 @@ export default function App() {
             setIsChatOpen(true);
           }
         }}
+        onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
         currentUser={currentUser}
@@ -1611,6 +1646,43 @@ export default function App() {
           onOpenAuth={(mode) => openAuth(mode || "signin")}
         />
       </GlobalErrorBoundary>
+
+      {/* Hybrid Smart Help & Support Center Modal */}
+      <HelpCenterModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        currentUser={currentUser}
+      />
+
+      {/* Floating 2-Way Help & Support Desk Trigger */}
+      <button
+        type="button"
+        onClick={() => setIsHelpOpen(true)}
+        className="floating-help-trigger"
+        title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
+        style={{
+          position: "fixed",
+          bottom: activeJob ? "82px" : "24px",
+          left: "20px",
+          zIndex: 140,
+          background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+          color: "#fff",
+          border: "1px solid rgba(255, 255, 255, 0.25)",
+          borderRadius: "999px",
+          padding: "10px 18px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          boxShadow: "0 10px 28px rgba(2, 132, 199, 0.4), 0 0 20px rgba(56, 189, 248, 0.25)",
+          cursor: "pointer",
+          fontWeight: 700,
+          fontSize: "0.85rem",
+          transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
+        <HelpCircle size={18} />
+        <span>Need Help?</span>
+      </button>
 
       {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
       {!isChatOpen && (

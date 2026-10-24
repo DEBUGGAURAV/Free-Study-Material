@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare } from "lucide-react";
+import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle } from "lucide-react";
 
 export default function Navbar({
   searchTerm,
@@ -10,6 +10,7 @@ export default function Navbar({
   onOpenAuth,
   onOpenProfile,
   onOpenChat,
+  onOpenHelp,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -229,6 +230,26 @@ export default function Navbar({
           >
             <MessageSquare size={16} />
             <span>Chat Hub</span>
+          </button>
+
+          {/* Help & Support Desk */}
+          <button
+            className="btn-secondary"
+            onClick={onOpenHelp}
+            title="Help Center, FAQs & 2-Way Admin Support"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(56, 189, 248, 0.12)",
+              border: "1px solid rgba(56, 189, 248, 0.35)",
+              color: "#38bdf8",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+            }}
+          >
+            <HelpCircle size={16} />
+            <span>Help Desk</span>
           </button>
 
           {/* Upload Button */}

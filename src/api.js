@@ -1059,4 +1059,12 @@ export const api = {
       return await request("/admin/threats/scan", { method: "POST" });
     }
   },
+
+  // 🌟 Hybrid Smart Help & Support Desk
+  getHelpFaqs: () => request("/help/faqs"),
+  askHelpQuestion: (payload) => request("/help/ask", { method: "POST", body: JSON.stringify(payload) }),
+  getHelpTicket: (code) => request(`/help/ticket/${encodeURIComponent(code)}`),
+  getMyHelpTickets: (ticketCodes = []) => request("/help/my-tickets", { method: "POST", body: JSON.stringify({ ticketCodes }) }),
+  adminReplyHelpTicket: (ticketCode, replyText) => request("/help/admin/reply", { method: "POST", body: JSON.stringify({ ticketCode, replyText }) }),
+  getAdminHelpTickets: (status = null) => request(`/help/admin/tickets${status ? `?status=${status}` : ""}`),
 };

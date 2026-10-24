@@ -49,6 +49,7 @@ const adminRoutes = require("./routes/admin");
 const noticesRoutes = require("./routes/notices");
 const p2pRoutes = require("./routes/p2p");
 const chatRoutes = require("./routes/chat");
+const helpRoutes = require("./routes/help");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -194,6 +195,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/notices", noticesRoutes);
 app.use("/api/p2p", p2pRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/help", helpRoutes);
 
 // Serve Client Web Application (Vite Dist) & Public Assets with proper PWA Cache-Control
 const distPath = path.join(__dirname, "../dist");
