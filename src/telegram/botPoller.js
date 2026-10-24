@@ -28,8 +28,19 @@ let isPollerRunning = false;
 let currentOffset = 0;
 const inFlightKeys = new Set();
 
+function normalizeNoteTitle(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/\.pdf$/i, "")
+    .replace(/[_\-–—]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 /**
- * Robust 4-Layer Single-Field Duplicate Detection Engine (Composite Index Free)
+ * Robust Multi-Layer Duplicate Detection Engine (Composite Index Free)
  */
 async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize, fileHash }) {
   if (!db) return null;
@@ -47,47 +58,47 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
       if (!snap.empty) return snap.docs[0];
     }
 
-    // 3. Single-field query by exact fileSize with in-memory name / title check (Zero composite index required)
-    if (fileSize && Number(fileSize) > 0) {
-      const snap = await db.collection("notes").where("fileSize", "==", Number(fileSize)).limit(10).get();
-      if (!snap.empty) {
-        const cleanName = (fileName || "").toLowerCase().trim();
-        const cleanTitle = (title || "").toLowerCase().trim();
-        for (const doc of snap.docs) {
-          const d = doc.data();
-          const docOrig = (d.originalName || "").toLowerCase().trim();
-          const docTitle = (d.title || "").toLowerCase().trim();
-          if (
-            (cleanName && docOrig && cleanName === docOrig) ||
-            (cleanTitle && docTitle && cleanTitle === docTitle) ||
-            (cleanName && docTitle && (cleanName.includes(docTitle) || docTitle.includes(cleanName)))
-          ) {
-            return doc;
-          }
-        }
-      }
-    }
-
-    // 4. Single-field query by exact originalName with in-memory size verification
+    // 3. Exact originalName query with generous tolerance (tolerates up to 3MB variance)
     if (fileName) {
-      const snap = await db.collection("notes").where("originalName", "==", fileName).limit(5).get();
+      const snap = await db.collection("notes").where("originalName", "==", fileName).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
           const d = doc.data();
-          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
             return doc;
           }
         }
       }
     }
 
-    // 5. Single-field query by exact title with in-memory size verification
+    // 4. Exact title query with generous size tolerance
     if (title) {
-      const snap = await db.collection("notes").where("title", "==", title).limit(5).get();
+      const snap = await db.collection("notes").where("title", "==", title).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
           const d = doc.data();
-          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+            return doc;
+          }
+        }
+      }
+    }
+
+    // 5. Normalized title matching (Catches punctuation and spacing differences)
+    const normInput = normalizeNoteTitle(title || fileName);
+    if (normInput) {
+      const allNotes = await db.collection("notes").limit(200).get();
+      for (const doc of allNotes.docs) {
+        const d = doc.data();
+        const normDoc = normalizeNoteTitle(d.title || d.originalName);
+        if (normDoc && normInput === normDoc) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
             return doc;
           }
         }

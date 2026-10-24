@@ -211,6 +211,17 @@ async function isUserAdmin(userId, c) {
 const processingDocIds = new Set();
 const processingMsgIds = new Set();
 
+function normalizeNoteTitle(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/\.pdf$/i, "")
+    .replace(/[_\-–—]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 /**
  * Checks if a note already exists in the Firestore database to prevent any duplicates
  * Single-field queries with in-memory matching (Zero composite index requirement)
@@ -258,26 +269,47 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
       }
     }
 
-    // 5. Single-field query by exact originalName with in-memory size verification
+    // 5. Query by originalName (tolerates up to 3MB variance for Telegram wrapper / re-compression)
     if (originalName) {
-      const snap = await db.collection("notes").where("originalName", "==", originalName).limit(5).get();
+      const snap = await db.collection("notes").where("originalName", "==", originalName).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
           const d = doc.data();
-          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
             return doc;
           }
         }
       }
     }
 
-    // 6. Single-field query by exact title with in-memory size verification
+    // 6. Query by exact title with generous size tolerance
     if (title) {
-      const snap = await db.collection("notes").where("title", "==", title).limit(5).get();
+      const snap = await db.collection("notes").where("title", "==", title).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
           const d = doc.data();
-          if (!fileSize || !d.fileSize || Math.abs(Number(d.fileSize) - Number(fileSize)) < 1024) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+            return doc;
+          }
+        }
+      }
+    }
+
+    // 7. Normalized title matching (Catches slight punctuation/spacing variations)
+    const normInput = normalizeNoteTitle(title || originalName);
+    if (normInput) {
+      const allNotes = await db.collection("notes").limit(200).get();
+      for (const doc of allNotes.docs) {
+        const d = doc.data();
+        const normDoc = normalizeNoteTitle(d.title || d.originalName);
+        if (normDoc && normInput === normDoc) {
+          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
             return doc;
           }
         }
@@ -544,7 +576,7 @@ function setupChannelSyncListeners(c) {
  * 1. telegramDocumentId (exact match)
  * 2. fileHash (SHA-256 match)
  * 3. telegramMessageId (exact match)
- * 4. originalName / title + fileSize match
+ * 4. normalizedTitle / originalName match (within 3MB metadata/wrapper variance)
  */
 async function deduplicateDatabaseNotes() {
   const db = getFirestoreDb();
@@ -552,34 +584,47 @@ async function deduplicateDatabaseNotes() {
 
   const snap = await db.collection("notes").get();
   const seenDocIds = new Map();
-  const seenFileKeys = new Map();
   const seenHashes = new Map();
   const seenTgMsgIds = new Map();
+  const seenNormTitles = new Map();
   let duplicateCleanedCount = 0;
 
   for (const doc of snap.docs) {
     const data = doc.data();
     const docIdStr = data.telegramDocumentId;
-    const fileKey = `${(data.originalName || data.title || "").toLowerCase().trim()}_${data.fileSize || 0}`;
+    const normTitle = normalizeNoteTitle(data.title || data.originalName);
 
     let isDup = false;
+    let reason = "";
+
     if (docIdStr && seenDocIds.has(docIdStr)) {
       isDup = true;
+      reason = "telegramDocumentId match";
     } else if (data.fileHash && seenHashes.has(data.fileHash)) {
       isDup = true;
+      reason = "fileHash match";
     } else if (data.telegramMessageId && Number(data.telegramMessageId) > 0 && seenTgMsgIds.has(Number(data.telegramMessageId))) {
       isDup = true;
-    } else if (data.fileSize && Number(data.fileSize) > 0 && seenFileKeys.has(fileKey)) {
-      isDup = true;
+      reason = "telegramMessageId match";
+    } else if (normTitle && seenNormTitles.has(normTitle)) {
+      const prev = seenNormTitles.get(normTitle);
+      const sizeDiff = Math.abs(Number(data.fileSize || 0) - Number(prev.fileSize || 0));
+      const maxDiff = Math.max(3 * 1024 * 1024, Number(data.fileSize || prev.fileSize || 0) * 0.25);
+      // If same normalized title and size difference is within 3MB (or either is dummy/test file < 5KB)
+      if (sizeDiff <= maxDiff || Number(data.fileSize || 0) < 5000 || Number(prev.fileSize || 0) < 5000) {
+        isDup = true;
+        reason = `Normalized title match ("${data.title}") with ${(sizeDiff / 1024).toFixed(1)} KB size variance`;
+      }
     }
 
     if (isDup) {
-      console.log(`[MTProto DEDUPLICATE] Removing duplicate note "${data.title}" (ID: ${doc.id})`);
+      console.log(`[MTProto DEDUPLICATE] Removing duplicate note "${data.title}" (ID: ${doc.id}) - Reason: ${reason}`);
       await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
         ...data,
         originalId: doc.id,
         collectionName: "notes",
         typeLabel: "Note (Duplicate Auto-Clean)",
+        dedupReason: reason,
         archivedAt: new Date().toISOString(),
         archivedBy: "Auto Deduplication Engine",
       }).catch(() => {});
@@ -590,7 +635,7 @@ async function deduplicateDatabaseNotes() {
       if (docIdStr) seenDocIds.set(docIdStr, doc.id);
       if (data.fileHash) seenHashes.set(data.fileHash, doc.id);
       if (data.telegramMessageId && Number(data.telegramMessageId) > 0) seenTgMsgIds.set(Number(data.telegramMessageId), doc.id);
-      if (data.fileSize && Number(data.fileSize) > 0) seenFileKeys.set(fileKey, doc.id);
+      if (normTitle) seenNormTitles.set(normTitle, { id: doc.id, ...data });
     }
   }
 
