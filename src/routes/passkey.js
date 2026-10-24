@@ -17,6 +17,7 @@ const { db } = require("../firebase");
 const { JWT_SECRET, authenticateToken, setAuthCookie } = require("../middleware/auth");
 const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
+const { isMaintenanceActive } = require("../middleware/maintenance");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -146,6 +147,15 @@ router.get("/register-options", authenticateToken, async (req, res) => {
       return res.status(404).json({ success: false, message: "User account not found in database." });
     }
 
+    // 🔒 Maintenance Mode Guard: Only administrators can enroll or modify passkeys
+    if (isMaintenanceActive() && !isAdmin) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        message: "Passkey registration is paused during scheduled server maintenance. Only platform administrators are permitted.",
+      });
+    }
+
     const userData = userDoc.data() || {};
     const existingPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
 
@@ -209,6 +219,15 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
     const { userDoc, effectiveUserId, isAdmin } = await resolveUserDocAndId(req);
     if (!userDoc || !userDoc.exists) {
       return res.status(404).json({ success: false, message: "User not found in database." });
+    }
+
+    // 🔒 Maintenance Mode Guard
+    if (isMaintenanceActive() && !isAdmin) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        message: "Passkey registration is paused during scheduled server maintenance. Only platform administrators are permitted.",
+      });
     }
 
     let challengeKey = `reg_${req.user.id}`;
@@ -487,8 +506,18 @@ router.post("/login-verify", async (req, res) => {
     const isMasterAdmin = Boolean(
       (MAIN_ADMIN_EMAIL && userRecord.email === MAIN_ADMIN_EMAIL) ||
       userRecord.isMainAdmin ||
-      userRecord.role === "admin"
+      userRecord.role === "admin" ||
+      userRecord.role === "half_admin"
     );
+
+    // 🔒 Maintenance Mode Guard: Block student login; allow only platform administrators
+    if (isMaintenanceActive() && !isMasterAdmin) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        message: "Student authentication is paused during scheduled server maintenance. Only platform administrators are allowed.",
+      });
+    }
 
     const payload = {
       id: userId,

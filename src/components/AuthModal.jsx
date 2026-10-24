@@ -43,8 +43,14 @@ const GoogleIcon = () => (
   </svg>
 );
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = "signin" }) {
-  const [tab, setTab] = useState(initialTab); // 'signin', 'signup', or 'forgot'
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onAuthSuccess,
+  initialTab = "signin",
+  isMaintenanceMode = false,
+}) {
+  const [tab, setTab] = useState(isMaintenanceMode ? "signin" : initialTab); // 'signin', 'signup', or 'forgot'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -356,14 +362,14 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
   useEffect(() => {
     if (isOpen) {
       resetAllFormFields();
-      setTab(initialTab);
+      setTab(isMaintenanceMode ? "signin" : initialTab);
       const hasPasskeyPref =
         typeof window !== "undefined" &&
         (localStorage.getItem("academic_vault_login_pref") === "passkey" ||
           localStorage.getItem("academic_vault_has_passkey") === "true");
       setLoginViewMode(hasPasskeyPref ? "passkey" : "password");
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, isMaintenanceMode]);
 
   // Clear any legacy session storage on mount to guarantee fresh forms
   useEffect(() => {
@@ -1015,6 +1021,11 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               <Fingerprint size={18} color="#38bdf8" />
               <span>Biometric Passkey Setup</span>
             </div>
+          ) : isMaintenanceMode ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#38bdf8", fontSize: "0.95rem" }}>
+              <ShieldCheck size={18} color="#38bdf8" />
+              <span>Administrator Access Only</span>
+            </div>
           ) : (
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
               <button
@@ -1664,6 +1675,28 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
                 </div>
 
                 <form onSubmit={handleSignIn} autoComplete="off">
+                  {isMaintenanceMode && (
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        marginBottom: "16px",
+                        borderRadius: "8px",
+                        background: "rgba(234, 179, 8, 0.12)",
+                        border: "1px solid rgba(234, 179, 8, 0.3)",
+                        color: "#fde047",
+                        fontSize: "0.82rem",
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "10px",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <div>
+                        <strong>Server Maintenance Mode Active:</strong> Student sign-in, account creation, and password recovery are currently paused. Only platform administrators may log in.
+                      </div>
+                    </div>
+                  )}
             <div className="form-group" id="field-group-signInIdentifier">
               <label className="form-label">Gmail Address or Admin Alias *</label>
               <FieldNotice fieldKey="signInIdentifier" />
@@ -1689,15 +1722,17 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
             <div className="form-group" id="field-group-signInPassword">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <label className="form-label">Password *</label>
-                <span
-                  style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
-                  onClick={() => {
-                    resetAllFormFields();
-                    setTab("forgot");
-                  }}
-                >
-                  Forgot password?
-                </span>
+                {!isMaintenanceMode && (
+                  <span
+                    style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
+                    onClick={() => {
+                      resetAllFormFields();
+                      setTab("forgot");
+                    }}
+                  >
+                    Forgot password?
+                  </span>
+                )}
               </div>
               <FieldNotice fieldKey="signInPassword" />
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -1762,18 +1797,20 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
               )}
             </button>
 
-            <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "16px", marginBottom: "8px" }}>
-              New student?{" "}
-              <span
-                style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
-                onClick={() => {
-                  resetAllFormFields();
-                  setTab("signup");
-                }}
-              >
-                Create Account
-              </span>
-            </p>
+            {!isMaintenanceMode && (
+              <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "16px", marginBottom: "8px" }}>
+                New student?{" "}
+                <span
+                  style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
+                  onClick={() => {
+                    resetAllFormFields();
+                    setTab("signup");
+                  }}
+                >
+                  Create Account
+                </span>
+              </p>
+            )}
 
             <div
               style={{

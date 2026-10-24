@@ -141,12 +141,31 @@ function isGmail(email) {
   return email.trim().toLowerCase().endsWith("@gmail.com");
 }
 
+const { isMaintenanceActive } = require("../middleware/maintenance");
+
+/**
+ * Maintenance Mode Guard:
+ * Blocks student operations (registration, forgot-password, non-admin login/logout) during maintenance.
+ */
+function rejectIfMaintenanceActive(res, actionLabel = "This action") {
+  if (isMaintenanceActive()) {
+    res.status(503).json({
+      success: false,
+      maintenance: true,
+      message: `${actionLabel} is temporarily paused while platform maintenance is active. Student operations are disabled. Only platform administrators are permitted.`,
+    });
+    return true;
+  }
+  return false;
+}
+
 /**
  * POST /api/auth/register-telegram-initiate
  * Initializes a student registration session for Telegram Bot verification.
  * NO email is sent via Brevo (saves transactional email quota).
  */
 router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { name, mobile, email, college, year, password } = req.body;
 
@@ -226,6 +245,7 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
  * and creates user document in Firestore (ZERO photo stored in DB).
  */
 router.post("/register-telegram-verify", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { regToken, mobile, email, otp } = req.body;
     if (!otp) {
@@ -407,6 +427,7 @@ router.get("/forgot-telegram-poll", async (req, res) => {
  * NO email is sent via Brevo (saves transactional email quota).
  */
 router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Password recovery")) return;
   try {
     const { mobile, email } = req.body;
     const cleanMobile = (mobile || "").replace(/\D/g, "").slice(-10);
@@ -482,6 +503,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
  * NO email is sent via Brevo.
  */
 router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Password recovery")) return;
   try {
     const { resetToken, mobile, email, otp, newPassword } = req.body;
     if (!otp || !newPassword) {
@@ -551,6 +573,7 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
  * Validates signup credentials and dispatches 6-digit registration OTP via Brevo SMTP
  */
 router.post("/register-request-otp", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { name, mobile, email, college, year, password } = req.body;
 
@@ -646,6 +669,7 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
  * Verifies the 6-digit signup OTP, creates user document in Firestore, and issues session JWT
  */
 router.post("/register-verify-otp", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { email, otp } = req.body;
     if (!email || !otp) {
@@ -743,6 +767,7 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
  * Optional: year
  */
 router.post("/register", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { name, mobile, email, college, year, password, otp } = req.body;
 
@@ -985,6 +1010,18 @@ router.post("/google", authLimiter, async (req, res) => {
       const doc = snap.docs[0];
       const userData = decryptUserObject(doc.data());
 
+      // MAINTENANCE MODE ENFORCEMENT: ONLY ADMINS PERMITTED
+      if (isMaintenanceActive()) {
+        const isAdmin = verifiedEmail === MAIN_ADMIN_EMAIL || ADMIN_ALIASES.includes(verifiedEmail) || userData.role === "admin" || userData.role === "half_admin";
+        if (!isAdmin) {
+          return res.status(503).json({
+            success: false,
+            maintenance: true,
+            message: "Platform is currently under scheduled maintenance. Student Google sign-in is paused. Only administrators are permitted.",
+          });
+        }
+      }
+
       if (userData.isBlocked) {
         return res.status(403).json({
           success: false,
@@ -1044,6 +1081,14 @@ router.post("/google", authLimiter, async (req, res) => {
     }
 
     // New User -> Prompt for Mobile Number & College to complete profile (NO OTP)
+    if (isMaintenanceActive()) {
+      return res.status(503).json({
+        success: false,
+        maintenance: true,
+        message: "Student registration is temporarily paused during scheduled maintenance. Only platform administrators are permitted.",
+      });
+    }
+
     return res.json({
       success: true,
       isNewUser: true,
@@ -1065,6 +1110,7 @@ router.post("/google", authLimiter, async (req, res) => {
  * Completes registration for new students signing up via Google
  */
 router.post("/google-complete-profile", authLimiter, async (req, res) => {
+  if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
     const { email, name, mobile, college, year, picture } = req.body;
     const cleanEmail = (email || "").trim().toLowerCase();
@@ -1349,6 +1395,18 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
+    // MAINTENANCE MODE ENFORCEMENT: ONLY ALL ADMINS ARE ALLOWED
+    if (isMaintenanceActive()) {
+      const isAdminRole = isMainAdminAlias || (userRecord && (userRecord.role === "admin" || userRecord.role === "half_admin" || userRecord.email === MAIN_ADMIN_EMAIL));
+      if (!isAdminRole) {
+        return res.status(503).json({
+          success: false,
+          maintenance: true,
+          message: "Platform is currently in maintenance mode. Student login is paused. Only platform administrators are permitted to sign in.",
+        });
+      }
+    }
+
     // Verify Student Password via bcrypt hash
     let passwordValid = false;
 
@@ -1543,6 +1601,15 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       return res.status(401).json({ success: false, message: "Invalid email/username or password." });
     }
 
+    // 🔒 Maintenance Mode Guard: Block regular students from OTP dispatch; allow only Admins & Half-Admins
+    const isTargetAdmin = Boolean(
+      isMainAdminAlias ||
+      (userRecord && (userRecord.role === "admin" || userRecord.role === "half_admin" || userRecord.email === MAIN_ADMIN_EMAIL))
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Student authentication is paused during scheduled server maintenance. Only platform administrators are allowed.");
+    }
+
     // Generate 6-digit OTP
     const otp = crypto.randomInt(100000, 999999).toString();
     const targetEmail = userRecord.email || inputIdentity;
@@ -1592,6 +1659,17 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
     }
 
     const { userRecord, docId, inputIdentity } = verification.data;
+
+    // 🔒 Maintenance Mode Guard: Block regular students from completing OTP login; allow only Admins & Half-Admins
+    const isTargetAdmin = Boolean(
+      inputIdentity === MAIN_ADMIN_EMAIL ||
+      cleanEmail === MAIN_ADMIN_EMAIL ||
+      ADMIN_ALIASES.includes(inputIdentity) ||
+      (userRecord && (userRecord.role === "admin" || userRecord.role === "half_admin" || userRecord.email === MAIN_ADMIN_EMAIL))
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Student authentication is paused during scheduled server maintenance. Only platform administrators are allowed.");
+    }
 
     // Record login activity in user's history (Zero bloated activities in DB)
     if (db && docId) {
@@ -1654,6 +1732,15 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
     const { email } = req.body;
     const cleanEmail = (email || "").trim().toLowerCase();
 
+    // 🔒 Maintenance Mode Guard
+    const isTargetAdmin = Boolean(
+      cleanEmail === MAIN_ADMIN_EMAIL ||
+      ADMIN_ALIASES.includes(cleanEmail)
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
+    }
+
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
@@ -1682,6 +1769,17 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
 
     const userDoc = snap.docs[0];
     const userData = userDoc.data();
+
+    // 🔒 Maintenance Mode Guard: Block regular students from password recovery; allow only Admins
+    const isTargetAdmin = Boolean(
+      cleanEmail === MAIN_ADMIN_EMAIL ||
+      ADMIN_ALIASES.includes(cleanEmail) ||
+      userData.role === "admin" ||
+      userData.role === "half_admin"
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
+    }
 
     if (userData.isBlocked) {
       return res.status(403).json({
@@ -1735,6 +1833,16 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+
+    // 🔒 Maintenance Mode Guard: Block regular students from completing password recovery
+    const isTargetAdmin = Boolean(
+      cleanEmail === MAIN_ADMIN_EMAIL ||
+      ADMIN_ALIASES.includes(cleanEmail)
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
+    }
+
     const verification = verifyOtp("forgot_password", cleanEmail, otp);
     if (!verification.valid) {
       return res.status(400).json({ success: false, message: verification.message });
@@ -1772,6 +1880,15 @@ router.post("/send-otp", authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     const cleanEmail = (email || "").trim().toLowerCase();
+
+    // 🔒 Maintenance Mode Guard
+    const isTargetAdmin = Boolean(
+      cleanEmail === MAIN_ADMIN_EMAIL ||
+      ADMIN_ALIASES.includes(cleanEmail)
+    );
+    if (isMaintenanceActive() && !isTargetAdmin) {
+      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
+    }
 
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
@@ -2115,6 +2232,21 @@ router.post("/logout", authenticateToken, async (req, res) => {
   try {
     const activeUser = req.user || req.body?.user;
     const userIdentifier = (activeUser?.email || activeUser?.id || "").toLowerCase().trim();
+
+    // 🔒 Maintenance Mode Guard: Block regular students from logout operations; allow only Admins & Half-Admins
+    const isRequesterAdmin = Boolean(
+      activeUser && (
+        activeUser.email === MAIN_ADMIN_EMAIL ||
+        ADMIN_ALIASES.includes((activeUser.email || "").toLowerCase().trim()) ||
+        activeUser.role === "admin" ||
+        activeUser.role === "half_admin"
+      )
+    );
+    if (isMaintenanceActive() && !isRequesterAdmin) {
+      clearAuthCookie(res, req);
+      return rejectIfMaintenanceActive(res, "Platform logout and student session operations are restricted during scheduled maintenance. Only platform administrators are permitted.");
+    }
+
     const logoutReason = req.body?.reason || req.body?.method || "Manual Session Logout";
     const isAutoLogout =
       String(logoutReason).toLowerCase().includes("inactivity") ||

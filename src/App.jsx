@@ -744,6 +744,7 @@ export default function App() {
           <AuthModal
             isOpen={isAuthOpen}
             initialTab={authInitialTab}
+            isMaintenanceMode={Boolean(maintenanceState?.active)}
             onClose={() => setIsAuthOpen(false)}
             onAuthSuccess={(user) => {
               setCurrentUser(user);
@@ -1583,6 +1584,7 @@ export default function App() {
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
         initialTab={authInitialTab}
+        isMaintenanceMode={Boolean(maintenanceState?.active)}
         onAuthSuccess={(user) => {
           setAutoLogoutNotice(null);
           setCurrentUser(user);

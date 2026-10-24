@@ -139,13 +139,17 @@ function checkMaintenanceMode(req, res, next) {
     return next();
   }
 
-  // 4. Always allow admin login & authentication routes so admins can log in
+  // 4. Allow admin login & authentication verification routes so administrators can authenticate
   if (
     req.path === "/api/auth/login" ||
     req.path === "/api/auth/verify" ||
     req.path === "/api/auth/logout" ||
     req.path === "/api/auth/google" ||
     req.path === "/api/auth/google-login" ||
+    req.path === "/api/auth/login-request-otp" ||
+    req.path === "/api/auth/login-verify-otp" ||
+    req.path === "/api/auth/passkey/login-options" ||
+    req.path === "/api/auth/passkey/login-verify" ||
     req.path.startsWith("/api/admin/")
   ) {
     return next();

@@ -31,6 +31,7 @@ const {
   getChatBotSettings,
   setChatHandlers,
 } = require("../services/chatAuditBotService");
+const { isMaintenanceActive } = require("../middleware/maintenance");
 
 const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
 
@@ -1026,6 +1027,30 @@ function initChatWebSocket(server) {
       try {
         ws.send(JSON.stringify({ type: "error", message: "Unauthorized WebSocket connection." }));
         ws.close(1008, "Unauthorized");
+      } catch (_) {}
+      return;
+    }
+
+    // 🔒 Maintenance Mode Guard: Block student WebSocket connections; allow only Administrators
+    const isWsAdmin = Boolean(
+      user.role === "admin" ||
+      user.role === "half_admin" ||
+      user.isMainAdmin ||
+      (MAIN_ADMIN_EMAIL && user.email === MAIN_ADMIN_EMAIL) ||
+      ["admin", "administrator", "root"].includes((user.email || "").toLowerCase().trim())
+    );
+
+    if (isMaintenanceActive() && !isWsAdmin) {
+      console.warn(`[CHAT-WS] 🛡️ Maintenance active: Rejected student socket connection for ${user.email || user.id}`);
+      try {
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            maintenance: true,
+            message: "Server maintenance mode is active. Real-time chat is paused for students. Only administrators are allowed.",
+          })
+        );
+        ws.close(1008, "Server Maintenance Active");
       } catch (_) {}
       return;
     }
