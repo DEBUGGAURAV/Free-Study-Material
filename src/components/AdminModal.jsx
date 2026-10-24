@@ -325,17 +325,15 @@ export default function AdminModal({
     enableMediaVaultUpload: true,
     enableDeletedMessageAlerts: true,
     enablePublicChatSync: true,
-    enableAdminDmMirror: true,
+    enableAdminDmMirror: false,
     chatRetentionDays: 7,
     privateRoomInactivityDays: 7,
-    supergroupId: "",
+    supergroupId: "-1004345492076",
     topics: {
-      podAudits: "",
-      mediaVault: "",
-      deletedMessages: "",
-      presence: "",
-      stealth: "",
-      publicChat: "",
+      podAudits: "31",
+      mediaVault: "33",
+      deletedMessages: "35",
+      publicChat: "39",
     },
   });
   const [chatTelemetry, setChatTelemetry] = useState(null);
@@ -343,6 +341,9 @@ export default function AdminModal({
   const [chatBotSaving, setChatBotSaving] = useState(false);
   const [chatBotActionMsg, setChatBotActionMsg] = useState("");
   const [showChatBotPanel, setShowChatBotPanel] = useState(false);
+  const [purgeStudentQuery, setPurgeStudentQuery] = useState("");
+  const [purgeStudentDays, setPurgeStudentDays] = useState(15);
+  const [purgeStudentLoading, setPurgeStudentLoading] = useState(false);
 
   // Turso LibSQL Database & Edge Cache State
   const [tursoStatus, setTursoStatus] = useState(null);
@@ -1566,12 +1567,46 @@ export default function AdminModal({
         year: editingStudent.year,
         role: editingStudent.role,
         permissions: editingStudent.permissions,
+        customInactivityDays: editingStudent.customInactivityDays,
+        neverPurge: editingStudent.neverPurge,
       });
       alert("✅ Student profile updated!");
       setEditingStudent(null);
       loadStudents();
     } catch (err) {
       alert("Failed to update student: " + err.message);
+    }
+  };
+
+  const handleAdjustStudentPurgeDays = async (student, action, days = 15) => {
+    try {
+      const res = await api.adjustUserInactivity(student.id, { action, days });
+      alert(`⏳ Student Inactivity Threshold Updated!\n\n${res.message || "Updated successfully"}\nScheduled Deletion: ${res.scheduledPurgeDate || "N/A"}`);
+      loadStudents();
+    } catch (err) {
+      alert("Failed to adjust purge days: " + err.message);
+    }
+  };
+
+  const handleAdjustStudentPurgeDaysByQuery = async (query, action, days = 15) => {
+    if (!query || !query.trim()) {
+      alert("Please enter a student email, mobile number, or ID first.");
+      return;
+    }
+    const clean = query.trim().toLowerCase();
+    const matched = (students || []).find(
+      (s) => s.id?.toLowerCase() === clean || s.email?.toLowerCase() === clean || s.mobile === clean
+    );
+    const targetId = matched ? matched.id : query.trim();
+    try {
+      setPurgeStudentLoading(true);
+      const res = await api.adjustUserInactivity(targetId, { action, days });
+      alert(`⏳ Student Inactivity Threshold Updated!\n\n👤 Student: ${res.userName || matched?.name || query}\n📧 Email: ${res.userEmail || matched?.email || query}\n⚡ ${res.message || "Updated successfully"}\n🗓️ Scheduled Deletion: ${res.scheduledPurgeDate || "N/A"}`);
+      loadStudents();
+    } catch (err) {
+      alert("Failed to adjust purge days: " + err.message);
+    } finally {
+      setPurgeStudentLoading(false);
     }
   };
 
@@ -3032,6 +3067,26 @@ export default function AdminModal({
                               {student.email}
                               {student.mobile && <span style={{ color: "var(--text-dim)", marginLeft: "6px" }}>• {student.mobile}</span>}
                             </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "3px" }}>
+                              <span
+                                style={{
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  padding: "1px 6px",
+                                  borderRadius: "4px",
+                                  background: student.neverPurge ? "rgba(52, 211, 153, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                                  color: student.neverPurge ? "#34d399" : "#fbbf24",
+                                  border: `1px solid ${student.neverPurge ? "rgba(52, 211, 153, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                                }}
+                              >
+                                ⏳ {student.neverPurge ? "🛡️ Immune (Never Purged)" : `${student.daysRemaining != null ? student.daysRemaining : 90}d to purge`}
+                              </span>
+                              {!student.neverPurge && student.scheduledPurgeDate && (
+                                <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                                  • Scheduled: {student.scheduledPurgeDate}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
                             <div>{student.college || "General University"}</div>
@@ -3093,6 +3148,49 @@ export default function AdminModal({
                           </td>
                           <td style={{ padding: "12px 16px", textAlign: "right" }}>
                             <div style={{ display: "inline-flex", gap: "6px" }}>
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDays(student, "increase", 15)}
+                                className="btn-icon"
+                                style={{ width: "32px", height: "32px", background: "rgba(34, 197, 94, 0.15)", color: "#4ade80", fontSize: "0.68rem", fontWeight: 800 }}
+                                title="Add +15 Days Grace to Purge Inactivity Limit"
+                              >
+                                +15d
+                              </button>
+
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDays(student, "decrease", 15)}
+                                className="btn-icon"
+                                style={{ width: "32px", height: "32px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", fontSize: "0.68rem", fontWeight: 800 }}
+                                title="Reduce 15 Days from Purge Inactivity Limit"
+                              >
+                                -15d
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  const input = window.prompt(
+                                    `Adjust purge / inactivity days for ${student.name} (${student.email}):\n\nEnter number of days (e.g. 60) or relative (+30, -15), or type 'never' for permanent immunity:`,
+                                    "30"
+                                  );
+                                  if (!input) return;
+                                  const clean = input.trim().toLowerCase();
+                                  if (clean === "never") {
+                                    handleAdjustStudentPurgeDays(student, "set", 9999);
+                                  } else if (clean.startsWith("+")) {
+                                    handleAdjustStudentPurgeDays(student, "increase", Math.abs(parseInt(clean, 10)) || 15);
+                                  } else if (clean.startsWith("-")) {
+                                    handleAdjustStudentPurgeDays(student, "decrease", Math.abs(parseInt(clean, 10)) || 15);
+                                  } else {
+                                    handleAdjustStudentPurgeDays(student, "set", parseInt(clean, 10) || 30);
+                                  }
+                                }}
+                                className="btn-icon"
+                                style={{ width: "32px", height: "32px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontSize: "0.68rem", fontWeight: 800 }}
+                                title="Set Custom Inactivity / Purge Days or Grant Immunity"
+                              >
+                                ⏱️
+                              </button>
+
                               <button
                                 onClick={() => handleToggleBlock(student)}
                                 className="btn-icon"
@@ -8350,6 +8448,143 @@ export default function AdminModal({
                             <span>{chatBotLoading ? "Purging..." : `🧹 Sweep Inactive Pods (${chatBotSettings.privateRoomInactivityDays || 7}d) Now`}</span>
                           </button>
                         </div>
+
+                        {/* Box 3: Student Inactivity & Auto-Purge Days Controller */}
+                        <div style={{ gridColumn: "1 / -1", background: "rgba(0, 0, 0, 0.4)", border: "1px solid rgba(56, 189, 248, 0.25)", borderRadius: "10px", padding: "14px", marginTop: "4px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "8px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "#38bdf8" }}>
+                                ⚡ Student Account Inactivity &amp; Auto-Purge Days Controller
+                              </span>
+                              <span style={{ fontSize: "0.68rem", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                                Live Bot &amp; Admin Sync
+                              </span>
+                            </div>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                              Increase, decrease, or set purge retention for any specific student
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                            <div style={{ flex: 1, minWidth: "220px" }}>
+                              <input
+                                type="text"
+                                placeholder="Enter student email, mobile, or student ID..."
+                                value={purgeStudentQuery}
+                                onChange={(e) => setPurgeStudentQuery(e.target.value)}
+                                style={{
+                                  width: "100%",
+                                  padding: "7px 12px",
+                                  borderRadius: "6px",
+                                  background: "rgba(255, 255, 255, 0.08)",
+                                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                                  color: "#fff",
+                                  fontSize: "0.8rem",
+                                }}
+                              />
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="3650"
+                                value={purgeStudentDays}
+                                onChange={(e) => setPurgeStudentDays(Number(e.target.value) || 15)}
+                                style={{
+                                  width: "55px",
+                                  padding: "7px 6px",
+                                  borderRadius: "6px",
+                                  background: "rgba(255, 255, 255, 0.08)",
+                                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                                  color: "#fff",
+                                  fontSize: "0.8rem",
+                                  textAlign: "center",
+                                  fontWeight: 800,
+                                }}
+                                title="Days step"
+                              />
+                              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Days</span>
+                            </div>
+
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDaysByQuery(purgeStudentQuery, "increase", purgeStudentDays)}
+                                disabled={purgeStudentLoading}
+                                style={{
+                                  padding: "7px 12px",
+                                  borderRadius: "6px",
+                                  background: "rgba(34, 197, 94, 0.2)",
+                                  border: "1px solid rgba(34, 197, 94, 0.4)",
+                                  color: "#4ade80",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                +{purgeStudentDays}d Extend
+                              </button>
+
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDaysByQuery(purgeStudentQuery, "decrease", purgeStudentDays)}
+                                disabled={purgeStudentLoading}
+                                style={{
+                                  padding: "7px 12px",
+                                  borderRadius: "6px",
+                                  background: "rgba(239, 68, 68, 0.2)",
+                                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                                  color: "#f87171",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                -{purgeStudentDays}d Reduce
+                              </button>
+
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDaysByQuery(purgeStudentQuery, "set", purgeStudentDays)}
+                                disabled={purgeStudentLoading}
+                                style={{
+                                  padding: "7px 12px",
+                                  borderRadius: "6px",
+                                  background: "rgba(56, 189, 248, 0.2)",
+                                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                                  color: "#38bdf8",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                Set to {purgeStudentDays}d
+                              </button>
+
+                              <button
+                                onClick={() => handleAdjustStudentPurgeDaysByQuery(purgeStudentQuery, "toggle_immunity", 9999)}
+                                disabled={purgeStudentLoading}
+                                style={{
+                                  padding: "7px 12px",
+                                  borderRadius: "6px",
+                                  background: "rgba(167, 139, 250, 0.2)",
+                                  border: "1px solid rgba(167, 139, 250, 0.4)",
+                                  color: "#c084fc",
+                                  fontSize: "0.74rem",
+                                  fontWeight: 800,
+                                  cursor: "pointer",
+                                }}
+                                title="Toggle immunity (Student will never be purged)"
+                              >
+                                🛡️ Never Purge
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -8451,7 +8686,7 @@ export default function AdminModal({
                             <span style={{ color: "var(--text-dim)" }}>Supergroup ID:</span>
                             <input
                               type="text"
-                              value={chatBotSettings.supergroupId || "-1003943130538"}
+                              value={chatBotSettings.supergroupId || "-1004345492076"}
                               onChange={(e) => setChatBotSettings((prev) => ({ ...prev, supergroupId: e.target.value }))}
                               style={{ width: "135px", padding: "3px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem" }}
                             />
@@ -8684,29 +8919,31 @@ export default function AdminModal({
                             {/* Message Header (Sender Info) */}
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "4px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <span style={{ fontWeight: 800, fontSize: "0.82rem", color: isAdminMsg ? "#fbbf24" : userColor }}>
-                                  {msg.sender?.name || "Student"}
-                                </span>
-                                {isAdminMsg ? (
+                                {isAdminMsg || msg.sender?.id?.startsWith("sys_admin_") || msg.sender?.isOfficialAdmin || (msg.sender?.name && /admin/i.test(msg.sender.name)) || msg.telegramMsgId ? (
                                   <span
                                     style={{
-                                      fontSize: "0.65rem",
+                                      fontSize: "0.68rem",
                                       fontWeight: 800,
-                                      padding: "1px 5px",
+                                      padding: "2px 8px",
                                       borderRadius: "4px",
                                       background: "linear-gradient(135deg, #ef4444, #f59e0b)",
                                       color: "#000",
                                       display: "inline-flex",
                                       alignItems: "center",
-                                      gap: "3px",
+                                      gap: "4px",
                                     }}
                                   >
-                                    <Crown size={10} /> ADMIN
+                                    <Crown size={11} /> 👑 OFFICIAL ADMIN
                                   </span>
                                 ) : (
-                                  <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
-                                    {msg.sender?.branch || "General"} {msg.sender?.year ? `• ${msg.sender.year}` : ""}
-                                  </span>
+                                  <>
+                                    <span style={{ fontWeight: 800, fontSize: "0.82rem", color: userColor }}>
+                                      {msg.sender?.name || "Student"}
+                                    </span>
+                                    <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                                      {msg.sender?.branch || "General"} {msg.sender?.year ? `• ${msg.sender.year}` : ""}
+                                    </span>
+                                  </>
                                 )}
                               </div>
 
@@ -10255,6 +10492,60 @@ export default function AdminModal({
                         🎓 <strong>Student (Standard / Revoked):</strong> Standard user permissions. Can view and download approved notes and upload study materials. Admin dashboard access is revoked.
                       </span>
                     )}
+                  </div>
+                </div>
+
+                {/* Inactivity & Auto-Purge Days Control */}
+                <div className="form-group" style={{ background: "rgba(0,0,0,0.25)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label className="form-label" style={{ margin: 0, fontWeight: 700 }}>⏳ Inactivity &amp; Account Purge Limit</label>
+                    <label style={{ fontSize: "0.72rem", color: "#34d399", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontWeight: 700 }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingStudent.neverPurge || editingStudent.customInactivityDays >= 9999)}
+                        onChange={(e) => {
+                          const immune = e.target.checked;
+                          setEditingStudent((prev) => ({
+                            ...prev,
+                            neverPurge: immune,
+                            customInactivityDays: immune ? 9999 : 90,
+                          }));
+                        }}
+                      />
+                      🛡️ Permanent Immunity Shield
+                    </label>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "6px" }}>
+                    <input
+                      type="number"
+                      className="form-input"
+                      disabled={editingStudent.neverPurge || editingStudent.customInactivityDays >= 9999}
+                      value={editingStudent.neverPurge ? 9999 : (editingStudent.customInactivityDays || 90)}
+                      onChange={(e) => setEditingStudent((prev) => ({ ...prev, customInactivityDays: Number(e.target.value) || 90 }))}
+                      style={{ width: "90px" }}
+                    />
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Days</span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "5px 10px", fontSize: "0.74rem" }}
+                      disabled={editingStudent.neverPurge}
+                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: (prev.customInactivityDays || 90) + 15 }))}
+                    >
+                      +15 Days
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ padding: "5px 10px", fontSize: "0.74rem" }}
+                      disabled={editingStudent.neverPurge}
+                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: Math.max(1, (prev.customInactivityDays || 90) - 15) }))}
+                    >
+                      -15 Days
+                    </button>
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "6px" }}>
+                    Accounts with 0 logins beyond this limit are safely archived &amp; purged.
                   </div>
                 </div>
 

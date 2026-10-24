@@ -210,13 +210,80 @@ function injectIncomingPublicMessage(newMsg) {
   console.log(`[CHAT-SYNC] 📥 Synced Telegram message into Public Chat Hall: "${newMsg.text || newMsg.fileName}"`);
 }
 
+/**
+ * ✏️ Inbound Telegram Edit Syncer
+ * Updates message in memory, broadcasts message_edited via WebSocket, updates Firestore and Turso.
+ */
+function editPublicMessageFromTelegram(telegramMsgId, newText) {
+  if (!activeMessages.has(PUBLIC_ROOM_ID)) return false;
+  const msgs = activeMessages.get(PUBLIC_ROOM_ID);
+  const msg = msgs.find((m) => String(m.telegramMsgId) === String(telegramMsgId) || m.id === String(telegramMsgId));
+  if (!msg) return false;
+
+  const sanitized = (newText || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+  msg.text = sanitized;
+  msg.isEdited = true;
+  msg.editedAt = new Date().toISOString();
+
+  broadcastToRoom(PUBLIC_ROOM_ID, {
+    type: "message_edited",
+    messageId: msg.id,
+    newText: msg.text,
+    editedAt: msg.editedAt,
+  });
+
+  if (db) {
+    db.collection("chat_messages").doc(msg.id).update({
+      text: msg.text,
+      isEdited: true,
+      editedAt: msg.editedAt,
+    }).catch(() => {});
+  }
+  return true;
+}
+
+/**
+ * 🗑️ Inbound Telegram Delete Syncer
+ * Marks message as deleted in memory, broadcasts message_deleted via WebSocket, updates Firestore.
+ */
+function deletePublicMessageFromTelegram(telegramMsgId) {
+  if (!activeMessages.has(PUBLIC_ROOM_ID)) return false;
+  const msgs = activeMessages.get(PUBLIC_ROOM_ID);
+  const msg = msgs.find((m) => String(m.telegramMsgId) === String(telegramMsgId) || m.id === String(telegramMsgId));
+  if (!msg) return false;
+
+  msg.isDeleted = true;
+  msg.text = "🗑️ This message was deleted";
+  msg.fileUrl = null;
+
+  broadcastToRoom(PUBLIC_ROOM_ID, {
+    type: "message_deleted",
+    messageId: msg.id,
+    text: msg.text,
+  });
+
+  if (db) {
+    db.collection("chat_messages").doc(msg.id).update({
+      text: msg.text,
+      isDeleted: true,
+      deletedAt: new Date().toISOString(),
+    }).catch(() => {});
+  }
+  return true;
+}
+
 setChatHandlers({
   injectIncomingPublicMessage,
+  editPublicMessage: editPublicMessageFromTelegram,
+  deletePublicMessage: deletePublicMessageFromTelegram,
   getActiveUsers: getActiveUsersList,
   blockUser: handleBlockUserFromTelegram,
   unblockUser: handleUnblockUserFromTelegram,
   getBlockedUsers: getBlockedUsersList,
   purgePublicChat: handlePurgePublicChatFromTelegram,
+  setRetentionDays: (days) => {
+    runRetentionPrune(days);
+  },
 });
 
 let lastPruneStats = {

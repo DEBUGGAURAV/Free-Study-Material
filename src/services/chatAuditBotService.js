@@ -19,17 +19,21 @@ const BOT_TOKEN = (process.env.TELEGRAM_CHAT_AUDIT_BOT_TOKEN || "").trim();
 let activeAdminId = (process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID || "").trim();
 const BOT_USERNAME = "fsm_chat_bot";
 
-let supergroupId = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "").trim();
+let supergroupId = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076").trim();
 let auditTopics = {
-  podAudits: process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "31",
-  mediaVault: process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "33",
-  deletedMessages: process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35",
-  tamperAudit: process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35",
-  forensicPurge: process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "72",
-  presence: process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "37",
-  stealth: process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "39",
-  publicChat: process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "39",
+  podAudits: (process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "31").trim(),
+  mediaVault: (process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "33").trim(),
+  deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35").trim(),
+  tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
+  forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "35").trim(),
+  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "35").trim(),
+  stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "39").trim(),
+  publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "39").trim(),
 };
+
+// Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID
+const telegramToWebMsgMap = new Map();
+const webToTelegramMsgMap = new Map();
 
 let pollerRunning = false;
 let lastUpdateId = 0;
@@ -46,11 +50,11 @@ let chatBotSettings = {
   enableMediaVaultUpload: true,
   enableDeletedMessageAlerts: true,
   enablePublicChatSync: true,
-  enableAdminDmMirror: true,
+  enableAdminDmMirror: false, // 🛡️ Keep Admin DM clean: Do NOT dump public chat messages into 1-on-1 DM
   chatRetentionDays: 7, // Delete messages older than X days
   privateRoomInactivityDays: 7, // Purge private rooms with no activity for 7 days
   adminId: activeAdminId || "",
-  supergroupId: supergroupId || "",
+  supergroupId: supergroupId || "-1004345492076",
   topics: {
     podAudits: auditTopics.podAudits,
     mediaVault: auditTopics.mediaVault,
@@ -67,6 +71,14 @@ let chatBotSettings = {
 // Registered external handlers from chat.js
 let chatHandlers = {
   injectIncomingPublicMessage: null,
+  editPublicMessage: null,
+  deletePublicMessage: null,
+  getActiveUsers: null,
+  blockUser: null,
+  unblockUser: null,
+  getBlockedUsers: null,
+  purgePublicChat: null,
+  setRetentionDays: null,
 };
 
 function setChatHandlers(handlers = {}) {
@@ -82,22 +94,31 @@ async function initChatBotSettings() {
     const doc = await dbRef.collection("settings").doc("chat_bot").get();
     if (doc.exists) {
       const data = doc.data() || {};
+      const savedTopics = data.topics || {};
       chatBotSettings = {
         ...chatBotSettings,
         ...data,
+        supergroupId: (data.supergroupId && data.supergroupId.trim()) || supergroupId || "-1004345492076",
         topics: {
-          ...chatBotSettings.topics,
-          ...(data.topics || {}),
+          podAudits: (savedTopics.podAudits && savedTopics.podAudits.trim()) || "31",
+          mediaVault: (savedTopics.mediaVault && savedTopics.mediaVault.trim()) || "33",
+          deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || "35",
+          tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
+          forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "35",
+          presence: (savedTopics.presence && savedTopics.presence.trim()) || "35",
+          stealth: (savedTopics.stealth && savedTopics.stealth.trim()) || "39",
+          publicChat: (savedTopics.publicChat && savedTopics.publicChat.trim()) || "39",
         },
       };
       if (chatBotSettings.adminId) {
         activeAdminId = String(chatBotSettings.adminId).trim();
       }
-      if (chatBotSettings.supergroupId) supergroupId = chatBotSettings.supergroupId;
-      if (chatBotSettings.topics) {
-        auditTopics = { ...auditTopics, ...chatBotSettings.topics };
-      }
-      console.log("[CHAT-AUDIT-BOT] ⚙️ Loaded settings from Firestore doc settings/chat_bot.");
+      supergroupId = chatBotSettings.supergroupId;
+      auditTopics = { ...chatBotSettings.topics };
+      console.log("[CHAT-AUDIT-BOT] ⚙️ Loaded settings from Firestore doc settings/chat_bot:", {
+        supergroupId,
+        topics: auditTopics,
+      });
     } else {
       await dbRef.collection("settings").doc("chat_bot").set(chatBotSettings, { merge: true });
     }
@@ -405,22 +426,38 @@ async function processUpdate(update) {
         return;
       }
 
-      if (data === "cmd_inactive") {
+      if (data === "cmd_clearchat") {
+        if (typeof chatHandlers.purgePublicChat === "function") {
+          await chatHandlers.purgePublicChat({ name: "Admin (Telegram Bot)", ip: "Telegram Bot Direct" });
+          await callTelegram("sendMessage", {
+            chat_id: chatId,
+            text: "🗑️ <b>Public Community Chat Purged:</b>\n\nAll messages have been purged from memory, Turso LibSQL, and database.",
+            parse_mode: "HTML",
+          });
+        }
+        return;
+      }
+
+      if (data === "cmd_purgedays" || data === "cmd_inactive") {
+        const curChatDays = chatBotSettings.chatRetentionDays || 7;
+        const curPodDays = chatBotSettings.privateRoomInactivityDays || 7;
+        let defAccountDays = 90;
+        try {
+          const { getDefaultInactivityDays } = require("./accountPurgeService");
+          defAccountDays = getDefaultInactivityDays();
+        } catch (_) {}
+
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: `⏳ <b>[STUDENT INACTIVITY & DATABASE DELETION POLICY]</b>\n\n` +
-            `1️⃣ <b>30-Minute Chat Idle Timeout:</b>\n` +
-            `• If a student remains idle in chat without interaction for 30 minutes, their WebSocket session is automatically disconnected to free server RAM and CPU.\n` +
-            `• Instant report is dispatched to you with student's Name, Email, IP, and Room.\n\n` +
-            `2️⃣ <b>90-Day Continuous Inactivity Database Purge:</b>\n` +
-            `• Student accounts with no login activity for over 90 continuous days are permanently deleted from database.\n` +
-            `• Their uploaded notes are safely preserved for other university scholars in the academic vault.\n\n` +
-            `3️⃣ <b>Direct Chat Bot Commands:</b>\n` +
-            `• <code>/active</code> - Live active online students\n` +
-            `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
-            `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
-            `• <code>/blocked</code> - List restricted students\n` +
-            `• <code>/clearchat</code> - Purge public chat hall`,
+          text: `⏱️ <b>[RETENTION & PURGE POLICIES]</b>\n\n` +
+            `• <b>Chat Messages Retention:</b> <b>${curChatDays} Days</b>\n` +
+            `• <b>Private Pods Inactivity:</b> <b>${curPodDays} Days</b>\n` +
+            `• <b>Student Account Inactivity:</b> <b>${defAccountDays} Days</b>\n\n` +
+            `<b>Direct Commands:</b>\n` +
+            `• <code>/purgedays 14</code> - Set global chat retention to 14 days\n` +
+            `• <code>/purgedays student@email.com 60</code> - Set custom days for student\n` +
+            `• <code>/extend student@email.com 30</code> - Add +30 days grace\n` +
+            `• <code>/decrease student@email.com 15</code> - Reduce 15 days`,
           parse_mode: "HTML",
         });
         return;
@@ -496,8 +533,9 @@ async function processUpdate(update) {
       }
     }
 
-    // 2. Incoming messages (Text, Photo, Document)
-    const message = update.message;
+    // 2. Incoming messages (Text, Photo, Document, Edited Message)
+    const isEdit = Boolean(update.edited_message);
+    const message = update.message || update.edited_message;
     if (!message) return;
 
     // Ignore messages sent by bots (including ourselves) to eliminate infinite loops
@@ -508,29 +546,88 @@ async function processUpdate(update) {
     const text = (message.text || "").trim();
     const caption = (message.caption || "").trim();
     const threadId = message.message_thread_id ? String(message.message_thread_id) : null;
-    const fromName = `${message.from?.first_name || ""} ${message.from?.last_name || ""}`.trim() || message.from?.username || "Admin";
     const fromId = String(message.from?.id || "");
 
-    // Command: /start in DM
-    if (chatType === "private" && (text === "/start" || text.startsWith("/start"))) {
-      activeAdminId = String(chatId);
-      chatBotSettings.adminId = String(chatId);
-      updateEnvFile("TELEGRAM_CHAT_AUDIT_ADMIN_ID", String(chatId));
-      if (dbRef) {
-        dbRef.collection("settings").doc("chat_bot").set({ adminId: String(chatId) }, { merge: true }).catch(() => {});
+    // ✏️ A. REAL-TIME EDIT FROM TELEGRAM TO WEB PUBLIC CHAT
+    if (isEdit) {
+      const isPublicChatTopic = auditTopics.publicChat && threadId === String(auditTopics.publicChat);
+      const isDirectChat = chatType === "private";
+
+      if (isPublicChatTopic || isDirectChat) {
+        const teleMsgId = message.message_id;
+        const newContent = text || caption || "";
+        if (typeof chatHandlers.editPublicMessage === "function") {
+          const edited = chatHandlers.editPublicMessage(teleMsgId, newContent);
+          if (edited) {
+            console.log(`[CHAT-SYNC] ✏️ Synced Telegram message edit (#${teleMsgId}) into Web Public Chat: "${newContent}"`);
+          }
+        }
       }
-      console.log(`[CHAT-AUDIT-BOT] 🔗 Auto-linked Admin Telegram ID: ${chatId} from /start DM.`);
+      return;
+    }
+
+    // 🗑️ B. DELETE MESSAGE FROM TELEGRAM AND WEB (/del or /delete)
+    if (text === "/del" || text === "/delete" || text.startsWith("/del ") || text.startsWith("/delete ")) {
+      let targetTeleMsgId = null;
+      if (message.reply_to_message && message.reply_to_message.message_id) {
+        targetTeleMsgId = message.reply_to_message.message_id;
+      } else {
+        const query = text.replace(/^\/(del|delete)\s*/i, "").trim();
+        if (query) targetTeleMsgId = query;
+      }
+
+      if (!targetTeleMsgId) {
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: "ℹ️ <b>Usage:</b> Reply to any message with <code>/del</code> to delete it from both Telegram and Web Public Chat.",
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      // Delete message from Telegram
+      await callTelegram("deleteMessage", {
+        chat_id: chatId,
+        message_id: targetTeleMsgId,
+      });
+
+      // Delete the /del command message itself
+      await callTelegram("deleteMessage", {
+        chat_id: chatId,
+        message_id: message.message_id,
+      });
+
+      // Delete from Web Public Chat in real-time
+      if (typeof chatHandlers.deletePublicMessage === "function") {
+        chatHandlers.deletePublicMessage(targetTeleMsgId);
+        console.log(`[CHAT-SYNC] 🗑️ Deleted message (#${targetTeleMsgId}) in Web Public Chat via Telegram /del command.`);
+      }
+      return;
+    }
+
+    // 🤖 C. CLEAN COMMANDS MANUAL (/start and /help)
+    if (text === "/start" || text.startsWith("/start") || text === "/help" || text === "/commands") {
+      if (chatType === "private") {
+        activeAdminId = String(chatId);
+        chatBotSettings.adminId = String(chatId);
+        updateEnvFile("TELEGRAM_CHAT_AUDIT_ADMIN_ID", String(chatId));
+        if (dbRef) {
+          dbRef.collection("settings").doc("chat_bot").set({ adminId: String(chatId) }, { merge: true }).catch(() => {});
+        }
+      }
 
       await callTelegram("sendMessage", {
         chat_id: chatId,
-        text: `🛡️ <b>Free Study Material Direct Admin Bot Connected!</b>\n\n` +
-          `✅ <b>Admin Telegram ID Linked:</b> <code>${chatId}</code>\n\n` +
-          `🚀 <b>Direct 1-on-1 Bot Mode Active (No Supergroup Needed):</b>\n` +
-          `• <b>Instant Inactivity Alerts:</b> 30-min idle timeouts with database deletion countdown arrive directly here.\n` +
-          `• <b>Block/Unblock Audits:</b> Student restrictions with live online users list come straight to this chat.\n` +
-          `• <b>Direct Moderation:</b> Block/unblock students, view live active users, or clear chat right from this bot.\n` +
-          `• <b>Two-Way Public Chat Sync:</b> Any text, photo, or PDF you send without a slash (/) streams into the web Public Chat Hall with your <code>🛡️ Admin</code> badge!\n\n` +
-          `📌 <i>Supergroup with topics is completely optional. You can manage everything right here!</i>`,
+        message_thread_id: threadId,
+        text: `🤖 <b>@${BOT_USERNAME} Command Center</b>\n\n` +
+          `• <code>/active</code> - Live active online students\n` +
+          `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
+          `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
+          `• <code>/blocked</code> - List restricted students\n` +
+          `• <code>/clearchat</code> - Purge public chat hall\n\n` +
+          `💬 <i>Type any message, photo, or PDF to broadcast directly to Public Hall with your official Admin badge! Reply to any message with <code>/del</code> to delete it.</i>\n\n` +
+          `⏱️ <i>Purge Days Control: <code>/purgedays &lt;email&gt; &lt;+days|-days&gt;</code></i>`,
         parse_mode: "HTML",
         reply_markup: {
           inline_keyboard: [
@@ -539,8 +636,8 @@ async function processUpdate(update) {
               { text: "📋 Blocked Students", callback_data: "cmd_blocked" },
             ],
             [
-              { text: "⏳ Inactivity & Deletion Policy", callback_data: "cmd_inactive" },
-              { text: "📖 Help & Commands", callback_data: "cmd_inactive" },
+              { text: "🗑️ Purge Public Chat", callback_data: "cmd_clearchat" },
+              { text: "⏱️ Purge Days", callback_data: "cmd_purgedays" },
             ],
           ],
         },
@@ -566,6 +663,7 @@ async function processUpdate(update) {
       }
       await callTelegram("sendMessage", {
         chat_id: chatId,
+        message_thread_id: threadId,
         text: msg,
         parse_mode: "HTML",
         reply_markup: {
@@ -586,16 +684,18 @@ async function processUpdate(update) {
       if (!query) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
+          message_thread_id: threadId,
           text: "ℹ️ <b>Usage:</b> <code>/block student_email_or_id</code>\n\nExample: <code>/block student@gmail.com</code>",
           parse_mode: "HTML",
         });
         return;
       }
       if (typeof chatHandlers.blockUser === "function") {
-        const res = await chatHandlers.blockUser(query, { name: fromName, ip: "Telegram Bot Direct" });
+        const res = await chatHandlers.blockUser(query, { name: "Administrator", ip: "Telegram Bot Direct" });
         if (res.success) {
           await callTelegram("sendMessage", {
             chat_id: chatId,
+            message_thread_id: threadId,
             text: `🚫 <b>Student Restricted from Chat Successfully:</b>\n\n` +
               `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
               `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
@@ -606,6 +706,7 @@ async function processUpdate(update) {
         } else {
           await callTelegram("sendMessage", {
             chat_id: chatId,
+            message_thread_id: threadId,
             text: `⚠️ <b>Block Failed:</b> ${escapeHtml(res.message || "Student not found.")}`,
             parse_mode: "HTML",
           });
@@ -620,16 +721,18 @@ async function processUpdate(update) {
       if (!query) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
+          message_thread_id: threadId,
           text: "ℹ️ <b>Usage:</b> <code>/unblock student_email_or_id</code>\n\nExample: <code>/unblock student@gmail.com</code>",
           parse_mode: "HTML",
         });
         return;
       }
       if (typeof chatHandlers.unblockUser === "function") {
-        const res = await chatHandlers.unblockUser(query, { name: fromName, ip: "Telegram Bot Direct" });
+        const res = await chatHandlers.unblockUser(query, { name: "Administrator", ip: "Telegram Bot Direct" });
         if (res.success) {
           await callTelegram("sendMessage", {
             chat_id: chatId,
+            message_thread_id: threadId,
             text: `✅ <b>Student Unblocked Successfully:</b>\n\n` +
               `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
               `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
@@ -639,6 +742,7 @@ async function processUpdate(update) {
         } else {
           await callTelegram("sendMessage", {
             chat_id: chatId,
+            message_thread_id: threadId,
             text: `⚠️ <b>Unblock Failed:</b> ${escapeHtml(res.message || "Student not found.")}`,
             parse_mode: "HTML",
           });
@@ -653,6 +757,7 @@ async function processUpdate(update) {
       if (blocked.length === 0) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
+          message_thread_id: threadId,
           text: "✅ <b>No Students Currently Blocked:</b>\n\nAll registered students currently have active chat permissions.",
           parse_mode: "HTML",
         });
@@ -665,6 +770,7 @@ async function processUpdate(update) {
         ]);
         await callTelegram("sendMessage", {
           chat_id: chatId,
+          message_thread_id: threadId,
           text: `🚫 <b>RESTRICTED / BLOCKED STUDENTS (${blocked.length}):</b>\n\n${lines}\n\n<i>Tap button below or use /unblock &lt;email&gt;</i>`,
           parse_mode: "HTML",
           reply_markup: { inline_keyboard: inlineKb },
@@ -673,129 +779,120 @@ async function processUpdate(update) {
       return;
     }
 
-    // Direct Admin Command: /inactive
-    if (text === "/inactive" || text === "/timeouts") {
-      await callTelegram("sendMessage", {
-        chat_id: chatId,
-        text: `⏳ <b>[STUDENT INACTIVITY & DATABASE DELETION POLICY]</b>\n\n` +
-          `1️⃣ <b>30-Minute Chat Idle Timeout:</b>\n` +
-          `• If a student remains idle in chat without interaction for 30 minutes, their WebSocket session is automatically disconnected to free server RAM and CPU.\n` +
-          `• Instant security report is dispatched to you with student's Name, Email, IP, and Room.\n\n` +
-          `2️⃣ <b>90-Day Continuous Inactivity Database Purge:</b>\n` +
-          `• Student accounts with no login activity for over 90 continuous days are permanently deleted from database.\n` +
-          `• Uploaded notes are safely preserved for other university scholars.\n\n` +
-          `3️⃣ <b>Direct Chat Bot Commands:</b>\n` +
-          `• <code>/active</code> - Live active online students\n` +
-          `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
-          `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
-          `• <code>/blocked</code> - List restricted students\n` +
-          `• <code>/clearchat</code> - Purge public chat hall`,
-        parse_mode: "HTML",
-      });
-      return;
-    }
-
     // Direct Admin Command: /clearchat or /purge
     if (text === "/clearchat" || text === "/purge") {
       if (typeof chatHandlers.purgePublicChat === "function") {
-        await chatHandlers.purgePublicChat({ name: fromName, ip: "Telegram Bot Direct" });
+        await chatHandlers.purgePublicChat({ name: "Administrator", ip: "Telegram Bot Direct" });
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: "🗑️ <b>Public Community Chat Cleared:</b>\n\nAll messages have been purged from memory and database.",
+          message_thread_id: threadId,
+          text: "🗑️ <b>Public Community Chat Cleared:</b>\n\nAll messages have been purged from memory, Turso LibSQL, and database.",
           parse_mode: "HTML",
         });
       }
       return;
     }
 
-    // Direct Admin Command: /extend <email/id> <days> (Increase or decrease days for a student)
-    if (text.startsWith("/extend") || text.startsWith("/increase") || text.startsWith("/decrease")) {
-      const parts = text.split(/\s+/);
-      const isDecrease = text.startsWith("/decrease");
-      const query = parts[1];
-      const days = parseInt(parts[2], 10) || 15;
-      if (!query) {
-        await callTelegram("sendMessage", {
-          chat_id: chatId,
-          text: `ℹ️ <b>Usage:</b> <code>/extend student@gmail.com 30</code>\nOr: <code>/decrease student@gmail.com 15</code>`,
-          parse_mode: "HTML",
-        });
-        return;
-      }
+    // ⏱️ D. PURGE DAYS CONTROL: /purgedays <days> OR /purgedays <email> <days> OR /extend /decrease
+    if (text.startsWith("/purgedays") || text.startsWith("/retention") || text.startsWith("/extend") || text.startsWith("/decrease") || text.startsWith("/increase")) {
+      const parts = text.trim().split(/\s+/);
+      const cmd = parts[0].toLowerCase();
 
-      try {
-        let targetId = query;
-        if (dbRef) {
-          const uSnap = await dbRef.collection("users").get();
-          uSnap.forEach((doc) => {
-            const d = doc.data();
-            if (doc.id === query || d.email?.toLowerCase() === query.toLowerCase() || d.mobile === query) {
-              targetId = doc.id;
-            }
+      // Case 1: /extend <email/id> <days>
+      if (cmd.startsWith("/extend") || cmd.startsWith("/increase")) {
+        const query = parts[1];
+        const days = parseInt(parts[2], 10) || 15;
+        if (!query) {
+          await callTelegram("sendMessage", {
+            chat_id: chatId,
+            message_thread_id: threadId,
+            text: "ℹ️ <b>Usage:</b> <code>/extend student@gmail.com 30</code>\n(Increases inactivity threshold by 30 days)",
+            parse_mode: "HTML",
           });
+          return;
         }
-        const { adjustUserInactivity } = require("./accountPurgeService");
-        const res = await adjustUserInactivity(targetId, { action: isDecrease ? "decrease" : "increase", days });
-        await callTelegram("sendMessage", {
-          chat_id: chatId,
-          text: `⏳ <b>[STUDENT INACTIVITY THRESHOLD UPDATED]</b>\n\n` +
-            `👤 <b>Student:</b> ${escapeHtml(res.userName || query)} (<code>${escapeHtml(res.userEmail || targetId)}</code>)\n` +
-            `• ${escapeHtml(res.message)}\n` +
-            `• 🗓️ <b>Scheduled Deletion:</b> <code>${res.scheduledPurgeDate}</code>`,
-          parse_mode: "HTML",
-        });
-      } catch (e) {
-        await callTelegram("sendMessage", { chat_id: chatId, text: `⚠️ Error updating user: ${e.message}` });
+        await handleAdjustUserPurgeDays(chatId, threadId, query, { action: "increase", days });
+        return;
       }
-      return;
-    }
 
-    // Direct Admin Command: /setinactivity <days> (Global default)
-    if (text.startsWith("/setinactivity") || text.startsWith("/inactivitydays")) {
-      const parts = text.split(/\s+/);
-      const days = parseInt(parts[1], 10);
-      if (!days || days < 1) {
+      // Case 2: /decrease <email/id> <days>
+      if (cmd.startsWith("/decrease")) {
+        const query = parts[1];
+        const days = parseInt(parts[2], 10) || 15;
+        if (!query) {
+          await callTelegram("sendMessage", {
+            chat_id: chatId,
+            message_thread_id: threadId,
+            text: "ℹ️ <b>Usage:</b> <code>/decrease student@gmail.com 15</code>\n(Decreases inactivity threshold by 15 days)",
+            parse_mode: "HTML",
+          });
+          return;
+        }
+        await handleAdjustUserPurgeDays(chatId, threadId, query, { action: "decrease", days });
+        return;
+      }
+
+      // Case 3: /purgedays with no arguments -> show help & current policies
+      if (parts.length === 1) {
+        const curChatDays = chatBotSettings.chatRetentionDays || 7;
+        const curPodDays = chatBotSettings.privateRoomInactivityDays || 7;
+        let defAccountDays = 90;
+        try {
+          const { getDefaultInactivityDays } = require("./accountPurgeService");
+          defAccountDays = getDefaultInactivityDays();
+        } catch (_) {}
+
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: `ℹ️ <b>Usage:</b> <code>/setinactivity 90</code>\n(Sets the system-wide inactivity purge threshold in days)`,
+          message_thread_id: threadId,
+          text: `⏱️ <b>[CURRENT RETENTION & PURGE POLICIES]</b>\n\n` +
+            `• <b>Chat Messages Retention:</b> <b>${curChatDays} Days</b>\n` +
+            `• <b>Private Study Pods Inactivity:</b> <b>${curPodDays} Days</b>\n` +
+            `• <b>Student Account Inactivity:</b> <b>${defAccountDays} Days</b>\n\n` +
+            `<b>Commands to adjust:</b>\n` +
+            `• <code>/purgedays 14</code> - Set global chat retention to 14 days\n` +
+            `• <code>/purgedays student@gmail.com 60</code> - Set custom days for student\n` +
+            `• <code>/extend student@gmail.com 30</code> - Add +30 days grace\n` +
+            `• <code>/decrease student@gmail.com 15</code> - Reduce 15 days`,
           parse_mode: "HTML",
         });
         return;
       }
 
-      try {
-        const { setDefaultInactivityDays } = require("./accountPurgeService");
-        const updated = await setDefaultInactivityDays(days);
+      // Case 4: /purgedays <number> -> sets global retention
+      if (parts.length === 2 && /^\d+$/.test(parts[1])) {
+        const newDays = Math.max(1, Math.min(365, parseInt(parts[1], 10)));
+        await updateChatBotSettings({
+          chatRetentionDays: newDays,
+          privateRoomInactivityDays: newDays,
+        });
+        if (typeof chatHandlers.setRetentionDays === "function") {
+          chatHandlers.setRetentionDays(newDays);
+        }
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: `✅ <b>System-Wide Inactivity Purge Limit Updated!</b>\n\n` +
-            `• <b>New Default Threshold:</b> <b>${updated} Days</b>\n` +
-            `• Accounts inactive beyond ${updated} days will be safely archived & purged.\n` +
-            `• You can customize or extend days for any specific student anytime!`,
+          message_thread_id: threadId,
+          text: `✅ <b>Global Purge & Retention Updated!</b>\n\n` +
+            `• <b>Chat Messages Retention:</b> <b>${newDays} Days</b>\n` +
+            `• <b>Private Study Pods Inactivity:</b> <b>${newDays} Days</b>\n` +
+            `Settings synced to memory, database & Turso cloud.`,
           parse_mode: "HTML",
         });
-      } catch (e) {
-        await callTelegram("sendMessage", { chat_id: chatId, text: `⚠️ Error: ${e.message}` });
+        return;
       }
-      return;
-    }
 
-    // Direct Admin Command: /help
-    if (text === "/help" || text === "/commands") {
-      await callTelegram("sendMessage", {
-        chat_id: chatId,
-        text: `🤖 <b>@${BOT_USERNAME} Direct Admin Commands:</b>\n\n` +
-          `• <code>/active</code> - View all live online students currently in chat\n` +
-          `• <code>/block &lt;email/id&gt;</code> - Restrict a student from chat immediately\n` +
-          `• <code>/unblock &lt;email/id&gt;</code> - Restore a student's chat permissions\n` +
-          `• <code>/blocked</code> - List all currently restricted students\n` +
-          `• <code>/inactive</code> - Check 30-min idle rules & 90-day database deletion countdown\n` +
-          `• <code>/clearchat</code> - Purge all messages in Public Chat Hall\n` +
-          `• <code>/help</code> - Show this commands manual\n\n` +
-          `💬 <i>Any regular text, photo, or PDF you type without a slash (/) will be posted directly to the web Public Chat Hall as 🛡️ Admin!</i>`,
-        parse_mode: "HTML",
-      });
-      return;
+      // Case 5: /purgedays <email or id> <days>
+      if (parts.length >= 3) {
+        const query = parts[1];
+        const daysRaw = parts[2];
+        const isRelativePlus = daysRaw.startsWith("+");
+        const isRelativeMinus = daysRaw.startsWith("-");
+        const parsedDays = Math.abs(parseInt(daysRaw, 10)) || 15;
+        const action = isRelativeMinus ? "decrease" : isRelativePlus ? "increase" : "set";
+
+        await handleAdjustUserPurgeDays(chatId, threadId, query, { action, days: parsedDays });
+        return;
+      }
     }
 
     // Command: /setup or /init_topics in a group
@@ -844,17 +941,25 @@ async function processUpdate(update) {
       if (typeof chatHandlers.injectIncomingPublicMessage === "function") {
         const msgId = `msg_sys_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
         const createdAt = new Date((message.date || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+        const teleMsgId = message.message_id;
 
-        const adminDisplayName = fromName && fromName !== "Admin" ? `${fromName} (🛡️ Admin)` : "🛡️ Admin";
+        // 🛡️ STRICT REQUIREMENT: Remove personal Telegram name! Display ONLY official Admin badge.
         const senderObj = {
-          id: `sys_admin_${Buffer.from(String(fromId || "adm")).toString("hex").slice(0, 8)}`,
-          name: adminDisplayName,
+          id: "sys_admin_official",
+          name: "👑 OFFICIAL ADMIN",
           role: "admin",
           isAdmin: true,
-          branch: "Admin Team",
-          year: "Official",
-          college: "FSM Network Hub",
+          isOfficialAdmin: true,
+          branch: "Official Desk",
+          year: "Authority",
+          college: "Free Study Material",
         };
+
+        // Record bidirectional mapping for real-time edits & deletes
+        if (teleMsgId) {
+          telegramToWebMsgMap.set(String(teleMsgId), msgId);
+          webToTelegramMsgMap.set(String(msgId), teleMsgId);
+        }
 
         // Case A: Image / Photo sent from Telegram
         if (Array.isArray(message.photo) && message.photo.length > 0) {
@@ -865,6 +970,7 @@ async function processUpdate(update) {
           if (fileUrl) {
             const webMsg = {
               id: msgId,
+              telegramMsgId: teleMsgId,
               roomId: "public",
               text: caption || "🖼️ Photo Attachment",
               type: "image",
@@ -879,7 +985,7 @@ async function processUpdate(update) {
               isDeleted: false,
             };
             chatHandlers.injectIncomingPublicMessage(webMsg);
-            console.log(`[CHAT-SYNC] 📥 Synced Admin Photo from ${fromName} into Public Chat Hall.`);
+            console.log(`[CHAT-SYNC] 📥 Synced Admin Photo into Public Chat Hall.`);
             return;
           }
         }
@@ -895,6 +1001,7 @@ async function processUpdate(update) {
             const isPdf = cleanDocName.toLowerCase().endsWith(".pdf") || doc.mime_type === "application/pdf";
             const webMsg = {
               id: msgId,
+              telegramMsgId: teleMsgId,
               roomId: "public",
               text: caption || (isPdf ? `📕 ${doc.file_name || "PDF Document"}` : `📁 ${doc.file_name || "Document"}`),
               type: isPdf ? "pdf" : "document",
@@ -909,7 +1016,7 @@ async function processUpdate(update) {
               isDeleted: false,
             };
             chatHandlers.injectIncomingPublicMessage(webMsg);
-            console.log(`[CHAT-SYNC] 📥 Synced Telegram Document (${doc.file_name}) from ${fromName} into Public Chat Hall.`);
+            console.log(`[CHAT-SYNC] 📥 Synced Telegram Document (${doc.file_name}) into Public Chat Hall.`);
             return;
           }
         }
@@ -918,6 +1025,7 @@ async function processUpdate(update) {
         if (text) {
           const webMsg = {
             id: msgId,
+            telegramMsgId: teleMsgId,
             roomId: "public",
             text,
             type: "text",
@@ -929,12 +1037,92 @@ async function processUpdate(update) {
             isDeleted: false,
           };
           chatHandlers.injectIncomingPublicMessage(webMsg);
-          console.log(`[CHAT-SYNC] 📥 Synced Telegram Message from ${fromName}: "${text}" into Public Chat Hall.`);
+          console.log(`[CHAT-SYNC] 📥 Synced Telegram Message into Public Chat Hall: "${text}"`);
         }
       }
     }
   } catch (err) {
     console.warn("[CHAT-AUDIT-BOT] Error processing update:", err.message);
+  }
+}
+
+/**
+ * Helper to adjust purge / inactivity days for a student from Telegram command
+ */
+async function handleAdjustUserPurgeDays(chatId, threadId, query, { action, days }) {
+  try {
+    const cleanQuery = String(query || "").trim().toLowerCase();
+    if (!cleanQuery) {
+      await callTelegram("sendMessage", {
+        chat_id: chatId,
+        message_thread_id: threadId,
+        text: "ℹ️ <b>Usage:</b> <code>/purgedays student@email.com +30</code> (or <code>/extend student@email.com 30</code>)",
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    let targetId = null;
+    let targetName = "Student";
+    let targetEmail = cleanQuery;
+    let targetMobile = "N/A";
+
+    if (dbRef) {
+      const uSnap = await dbRef.collection("users").get();
+      uSnap.forEach((doc) => {
+        const d = doc.data() || {};
+        const dEmail = (d.email || "").toLowerCase().trim();
+        const dMobile = (d.mobile || "").trim();
+        const dName = (d.name || "").toLowerCase().trim();
+        const dId = doc.id.toLowerCase().trim();
+
+        if (dId === cleanQuery || dEmail === cleanQuery || dMobile === cleanQuery) {
+          targetId = doc.id;
+          targetName = d.name || targetName;
+          targetEmail = d.email || targetEmail;
+          targetMobile = d.mobile || targetMobile;
+        } else if (!targetId && (dEmail.includes(cleanQuery) || dName.includes(cleanQuery))) {
+          targetId = doc.id;
+          targetName = d.name || targetName;
+          targetEmail = d.email || targetEmail;
+          targetMobile = d.mobile || targetMobile;
+        }
+      });
+    }
+
+    if (!targetId) {
+      targetId = query;
+    }
+
+    const { adjustUserInactivity } = require("./accountPurgeService");
+    const res = await adjustUserInactivity(targetId, { action, days });
+
+    const actionText = action === "increase"
+      ? `Increased by +${days} Days`
+      : action === "decrease"
+      ? `Decreased by -${days} Days`
+      : `Set to ${days} Days`;
+
+    await callTelegram("sendMessage", {
+      chat_id: chatId,
+      message_thread_id: threadId,
+      text: `⏳ <b>[STUDENT INACTIVITY & PURGE DAYS UPDATED]</b>\n\n` +
+        `👤 <b>Student Name:</b> ${escapeHtml(res.userName || targetName)}\n` +
+        `📧 <b>Email:</b> <code>${escapeHtml(res.userEmail || targetEmail)}</code>\n` +
+        `📱 <b>Mobile:</b> <code>${escapeHtml(targetMobile)}</code>\n` +
+        `⚡ <b>Action:</b> <b>${actionText}</b>\n` +
+        `⏱️ <b>Inactivity Threshold:</b> <b>${res.effectiveThreshold} Days</b> (${res.daysRemaining} days remaining)\n` +
+        `🗓️ <b>Scheduled Auto-Purge:</b> <code>${res.scheduledPurgeDate}</code>\n` +
+        `\n<i>${escapeHtml(res.message)}</i>`,
+      parse_mode: "HTML",
+    });
+  } catch (err) {
+    await callTelegram("sendMessage", {
+      chat_id: chatId,
+      message_thread_id: threadId,
+      text: `⚠️ <b>Failed to update purge days:</b> ${escapeHtml(err.message)}`,
+      parse_mode: "HTML",
+    });
   }
 }
 
@@ -949,6 +1137,16 @@ async function startChatAuditBotPoller() {
 
   try {
     await callTelegram("deleteWebhook", { drop_pending_updates: false });
+    // Register the strict 5-command menu requested on Telegram
+    await callTelegram("setMyCommands", {
+      commands: [
+        { command: "active", description: "Live active online students" },
+        { command: "block", description: "Restrict a student (<email or id>)" },
+        { command: "unblock", description: "Restore a student (<email or id>)" },
+        { command: "blocked", description: "List restricted students" },
+        { command: "clearchat", description: "Purge public chat hall" },
+      ],
+    });
   } catch {}
 
   const pollLoop = async () => {
@@ -993,12 +1191,9 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.publicChat || null,
+      threadId: auditTopics.publicChat || "39",
     });
-  }
-
-  // If Supergroup is not set OR Admin DM mirror is enabled, route to Admin Direct DM
-  if (effectiveAdminId && (!currentSupergroupId || chatBotSettings.enableAdminDmMirror)) {
+  } else if (effectiveAdminId) {
     targetChats.push({
       chatId: effectiveAdminId,
       threadId: null,
@@ -1042,11 +1237,18 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
+          const photoRes = await resp.json().catch(() => ({}));
+          if (photoRes.ok && photoRes.result?.message_id) {
+            const teleMsgId = photoRes.result.message_id;
+            message.telegramMsgId = teleMsgId;
+            telegramToWebMsgMap.set(String(teleMsgId), message.id);
+            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+          }
           continue;
         } else {
           // Direct URL sendPhoto
@@ -1059,7 +1261,13 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
-          await callTelegram("sendPhoto", body);
+          const photoRes = await callTelegram("sendPhoto", body);
+          if (photoRes.ok && photoRes.result?.message_id) {
+            const teleMsgId = photoRes.result.message_id;
+            message.telegramMsgId = teleMsgId;
+            telegramToWebMsgMap.set(String(teleMsgId), message.id);
+            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+          }
           continue;
         }
       }
@@ -1092,11 +1300,18 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
+          const docRes = await resp.json().catch(() => ({}));
+          if (docRes.ok && docRes.result?.message_id) {
+            const teleMsgId = docRes.result.message_id;
+            message.telegramMsgId = teleMsgId;
+            telegramToWebMsgMap.set(String(teleMsgId), message.id);
+            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+          }
           continue;
         } else {
           // Direct URL sendDocument
@@ -1109,7 +1324,13 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
-          await callTelegram("sendDocument", body);
+          const docRes = await callTelegram("sendDocument", body);
+          if (docRes.ok && docRes.result?.message_id) {
+            const teleMsgId = docRes.result.message_id;
+            message.telegramMsgId = teleMsgId;
+            telegramToWebMsgMap.set(String(teleMsgId), message.id);
+            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+          }
           continue;
         }
       }
@@ -1122,7 +1343,13 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
         disable_web_page_preview: false,
       };
       if (threadId) body.message_thread_id = threadId;
-      await callTelegram("sendMessage", body);
+      const res = await callTelegram("sendMessage", body);
+      if (res.ok && res.result?.message_id) {
+        const teleMsgId = res.result.message_id;
+        message.telegramMsgId = teleMsgId;
+        telegramToWebMsgMap.set(String(teleMsgId), message.id);
+        webToTelegramMsgMap.set(String(message.id), teleMsgId);
+      }
     } catch (err) {
       console.warn(`[CHAT-AUDIT-BOT] Error sending public msg to chat ${chatId}:`, err.message);
     }
@@ -1137,11 +1364,27 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
 async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, sender }) {
   if (!chatBotSettings.enablePublicChatSync && !chatBotSettings.enableDeletedMessageAlerts) return false;
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
 
-  // 🛡️ STRICT: Send ONLY to Chat Audit Supergroup (Dedicated Tamper & Audit Topic 35). NEVER to Private DM.
+  // 1. Edit the mirrored message in Telegram Topic 39 in-place
+  const teleMsgId = webToTelegramMsgMap.get(String(messageId));
+  if (teleMsgId && currentSupergroupId) {
+    try {
+      const senderName = sender?.name || "Student";
+      const senderBranch = sender?.branch || "General";
+      const senderIp = sender?.ip ? ` • 🌐 <code>${escapeHtml(sender.ip)}</code>` : "";
+      await callTelegram("editMessageText", {
+        chat_id: currentSupergroupId,
+        message_id: teleMsgId,
+        text: `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${senderIp}):\n${escapeHtml(newText)} <i>(edited)</i>`,
+        parse_mode: "HTML",
+      });
+    } catch (_) {}
+  }
+
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic 35 (Deleted Msgs)
   const targetChats = [];
-  const targetThreadId = auditTopics.tamperAudit || auditTopics.deletedMessages || "35";
+  const targetThreadId = auditTopics.deletedMessages || auditTopics.tamperAudit || "35";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -1188,11 +1431,22 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
 async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fileName, sender }) {
   if (!chatBotSettings.enableDeletedMessageAlerts && !chatBotSettings.enablePublicChatSync) return false;
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
 
-  // 🛡️ STRICT: Send ONLY to Chat Audit Supergroup (Dedicated Tamper & Audit Topic 35). NEVER to Private DM.
+  // 1. Delete or clear the mirrored message in Telegram Topic 39
+  const teleMsgId = webToTelegramMsgMap.get(String(messageId));
+  if (teleMsgId && currentSupergroupId) {
+    try {
+      await callTelegram("deleteMessage", {
+        chat_id: currentSupergroupId,
+        message_id: teleMsgId,
+      });
+    } catch (_) {}
+  }
+
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic 35 (Deleted Msgs)
   const targetChats = [];
-  const targetThreadId = auditTopics.tamperAudit || auditTopics.deletedMessages || "35";
+  const targetThreadId = auditTopics.deletedMessages || auditTopics.tamperAudit || "35";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -1235,7 +1489,7 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 
 /**
  * Dispatches Complete Private Room Forensic Audit to Telegram
- * (Both to Supergroup Topics and Direct to Admin)
+ * (Strictly to Supergroup Topics 31 & 33. Never dumped into Admin 1-on-1 DM!)
  */
 async function dispatchChatForensicAudit({
   room,
@@ -1252,23 +1506,20 @@ async function dispatchChatForensicAudit({
     return false;
   }
 
+  // 🛡️ STRICT REQUIREMENT: Send forensic dossiers & media vault ONLY to Supergroup -1004345492076 topics.
+  // NEVER send bulky .txt transcripts, media files, or avatars to Admin 1-on-1 DM!
   const targetChatIds = [];
   const threadMap = {};
-  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
 
-  // Target 1: Admin Direct Message
-  if (effectiveAdminId) {
-    targetChatIds.push(effectiveAdminId);
-  }
-
-  // Target 2: Configured Supergroup (if available)
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChatIds.push(currentSupergroupId);
     if (auditTopics.podAudits) {
       threadMap[currentSupergroupId] = auditTopics.podAudits;
     }
   }
+
+  if (targetChatIds.length === 0) return false;
 
   const uniqueChats = Array.from(new Set(targetChatIds));
   console.log(`[CHAT-AUDIT-BOT] 📡 Dispatching audit for pod "${room.name}" (${is7DayInactivity ? "7-DAY INACTIVITY PURGE" : "AUTO-PURGE"}) to ${uniqueChats.length} destinations...`);
@@ -1508,25 +1759,15 @@ async function sendTestChatBotAlert(event = "PING") {
  * (Topic: presence / 37)
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
-  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
 
   const targetChats = [];
 
-  // 1. DIRECT ADMIN DM (PRIMARY: Always delivered directly to Admin via @fsm_chat_bot)
-  if (effectiveAdminId) {
-    targetChats.push({
-      chatId: effectiveAdminId,
-      threadId: null,
-      isDirect: true,
-    });
-  }
-
-  // 2. SUPERGROUP TOPIC (STRICTLY OPTIONAL: Mirrored only if supergroup is configured)
+  // 🛡️ STRICT REQUIREMENT: Send ONLY to Supergroup Topic 35 (Never spammed to Admin DM!)
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.presence || null,
+      threadId: auditTopics.deletedMessages || "35",
       isDirect: false,
     });
   }
@@ -1659,16 +1900,15 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.deletedMessages || null,
+      threadId: auditTopics.deletedMessages || "35",
     });
     if (auditTopics.publicChat && roomId === "public") {
       targetChats.push({
         chatId: currentSupergroupId,
-        threadId: auditTopics.publicChat,
+        threadId: auditTopics.publicChat || "39",
       });
     }
-  }
-  if (effectiveAdminId && (!currentSupergroupId || chatBotSettings.enableAdminDmMirror)) {
+  } else if (effectiveAdminId) {
     targetChats.push({
       chatId: effectiveAdminId,
       threadId: null,
@@ -1709,25 +1949,15 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
  * (Topic: presence / 37)
  */
 async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, activeUsers = [] }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
-  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
 
   const targetChats = [];
 
-  // 1. DIRECT ADMIN DM (PRIMARY: Always delivered directly to Admin via @fsm_chat_bot)
-  if (effectiveAdminId) {
-    targetChats.push({
-      chatId: effectiveAdminId,
-      threadId: null,
-      isDirect: true,
-    });
-  }
-
-  // 2. SUPERGROUP TOPIC (STRICTLY OPTIONAL: Mirrored only if supergroup is configured)
+  // Deliver to Supergroup Topic 35 (Deleted Msgs & Tamper Log)
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.presence || null,
+      threadId: auditTopics.deletedMessages || "35",
       isDirect: false,
     });
   }
@@ -1804,13 +2034,12 @@ async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, acti
  * Sent to Chat Audit Bot Supergroup (topic: deletedMessages or presence) and Admin DM
  */
 async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSummary = {} }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
-  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
 
   const targetChats = [];
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Chat Audit Supergroup Dedicated Forensic & Purge Topic 72 (Never mixed with topic 35). NEVER to private 1-on-1 Admin DM.
-  const targetThreadId = auditTopics.forensicPurge || process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "72";
+  // 🛡️ STRICT REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 35 (Deleted Msgs & Tamper Log). NEVER to Admin DM.
+  const targetThreadId = auditTopics.deletedMessages || "35";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,

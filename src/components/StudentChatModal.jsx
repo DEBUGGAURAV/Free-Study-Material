@@ -2948,8 +2948,17 @@ export default function StudentChatModal({
                 (Array.isArray(messages) ? messages : []).filter(Boolean).map((msg, index) => {
                   const isMine = msg?.sender?.id === currentUser?.id;
                   const senderRole = msg?.sender?.role || "student";
-                  const senderIsAdmin = msg?.sender?.isAdmin || senderRole === "admin" || senderRole === "half_admin";
-                  const senderColor = isMine ? "#ffffff" : getUsernameColor(msg?.sender?.id, msg?.sender?.name);
+                  const isOfficialAdminMsg = Boolean(
+                    msg?.sender?.id?.startsWith("sys_admin_") ||
+                    msg?.sender?.isOfficialAdmin ||
+                    msg?.sender?.isAdmin ||
+                    senderRole === "admin" ||
+                    senderRole === "half_admin" ||
+                    (msg?.sender?.name && /admin|adm\s*\(|telegram/i.test(msg?.sender?.name)) ||
+                    (msg?.telegramMsgId && (msg?.sender?.id?.startsWith("sys_admin_") || senderRole === "admin"))
+                  );
+                  const senderIsAdmin = isOfficialAdminMsg || msg?.sender?.isAdmin || senderRole === "admin" || senderRole === "half_admin";
+                  const senderColor = isMine ? "#ffffff" : isOfficialAdminMsg ? "#f59e0b" : getUsernameColor(msg?.sender?.id, msg?.sender?.name);
 
                   // Date separator detection
                   const prevMsg = index > 0 ? messages[index - 1] : null;
@@ -3001,13 +3010,15 @@ export default function StudentChatModal({
                             <div
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (msg.sender) setViewingProfile(msg.sender);
+                                if (msg.sender) {
+                                  setViewingProfile(isOfficialAdminMsg ? { ...msg.sender, name: "👑 OFFICIAL ADMIN", isAdmin: true, isOfficialAdmin: true, role: "admin", username: "" } : msg.sender);
+                                }
                               }}
                               style={{
                                 width: "32px",
                                 height: "32px",
                                 borderRadius: "50%",
-                                background: senderColor,
+                                background: isOfficialAdminMsg ? "linear-gradient(135deg, #f59e0b, #ea580c)" : senderColor,
                                 color: "#fff",
                                 display: "flex",
                                 alignItems: "center",
@@ -3016,13 +3027,15 @@ export default function StudentChatModal({
                                 fontWeight: 800,
                                 flexShrink: 0,
                                 cursor: "pointer",
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                                boxShadow: isOfficialAdminMsg ? "0 2px 10px rgba(245, 158, 11, 0.45)" : "0 2px 8px rgba(0,0,0,0.3)",
                                 transition: "transform 0.15s ease",
                                 overflow: "hidden",
                               }}
-                              title={`View ${msg.sender?.name || "Student"}'s Profile`}
+                              title={isOfficialAdminMsg ? "Official Administrator Desk" : `View ${msg.sender?.name || "Student"}'s Profile`}
                             >
-                              {msg.sender?.photoUrl ? (
+                              {isOfficialAdminMsg ? (
+                                <Crown size={15} color="#fff" />
+                              ) : msg.sender?.photoUrl ? (
                                 <img
                                   src={msg.sender.photoUrl}
                                   alt=""
@@ -3189,34 +3202,38 @@ export default function StudentChatModal({
                                   }}
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (msg.sender) setViewingProfile(msg.sender);
+                                    if (msg.sender) {
+                                      setViewingProfile(isOfficialAdminMsg ? { ...msg.sender, name: "👑 OFFICIAL ADMIN", isAdmin: true, isOfficialAdmin: true, role: "admin", username: "" } : msg.sender);
+                                    }
                                   }}
                                 >
-                                  <span style={{ fontWeight: 800, color: senderColor }}>
-                                    {(msg.sender?.name || "Student Scholar").replace(/\(?🛡️\s*Telegram\s*Admin\)?/gi, "🛡️ Admin").replace(/Telegram Admin/gi, "Admin")}
-                                  </span>
-
-                                  {senderIsAdmin ? (
+                                  {isOfficialAdminMsg ? (
                                     <span
                                       style={{
                                         background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(234, 88, 12, 0.25))",
                                         border: "1px solid rgba(245, 158, 11, 0.5)",
                                         color: "#f59e0b",
-                                        padding: "1px 6px",
-                                        borderRadius: "4px",
-                                        fontSize: "0.62rem",
+                                        padding: "2px 8px",
+                                        borderRadius: "5px",
+                                        fontSize: "0.72rem",
                                         fontWeight: 800,
                                         display: "inline-flex",
                                         alignItems: "center",
-                                        gap: "3px",
+                                        gap: "4px",
                                       }}
                                     >
-                                      <Crown size={9} /> ADMIN
+                                      <Crown size={11} /> 👑 OFFICIAL ADMIN
                                     </span>
                                   ) : (
-                                    <span style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>
-                                      • {msg.sender?.branch || "Engg"} {msg.sender?.year || ""}
-                                    </span>
+                                    <>
+                                      <span style={{ fontWeight: 800, color: senderColor }}>
+                                        {msg.sender?.name || "Student Scholar"}
+                                      </span>
+
+                                      <span style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>
+                                        • {msg.sender?.branch || "Engg"} {msg.sender?.year || ""}
+                                      </span>
+                                    </>
                                   )}
 
                                   {!senderIsAdmin && isUserBlocked(msg.sender?.id || msg.senderId) && (
@@ -4048,7 +4065,9 @@ export default function StudentChatModal({
                 width: "64px",
                 height: "64px",
                 borderRadius: "50%",
-                background: getUsernameColor(viewingProfile.id, viewingProfile.name),
+                background: (viewingProfile.isAdmin || viewingProfile.role === "admin" || viewingProfile.isOfficialAdmin || viewingProfile.id?.startsWith("sys_admin_") || (viewingProfile.name && /admin/i.test(viewingProfile.name)))
+                  ? "linear-gradient(135deg, #f59e0b, #ea580c)"
+                  : getUsernameColor(viewingProfile.id, viewingProfile.name),
                 color: "#fff",
                 display: "flex",
                 alignItems: "center",
@@ -4060,7 +4079,9 @@ export default function StudentChatModal({
                 overflow: "hidden",
               }}
             >
-              {viewingProfile.photoUrl ? (
+              {(viewingProfile.isAdmin || viewingProfile.role === "admin" || viewingProfile.isOfficialAdmin || viewingProfile.id?.startsWith("sys_admin_") || (viewingProfile.name && /admin/i.test(viewingProfile.name))) ? (
+                <Crown size={28} color="#fff" />
+              ) : viewingProfile.photoUrl ? (
                 <img
                   src={viewingProfile.photoUrl}
                   alt=""
@@ -4071,15 +4092,19 @@ export default function StudentChatModal({
               )}
             </div>
             <h3 style={{ margin: "0 0 2px", fontSize: "1.1rem", fontWeight: 800, color: "#fff" }}>
-              {(viewingProfile.name || "Student Scholar").replace(/\(?🛡️\s*Telegram\s*Admin\)?/gi, "🛡️ Admin").replace(/Telegram Admin/gi, "Admin")}
+              {(viewingProfile.isAdmin || viewingProfile.role === "admin" || viewingProfile.isOfficialAdmin || viewingProfile.id?.startsWith("sys_admin_") || (viewingProfile.name && /admin/i.test(viewingProfile.name)))
+                ? "👑 OFFICIAL ADMIN"
+                : (viewingProfile.name || "Student Scholar")}
             </h3>
-            {viewingProfile.username && (
+            {viewingProfile.username && !(viewingProfile.isAdmin || viewingProfile.role === "admin" || viewingProfile.isOfficialAdmin || viewingProfile.id?.startsWith("sys_admin_") || (viewingProfile.name && /admin/i.test(viewingProfile.name))) && (
               <div style={{ fontSize: "0.82rem", color: "#38bdf8", fontWeight: 700, marginBottom: "4px" }}>
                 @{viewingProfile.username}
               </div>
             )}
             <div style={{ fontSize: "0.78rem", color: "var(--accent-cyan)", fontWeight: 700, marginBottom: "12px" }}>
-              {viewingProfile.isAdmin ? "👑 Administrator" : "🎓 Verified Student Scholar"}
+              {(viewingProfile.isAdmin || viewingProfile.role === "admin" || viewingProfile.isOfficialAdmin || viewingProfile.id?.startsWith("sys_admin_") || (viewingProfile.name && /admin/i.test(viewingProfile.name)))
+                ? "Authority Desk • Verified System Admin"
+                : "🎓 Verified Student Scholar"}
             </div>
 
             <div style={{ width: "100%", background: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "12px", marginBottom: "16px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "0.8rem", color: "#cbd5e1" }}>
