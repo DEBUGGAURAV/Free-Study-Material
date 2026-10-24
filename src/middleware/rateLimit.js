@@ -266,7 +266,7 @@ const helpLimiter = rateLimit({
   keyGenerator: getClientIp,
   skip: (req) => req.method === "OPTIONS" || isImmune(req),
   handler: createSafeLimiterHandler(
-    "Aapne bohot saare sawal bhej diye hain. Kripya 1 ghante baad naya sawal poochein."
+    "Too many help queries submitted. Please wait 1 hour before submitting another query."
   ),
 });
 

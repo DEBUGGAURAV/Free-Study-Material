@@ -90,7 +90,7 @@ export default function TabDatabase(props) {
                     lineHeight: 1.6,
                   }}
                 >
-                  Aapka account <strong>Half Admin (Sub-Administrator)</strong> position par configured hai. System security aur raw records protection ke liye Google Cloud Firestore raw collections, dynamic document explorer, DB JSON backup export, aur batch purge controls exclusively <strong>Full Administrator (Master Admin)</strong> ke liye reserved hain.
+                  Your account is configured as a <strong>Half Admin (Sub-Administrator)</strong>. For system security and raw record protection, direct access to Google Cloud Firestore raw collections, dynamic document explorer, DB JSON backup export, and batch purge controls are exclusively reserved for the <strong>Full Administrator (Master Admin)</strong>.
                 </p>
                 <div
                   style={{

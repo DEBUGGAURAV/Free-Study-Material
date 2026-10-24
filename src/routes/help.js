@@ -107,7 +107,7 @@ router.post("/ask", helpLimiter, async (req, res) => {
     if (!question || question.trim().length < 5) {
       return res.status(400).json({
         success: false,
-        message: "Kripya apna question detail me likhein (minimum 5 characters).",
+        message: "Please write your question in detail (minimum 5 characters).",
       });
     }
 
@@ -148,7 +148,7 @@ router.post("/ask", helpLimiter, async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Aapka sawal submit ho gaya hai! Admin jald hi reply karenge.",
+      message: "Your question has been submitted successfully! An administrator will respond shortly.",
       ticket: {
         ticket_code: ticket.ticket_code,
         user_name: ticket.user_name,

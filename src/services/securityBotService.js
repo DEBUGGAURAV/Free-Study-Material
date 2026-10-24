@@ -883,8 +883,8 @@ async function startSecurityBotPoller() {
               await sendTelegramDirect(
                 chatId,
                 `⚠️ <b>Registration Session Expired or Invalid</b>\n\n` +
-                  `Aapka website registration session expire ho chuka hai ya link invalid hai.\n` +
-                  `Kripya pehle website par jayein, form fill karein, aur naye link par click karein.\n\n` +
+                  `Your website registration session has expired or the link is invalid.\n` +
+                  `Please open the website, complete the registration form, and click the new verification link.\n\n` +
                   `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
                 { remove_keyboard: true }
               );
@@ -930,8 +930,8 @@ async function startSecurityBotPoller() {
               await sendTelegramDirect(
                 chatId,
                 `⚠️ <b>Password Reset Session Expired or Invalid</b>\n\n` +
-                  `Aapka password reset session expire ho chuka hai ya link invalid hai.\n` +
-                  `Kripya pehle website par jayein, Forgot Password form bharein, aur naye link par click karein.\n\n` +
+                  `Your password reset session has expired or the link is invalid.\n` +
+                  `Please open the website, complete the Forgot Password form, and click the new verification link.\n\n` +
                   `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
                 { remove_keyboard: true }
               );
@@ -943,15 +943,15 @@ async function startSecurityBotPoller() {
           userBotStates.delete(chatId);
           await sendTelegramDirect(
             chatId,
-            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
-              `Aapne abhi tak website par <b>Student Registration</b> ya <b>Forgot Password</b> form fill nahi kiya hai.\n\n` +
+            `⚠️ <b>Website Form Submission Required!</b>\n\n` +
+              `You have not yet filled out the <b>Student Registration</b> or <b>Forgot Password</b> form on the website.\n\n` +
               `🛡️ <b>Security Policy:</b>\n` +
-              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
-              `👉 <b>Aapko kya karna hai:</b>\n` +
-              `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
-              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
-              `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par click karein.\n\n` +
-              `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+              `One-Time Passcodes (OTP) cannot be generated directly from Telegram without submitting the website form first.\n\n` +
+              `👉 <b>Action Steps:</b>\n` +
+              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
+              `3️⃣ After submitting, click the <b>"Verify via Telegram"</b> button.\n\n` +
+              `The bot will display your submitted details and deliver your verification OTP once your mobile number is confirmed!`,
             { remove_keyboard: true }
           );
           continue;
@@ -972,9 +972,9 @@ async function startSecurityBotPoller() {
           userBotStates.delete(chatId);
           await sendTelegramDirect(
             chatId,
-            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
-              `Direct Telegram se OTP generate nahi kiya ja sakta.\n\n` +
-              `Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par ja kar form bharein, aur wahan diye gaye link se aayein!`,
+            `⚠️ <b>Website Form Submission Required!</b>\n\n` +
+              `Direct OTP generation from Telegram is disabled.\n\n` +
+              `Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a>, submit the form, and follow the Telegram verification link!`,
             { remove_keyboard: true }
           );
           continue;
@@ -994,13 +994,13 @@ async function startSecurityBotPoller() {
           await sendTelegramDirect(
             chatId,
             `👋 <b>Free Study Material Security Verification Bot</b>\n\n` +
-              `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n` +
-              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
+              `⚠️ <b>Website Form Submission Required!</b>\n` +
+              `One-Time Passcodes (OTP) cannot be generated directly from Telegram without submitting the website form first.\n\n` +
               `👉 <b>Steps:</b>\n` +
-              `1️⃣ Pehle website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
-              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
-              `3️⃣ Wahan diye gaye <b>"Verify via Telegram"</b> button par click karein.\n\n` +
-              `Form submit hone par bot automatically aapka bhara hua data show karega aur phone verify hote hi OTP generate karega!`,
+              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
+              `3️⃣ Click the <b>"Verify via Telegram"</b> button provided on the confirmation screen.\n\n` +
+              `Upon submission, the bot will display your form data and generate your OTP once phone verification is completed!`,
             { remove_keyboard: true }
           );
           continue;
@@ -1065,7 +1065,7 @@ async function startSecurityBotPoller() {
                 `❌ <b>Mobile Number Mismatch!</b>\n\n` +
                   `• <b>Account Registered Mobile:</b> <code>${formMobile}</code>\n` +
                   `• <b>Telegram Verified Number:</b> <code>${verifiedTgMobile}</code>\n\n` +
-                  `Dono mobile numbers match nahi ho rahe hain. Kripya registered phone number se hi Telegram contact share karein.`,
+                  `The mobile numbers do not match. Please share the Telegram contact registered with this account.`,
                 { remove_keyboard: true }
               );
               userBotStates.delete(chatId);
@@ -1082,14 +1082,14 @@ async function startSecurityBotPoller() {
           // Case B: User directly shared contact without opening from website form link -> STRICTLY REJECT!
           await sendTelegramDirect(
             chatId,
-            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
-              `Aapne website par Registration ya Forgot Password ka form fill nahi kiya hai.\n` +
-              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
-              `👉 <b>Kripya pehle website par jayein:</b>\n` +
-              `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
-              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
-              `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par tap karein.\n\n` +
-              `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+            `⚠️ <b>Website Form Submission Required!</b>\n\n` +
+              `You have not submitted the Registration or Forgot Password form on the website.\n` +
+              `One-Time Passcodes (OTP) cannot be generated directly through Telegram without website form submission.\n\n` +
+              `👉 <b>Please follow these steps:</b>\n` +
+              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
+              `3️⃣ Click the <b>"Verify via Telegram"</b> button.\n\n` +
+              `The bot will automatically present your details and deliver your OTP upon phone number verification!`,
             { remove_keyboard: true }
           );
           userBotStates.delete(chatId);
@@ -1169,8 +1169,8 @@ async function startSecurityBotPoller() {
           await sendTelegramDirect(
             chatId,
             `⚠️ <b>Website Session Not Found!</b>\n\n` +
-              `Mobile number <code>${digitsOnly}</code> ke liye website par koi pending registration ya password reset session nahi mila.\n\n` +
-              `👉 Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par jayein aur form bharein!`,
+              `No pending registration or password reset session found for mobile number <code>${digitsOnly}</code>.\n\n` +
+              `👉 Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a> and complete the form first!`,
             { remove_keyboard: true }
           );
           continue;
@@ -1225,9 +1225,9 @@ async function startSecurityBotPoller() {
           // If not in waiting_email_reset, reject direct OTP generation
           await sendTelegramDirect(
             chatId,
-            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
-              `Direct Telegram se bina form bhare OTP generate nahi kiya ja sakta.\n\n` +
-              `👉 Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par jayein aur Registration ya Forgot Password form bharein!`,
+            `⚠️ <b>Website Form Submission Required!</b>\n\n` +
+              `One-Time Passcodes (OTP) cannot be generated directly without submitting the form first.\n\n` +
+              `👉 Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a> and complete the Registration or Forgot Password form!`,
             { remove_keyboard: true }
           );
           continue;
@@ -1254,13 +1254,13 @@ async function startSecurityBotPoller() {
         // Fallback for direct / unhandled text messages
         await sendTelegramDirect(
           chatId,
-          `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
-            `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
-            `👉 <b>Aapko kya karna hai:</b>\n` +
-            `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
-            `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
-            `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par tap karein.\n\n` +
-            `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+          `⚠️ <b>Website Form Submission Required!</b>\n\n` +
+            `One-Time Passcodes (OTP) cannot be generated directly through Telegram without website form submission.\n\n` +
+            `👉 <b>Action Steps:</b>\n` +
+            `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+            `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
+            `3️⃣ Click the <b>"Verify via Telegram"</b> button.\n\n` +
+            `The bot will automatically present your details and deliver your OTP once mobile verification is completed!`,
           { remove_keyboard: true }
         );
       }

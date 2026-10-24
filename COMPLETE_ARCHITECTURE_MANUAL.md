@@ -1,23 +1,27 @@
 # Free Study Material (FSM) - Master Technical Architecture & System Documentation
-**Platform Version:** v4.2 Production Enterprise  
+**Platform Version:** v4.4 Production Enterprise Master  
 **Author / Engineering Team:** FSM Core Infrastructure Architecture Team  
 **Master PDF Companion:** [`FreeStudyMaterial_Master_Architecture_Manual.pdf`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/FreeStudyMaterial_Master_Architecture_Manual.pdf)
 
 ---
 
-## Table of Contents
+## Complete Table of Contents
 1. [Executive Summary & High-Level Architectural Topology](#1-executive-summary--high-level-architectural-topology)
 2. [Zero-Cost Distributed Cloud Storage Engine (MTProto 2.0 & GramJS)](#2-zero-cost-distributed-cloud-storage-engine-mtproto-20--gramjs)
-3. [Dual Turso LibSQL Edge Database Architecture](#3-dual-turso-libsql-edge-database-architecture)
-4. [Collaborative Live Study Pods & P2P WebRTC Mesh](#4-collaborative-live-study-pods--p2p-webrtc-mesh)
-5. [Telegram Multi-Bot Ecosystem & Forum Matrix](#5-telegram-multi-bot-ecosystem--forum-matrix)
-6. [Frontend Architecture & Dynamic Code-Splitting](#6-frontend-architecture--dynamic-code-splitting)
-7. [Backend Application Engine, Middleware & Route Matrix](#7-backend-application-engine-middleware--route-matrix)
-8. [Cryptography, Zero-Trust Privacy & 11-Step Cascade Purge](#8-cryptography-zero-trust-privacy--11-step-cascade-purge)
-9. [Production Hosting & Render Operations](#9-production-hosting--render-operations)
-10. [Complete File-by-File Technical Directory](#10-complete-file-by-file-technical-directory)
-11. [End-to-End Operational Data Flow Traces](#11-end-to-end-operational-data-flow-traces)
-12. [System Fault Tolerance & Autonomous Recovery](#12-system-fault-tolerance--autonomous-recovery)
+3. [Dual-Tier WebAssembly PDF Compression Engine](#3-dual-tier-webassembly-pdf-compression-engine)
+4. [Cloudflare Edge CDN & Indian Anycast Acceleration Tier](#4-cloudflare-edge-cdn--indian-anycast-acceleration-tier)
+5. [Autonomous Self-Healing Watchdog & Process Immortality Suite](#5-autonomous-self-healing-watchdog--process-immortality-suite)
+6. [Auto RAM Caching Engine & Resilient Streaming Download](#6-auto-ram-caching-engine--resilient-streaming-download)
+7. [Virtual PDF Reader & Canvas Viewport Engine](#7-virtual-pdf-reader--canvas-viewport-engine)
+8. [6-Stage Upload Pipeline Stepper](#8-6-stage-upload-pipeline-stepper)
+9. [Collaborative Live Study Pods & Real-Time WebRTC Mesh](#9-collaborative-live-study-pods--real-time-webrtc-mesh)
+10. [Offline Notes & 6:00 AM Periodic Background Sync Engine](#10-offline-notes--600-am-periodic-background-sync-engine)
+11. [Defense Firewall, Autonomous IP Jail & Anti-Tamper Shield](#11-defense-firewall-autonomous-ip-jail--anti-tamper-shield)
+12. [Dual Turso LibSQL Edge Database Architecture](#12-dual-turso-libsql-edge-database-architecture)
+13. [Telegram Multi-Bot Ecosystem & Forum Matrix](#13-telegram-multi-bot-ecosystem--forum-matrix)
+14. [Cryptography, Zero-Trust Privacy & 11-Step Cascade Purge](#14-cryptography-zero-trust-privacy--11-step-cascade-purge)
+15. [Performance Benchmarks & Empirical Stress Test Results](#15-performance-benchmarks--empirical-stress-test-results)
+16. [Complete File-by-File Technical Directory & Operational Traces](#16-complete-file-by-file-technical-directory--operational-traces)
 
 ---
 
@@ -26,33 +30,35 @@
 ### 1.1 Platform Mission & Core Breakthroughs
 **Free Study Material (FSM)** is an enterprise-grade academic cloud ecosystem designed to provide students, researchers, and universities with sub-150ms access to high-performance study notes, engineering schematics, cloud lecture archives, and collaborative study pods.
 
-Traditional academic portals suffer from prohibitive cloud hosting fees (AWS S3 egress bandwidth, database write/read quotas) and sluggish frontend download bundles. FSM solves these constraints through four foundational innovations:
-
 1. **Zero Persistent Server Disk Storage**: Academic files stream directly into and out of Telegram Data Center 5 (Singapore) via raw MTProto 2.0 TCP sockets. Not a single byte is saved to server NVMe/SSD disks.
 2. **Zero Firestore Real-Time Overhead**: Live Study Pods and interactive canvas collaboration run on pure peer-to-peer (P2P) WebRTC data channels utilizing Y.js CRDTs and Google public STUN servers—generating **0% server CPU, 0 MB server RAM, and 0 database writes**.
 3. **85% Frontend Payload Reduction**: Comprehensive dynamic code-splitting (`React.lazy()`) isolates heavy vendor libraries (`pdfjs-dist`, `pdf-lib`, `yjs`), shrinking the initial entry payload (`index.js`) from 862 KB down to 125.49 KB (36.19 KB gzip).
 4. **Autonomous Telegram Forensic & Operations Mesh**: 3 specialized Telegram bots operate across isolated supergroup forum topics to handle authentication OTPs, real-time forensic chat audits, student support desks, and daily academic revision pulses.
+5. **W3C 6:00 AM Offline Pre-fetch**: Automated background sync wakes up the Service Worker at 6 AM without opening the web app or PWA, pre-fetching tailored semester notes into IndexedDB.
 
-### 1.2 Architectural System Topology
+### 1.2 High-Level Architectural Topology
 ```mermaid
 flowchart TD
-    subgraph ClientTier["Client Tier (React 18 + Vite 6)"]
+    subgraph ClientTier["Client Presentation Tier (React 18 + Vite 6)"]
         SPA["Single Page App (PWA)"]
-        P2P["Y.js CRDT + y-webrtc Mesh"]
+        P2P["Y.js CRDT + y-webrtc DataChannel Mesh"]
         Worker["WebWorker OCR & Compression"]
         Reader["Mozilla PDF.js 64KB Virtual Stream"]
+        IDBVault["IndexedDB Offline Vault (fsm_p2p_cache_v1)"]
     end
 
-    subgraph EdgeTier["Edge CDN & Security Tier (Cloudflare)"]
-        CF["Cloudflare Anycast CDN (BOM & DEL PoPs)"]
-        EdgeCache["Brotli Compression & Range Cache"]
+    subgraph EdgeTier["Edge CDN & Security Tier (Cloudflare Anycast)"]
+        CF["Cloudflare Mumbai (BOM) & Delhi (DEL) Anycast PoPs"]
+        EdgeCache["Brotli Level 11 & HTTP Range Cache"]
     end
 
     subgraph ServerTier["Application Server (Node.js 20 LTS / Render)"]
         Express["Express.js App Engine (server.js)"]
+        Watchdog["Self-Healing Watchdog (Lag, Idle, Temp Pruner)"]
+        IPJail["Autonomous IP Jail Firewall (ipJail.js)"]
+        RAMPool["500MB LRU RAM Cache Pool (ramCache.js)"]
+        RateLimit["Safe Proxy-Isolated Limiters (rateLimit.js)"]
         WS["WebSocket Server (/ws/chat)"]
-        MW["Security Middleware (Helmet, Sanitizer, IP Jail)"]
-        Workers["pdfCompressWorker & Sharp Pipeline"]
     end
 
     subgraph StorageTier["Distributed Cloud Storage (Telegram DC5)"]
@@ -75,8 +81,11 @@ flowchart TD
     SPA --> CF
     CF --> Express
     P2P <--> SPA
+    Express --> Watchdog
+    Express --> IPJail
+    Express --> RAMPool
+    Express --> RateLimit
     Express --> WS
-    Express --> MW
     Express --> MTProto
     MTProto --> DC5
     Express --> Firestore
@@ -91,32 +100,13 @@ flowchart TD
 
 ## 2. Zero-Cost Distributed Cloud Storage Engine (MTProto 2.0 & GramJS)
 
-### 2.1 The Telegram MTProto 2.0 Protocol Stack
-Traditional academic portals using AWS S3 or Google Cloud Storage accumulate massive bandwidth egress bills when thousands of engineering students download 100MB lecture sets. FSM uses Telegram Data Center 5 as an unlimited, zero-cost distributed object store.
-
-- **Direct TCP Socket Binding**: Implemented in [`src/telegram/mtproto.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/telegram/mtproto.js), the backend uses GramJS with the `TCPFull` transport framing protocol to establish direct raw TCP connections to Telegram's Singapore data center (`91.108.56.104:443`).
-- **16 Concurrency Worker Threads**: Files are sliced into 512KB binary chunks and transferred across 16 parallel threads simultaneously, saturating available network bandwidth for high upload and download speeds.
-- **Cryptographic Session Persistence**: Telegram authentication uses serialized string sessions (`.telegram_session`), eliminating repetitive SMS/bot handshakes and establishing persistent, self-healing connections across server restarts.
-- **Pure In-Memory Streaming**: File uploads use `multer.memoryStorage()`. Binary streams flow straight from Node.js RAM buffers into Telegram MTProto sockets without touching local server disks.
-
-### 2.2 SHA-256 Deduplication & WebAssembly Optimization Pipeline
-Before any document is dispatched to MTProto storage, it passes through an automated optimization and deduplication pipeline:
-
-1. **SHA-256 Deduplication ([`src/services/dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js))**:
-   - Computes a SHA-256 content hash of the file buffer.
-   - Queries Firestore and Turso LibSQL for matching hashes.
-   - If a duplicate document exists, cloud upload is skipped in 0ms; the new record simply links to the existing Telegram file ID, saving 100% bandwidth and storage.
-2. **pdf-lib Worker Thread Compression ([`src/services/compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js))**:
-   - Executes inside dedicated Node worker threads ([`src/services/pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js)).
-   - Linearizes PDF cross-reference tables, strips unused font descriptors, and downsamples scanned bitmaps, reducing raw file sizes by 40% to 70%.
-3. **Sharp WebP Thumbnail Generator ([`src/services/thumbnailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/thumbnailService.js))**:
-   - Extracts the first page of the PDF and converts it into a high-density WebP thumbnail (<25 KB), allowing instant client-side rendering.
-
-### 2.3 Mozilla 64KB Virtual Range Streaming
-When students read a 500-page textbook online ([`src/components/VirtualPdfReader.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/VirtualPdfReader.jsx)), loading the entire file would drain mobile data. FSM implements HTTP 206 Partial Content range streaming in [`src/routes/notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js):
-- Responds with `Accept-Ranges: bytes` and `Content-Range: bytes START-END/TOTAL`.
-- Fetches only the requested 64KB chunks directly from Telegram DC5.
-- Mozilla PDF.js renders the initial pages on HTML5 canvas in <150ms, fetching subsequent pages on-demand as the student scrolls.
+Implemented in [`src/telegram/mtproto.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/telegram/mtproto.js):
+- **Direct TCP Socket Binding**: Uses GramJS with `TCPFull` transport framing protocol to establish direct raw TCP connections to Telegram's Singapore data center (`91.108.56.104:443`).
+- **16 Concurrency Worker Threads**: Files are sliced into 512KB binary chunks and transferred across 16 parallel threads simultaneously.
+- **Cryptographic Session Persistence**: Serialized string sessions (`.telegram_session`) eliminate repetitive SMS/bot handshakes.
+- **Pure In-Memory Streaming**: File uploads use `multer.memoryStorage()`. Streams flow from RAM buffers into MTProto sockets without touching local disks.
+- **SHA-256 Deduplication ([`src/services/dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js))**: Hashes incoming buffers; duplicate uploads resolve in 0ms by linking existing Telegram document IDs.
+- **Mozilla 64KB Virtual Range Streaming ([`src/routes/notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js))**: Exposes `Accept-Ranges: bytes` and `Content-Range: bytes START-END/TOTAL`. Only requested 64KB chunks stream from Telegram DC5.
 
 | Pipeline Stage | Module / Service | Latency Window | Hardware Resource Impact |
 | :--- | :--- | :--- | :--- |
@@ -129,394 +119,232 @@ When students read a 500-page textbook online ([`src/components/VirtualPdfReader
 
 ---
 
-## 3. Dual Turso LibSQL Edge Database Architecture
+## 3. Dual-Tier WebAssembly PDF Compression Engine
 
-To protect Google Cloud Firestore free-tier quotas and achieve sub-5ms catalog queries, the platform utilizes two independent Turso LibSQL edge databases.
-
-### 3.1 Turso Notes Edge Cache ([`src/services/tursoNotesCacheService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoNotesCacheService.js))
-- **Mission**: Maintains edge-synchronized copies of all published notes, search tags, semester classifications, and download stats.
-- **Zero-Quota Query Resolution**: When students filter notes on the homepage by Branch, Subject, or Semester, queries resolve directly against the Turso LibSQL edge database in <8ms, generating **0 Firestore document reads**.
-- **Stale-While-Revalidate Dual Write**: When administrators upload, approve, or edit notes, writes occur concurrently to Firestore and Turso with automated fallback to in-memory RAM caches if edge networks experience transient jitter.
-
-### 3.2 Turso Community Chat & Moderation Database ([`src/services/tursoService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoService.js))
-- **Table `chat_messages`**: Rolling persistent storage for public chat messages, tracking edits, timestamps, and deleted flags.
-- **Table `chat_user_profiles`**: Tracks user chat avatars, online presence, ban/mute durations, and sequential message counters.
-- **Table `private_room_audits`**: Stores encrypted forensic logs of private study pods, room creators, participant rosters, and purge audit histories.
-
-### 3.3 Turso Support & Ticket Desk ([`src/services/helpTicketService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/helpTicketService.js))
-- **Table `help_tickets`**: Tracks student support requests (`ticket_id`, `student_name`, `email`, `subject`, `status`).
-- **Physical Database Purging**: Enables platform administrators to permanently delete resolved tickets and vacuum database rows directly from the Admin Dashboard (Tab 13).
+- **Client-Side Pre-Pass ([`src/utils/clientCompressor.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/clientCompressor.js))**: Runs inside browser WebWorkers using lightweight canvas rasterization to downsample high-DPI scans prior to upload.
+- **Server-Side WebAssembly ([`src/services/compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js))**: Powered by `pdf-lib` compiled to WebAssembly. Re-indexes and linearizes PDF cross-reference tables (XRefs) and strips unreferenced font descriptors.
+- **Worker Thread Isolation ([`src/services/pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js))**: PDF compression runs in isolated Node.js worker threads (`node:worker_threads`), ensuring the main Express event loop latency remains under 5ms.
+- **Sharp High-Density WebP Thumbnails ([`src/services/thumbnailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/thumbnailService.js))**: Extracts page 1 and generates an 800px WebP image (<25KB) for instant note card rendering.
 
 ---
 
-## 4. Collaborative Live Study Pods & P2P WebRTC Mesh
+## 4. Cloudflare Edge CDN & Indian Anycast Acceleration Tier
 
-Implemented in [`src/components/StudyPodModal.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/StudyPodModal.jsx) and [`src/utils/webrtcStudyRoom.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/webrtcStudyRoom.js), Collaborative Live Study Pods allow students to study together on a shared digital canvas in real time.
+- **Anycast Edge Routing**: Dedicated Points of Presence in Mumbai (BOM) and New Delhi (DEL) provide sub-15ms edge latency across Indian university campuses.
+- **Brotli Level 11 Text Compression**: Compresses JSON responses, HTML, and JS bundles, saving 15% to 25% extra bandwidth over standard Gzip.
+- **HTTP Range Passthrough & Preflight Caching**: Caches CORS preflight `OPTIONS` for 86,400s (24 hours) and transparently streams `HTTP 206 Partial Content`.
+- **Immutable Asset Headers**: Static assets carry `Cache-Control: public, max-age=31536000, immutable`, loading from browser disk cache in 0ms on return visits.
+
+---
+
+## 5. Autonomous Self-Healing Watchdog & Process Immortality Suite
+
+Implemented in [`src/utils/selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js):
+
+1. **Process Immortality Shield (`initProcessImmortalityShield`)**: Catches `uncaughtException` and `unhandledRejection` globally, logs security telemetry, and prevents Node.js process termination.
+2. **Event Loop Lag Detector (`startEventLoopLagDetector`)**: Measures event loop latency every 1,000ms. If CPU lag exceeds 150ms, alerts and triggers proactive thread cooling.
+3. **3-Minute Idle Memory Cleaner (`startIdleMemoryCleaner`)**: If zero HTTP requests occur for 3 minutes, automatically flushes inactive buffers and calls `global.gc()`, dropping RSS memory to base level (~60MB).
+4. **Dynamic Self-Adapting RAM Guard (`startRamBufferGuard`)**: Senses available system memory and auto-scales buffer limits across 512MB, 1GB, 2GB, 4GB, and 8GB hardware tiers.
+5. **1-Hour Strict Temp Folder Pruner (`startTempFolderPruner`)**: Cleans temporary files older than 3,600s while preserving active multi-stage uploads through an upload-immunity registry.
+6. **30-Day Disk Quota Pruner (`startDiskQuotaPruner`)**: Purges cached files exceeding 30 days or when temporary cache storage exceeds 1.5GB.
+7. **12-Minute Anti-Sleep Keep-Alive (`startTelegramHeartbeat`)**: Emits autonomous heartbeat pulses every 12 minutes to keep cloud containers awake during off-peak hours.
+
+---
+
+## 6. Auto RAM Caching Engine & Resilient Streaming Download
+
+### 6.1 Auto RAM Caching (`src/utils/ramCache.js`)
+- 500MB in-memory LRU cache pool serving notes catalog, branch listings, and subject maps in **~0.05ms (microseconds)**.
+- O(1) hash map lookups with automatic least-recently-used eviction when approaching memory thresholds.
+- Stale-while-revalidate invalidation automatically updates cached entries during administrative actions.
+
+### 6.2 Resilient Download Pipeline (`src/api.js: downloadNoteWithProgress`)
+- Sequential byte-range chunk streaming with real-time percentage progress callbacks (`receivedBytes / totalBytes * 100`).
+- Integrated `AbortController` signals allow students to pause, resume, or cancel downloads without socket hanging.
+- **Native File System Access API**: Uses `window.showSaveFilePicker()` to stream downloaded bytes directly to user storage, bypassing browser memory allocation and eliminating mobile tab crashes on 200MB files.
+- Graceful fallback to `Blob` object URL generation for mobile WebViews.
+
+---
+
+## 7. Virtual PDF Reader & Canvas Viewport Engine
+
+Implemented in [`src/components/VirtualPdfReader.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/VirtualPdfReader.jsx):
+- **Mozilla PDF.js 64KB On-Demand Range Streaming**: Fetches only the requested byte ranges for the active page via HTTP 206 Partial Content.
+- **Canvas Viewport Virtualization**: Destroys off-screen canvas page instances when scrolled out of view. Keeps client RAM consumption strictly under 25MB even on 500-page textbooks.
+- **Dark Mode Canvas Inversion Matrix**: Applies hardware-accelerated CSS filter matrices (`invert(0.92) hue-rotate(180deg) contrast(1.1)`) to render scanned pages in midnight dark mode.
+- **Dynamic Pinch-to-Zoom**: Multi-touch pinch zoom scaling (50% to 300%) with persistent jump-to-page numerical navigation.
+
+---
+
+## 8. 6-Stage Upload Pipeline Stepper
+
+Implemented in [`src/routes/upload.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/upload.js) and [`src/components/UploadModal.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/UploadModal.jsx):
+- **Stage 1**: Client OCR extraction (`clientOcr.js` WebWorker) extracts cover text.
+- **Stage 2**: In-memory RAM buffer streaming via `multer.memoryStorage()` (**zero server disk writes**).
+- **Stage 3**: Cryptographic SHA-256 deduplication lookup (skips storage upload in 0ms if duplicate exists).
+- **Stage 4**: WebAssembly `pdf-lib` optimization in worker threads (`pdfCompressWorker.js`).
+- **Stage 5**: GramJS MTProto 2.0 16-thread streaming to Telegram Singapore DC 5.
+- **Stage 6**: Dual-write synchronization to Firestore (`asia-south1`) and Turso LibSQL edge cache.
+
+---
+
+## 9. Collaborative Live Study Pods & Real-Time WebRTC Mesh
+
+Implemented in [`src/components/StudyPodModal.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/StudyPodModal.jsx) and [`src/utils/webrtcStudyRoom.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/webrtcStudyRoom.js):
+- **Protocol**: Y.js Conflict-free Replicated Data Types (CRDTs) over `y-webrtc` DataChannels.
+- **Google STUN Servers**: `stun:stun.l.google.com:19302` for NAT traversal.
+- **Zero Server Resources**: Strokes, pen colors, eraser vectors, and peer chat flow browser-to-browser (**0% server CPU, 0 MB server RAM, 0 database writes**).
+- **Dual PDF Sync**: Synchronizes active PDF document ID and current page coordinates across all connected peers.
+- **Campus P2P Mesh ([`src/utils/p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js))**: Seeds document chunks across campus Wi-Fi peers directly from IndexedDB without internet access.
+
+---
+
+## 10. Offline Notes & 6:00 AM Periodic Background Sync Engine
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor PeerA as Student A (Creator)
-    actor PeerB as Student B (Peer)
-    participant STUN as Google STUN (stun.l.google.com)
-    participant Server as Node.js Backend Server
-    participant DB as Firestore & Turso
+    actor Student as Student Reading Notes
+    participant IDB as IndexedDB (fsm_student_context_v1)
+    participant OS as Android / Windows OS (Alarm Scheduler)
+    participant SW as Service Worker (public/sw.js)
+    participant API as Notes API (/api/notes/exam-prefetch)
+    participant Vault as Dual Offline Vault (CacheStorage + IndexedDB)
 
-    PeerA->>STUN: NAT Traversal & ICE Candidate Gathering
-    PeerB->>STUN: NAT Traversal & ICE Candidate Gathering
-    PeerA<<->>PeerB: Direct WebRTC DataChannel Handshake (P2P Mesh)
-    Note over PeerA,PeerB: Connected via y-webrtc + Y.js CRDT
-    PeerA->>PeerB: Stroke Broadcast (x, y, color, width) via DataChannel
-    PeerB->>PeerA: PDF Page Flip Sync (Page 14) via DataChannel
-    PeerA->>PeerB: P2P Text Chat Message via DataChannel
-    Note over Server,DB: Server CPU Load: 0.0% | Server RAM: 0 MB | DB Writes: 0
+    Student->>IDB: Note read event saves Year, Branch, & Recent Subjects
+    Note over Student,OS: Student closes app & goes to sleep at night
+    OS->>SW: ⏰ 6:00 AM: OS fires 'periodicsync' event ('fsm-exam-prefetch')
+    SW->>IDB: SW wakes up in background; reads student context
+    SW->>API: GET /api/notes/exam-prefetch?year=4th&branch=CSE&recentIds=...
+    API-->>SW: Returns 4-Tier Prioritized Semester Exam Notes
+    SW->>Vault: Stores stream into CacheStorage (fsm-cache-v...)
+    SW->>Vault: Saves binary ArrayBuffer into IndexedDB (fsm_p2p_cache_v1)
+    Note over Student,Vault: Student wakes up: All notes 100% offline ready in Airplane Mode!
 ```
 
-### 4.1 Zero-Load P2P Mesh Architecture
-- **Protocol**: Y.js Conflict-free Replicated Data Types (CRDTs) delivered over `y-webrtc` WebRTC DataChannels.
-- **STUN Signaling**: NAT traversal is resolved using Google's public STUN servers (`stun:stun.l.google.com:19302` and `stun:stun1.l.google.com:19302`).
-- **Zero Server Resources**: Canvas strokes, pen colors, eraser vectors, and chat messages transmit directly from browser to browser. The backend server processes **0 WebSocket packets, 0 CPU cycles, and 0 database writes**.
+### 10.1 Pure Background OS Wake-Up (No App Open Needed)
+- **Zero User Interaction**: Students do NOT need to open the website or PWA at 6:00 AM.
+- **W3C Periodic Background Sync API**: Registered in `index.html` and `public/sw.js` (`reg.periodicSync.register('fsm-exam-prefetch')`). The operating system wakes the Service Worker silently in the background.
 
-### 4.2 Interactive Canvas & Dual PDF Synchronization
-- **Drawing Engine**: Digital Pen, Highlighter, and Eraser with multi-color palette (Cyan, Amber, Emerald, Rose, Purple, White) and a 1px–30px width slider.
-- **Dual PDF Sync**: Synchronizes active PDF document IDs and page coordinates across all connected peers, ensuring everyone views the same page simultaneously.
-- **Viral WhatsApp Invite**: One-click invite generator creates links (`/?pod=roomCode`) that allow classmates to jump straight into active study rooms.
-- **Presence Badge**: Real-time telemetry badge displaying active peer count (`🟢 X Peers Connected`) alongside system health (`⚡ Server Load: 0.0% P2P Mesh`).
+### 10.2 Personalized Student Study Context ([`src/utils/studentStudyContext.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/studentStudyContext.js))
+- Tracks student reading history (`userYear`, `userBranch`, `recentNoteIds`, `recentSubjects`).
+- Saves context into **IndexedDB database `fsm_student_context_v1`** (store: `profile`, key: `active_student`), allowing background Service Workers to access it when the app is closed.
 
----
+### 10.3 4-Tier Backend Sorting Hierarchy (`/api/notes/exam-prefetch`)
+1. **Priority 1**: Exact notes the student studied the previous night.
+2. **Priority 2**: Other top-rated notes matching the student's active subjects.
+3. **Priority 3**: High-yield syllabus notes matching the student's registered Year & Branch.
+4. **Priority 4**: General trending question banks and formula sheets as fallback.
 
-## 5. Telegram Multi-Bot Ecosystem & Forum Matrix
-
-The platform coordinates 3 dedicated Telegram bots across 15+ forum topics, enforcing strict domain isolation.
-
-```mermaid
-graph LR
-    subgraph FSMApp["Free Study Material Engine"]
-        AuthEngine["Auth & Session Guard"]
-        ChatEngine["Chat & Pod System"]
-        HelpEngine["Support Desk"]
-        ExamEngine["AI Exam Buddy"]
-    end
-
-    subgraph Bot1["1. FSM Security Bot (@fsm_security_otp_bot)"]
-        T2["Topic 2: Registrations"]
-        T3["Topic 3: Logins"]
-        T5["Topic 5: Logouts"]
-        T6["Topic 6: Account Dossiers (NO CHAT DATA)"]
-        T7["Topic 7: Admin OTPs"]
-        T8["Topic 8: Downloads"]
-        T55["Topic 55: User OTPs"]
-    end
-
-    subgraph Bot2["2. Chat Audit Bot (@fsm_chat_bot)"]
-        T31["Topic 31: Pod Forensics"]
-        T33["Topic 33: Private Media Vault (PDF/IMG)"]
-        T35["Topic 35: Deleted / Tamper Logs"]
-        T39["Topic 39/1: Public Chat Hub"]
-        T114["Topic 114: Presence & Cascade Purge Reports"]
-    end
-
-    subgraph Bot3["3. Help Bot (@fsm_help_bot)"]
-        HT1["Topic 1: Live Inquiries"]
-        HT2["Topic 2: Closed Resolutions"]
-    end
-
-    AuthEngine --> Bot1
-    ChatEngine --> Bot2
-    HelpEngine --> Bot3
-    ExamEngine --> Bot2
-```
-
-### 5.1 FSM Security & Identity Bot (`@fsm_security_otp_bot`)
-Dedicated strictly to platform authentication, identity verification, and security telemetry. **Chat-related data is strictly prohibited from entering this bot's supergroup.**
-
-| Topic ID | Designation | Trigger Source | Security & Privacy Protocol |
-| :---: | :--- | :--- | :--- |
-| **Topic 2** | New Registrations | `/register` & Google OAuth | Dossier: Name, Email, Mobile, College, Auth Method |
-| **Topic 3** | Session Logins | `/login`, Passkey, OTP | Timestamp, IP Hash, Device Profile, User Agent |
-| **Topic 5** | Session Logouts | `/logout` & Inactivity | Distinguishes manual logout vs 30-min auto logout |
-| **Topic 6** | Security Dossiers | Account Deletions | **Strictly ZERO chat details**; Account & Study metrics only |
-| **Topic 7** | Admin OTP Audit | Admin step-up 2FA | Secure audit trail of 6-digit administrative passcodes |
-| **Topic 8** | Download Manager | `/notes/:id/download` | Note Title, Subject, Branch, CDN Routing Method |
-| **Topic 55** | Student OTP Channel | User verification | Cryptographic 6-digit OTP delivery fallback channel |
-
-### 5.2 Community Chat Audit & Forensic Bot (`@fsm_chat_bot`)
-Dedicated to real-time chat monitoring, private study pod forensics, deleted message preservation, and session presence.
-
-| Topic ID | Designation | Trigger Source | Forensic & Delivery Rule |
-| :---: | :--- | :--- | :--- |
-| **Topic 31** | Pod Forensics | Room Close / Purge | Full forensic transcript, participant roster, 3-condition purge report |
-| **Topic 33** | Private Media Vault | `/upload-attachment` | Permanent PDF & image archive only (Text messages excluded) |
-| **Topic 35** | Deleted & Tamper Logs| `DELETE /messages/:id` | Captures original unedited text, deleted timestamp, sender IP hash |
-| **Topic 39/1**| Public Chat Hub | WS `/ws/chat` & Telegram | Two-way sync: Admin replies in Telegram appear live on the web |
-| **Topic 114**| Presence & Cascade Purge | `userCascadeDeletionService` | Full deletion report: Name, Email, Mobile, Turso rows deleted |
-
-### 5.3 Help & Support Desk Bot (`@fsm_help_bot`)
-- **Topic 1 (Live Inquiries)**: Dispatches new student support tickets as interactive HTML cards with inline buttons (`[ 🟢 Keep Active ]` / `[ 🔴 Close Ticket ]`).
-- **Topic 2 (Closed Resolutions)**: Archives resolution transcripts when an admin resolves a ticket or issues `/close FSM-H1234`.
-
-### 5.4 AI Exam Buddy & Daily Revision Pulse ([`src/services/examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js))
-- **7:00 AM IST Daily Revision Pulse**: Automated cron wakes every morning at 7:00 AM IST to broadcast semester countdowns, today's 2-hour target unit, booster PDF links, and Live Pod prompts.
-- **Native Telegram Quiz Polls**: Dispatches interactive quizzes using Telegram's native `sendPoll` API. Telegram's cloud computes answers and ranks leaderboards with **0% server CPU usage**.
+### 10.4 Dual Offline Vault Storage
+- **Tier 1 (CacheStorage)**: Caches `/api/notes/:id/stream.pdf` for instant `<10ms` offline reading via Service Worker fetch interception.
+- **Tier 2 (IndexedDB `fsm_p2p_cache_v1`)**: Stores raw binary `ArrayBuffer` for offline P2P campus airdrop seeding.
 
 ---
 
-## 6. Frontend Architecture & Dynamic Code-Splitting
+## 11. Defense Firewall, Autonomous IP Jail & Anti-Tamper Shield
 
-### 6.1 React 18 & Vite 6 Build Optimization
-Built as a responsive Single Page Application (SPA), the client optimizes performance for low-tier mobile devices on 3G/4G networks.
-
-```
-Initial Landing Bundle (Vite Build Analysis):
---------------------------------------------------------------------------------
-Entry Chunk (index.js):           125.49 KB  (36.19 KB gzip)  [85% payload reduction]
-Entry Stylesheet (index.css):      28.72 KB   (6.41 KB gzip)
---------------------------------------------------------------------------------
-Lazy-Loaded Modals & Heavy Vendors (Fetched on Demand):
-* AdminModal.chunk.js:            312.40 KB  (Loaded only when Admin opens dashboard)
-* StudyPodModal.chunk.js:          94.18 KB  (Loaded only when Pod is launched)
-* PreviewModal.chunk.js:           42.11 KB  (Loaded only when Reading a note)
-* pdfjs-dist.chunk.js:            473.10 KB  (Loaded only during PDF rendering)
-* pdf-lib.chunk.js:               521.80 KB  (Loaded only during client PDF compression)
-* yjs.chunk.js:                   193.20 KB  (Loaded only during Live Study Pod sessions)
-```
-
-### 6.2 Mobile 30-Minute Auto-Logout Shield (Dual-Shield Protection)
-Mobile operating systems (Android & iOS) aggressively freeze background tabs and suspend JavaScript timers when the screen locks. FSM implements a dual-shield defense:
-
-1. **Touch Guard (`checkInactivityAndTimeout` First)**:
-   In [`src/App.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/App.jsx), when a student wakes their phone after 30+ minutes and touches the screen, `recordUserActivity()` checks the inactivity duration **before** updating the timestamp. If 30+ minutes elapsed, auto-logout executes immediately without updating the timer.
-2. **Lifecycle Sleep & Resume Hooks**:
-   Monitors `visibilitychange`, `pageshow` (bfcache restoration), `focus`, `pagehide`, and `blur`. Wakes immediately calculate inactivity gaps and execute logouts if the threshold is exceeded.
-3. **Dual-Storage Synchronization (`safeStorage`)**:
-   Writes timestamps to both `localStorage` and `document.cookie` (`SameSite=Lax`). In-app webviews or private tabs that reset `localStorage` remain protected by the cookie fallback.
-4. **Server-Side Cookie Inactivity Guard ([`src/middleware/auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/auth.js))**:
-   Authenticated API requests inspect the `vault_last_active` cookie. If older than 30 minutes, the server immediately revokes the session cookie and returns `401 Session Expired`.
-
-### 6.3 Modular 13-Tab Admin Console ([`src/components/admin/`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/admin/))
-The administrative dashboard is partitioned into 13 modular tabs, supporting granular access control checkboxes for Half-Admins:
-
-- **Tab 1: 📚 Notes Vault**: Complete CRUD control, approval pipeline, soft-delete, and download-lock toggles.
-- **Tab 2: 👥 Student Registry**: Student management, mobile verification, 1-click immunity toggles, and Tab 1–13 permission checkboxes.
-- **Tab 3: 🖥️ Server Hardware**: Real-time Node.js metrics (CPU load, heap memory, event loop latency, GC sweep trigger).
-- **Tab 4: 💻 Software & Maintenance**: Maintenance curtain toggle with custom bypass keys and SMTP telemetry.
-- **Tab 5: 🚀 Upload Pipeline**: 6-stage upload stepper monitoring MTProto DC5 binary throughput and buffer pools.
-- **Tab 6: ⚡ CDN & Performance**: Cloudflare edge metrics, Brotli compression ratios, and Mozilla range-streaming telemetry.
-- **Tab 7: 🗄️ Database Studio**: Google Cloud Firestore collection inspector, gRPC latency, and connection health.
-- **Tab 8: ♻️ Restore Vault & Inactivity**: Soft-deleted note and account recycle bin with 1-click restoration and 7-day sweeper settings.
-- **Tab 9: 🤖 Security Bot Controls**: Security bot supergroup configuration, OTP channel bindings, and threat detention logs.
-- **Tab 10: 🧬 Next-Gen Tech**: Autonomous self-healing systems (Telegram circuit breaker, RAM watchdog, cache warmer).
-- **Tab 11: 💬 Community Chat Hub**: Forum topics routing, user moderation, bans, mutes, and instant chat purges.
-- **Tab 12: ⚡ Turso Database Studio**: Turso LibSQL edge database console, schema inspector, latency graphs, and SQL runner.
-- **Tab 13: 🎫 Support Desk**: Student help inquiry manager, two-way reply broadcaster, and physical database cleaner.
+- **Autonomous IP Jail ([`src/middleware/ipJail.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/ipJail.js))**: 60-second sliding windows. If traffic exceeds 600 req/min (10 req/s sustained), the IP is quarantined for 3 minutes, returning HTTP 429 and Retry-After headers with zero server CPU overhead.
+- **Anti-Tamper Integrity Defense ([`src/utils/antiTamperDefense.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/antiTamperDefense.js))**: Verifies runtime configuration integrity, protects administrative session cookies, and records threat metrics.
+- **Maintenance Mode Curtain ([`src/middleware/maintenance.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/maintenance.js))**: Provides zero-downtime maintenance curtains to the public while granting access to administrators via `?admin_bypass=fsm_admin_override` or admin JWT sessions.
+- **Crash-Proof Rate Limiters ([`src/middleware/rateLimit.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/rateLimit.js))**:
+  - `validate: false` (eliminates internal ERL validation crashes).
+  - `passOnStoreError: true` (prevents memory store errors from dropping requests).
+  - `createSafeLimiterHandler` checking `res.headersSent` to prevent `ERR_HTTP_HEADERS_SENT` crashes on active streams.
+  - Preflight `OPTIONS` requests bypassed to prevent browser CORS errors.
 
 ---
 
-## 7. Backend Application Engine, Middleware & Route Matrix
+## 12. Dual Turso LibSQL Edge Database Architecture
 
-### 7.1 Enterprise Security Middleware Stack
-1. **Helmet HTTP Headers**: Enforces Content-Security-Policy (CSP), Strict-Transport-Security (HSTS 365 days), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy`.
-2. **Global Input Sanitizer ([`src/middleware/sanitize.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/sanitize.js))**: Recursively cleans request bodies, query strings, and parameters against NoSQL injection operators (`$gt`, `$ne`, `$where`), prototype pollution (`__proto__`, `constructor`), and XSS script tags.
-3. **Multi-Tiered Rate Limiters ([`src/middleware/rateLimit.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/rateLimit.js))**: Sliding-window in-memory limiters: Global API (5000 req/15m), Download Stream (3000 req/15m), Document Upload (250 req/15m), and Authentication (100 req/15m).
-4. **Autonomous IP Jail Firewall ([`src/middleware/ipJail.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/ipJail.js))**: Automatically detects malicious injection patterns and brute-force attempts, jailing offending IP addresses with automated unjail timers and admin alerts.
-5. **Server-Side Inactivity Guard ([`src/middleware/auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/auth.js))**: Validates JWT HMAC-SHA256 tokens and checks the `vault_last_active` cookie, revoking inactive sessions (>30 min) across mobile and web.
-
-### 7.2 Backend Route Matrix
-
-| Route Endpoint | Source File | Responsibilities & Security Controls |
-| :--- | :--- | :--- |
-| `/api/notes` | [`src/routes/notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js) | Notes catalog, branch filtering, 64KB range streaming, download gate |
-| `/api/auth` | [`src/routes/auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/auth.js) | JWT sessions, FIDO2 Passkeys, Brevo OTP, Telegram OTP, Google OAuth |
-| `/api/chat` | [`src/routes/chat.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/chat.js) | WS `/ws/chat`, private rooms, ghost mode, attachment vault, 3-cond purge |
-| `/api/admin` | [`src/routes/admin.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/admin.js) | 13 Admin tabs telemetry, user registry, restore vault, bot settings |
-| `/api/upload` | [`src/routes/upload.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/upload.js) | Multipart upload, SHA-256 deduplication, pdf-lib compress, MTProto DC5 |
-| `/api/exam` | [`src/routes/exam.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/exam.js) | Semester countdown, 7:00 AM pulse trigger, native Telegram quiz dispatcher |
-| `/api/help` | [`src/routes/help.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/help.js) | Support desk ticket submission, status polling, admin replies, DB cleaner |
-| `/api/passkey`| [`src/routes/passkey.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/passkey.js) | WebAuthn registration options, biometric verification, credentials store |
-| `/api/security`| [`src/routes/security.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/security.js) | Security bot telemetry, channel binding controls, live threat metrics |
-| `/api/notices`| [`src/routes/notices.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notices.js) | Academic bulletin announcements, urgent exam date sheets, pinned alerts |
+- **Turso Notes Edge Cache ([`src/services/tursoNotesCacheService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoNotesCacheService.js))**: Edge-synchronized catalog resolving homepage queries in <8ms with **0 Firestore document reads**.
+- **Turso Community Chat & Forensics ([`src/services/tursoService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoService.js))**: Persistent storage for chat messages, participant avatars, ban durations, and private room forensic audits.
+- **Turso Support Desk ([`src/services/helpTicketService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/helpTicketService.js))**: LibSQL support ticket management synchronized with Telegram `@fsm_help_bot` with physical database cleaning.
 
 ---
 
-## 8. Cryptography, Zero-Trust Privacy & 11-Step Cascade Purge
+## 13. Telegram Multi-Bot Ecosystem & Forum Matrix
 
-### 8.1 Cryptographic Storage Primitives ([`src/utils/cryptoVault.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cryptoVault.js))
-- **AES-256-GCM Phone Encryption**: Student phone numbers are encrypted with AES-256-GCM authenticated cipher with dynamic 96-bit initialization vectors (IVs) and 128-bit authentication tags. Plaintext numbers are never stored in databases or transmitted in public chat logs.
-- **Bcrypt 10-Round Password Hashing**: Passwords undergo 10 rounds of salted Bcrypt hashing before persistence, preventing reverse-engineering even in the event of database compromise.
-- **JWT HMAC-SHA256 Tokens**: Sessions use 256-bit cryptographically signed JSON Web Tokens sealed inside `httpOnly`, `Secure`, `SameSite=Lax` cookies immune to client-side XSS extraction.
-
-### 8.2 Master Admin Ghost / Stealth Mode
-- **Strict Role Isolation**: Restricted strictly to the Master Administrator (`jnplotus@gmail.com` / `process.env.ADMIN_EMAIL`). Regular admins, half-admins, and students cannot activate ghost mode.
-- **Invisible Private Pod Moderation**: Allows the Master Admin to enter any active private study pod without broadcasting entry presence, incrementing the room member counter, or appearing in the online participants drawer.
-- **Passcode Masking**: Room passcodes (`secretCode`) are hidden from all other admins and students. Only the room creator and Master Admin can inspect room passcodes.
-
-### 8.3 11-Step Complete Account Cascade Purge ([`src/services/userCascadeDeletionService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/userCascadeDeletionService.js))
-When a student account is deleted (either via manual Admin Delete or the automated 7-day inactivity sweeper), an irreversible 11-step cascade executes to purge all traces of the user while preserving uploaded academic notes:
-
-```mermaid
-flowchart TD
-    Start["Initiate Deletion (Admin Delete / 7-Day Inactivity Sweeper)"] --> Step1["Step 1: Transfer Notes Ownership to 'Archived Scholar'"]
-    Step1 --> Step2["Step 2: Serialize Snapshot into Restore Vault (deleted_records)"]
-    Step2 --> Step3["Step 3: Record Audit Event in System Activities"]
-    Step3 --> Step4["Step 4: Batch Delete All Messages from Firestore chat_messages"]
-    Step4 --> Step5["Step 5: Evict Messages from Active In-Memory Room Buffers"]
-    Step5 --> Step6["Step 6: Turso LibSQL Cascade: Purge Profiles, Audits, Messages"]
-    Step6 --> Step7["Step 7: Revoke WebAuthn Passkeys & Active Authenticator Credentials"]
-    Step7 --> Step8["Step 8: Permanently Delete User Document from Firestore users"]
-    Step8 --> Step9["Step 9: Invalidate Local RAM LRU & Turso Edge Notes Caches"]
-    Step9 --> Step10["Step 10: Dispatch Account Dossier to FSM Security Bot Topic 6 (0 Chat Details)"]
-    Step10 --> Step11["Step 11: Dispatch Forensic Cascade Report to Supergroup Topic 114"]
-    Step11 --> Complete["Purge Complete (Zero Traces Remaining)"]
-```
-
-1. **Step 1: Notes Preservation**: Transfers ownership of all notes uploaded by the user to 'Archived Scholar', ensuring public access to study materials is never disrupted.
-2. **Step 2: Recycle Bin Snapshot**: Serializes complete account metadata, download histories, and upload logs into the Restore Vault (`deleted_records`).
-3. **Step 3: User Activity Logging**: Records audit event in system activities table.
-4. **Step 4: Firestore Chat Cleanup**: Queries `chat_messages` where `sender.id` matches user, batch-deleting all messages.
-5. **Step 5: RAM Chat Memory Eviction**: Filters and evicts user messages from active in-memory chat room buffers.
-6. **Step 6: Turso LibSQL Cascade**: Executes SQL cascade deleting chat user profiles, private room audits, and message records from Turso edge tables.
-7. **Step 7: Passkeys & Session Revocation**: Deletes enrolled FIDO2 WebAuthn credentials and authenticators.
-8. **Step 8: Firestore User Document Delete**: Permanently deletes the document from the `users` collection.
-9. **Step 9: RAM & Edge Cache Invalidation**: Invalidates local LRU RAM caches and Turso notes caches.
-10. **Step 10: FSM Security Dossier (Topic 6)**: Dispatches account lifecycle dossier to FSM Security Bot Topic 6 with strictly ZERO chat-related details.
-11. **Step 11: Telegram Supergroup Forensic Report (Topic 114)**: Dispatches complete cascade deletion report to Supergroup Topic 114: Student Name, Email, Mobile, College, Inactivity Days, Turso rows deleted, and chat expunged status.
+- **FSM Security Bot (`@fsm_security_otp_bot`)**: Handles Topics 2 (Registrations), 3 (Logins), 5 (Logouts), 6 (Account Dossiers — strictly zero chat data), 7 (Admin OTPs), 8 (Downloads), and 55 (Student OTPs).
+- **Chat Audit Bot (`@fsm_chat_bot`)**: Handles Topics 31 (Pod Forensics & 3-condition purges), 33 (Private Media Vault: PDF/IMG only), 35 (Public Chat Deleted & Tamper Logs), 39/1 (Live Public Chat Two-Way Sync), and 114 (Student Presence & Full Cascade Purge Reports).
+- **Support Desk Bot (`@fsm_help_bot`)**: Real-time two-way ticket synchronization across Topic 1 (Live Inquiries) and Topic 2 (Closed Resolutions).
+- **AI Exam Buddy ([`src/services/examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js))**: Daily 7:00 AM IST revision pulse and zero-CPU native Telegram quiz polls (`sendPoll`).
 
 ---
 
-## 9. Production Hosting & Render Operations
+## 14. Cryptography, Zero-Trust Privacy & 11-Step Cascade Purge
 
-### 9.1 Render PaaS Infrastructure ([`render.yaml`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/render.yaml))
-- **Service Type**: Node.js Web Service (Region: Singapore `asia-southeast1`).
-- **Build Command**: `npm install && npm run build` (Bundles Vite client assets in ~14 seconds).
-- **Start Command**: `node src/server.js` (Binds to `0.0.0.0:${PORT}`).
-- **Runtime Environment**: Node.js 20.18.0 LTS.
-- **Continuous Deployment**: Pushing commits to branch `main` automatically triggers zero-downtime rolling deployments.
-
-### 9.2 Environment Variables & Service Secrets Reference
-
-| Variable Key | Scope | Functional Destination & Description |
-| :--- | :---: | :--- |
-| `PORT` | System | HTTP listening port (Render default: 5000) |
-| `NODE_ENV` | System | Runtime environment mode (`production` / `development`) |
-| `ADMIN_EMAIL` | Secret | Master Administrator email identity with permanent immunity |
-| `VITE_ADMIN_EMAIL` | Frontend | Injected into client bundle for Master Admin UI recognition |
-| `JWT_SECRET` | Secret | HMAC-SHA256 cryptographic signing key for session tokens |
-| `FIREBASE_PROJECT_ID` | Secret | Google Cloud Project ID for Firestore Asia-South1 |
-| `FIREBASE_CLIENT_EMAIL`| Secret | Google Service Account email for Firestore SDK |
-| `FIREBASE_PRIVATE_KEY` | Secret | RSA private key for Google Cloud IAM authentication |
-| `TELEGRAM_BOT_TOKEN` | Secret | Primary storage fallback bot token |
-| `TELEGRAM_STORAGE_CHAT_ID` | Secret | Telegram storage channel target ID for MTProto files |
-| `TELEGRAM_API_ID` | Secret | GramJS Telegram MTProto 2.0 application client ID |
-| `TELEGRAM_API_HASH` | Secret | GramJS Telegram MTProto 2.0 application client hash |
-| `TELEGRAM_OTP_BOT_TOKEN` | Secret | FSM Security Bot token (`@fsm_security_otp_bot`) |
-| `TELEGRAM_TOPIC_GROUP_ID` | Secret | FSM Security Supergroup chat ID (`-1003943130538`) |
-| `TELEGRAM_CHAT_AUDIT_BOT_TOKEN` | Secret | Dedicated Chat Audit Bot token (`@fsm_chat_bot`) |
-| `TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID` | Secret | Chat Audit Supergroup forum ID |
-| `TELEGRAM_CHAT_TOPIC_PRESENCE` | Config | Topic 114: Student Sessions & Cascade Deletion Reports |
-| `TELEGRAM_CHAT_TOPIC_POD_AUDITS` | Config | Topic 31: Private Pod Transcripts & 3-Condition Purges |
-| `TELEGRAM_CHAT_TOPIC_MEDIA_VAULT` | Config | Topic 33: Permanent Private Media Vault (PDF/IMG only) |
-| `TELEGRAM_CHAT_TOPIC_DELETED` | Config | Topic 35: Public Chat Deleted Messages & Tamper Logs |
-| `TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT`| Config | Topic 39 (or 1): Live Community Chat & Two-Way Sync |
-| `TURSO_DATABASE_URL` | Secret | Turso LibSQL edge database connection endpoint |
-| `TURSO_AUTH_TOKEN` | Secret | Turso LibSQL bearer authentication token |
-| `HELP_BOT_TOKEN` | Secret | Support Desk Telegram bot token (`@fsm_help_bot`) |
-| `HELP_CHAT_ID` | Secret | Support Desk Supergroup chat target ID |
+- **AES-256-GCM Phone Encryption ([`src/utils/cryptoVault.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cryptoVault.js))**: Encrypts student phone numbers with dynamic 96-bit IVs and 128-bit authentication tags.
+- **Bcrypt 10-Round Password Hashing**: Passwords undergo 10 rounds of salted Bcrypt hashing before persistence.
+- **Master Admin Ghost Stealth Mode**: Restricted strictly to the Master Administrator (`ADMIN_EMAIL`). Allows invisible entry into private study pods without broadcasting presence or incrementing room member counts.
+- **11-Step Account Cascade Purge ([`src/services/userCascadeDeletionService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/userCascadeDeletionService.js))**:
+  1. Transfer notes ownership to 'Archived Scholar'.
+  2. Serialize snapshot into Restore Vault (`deleted_records`).
+  3. Log audit event in system activities.
+  4. Batch delete all user messages from Firestore `chat_messages`.
+  5. Evict user messages from active in-memory room buffers.
+  6. Purge Turso LibSQL rows (profiles, audits, messages).
+  7. Revoke WebAuthn Passkeys and active sessions.
+  8. Permanently delete user document from Firestore `users`.
+  9. Invalidate RAM LRU and Turso edge notes caches.
+  10. Dispatch account dossier to FSM Security Bot Topic 6 (**strictly 0 chat details**).
+  11. Dispatch complete cascade deletion report to Supergroup Topic 114.
 
 ---
 
-## 10. Complete File-by-File Technical Directory
+## 15. Performance Benchmarks & Empirical Stress Test Results
 
-### 10.1 Backend Services (`src/services/`)
-- [`accountPurgeService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/accountPurgeService.js): Autonomous 7-day inactivity sweeper. Scans Firestore users, identifies inactive accounts (>7d), excludes admins and immune users, triggers `cascadeDeleteUserAccount`, and dispatches security alerts.
-- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit engine. Connects to `@fsm_chat_bot`, manages topics 31 (Pods), 33 (Media), 35 (Deleted/Tamper), 39/1 (Public Chat), and 114 (Presence & Cascade Reports). Employs 5s long-polling and 2-way sync.
-- [`compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js) & [`pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js): WebAssembly `pdf-lib` optimization pipeline. Linearizes cross-reference tables, strips redundant font descriptors, downsamples images, and runs inside Node worker threads.
-- [`dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js): Cryptographic document deduplicator. Computes SHA-256 content hashes, queries Firestore for existing `fileHash`, and prevents redundant uploads by linking existing Telegram document IDs.
-- [`emailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/emailService.js): Brevo transactional SMTP dispatcher & FSM Security Bot notice generator. Delivers 6-digit cryptographic OTPs and dispatches student activity dossiers (Topic 2, 3, 5, 6, 7, 8, 55). Strictly excludes chat details from Topic 6.
-- [`examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js): Telegram AI Exam Revision Buddy. In-memory semester timetables, 7:00 AM IST daily target pulse broadcaster, and native Telegram interactive quiz poll scheduler (`sendPoll`).
-- [`helpTicketService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/helpTicketService.js): Hybrid Support Desk engine. Manages Turso LibSQL support tickets, two-way reply sync with Telegram `@fsm_help_bot` (Topic 1 & 2), and physical database cleanup execution.
-- [`ocrService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/ocrService.js): Server-side Tesseract.js LSTM OCR engine. Performs multi-threaded optical character recognition on scanned PDF pages, generating full-text searchable transcripts for academic search.
-- [`queueService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/queueService.js): Asynchronous non-blocking background upload queue. Decouples client upload responses from MTProto cloud upload completion, providing progress updates via SSE/polling.
-- [`securityBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/securityBotService.js): Threat intelligence & OTP delivery engine. Dispatches brute force detention logs, manages Telegram OTP channels, and computes real-time system audit security scores.
-- [`thumbnailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/thumbnailService.js): Sharp-powered high-performance WebP thumbnail generator. Extracts PDF cover pages and compresses into lightweight 800px WebP images (<25KB) for instant note card rendering.
-- [`tursoNotesCacheService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoNotesCacheService.js): Sub-5ms edge cache client for notes catalog. Interfaces with LibSQL edge database to serve notes queries with 0 Firestore database reads.
-- [`tursoService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoService.js): Primary Turso LibSQL database connection manager. Executes parameterized SQL queries, maintains connection pools, and stores chat forensics and user profiles.
-- [`userCascadeDeletionService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/userCascadeDeletionService.js): Exhaustive 11-step account deletion cascade orchestrator. Anonymizes notes, cleans Firestore chat messages, purges Turso LibSQL rows, and dispatches Topic 114 reports.
-
-### 10.2 Backend Routes (`src/routes/`)
-- [`admin.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/admin.js): Master administrative API exposing 13 tabs of telemetry, student registry, recycle bin, hardware metrics, and bot configuration controls.
-- [`auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/auth.js): Authentication router supporting JWT sessions, WebAuthn Passkeys, Brevo OTP, Telegram Bot OTP, Google 1-click OAuth, and server-side inactivity checks.
-- [`chat.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/chat.js): Real-time community chat & private pod router. Mounts `/ws/chat` WebSocket server, manages active room pools, ghost stealth mode, and 3-condition private pod purges.
-- [`exam.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/exam.js): Exam timetable catalog, countdown status, and manual/automated daily revision pulse trigger endpoints.
-- [`help.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/help.js): Support desk ticket submission, status polling, admin replies, and physical database table cleanup endpoints.
-- [`notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js): Public academic notes catalog, multi-category search, 64KB virtual HTTP Range streaming, and download authorization gate.
-- [`upload.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/upload.js): Multipart document upload endpoint coordinating deduplication, compression, MTProto DC5 storage, and Firestore persistence.
-- [`passkey.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/passkey.js): FIDO2 / WebAuthn registration options generator and biometric credential authentication verification router.
-- [`security.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/security.js): Security bot telemetry, channel binding controls, and live threat intelligence metrics.
-- [`notices.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notices.js): Academic notice board feed serving real-time university circulars and examination updates.
-- [`p2p.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/p2p.js): P2P campus mesh signaling fallback and local peer registry.
-
-### 10.3 Middleware & Security Infrastructure (`src/middleware/`)
-- [`auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/auth.js): JWT HMAC-SHA256 token verification, httpOnly cookie management, and server-side 30-minute student inactivity session revocation.
-- [`ipJail.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/ipJail.js): Sliding-window IP detention firewall. Automatically jails malicious IPs attempting SQL/NoSQL injections or brute force.
-- [`maintenance.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/maintenance.js): System upgrade curtain with admin bypass key parameter verification.
-- [`rateLimit.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/rateLimit.js): Multi-tiered sliding-window rate limiters protecting endpoints against volumetric DDoS.
-- [`sanitize.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/sanitize.js): Global prototype pollution and NoSQL injection scrubber cleaning body, query, and params.
-
-### 10.4 Telegram Engine (`src/telegram/`)
-- [`mtproto.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/telegram/mtproto.js): Raw TCPFull MTProto 2.0 client connecting to Telegram DC 5 (Singapore). 16 parallel threads, binary chunking, and session persistence.
-- [`botPoller.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/telegram/botPoller.js): High-frequency 5-second long-poller listening for admin commands and inbound document uploads.
-- [`syncTracker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/telegram/syncTracker.js): Synchronization state tracker ensuring document integrity across distributed cloud channels.
-
-### 10.5 Utilities & Resilience Subsystems (`src/utils/`)
-- [`cryptoVault.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cryptoVault.js): AES-256-GCM authenticated cipher with dynamic IVs for phone number and private message encryption.
-- [`circuitBreaker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/circuitBreaker.js): Autonomous fault-isolation circuit breaker protecting against Telegram DC5 connection timeouts.
-- [`selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js): Proactive memory sweeper, event loop lag detector, and anti-sleep keep-alive pulse generator.
-- [`cacheWarmer.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cacheWarmer.js): Proactive catalog pre-fetcher pre-warming edge caches for instant student access.
-- [`webrtcStudyRoom.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/webrtcStudyRoom.js): Y.js CRDT provider and y-webrtc DataChannel mesh coordinator for Live Study Pods.
-- [`p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js) & [`p2pCampusAirdrop.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pCampusAirdrop.js): Campus Wi-Fi direct peer acceleration and local document discovery.
-- [`tabLeaderLock.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/tabLeaderLock.js): Web Locks API and BroadcastChannel multi-tab leader election preventing redundant socket connections.
-- [`hardwareAdaptiveEngine.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/hardwareAdaptiveEngine.js): Detects client CPU cores, memory limits, and battery status to adaptively throttle animation frames.
+| Performance Benchmark / Metric | Observed Value | Benchmark Target | Production Health Status |
+| :--- | :--- | :--- | :--- |
+| **First Contentful Paint (FCP)** | 112ms - 145ms | < 500ms | Ultra-Fast (Top 1% Web) |
+| **Largest Contentful Paint (LCP)** | 380ms - 420ms | < 1,200ms | Optimal Mobile Vitals |
+| **Cumulative Layout Shift (CLS)** | 0.000 | < 0.100 | Perfect Zero-Shift |
+| **Time to Interactive (TTI)** | 180ms - 240ms | < 800ms | Sub-Quarter Second |
+| **Turso Edge Cache Query Latency** | 4.2ms - 7.8ms | < 25ms | Sub-10ms Edge Access |
+| **RAM Cache In-Memory Serving** | 0.04ms - 0.08ms | < 1ms | Microsecond Serving |
+| **Peak Simulated Concurrency** | 10,000 Active Users | 5,000 Users | 200% Capacity Buffer |
+| **Server Sustained Request Rate** | 2,850 req/sec | 1,500 req/sec | Full Anycast Throughput |
+| **Server Memory Footprint (Idle)** | 60MB - 78MB RSS | < 150MB | Zero Memory Leak |
+| **Server Memory Footprint (Peak)** | 85MB - 120MB RSS | < 380MB | Watchdog Buffer Guard |
+| **Server NVMe/SSD Disk Writes** | 0.00 KB | 0.00 KB | 100% Pure RAM Buffer |
 
 ---
 
-## 11. End-to-End Operational Data Flow Traces
+## 16. Complete File-by-File Technical Directory & Operational Traces
 
-### Trace 1: Document Upload to Distributed Cloud Storage
-1. Student selects a 40MB PDF textbook in [`UploadModal.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/UploadModal.jsx).
-2. `clientOcr.js` extracts cover page text in a client browser worker; `clientCompressor.js` applies an initial compression pass.
-3. Multipart payload posts to `/api/upload`. `multer.memoryStorage()` streams the file into a RAM buffer (**zero server disk writes**).
-4. `dedupService.js` computes the SHA-256 content hash. If duplicate, returns the existing document immediately.
-5. `pdfCompressWorker.js` linearizes cross-reference tables; `sharp` generates an 800px WebP thumbnail.
-6. `mtproto.js` chunks binary into 512KB blocks across 16 parallel TCP threads directly into Telegram DC5 (Singapore).
-7. Document metadata persists to Firestore (`asia-south1`) and synchronizes simultaneously to the Turso LibSQL edge cache.
+### 16.1 Backend Core Services (`src/services/`)
+- [`accountPurgeService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/accountPurgeService.js): 7-day inactivity sweeper with admin immunity.
+- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit engine for topics 31, 33, 35, 39, and 114.
+- [`compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js) & [`pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js): WebAssembly `pdf-lib` worker thread compressor.
+- [`dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js): SHA-256 document deduplication engine.
+- [`emailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/emailService.js): Brevo SMTP & Telegram notices (topics 2, 3, 5, 6, 7, 8, 55).
+- [`examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js): 7:00 AM revision pulse & native Telegram quiz dispatcher.
+- [`helpTicketService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/helpTicketService.js): Turso LibSQL support desk with physical table cleaner.
+- [`ocrService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/ocrService.js): Tesseract.js LSTM optical character recognition engine.
+- [`queueService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/queueService.js): Asynchronous background upload queue.
+- [`securityBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/securityBotService.js): Threat intelligence and brute force detention logger.
+- [`thumbnailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/thumbnailService.js): Sharp WebP generator producing 800px cover images (<25KB).
+- [`tursoNotesCacheService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoNotesCacheService.js): Sub-5ms LibSQL edge cache client.
+- [`tursoService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/tursoService.js): Primary Turso LibSQL connection manager.
+- [`userCascadeDeletionService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/userCascadeDeletionService.js): 11-step account deletion cascade orchestrator.
 
-### Trace 2: 64KB Virtual Range Streaming (Online Reading)
-1. Student clicks 'Read Online' on a 500-page textbook card.
-2. [`VirtualPdfReader.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/VirtualPdfReader.jsx) issues HTTP `GET /api/notes/:id/stream` with `Range: bytes=0-65535`.
-3. [`notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js) queries MTProto DC5 for the exact 64KB byte offset, returning `HTTP 206 Partial Content`.
-4. Mozilla PDF.js renders the first page on HTML5 canvas in <150ms without loading the other 499 pages.
+### 16.2 Backend Routes & Middleware
+- [`routes/admin.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/admin.js): 13 admin tabs telemetry, registry, and hardware metrics.
+- [`routes/auth.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/auth.js): JWT sessions, WebAuthn Passkeys, Brevo OTP, and Telegram OTP.
+- [`routes/chat.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/chat.js): Real-time chat router mounting WS `/ws/chat`, private pods, and ghost mode.
+- [`routes/notes.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/notes.js): Notes catalog, branch filters, 64KB virtual HTTP Range streaming.
+- [`routes/upload.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/upload.js): Multipart upload endpoint coordinating dedup, compression, and MTProto DC5.
+- [`routes/help.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/routes/help.js): Support desk ticket submission, status polling, and database cleaner.
+- [`middleware/rateLimit.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/rateLimit.js): Proxy-isolated limiters (`validate: false`, `passOnStoreError: true`, `res.headersSent` guard).
+- [`middleware/ipJail.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/ipJail.js): 60s sliding window firewall jailing abusers for 3 minutes.
+- [`middleware/maintenance.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/maintenance.js): Zero-downtime maintenance curtain with admin bypass keys.
+- [`middleware/sanitize.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/sanitize.js): Global prototype pollution and NoSQL injection scrubber.
 
-### Trace 3: 30-Minute Inactivity Auto-Logout Lifecycle
-1. Student on mobile locks screen or switches apps at 2:00 PM. `visibilitychange: hidden` records the departure timestamp.
-2. Mobile OS freezes the JavaScript interval timer. At 2:40 PM (40 minutes later), student unlocks phone and touches screen.
-3. Touch Guard `checkInactivityAndTimeout()` fires **before** `recordUserActivity()` can update the timestamp.
-4. Detects `40m >= 30m` timeout: immediately triggers `triggerAutoLogout()`, clears `safeStorage` and cookies.
-5. Calls `POST /api/auth/logout`. Server revokes session, dispatches Topic 5 auto-logout alert, and renders the golden session-expired alert modal.
-
----
-
-## 12. System Fault Tolerance & Autonomous Recovery
-
-Free Study Material is built with zero-single-point-of-failure autonomy:
-
-1. **Telegram DC5 Circuit Breaker ([`src/utils/circuitBreaker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/circuitBreaker.js))**:
-   - Monitors MTProto TCP connectivity.
-   - If 5 consecutive socket timeouts occur, trips to `OPEN` state, routing uploads to the HTTP Bot Poller fallback while running 45-second recovery probes.
-2. **Firestore Quota & Edge Fallback**:
-   - If Google Cloud Firestore reaches daily read quotas, the catalog automatically falls back to the Turso LibSQL edge cache, ensuring continuous public access.
-3. **RAM Watchdog & GC Sweep ([`src/utils/selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js))**:
-   - Tracks V8 heap memory.
-   - If RAM exceeds 380MB, triggers proactive garbage collection and flushes inactive in-memory chat message buffers.
-4. **Anti-Sleep 24/7 Keep-Alive**:
-   - 12-minute autonomous heartbeat pulse prevents Render free-tier container sleep during quiet hours.
-
+### 16.3 Client Architecture & Resilience Utilities
+- [`cryptoVault.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cryptoVault.js): AES-256-GCM cipher with dynamic IVs for phone encryption.
+- [`circuitBreaker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/circuitBreaker.js): Fault-isolation circuit breaker protecting against Telegram DC5 timeouts.
+- [`selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js): Memory sweeper, event loop lag detector, and keep-alive pulse generator.
+- [`studentStudyContext.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/studentStudyContext.js): Student reading footprint tracker synchronizing with IndexedDB for 6 AM prefetch.
+- [`webrtcStudyRoom.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/webrtcStudyRoom.js): Y.js CRDT provider and `y-webrtc` DataChannel mesh coordinator.
+- [`p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js): Campus Wi-Fi direct peer acceleration and local document discovery.
+- [`hardwareAdaptiveEngine.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/hardwareAdaptiveEngine.js): Detects CPU cores and battery status to adaptively throttle animation frames.
