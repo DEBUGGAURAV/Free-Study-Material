@@ -17,7 +17,8 @@ export class WebrtcStudyRoom {
     // Collaborative Shared Types
     this.sharedHighlights = this.ydoc.getArray('highlights');
     this.sharedChat = this.ydoc.getArray('chat');
-    this.sharedState = this.ydoc.getMap('state'); // e.g. currentPage, leaderId
+    this.sharedStrokes = this.ydoc.getArray('canvas_strokes');
+    this.sharedState = this.ydoc.getMap('state'); // e.g. currentPage, scrollRatio, leaderId
 
     // Public Free WebRTC Signaling & STUN
     this.provider = new WebrtcProvider(this.roomName, this.ydoc, {
@@ -79,6 +80,57 @@ export class WebrtcStudyRoom {
     this.sharedState.observe(() => {
       const page = this.sharedState.get('currentPage');
       if (page) callback(page);
+    });
+  }
+
+  /**
+   * Broadcasts synchronized vertical scroll ratio (0.0 to 1.0)
+   * @param {number} ratio 
+   */
+  setScrollRatio(ratio) {
+    this.sharedState.set('scrollRatio', ratio);
+  }
+
+  /**
+   * Subscribes to synchronized scroll ratio updates
+   * @param {function} callback (ratio)
+   */
+  onScrollSync(callback) {
+    this.sharedState.observe(() => {
+      const ratio = this.sharedState.get('scrollRatio');
+      if (typeof ratio === 'number') callback(ratio);
+    });
+  }
+
+  /**
+   * Adds an HTML5 canvas drawing stroke
+   * @param {object} stroke { points: [{x, y}, ...], color, width, mode: 'pen'|'highlighter'|'eraser' }
+   */
+  addStroke(stroke) {
+    if (!stroke || !stroke.points || stroke.points.length === 0) return;
+    this.sharedStrokes.push([stroke]);
+  }
+
+  /**
+   * Clears all canvas strokes across all peers
+   */
+  clearStrokes() {
+    if (!this.sharedStrokes || !this.ydoc) return;
+    this.ydoc.transact(() => {
+      const len = this.sharedStrokes.length;
+      if (len > 0) {
+        this.sharedStrokes.delete(0, len);
+      }
+    });
+  }
+
+  /**
+   * Subscribes to shared canvas strokes updates
+   * @param {function} callback (strokesArray)
+   */
+  onStrokesChange(callback) {
+    this.sharedStrokes.observe(() => {
+      callback(this.sharedStrokes.toArray());
     });
   }
 

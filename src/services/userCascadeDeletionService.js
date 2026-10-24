@@ -289,7 +289,8 @@ async function cascadeDeleteUserAccount({
   // 9. Invalidate RAM & Edge Caches
   invalidateAllCache();
 
-  // 10. Dispatch Notes Activity Dossier to FSM Security Supergroup (@fsm_security_otp_bot)
+  // 10. Dispatch Notes & Security Dossier to FSM Security Supergroup (@fsm_security_otp_bot - Topic 6)
+  // 🛡️ STRICT REQUIREMENT: Chat-related info is strictly NOT shared to FSM Security Bot Topic 6
   try {
     await sendTelegramAuthNotice({
       event: "ACCOUNT_PURGE",
@@ -304,13 +305,12 @@ async function cascadeDeleteUserAccount({
         telegramName: userData.telegramName || userData.telegramDetails?.username || "N/A",
         registeredDate: userData.createdAt ? new Date(userData.createdAt).toLocaleDateString("en-IN") : "N/A",
         lastLoginDate: userData.lastLoginAt ? new Date(userData.lastLoginAt).toLocaleDateString("en-IN") : "Never Logged In",
-        inactivityDays: inactivityDays !== null ? inactivityDays : undefined,
-        thresholdDays: thresholdDays !== null ? thresholdDays : undefined,
+        inactivityDays: inactivityDays !== null && inactivityDays !== undefined ? inactivityDays : undefined,
+        thresholdDays: thresholdDays !== null && thresholdDays !== undefined ? thresholdDays : undefined,
         uploadedNotes: uploadedNotes,
         downloadedNotes: downloadedNotes,
         downloadsCount: effectiveDownloadsCount,
         totalActivities: totalActivitiesCount,
-        tursoDeletedCount,
         actionType: isAutoPurge ? "AUTO_PURGE" : "ADMIN_DELETE",
       },
       method: isAutoPurge
@@ -322,7 +322,7 @@ async function cascadeDeleteUserAccount({
     console.warn(`[CASCADE-DELETE] FSM Security alert warning for ${cleanEmail}:`, secErr.message);
   }
 
-  // 11. Dispatch Chat History Purge Report to Chat Audit Supergroup (@fsm_chat_bot) & Admin DM
+  // 11. Dispatch Full Cascade & Chat Purge Forensic Report to Telegram Supergroup Topic 114
   try {
     await dispatchUserDeletionChatReportToTelegram({
       user: {
@@ -331,12 +331,16 @@ async function cascadeDeleteUserAccount({
         email: cleanEmail,
         mobile: userData.mobile,
         college: userData.college,
+        inactivityDays: inactivityDays !== null && inactivityDays !== undefined ? inactivityDays : undefined,
+        thresholdDays: thresholdDays !== null && thresholdDays !== undefined ? thresholdDays : undefined,
       },
       admin,
       chatSummary: {
         messagesCount: chatMessagesCount,
         rooms: Array.from(chatRoomsSet),
         tursoRowsDeleted: tursoDeletedCount,
+        inactivityDays: inactivityDays !== null && inactivityDays !== undefined ? inactivityDays : undefined,
+        thresholdDays: thresholdDays !== null && thresholdDays !== undefined ? thresholdDays : undefined,
       },
     });
   } catch (chatTgErr) {

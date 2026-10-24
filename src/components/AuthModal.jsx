@@ -388,10 +388,10 @@ export default function AuthModal({
           mobile: forgotMobile,
           email: forgotEmail,
         });
-        if (!isCancelled && res?.ready && res?.otp) {
+        if (!isCancelled && res?.ready && res?.phoneVerified && res?.otp) {
           setForgotTgOtpCode(String(res.otp).trim());
           clearFieldError("forgotTgOtpCode");
-          setSuccessMsg(`✅ Passcode received from Telegram: ${res.otp}`);
+          setSuccessMsg(`✅ Telegram mobile verified! Passcode received: ${res.otp}`);
         }
       } catch (_) {}
     };
@@ -419,10 +419,10 @@ export default function AuthModal({
           mobile: mobile,
           email: email,
         });
-        if (!isCancelled && res?.ready && res?.otp) {
+        if (!isCancelled && res?.ready && res?.phoneVerified && res?.otp) {
           setRegTgOtpCode(String(res.otp).trim());
           clearFieldError("regTgOtpCode");
-          setSuccessMsg(`✅ Passcode received from Telegram: ${res.otp}`);
+          setSuccessMsg(`✅ Telegram mobile verified! Passcode received: ${res.otp}`);
         }
       } catch (_) {}
     };

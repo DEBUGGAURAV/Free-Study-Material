@@ -17,52 +17,59 @@ const {
   getTicketByCode,
   getTicketsByCodes,
   replyHelpTicket,
+  closeHelpTicket,
+  setHelpTicketActive,
+  deleteHelpTicket,
+  purgeHelpTickets,
+  createTelegramForumTopics,
   getAllHelpTickets,
+  getHelpTursoTelemetry,
+  getHelpBotTelemetry,
 } = require("../services/helpTicketService");
 
-// Curated Instant Solutions & FAQs (0ms self-service)
+// Curated Instant Solutions & FAQs (Standard Professional English Language)
 const CURATED_FAQS = [
   {
     id: "faq_1",
     category: "download",
-    question: "PDF Download kaise karein ya download paused kyo dikha raha hai?",
+    question: "How do I download PDF notes, or what should I do if a download is paused?",
     answer:
-      "Agar download paused dikhe, to घबराएं nahi! Platform me 3-Layer Failover Engine hai. Pehle Storage Server, phir Cloudflare CDN, aur phir Native PDF fallback automatic connect hota hai. 'Retry Download' pe click karein ya direct 'Preview' button se online padhein.",
+      "Free Study Material employs an autonomous 3-layer resilient failover network. Download requests seamlessly cycle through the Primary Storage Vault, Cloudflare Edge CDN, and native streaming fallback. If a download pauses, click 'Retry Download' or use 'Online Preview' for instant in-browser reading.",
   },
   {
     id: "faq_2",
     category: "offline",
-    question: "Offline bina internet ke notes kaise padhein?",
+    question: "How can I access and read notes offline without an active internet connection?",
     answer:
-      "Aap kisi bhi note ke samne 'Save Offline' icon pe click kar sakte hain. Note aapke browser ke IndexedDB storage me save ho jayega aur bina kisi internet connection ke bhi instant open hoga.",
+      "Click the 'Save Offline' button next to any study material. The document will be cached securely in your browser's local IndexedDB vault, allowing instant 0ms access even with zero internet connectivity.",
   },
   {
     id: "faq_3",
     category: "passkey",
-    question: "Passkey (Fingerprint / Face ID) sign-in kaise set karein?",
+    question: "How do I set up and use Biometric Passkey (Fingerprint / Face ID) sign-in?",
     answer:
-      "Account me login karne ke baad 'Security & Passkey' section me jayein aur 'Register Biometric Passkey' pe tap karein. Iske baad aap bina password dale sirf apne fingerprint ya Face ID se 0ms me sign-in kar sakte hain.",
+      "After signing in, navigate to your Profile or Security settings and click 'Register Biometric Passkey'. You can then authenticate in sub-second time using Touch ID, Face ID, or Windows Hello without entering passwords.",
   },
   {
     id: "faq_4",
     category: "request_notes",
-    question: "Kisi subject ke notes missing hain to request kaise karein?",
+    question: "How can I request missing syllabus notes or previous year exam papers?",
     answer:
-      "Aap is Help Center ke 'Ask Question / Request' tab me ja kar Category me 'Request Missing Notes' select karein aur Subject name & Semester likhein. Humari team 24-48 hours me use upload kar degi.",
+      "Navigate to the 'Ask Question / Request' tab in this Help Center, select 'Request Missing Notes', and provide your Subject Name, University, and Semester. Our academic team curates and uploads verified materials within 24 to 48 hours.",
   },
   {
     id: "faq_5",
     category: "account",
-    question: "Kya Free Study Material 100% free hai?",
+    question: "Is Free Study Material completely free for all college and university students?",
     answer:
-      "Haan! Free Study Material platform sabhi engineering & academic students ke liye 100% free hai. Yahan sabhi handwritten notes, pyqs, aur textbooks bina kisi subscription ke uplabdh hain.",
+      "Yes, 100% free! All handwritten lecture notes, university exam papers, and engineering textbooks are provided with zero subscription fees, zero paywalls, and unlimited access.",
   },
   {
     id: "faq_6",
     category: "telegram",
-    question: "Telegram Study Group / Bot kaise join karein?",
+    question: "How can I connect with the official Telegram Academic Community & notifications?",
     answer:
-      "Aap humare official Telegram Bot @fsm_chat_bot ya official FSM channel se jud sakte hain jahan daily new notes aur semester updates aate hain.",
+      "You can connect through our official Telegram Bot (@fsm_chat_bot or @fsm_security_otp_bot) or join official FSM broadcast channels to receive daily semester updates, exam datesheets, and new study material alerts.",
   },
 ];
 
@@ -300,6 +307,127 @@ router.get("/admin/tickets", authenticateToken, async (req, res) => {
       success: true,
       tickets,
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/close
+ * Admin close ticket, dispatches Topic 2 report, with optional auto-delete
+ */
+router.post("/admin/close", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { ticketCode, reason, autoDelete } = req.body;
+    if (!ticketCode) {
+      return res.status(400).json({ success: false, message: "Ticket code required." });
+    }
+
+    const result = await closeHelpTicket({
+      ticketCode,
+      closedBy: req.user.name || "Academic Administrator",
+      reason: reason || "Resolved by Administrator via Web Console",
+      autoDelete: Boolean(autoDelete),
+    });
+
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/active
+ * Mark ticket active
+ */
+router.post("/admin/active", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { ticketCode } = req.body;
+    if (!ticketCode) {
+      return res.status(400).json({ success: false, message: "Ticket code required." });
+    }
+
+    const result = await setHelpTicketActive({
+      ticketCode,
+      updatedBy: req.user.name || "Academic Administrator",
+    });
+
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/help/admin/ticket/:code
+ * Physically delete a ticket from Turso Database & Memory
+ */
+router.delete("/admin/ticket/:code", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+
+    const { code } = req.params;
+    const result = await deleteHelpTicket(code);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/help/admin/purge
+ * Physically purge tickets from Turso Database
+ */
+router.delete("/admin/purge", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Only Master Admin can purge database." });
+    }
+
+    const onlyClosed = req.query.all !== "true";
+    const result = await purgeHelpTickets(onlyClosed);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/create-topics
+ * Automatically create Telegram Forum Topics in Supergroup
+ */
+router.post("/admin/create-topics", authenticateToken, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Admin authorization required." });
+    }
+
+    const result = await createTelegramForumTopics(req.body.chatId);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/help/admin/telemetry
+ * Live telemetry stats
+ */
+router.get("/admin/telemetry", authenticateToken, async (req, res) => {
+  try {
+    const turso = await getHelpTursoTelemetry();
+    const bot = getHelpBotTelemetry();
+    return res.json({ success: true, turso, bot });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

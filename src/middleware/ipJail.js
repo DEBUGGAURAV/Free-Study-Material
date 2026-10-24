@@ -319,8 +319,34 @@ function clearAllJails() {
   return count;
 }
 
+/**
+ * Instantly put a specific IP in jail for security tampering violations
+ */
+function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000) {
+  if (!ip || ip === "unknown" || ip === "127.0.0.1" || ip === "::1") return;
+  const unjailTime = Date.now() + durationMs;
+  jailedIps.set(ip, unjailTime);
+  jailedIpsDetails.set(ip, {
+    ip,
+    unjailTime,
+    jailedAt: new Date().toISOString(),
+    reason,
+    requestCount: 999,
+  });
+  totalJailedCount++;
+  recordThreatIncident({
+    type: "CLIENT_SCRIPT_TAMPERING",
+    ip,
+    detail: reason,
+    severity: "CRITICAL",
+    actionTaken: "JAILED_24H",
+  });
+  console.warn(`[IP-JAIL] 🚨 IP ${ip} jailed for 24h due to: ${reason}`);
+}
+
 module.exports = {
   ipJailFirewall,
+  jailSpecificIp,
   reportFailedAuth,
   getClientIp,
   recordThreatIncident,

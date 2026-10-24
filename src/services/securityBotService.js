@@ -396,10 +396,11 @@ async function createPendingRegistration({ name, mobile, email, college, year, p
     otp,
     tgName: existingReg?.tgName || null,
     tgChatId: existingReg?.tgChatId || null,
-    createdAt: existingReg?.createdAt || Date.now(),
+    createdAt: Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000, // 15 mins validity
     attempts: 0,
-    verified: existingReg?.verified || false,
+    phoneVerified: false,
+    verified: false,
   };
 
   storeRegistrationInRam(record);
@@ -477,10 +478,11 @@ async function createPendingReset({ mobile, email, userId, userName, college }) 
     college: college && college !== "Academic Institute" ? college : (existingRecord?.college || ""),
     otp,
     tgChatId: existingRecord?.tgChatId || null,
-    createdAt: existingRecord?.createdAt || Date.now(),
+    createdAt: Date.now(),
     expiresAt: Date.now() + 15 * 60 * 1000,
     attempts: 0,
-    verified: existingRecord?.verified || false,
+    phoneVerified: false,
+    verified: false,
     botUsername: BOT_USERNAME,
     botLink: `https://t.me/${BOT_USERNAME}?start=${resetToken}`,
   };
@@ -576,6 +578,7 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
     fullName: tgFullName,
     displayName: tgDisplayName,
   };
+  record.phoneVerified = true;
   record.verified = true;
   record.verifiedAt = Date.now();
 
@@ -660,6 +663,7 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
 async function dispatchPasswordResetOtp(chatId, record) {
   if (!record) return;
   record.tgChatId = chatId;
+  record.phoneVerified = true;
   record.verified = true;
   record.verifiedAt = Date.now();
   storeResetInRam(record);
@@ -861,41 +865,28 @@ async function startSecurityBotPoller() {
 
               await sendTelegramDirect(
                 chatId,
-                `🎓 <b>Student Registration Security Check</b>\n\n` +
+                `🎓 <b>Student Registration Details (Form Filled Data)</b>\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
                   `👤 <b>Student Name:</b> <code>${regRecord.name}</code>\n` +
-                  `📱 <b>Website Mobile:</b> <code>${regRecord.mobile}</code>\n` +
-                  `📧 <b>Website Email:</b> <code>${regRecord.email}</code>\n` +
-                  (regRecord.college ? `🏛️ <b>College:</b> <code>${regRecord.college}</code>\n` : "") +
-                  (regRecord.year ? `📚 <b>Academic Year:</b> <code>${regRecord.year}</code>\n\n` : "\n") +
+                  `📧 <b>Gmail Address:</b> <code>${regRecord.email}</code>\n` +
+                  `📱 <b>Mobile Number:</b> <code>${regRecord.mobile}</code>\n` +
+                  (regRecord.college ? `🏛️ <b>College / University:</b> <code>${regRecord.college}</code>\n` : "") +
+                  (regRecord.year ? `📚 <b>Academic Year:</b> <code>${regRecord.year}</code>\n` : "") +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
                   `🛡️ <b>Step 1: Mobile Ownership Verification</b>\n` +
                   `To verify that you own mobile number <code>${regRecord.mobile}</code> and receive your 6-digit registration OTP, please tap the button below:`,
                 contactKeyboard
               );
               continue;
             } else {
-              userBotStates.set(chatId, {
-                action: "waiting_verified_contact_reg_generic",
-                lastInteraction: Date.now(),
-                expiresAt: Date.now() + 15 * 60 * 1000,
-              });
-
-              const contactKeyboard = {
-                keyboard: [
-                  [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-                  [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-                  [{ text: "🔄 Restart Bot" }],
-                ],
-                resize_keyboard: true,
-                one_time_keyboard: false,
-              };
-
+              userBotStates.delete(chatId);
               await sendTelegramDirect(
                 chatId,
-                `🎓 <b>Student Registration & Passcode Delivery</b>\n\n` +
-                  `Welcome! To verify your phone and receive your 6-digit registration OTP code:\n\n` +
-                  `📲 Tap <b>[ 📲 Verify & Share My Telegram Number ]</b> below, or send your 10-digit registered mobile number.\n\n` +
-                  `Your passcode will be generated and delivered right here!`,
-                contactKeyboard
+                `⚠️ <b>Registration Session Expired or Invalid</b>\n\n` +
+                  `Aapka website registration session expire ho chuka hai ya link invalid hai.\n` +
+                  `Kripya pehle website par jayein, form fill karein, aur naye link par click karein.\n\n` +
+                  `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
+                { remove_keyboard: true }
               );
               continue;
             }
@@ -922,192 +913,95 @@ async function startSecurityBotPoller() {
 
               await sendTelegramDirect(
                 chatId,
-                `🔑 <b>Password Reset Security Check (2-Step Verification)</b>\n\n` +
+                `🔑 <b>Password Reset Details (Form Filled Data)</b>\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
                   `👤 <b>Account Holder:</b> <code>${resetRecord.userName || "Scholar"}</code>\n` +
-                  `📱 <b>Registered Mobile:</b> <code>${resetRecord.mobile}</code>\n\n` +
-                  `🛡️ <b>Security Rule:</b>\n` +
-                  `1️⃣ <b>Step 1:</b> Tap the button below to share your verified Telegram contact.\n` +
-                  `2️⃣ <b>Step 2:</b> Enter your registered Email address to verify ownership.\n\n` +
-                  `👇 <i>Please tap the button below for Step 1:</i>`,
+                  `📧 <b>Registered Email:</b> <code>${resetRecord.email}</code>\n` +
+                  `📱 <b>Registered Mobile:</b> <code>${resetRecord.mobile}</code>\n` +
+                  (resetRecord.college ? `🏛️ <b>College:</b> <code>${resetRecord.college}</code>\n` : "") +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `🛡️ <b>Step 1: Mobile Ownership Verification</b>\n` +
+                  `To verify that you own mobile number <code>${resetRecord.mobile}</code> and receive your 6-digit password reset OTP, please tap the button below:`,
                 contactKeyboard
               );
               continue;
             } else {
-              userBotStates.set(chatId, {
-                action: "waiting_verified_contact_reset_generic",
-                lastInteraction: Date.now(),
-                expiresAt: Date.now() + 15 * 60 * 1000,
-              });
-
-              const contactKeyboard = {
-                keyboard: [
-                  [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-                  [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-                  [{ text: "🔄 Restart Bot" }],
-                ],
-                resize_keyboard: true,
-                one_time_keyboard: false,
-              };
-
+              userBotStates.delete(chatId);
               await sendTelegramDirect(
                 chatId,
-                `🔑 <b>Password Reset & Account Recovery</b>\n\n` +
-                  `Welcome! To recover your account password and receive your reset passcode:\n\n` +
-                  `📲 Tap <b>[ 📲 Verify & Share My Telegram Number ]</b> below, or type your 10-digit registered mobile number.\n\n` +
-                  `Your recovery code will be dispatched securely!`,
-                contactKeyboard
+                `⚠️ <b>Password Reset Session Expired or Invalid</b>\n\n` +
+                  `Aapka password reset session expire ho chuka hai ya link invalid hai.\n` +
+                  `Kripya pehle website par jayein, Forgot Password form bharein, aur naye link par click karein.\n\n` +
+                  `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
+                { remove_keyboard: true }
               );
               continue;
             }
           }
 
-          // 3. Plain /start (User opened bot and tapped or typed /start manually without token)
-          userBotStates.set(chatId, {
-            lastInteraction: Date.now(),
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          });
-
-          const initialOptionsKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-
+          // 3. Plain /start (User opened bot directly without form token):
+          userBotStates.delete(chatId);
           await sendTelegramDirect(
             chatId,
-            `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
-              `I can securely deliver your verification passcodes and assist with account access:\n\n` +
-              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
-              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
-              `2️⃣ <b>Forgot Password:</b> Recover your account access safely.`,
-            initialOptionsKeyboard
+            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
+              `Aapne abhi tak website par <b>Student Registration</b> ya <b>Forgot Password</b> form fill nahi kiya hai.\n\n` +
+              `🛡️ <b>Security Policy:</b>\n` +
+              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
+              `👉 <b>Aapko kya karna hai:</b>\n` +
+              `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
+              `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par click karein.\n\n` +
+              `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+            { remove_keyboard: true }
           );
           continue;
         }
 
-        // 2. User chose Option 1: Student Registration
+        // Reject plain commands like /register, /forgot, /reset, "1", "2" if user didn't fill form
         if (
           text === "1" ||
           text === "1️⃣" ||
           text === "1️⃣ Student Registration" ||
-          text.toLowerCase() === "student registration" ||
-          text === "/register"
-        ) {
-          userBotStates.set(chatId, {
-            action: "waiting_verified_contact_reg_generic",
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          });
-
-          const contactKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-
-          await sendTelegramDirect(
-            chatId,
-            `1️⃣ <b>Student Registration Verification</b>\n\n` +
-              `Enter your details on our website and choose Telegram Bot Verification.\n\n` +
-              `📲 <i>Tap the button below to verify your phone number:</i>`,
-            contactKeyboard
-          );
-          continue;
-        }
-
-        // 2. User chose Option 2: Forgot Password
-        if (
           text === "2" ||
           text === "2️⃣" ||
           text === "2️⃣ Forgot Password" ||
-          text.toLowerCase() === "forgot password" ||
+          text === "/register" ||
           text === "/forgot" ||
           text === "/reset"
         ) {
-          userBotStates.set(chatId, {
-            action: "waiting_verified_contact_reset_generic",
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          });
-
-          const contactKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-
+          userBotStates.delete(chatId);
           await sendTelegramDirect(
             chatId,
-            `2️⃣ <b>Forgot Password Recovery</b>\n\n` +
-              `Tap the button below to verify your Telegram contact and recover your account:\n\n` +
-              `📲 <i>Tap the button below to verify your phone number:</i>`,
-            contactKeyboard
+            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
+              `Direct Telegram se OTP generate nahi kiya ja sakta.\n\n` +
+              `Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par ja kar form bharein, aur wahan diye gaye link se aayein!`,
+            { remove_keyboard: true }
           );
           continue;
         }
 
-        // 3. Restart Bot / Main Menu return
+        // 3. Restart Bot / Help / Main Menu return
         if (
           text === "🔙 Main Menu" ||
           text.toLowerCase() === "menu" ||
           text === "🔄 Restart Bot" ||
           text.toLowerCase() === "restart" ||
           text.toLowerCase() === "restart bot" ||
-          text === "/restart"
+          text === "/restart" ||
+          text === "/help"
         ) {
-          userBotStates.set(chatId, {
-            lastInteraction: Date.now(),
-            expiresAt: Date.now() + 10 * 60 * 1000,
-          });
-          const initialOptionsKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-
+          userBotStates.delete(chatId);
           await sendTelegramDirect(
             chatId,
-            `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
-              `I can instantly generate and deliver your verification passcodes:\n\n` +
-              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
-              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
-              `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
-            initialOptionsKeyboard
-          );
-          continue;
-        }
-
-        // 4. Help Command
-        if (text === "/help") {
-          const initialOptionsKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
-          await sendTelegramDirect(
-            chatId,
-            `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
-              `I can instantly generate and deliver your verification passcodes:\n\n` +
-              `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
-              `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
-              `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
-            initialOptionsKeyboard
+            `👋 <b>Free Study Material Security Verification Bot</b>\n\n` +
+              `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n` +
+              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
+              `👉 <b>Steps:</b>\n` +
+              `1️⃣ Pehle website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
+              `3️⃣ Wahan diye gaye <b>"Verify via Telegram"</b> button par click karein.\n\n` +
+              `Form submit hone par bot automatically aapka bhara hua data show karega aur phone verify hote hi OTP generate karega!`,
+            { remove_keyboard: true }
           );
           continue;
         }
@@ -1166,210 +1060,38 @@ async function startSecurityBotPoller() {
             const formMobile = currentState.resetRecord.mobile.replace(/\D/g, "").slice(-10);
 
             if (verifiedTgMobile !== formMobile) {
-              const restartKeyboard = {
-                keyboard: [
-                  [{ text: "🔄 Restart Bot" }],
-                ],
-                resize_keyboard: true,
-                one_time_keyboard: false,
-              };
               await sendTelegramDirect(
                 chatId,
                 `❌ <b>Mobile Number Mismatch!</b>\n\n` +
-                  `• <b>Account Mobile:</b> <code>${formMobile}</code>\n` +
+                  `• <b>Account Registered Mobile:</b> <code>${formMobile}</code>\n` +
                   `• <b>Telegram Verified Number:</b> <code>${verifiedTgMobile}</code>\n\n` +
-                  `Please share contact from your registered Telegram phone number or tap <b>[ 🔄 Restart Bot ]</b> below.`,
-                restartKeyboard
+                  `Dono mobile numbers match nahi ho rahe hain. Kripya registered phone number se hi Telegram contact share karein.`,
+                { remove_keyboard: true }
               );
               userBotStates.delete(chatId);
               continue;
             }
 
-            // SUCCESS! Numbers match 100%!
-            // Transition to Step 2: Require registered Email address input to confirm identity
-            userBotStates.set(chatId, {
-              action: "waiting_email_reset",
-              mobile: verifiedTgMobile,
-              userId: currentState.resetRecord.userId,
-              resetRecord: currentState.resetRecord,
-              userData: {
-                email: currentState.resetRecord.email,
-                name: currentState.resetRecord.userName,
-                college: currentState.resetRecord.college,
-              },
-              expiresAt: Date.now() + 10 * 60 * 1000,
-            });
-
-            const restartKeyboard = {
-              keyboard: [
-                [{ text: "🔄 Restart Bot" }],
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: false,
-            };
-
-            await sendTelegramDirect(
-              chatId,
-              `✅ <b>Step 1 Verified: Mobile Number Confirmed!</b>\n\n` +
-                `👤 <b>Student Name:</b> <code>${currentState.resetRecord.userName || "Scholar"}</code>\n` +
-                `📱 <b>Verified Mobile:</b> <code>${verifiedTgMobile}</code>\n\n` +
-                `👉 <b>Step 2 (Email Ownership Check):</b>\nPlease type and send your registered <b>Email Address</b> to verify ownership and receive your password reset OTP:`,
-              restartKeyboard
-            );
-            continue;
-          }
-
-          // Case B: Generic Forgot Password (user clicked 2️⃣ Forgot Password in bot)
-          if (
-            currentState &&
-            (currentState.action === "waiting_mobile_reset" || currentState.action === "waiting_verified_contact_reset_generic")
-          ) {
-            const restartKeyboard = {
-              keyboard: [
-                [{ text: "🔄 Restart Bot" }],
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: false,
-            };
-
-            if (db) {
-              try {
-                const mHash = blindIndex(verifiedTgMobile);
-                let snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-                if (snap.empty) {
-                  snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
-                }
-                if (!snap.empty) {
-                  const userDoc = snap.docs[0];
-                  const userData = decryptUserObject(userDoc.data());
-                  userBotStates.set(chatId, {
-                    action: "waiting_email_reset",
-                    mobile: verifiedTgMobile,
-                    userId: userDoc.id,
-                    userData,
-                    expiresAt: Date.now() + 10 * 60 * 1000,
-                  });
-                  await sendTelegramDirect(
-                    chatId,
-                    `✅ <b>Step 1 Verified: Mobile Number confirmed!</b>\n\n` +
-                      `👤 <b>Student Name:</b> <code>${userData.name || "Scholar"}</code>\n` +
-                      `📱 <b>Mobile:</b> <code>${verifiedTgMobile}</code>\n\n` +
-                      `👉 <b>Step 2:</b> Now please enter your registered <b>Email Address</b> manually to verify ownership and receive your password reset passcode:`,
-                    restartKeyboard
-                  );
-                  continue;
-                } else {
-                  await sendTelegramDirect(
-                    chatId,
-                    `❌ <b>No Account Found</b>\n\nNo registered student account was found with mobile number <code>${verifiedTgMobile}</code>.\n\nPlease register on the website or tap <b>[ 🔄 Restart Bot ]</b> below.`,
-                    restartKeyboard
-                  );
-                  userBotStates.delete(chatId);
-                  continue;
-                }
-              } catch (dbErr) {
-                console.warn("[SECURITY-BOT] DB lookup notice:", dbErr.message);
-              }
-            }
-          }
-
-          // Case C & D: Direct Pending Registration match
-          const directPendingReg = await getPendingRegistration(verifiedTgMobile);
-          if (directPendingReg) {
-            await dispatchRegistrationOtp(chatId, directPendingReg, user);
+            // SUCCESS! Both Mobile & Email were already filled & verified on website form!
+            // Directly dispatch OTP and mark session verified so website auto-fills it!
+            await dispatchPasswordResetOtp(chatId, currentState.resetRecord);
             userBotStates.delete(chatId);
             continue;
           }
 
-          // Direct Pending Reset match
-          const directPendingReset = await getPendingReset(verifiedTgMobile);
-          if (directPendingReset) {
-            userBotStates.set(chatId, {
-              action: "waiting_email_reset",
-              mobile: verifiedTgMobile,
-              userId: directPendingReset.userId,
-              resetRecord: directPendingReset,
-              userData: {
-                email: directPendingReset.email,
-                name: directPendingReset.userName,
-                college: directPendingReset.college,
-              },
-              expiresAt: Date.now() + 10 * 60 * 1000,
-            });
-
-            const restartKeyboard = {
-              keyboard: [
-                [{ text: "🔄 Restart Bot" }],
-              ],
-              resize_keyboard: true,
-              one_time_keyboard: false,
-            };
-
-            await sendTelegramDirect(
-              chatId,
-              `✅ <b>Step 1 Verified: Mobile Number Confirmed!</b>\n\n` +
-                `👤 <b>Student Name:</b> <code>${directPendingReset.userName || "Scholar"}</code>\n` +
-                `📱 <b>Verified Mobile:</b> <code>${verifiedTgMobile}</code>\n\n` +
-                `👉 <b>Step 2 (Email Ownership Check):</b>\nPlease type and send your registered <b>Email Address</b> to verify ownership and receive your password reset OTP:`,
-              restartKeyboard
-            );
-            continue;
-          }
-
-          // Check if this mobile number already belongs to an existing student account in Firestore
-          if (db) {
-            try {
-              const mHash = blindIndex(verifiedTgMobile);
-              let snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-              if (snap.empty) {
-                snap = await db.collection("users").where("mobile", "==", verifiedTgMobile).limit(1).get();
-              }
-              if (!snap.empty) {
-                const userDoc = snap.docs[0];
-                const userData = decryptUserObject(userDoc.data());
-                userBotStates.set(chatId, {
-                  action: "waiting_email_reset",
-                  mobile: verifiedTgMobile,
-                  userId: userDoc.id,
-                  userData,
-                  expiresAt: Date.now() + 10 * 60 * 1000,
-                });
-                const restartKeyboard = {
-                  keyboard: [
-                    [{ text: "2️⃣ Forgot Password" }],
-                    [{ text: "🔄 Restart Bot" }],
-                  ],
-                  resize_keyboard: true,
-                  one_time_keyboard: false,
-                };
-                await sendTelegramDirect(
-                  chatId,
-                  `ℹ️ <b>Mobile Number Already Registered</b>\n\n` +
-                    `Mobile <code>${verifiedTgMobile}</code> is already linked to student account: <b>${userData.name || "Scholar"}</b>.\n\n` +
-                    `• If you want to reset your password, please enter your registered <b>Email Address</b> or tap <b>[ 2️⃣ Forgot Password ]</b>.\n` +
-                    `• Or sign in directly on the website with your Passkey or Password.`,
-                  restartKeyboard
-                );
-                continue;
-              }
-            } catch (userErr) {
-              console.warn("[SECURITY-BOT] User lookup check error:", userErr.message);
-            }
-          }
-
-          // New Student: ALWAYS generate registration OTP and dispatch immediately!
-          // NEVER show "No Pending Registration Found" error!
-          const tgFullName = [user.first_name, user.last_name].filter(Boolean).join(" ");
-          const autoReg = await createPendingRegistration({
-            name: tgFullName || user.username || "Scholar",
-            mobile: verifiedTgMobile,
-            email: "",
-            college: "Academic Institute",
-            year: "1st Year",
-            password: "",
-          });
-          const freshRecord = await getPendingRegistration(verifiedTgMobile);
-          await dispatchRegistrationOtp(chatId, freshRecord || autoReg, user);
+          // Case B: User directly shared contact without opening from website form link -> STRICTLY REJECT!
+          await sendTelegramDirect(
+            chatId,
+            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
+              `Aapne website par Registration ya Forgot Password ka form fill nahi kiya hai.\n` +
+              `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
+              `👉 <b>Kripya pehle website par jayein:</b>\n` +
+              `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
+              `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par tap karein.\n\n` +
+              `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+            { remove_keyboard: true }
+          );
           userBotStates.delete(chatId);
           continue;
         }
@@ -1397,9 +1119,15 @@ async function startSecurityBotPoller() {
             };
             await sendTelegramDirect(
               chatId,
-              `🔑 <b>Password Reset Authorization</b>\n\n` +
-                `Account found for mobile <code>${digitsOnly}</code> (<code>${pendingReset.userName}</code>).\n\n` +
-                `🛡️ <b>Security Check:</b> To confirm you own this number, please tap the button below to share your verified Telegram contact:`,
+              `🔑 <b>Password Reset Details (Form Filled Data)</b>\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `👤 <b>Account Holder:</b> <code>${pendingReset.userName || "Scholar"}</code>\n` +
+                `📧 <b>Registered Email:</b> <code>${pendingReset.email}</code>\n` +
+                `📱 <b>Registered Mobile:</b> <code>${pendingReset.mobile}</code>\n` +
+                (pendingReset.college ? `🏛️ <b>College:</b> <code>${pendingReset.college}</code>\n` : "") +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `🛡️ <b>Step 1: Mobile Ownership Verification</b>\n` +
+                `To verify that you own mobile number <code>${pendingReset.mobile}</code> and receive your 6-digit password reset OTP, please tap the button below:`,
               contactKeyboard
             );
             continue;
@@ -1422,26 +1150,28 @@ async function startSecurityBotPoller() {
             };
             await sendTelegramDirect(
               chatId,
-              `🎓 <b>Student Registration Authorization</b>\n\n` +
-                `Registration found for mobile <code>${digitsOnly}</code> (<code>${pendingReg.name}</code>).\n\n` +
-                `🛡️ <b>Security Check:</b> To confirm you own this number, please tap the button below to share your verified Telegram contact:`,
+              `🎓 <b>Student Registration Details (Form Filled Data)</b>\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `👤 <b>Student Name:</b> <code>${pendingReg.name}</code>\n` +
+                `📧 <b>Gmail Address:</b> <code>${pendingReg.email}</code>\n` +
+                `📱 <b>Mobile Number:</b> <code>${pendingReg.mobile}</code>\n` +
+                (pendingReg.college ? `🏛️ <b>College / University:</b> <code>${pendingReg.college}</code>\n` : "") +
+                (pendingReg.year ? `📚 <b>Academic Year:</b> <code>${pendingReg.year}</code>\n` : "") +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `🛡️ <b>Step 1: Mobile Ownership Verification</b>\n` +
+                `To verify that you own mobile number <code>${pendingReg.mobile}</code> and receive your 6-digit registration OTP, please tap the button below:`,
               contactKeyboard
             );
             continue;
           }
 
-          const contactKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
+          // No active website session found for this mobile number:
           await sendTelegramDirect(
             chatId,
-            `👇 Please tap the <b>[ 📲 Verify & Share My Telegram Number ]</b> button below:`,
-            contactKeyboard
+            `⚠️ <b>Website Session Not Found!</b>\n\n` +
+              `Mobile number <code>${digitsOnly}</code> ke liye website par koi pending registration ya password reset session nahi mila.\n\n` +
+              `👉 Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par jayein aur form bharein!`,
+            { remove_keyboard: true }
           );
           continue;
         }
@@ -1492,19 +1222,13 @@ async function startSecurityBotPoller() {
             }
           }
 
-          // If not in waiting_email_reset, prompt to verify contact first
-          const contactKeyboard = {
-            keyboard: [
-              [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-              [{ text: "🔄 Restart Bot" }],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: false,
-          };
+          // If not in waiting_email_reset, reject direct OTP generation
           await sendTelegramDirect(
             chatId,
-            `🛡️ <b>Security Verification Required</b>\n\nPlease verify your mobile number first by tapping <b>[ 📲 Verify & Share My Telegram Number ]</b> below:`,
-            contactKeyboard
+            `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
+              `Direct Telegram se bina form bhare OTP generate nahi kiya ja sakta.\n\n` +
+              `👉 Kripya pehle <a href="https://freestudymaterial.com">freestudymaterial.com</a> par jayein aur Registration ya Forgot Password form bharein!`,
+            { remove_keyboard: true }
           );
           continue;
         }
@@ -1527,24 +1251,17 @@ async function startSecurityBotPoller() {
           continue;
         }
 
-        // Fallback friendly instruction
-        const fallbackOptionsKeyboard = {
-          keyboard: [
-            [{ text: "📲 Verify & Share My Telegram Number", request_contact: true }],
-            [{ text: "1️⃣ Student Registration" }, { text: "2️⃣ Forgot Password" }],
-            [{ text: "🔄 Restart Bot" }],
-          ],
-          resize_keyboard: true,
-          one_time_keyboard: false,
-        };
+        // Fallback for direct / unhandled text messages
         await sendTelegramDirect(
           chatId,
-          `👋 <b>Welcome to Free Study Material Security Bot!</b>\n\n` +
-            `I can instantly generate and deliver your verification passcodes:\n\n` +
-            `📲 <b>One-Tap Verification:</b> Tap <i>[ 📲 Verify & Share My Telegram Number ]</i> below to verify your phone number directly.\n\n` +
-            `1️⃣ <b>Student Registration:</b> Complete verification for your website account.\n` +
-            `2️⃣ <b>Forgot Password:</b> Select this option to start secure password recovery.`,
-          fallbackOptionsKeyboard
+          `⚠️ <b>Website Form Fill Karna Zaroori Hai!</b>\n\n` +
+            `Direct Telegram se bina website form bhare OTP generate nahi kiya ja sakta.\n\n` +
+            `👉 <b>Aapko kya karna hai:</b>\n` +
+            `1️⃣ Website open karein: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+            `2️⃣ <b>Registration</b> ya <b>Forgot Password</b> form bharein.\n` +
+            `3️⃣ Form bharne ke baad wahan <b>"Verify via Telegram"</b> button par tap karein.\n\n` +
+            `Form bhar kar aane par bot automatically aapka data show karega aur mobile verify hote hi OTP deliver karega!`,
+          { remove_keyboard: true }
         );
       }
     } catch (pollErr) {

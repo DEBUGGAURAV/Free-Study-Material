@@ -3000,6 +3000,37 @@ export default function VirtualPdfReader({
 
           <button
             type="button"
+            onClick={() => {
+              window.dispatchEvent(
+                new CustomEvent("open_study_pod", {
+                  detail: {
+                    roomCode: `pod-${(note?.subject || title || "study").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}-${noteId ? String(noteId).slice(-4) : "live"}`,
+                    note,
+                  },
+                })
+              );
+            }}
+            style={{
+              padding: "5px 10px",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: "rgba(16, 185, 129, 0.15)",
+              color: "#34d399",
+              border: "1px solid rgba(16, 185, 129, 0.4)",
+              borderRadius: "6px",
+              cursor: "pointer",
+            }}
+            title="Launch Collaborative Live Study Pod with Real-time Canvas (0% Server Load)"
+          >
+            <Sparkles size={14} />
+            <span>🚀 Live Pod Canvas</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleGenerateAi}
             disabled={isGeneratingAi}
             style={{

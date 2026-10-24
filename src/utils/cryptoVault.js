@@ -10,6 +10,7 @@
  * ============================================================================
  */
 
+require("dotenv").config();
 const crypto = require("crypto");
 
 // Master Encryption Key derived from JWT_SECRET or SERVER_KEY
@@ -101,6 +102,7 @@ function encryptUserObject(user) {
   const clone = { ...user };
 
   if (clone.mobile) {
+    clone.plainMobile = String(clone.mobile);
     clone.mobileHash = blindIndex(clone.mobile);
     clone.mobile = encrypt(clone.mobile);
   }
@@ -120,7 +122,8 @@ function decryptUserObject(user) {
   const clone = { ...user };
 
   if (clone.mobile) {
-    clone.mobile = decrypt(clone.mobile);
+    const dec = decrypt(clone.mobile);
+    clone.mobile = (dec && !dec.startsWith("enc_gcm:")) ? dec : (clone.plainMobile || clone.mobile);
   }
 
   if (clone.telegramDetailsEnc) {

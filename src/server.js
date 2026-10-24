@@ -50,6 +50,8 @@ const noticesRoutes = require("./routes/notices");
 const p2pRoutes = require("./routes/p2p");
 const chatRoutes = require("./routes/chat");
 const helpRoutes = require("./routes/help");
+const securityRoutes = require("./routes/security");
+const examRoutes = require("./routes/exam");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -196,6 +198,8 @@ app.use("/api/notices", noticesRoutes);
 app.use("/api/p2p", p2pRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/help", helpRoutes);
+app.use("/api/security", securityRoutes);
+app.use("/api/exam", examRoutes);
 
 // Serve Client Web Application (Vite Dist) & Public Assets with proper PWA Cache-Control
 const distPath = path.join(__dirname, "../dist");
@@ -216,10 +220,8 @@ app.use(
     setHeaders: (res, filePath) => {
       if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.json")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      } else if (filePath.includes("tesseract")) {
+      } else if (filePath.includes("tesseract") || /[\\/]assets[\\/]/.test(filePath)) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-      } else if (filePath.includes("/assets/")) {
-        res.setHeader("Cache-Control", "public, max-age=86400");
       }
     },
   })
@@ -327,6 +329,16 @@ server.listen(PORT, "0.0.0.0", async () => {
     }, 24 * 60 * 60 * 1000);
   } catch (e) {
     console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
+  }
+
+  // ⏰ Start Telegram Exam Countdown & Daily Revision Buddy Scheduler (0 DB Reads, Pure Edge/RAM)
+  try {
+    const { startExamCountdownScheduler } = require("./services/examBuddyService");
+    if (startExamCountdownScheduler) {
+      startExamCountdownScheduler();
+    }
+  } catch (e) {
+    console.warn("[EXAM BUDDY] Scheduler start deferred:", e.message);
   }
 
   // 🧹 2. Smart Dynamic RAM Buffer Guard & Multi-Tier Auto-Purge

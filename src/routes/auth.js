@@ -376,9 +376,11 @@ router.get("/register-telegram-poll", async (req, res) => {
     const record = await getPendingRegistration({ regToken, mobile, email });
     if (!record) return res.json({ ready: false, expired: true });
 
-    if (record.verified && record.otp) {
+    // STRICT CHECK: Return OTP only when filled mobile number has been cryptographically verified by Telegram contact sharing!
+    if (record.verified && record.phoneVerified && record.otp) {
       return res.json({
         ready: true,
+        phoneVerified: true,
         otp: record.otp,
         tgName: record.tgName,
         mobile: record.mobile,
@@ -386,7 +388,7 @@ router.get("/register-telegram-poll", async (req, res) => {
       });
     }
 
-    return res.json({ ready: false });
+    return res.json({ ready: false, phoneVerified: false });
   } catch (err) {
     return res.json({ ready: false });
   }
@@ -404,9 +406,11 @@ router.get("/forgot-telegram-poll", async (req, res) => {
     const record = await getPendingReset({ resetToken, mobile, email });
     if (!record) return res.json({ ready: false, expired: true });
 
-    if (record.verified && record.otp) {
+    // STRICT CHECK: Return OTP only when filled mobile number has been cryptographically verified by Telegram contact sharing!
+    if (record.verified && record.phoneVerified && record.otp) {
       return res.json({
         ready: true,
+        phoneVerified: true,
         otp: record.otp,
         mobile: record.mobile,
         email: record.email,
@@ -414,7 +418,7 @@ router.get("/forgot-telegram-poll", async (req, res) => {
       });
     }
 
-    return res.json({ ready: false });
+    return res.json({ ready: false, phoneVerified: false });
   } catch (err) {
     return res.json({ ready: false });
   }
@@ -1474,6 +1478,20 @@ router.post("/login", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
+    // Update Client Hardware Specs Asynchronously (Zero Extra Latency)
+    if (req.body.deviceSpecs && docId && db) {
+      db.collection("users").doc(docId).set({
+        deviceSpecs: {
+          cores: Number(req.body.deviceSpecs.cores) || 4,
+          memoryGB: Number(req.body.deviceSpecs.memoryGB) || 4,
+          tier: String(req.body.deviceSpecs.tier || "mid"),
+          label: String(req.body.deviceSpecs.label || ""),
+          isMobile: Boolean(req.body.deviceSpecs.isMobile),
+          updatedAt: new Date().toISOString(),
+        }
+      }, { merge: true }).catch(() => {});
+    }
+
     // Send Real-time Telegram Security Notice to Security Bot (Zero latency overhead for response!)
     setImmediate(() => {
       sendTelegramAuthNotice({
@@ -1500,6 +1518,31 @@ router.post("/login", authLimiter, async (req, res) => {
   } catch (err) {
     console.error("[AUTH] Login error:", err);
     return res.status(500).json({ success: false, message: "Server error during authentication." });
+  }
+});
+
+/**
+ * POST /api/auth/sync-device
+ * Lightweight async device specs telemetry updater (0 server load, updates only on session start)
+ */
+router.post("/sync-device", authenticateToken, async (req, res) => {
+  try {
+    const { deviceSpecs } = req.body;
+    if (deviceSpecs && req.user?.id && db) {
+      db.collection("users").doc(req.user.id).set({
+        deviceSpecs: {
+          cores: Number(deviceSpecs.cores) || 4,
+          memoryGB: Number(deviceSpecs.memoryGB) || 4,
+          tier: String(deviceSpecs.tier || "mid"),
+          label: String(deviceSpecs.label || ""),
+          isMobile: Boolean(deviceSpecs.isMobile),
+          updatedAt: new Date().toISOString(),
+        }
+      }, { merge: true }).catch(() => {});
+    }
+    return res.json({ success: true });
+  } catch (_) {
+    return res.json({ success: true });
   }
 });
 
@@ -1731,15 +1774,6 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
   try {
     const { email } = req.body;
     const cleanEmail = (email || "").trim().toLowerCase();
-
-    // 🔒 Maintenance Mode Guard
-    const isTargetAdmin = Boolean(
-      cleanEmail === MAIN_ADMIN_EMAIL ||
-      ADMIN_ALIASES.includes(cleanEmail)
-    );
-    if (isMaintenanceActive() && !isTargetAdmin) {
-      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
-    }
 
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
@@ -2351,6 +2385,7 @@ router.get("/me", authenticateToken, async (req, res) => {
           year: data.year,
           role: data.email === MAIN_ADMIN_EMAIL ? "admin" : data.role,
           permissions: data.permissions || [],
+          allowedTabs: Array.isArray(data.allowedTabs) ? data.allowedTabs : [],
           isBlocked: data.isBlocked || false,
           hasPasskey: Boolean(data.hasPasskey || (data.passkeys && data.passkeys.length > 0)),
         },

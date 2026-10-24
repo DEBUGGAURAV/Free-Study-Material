@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2 } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
+import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -42,6 +43,19 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [deletingPasskeyId, setDeletingPasskeyId] = useState(null);
   const [supportsPasskey, setSupportsPasskey] = useState(true);
+  const hwProfile = detectClientHardwareProfile();
+
+  useEffect(() => {
+    if (isOpen && currentUser?.id && api.syncDeviceSpecs) {
+      api.syncDeviceSpecs({
+        cores: hwProfile.cores,
+        memoryGB: hwProfile.memoryGB,
+        tier: hwProfile.tier,
+        label: hwProfile.label,
+        isMobile: hwProfile.isMobile,
+      }).catch(() => {});
+    }
+  }, [isOpen, currentUser?.id]);
 
   useEffect(() => {
     isPasskeySupported().then((sup) => setSupportsPasskey(sup));
@@ -299,8 +313,38 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
         )}
 
         {tab === "profile" && (
-          /* Profile Details Form */
-          <form onSubmit={handleUpdateProfile}>
+          <>
+            {/* 🛡️ Adaptive Hardware Guard Card */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(99, 102, 241, 0.1))",
+                border: "1px solid rgba(6, 182, 212, 0.3)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                marginBottom: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "0.84rem", color: "#fff" }}>
+                  <Shield size={16} style={{ color: "#38bdf8" }} />
+                  <span>Adaptive Hardware Guard:</span>
+                  <span style={{ fontSize: "0.7rem", color: "#34d399", background: "rgba(16, 185, 129, 0.2)", padding: "1px 6px", borderRadius: "4px", fontWeight: 800 }}>ACTIVE</span>
+                </div>
+                <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700 }}>
+                  ⚡ Mode: {hwProfile.tier === "workstation" || hwProfile.tier === "high" ? "High-Performance Engine" : "Safe Dynamic Mode"}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                <span>📱 Hardware: <strong>{hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM</strong></span>
+                <span style={{ color: "#34d399" }}>(Auto-Clamping Enabled)</span>
+              </div>
+            </div>
+
+            {/* Profile Details Form */}
+            <form onSubmit={handleUpdateProfile}>
             <div className="form-group">
               <label className="form-label">Full Name *</label>
               <input
@@ -418,6 +462,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </button>
             </div>
           </form>
+          </>
         )}
 
         {tab === "password" && (

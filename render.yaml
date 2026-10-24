@@ -91,3 +91,17 @@ services:
         sync: false
       - key: BREVO_FROM_NAME
         value: Free Study Material
+      - key: VITE_ADMIN_EMAIL
+        sync: false
+      - key: HELP_BOT_TOKEN
+        sync: false
+      - key: HELP_CHAT_ID
+        sync: false
+      - key: HELP_TOPIC_ACTIVE_ID
+        value: "1"
+      - key: HELP_TOPIC_CLOSED_ID
+        value: "2"
+      - key: TURSO_HELP_DATABASE_URL
+        sync: false
+      - key: TURSO_HELP_AUTH_TOKEN
+        sync: false

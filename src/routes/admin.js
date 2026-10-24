@@ -369,11 +369,17 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         permsArray = Object.keys(d.permissions).filter((k) => Boolean(d.permissions[k]));
       }
 
+      let userMobile = d.plainMobile || d.mobile || "N/A";
+      if (typeof userMobile === "string" && userMobile.startsWith("enc_gcm:")) {
+        const dec = decrypt(userMobile);
+        userMobile = (dec && !dec.startsWith("enc_gcm:")) ? dec : (d.plainMobile || "Not Set");
+      }
+
       users.push({
         id: doc.id,
         name: d.name || "Unnamed",
         email: d.email || "",
-        mobile: d.mobile ? decrypt(d.mobile) : "N/A",
+        mobile: userMobile,
         college: d.college || "N/A",
         year: d.year || "N/A",
         role: isMain ? "admin" : (d.role || "student"),
@@ -390,6 +396,7 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         inactivityDays,
         daysRemaining,
         scheduledPurgeDate,
+        allowedTabs: Array.isArray(d.allowedTabs) ? d.allowedTabs : [],
       });
     });
 
@@ -554,7 +561,8 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     if (name !== undefined) updateData.name = name.trim();
     if (mobile !== undefined) {
       const cleanMob = mobile.trim();
-      updateData.mobile = cleanMob ? encrypt(cleanMob) : "";
+      updateData.mobile = cleanMob;
+      updateData.plainMobile = cleanMob;
       updateData.mobileHash = cleanMob ? blindIndex(cleanMob) : "";
     }
     if (college !== undefined) updateData.college = college.trim();
@@ -564,15 +572,33 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     if (targetUser.email?.toLowerCase() !== MAIN_ADMIN_EMAIL) {
       if (role !== undefined) {
         updateData.role = role;
-        if (role === "admin") {
-          updateData.permissions = ["all", "manage_notes", "manage_users", "manage_notices", "delete_records", "database"];
-        } else if (role === "half_admin") {
-          updateData.permissions = ["manage_notes", "manage_notices", "manage_users"];
-        } else {
-          updateData.permissions = ["upload_notes", "download_notes"];
+        // 🛡️ Automatic Immunity Rule:
+        // Admin / Half-Admin -> NEVER PURGE ON (Permanent Immunity)
+        // Demote to Student -> Default Inactivity Purge ON (e.g. 90 days)
+        if (role === "admin" || role === "half_admin") {
+          updateData.neverPurge = true;
+          updateData.customInactivityDays = 9999;
+        } else if (role === "student") {
+          updateData.neverPurge = false;
+          let defaultPurge = 90;
+          try {
+            const { getDefaultInactivityDays } = require("../services/accountPurgeService");
+            defaultPurge = getDefaultInactivityDays();
+          } catch (_) {}
+          updateData.customInactivityDays = defaultPurge;
         }
-      } else if (permissions !== undefined) {
+      }
+      if (permissions !== undefined) {
         updateData.permissions = permissions;
+      } else if (role === "admin") {
+        updateData.permissions = ["all", "manage_notes", "manage_users", "manage_notices", "delete_records", "database"];
+      } else if (role === "half_admin") {
+        updateData.permissions = ["manage_notes", "manage_notices", "manage_users"];
+      } else if (role === "student") {
+        updateData.permissions = ["upload_notes", "download_notes"];
+      }
+      if (req.body.allowedTabs !== undefined) {
+        updateData.allowedTabs = Array.isArray(req.body.allowedTabs) ? req.body.allowedTabs : [];
       }
     }
 
@@ -2246,6 +2272,17 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       tursoNotesCache = { connected: false, error: err.message, latencyMs: 0 };
     }
 
+    let tursoHelp = null;
+    let helpBot = null;
+    try {
+      const { getHelpTursoTelemetry, getHelpBotTelemetry } = require("../services/helpTicketService");
+      tursoHelp = await getHelpTursoTelemetry();
+      helpBot = getHelpBotTelemetry();
+    } catch (err) {
+      tursoHelp = { connected: false, error: err.message, latencyMs: 0 };
+      helpBot = { status: "OFFLINE", error: err.message };
+    }
+
     let isMaintActive = false;
     try {
       const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -2277,6 +2314,8 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
         database,
         tursoVault,
         tursoNotesCache,
+        tursoHelp,
+        helpBot,
         smtp,
         securityShield,
         speedBooster,
@@ -3446,7 +3485,12 @@ router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) =>
         cacheStats = getTursoNotesCacheStats();
       }
     } catch (_) {}
-    res.json({ success: true, ...status, cacheStats });
+    let helpVault = null;
+    try {
+      const { getHelpTursoTelemetry } = require("../services/helpTicketService");
+      helpVault = await getHelpTursoTelemetry();
+    } catch (_) {}
+    res.json({ success: true, ...status, cacheStats, helpVault });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

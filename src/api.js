@@ -200,10 +200,19 @@ export const api = {
     return data;
   },
 
-  login: async (identifier, password) => {
+  login: async (identifier, password, deviceSpecs = null) => {
+    let specs = deviceSpecs;
+    if (!specs && typeof window !== "undefined") {
+      try {
+        const cores = navigator.hardwareConcurrency || 4;
+        const memoryGB = navigator.deviceMemory || 4;
+        const isMobile = window.innerWidth < 768;
+        specs = { cores, memoryGB, isMobile };
+      } catch (_) {}
+    }
     const data = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ identifier, password }),
+      body: JSON.stringify({ identifier, password, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -240,6 +249,13 @@ export const api = {
       setAuthToken(data.token);
     }
     return data;
+  },
+
+  syncDeviceSpecs: async (deviceSpecs) => {
+    return request("/auth/sync-device", {
+      method: "POST",
+      body: JSON.stringify({ deviceSpecs }),
+    }).catch(() => ({ success: true }));
   },
 
   logout: async (reason = "Manual Session Logout", fallbackUser = null) => {
@@ -1066,5 +1082,16 @@ export const api = {
   getHelpTicket: (code) => request(`/help/ticket/${encodeURIComponent(code)}`),
   getMyHelpTickets: (ticketCodes = []) => request("/help/my-tickets", { method: "POST", body: JSON.stringify({ ticketCodes }) }),
   adminReplyHelpTicket: (ticketCode, replyText) => request("/help/admin/reply", { method: "POST", body: JSON.stringify({ ticketCode, replyText }) }),
+  adminCloseHelpTicket: (ticketCode, reason = "", autoDelete = false) =>
+    request("/help/admin/close", { method: "POST", body: JSON.stringify({ ticketCode, reason, autoDelete }) }),
+  adminActiveHelpTicket: (ticketCode) =>
+    request("/help/admin/active", { method: "POST", body: JSON.stringify({ ticketCode }) }),
+  adminDeleteHelpTicket: (ticketCode) =>
+    request(`/help/admin/ticket/${encodeURIComponent(ticketCode)}`, { method: "DELETE" }),
+  adminPurgeHelpTickets: (onlyClosed = true) =>
+    request(`/help/admin/purge${onlyClosed ? "" : "?all=true"}`, { method: "DELETE" }),
+  adminCreateHelpTopics: (chatId = null) =>
+    request("/help/admin/create-topics", { method: "POST", body: JSON.stringify({ chatId }) }),
+  getHelpTelemetry: () => request("/help/admin/telemetry"),
   getAdminHelpTickets: (status = null) => request(`/help/admin/tickets${status ? `?status=${status}` : ""}`),
 };

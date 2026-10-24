@@ -19,17 +19,35 @@ const BOT_TOKEN = (process.env.TELEGRAM_CHAT_AUDIT_BOT_TOKEN || "").trim();
 let activeAdminId = (process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID || "").trim();
 const BOT_USERNAME = "fsm_chat_bot";
 
-let supergroupId = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076").trim();
+let supergroupId = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "").trim();
 let auditTopics = {
   podAudits: (process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "31").trim(),
   mediaVault: (process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "33").trim(),
   deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35").trim(),
   tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
-  forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "35").trim(),
-  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "35").trim(),
+  forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "31").trim(),
+  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "114").trim(),
   stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "39").trim(),
   publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "39").trim(),
 };
+
+/**
+ * ⚡ Topic 1 Public Chat Option:
+ * When publicChat is configured as "1", all public messages, images, PDFs, and deleted message tamper alerts
+ * are routed through Topic 1 (Telegram General Topic).
+ */
+function isTopic1PublicMode() {
+  return String(auditTopics.publicChat || "").trim() === "1";
+}
+
+function getTargetPublicChatTopic() {
+  return isTopic1PublicMode() ? "1" : (auditTopics.publicChat || "39").trim();
+}
+
+function getTargetPublicDeletedTopic() {
+  // If setting is 1, public chat deleted messages & tamper alerts route to Topic 1 as requested!
+  return isTopic1PublicMode() ? "1" : (auditTopics.deletedMessages || "35").trim();
+}
 
 // Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID
 const telegramToWebMsgMap = new Map();
@@ -54,7 +72,7 @@ let chatBotSettings = {
   chatRetentionDays: 7, // Delete messages older than X days
   privateRoomInactivityDays: 7, // Purge private rooms with no activity for 7 days
   adminId: activeAdminId || "",
-  supergroupId: supergroupId || "-1004345492076",
+  supergroupId: supergroupId || "",
   topics: {
     podAudits: auditTopics.podAudits,
     mediaVault: auditTopics.mediaVault,
@@ -98,14 +116,14 @@ async function initChatBotSettings() {
       chatBotSettings = {
         ...chatBotSettings,
         ...data,
-        supergroupId: (data.supergroupId && data.supergroupId.trim()) || supergroupId || "-1004345492076",
+        supergroupId: (data.supergroupId && data.supergroupId.trim()) || supergroupId || "",
         topics: {
           podAudits: (savedTopics.podAudits && savedTopics.podAudits.trim()) || "31",
           mediaVault: (savedTopics.mediaVault && savedTopics.mediaVault.trim()) || "33",
           deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || "35",
           tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
-          forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "35",
-          presence: (savedTopics.presence && savedTopics.presence.trim()) || "35",
+          forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "31",
+          presence: (savedTopics.presence && savedTopics.presence.trim()) || "114",
           stealth: (savedTopics.stealth && savedTopics.stealth.trim()) || "39",
           publicChat: (savedTopics.publicChat && savedTopics.publicChat.trim()) || "39",
         },
@@ -231,7 +249,7 @@ async function autoCreateTopicsForSupergroup(chatId) {
   const topicConfigs = [
     { key: "podAudits", name: "📜 Pod Audits & Transcripts", color: 7322096 },
     { key: "mediaVault", name: "📎 Original Media Vault (PDF & IMG)", color: 16766590 },
-    { key: "deletedMessages", name: "⚠️ Deleted Messages & Tamper Log", color: 16749490 },
+    { key: "deletedMessages", name: "⚠️ Public Deleted Messages & Tamper Log", color: 16749490 },
     { key: "forensicPurge", name: "🚨 Forensic & Purge Dossier", color: 16749490 },
     { key: "presence", name: "👥 Student Presence & Session Logs", color: 9367192 },
     { key: "stealth", name: "👻 Admin Stealth Mode Alerts", color: 13338331 },
@@ -550,7 +568,9 @@ async function processUpdate(update) {
 
     // ✏️ A. REAL-TIME EDIT FROM TELEGRAM TO WEB PUBLIC CHAT
     if (isEdit) {
-      const isPublicChatTopic = auditTopics.publicChat && threadId === String(auditTopics.publicChat);
+      const isPublicChatTopic = isTopic1PublicMode()
+        ? (threadId === "1" || !threadId)
+        : (auditTopics.publicChat && threadId === String(auditTopics.publicChat));
       const isDirectChat = chatType === "private";
 
       if (isPublicChatTopic || isDirectChat) {
@@ -921,7 +941,9 @@ async function processUpdate(update) {
     // =========================================================================
     // Checks if incoming message is in General Student Hall topic OR sent in Direct Bot DM
     const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
-    const isPublicChatTopic = auditTopics.publicChat && threadId === String(auditTopics.publicChat);
+    const isPublicChatTopic = isTopic1PublicMode()
+      ? (threadId === "1" || !threadId)
+      : (auditTopics.publicChat && threadId === String(auditTopics.publicChat));
     const isAdminDirectChat = chatType === "private" && (
       (effectiveAdminId && fromId === String(effectiveAdminId)) ||
       !effectiveAdminId // If no admin ID set yet, auto-accept and link on first direct message!
@@ -1191,7 +1213,7 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.publicChat || "39",
+      threadId: getTargetPublicChatTopic(),
     });
   } else if (effectiveAdminId) {
     targetChats.push({
@@ -1364,7 +1386,7 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
 async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, sender }) {
   if (!chatBotSettings.enablePublicChatSync && !chatBotSettings.enableDeletedMessageAlerts) return false;
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
   // 1. Edit the mirrored message in Telegram Topic 39 in-place
   const teleMsgId = webToTelegramMsgMap.get(String(messageId));
@@ -1382,9 +1404,9 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
     } catch (_) {}
   }
 
-  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic 35 (Deleted Msgs)
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
   const targetChats = [];
-  const targetThreadId = auditTopics.deletedMessages || auditTopics.tamperAudit || "35";
+  const targetThreadId = getTargetPublicDeletedTopic();
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -1431,7 +1453,7 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
 async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fileName, sender }) {
   if (!chatBotSettings.enableDeletedMessageAlerts && !chatBotSettings.enablePublicChatSync) return false;
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
   // 1. Delete or clear the mirrored message in Telegram Topic 39
   const teleMsgId = webToTelegramMsgMap.get(String(messageId));
@@ -1444,9 +1466,9 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
     } catch (_) {}
   }
 
-  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic 35 (Deleted Msgs)
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
   const targetChats = [];
-  const targetThreadId = auditTopics.deletedMessages || auditTopics.tamperAudit || "35";
+  const targetThreadId = getTargetPublicDeletedTopic();
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -1488,6 +1510,103 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 }
 
 /**
+ * 🔒 Dispatches Real-Time Private Chat Media (PDF, Images, Documents) to Topic 33 Vault
+ * Strictly for files (EXCEPT pure text messages).
+ * Even if user deletes the file in private chat later, this copy stays permanently in Topic 33!
+ * Caption explicitly identifies which private chat / pod it came from.
+ */
+async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir, sender }) {
+  if (!chatBotSettings.enableMediaVaultUpload) return false;
+
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const targetThreadId = auditTopics.mediaVault || "33";
+
+  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+
+  const roomName = room?.name || "Private Pod";
+  const roomId = room?.id || message?.roomId || "private";
+  const secretCode = room?.secretCode || "N/A";
+
+  const senderName = sender?.name || message?.sender?.name || "Student";
+  const senderEmail = sender?.email || message?.sender?.email || "N/A";
+  const senderMobile = sender?.mobile || message?.sender?.mobile || "N/A";
+  const senderIp = sender?.ip || message?.sender?.ip || message?.ip || "127.0.0.1";
+
+  const originalName = message.fileName || (message.type === "image" ? "pod_photo.jpg" : "pod_document.pdf");
+  const fileMb = message.fileSize ? (Number(message.fileSize) / (1024 * 1024)).toFixed(2) : "N/A";
+
+  let fileBuffer = null;
+  if (message.fileUrl && chatMediaDir) {
+    const filenameOnDisk = path.basename(message.fileUrl.split("?")[0]);
+    const potentialPath = path.join(chatMediaDir, filenameOnDisk);
+    if (fs.existsSync(potentialPath)) {
+      try { fileBuffer = fs.readFileSync(potentialPath); } catch {}
+    }
+  }
+
+  if (!fileBuffer && message.fileUrl && message.fileUrl.startsWith("http")) {
+    try {
+      const resp = await fetch(message.fileUrl);
+      if (resp.ok) {
+        const arrBuf = await resp.arrayBuffer();
+        fileBuffer = Buffer.from(arrBuf);
+      }
+    } catch {}
+  }
+
+  const caption =
+    `📎 <b>[PRIVATE CHAT MEDIA VAULT - REAL-TIME VAULT]</b>\n\n` +
+    `🏠 <b>Pod Origin:</b> <b>${escapeHtml(roomName)}</b>\n` +
+    `🆔 <b>Room ID:</b> <code>${escapeHtml(roomId)}</code> (🔑 Code: <code>${escapeHtml(secretCode)}</code>)\n` +
+    `👤 <b>Sender:</b> <b>${escapeHtml(senderName)}</b> (📱 <code>${escapeHtml(senderMobile)}</code> | 📧 <code>${escapeHtml(senderEmail)}</code> | 🌐 <code>${escapeHtml(senderIp)}</code>)\n` +
+    `📁 <b>File Name:</b> <code>${escapeHtml(originalName)}</code>\n` +
+    (fileMb !== "N/A" ? `📦 <b>Size:</b> ${fileMb} MB\n` : "") +
+    (message.text ? `💬 <b>Accompanying Text:</b> "${escapeHtml(message.text)}"\n` : "") +
+    `🔍 <b>Status:</b> ✅ <b>Active in Private Pod</b>\n` +
+    `🔒 <b>Vault Guarantee:</b> Retained permanently in Topic 33 even if deleted from private chat by user.\n` +
+    `🕒 <b>Uploaded At:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
+
+  try {
+    if (fileBuffer && fileBuffer.length > 0 && fileBuffer.length <= 50 * 1024 * 1024) {
+      const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+      let formHeader = `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${currentSupergroupId}\r\n`;
+      if (targetThreadId) {
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${targetThreadId}\r\n`;
+      }
+      formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+      formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+
+      const isImage = (message.type === "image" || /\.(jpe?g|png|webp|gif)$/i.test(originalName));
+      const fieldName = isImage ? "photo" : "document";
+      const mimeType = isImage ? "image/jpeg" : "application/octet-stream";
+      formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${originalName}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+
+      const payload = Buffer.concat([
+        Buffer.from(formHeader),
+        fileBuffer,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+
+      const endpoint = isImage ? "sendPhoto" : "sendDocument";
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+        body: payload,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.ok && data.result?.message_id) {
+        message.vaultTelegramMsgId = data.result.message_id;
+        console.log(`[CHAT-VAULT] 📎 Private media "${originalName}" vaulted to Supergroup Topic 33 (msg #${data.result.message_id}).`);
+      }
+      return true;
+    }
+  } catch (err) {
+    console.warn(`[CHAT-VAULT] Error vaulting private media "${originalName}":`, err.message);
+  }
+  return false;
+}
+
+/**
  * Dispatches Complete Private Room Forensic Audit to Telegram
  * (Strictly to Supergroup Topics 31 & 33. Never dumped into Admin 1-on-1 DM!)
  */
@@ -1506,12 +1625,12 @@ async function dispatchChatForensicAudit({
     return false;
   }
 
-  // 🛡️ STRICT REQUIREMENT: Send forensic dossiers & media vault ONLY to Supergroup -1004345492076 topics.
+  // 🛡️ STRICT REQUIREMENT: Send forensic dossiers & media vault ONLY to Supergroup topics.
   // NEVER send bulky .txt transcripts, media files, or avatars to Admin 1-on-1 DM!
   const targetChatIds = [];
   const threadMap = {};
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChatIds.push(currentSupergroupId);
     if (auditTopics.podAudits) {
@@ -1598,15 +1717,15 @@ async function dispatchChatForensicAudit({
           if (fileBuffer && fileBuffer.length > 0 && fileBuffer.length <= 50 * 1024 * 1024) {
             try {
               const fileMb = (fileBuffer.length / (1024 * 1024)).toFixed(2);
-              const delStatus = att.isDeleted ? "⚠️ [USER DELETED THIS FILE LATER]" : "✅ [ACTIVE AT POD CLOSE]";
+              const delStatus = att.isDeleted ? "⚠️ [USER DELETED THIS FILE IN CHAT - PRESERVED IN AUDIT]" : "✅ [ACTIVE AT POD CLOSE]";
               const caption =
-                `📎 <b>Forensic Pod Attachment (${i + 1}/${mediaMsgs.length})</b>\n\n` +
-                `📁 <b>File Name:</b> <code>${originalName}</code>\n` +
-                `📦 <b>Size:</b> ${fileMb} MB\n` +
-                `👤 <b>Sender:</b> ${att.senderName || "Student"} (📱 <code>${att.senderMobile || "N/A"}</code>)\n` +
+                `📎 <b>[PRIVATE CHAT MEDIA VAULT - ARCHIVE COPY]</b>\n\n` +
+                `🏠 <b>Pod Origin:</b> <b>${escapeHtml(room.name)}</b>\n` +
+                `🆔 <b>Room ID:</b> <code>${room.id}</code> (🔑 Code: <code>${escapeHtml(room.secretCode || "N/A")}</code>)\n` +
+                `📁 <b>File Name:</b> <code>${originalName}</code> (${fileMb} MB)\n` +
+                `👤 <b>Sender:</b> ${escapeHtml(att.senderName || "Student")} (📱 <code>${escapeHtml(att.senderMobile || "N/A")}</code> | 🌐 <code>${escapeHtml(att.senderIp || "127.0.0.1")}</code>)\n` +
                 `🕒 <b>Sent At:</b> ${att.createdAt || "N/A"}\n` +
-                `🔍 <b>Status:</b> ${delStatus}\n` +
-                `🏠 <b>Pod:</b> ${room.name} (ID: <code>${room.id}</code>)`;
+                `🔍 <b>Condition / Status:</b> <b>${delStatus}</b>`;
 
               const fileBoundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
               let fileFormHeader = `--${fileBoundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
@@ -1759,15 +1878,15 @@ async function sendTestChatBotAlert(event = "PING") {
  * (Topic: presence / 37)
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
   const targetChats = [];
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Supergroup Topic 35 (Never spammed to Admin DM!)
+  // 🛡️ STRICT REQUIREMENT: Send ONLY to Supergroup Topic 114 (Presence & Session Logs)
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.deletedMessages || "35",
+      threadId: auditTopics.presence || "114",
       isDirect: false,
     });
   }
@@ -1889,6 +2008,64 @@ async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomI
 }
 
 /**
+ * 👥 Dispatches Live Active Students Count & Session Logs to Topic 114
+ */
+async function dispatchActiveStudentsReportToTelegram() {
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const targetThreadId = auditTopics.presence || "114";
+  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+
+  const activeUsers = typeof chatHandlers.getActiveUsers === "function" ? chatHandlers.getActiveUsers() : [];
+  let bodyText = "";
+
+  if (activeUsers.length === 0) {
+    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
+      `🟢 <b>Active Students Online:</b> <b>0</b>\n` +
+      `ℹ️ No students are currently connected to live chat sockets.\n\n` +
+      `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
+  } else {
+    const lines = activeUsers.map((u, i) => {
+      const connMins = u.connectedAt ? Math.round((Date.now() - u.connectedAt) / 60000) : 0;
+      const lastSecs = u.lastInteraction ? Math.round((Date.now() - u.lastInteraction) / 1000) : 0;
+      return `<b>${i + 1}. ${escapeHtml(u.name || "Student")}</b> (${escapeHtml(u.role || "student")})\n` +
+        `   📧 <code>${escapeHtml(u.email || "N/A")}</code> | 📱 <code>${escapeHtml(u.mobile || "N/A")}</code>\n` +
+        `   🏠 Room: <code>${escapeHtml(u.roomName || u.roomId || "General")}</code>\n` +
+        `   🌐 IP: <code>${escapeHtml(u.ip || "127.0.0.1")}</code>\n` +
+        `   ⏱️ Connected: <b>${connMins} mins ago</b> (Last active ${lastSecs}s ago)`;
+    }).join("\n\n");
+
+    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
+      `🟢 <b>Total Students Currently Active:</b> <b>${activeUsers.length} Online</b>\n\n` +
+      lines + `\n\n` +
+      `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
+  }
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: "🔄 Refresh Active Students", callback_data: "cmd_active" },
+        { text: "📋 Blocked Students", callback_data: "cmd_blocked" },
+      ],
+    ],
+  };
+
+  const body = {
+    chat_id: currentSupergroupId,
+    text: bodyText,
+    parse_mode: "HTML",
+    reply_markup: replyMarkup,
+  };
+  if (targetThreadId) body.message_thread_id = targetThreadId;
+
+  let res = await callTelegram("sendMessage", body);
+  if (!res.ok && body.message_thread_id) {
+    delete body.message_thread_id;
+    await callTelegram("sendMessage", body);
+  }
+  return true;
+}
+
+/**
  * Dispatches Complete Chat Purge / Clear History Alert
  * (Topic: deletedMessages / 35 and publicChat / 39)
  */
@@ -1898,14 +2075,23 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
 
   const targetChats = [];
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
-    targetChats.push({
-      chatId: currentSupergroupId,
-      threadId: auditTopics.deletedMessages || "35",
-    });
-    if (auditTopics.publicChat && roomId === "public") {
+    if (roomId === "public") {
+      const publicDelTopic = getTargetPublicDeletedTopic();
       targetChats.push({
         chatId: currentSupergroupId,
-        threadId: auditTopics.publicChat || "39",
+        threadId: publicDelTopic,
+      });
+      if (!isTopic1PublicMode() && auditTopics.publicChat) {
+        targetChats.push({
+          chatId: currentSupergroupId,
+          threadId: auditTopics.publicChat || "39",
+        });
+      }
+    } else {
+      // Private pod purge belongs to Topic 31 (Pod Audits / Forensics)
+      targetChats.push({
+        chatId: currentSupergroupId,
+        threadId: auditTopics.podAudits || "31",
       });
     }
   } else if (effectiveAdminId) {
@@ -1949,15 +2135,15 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
  * (Topic: presence / 37)
  */
 async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, activeUsers = [] }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
   const targetChats = [];
 
-  // Deliver to Supergroup Topic 35 (Deleted Msgs & Tamper Log)
+  // Deliver to Supergroup Topic 114 (Student Presence & Session Logs)
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.deletedMessages || "35",
+      threadId: auditTopics.presence || "114",
       isDirect: false,
     });
   }
@@ -2034,12 +2220,12 @@ async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, acti
  * Sent to Chat Audit Bot Supergroup (topic: deletedMessages or presence) and Admin DM
  */
 async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSummary = {} }) {
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "-1004345492076";
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
   const targetChats = [];
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 35 (Deleted Msgs & Tamper Log). NEVER to Admin DM.
-  const targetThreadId = auditTopics.deletedMessages || "35";
+  // 🛡️ STRICT REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 114 (Student Presence & Session Logs / Cascade Deletion Report). NEVER to Admin DM.
+  const targetThreadId = auditTopics.presence || "114";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -2057,6 +2243,8 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
   const studentEmail = user.email || "N/A";
   const studentMobile = user.mobile || "N/A";
   const studentCollege = user.college || "N/A";
+  const inactivityDays = user.inactivityDays !== undefined ? user.inactivityDays : chatSummary.inactivityDays;
+  const thresholdDays = user.thresholdDays !== undefined ? user.thresholdDays : chatSummary.thresholdDays;
   const adminName = admin?.name || (admin?.email ? "Administrator" : "Automated Lifecycle Sweeper");
   const adminEmail = admin?.email || "admin";
 
@@ -2066,19 +2254,22 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
     : "Public Room";
   const tursoCleared = chatSummary.tursoRowsDeleted !== undefined ? `${chatSummary.tursoRowsDeleted} rows` : "Cleared";
 
-  const textHtml = `🚨 <b>[STUDENT CHAT HISTORY PURGED & FORENSIC DOSSIER]</b>\n\n` +
+  const textHtml = `🚨 <b>[STUDENT ACCOUNT CASCADE PURGE REPORT - TOPIC 114]</b>\n\n` +
     `👤 <b>Student Name:</b> <code>${escapeHtml(studentName)}</code>\n` +
     `📧 <b>Email Address:</b> <code>${escapeHtml(studentEmail)}</code>\n` +
     `📱 <b>Mobile Number:</b> <code>${escapeHtml(studentMobile)}</code>\n` +
-    `🏛️ <b>College / Institute:</b> <code>${escapeHtml(studentCollege)}</code>\n\n` +
-    `💬 <b>Chat Activity & Deletion Forensic:</b>\n` +
-    `• <b>Total Chat Messages Erased:</b> <code>${totalMessagesDeleted} messages (Firebase + Turso)</code>\n` +
-    `• <b>Rooms Involved:</b> <code>${escapeHtml(roomsInvolved)}</code>\n` +
-    `• <b>Turso Rows Cleared:</b> <code>${escapeHtml(tursoCleared)} (Chat messages, profiles, audits)</code>\n` +
-    `• <b>Firebase Firestore:</b> <code>100% Cleared (chat_messages)</code>\n\n` +
+    `🏛️ <b>College / Institute:</b> <code>${escapeHtml(studentCollege)}</code>\n` +
+    (inactivityDays !== undefined
+      ? `⌛ <b>Inactivity Days:</b> <code>${inactivityDays} Days${thresholdDays ? ` (Exceeded ${thresholdDays}-Day threshold)` : ""}</code>\n`
+      : `⚙️ <b>Purge Trigger:</b> <code>Manual Administrator Cascade</code>\n`) +
+    `\n` +
+    `⚡ <b>Turso Database Rows Cleared:</b> <code>${escapeHtml(tursoCleared)} (Profiles, messages, audits, sockets)</code>\n` +
+    `🔒 <b>Chat & Session Traces Expunged Status:</b> <code>100% Expunged & Cleared (Firestore + Turso LibSQL + Edge RAM)</code>\n` +
+    `💬 <b>Total Chat Messages Erased:</b> <code>${totalMessagesDeleted} messages</code>\n` +
+    `🏠 <b>Chat Rooms Involved:</b> <code>${escapeHtml(roomsInvolved)}</code>\n\n` +
     `👮 <b>Action Executed By:</b> <code>${escapeHtml(adminName)} (${escapeHtml(adminEmail)})</code>\n` +
     `⏰ <b>Action Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>\n\n` +
-    `🔒 <i>Forensic Audit Record: User identity and all associated chat traces permanently expunged across Firebase and Turso. Broadcasted strictly to Public Chat Audit Supergroup.</i>`;
+    `🔒 <i>Forensic Audit Record: User identity, Turso database rows, and all associated chat & session traces permanently expunged across Firebase and Turso. Delivered strictly to Supergroup Topic 114.</i>`;
 
   for (const { chatId, threadId } of targetChats) {
     try {
@@ -2117,6 +2308,8 @@ module.exports = {
   startChatAuditBotPoller,
   autoCreateTopicsForSupergroup,
   dispatchChatForensicAudit,
+  dispatchPrivateMediaToTelegramVault,
+  dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,

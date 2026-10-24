@@ -3,14 +3,6 @@ import Navbar from "./components/Navbar";
 import HeroBanner from "./components/HeroBanner";
 import CategoryFilter from "./components/CategoryFilter";
 import NoteCard from "./components/NoteCard";
-import UploadModal from "./components/UploadModal";
-import PreviewModal from "./components/PreviewModal";
-import AdminModal from "./components/AdminModal";
-import NoticeBoardModal from "./components/NoticeBoardModal";
-import AuthModal from "./components/AuthModal";
-import ProfileModal from "./components/ProfileModal";
-import StudentChatModal from "./components/StudentChatModal";
-import HelpCenterModal from "./components/HelpCenterModal";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
@@ -20,10 +12,36 @@ import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 
+// ⚡ Ultra-Fast Code Splitting & Dynamic Lazy Loading for All Modals
+const UploadModal = React.lazy(() => import("./components/UploadModal"));
+const PreviewModal = React.lazy(() => import("./components/PreviewModal"));
+const AdminModal = React.lazy(() => import("./components/AdminModal"));
+const NoticeBoardModal = React.lazy(() => import("./components/NoticeBoardModal"));
+const AuthModal = React.lazy(() => import("./components/AuthModal"));
+const ProfileModal = React.lazy(() => import("./components/ProfileModal"));
+const StudentChatModal = React.lazy(() => import("./components/StudentChatModal"));
+const HelpCenterModal = React.lazy(() => import("./components/HelpCenterModal"));
+const StudyPodModal = React.lazy(() => import("./components/StudyPodModal"));
+
+const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
+export const isMasterAdminUser = (user) => {
+  if (!user) return false;
+  if (user.isMasterAdmin || user.isMainAdmin) return true;
+  if (MASTER_ADMIN_EMAIL && user.email && user.email.toLowerCase() === MASTER_ADMIN_EMAIL) return true;
+  return false;
+};
+
 const safeStorage = {
   getItem: (key) => {
     try {
-      return typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+      const val = typeof localStorage !== "undefined" ? localStorage.getItem(key) : null;
+      if (val !== null && val !== undefined) return val;
+      // Cookie fallback for mobile browsers & isolated webviews
+      if (typeof document !== "undefined" && document.cookie) {
+        const match = document.cookie.match(new RegExp("(^|; )" + key + "=([^;]+)"));
+        if (match) return decodeURIComponent(match[2]);
+      }
+      return null;
     } catch (_) {
       return null;
     }
@@ -31,11 +49,17 @@ const safeStorage = {
   setItem: (key, val) => {
     try {
       if (typeof localStorage !== "undefined") localStorage.setItem(key, val);
+      if (typeof document !== "undefined") {
+        document.cookie = `${key}=${encodeURIComponent(val)}; path=/; max-age=604800; SameSite=Lax`;
+      }
     } catch (_) {}
   },
   removeItem: (key) => {
     try {
       if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+      if (typeof document !== "undefined") {
+        document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+      }
     } catch (_) {}
   },
 };
@@ -60,15 +84,24 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isStudyPodOpen, setIsStudyPodOpen] = useState(false);
+  const [studyPodRoomCode, setStudyPodRoomCode] = useState("");
+  const [studyPodNote, setStudyPodNote] = useState(null);
   const [previewNote, setPreviewNote] = useState(null);
 
   useEffect(() => {
     const handleOpenChat = () => setIsChatOpen(true);
     const handleOpenHelp = () => setIsHelpOpen(true);
+    const handleOpenPod = (e) => {
+      if (e?.detail?.roomCode) setStudyPodRoomCode(e.detail.roomCode);
+      if (e?.detail?.note) setStudyPodNote(e.detail.note);
+      setIsStudyPodOpen(true);
+    };
     window.addEventListener("open_student_chat", handleOpenChat);
     window.addEventListener("open_help_desk", handleOpenHelp);
+    window.addEventListener("open_study_pod", handleOpenPod);
 
-    // Auto-open chat or help if URL has matching parameter
+    // Auto-open chat, help or study pod if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
     if (params.get("chat") || params.get("code") || params.get("chat_join")) {
       setIsChatOpen(true);
@@ -76,10 +109,16 @@ export default function App() {
     if (params.get("help") || params.get("ticket") || params.get("support")) {
       setIsHelpOpen(true);
     }
+    const podParam = params.get("pod") || params.get("studypod") || params.get("room");
+    if (podParam) {
+      setStudyPodRoomCode(podParam);
+      setIsStudyPodOpen(true);
+    }
 
     return () => {
       window.removeEventListener("open_student_chat", handleOpenChat);
       window.removeEventListener("open_help_desk", handleOpenHelp);
+      window.removeEventListener("open_study_pod", handleOpenPod);
     };
   }, []);
 
@@ -229,8 +268,13 @@ export default function App() {
   useEffect(() => {
     currentUserRef.current = currentUser;
     if (currentUser) {
-      lastActivityRef.current = Date.now();
-      safeStorage.setItem("vault_last_active", String(Date.now()));
+      const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);
+      if (!storedLast || isNaN(storedLast) || storedLast <= 0) {
+        lastActivityRef.current = Date.now();
+        safeStorage.setItem("vault_last_active", String(Date.now()));
+      } else {
+        lastActivityRef.current = storedLast;
+      }
       try {
         syncStudentProfileContext(currentUser);
       } catch (_) {}
@@ -267,11 +311,42 @@ export default function App() {
     }
   }, []);
 
-  // Track Inactivity (30 min = 1,800,000 ms)
+  // Track Inactivity (30 min = 1,800,000 ms) with Complete Mobile OS Sleep/Resume Shield
   useEffect(() => {
     if (!currentUser) return;
 
+    const getEffectiveTimeoutMs = () => {
+      const setting = inactivitySettingRef.current;
+      if (setting === 0 || setting === "0") return 0; // Disabled
+      if (typeof setting === "number" && setting > 0) return setting * 60 * 1000;
+      if (typeof setting === "string" && !isNaN(parseInt(setting, 10)) && parseInt(setting, 10) > 0) {
+        return parseInt(setting, 10) * 60 * 1000;
+      }
+      return 30 * 60 * 1000; // 30 Minutes standard
+    };
+
+    const checkInactivityAndTimeout = () => {
+      if (!currentUserRef.current) return false;
+      const timeoutMs = getEffectiveTimeoutMs();
+      if (timeoutMs === 0) return false;
+
+      const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);
+      const effectiveLast = Math.max(lastActivityRef.current || 0, storedLast || 0);
+
+      if (effectiveLast > 0 && Date.now() - effectiveLast >= timeoutMs) {
+        console.log(`[AUTO-LOGOUT] ⏱️ Mobile/Web inactivity timeout (${Math.round((Date.now() - effectiveLast) / 60000)}m >= ${timeoutMs / 60000}m). Logging out.`);
+        triggerAutoLogout();
+        return true;
+      }
+      return false;
+    };
+
     const recordUserActivity = () => {
+      if (!currentUserRef.current) return;
+      // 🚨 CRITICAL MOBILE FIX: If user returns after 30+ minutes of phone sleep / lock,
+      // their first touch MUST NOT overwrite the timestamp! We must check timeout first!
+      if (checkInactivityAndTimeout()) return;
+
       const now = Date.now();
       lastActivityRef.current = now;
       if (now - lastStorageSyncRef.current > 5000) {
@@ -280,47 +355,48 @@ export default function App() {
       }
     };
 
-    const checkInactivity = () => {
+    const handleLifecycleResume = () => {
       if (!currentUserRef.current) return;
-      const setting = inactivitySettingRef.current;
-      if (setting === 0 || setting === "0") return; // Disabled
+      checkInactivityAndTimeout();
+    };
 
-      const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);
-      const effectiveLastActive = Math.max(lastActivityRef.current, storedLast);
-
-      let timeoutMs = 30 * 60 * 1000;
-      if (setting === "auto" || !setting) {
-        timeoutMs = 30 * 60 * 1000; // ⚡ 100% Strictly 30 Minutes for Auto Mode
-      } else if (typeof setting === "number" && setting > 0) {
-        timeoutMs = setting * 60 * 1000;
-      } else if (typeof setting === "string" && !isNaN(parseInt(setting, 10)) && parseInt(setting, 10) > 0) {
-        timeoutMs = parseInt(setting, 10) * 60 * 1000;
-      }
-
-      if (Date.now() - effectiveLastActive >= timeoutMs) {
-        triggerAutoLogout();
+    const handleLifecyclePause = () => {
+      // When screen locks or tab hides on mobile, save exact timestamp
+      if (currentUserRef.current) {
+        safeStorage.setItem("vault_last_active", String(Date.now()));
       }
     };
 
-    const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        handleLifecycleResume();
+      } else if (document.visibilityState === "hidden") {
+        handleLifecyclePause();
+      }
+    };
+
+    const activityEvents = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "touchend", "pointerdown", "click"];
     activityEvents.forEach((evt) => {
       window.addEventListener(evt, recordUserActivity, { passive: true });
     });
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        checkInactivity();
-      }
-    };
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pageshow", handleLifecycleResume);
+    window.addEventListener("focus", handleLifecycleResume);
+    window.addEventListener("pagehide", handleLifecyclePause);
+    window.addEventListener("blur", handleLifecyclePause);
 
-    const intervalId = setInterval(checkInactivity, 10000);
+    const intervalId = setInterval(checkInactivityAndTimeout, 10000);
 
     return () => {
       activityEvents.forEach((evt) => {
         window.removeEventListener(evt, recordUserActivity);
       });
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pageshow", handleLifecycleResume);
+      window.removeEventListener("focus", handleLifecycleResume);
+      window.removeEventListener("pagehide", handleLifecyclePause);
+      window.removeEventListener("blur", handleLifecyclePause);
       clearInterval(intervalId);
     };
   }, [currentUser, triggerAutoLogout]);
@@ -355,13 +431,21 @@ export default function App() {
           return;
         }
         setCurrentUser(res.user);
-        lastActivityRef.current = Date.now();
-        safeStorage.setItem("vault_last_active", String(Date.now()));
+        lastActivityRef.current = storedLast > 0 ? storedLast : Date.now();
+        safeStorage.setItem("vault_last_active", String(lastActivityRef.current));
       }
     }).catch((err) => {
-      if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required"))) {
+      if (err.message && (err.message.includes("401") || err.message.includes("Not authenticated") || err.message.includes("Authentication required") || err.message.includes("inactivity") || err.message.includes("INACTIVITY"))) {
+        const wasLoggedIn = Boolean(safeStorage.getItem("vault_last_active"));
         setCurrentUser(null);
         safeStorage.removeItem("vault_last_active");
+        if (wasLoggedIn && (err.message.includes("inactivity") || err.message.includes("INACTIVITY"))) {
+          setAutoLogoutNotice({
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            userEmail: "",
+            userName: "Student",
+          });
+        }
       }
     });
   }, []);
@@ -407,7 +491,7 @@ export default function App() {
   };
 
   const handleQuickToggleNoteDownload = async (note) => {
-    const isUserAdmin = currentUser?.role === "admin" || currentUser?.role === "half_admin" || currentUser?.email === "jnplotus@gmail.com";
+    const isUserAdmin = currentUser?.role === "admin" || currentUser?.role === "half_admin" || isMasterAdminUser(currentUser);
     if (!isUserAdmin) return;
     const isCurrentlyAllowed = note.allowDownload !== false && String(note.allowDownload) !== "false" && note.allowDownload !== 0 && String(note.allowDownload) !== "0";
     const newAllowed = !isCurrentlyAllowed;
@@ -593,7 +677,7 @@ export default function App() {
   // Rule: Display initial 15 notes, keep rest hidden until user clicks "Show All Notes"
   const displayedNotes = showAllNotes ? notes : notes.slice(0, 15);
 
-  const isAdminUser = currentUser?.role === "admin" || currentUser?.role === "half_admin" || currentUser?.email === "jnplotus@gmail.com";
+  const isAdminUser = currentUser?.role === "admin" || currentUser?.role === "half_admin" || isMasterAdminUser(currentUser);
   const hasBypassParam =
     typeof window !== "undefined" &&
     (window.location.search.includes("admin_bypass") ||
@@ -768,24 +852,28 @@ export default function App() {
           </div>
         </div>
 
-        <HelpCenterModal
-          isOpen={isHelpOpen}
-          onClose={() => setIsHelpOpen(false)}
-          currentUser={currentUser}
-        />
+        <React.Suspense fallback={null}>
+          {isHelpOpen && (
+            <HelpCenterModal
+              isOpen={isHelpOpen}
+              onClose={() => setIsHelpOpen(false)}
+              currentUser={currentUser}
+            />
+          )}
 
-        {isAuthOpen && (
-          <AuthModal
-            isOpen={isAuthOpen}
-            initialTab={authInitialTab}
-            isMaintenanceMode={Boolean(maintenanceState?.active)}
-            onClose={() => setIsAuthOpen(false)}
-            onAuthSuccess={(user) => {
-              setCurrentUser(user);
-              setIsAuthOpen(false);
-            }}
-          />
-        )}
+          {isAuthOpen && (
+            <AuthModal
+              isOpen={isAuthOpen}
+              initialTab={authInitialTab}
+              isMaintenanceMode={Boolean(maintenanceState?.active)}
+              onClose={() => setIsAuthOpen(false)}
+              onAuthSuccess={(user) => {
+                setCurrentUser(user);
+                setIsAuthOpen(false);
+              }}
+            />
+          )}
+        </React.Suspense>
       </div>
     );
   }
@@ -818,6 +906,7 @@ export default function App() {
             setIsChatOpen(true);
           }
         }}
+        onOpenStudyPod={() => setIsStudyPodOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
@@ -1561,98 +1650,132 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Modals & Overlays */}
-      <UploadModal
-        isOpen={isUploadOpen}
-        onClose={() => setIsUploadOpen(false)}
-        onUploadQueued={handleUploadQueued}
-        existingBranches={branches}
-      />
+      {/* Modals & Overlays - Ultra-Fast Lazy Loaded */}
+      <React.Suspense fallback={null}>
+        {isUploadOpen && (
+          <UploadModal
+            isOpen={isUploadOpen}
+            onClose={() => setIsUploadOpen(false)}
+            onUploadQueued={handleUploadQueued}
+            existingBranches={branches}
+          />
+        )}
 
-      <PreviewModal
-        note={previewNote}
-        onClose={() => setPreviewNote(null)}
-        currentUser={currentUser}
-        allowNotesDownload={allowNotesDownload}
-        downloadDisabledReason={downloadDisabledReason}
-        onOpenAuth={(mode) => {
-          setPreviewNote(null);
-          openAuth(mode || "signin");
-        }}
-      />
+        {previewNote && (
+          <PreviewModal
+            note={previewNote}
+            onClose={() => setPreviewNote(null)}
+            currentUser={currentUser}
+            allowNotesDownload={allowNotesDownload}
+            downloadDisabledReason={downloadDisabledReason}
+            onOpenAuth={(mode) => {
+              setPreviewNote(null);
+              openAuth(mode || "signin");
+            }}
+          />
+        )}
 
-      <AdminModal
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        currentUser={currentUser}
-        onLoginSuccess={(user) => {
-          setAutoLogoutNotice(null);
-          setCurrentUser(user);
-          safeStorage.setItem("vault_last_active", String(Date.now()));
-          fetchNotes(user);
-        }}
-        notes={notes}
-        onRefreshNotes={() => fetchNotes(null, true)}
-        branches={branches}
-        allowNotesDownload={allowNotesDownload}
-        onToggleDownloadAllowed={(val, reason) => {
-          setAllowNotesDownload(Boolean(val));
-          if (reason) setDownloadDisabledReason(reason);
-        }}
-        onToggleNoteDownload={handleToggleNoteDownloadInState}
-        maintenanceState={maintenanceState}
-        onMaintenanceChange={setMaintenanceState}
-      />
+        {isAdminOpen && (
+          <AdminModal
+            isOpen={isAdminOpen}
+            onClose={() => setIsAdminOpen(false)}
+            currentUser={currentUser}
+            onLoginSuccess={(user) => {
+              setAutoLogoutNotice(null);
+              setCurrentUser(user);
+              safeStorage.setItem("vault_last_active", String(Date.now()));
+              fetchNotes(user);
+            }}
+            notes={notes}
+            onRefreshNotes={() => fetchNotes(null, true)}
+            branches={branches}
+            allowNotesDownload={allowNotesDownload}
+            onToggleDownloadAllowed={(val, reason) => {
+              setAllowNotesDownload(Boolean(val));
+              if (reason) setDownloadDisabledReason(reason);
+            }}
+            onToggleNoteDownload={handleToggleNoteDownloadInState}
+            maintenanceState={maintenanceState}
+            onMaintenanceChange={setMaintenanceState}
+          />
+        )}
 
-      <NoticeBoardModal
-        isOpen={isNoticeBoardOpen}
-        onClose={() => setIsNoticeBoardOpen(false)}
-        currentUser={currentUser}
-        onOpenNote={handleOpenNoteFromNotice}
-        onOpenAuth={(mode) => {
-          setIsNoticeBoardOpen(false);
-          openAuth(mode || "signup");
-        }}
-      />
+        {isNoticeBoardOpen && (
+          <NoticeBoardModal
+            isOpen={isNoticeBoardOpen}
+            onClose={() => setIsNoticeBoardOpen(false)}
+            currentUser={currentUser}
+            onOpenNote={handleOpenNoteFromNotice}
+            onOpenAuth={(mode) => {
+              setIsNoticeBoardOpen(false);
+              openAuth(mode || "signup");
+            }}
+          />
+        )}
 
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        initialTab={authInitialTab}
-        isMaintenanceMode={Boolean(maintenanceState?.active)}
-        onAuthSuccess={(user) => {
-          setAutoLogoutNotice(null);
-          setCurrentUser(user);
-          safeStorage.setItem("vault_last_active", String(Date.now()));
-          fetchNotes(user);
-        }}
-      />
+        {isAuthOpen && (
+          <AuthModal
+            isOpen={isAuthOpen}
+            onClose={() => setIsAuthOpen(false)}
+            initialTab={authInitialTab}
+            isMaintenanceMode={Boolean(maintenanceState?.active)}
+            onAuthSuccess={(user) => {
+              setAutoLogoutNotice(null);
+              setCurrentUser(user);
+              safeStorage.setItem("vault_last_active", String(Date.now()));
+              fetchNotes(user);
+            }}
+          />
+        )}
 
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        currentUser={currentUser}
-        onProfileUpdated={(updated) => {
-          setCurrentUser(updated);
-        }}
-      />
+        {isProfileOpen && (
+          <ProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            currentUser={currentUser}
+            onProfileUpdated={(updated) => {
+              setCurrentUser(updated);
+            }}
+          />
+        )}
 
-      <GlobalErrorBoundary>
-        <StudentChatModal
-          isOpen={isChatOpen}
-          onClose={() => setIsChatOpen(false)}
-          currentUser={currentUser}
-          onPreviewNote={(note) => setPreviewNote(note)}
-          onOpenAuth={(mode) => openAuth(mode || "signin")}
-        />
-      </GlobalErrorBoundary>
+        {isChatOpen && (
+          <GlobalErrorBoundary>
+            <StudentChatModal
+              isOpen={isChatOpen}
+              onClose={() => setIsChatOpen(false)}
+              currentUser={currentUser}
+              onPreviewNote={(note) => setPreviewNote(note)}
+              onOpenAuth={(mode) => openAuth(mode || "signin")}
+            />
+          </GlobalErrorBoundary>
+        )}
 
-      {/* Hybrid Smart Help & Support Center Modal */}
-      <HelpCenterModal
-        isOpen={isHelpOpen}
-        onClose={() => setIsHelpOpen(false)}
-        currentUser={currentUser}
-      />
+        {/* Collaborative Live Study Pod with Real-time Canvas & PDF Sync */}
+        {isStudyPodOpen && (
+          <GlobalErrorBoundary>
+            <StudyPodModal
+              isOpen={isStudyPodOpen}
+              onClose={() => {
+                setIsStudyPodOpen(false);
+                setStudyPodNote(null);
+              }}
+              currentUser={currentUser}
+              note={studyPodNote}
+              initialRoomCode={studyPodRoomCode}
+            />
+          </GlobalErrorBoundary>
+        )}
+
+        {/* Hybrid Smart Help & Support Center Modal */}
+        {isHelpOpen && (
+          <HelpCenterModal
+            isOpen={isHelpOpen}
+            onClose={() => setIsHelpOpen(false)}
+            currentUser={currentUser}
+          />
+        )}
+      </React.Suspense>
 
       {/* Floating 2-Way Help & Support Desk Trigger */}
       <button

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle } from "lucide-react";
+import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle, Users } from "lucide-react";
 
 export default function Navbar({
   searchTerm,
@@ -11,6 +11,7 @@ export default function Navbar({
   onOpenProfile,
   onOpenChat,
   onOpenHelp,
+  onOpenStudyPod,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -210,6 +211,38 @@ export default function Navbar({
                 }}
               />
             )}
+          </button>
+
+          {/* Collaborative Live Study Pod with Real-time Canvas */}
+          <button
+            className="btn-secondary"
+            onClick={onOpenStudyPod}
+            title="Collaborative Live Study Pod (Real-time P2P Canvas & Notes Sync)"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(16, 185, 129, 0.12)",
+              border: "1px solid rgba(16, 185, 129, 0.35)",
+              color: "#34d399",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+            }}
+          >
+            <Users size={16} />
+            <span>Study Pod</span>
+            <span
+              style={{
+                fontSize: "0.65rem",
+                background: "rgba(16, 185, 129, 0.25)",
+                padding: "1px 5px",
+                borderRadius: "8px",
+                color: "#6ee7b7",
+                fontWeight: 700,
+              }}
+            >
+              P2P
+            </span>
           </button>
 
           {/* Real-time Student Chat & Study Pods */}

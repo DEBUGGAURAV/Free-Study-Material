@@ -338,7 +338,8 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
       }
     } else if (event === "ACCOUNT_PURGE") {
-      threadId = topics.accountPurge || topics.securityUpdates || process.env.TELEGRAM_TOPIC_PURGE || "59";
+      // 🛡️ User Request: Security dossier delivered safely to FSM Security Bot Topic 6 (No chat details shared in Topic 6)
+      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
     }
 
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -492,8 +493,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `📥 <b>Downloaded Notes Count:</b> <code>${user.downloadsCount || 0} documents</code>\n` +
         `📑 <b>Documents Downloaded by Student:</b>\n` +
         `${downloadedNotesSnippet}\n\n` +
-        `⚡ <b>Turso Database Status:</b> <code>100% Cascaded & Cleared (${user.tursoDeletedCount || 0} rows removed)</code>\n` +
-        `🛡️ <b>Purge Status:</b> <code>Account Permanently Deleted from Database</code>\n` +
+        `🛡️ <b>Purge Status:</b> <code>Account & Credentials Permanently Deleted from Database</code>\n` +
         (admin ? `👮 <b>Action Executed By:</b> ${admin.name || "Admin"} (<code>${admin.email || "admin"}</code>)\n` : `⚙️ <b>Action Executed By:</b> <code>${method || "Automated Lifecycle Sweeper"}</code>\n`) +
         `⏰ <b>Action Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the login account was removed.</i>`;

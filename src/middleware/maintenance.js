@@ -134,11 +134,12 @@ function checkMaintenanceMode(req, res, next) {
     return next();
   }
 
-  // 3. Always allow tech-flags check and help desk so students can view FAQs & ask questions
+  // 3. Always allow tech-flags check, security defense & help desk so students can view FAQs & ask questions
   if (
     req.path === "/api/admin/tech-flags" ||
     req.path === "/api/admin/maintenance/status" ||
-    req.path.startsWith("/api/help")
+    req.path.startsWith("/api/help") ||
+    req.path.startsWith("/api/security")
   ) {
     return next();
   }
