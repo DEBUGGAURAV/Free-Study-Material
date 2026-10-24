@@ -3,24 +3,55 @@ const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("./auth");
 
 /**
- * Extracts true client IP address behind Cloudflare CDN & Render reverse proxies
- * Priority: CF-Connecting-IP > X-Forwarded-For (first hop) > X-Real-IP > req.ip
- * This prevents all users behind Cloudflare/Render from sharing a single IP rate-limit bucket!
+ * Robust Client IP Extractor
+ * Extracts true client IP address behind Cloudflare CDN, Render reverse proxies, and direct TCP sockets.
+ * Handles arrays, strings, missing headers, and strips IPv4-mapped IPv6 prefixes (::ffff:).
+ * Fully try-catch wrapped to guarantee zero exceptions.
  */
 function getClientIp(req) {
-  const cfIp = req.headers["cf-connecting-ip"];
-  if (cfIp) return cfIp.trim();
+  try {
+    if (!req) return "127.0.0.1";
+    const headers = req.headers || {};
 
-  const xff = req.headers["x-forwarded-for"];
-  if (xff) {
-    const firstIp = xff.split(",")[0].trim();
-    if (firstIp) return firstIp;
+    // 1. Cloudflare Connecting IP (True visitor IP)
+    const cfIp = headers["cf-connecting-ip"];
+    if (cfIp) {
+      const val = Array.isArray(cfIp) ? cfIp[0] : cfIp;
+      if (typeof val === "string" && val.trim()) {
+        return val.trim().replace(/^::ffff:/, "");
+      }
+    }
+
+    // 2. X-Forwarded-For (First IP is the client origin hop)
+    const xff = headers["x-forwarded-for"];
+    if (xff) {
+      const rawXff = Array.isArray(xff) ? xff[0] : xff;
+      if (typeof rawXff === "string" && rawXff.trim()) {
+        const firstIp = rawXff.split(",")[0].trim();
+        if (firstIp) return firstIp.replace(/^::ffff:/, "");
+      }
+    }
+
+    // 3. X-Real-IP
+    const realIp = headers["x-real-ip"];
+    if (realIp) {
+      const val = Array.isArray(realIp) ? realIp[0] : realIp;
+      if (typeof val === "string" && val.trim()) {
+        return val.trim().replace(/^::ffff:/, "");
+      }
+    }
+
+    // 4. Express req.ip or socket remote address fallback
+    const directIp =
+      req.ip ||
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
+      "127.0.0.1";
+
+    return String(directIp).trim().replace(/^::ffff:/, "");
+  } catch (err) {
+    return "127.0.0.1";
   }
-
-  const realIp = req.headers["x-real-ip"];
-  if (realIp) return realIp.trim();
-
-  return req.ip || "127.0.0.1";
 }
 
 /**
@@ -28,14 +59,21 @@ function getClientIp(req) {
  */
 function isUserAdmin(req) {
   try {
+    if (!req) return false;
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-    const token =
-      req.cookies?.fsm_token ||
-      req.cookies?.token ||
-      req.query?.token ||
-      req.headers["authorization"]?.split(" ")[1];
+    const headers = req.headers || {};
+    const cookies = req.cookies || {};
+    const query = req.query || {};
 
-    if (token) {
+    const authHeader = typeof headers["authorization"] === "string" ? headers["authorization"] : "";
+    const token =
+      cookies.fsm_token ||
+      cookies.token ||
+      cookies.vault_token ||
+      query.token ||
+      (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null);
+
+    if (token && JWT_SECRET) {
       const decoded = jwt.verify(token, JWT_SECRET);
       if (
         decoded.role === "admin" ||
@@ -54,61 +92,101 @@ function isUserAdmin(req) {
  * (Admin sessions, developer on localhost/loopback, private intranets, Cloudflare worker edge)
  */
 function isImmune(req) {
-  const ip = getClientIp(req);
-  if (
-    !ip ||
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1" ||
-    ip === "localhost" ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("10.") ||
-    ip.startsWith("172.16.") ||
-    ip.startsWith("172.17.") ||
-    ip.startsWith("172.18.") ||
-    ip.startsWith("172.19.") ||
-    ip.startsWith("172.2") ||
-    ip.startsWith("172.30.") ||
-    ip.startsWith("172.31.")
-  ) {
-    return true;
-  }
+  try {
+    if (!req) return true;
+    const ip = getClientIp(req);
+    if (
+      !ip ||
+      ip === "127.0.0.1" ||
+      ip === "::1" ||
+      ip === "localhost" ||
+      ip.startsWith("192.168.") ||
+      ip.startsWith("10.") ||
+      ip.startsWith("172.16.") ||
+      ip.startsWith("172.17.") ||
+      ip.startsWith("172.18.") ||
+      ip.startsWith("172.19.") ||
+      ip.startsWith("172.2") ||
+      ip.startsWith("172.30.") ||
+      ip.startsWith("172.31.")
+    ) {
+      return true;
+    }
 
-  if (
-    req.query?.admin_bypass === "fsm_admin_override" ||
-    req.query?.bypass === "fsm_admin_override" ||
-    req.headers["x-admin-bypass"] === "fsm_admin_override"
-  ) {
-    return true;
-  }
+    const query = req.query || {};
+    const headers = req.headers || {};
 
-  if (req.headers["x-worker-origin"] || (req.headers["host"] && req.headers["host"].includes("workers.dev"))) {
-    return true;
-  }
+    if (
+      query.admin_bypass === "fsm_admin_override" ||
+      query.bypass === "fsm_admin_override" ||
+      headers["x-admin-bypass"] === "fsm_admin_override"
+    ) {
+      return true;
+    }
 
-  return isUserAdmin(req);
+    const host = typeof headers["host"] === "string" ? headers["host"] : "";
+    if (headers["x-worker-origin"] || host.includes("workers.dev")) {
+      return true;
+    }
+
+    return isUserAdmin(req);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Safe rate-limit rejection handler
+ * Guards against ERR_HTTP_HEADERS_SENT when responses are already underway or streaming
+ */
+function createSafeLimiterHandler(defaultMessage) {
+  return (req, res, next, options) => {
+    try {
+      if (res.headersSent || res.writableEnded) {
+        return;
+      }
+      const retryAfter = Math.ceil((options.windowMs || 60000) / 1000);
+      try {
+        res.setHeader("Retry-After", String(retryAfter));
+      } catch {}
+
+      return res.status(options.statusCode || 429).json({
+        success: false,
+        message: defaultMessage,
+        retryAfter,
+      });
+    } catch (err) {
+      if (!res.headersSent && !res.writableEnded) {
+        try {
+          return res.status(429).json({ success: false, message: defaultMessage });
+        } catch {}
+      }
+    }
+  };
 }
 
 /**
  * 1. Global API Limiter
  * Generous 5,000 requests per 15 minutes per real client IP.
- * Skips health checks, keep-alive pings, and immune sessions.
+ * Skips health checks, keep-alive pings, preflight OPTIONS, and immune sessions.
  */
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5000,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: false },
+  validate: false, // 🛡️ Disables all internal ERL validation crashes
+  passOnStoreError: true, // 🛡️ Prevents memory store errors from crashing requests
   keyGenerator: getClientIp,
   skip: (req) => {
-    if (req.path === "/health" || req.path === "/api/health") return true;
+    if (req.method === "OPTIONS") return true;
+    const p = req.path || req.url || "";
+    if (p === "/health" || p === "/api/health" || p.includes("/health")) return true;
     return isImmune(req);
   },
-  message: {
-    success: false,
-    message: "Network traffic alert: High volume of requests from your connection. Please wait a short moment.",
-  },
+  handler: createSafeLimiterHandler(
+    "Network traffic alert: High volume of requests from your connection. Please wait a short moment."
+  ),
 });
 
 /**
@@ -122,13 +200,13 @@ const downloadLimiter = rateLimit({
   max: 3000,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: false },
+  validate: false,
+  passOnStoreError: true,
   keyGenerator: getClientIp,
-  skip: (req) => isImmune(req),
-  message: {
-    success: false,
-    message: "Download rate limit reached. Please wait 1-2 minutes before streaming more notes.",
-  },
+  skip: (req) => req.method === "OPTIONS" || isImmune(req),
+  handler: createSafeLimiterHandler(
+    "Download rate limit reached. Please wait 1-2 minutes before streaming more notes."
+  ),
 });
 
 /**
@@ -141,42 +219,65 @@ const uploadLimiter = rateLimit({
   max: 250,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: false },
+  validate: false,
+  passOnStoreError: true,
   keyGenerator: getClientIp,
-  skip: (req) => isImmune(req),
-  message: {
-    success: false,
-    message: "Upload rate limit reached. Please wait a moment before uploading more notes.",
-  },
+  skip: (req) => req.method === "OPTIONS" || isImmune(req),
+  handler: createSafeLimiterHandler(
+    "Upload rate limit reached. Please wait a moment before uploading more notes."
+  ),
 });
 
 /**
  * 4. Auth Limiter
  * Hardens login/register/OTP endpoints against brute-force attacks.
  * Permits 100 attempts per 15 minutes per true client IP.
- * Skips passive GET checks (e.g. checking auth status).
+ * Skips passive GET checks (e.g. checking auth status) and preflight OPTIONS.
  */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { trustProxy: false },
+  validate: false,
+  passOnStoreError: true,
   keyGenerator: getClientIp,
   skip: (req) => {
-    if (req.method === "GET") return true;
+    if (req.method === "OPTIONS" || req.method === "GET") return true;
     return isImmune(req);
   },
-  message: {
-    success: false,
-    message: "Too many authentication attempts. Please wait 15 minutes before trying again.",
-  },
+  handler: createSafeLimiterHandler(
+    "Too many authentication attempts. Please wait 15 minutes before trying again."
+  ),
+});
+
+/**
+ * 5. Help Desk Limiter
+ * Protects student question submissions against bot spam.
+ * Permits 25 questions per hour per real IP, with immunity for admin responses.
+ */
+const helpLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 25,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  passOnStoreError: true,
+  keyGenerator: getClientIp,
+  skip: (req) => req.method === "OPTIONS" || isImmune(req),
+  handler: createSafeLimiterHandler(
+    "Aapne bohot saare sawal bhej diye hain. Kripya 1 ghante baad naya sawal poochein."
+  ),
 });
 
 module.exports = {
   getClientIp,
+  isImmune,
+  isUserAdmin,
+  createSafeLimiterHandler,
   globalLimiter,
   downloadLimiter,
   uploadLimiter,
   authLimiter,
+  helpLimiter,
 };

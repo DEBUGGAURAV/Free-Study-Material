@@ -10,7 +10,7 @@
 
 const express = require("express");
 const router = express.Router();
-const rateLimit = require("express-rate-limit");
+const { helpLimiter } = require("../middleware/rateLimit");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
 const {
   createHelpTicket,
@@ -73,17 +73,7 @@ const CURATED_FAQS = [
   },
 ];
 
-// Anti-Spam Rate Limiter: Max 6 questions per hour per IP for guests
-const helpLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
-  message: {
-    success: false,
-    message: "Aapne bohot saare sawal bhej diye hain. Kripya 1 ghante baad naya sawal poochein.",
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Note: Anti-Spam helpLimiter imported from ../middleware/rateLimit with proxy isolation & immunity
 
 /**
  * GET /api/help/faqs

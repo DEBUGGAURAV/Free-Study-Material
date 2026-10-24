@@ -8,6 +8,8 @@
  * - Safe whitelisting for local loopback & master admin sessions
  */
 
+const { getClientIp } = require("./rateLimit");
+
 const jailedIps = new Map(); // ip -> unjailTimestamp
 const jailedIpsDetails = new Map(); // ip -> { ip, unjailTime, jailedAt, reason, requestCount }
 const ipRequestHistory = new Map(); // ip -> Array of timestamps
@@ -36,16 +38,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-function getClientIp(req) {
-  return (
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-    req.headers["x-real-ip"] ||
-    req.socket?.remoteAddress ||
-    req.ip ||
-    "unknown"
-  );
-}
+// Note: getClientIp is imported from ./rateLimit with proxy isolation & IPv6/IPv4 normalization
 
 function recordThreatIncident({ type, ip, detail, severity = "HIGH", actionTaken = "BLOCKED" }) {
   totalThreatsDetected++;
@@ -115,6 +108,11 @@ function isWhitelistedIp(req, ip) {
 }
 
 function ipJailFirewall(req, res, next) {
+  // Always allow CORS preflight OPTIONS requests without jailing
+  if (req && req.method === "OPTIONS") {
+    return next();
+  }
+
   const ip = getClientIp(req);
 
   // 1. Whitelist local loopback, developer machines, private intranets, Cloudflare worker & admin bypass
@@ -124,12 +122,14 @@ function ipJailFirewall(req, res, next) {
 
   // 2. Skip health endpoints & PDF range chunk streaming from DoS tracking
   // PDF readers naturally send dozens of HTTP Range byte requests per second
+  const p = (req && (req.path || req.url)) ? (req.path || req.url) : "";
   const isStreamOrHealth =
-    req.path === "/health" ||
-    req.path === "/api/health" ||
-    Boolean(req.headers["range"]) ||
-    req.path.includes("/stream") ||
-    req.path.endsWith(".pdf");
+    p === "/health" ||
+    p === "/api/health" ||
+    p.includes("/health") ||
+    Boolean(req && req.headers && req.headers["range"]) ||
+    p.includes("/stream") ||
+    p.endsWith(".pdf");
 
   const now = Date.now();
 
