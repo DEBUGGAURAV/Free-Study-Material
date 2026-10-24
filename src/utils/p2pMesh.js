@@ -73,6 +73,55 @@ export async function getCachedNoteBuffer(noteId) {
   }
 }
 
+// Delete a specific cached note buffer from local device storage
+export async function deleteCachedNote(noteId) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).delete(noteId);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+// Clear all cached note buffers from local device storage to free phone space
+export async function clearAllCachedNotes() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+// Query device hardware storage usage and available browser quota
+export async function getStorageUsage() {
+  if (typeof navigator !== "undefined" && navigator.storage && navigator.storage.estimate) {
+    try {
+      const estimate = await navigator.storage.estimate();
+      return {
+        usageBytes: estimate.usage || 0,
+        quotaBytes: estimate.quota || 0,
+        usageMB: ((estimate.usage || 0) / (1024 * 1024)).toFixed(1),
+        quotaMB: ((estimate.quota || 0) / (1024 * 1024)).toFixed(1),
+        percentUsed: (((estimate.usage || 0) / (estimate.quota || 1)) * 100).toFixed(2),
+      };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 // Announce seeder status to backend
 export async function announceAsSeeder(noteId) {
   const peerId = getPeerId();

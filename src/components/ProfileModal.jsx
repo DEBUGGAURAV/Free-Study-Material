@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
+import { getStorageUsage, clearAllCachedNotes } from "../utils/p2pMesh";
+import { clearOfflineVault } from "../utils/offlineQueue";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -43,7 +45,45 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [registeringPasskey, setRegisteringPasskey] = useState(false);
   const [deletingPasskeyId, setDeletingPasskeyId] = useState(null);
   const [supportsPasskey, setSupportsPasskey] = useState(true);
+  const [storageInfo, setStorageInfo] = useState(null);
+  const [clearingStorage, setClearingStorage] = useState(false);
   const hwProfile = detectClientHardwareProfile();
+
+  const fetchStorageInfo = async () => {
+    try {
+      const info = await getStorageUsage();
+      setStorageInfo(info);
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    if (tab === "storage") {
+      fetchStorageInfo();
+    }
+  }, [tab]);
+
+  const handleWipeStorage = async () => {
+    if (!window.confirm("Are you sure you want to delete all offline notes cached on this device? This will free up storage space.")) return;
+    try {
+      setClearingStorage(true);
+      await clearAllCachedNotes();
+      await clearOfflineVault();
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          if (k.startsWith("fsm-")) {
+            await caches.delete(k);
+          }
+        }
+      }
+      setMsg({ type: "success", text: "Offline notes and storage cache successfully cleared from this device!" });
+      await fetchStorageInfo();
+    } catch (err) {
+      setMsg({ type: "error", text: "Failed to clear local device cache: " + err.message });
+    } finally {
+      setClearingStorage(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen && currentUser?.id && api.syncDeviceSpecs) {
@@ -289,6 +329,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
           >
             <Key size={14} style={{ marginRight: "4px" }} />
             Passkey & Biometrics
+          </button>
+          <button
+            type="button"
+            className={`filter-tab ${tab === "storage" ? "active" : ""}`}
+            onClick={() => { setTab("storage"); setMsg(null); }}
+          >
+            <Database size={14} style={{ marginRight: "4px" }} />
+            Offline Storage Vault
           </button>
         </div>
 
@@ -744,6 +792,133 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               <span>
                 <strong>100% Phishing Resistant:</strong> Passkey private keys never leave your device sensor. Protected by Firebase Cloud Storage.
               </span>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4: Offline Storage Vault & Device Space Management */}
+        {tab === "storage" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div
+              style={{
+                background: "rgba(56, 189, 248, 0.08)",
+                border: "1px solid rgba(56, 189, 248, 0.25)",
+                borderRadius: "12px",
+                padding: "16px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <HardDrive size={18} style={{ color: "#38bdf8" }} />
+                  <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "#f8fafc" }}>
+                    Device Hardware Storage Meter
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchStorageInfo}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "6px",
+                    color: "var(--text-muted)",
+                    padding: "4px 8px",
+                    fontSize: "0.72rem",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <RefreshCw size={12} />
+                  Refresh
+                </button>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "6px" }}>
+                <span style={{ color: "var(--text-muted)" }}>FSM Cached Notes & Vault:</span>
+                <span style={{ fontWeight: 700, color: "#38bdf8" }}>
+                  {storageInfo ? `${storageInfo.usageMB} MB Used` : "Calculating..."}
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div style={{ height: "6px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden", marginBottom: "8px" }}>
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${Math.min(100, Math.max(2, Number(storageInfo?.percentUsed || 0.5)))}%`,
+                    background: "linear-gradient(90deg, #38bdf8, #818cf8)",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                <span>Available Browser Quota: {storageInfo ? `${(Number(storageInfo.quotaMB) / 1024).toFixed(1)} GB` : "Unlimited"}</span>
+                <span>{storageInfo ? `${storageInfo.percentUsed}% Utilized` : "Normal"}</span>
+              </div>
+            </div>
+
+            {/* IndexedDB Database Breakdown Cards */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.78rem" }}>
+              <div style={{ fontWeight: 700, color: "var(--text-dim)", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Active Local Device Stores
+              </div>
+
+              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm_p2p_cache_v1 (note_chunks)</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>6 AM Exam Pre-fetch & Campus P2P Mesh Binary Chunks</div>
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#34d399", background: "rgba(16, 185, 129, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>IndexedDB</span>
+              </div>
+
+              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm_offline_vault (offline_notes)</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>User explicitly saved village and train reading vaults</div>
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>IndexedDB</span>
+              </div>
+
+              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v8 (Service Worker)</div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Application shell, offline catalog JSON, and stream clones</div>
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>CacheStorage</span>
+              </div>
+            </div>
+
+            {/* Clear Storage Action Button */}
+            <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={handleWipeStorage}
+                disabled={clearingStorage}
+                style={{
+                  background: "rgba(244, 63, 94, 0.12)",
+                  border: "1px solid rgba(244, 63, 94, 0.35)",
+                  color: "#f43f5e",
+                  padding: "10px 14px",
+                  borderRadius: "8px",
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: clearingStorage ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                <Trash2 size={16} />
+                {clearingStorage ? "Purging Device Storage..." : "Free Up Device Space (Clear All Cached Notes)"}
+              </button>
+
+              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+                💡 <em>Note: Clearing storage deletes local offline copies. You can always re-read or download them again when internet is available. Browsers also auto-prune oldest notes when device disk space is below 10%.</em>
+              </div>
             </div>
           </div>
         )}

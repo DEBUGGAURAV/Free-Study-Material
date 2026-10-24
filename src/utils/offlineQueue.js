@@ -77,6 +77,43 @@ export async function getOfflineNotes() {
 }
 
 /**
+ * Deletes an individual offline note from IndexedDB
+ * @param {string} noteId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteOfflineNote(noteId) {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NOTES], 'readwrite');
+      tx.objectStore(STORE_NOTES).delete(noteId);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Completely clears all offline notes from device storage
+ * @returns {Promise<boolean>}
+ */
+export async function clearOfflineVault() {
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NOTES], 'readwrite');
+      tx.objectStore(STORE_NOTES).clear();
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Queues an action taken while offline (e.g. Bookmark, Rating)
  * @param {string} actionType 
  * @param {object} payload 
