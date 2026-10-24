@@ -903,6 +903,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, secretCode, description }),
     }),
+  renameChatRoom: (roomId, newName) =>
+    request("/chat/rooms/rename", {
+      method: "POST",
+      body: JSON.stringify({ roomId, newName }),
+    }),
   joinChatRoom: (secretCode, roomId) =>
     request("/chat/rooms/join", {
       method: "POST",
@@ -1043,6 +1048,7 @@ export const api = {
   getTursoStatus: () => request("/admin/turso/status"),
   syncTurso: () => request("/admin/turso/sync", { method: "POST" }),
   refreshTursoCache: () => request("/admin/turso/refresh-cache", { method: "POST" }),
+  pruneTursoCache: (days = 7, target = "all") => request("/admin/turso/cache/prune", { method: "POST", body: JSON.stringify({ days, target }) }),
   getTursoAudits: (limit = 100) => request(`/admin/turso/audits?limit=${limit}`),
   pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
   deleteTursoAudit: (roomId) => request(`/admin/turso/audits/${encodeURIComponent(roomId)}`, { method: "DELETE" }),

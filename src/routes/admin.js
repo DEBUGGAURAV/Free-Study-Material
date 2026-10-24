@@ -3434,8 +3434,8 @@ function isDownloadAllowed() {
 // ============================================================================
 // 🚀 TURSO (LIBSQL / EDGE SQLITE) DATABASE ENDPOINTS FOR RENDER
 // ============================================================================
-const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan, deleteSinglePrivateRoomAudit } = require("../services/tursoService");
-const { getTursoNotesCacheStats, refreshCacheFromFirestore } = require("../services/tursoNotesCacheService");
+const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan, deleteSinglePrivateRoomAudit, pruneChatMessagesOlderThan } = require("../services/tursoService");
+const { getTursoNotesCacheStats, refreshCacheFromFirestore, pruneNotesCacheOlderThan, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
 
 router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -3474,6 +3474,68 @@ router.post("/turso/refresh-cache", authenticateToken, requireAdmin, async (req,
     return res.json({ success: false, message: "Cache refresher not available." });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/turso/cache/prune
+ * Prune Turso Edge Notes Cache, Chat History & Pod Audits by Days (0 = Clear all)
+ */
+router.post("/turso/cache/prune", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const daysRaw = req.body?.days !== undefined ? req.body.days : (req.query?.days !== undefined ? req.query.days : 7);
+    const days = parseInt(daysRaw, 10);
+    const target = req.body?.target || "all"; // "all" | "notes_cache" | "messages" | "audits"
+
+    let prunedNotesCache = 0;
+    let prunedMessages = 0;
+    let prunedAudits = 0;
+
+    // 1. Prune Turso Edge Notes Cache
+    if (target === "all" || target === "notes_cache") {
+      if (typeof pruneNotesCacheOlderThan === "function") {
+        const nRes = await pruneNotesCacheOlderThan(days);
+        prunedNotesCache = nRes.deletedCount || 0;
+      }
+    }
+
+    // 2. Prune Turso Chat Messages Cache
+    if (target === "all" || target === "messages") {
+      if (typeof pruneChatMessagesOlderThan === "function") {
+        const mRes = await pruneChatMessagesOlderThan(days <= 0 ? 0 : days);
+        prunedMessages = mRes.deletedCount || 0;
+      }
+    }
+
+    // 3. Prune Turso Pod Audits
+    if (target === "all" || target === "audits") {
+      if (typeof prunePrivateRoomAuditsOlderThan === "function") {
+        const aRes = await prunePrivateRoomAuditsOlderThan(days);
+        prunedAudits = aRes.deletedCount || 0;
+      }
+    }
+
+    // 4. Invalidate Server RAM caches
+    try {
+      if (typeof invalidateTursoNotesCache === "function") invalidateTursoNotesCache();
+      invalidateAllCache();
+    } catch (_) {}
+
+    const totalPruned = prunedNotesCache + prunedMessages + prunedAudits;
+    const daysLabel = days <= 0 ? "entire cache (0 Days / Immediate Clear)" : `older than ${days} days`;
+
+    return res.json({
+      success: true,
+      days,
+      target,
+      prunedNotesCache,
+      prunedMessages,
+      prunedAudits,
+      totalPruned,
+      message: `⚡ Turso Cache Pruner: Cleaned ${totalPruned} items ${daysLabel} (${prunedNotesCache} notes cache, ${prunedMessages} chat msgs, ${prunedAudits} audits).`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

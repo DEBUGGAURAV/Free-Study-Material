@@ -1521,6 +1521,90 @@ function initChatWebSocket(server) {
           console.log(`[CHAT-ADMIN] 🗑️ Admin ${user.name} purged all ${deletedList.length} messages by user ${targetUserId} in room ${roomId}.`);
         }
 
+        // 4c. RENAME ROOM (Host or Admin only)
+        else if (type === "rename_room") {
+          const { roomId, newName } = data;
+          const targetRoomId = roomId || ws.currentRoomId;
+          if (!targetRoomId || !newName || !newName.trim()) {
+            return ws.send(JSON.stringify({ type: "error", message: "Please provide a valid room name." }));
+          }
+
+          const currentRoom = activeRooms.get(targetRoomId);
+          if (!currentRoom || !currentRoom.isPrivate) {
+            return ws.send(JSON.stringify({ type: "error", message: "Private room not found or already closed." }));
+          }
+
+          const isCreator = currentRoom.createdBy === user.id;
+          const isAdmin = isUserAdmin(user);
+
+          if (!isCreator && !isAdmin) {
+            return ws.send(
+              JSON.stringify({
+                type: "error",
+                message: "Permission denied. Only the host who created this private room or an admin can rename it.",
+              })
+            );
+          }
+
+          const sanitizedNewName = newName.trim().slice(0, 60);
+          const oldName = currentRoom.name;
+          currentRoom.name = sanitizedNewName;
+          currentRoom.lastActivity = new Date().toISOString();
+
+          // Update in Firestore
+          if (db) {
+            db.collection("chat_rooms").doc(targetRoomId).update({
+              name: sanitizedNewName,
+              lastActivity: currentRoom.lastActivity,
+            }).catch((err) => console.warn("[CHAT-RENAME] Firestore update error:", err.message));
+          }
+
+          // Update in Turso LibSQL
+          try {
+            if (tursoClient) {
+              tursoClient.execute({
+                sql: "UPDATE chat_rooms SET name = ? WHERE id = ?",
+                args: [sanitizedNewName, targetRoomId],
+              }).catch(() => {});
+            }
+          } catch (_) {}
+
+          // Insert system message into room history
+          const renameSysMsg = {
+            id: `sys_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            roomId: targetRoomId,
+            text: `✏️ ${user.name || "Host"} renamed the group to "${sanitizedNewName}".`,
+            type: "text",
+            sender: {
+              id: "system",
+              name: "System",
+              role: "system",
+            },
+            createdAt: new Date().toISOString(),
+            isSystem: true,
+          };
+          if (!activeMessages.has(targetRoomId)) activeMessages.set(targetRoomId, []);
+          const msgs = activeMessages.get(targetRoomId);
+          msgs.push(renameSysMsg);
+          if (msgs.length > 200) msgs.shift();
+
+          // Broadcast rename event and system message to all participants in this room
+          broadcastToRoom(targetRoomId, {
+            type: "room_renamed",
+            roomId: targetRoomId,
+            newName: sanitizedNewName,
+            oldName,
+            renamedBy: { id: user.id, name: user.name },
+          });
+
+          broadcastToRoom(targetRoomId, {
+            type: "new_message",
+            message: renameSysMsg,
+          });
+
+          console.log(`[CHAT-POD] ✏️ Room ${targetRoomId} renamed from "${oldName}" to "${sanitizedNewName}" by ${user.name}`);
+        }
+
         // 5. EXPLICIT DELETE/CLOSE ROOM (Host or Admin only - Permanently deletes room for everyone)
         else if (type === "close_room" || type === "delete_room") {
           const roomId = data.roomId || ws.currentRoomId;
@@ -1978,6 +2062,112 @@ router.post("/rooms/create", authenticateToken, requireAuth, async (req, res) =>
         secretCode: newRoom.secretCode,
         createdBy: newRoom.createdBy,
         creatorName: newRoom.creatorName,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/chat/rooms/rename
+ * Renames a Private Study Pod (Host or Admin only)
+ */
+router.post("/rooms/rename", authenticateToken, requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    const { roomId, newName } = req.body || {};
+
+    if (!roomId) {
+      return res.status(400).json({ success: false, message: "Room ID is required." });
+    }
+    if (!newName || !newName.trim()) {
+      return res.status(400).json({ success: false, message: "Please provide a valid room name." });
+    }
+
+    const room = activeRooms.get(roomId);
+    if (!room || !room.isPrivate) {
+      return res.status(404).json({ success: false, message: "Private room not found or already closed." });
+    }
+
+    const isCreator = room.createdBy === user.id;
+    const isAdmin = isUserAdmin(user);
+
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: "Permission denied. Only the room creator or an admin can rename this private room.",
+      });
+    }
+
+    const sanitizedNewName = newName.trim().slice(0, 60);
+    const oldName = room.name;
+    room.name = sanitizedNewName;
+    room.lastActivity = new Date().toISOString();
+
+    // Update in Firestore
+    if (db) {
+      db.collection("chat_rooms").doc(roomId).update({
+        name: sanitizedNewName,
+        lastActivity: room.lastActivity,
+      }).catch((err) => console.warn("[CHAT-RENAME] Firestore update error:", err.message));
+    }
+
+    // Update in Turso LibSQL
+    try {
+      if (tursoClient) {
+        tursoClient.execute({
+          sql: "UPDATE chat_rooms SET name = ? WHERE id = ?",
+          args: [sanitizedNewName, roomId],
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
+    // Add system message into room history
+    const renameSysMsg = {
+      id: `sys_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      roomId,
+      text: `✏️ ${user.name || "Host"} renamed the group to "${sanitizedNewName}".`,
+      type: "text",
+      sender: {
+        id: "system",
+        name: "System",
+        role: "system",
+      },
+      createdAt: new Date().toISOString(),
+      isSystem: true,
+    };
+    if (!activeMessages.has(roomId)) activeMessages.set(roomId, []);
+    const msgs = activeMessages.get(roomId);
+    msgs.push(renameSysMsg);
+    if (msgs.length > 200) msgs.shift();
+
+    // Broadcast rename event and system message to all participants in this room
+    broadcastToRoom(roomId, {
+      type: "room_renamed",
+      roomId,
+      newName: sanitizedNewName,
+      oldName,
+      renamedBy: { id: user.id, name: user.name },
+    });
+
+    broadcastToRoom(roomId, {
+      type: "new_message",
+      message: renameSysMsg,
+    });
+
+    console.log(`[CHAT-POD] ✏️ Room ${roomId} renamed from "${oldName}" to "${sanitizedNewName}" by ${user.name} via API`);
+
+    return res.json({
+      success: true,
+      message: `Room renamed to "${sanitizedNewName}" successfully!`,
+      room: {
+        id: room.id,
+        name: room.name,
+        isPrivate: true,
+        secretCode: room.secretCode,
+        createdBy: room.createdBy,
+        creatorName: room.creatorName,
       },
     });
   } catch (err) {

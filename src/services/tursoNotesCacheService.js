@@ -390,6 +390,33 @@ async function updateUserNotesInTursoCache(userEmail, archivedUploaderName) {
   }
 }
 
+/**
+ * Prune Turso Edge Notes Cache entries older than specified days (0 = clear all)
+ */
+async function pruneNotesCacheOlderThan(days = 0) {
+  if (!client) return { success: false, deletedCount: 0 };
+  try {
+    let deletedCount = 0;
+    if (days <= 0) {
+      const res = await client.execute("DELETE FROM notes_cache");
+      deletedCount = Number(res.rowsAffected || 0);
+    } else {
+      const cutoff = Date.now() - (Number(days) * 86400000);
+      const res = await client.execute({
+        sql: "DELETE FROM notes_cache WHERE updatedAt < ?",
+        args: [cutoff],
+      });
+      deletedCount = Number(res.rowsAffected || 0);
+    }
+    invalidateTursoNotesCache();
+    console.log(`[TURSO-NOTES-CACHE] 🗑️ Pruned ${deletedCount} cache entries older than ${days} days.`);
+    return { success: true, deletedCount };
+  } catch (err) {
+    console.warn("[TURSO-NOTES-CACHE] Prune error:", err.message);
+    return { success: false, error: err.message, deletedCount: 0 };
+  }
+}
+
 module.exports = {
   getAllCachedNotes,
   refreshCacheFromFirestore,
@@ -401,5 +428,6 @@ module.exports = {
   getTursoNotesCacheTelemetry,
   initTursoNotesCacheTables,
   updateUserNotesInTursoCache,
+  pruneNotesCacheOlderThan,
 };
 

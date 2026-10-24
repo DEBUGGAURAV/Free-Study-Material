@@ -356,6 +356,9 @@ export default function AdminModal({
   const [tursoAuditSearch, setTursoAuditSearch] = useState("");
   const [tursoActionMsg, setTursoActionMsg] = useState(null);
   const [tursoPruneDays, setTursoPruneDays] = useState(30);
+  const [tursoCachePruneDays, setTursoCachePruneDays] = useState(7);
+  const [tursoCachePruning, setTursoCachePruning] = useState(false);
+  const [tursoCacheTarget, setTursoCacheTarget] = useState("all");
 
   // Database Lifecycle & Inactivity Retention Policies
   const [dbRetentionDays, setDbRetentionDays] = useState(90);
@@ -1149,6 +1152,54 @@ export default function AdminModal({
       });
     } finally {
       setTursoRefreshing(false);
+    }
+  };
+
+  const handleTursoPruneCache = async (days = 7, target = "all") => {
+    const pruneDays = Number(days !== undefined ? days : tursoCachePruneDays);
+    const chosenTarget = target || tursoCacheTarget || "all";
+    const targetLabel = chosenTarget === "all"
+      ? "all Turso caches (Notes Cache, Chat Messages, and Pod Audits)"
+      : chosenTarget === "notes_cache"
+      ? "Turso Edge Notes Cache"
+      : chosenTarget === "messages"
+      ? "Turso Chat Messages"
+      : "Turso Pod Audits";
+
+    const confirmPrompt = pruneDays <= 0
+      ? `🧹 CLEAR TURSO CACHE (0 Days / Immediate Wipe)\n\nAre you sure you want to completely clear ${targetLabel} and reset Server RAM buffer pool?\n\nThis will flush cached records from Turso database and reload fresh from source.`
+      : `🗑️ DELETE / PRUNE TURSO CACHE (> ${pruneDays} Days)\n\nAre you sure you want to delete ${targetLabel} older than ${pruneDays} days from Turso LibSQL database?\n\nThis will permanently clean expired cache entries and optimize storage.`;
+
+    if (!window.confirm(confirmPrompt)) {
+      return;
+    }
+
+    try {
+      setTursoCachePruning(true);
+      setTursoActionMsg(null);
+      const res = await api.pruneTursoCache(pruneDays, chosenTarget);
+      if (res && res.success) {
+        setTursoActionMsg({
+          type: "success",
+          text: res.message || `Turso cache older than ${pruneDays} days deleted successfully!`,
+        });
+        loadTursoData();
+        if (chosenTarget === "all" || chosenTarget === "audits") {
+          loadTursoAudits();
+        }
+      } else {
+        setTursoActionMsg({
+          type: "error",
+          text: res?.message || res?.error || "Failed to prune Turso cache.",
+        });
+      }
+    } catch (err) {
+      setTursoActionMsg({
+        type: "error",
+        text: err.message || "Failed to prune Turso cache.",
+      });
+    } finally {
+      setTursoCachePruning(false);
     }
   };
 
@@ -4607,6 +4658,18 @@ export default function AdminModal({
                   >
                     <Flame size={14} />
                     <span>🔥 Purge All (RAM + Edge)</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab("turso");
+                    }}
+                    className="btn-secondary"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(239, 68, 68, 0.4)", color: "#fca5a5", fontWeight: 700 }}
+                    title="Open Turso Cache Delete Controller by Days"
+                  >
+                    <Trash2 size={13} />
+                    <span>🗑️ Turso Cache (By Days)</span>
                   </button>
                 </div>
               </div>
@@ -9480,6 +9543,29 @@ export default function AdminModal({
                     <Zap size={13} className={tursoRefreshing ? "spin" : ""} />
                     <span>{tursoRefreshing ? "Reloading..." : "Flush Edge Cache"}</span>
                   </button>
+
+                  <button
+                    onClick={() => handleTursoPruneCache(tursoCachePruneDays, tursoCacheTarget)}
+                    disabled={tursoCachePruning}
+                    className="btn-danger"
+                    style={{
+                      fontSize: "0.78rem",
+                      padding: "7px 12px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "rgba(239, 68, 68, 0.18)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      color: "#fca5a5",
+                      cursor: "pointer",
+                      borderRadius: "6px",
+                      fontWeight: 700,
+                    }}
+                    title={`Delete Turso cache older than ${tursoCachePruneDays} days`}
+                  >
+                    <Trash2 size={13} className={tursoCachePruning ? "spin" : ""} />
+                    <span>{tursoCachePruning ? "Deleting..." : `Delete Turso Cache (>${tursoCachePruneDays}d)`}</span>
+                  </button>
                 </div>
               </div>
 
@@ -9826,6 +9912,179 @@ export default function AdminModal({
                       <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
                         When any student account is removed from Firebase, our backend cascade engine removes all their associated Turso records and automatically dispatches a verified Dossier to Telegram Security Supergroup.
                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Turso Edge Cache Delete Day Controller */}
+                <div
+                  style={{
+                    background: "rgba(15, 23, 42, 0.5)",
+                    border: "1px solid rgba(239, 68, 68, 0.25)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "18px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Trash2 size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Turso Cache Deletion (By Days)</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Delete cached notes, messages & transcripts by days threshold</div>
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                        background: "rgba(239, 68, 68, 0.12)",
+                        color: "#fca5a5",
+                        border: "1px solid rgba(239, 68, 68, 0.3)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      🗑️ Cache Delete Controller
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.8rem" }}>
+                    <p style={{ color: "var(--text-dim)", margin: 0, fontSize: "0.76rem", lineHeight: 1.5 }}>
+                      Permanently clean cached entries older than the selected day threshold from the Turso LibSQL <code style={{ color: "#38bdf8" }}>notes_cache</code>, chat messages, and pod audits, resetting RAM buffers.
+                    </p>
+
+                    {/* Quick Presets & Day Input */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.76rem", fontWeight: 600 }}>Quick Presets:</span>
+                      {[1, 7, 15, 30, 60].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setTursoCachePruneDays(d)}
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            background: tursoCachePruneDays === d ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                            border: tursoCachePruneDays === d ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            color: tursoCachePruneDays === d ? "#fff" : "var(--text-muted)",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setTursoCachePruneDays(0)}
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          background: tursoCachePruneDays === 0 ? "rgba(239, 68, 68, 0.3)" : "rgba(239, 68, 68, 0.1)",
+                          border: tursoCachePruneDays === 0 ? "1px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.3)",
+                          color: tursoCachePruneDays === 0 ? "#fff" : "#fca5a5",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        0d (All)
+                      </button>
+
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginLeft: "4px" }}>
+                        <span style={{ color: "var(--text-dim)", fontSize: "0.76rem" }}>Days:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="365"
+                          value={tursoCachePruneDays}
+                          onChange={(e) => setTursoCachePruneDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                          style={{
+                            width: "55px",
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            background: "rgba(0, 0, 0, 0.5)",
+                            border: "1px solid rgba(255, 255, 255, 0.15)",
+                            color: "#fff",
+                            fontSize: "0.78rem",
+                            fontWeight: 700,
+                            textAlign: "center",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Target Scope & Action Buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "2px" }}>
+                      <select
+                        value={tursoCacheTarget}
+                        onChange={(e) => setTursoCacheTarget(e.target.value)}
+                        style={{
+                          background: "rgba(0, 0, 0, 0.5)",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          color: "#38bdf8",
+                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          fontSize: "0.78rem",
+                          fontWeight: 600,
+                        }}
+                      >
+                        <option value="all">⚡ All Turso Caches (Notes + Messages + Audits)</option>
+                        <option value="notes_cache">📄 Notes Cache Only (notes_cache table)</option>
+                        <option value="messages">💬 Chat Messages Only</option>
+                        <option value="audits">🔒 Pod Audits Only</option>
+                      </select>
+
+                      <button
+                        onClick={() => handleTursoPruneCache(tursoCachePruneDays, tursoCacheTarget)}
+                        disabled={tursoCachePruning}
+                        className="btn-danger"
+                        style={{
+                          fontSize: "0.78rem",
+                          padding: "7px 14px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          fontWeight: 700,
+                        }}
+                        title={`Delete Turso cache older than ${tursoCachePruneDays} days`}
+                      >
+                        <Trash2 size={13} className={tursoCachePruning ? "spin" : ""} />
+                        <span>
+                          {tursoCachePruning
+                            ? "Deleting..."
+                            : tursoCachePruneDays <= 0
+                            ? "Clear Entire Turso Cache Now"
+                            : `Delete Turso Cache Older Than ${tursoCachePruneDays} Days`}
+                        </span>
+                      </button>
+
+                      {tursoCachePruneDays !== 0 && (
+                        <button
+                          onClick={() => handleTursoPruneCache(0, tursoCacheTarget)}
+                          disabled={tursoCachePruning}
+                          className="btn-secondary"
+                          style={{
+                            fontSize: "0.74rem",
+                            padding: "6px 11px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            borderColor: "rgba(239, 68, 68, 0.35)",
+                            color: "#fca5a5",
+                          }}
+                          title="Clear all Turso cached rows immediately"
+                        >
+                          <Flame size={12} />
+                          <span>Wipe All (0d)</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

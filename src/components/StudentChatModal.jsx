@@ -436,6 +436,12 @@ export default function StudentChatModal({
   const [copiedShareLink, setCopiedShareLink] = useState(false);
   const [copiedShareCode, setCopiedShareCode] = useState(false);
 
+  // Rename Private Chat Modal State
+  const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [renameTargetRoom, setRenameTargetRoom] = useState(null);
+  const [newRoomNameInput, setNewRoomNameInput] = useState("");
+  const [renameLoading, setRenameLoading] = useState(false);
+
   // Auto-fill invite code if URL parameter present
   useEffect(() => {
     if (!isOpen) return;
@@ -688,6 +694,18 @@ export default function StudentChatModal({
               return next;
             });
           }, 2500);
+        } else if (data.type === "room_renamed") {
+          setCurrentRoom((prev) => {
+            if (prev && prev.id === data.roomId) {
+              return { ...prev, name: data.newName };
+            }
+            return prev;
+          });
+          setRooms((prev) =>
+            (Array.isArray(prev) ? prev : []).map((r) =>
+              r && r.id === data.roomId ? { ...r, name: data.newName } : r
+            )
+          );
         } else if (data.type === "room_closed") {
           alert(`🔒 ${data.message || "This private chat was permanently closed and deleted."}`);
           setRooms((prev) => prev.filter((r) => r.id !== data.roomId));
@@ -1393,6 +1411,61 @@ export default function StudentChatModal({
   const handleSharePrivateRoom = (room = currentRoom) => {
     if (!room || !room.isPrivate) return;
     setShareRoomModal(room);
+  };
+
+  // Host / Admin Action: Rename Private Chat
+  const openRenameModal = (room = currentRoom) => {
+    const target = room || currentRoom;
+    if (!target || !target.isPrivate) return;
+    setRenameTargetRoom(target);
+    setNewRoomNameInput(target.name || "");
+    setRenameModalOpen(true);
+  };
+
+  const handleSaveRoomRename = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const target = renameTargetRoom || currentRoom;
+    if (!target || !target.id) return;
+    const trimmed = newRoomNameInput.trim();
+    if (!trimmed) {
+      alert("Please enter a valid room name.");
+      return;
+    }
+    if (trimmed === target.name) {
+      setRenameModalOpen(false);
+      return;
+    }
+
+    try {
+      setRenameLoading(true);
+      // 1. Broadcast via WebSocket for instant 0ms update to all participants
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "rename_room",
+            roomId: target.id,
+            newName: trimmed,
+          })
+        );
+      }
+
+      // 2. Call REST API for server / Firestore persistence
+      await api.renameChatRoom(target.id, trimmed).catch(() => {});
+
+      // 3. Update local UI immediately
+      setCurrentRoom((prev) => (prev && prev.id === target.id ? { ...prev, name: trimmed } : prev));
+      setRooms((prev) =>
+        (Array.isArray(prev) ? prev : []).map((r) =>
+          r && r.id === target.id ? { ...r, name: trimmed } : r
+        )
+      );
+
+      setRenameModalOpen(false);
+    } catch (err) {
+      alert("Failed to rename room: " + err.message);
+    } finally {
+      setRenameLoading(false);
+    }
   };
 
   // Host / Admin Action: Permanently Delete Private Chat (Erased for everyone)
@@ -2204,6 +2277,31 @@ export default function StudentChatModal({
                     PRIVATE
                   </span>
                 )}
+                {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => openRenameModal(currentRoom)}
+                    style={{
+                      background: "rgba(56, 189, 248, 0.14)",
+                      border: "1px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "6px",
+                      padding: "2px 6px",
+                      color: "#38bdf8",
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Rename this private chat room"
+                  >
+                    <Edit2 size={11} />
+                    <span>Rename</span>
+                  </button>
+                )}
                 {currentRoom.isPrivate && isAdmin && (
                   <span
                     style={{
@@ -2297,6 +2395,31 @@ export default function StudentChatModal({
               >
                 <Share2 size={12} />
                 <span>Share</span>
+              </button>
+            )}
+
+            {/* Host or Admin: Rename Chat Button */}
+            {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
+              <button
+                onClick={() => openRenameModal(currentRoom)}
+                style={{
+                  background: "rgba(56, 189, 248, 0.15)",
+                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  color: "#38bdf8",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                title="Rename this private study room"
+              >
+                <Edit2 size={12} color="#38bdf8" />
+                <span>Rename</span>
               </button>
             )}
 
@@ -2922,6 +3045,33 @@ export default function StudentChatModal({
                             <Share2 size={12} />
                             <span>Share</span>
                           </button>
+                          {(r.createdBy === currentUser?.id || isAdmin) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openRenameModal(r);
+                              }}
+                              style={{
+                                background: "rgba(56, 189, 248, 0.15)",
+                                border: "1px solid rgba(56, 189, 248, 0.35)",
+                                borderRadius: "8px",
+                                padding: "4px 8px",
+                                color: "#38bdf8",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              title="Rename this Private Chat"
+                            >
+                              <Edit2 size={11} />
+                              <span>Rename</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -5590,6 +5740,109 @@ export default function StudentChatModal({
                 Ephemeral & Private: When all students leave, all chat messages and attachments are permanently deleted.
               </span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENAME PRIVATE CHAT MODAL */}
+      {renameModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0, 0, 0, 0.78)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10001,
+            padding: "16px",
+          }}
+          onClick={() => setRenameModalOpen(false)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #0f172a 0%, #1e293b 100%)",
+              border: "1px solid rgba(56, 189, 248, 0.35)",
+              borderRadius: "16px",
+              padding: "22px",
+              width: "100%",
+              maxWidth: "420px",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Edit2 size={16} />
+                </div>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#fff" }}>Rename Private Chat</h4>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Update room name for all members</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRenameModalOpen(false)}
+                style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRoomRename} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "0.76rem", color: "var(--text-dim)", display: "block", marginBottom: "6px", fontWeight: 600 }}>
+                  Chat Name
+                </label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={newRoomNameInput}
+                  onChange={(e) => setNewRoomNameInput(e.target.value.slice(0, 60))}
+                  placeholder="e.g. DBMS Exam Revision 2026"
+                  autoFocus
+                  required
+                  style={{ width: "100%", fontSize: "0.88rem", boxSizing: "border-box" }}
+                />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                  <span>Visible to all current & future members</span>
+                  <span>{newRoomNameInput.length}/60</span>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "4px" }}>
+                <button
+                  type="button"
+                  onClick={() => setRenameModalOpen(false)}
+                  className="btn-secondary"
+                  style={{ padding: "8px 14px", fontSize: "0.8rem" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={renameLoading || !newRoomNameInput.trim()}
+                  className="btn-primary"
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: "0.8rem",
+                    background: "linear-gradient(135deg, #0284c7 0%, #06b6d4 100%)",
+                    border: "none",
+                    color: "#fff",
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {renameLoading ? "Saving..." : "Save New Name"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
