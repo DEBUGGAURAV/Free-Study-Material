@@ -1814,8 +1814,8 @@ export default function AdminModal({
     }
   };
 
-  // 🛠️ Shared Pure English Server Maintenance Mode Control Card (Used in Tab 4 & Tab 10)
-  const renderMaintenanceControlCard = (locationTag = "Tab 4") => (
+  // 🛠️ Pure English Server Maintenance Mode Control Card (Tab 10 - Tech Controls)
+  const renderMaintenanceControlCard = (locationTag = "Tab 10") => (
     <div
       style={{
         background: maintenanceMode
@@ -3461,9 +3461,6 @@ export default function AdminModal({
                   <span>Refresh Software Telemetry</span>
                 </button>
               </div>
-
-              {/* 🛠️ SERVER MAINTENANCE MODE EMERGENCY CONTROL CARD (PURE ENGLISH) */}
-              {renderMaintenanceControlCard("Tab 4")}
 
               {/* 🔥 DUAL TURSO LIB-SQL EDGE DATABASES (LIVE STATUS & SPEED TELEMETRY) */}
               <div
