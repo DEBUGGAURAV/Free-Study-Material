@@ -11,6 +11,7 @@ import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
+import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
 import AuthModal from "./components/AuthModal";
@@ -147,6 +148,9 @@ export default function App() {
   const [previewNote, setPreviewNote] = useState(null);
 
   useEffect(() => {
+    try {
+      document.title = `${SITE_NAME} — ${SITE_TAGLINE}`;
+    } catch (_) {}
     const handleOpenChat = () => setIsChatOpen(true);
     const handleOpenHelp = () => setIsHelpOpen(true);
     const handleOpenPod = (e) => {
@@ -235,7 +239,7 @@ export default function App() {
             setMaintenanceState({
               active: true,
               title: res.flags.maintenanceTitle || "Scheduled System Upgrade in Progress",
-              message: res.flags.maintenanceMessage || "We are currently performing scheduled platform upgrades. Free Study Material will be back online shortly!",
+              message: res.flags.maintenanceMessage || `We are currently performing scheduled platform upgrades. ${SITE_NAME} will be back online shortly!`,
               estimatedEnd: res.flags.maintenanceEstimatedEnd || "",
             });
           } else {
@@ -865,7 +869,7 @@ export default function App() {
           </h2>
 
           <p style={{ fontSize: "0.92rem", color: "var(--text-muted)", lineHeight: "1.6", marginBottom: "24px" }}>
-            {maintenanceState.message || "We are currently performing scheduled platform upgrades to optimize performance, cloud CDN caching, and security. Free Study Material will be back online shortly!"}
+            {maintenanceState.message || `We are currently performing scheduled platform upgrades to optimize performance, cloud CDN caching, and security. ${SITE_NAME} will be back online shortly!`}
           </p>
 
           {/* Estimated End Box */}
@@ -1249,7 +1253,7 @@ export default function App() {
                   margin: "0 auto 16px",
                 }}
               >
-                Free Study Material Vault
+                {SITE_VAULT_NAME}
               </h1>
 
               <p
@@ -1752,7 +1756,7 @@ export default function App() {
       >
         <div style={{ maxWidth: "1380px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
           <div>
-            Free Study Material Vault • Domain: <strong>{typeof window !== "undefined" ? window.location.host : "freestudymaterial.onrender.com"}</strong>
+            {SITE_VAULT_NAME} • Domain: <strong>{getClientDomain()}</strong>
           </div>
 
           <div>

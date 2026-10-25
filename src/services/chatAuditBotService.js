@@ -14,6 +14,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { getSiteUrl } = require("../config/siteConfig");
 
 const BOT_TOKEN = (process.env.TELEGRAM_CHAT_AUDIT_BOT_TOKEN || "").trim();
 let activeAdminId = (process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID || "").trim();
@@ -1526,7 +1527,7 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           continue;
         } else {
           // Direct URL sendPhoto
-          const clientUrl = process.env.CLIENT_URL || "https://freestudymaterial.onrender.com";
+          const clientUrl = getSiteUrl();
           const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
           const body = {
             chat_id: chatId,
@@ -1613,7 +1614,7 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           continue;
         } else {
           // Direct URL sendDocument
-          const clientUrl = process.env.CLIENT_URL || "https://freestudymaterial.onrender.com";
+          const clientUrl = getSiteUrl();
           const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
           const body = {
             chat_id: chatId,

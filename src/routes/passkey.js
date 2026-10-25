@@ -37,6 +37,8 @@ setInterval(() => {
   }
 }, 60000);
 
+const { getSiteUrl } = require("../config/siteConfig");
+
 /**
  * Determine dynamic Relying Party ID and Expected Origin
  */
@@ -45,18 +47,22 @@ function getRpInfo(req) {
   let origin = originHeader;
 
   if (!origin) {
-    const host = req.get("host") || "localhost:5001";
-    const proto = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-    origin = `${proto}://${host}`;
+    const host = req.get("host");
+    if (host) {
+      const proto = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
+      origin = `${proto}://${host}`;
+    } else {
+      origin = getSiteUrl(req);
+    }
   }
 
   try {
     const url = new URL(origin);
-    const rpID = url.hostname; // e.g. "localhost" or "freestudymaterial.onrender.com"
+    const rpID = url.hostname; // e.g. "localhost", "studyvault.in", or "freestudymaterial.onrender.com"
     const expectedOrigin = url.origin;
     return { rpID, expectedOrigin };
   } catch (_) {
-    return { rpID: "localhost", expectedOrigin: `http://${req.get("host") || "localhost:5001"}` };
+    return { rpID: "localhost", expectedOrigin: `http://${req.get("host") || "localhost:5000"}` };
   }
 }
 

@@ -16,6 +16,7 @@ const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
 const { recordSyncEvent } = require("./syncTracker");
 const { upsertNoteToTurso } = require("../services/tursoService");
+const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 function getBotToken() {
   return (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -377,8 +378,8 @@ async function processIncomingMessage(message) {
         }
         const realSize = formatRealSize(fileSize);
 
-        const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
-        const dupNotice = `♻️ <b>Free Study Material — Duplicate Notice Receipt</b>\n\n` +
+        const siteUrl = getSiteUrl();
+        const dupNotice = `♻️ <b>${getVaultName()} — Duplicate Notice Receipt</b>\n\n` +
           `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
           `📄 <b>Title:</b> ${dupData.title || title}\n` +
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
@@ -495,8 +496,8 @@ async function processIncomingMessage(message) {
       }
       const realSize = formatRealSize(fileSize);
 
-      const siteUrl2 = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
-      const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
+      const siteUrl2 = getSiteUrl();
+      const receiptText = `⚡ <b>${getVaultName()} Receipt</b>\n\n` +
         `✅ <b>Note Successfully Indexed to Website!</b>\n` +
         `📄 <b>Title:</b> ${title}\n` +
         `📚 <b>Subject:</b> ${subject}\n` +

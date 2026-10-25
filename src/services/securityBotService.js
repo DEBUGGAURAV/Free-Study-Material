@@ -24,7 +24,7 @@ const pendingPasswordResets = new Map();
 // Key: Telegram chat_id -> { action, mobile, email, expiresAt }
 const userBotStates = new Map();
 
-const getSiteUrl = () => (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 
 // Runtime Security Bot Controls (Single Document Commit Pattern to prevent database bloat)

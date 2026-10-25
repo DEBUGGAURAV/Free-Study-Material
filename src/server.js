@@ -431,24 +431,26 @@ function startServer(portToTry, attempt = 1) {
     }
 
     // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)
-    const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || "https://freestudymaterial.onrender.com";
-    const KEEP_ALIVE_INTERVAL = 12 * 60 * 1000; // 12 minutes (safely under Render's 15m idle cutoff)
+    if (process.env.DISABLE_KEEP_ALIVE !== "true") {
+      const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || getSiteUrl();
+      const KEEP_ALIVE_INTERVAL = 12 * 60 * 1000; // 12 minutes (safely under Render's 15m idle cutoff)
 
-    const pingSelf = async () => {
-      try {
-        const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
-        const res = await fetch(pingEndpoint, { signal: AbortSignal.timeout(10000) });
-        if (res.ok) {
-          console.log(`[ANTI-SLEEP] 💓 Self-ping successful: ${pingEndpoint} (Status: ${res.status}) - Render kept awake 24/7`);
+      const pingSelf = async () => {
+        try {
+          const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
+          const res = await fetch(pingEndpoint, { signal: AbortSignal.timeout(10000) });
+          if (res.ok) {
+            console.log(`[ANTI-SLEEP] 💓 Self-ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform kept awake 24/7`);
+          }
+        } catch (e) {
+          console.warn("[ANTI-SLEEP] Self-ping notice:", e.message);
         }
-      } catch (e) {
-        console.warn("[ANTI-SLEEP] Self-ping notice:", e.message);
-      }
-    };
+      };
 
-    // Initial ping after 3 minutes, then recurring every 12 minutes
-    setTimeout(pingSelf, 3 * 60 * 1000);
-    setInterval(pingSelf, KEEP_ALIVE_INTERVAL);
+      // Initial ping after 3 minutes, then recurring every 12 minutes
+      setTimeout(pingSelf, 3 * 60 * 1000);
+      setInterval(pingSelf, KEEP_ALIVE_INTERVAL);
+    }
   });
 }
 

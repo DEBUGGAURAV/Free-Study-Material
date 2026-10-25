@@ -5,6 +5,7 @@
 
 const nodemailer = require("nodemailer");
 const { ramCache } = require("../utils/ramCache");
+const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 // Configuration from environment variables
 const SMTP_HOST = (process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com").trim();
@@ -13,7 +14,7 @@ const SMTP_USER = (process.env.BREVO_SMTP_USER || process.env.BREVO_USER || "").
 const SMTP_PASS = (process.env.BREVO_SMTP_KEY || process.env.BREVO_SMTP_PASSWORD || "").trim();
 const BREVO_API_KEY = (process.env.BREVO_API_KEY || "").trim();
 const FROM_EMAIL = (process.env.BREVO_FROM_EMAIL || SMTP_USER || "vault@freestudymaterial.com").trim();
-const FROM_NAME = (process.env.BREVO_FROM_NAME || "Free Study Material Vault").trim();
+const FROM_NAME = (process.env.BREVO_FROM_NAME || getVaultName()).trim();
 
 let transporter = null;
 
@@ -429,7 +430,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
         `👤 <b>Uploaded By:</b> <code>${user.name || "Student Contributor"}</code>\n` +
         (user.email ? `📧 <b>Email:</b> <code>${user.email}</code>\n` : "") +
-        `🔗 <b>Direct Link:</b> ${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/api/notes/${note?.id}/stream\n` +
+        `🔗 <b>Direct Link:</b> ${getSiteUrl()}/api/notes/${note?.id}/stream\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
     } else if (event === "NOTE_DOWNLOAD") {

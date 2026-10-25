@@ -9,6 +9,8 @@
  * ============================================================================
  */
 
+const { getSiteUrl } = require("../config/siteConfig");
+
 const CURATED_EXAM_SCHEDULES = [
   {
     university: "AKTU / UPTU",
@@ -122,11 +124,11 @@ async function dispatchDailyRevisionAlert(botToken, chatId, threadId = null, bra
     `• <b>Unit ${dossier.todayTarget.unit}:</b> <i>${dossier.todayTarget.title}</i>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Revision Actions:</b>`,
-    `📄 <b>Open Booster PDF:</b> <a href="${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/?search=${encodeURIComponent(dossier.subject)}">Read Verified Notes</a>`,
-    `🧠 <b>Peer Study Pod:</b> <a href="${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/?pod=exam-${encodeURIComponent(dossier.subjectCode)}">Join Live Canvas Pod</a>`,
+    `📄 <b>Open Booster PDF:</b> <a href="${getSiteUrl()}/?search=${encodeURIComponent(dossier.subject)}">Read Verified Notes</a>`,
+    `🧠 <b>Peer Study Pod:</b> <a href="${getSiteUrl()}/?pod=exam-${encodeURIComponent(dossier.subjectCode)}">Join Live Canvas Pod</a>`,
   ].join("\n");
 
-  const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+  const siteUrl = getSiteUrl();
   const inlineKeyboard = {
     inline_keyboard: [
       [

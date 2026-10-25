@@ -1,5 +1,6 @@
 import React from "react";
 import { Sparkles } from "lucide-react";
+import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
 export default function HeroBanner({ totalNotes }) {
   const techCards = [
@@ -67,7 +68,7 @@ export default function HeroBanner({ totalNotes }) {
       </div>
 
       <h1 className="hero-title">
-        Free Study Material — <span>Academic Cloud Vault</span>
+        {SITE_NAME} — <span>{SITE_TAGLINE}</span>
       </h1>
 
       <p className="hero-subtitle">

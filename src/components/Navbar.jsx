@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle, Users } from "lucide-react";
+import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
 export default function Navbar({
   searchTerm,
@@ -142,10 +143,10 @@ export default function Navbar({
             <Cloud size={24} />
           </div>
           <div>
-            <div className="brand-title">Free Study Material</div>
+            <div className="brand-title">{SITE_NAME}</div>
             <div className="brand-status-tag">
               <span className="pulse-dot"></span>
-              Academic Vault • CDN Ready
+              {SITE_TAGLINE} • CDN Ready
             </div>
           </div>
         </div>
@@ -306,7 +307,7 @@ export default function Navbar({
                 fontWeight: 600,
                 fontSize: "0.82rem",
               }}
-              title="Install Free Study Material as Desktop / Mobile App"
+              title={`Install ${SITE_NAME} as Desktop / Mobile App`}
             >
               <Smartphone size={16} />
               <span>📲 Install App</span>
