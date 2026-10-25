@@ -860,76 +860,40 @@ export default function TabCommunityChat(props) {
                               style={{ width: "135px", padding: "3px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem" }}
                             />
                           </div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 31: Private Pod Forensics, Transcripts, Conditions">Pod Vault (31):</span>
-                              <input
-                                type="text"
-                                value={chatBotSettings.topics?.podAudits || "31"}
-                                onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, podAudits: e.target.value } }))}
-                                style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
-                              />
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 33: Private Chat Media Vault (PDF & IMG only, permanent)">Media Vault (33):</span>
-                              <input
-                                type="text"
-                                value={chatBotSettings.topics?.mediaVault || "33"}
-                                onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, mediaVault: e.target.value } }))}
-                                style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
-                              />
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 35: Public Deleted Messages & Tamper Logs">Public Del (35):</span>
-                              <input
-                                type="text"
-                                value={chatBotSettings.topics?.deletedMessages || "35"}
-                                onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, deletedMessages: e.target.value } }))}
-                                style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
-                              />
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 114: Active Students, Session Logs & Purge Reports">Sessions (114):</span>
-                              <input
-                                type="text"
-                                value={chatBotSettings.topics?.presence || "114"}
-                                onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, presence: e.target.value } }))}
-                                style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
-                              />
-                            </div>
-                            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: "6px", marginTop: "2px" }}>
-                              <span style={{ color: "#4ade80", fontSize: "0.7rem", fontWeight: 700 }}>
-                                Public Chat Topic:
-                              </span>
-                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <input
-                                  type="text"
-                                  value={chatBotSettings.topics?.publicChat || "1"}
-                                  onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: e.target.value } }))}
-                                  placeholder="1"
-                                  style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1.5px solid #4ade80", color: "#4ade80", fontSize: "0.72rem", textAlign: "center", fontWeight: 800 }}
-                                />
-                                <span style={{ fontSize: "0.68rem", color: "#4ade80", fontWeight: 700 }}>
-                                  (General Topic 1)
-                                </span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(34, 197, 94, 0.08)", border: "1px solid rgba(34, 197, 94, 0.3)", borderRadius: "8px", padding: "10px 12px", marginTop: "4px" }}>
+                            <div>
+                              <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span>🎯 Target Public Chat Topic ID:</span>
                               </div>
+                              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                                Subtopics &amp; Pods: <strong style={{ color: "#f87171" }}>🔇 Suppressed (Public Chat Only)</strong>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <input
+                                type="text"
+                                value={chatBotSettings.topics?.publicChat || "1"}
+                                onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: e.target.value } }))}
+                                placeholder="1"
+                                style={{ width: "55px", padding: "4px 6px", borderRadius: "6px", background: "rgba(0,0,0,0.5)", border: "1.5px solid #4ade80", color: "#4ade80", fontSize: "0.85rem", textAlign: "center", fontWeight: 800 }}
+                              />
                             </div>
                           </div>
 
-                          {/* Dynamic Topic 1 Mode Helper Banner */}
+                          {/* Dynamic Topic Helper Banner */}
                           <div
                             style={{
                               marginTop: "6px",
-                              padding: "6px 8px",
+                              padding: "8px 10px",
                               borderRadius: "6px",
-                              fontSize: "0.68rem",
-                              background: "rgba(34, 197, 94, 0.12)",
-                              border: "1px solid rgba(34, 197, 94, 0.3)",
-                              color: "#86efac",
-                              lineHeight: 1.35,
+                              fontSize: "0.7rem",
+                              background: "rgba(56, 189, 248, 0.1)",
+                              border: "1px solid rgba(56, 189, 248, 0.25)",
+                              color: "#7dd3fc",
+                              lineHeight: 1.4,
                             }}
                           >
-                            <span>🟢 <strong>Topic 1 &amp; Bot DM Control Active:</strong> Public chat syncs via Topic 1 &amp; 1-on-1 Admin Bot DM with real-time bidirectional control!</span>
+                            <div>💡 <strong>Telegram Topic Binding:</strong> Open any topic in your Telegram Supergroup and send <code>/set_topic</code> to immediately bind public chat and controller to that topic!</div>
                           </div>
                         </div>
                       </div>

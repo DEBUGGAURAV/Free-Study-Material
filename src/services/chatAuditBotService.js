@@ -32,10 +32,10 @@ let auditTopics = {
 };
 
 /**
- * ⚡ Topic 1 Public Chat Option:
- * Defaulted to "1" (General Topic) because Topic 39 does not belong to standard Telegram supergroups.
- * When publicChat is "1", all public messages, images, PDFs, and deleted message tamper alerts
- * are routed through Topic 1 (Telegram General Topic) or direct Bot DM.
+ * ⚡ Public Chat Topic Router:
+ * Subtopics (study pods, private rooms, presence logs) are strictly suppressed.
+ * ONLY Public Chat messages and its Controller actions (moderation, active users, deletes, purge)
+ * are routed to the user's explicitly configured topic (or 1-on-1 Admin DM).
  */
 function isTopic1PublicMode() {
   const topic = String(auditTopics.publicChat || "").trim();
@@ -44,13 +44,13 @@ function isTopic1PublicMode() {
 
 function getTargetPublicChatTopic() {
   const topic = String(auditTopics.publicChat || "").trim();
-  if (!topic || topic === "39" || topic === "1") return "1";
+  if (!topic || topic === "off" || topic === "none" || topic === "dm") return null;
+  if (topic === "39") return "1"; // Auto-correct legacy 39 to 1
   return topic;
 }
 
 function getTargetPublicDeletedTopic() {
-  // If setting is 1, public chat deleted messages & tamper alerts route to Topic 1 as requested!
-  return isTopic1PublicMode() ? "1" : (auditTopics.deletedMessages || "35").trim();
+  return getTargetPublicChatTopic() || "1";
 }
 
 // Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID
@@ -292,74 +292,47 @@ function updateEnvFile(key, value) {
  */
 async function autoCreateTopicsForSupergroup(chatId) {
   const cleanChatId = String(chatId).trim();
-  console.log(`[CHAT-AUDIT-BOT] 🛠️ Initializing 6 Forum Topics in Supergroup ${cleanChatId}...`);
+  console.log(`[CHAT-AUDIT-BOT] 🛠️ Connecting Supergroup ${cleanChatId} in Public-Chat-Only Mode...`);
 
-  const topicConfigs = [
-    { key: "podAudits", name: "📜 Pod Audits & Transcripts", color: 7322096 },
-    { key: "mediaVault", name: "📎 Original Media Vault (PDF & IMG)", color: 16766590 },
-    { key: "deletedMessages", name: "⚠️ Public Deleted Messages & Tamper Log", color: 16749490 },
-    { key: "forensicPurge", name: "🚨 Forensic & Purge Dossier", color: 16749490 },
-    { key: "presence", name: "👥 Student Presence & Session Logs", color: 9367192 },
-    { key: "stealth", name: "👻 Admin Stealth Mode Alerts", color: 13338331 },
-    { key: "publicChat", name: "💬 Public Community Chat", color: 5322744 },
-  ];
+  supergroupId = cleanChatId;
+  chatBotSettings.supergroupId = cleanChatId;
+  updateEnvFile("TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID", cleanChatId);
 
-  const createdTopics = {};
-
-  for (const conf of topicConfigs) {
-    let attempts = 0;
-    while (attempts < 3) {
-      attempts++;
-      try {
-        const res = await callTelegram("createForumTopic", {
-          chat_id: cleanChatId,
-          name: conf.name,
-          icon_color: conf.color,
-        });
-
-        if (res.ok && res.result?.message_thread_id) {
-          const threadId = String(res.result.message_thread_id);
-          createdTopics[conf.key] = threadId;
-          console.log(`[CHAT-AUDIT-BOT] ✅ Created topic: "${conf.name}" -> Thread ID: ${threadId}`);
-
-          // Post welcome message in topic
-          await callTelegram("sendMessage", {
-            chat_id: cleanChatId,
-            message_thread_id: threadId,
-            text: `🟢 <b>${conf.name} Activated</b>\n\nChannel configured for real-time archival and public two-way sync with Academic Cloud.`,
-            parse_mode: "HTML",
-          });
-          await new Promise((r) => setTimeout(r, 1200));
-          break;
-        } else if (res.error_code === 429 && res.parameters?.retry_after) {
-          const waitSec = res.parameters.retry_after + 1;
-          console.log(`[CHAT-AUDIT-BOT] ⏳ Telegram rate-limited. Waiting ${waitSec}s before creating "${conf.name}"...`);
-          await new Promise((r) => setTimeout(r, waitSec * 1000));
-        } else {
-          console.warn(`[CHAT-AUDIT-BOT] ⚠️ Could not create topic "${conf.name}":`, res.description);
-          break;
-        }
-      } catch (e) {
-        console.warn(`[CHAT-AUDIT-BOT] Error creating topic ${conf.name}:`, e.message);
-        break;
-      }
-    }
+  // If user already has a topic configured, keep it
+  const existingTopic = getTargetPublicChatTopic();
+  if (existingTopic && existingTopic !== "1") {
+    await callTelegram("sendMessage", {
+      chat_id: cleanChatId,
+      message_thread_id: existingTopic,
+      text: `🟢 <b>Public Community Chat Connected!</b>\n\n` +
+        `• <b>Bound Forum Topic:</b> <code>#${existingTopic}</code>\n` +
+        `• <b>Subtopics:</b> 🔇 <i>Disabled (Public Only Mode Active)</i>\n\n` +
+        `Send <code>/set_topic</code> in any other topic to change it anytime.`,
+      parse_mode: "HTML",
+    });
+    return { publicChat: existingTopic };
   }
 
-  // Update in-memory state
-  supergroupId = cleanChatId;
-  auditTopics = { ...auditTopics, ...createdTopics };
-  chatBotSettings.supergroupId = cleanChatId;
-  chatBotSettings.topics = { ...chatBotSettings.topics, ...createdTopics };
+  // Create single Public Community Chat topic if not already present
+  let publicChatThreadId = "1";
+  try {
+    const res = await callTelegram("createForumTopic", {
+      chat_id: cleanChatId,
+      name: "💬 Public Community Chat",
+      icon_color: 5322744,
+    });
 
-  // Persist to .env and Firestore
-  updateEnvFile("TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID", cleanChatId);
-  if (createdTopics.podAudits) updateEnvFile("TELEGRAM_CHAT_TOPIC_POD_AUDITS", createdTopics.podAudits);
-  if (createdTopics.mediaVault) updateEnvFile("TELEGRAM_CHAT_TOPIC_MEDIA_VAULT", createdTopics.mediaVault);
-  if (createdTopics.deletedMessages) updateEnvFile("TELEGRAM_CHAT_TOPIC_DELETED", createdTopics.deletedMessages);
-  if (createdTopics.presence) updateEnvFile("TELEGRAM_CHAT_TOPIC_PRESENCE", createdTopics.presence);
-  if (createdTopics.stealth) updateEnvFile("TELEGRAM_CHAT_TOPIC_STEALTH", createdTopics.stealth);
-  if (createdTopics.publicChat) updateEnvFile("TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT", createdTopics.publicChat);
+    if (res.ok && res.result?.message_thread_id) {
+      publicChatThreadId = String(res.result.message_thread_id);
+      console.log(`[CHAT-AUDIT-BOT] ✅ Created Public Community Chat topic -> Thread ID: ${publicChatThreadId}`);
+    }
+  } catch (e) {
+    console.warn(`[CHAT-AUDIT-BOT] Topic creation notice:`, e.message);
+  }
+
+  auditTopics.publicChat = publicChatThreadId;
+  chatBotSettings.topics.publicChat = publicChatThreadId;
+  updateEnvFile("TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT", publicChatThreadId);
 
   if (dbRef) {
     dbRef.collection("settings").doc("chat_bot").set(chatBotSettings, { merge: true }).catch(() => {});
@@ -368,11 +341,17 @@ async function autoCreateTopicsForSupergroup(chatId) {
   // Send Admin summary message
   await callTelegram("sendMessage", {
     chat_id: cleanChatId,
-    text: `🎉 <b>Free Study Material Chat Audit Vault Initialized!</b>\n\n` +
+    message_thread_id: publicChatThreadId !== "1" ? publicChatThreadId : undefined,
+    text: `🎉 <b>Free Study Material Public Chat & Controller Initialized!</b>\n\n` +
       `🛡️ <b>Supergroup ID:</b> <code>${cleanChatId}</code>\n` +
-      `📁 <b>6 Forensic & Sync Topics Active:</b>\n` +
-      `• 📜 Pod Audits: Thread <code>${createdTopics.podAudits || "N/A"}</code>\n` +
-      `• 📎 Media Vault (Original Files): Thread <code>${createdTopics.mediaVault || "N/A"}</code>\n` +
+      `💬 <b>Bound Public Chat Topic:</b> <code>#${publicChatThreadId}</code>\n` +
+      `🔇 <b>Subtopics Status:</b> <i>Suppressed (No study pod or transcript spam)</i>\n\n` +
+      `💡 <i>To bind Public Chat to any other topic, open that topic and type <code>/set_topic</code>!</i>`,
+    parse_mode: "HTML",
+  });
+
+  return { publicChat: publicChatThreadId };
+}
       `• ⚠️ Deleted Messages: Thread <code>${createdTopics.deletedMessages || "N/A"}</code>\n` +
       `• 👥 Student Presence: Thread <code>${createdTopics.presence || "N/A"}</code>\n` +
       `• 👻 Admin Stealth: Thread <code>${createdTopics.stealth || "N/A"}</code>\n` +
@@ -504,6 +483,20 @@ async function processUpdate(update) {
         return;
       }
 
+      if (data === "cmd_topic_status") {
+        const curTopic = auditTopics.publicChat || "Not Set";
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          text: `🎯 <b>Public Chat Topic Status:</b>\n\n` +
+            `• <b>Bound Topic ID:</b> <code>#${curTopic}</code>\n` +
+            `• <b>Supergroup:</b> <code>${supergroupId || "Direct DM Only"}</code>\n` +
+            `• <b>Subtopics:</b> 🔇 <i>Suppressed (Public Chat Only Mode Active)</i>\n\n` +
+            `💡 <i>To change topic, open any forum topic in your group and send <code>/set_topic</code>!</i>`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
       if (data === "cmd_purgedays" || data === "cmd_inactive") {
         const curChatDays = chatBotSettings.chatRetentionDays || 7;
         const curPodDays = chatBotSettings.privateRoomInactivityDays || 7;
@@ -586,15 +579,21 @@ async function processUpdate(update) {
       const chat = chatMember.chat;
       if ((chat.type === "supergroup" || chat.type === "group") && (status === "administrator" || status === "member")) {
         console.log(`[CHAT-AUDIT-BOT] 🔔 Bot added to chat: "${chat.title}" (${chat.id}) as ${status}`);
-        if (chat.type === "supergroup") {
-          await autoCreateTopicsForSupergroup(chat.id);
-        } else {
-          await callTelegram("sendMessage", {
-            chat_id: chat.id,
-            text: `👋 <b>Hello! Please convert this group to a Supergroup with "Topics" enabled</b> so I can auto-create the 6 dedicated archival & public chat channels!`,
-            parse_mode: "HTML",
-          });
+        supergroupId = String(chat.id);
+        chatBotSettings.supergroupId = String(chat.id);
+        updateEnvFile("TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID", String(chat.id));
+        if (dbRef) {
+          dbRef.collection("settings").doc("chat_bot").set({ supergroupId: String(chat.id) }, { merge: true }).catch(() => {});
         }
+
+        await callTelegram("sendMessage", {
+          chat_id: chat.id,
+          text: `👑 <b>@${BOT_USERNAME} Connected!</b>\n\n` +
+            `• <b>Supergroup ID:</b> <code>${chat.id}</code>\n` +
+            `• <b>Mode:</b> 🟢 <b>Public Chat & Controller ONLY</b> (Subtopics Disabled)\n\n` +
+            `👉 <i>To bind Public Chat to any topic, open that topic and send <code>/set_topic</code>!</i>`,
+          parse_mode: "HTML",
+        });
         return;
       }
     }
@@ -616,9 +615,10 @@ async function processUpdate(update) {
 
     // ✏️ A. REAL-TIME EDIT FROM TELEGRAM TO WEB PUBLIC CHAT
     if (isEdit) {
-      const isPublicChatTopic = isTopic1PublicMode()
-        ? (threadId === "1" || !threadId)
-        : (auditTopics.publicChat && threadId === String(auditTopics.publicChat));
+      const targetTopic = getTargetPublicChatTopic();
+      const isPublicChatTopic = targetTopic
+        ? (String(threadId || "1") === String(targetTopic))
+        : false;
       const isDirectChat = chatType === "private";
 
       if (isPublicChatTopic || isDirectChat) {
@@ -689,6 +689,9 @@ async function processUpdate(update) {
         chat_id: chatId,
         message_thread_id: threadId,
         text: `🤖 <b>@${BOT_USERNAME} Command Center</b>\n\n` +
+          `• <code>/set_topic</code> - Bind public chat & controller to current topic\n` +
+          `• <code>/set_topic &lt;id&gt;</code> - Bind to specific topic ID (or <code>/set_topic off</code>)\n` +
+          `• <code>/topic</code> - Check current bound topic & status\n` +
           `• <code>/active</code> - Live active online students\n` +
           `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
           `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
@@ -696,7 +699,7 @@ async function processUpdate(update) {
           `• <code>/clearchat</code> - Purge public chat hall\n` +
           `• <code>/resetcache &lt;email&gt;</code> - Remotely wipe a student's phone cache (0 DB cost)\n` +
           `• <code>/resetallcache</code> - Global fleet storage wipe (0 DB cost)\n\n` +
-          `💬 <i>Type any message, photo, or PDF to broadcast directly to Public Hall with your official Admin badge! Reply to any message with <code>/del</code> to delete it.</i>\n\n` +
+          `💬 <i>Type any message, photo, or PDF in the bound topic to broadcast directly to Public Hall with your official Admin badge! Reply to any message with <code>/del</code> to delete it.</i>\n\n` +
           `⏱️ <i>Purge Days Control: <code>/purgedays &lt;email&gt; &lt;+days|-days&gt;</code></i>`,
         parse_mode: "HTML",
         reply_markup: {
@@ -707,7 +710,7 @@ async function processUpdate(update) {
             ],
             [
               { text: "🗑️ Purge Public Chat", callback_data: "cmd_clearchat" },
-              { text: "⏱️ Purge Days", callback_data: "cmd_purgedays" },
+              { text: "🎯 Topic Status", callback_data: "cmd_topic_status" },
             ],
           ],
         },
@@ -1037,6 +1040,107 @@ async function processUpdate(update) {
       }
     }
 
+    // Command: /set_topic, /set_public_topic, /bind_topic
+    if (
+      text === "/set_topic" ||
+      text.startsWith("/set_topic ") ||
+      text === "/set_public_topic" ||
+      text.startsWith("/set_public_topic ") ||
+      text === "/bind_topic" ||
+      text.startsWith("/bind_topic ")
+    ) {
+      let specifiedTopic = text.replace(/^\/(set_topic|set_public_topic|bind_topic)\s*/i, "").trim();
+
+      let targetTopic = specifiedTopic;
+      if (!targetTopic) {
+        if (threadId) {
+          targetTopic = String(threadId);
+        } else if (chatType === "supergroup" || chatType === "group") {
+          targetTopic = "1";
+        } else {
+          targetTopic = "dm";
+        }
+      }
+
+      if (targetTopic.toLowerCase() === "off" || targetTopic.toLowerCase() === "none") {
+        auditTopics.publicChat = "off";
+        chatBotSettings.topics.publicChat = "off";
+        updateEnvFile("TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT", "off");
+        if (dbRef) {
+          dbRef.collection("settings").doc("chat_bot").set({ topics: { publicChat: "off" } }, { merge: true }).catch(() => {});
+        }
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: `🔇 <b>Topic Routing Disabled!</b>\n\nPublic Chat messages will no longer be forwarded to any forum topic. Messages will only mirror to your 1-on-1 Admin DM.`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      if (targetTopic.toLowerCase() === "dm" || targetTopic.toLowerCase() === "pm") {
+        auditTopics.publicChat = "off";
+        chatBotSettings.topics.publicChat = "off";
+        updateEnvFile("TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT", "off");
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: `📱 <b>Direct DM Mode Activated:</b>\n\nPublic Chat messages and moderation controller are now bound exclusively to Admin 1-on-1 DM.`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      const cleanTopic = targetTopic.replace(/[^0-9]/g, "") || "1";
+      auditTopics.publicChat = cleanTopic;
+      chatBotSettings.topics.publicChat = cleanTopic;
+      updateEnvFile("TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT", cleanTopic);
+
+      if (chatType === "supergroup" || chatType === "group") {
+        supergroupId = String(chatId);
+        chatBotSettings.supergroupId = String(chatId);
+        updateEnvFile("TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID", String(chatId));
+      }
+
+      if (dbRef) {
+        dbRef.collection("settings").doc("chat_bot").set({
+          topics: { publicChat: cleanTopic },
+          supergroupId: supergroupId || String(chatId),
+        }, { merge: true }).catch(() => {});
+      }
+
+      console.log(`[CHAT-AUDIT-BOT] 🎯 Public Chat explicitly bound to Topic #${cleanTopic} in Supergroup ${supergroupId || chatId}`);
+
+      await callTelegram("sendMessage", {
+        chat_id: chatId,
+        message_thread_id: cleanTopic,
+        text: `🎯 <b>Public Chat & Controller Bound Successfully!</b>\n\n` +
+          `• <b>Bound Forum Topic:</b> <code>#${cleanTopic}</code>\n` +
+          `• <b>Supergroup ID:</b> <code>${supergroupId || chatId}</code>\n` +
+          `• <b>Status:</b> 🟢 <b>Active & Ready</b>\n\n` +
+          `💬 <i>Ab Web Public Chat ke saare student messages aur controller alerts sirf is topic me aayenge. Subtopics (study pods / private rooms) bilkul band hain.</i>\n\n` +
+          `Reply to any message with <code>/del</code> to delete it in real-time, or type text to reply as <b>👑 OFFICIAL ADMIN</b>!`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
+    // Command: /current_topic or /topic
+    if (text === "/current_topic" || text === "/topic" || text === "/topic_status") {
+      const curTopic = auditTopics.publicChat || "Not Set";
+      await callTelegram("sendMessage", {
+        chat_id: chatId,
+        message_thread_id: threadId,
+        text: `ℹ️ <b>Current Public Chat Topic Configuration:</b>\n\n` +
+          `• <b>Current Topic ID:</b> <code>#${curTopic}</code>\n` +
+          `• <b>Supergroup ID:</b> <code>${supergroupId || "Not Configured"}</code>\n` +
+          `• <b>Subtopics:</b> 🔇 <i>Suppressed (Public Chat Only Mode Active)</i>\n\n` +
+          `💡 <i>To change or bind to a new topic, open that topic and type <code>/set_topic</code> or use <code>/set_topic &lt;id&gt;</code>.</i>`,
+        parse_mode: "HTML",
+      });
+      return;
+    }
+
     // Command: /setup or /init_topics in a group
     if (
       (chatType === "supergroup" || chatType === "group") &&
@@ -1045,13 +1149,13 @@ async function processUpdate(update) {
       if (chatType === "supergroup") {
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: `⚙️ Setting up 6 dedicated Forensic & Public Chat Topics now...`,
+          text: `⚙️ Initializing Public Community Chat Topic now...`,
         });
         await autoCreateTopicsForSupergroup(chatId);
       } else {
         await callTelegram("sendMessage", {
           chat_id: chatId,
-          text: `⚠️ Please enable <b>Topics</b> in this group's settings to allow topic creation.`,
+          text: `⚠️ Please enable <b>Topics</b> in this group's settings to allow topic binding.`,
           parse_mode: "HTML",
         });
       }
@@ -1063,9 +1167,10 @@ async function processUpdate(update) {
     // =========================================================================
     // Checks if incoming message is in General Student Hall topic OR sent in Direct Bot DM
     const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
-    const isPublicChatTopic = isTopic1PublicMode()
-      ? (threadId === "1" || !threadId)
-      : (auditTopics.publicChat && threadId === String(auditTopics.publicChat));
+    const targetTopic = getTargetPublicChatTopic();
+    const isPublicChatTopic = targetTopic
+      ? (String(threadId || "1") === String(targetTopic))
+      : false;
     const isAdminDirectChat = chatType === "private" && (
       (effectiveAdminId && fromId === String(effectiveAdminId)) ||
       !effectiveAdminId // If no admin ID set yet, auto-accept and link on first direct message!
@@ -1693,13 +1798,12 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir, sender }) {
   if (!chatBotSettings.enableMediaVaultUpload) return false;
 
-  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetThreadId = auditTopics.mediaVault || "33";
-
-  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
-
-  const roomName = room?.name || "Private Pod";
+  // 🛡️ User requirement: Strictly suppress subtopics / private pods. Only public chat allowed.
   const roomId = room?.id || message?.roomId || "private";
+  if (roomId !== "public") {
+    console.log(`[CHAT-AUDIT-BOT] 🔇 Suppressed private pod media vault dispatch for "${roomId}" (Public Chat Only mode).`);
+    return false;
+  }
   const secretCode = room?.secretCode || "N/A";
 
   const senderName = sender?.name || message?.sender?.name || "Student";
@@ -1797,6 +1901,13 @@ async function dispatchChatForensicAudit({
 }) {
   if (!chatBotSettings.enableChatAudit) {
     console.log("[CHAT-AUDIT-BOT] Chat audit is disabled in settings, skipping Telegram dispatch.");
+    return false;
+  }
+
+  // 🛡️ User requirement: Strictly suppress subtopics & study pods.
+  // ONLY public chat and its controller actions are permitted in the bot.
+  if (room && room.id !== "public") {
+    console.log(`[CHAT-AUDIT-BOT] 🔇 Suppressed subtopic audit for "${room.name || room.id}" (Public Chat Only Mode).`);
     return false;
   }
 
@@ -2053,15 +2164,21 @@ async function sendTestChatBotAlert(event = "PING") {
  * (Topic: presence / 37)
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
+  // 🛡️ User requirement: Strictly suppress subtopics / private pods. Only public chat allowed.
+  if (roomId && roomId !== "public") {
+    return false;
+  }
+
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const targetTopic = getTargetPublicChatTopic();
 
   const targetChats = [];
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Supergroup Topic 114 (Presence & Session Logs)
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
+  // Deliver to configured Public Chat Topic
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.presence || "114",
+      threadId: targetTopic,
       isDirect: false,
     });
   }
@@ -2245,32 +2362,31 @@ async function dispatchActiveStudentsReportToTelegram() {
  * (Topic: deletedMessages / 35 and publicChat / 1)
  */
 async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count }) {
+  // 🛡️ User requirement: Strictly suppress subtopics. Only public chat allowed.
+  if (roomId !== "public") {
+    return false;
+  }
+
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
   const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const targetTopic = getTargetPublicChatTopic();
 
   const targetChats = [];
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
-    if (roomId === "public") {
-      const publicDelTopic = getTargetPublicDeletedTopic();
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
+    targetChats.push({
+      chatId: currentSupergroupId,
+      threadId: targetTopic,
+    });
+  }
+
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId || !targetTopic)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
       targetChats.push({
-        chatId: currentSupergroupId,
-        threadId: publicDelTopic,
-      });
-      if (!isTopic1PublicMode() && auditTopics.publicChat) {
-        targetChats.push({
-          chatId: currentSupergroupId,
-          threadId: auditTopics.publicChat || "1",
-        });
-      }
-    } else {
-      // Private pod purge belongs to Topic 31 (Pod Audits / Forensics)
-      targetChats.push({
-        chatId: currentSupergroupId,
-        threadId: auditTopics.podAudits || "31",
+        chatId: effectiveAdminId,
+        threadId: null,
       });
     }
-  } else if (effectiveAdminId) {
-    targetChats.push({
+  }
       chatId: effectiveAdminId,
       threadId: null,
     });
@@ -2311,16 +2427,29 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
  */
 async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, activeUsers = [] }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const targetTopic = getTargetPublicChatTopic();
 
   const targetChats = [];
 
-  // Deliver to Supergroup Topic 114 (Student Presence & Session Logs)
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
+  // Deliver to configured Public Chat Topic
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: auditTopics.presence || "114",
+      threadId: targetTopic,
       isDirect: false,
     });
+  }
+
+  // Deliver to Admin DM
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId || !targetTopic)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+        isDirect: true,
+      });
+    }
   }
 
   if (targetChats.length === 0) return false;
@@ -2396,21 +2525,33 @@ async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, acti
  */
 async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSummary = {} }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  const targetTopic = getTargetPublicChatTopic();
 
   const targetChats = [];
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 114 (Student Presence & Session Logs / Cascade Deletion Report). NEVER to Admin DM.
-  const targetThreadId = auditTopics.presence || "114";
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
+  // Deliver to configured Public Chat Topic
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: targetThreadId,
+      threadId: targetTopic,
       isDirect: false,
     });
   }
 
+  // Deliver to Admin DM
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId || !targetTopic)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+        isDirect: true,
+      });
+    }
+  }
+
   if (targetChats.length === 0) {
-    console.log("[CHAT-AUDIT-BOT] ⚠️ No Chat Audit Supergroup configured; skipping Telegram broadcast.");
+    console.log("[CHAT-AUDIT-BOT] ⚠️ No target chat configured for deletion report; skipping Telegram broadcast.");
     return false;
   }
 
