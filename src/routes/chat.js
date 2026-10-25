@@ -1483,8 +1483,8 @@ function initChatWebSocket(server) {
             }
           }
 
-          const originalTextContent = (msg.text !== "🗑️ This message was deleted" ? msg.text : null) || msg.originalText || "(Media Attachment)";
-          const originalFileNameContent = msg.fileName;
+          const originalUntamperedText = (deletedSnapshot?.originalText) || (msg.text !== "🗑️ This message was deleted" ? msg.text : null) || msg.originalText || "(Media Attachment)";
+          const originalUntamperedFileName = deletedSnapshot?.fileName || msg.fileName;
 
           msg.isDeleted = true;
           msg.text = "🗑️ This message was deleted";
@@ -1500,8 +1500,8 @@ function initChatWebSocket(server) {
           if (roomId === PUBLIC_ROOM_ID) {
             dispatchPublicChatDeleteToTelegram({
               messageId,
-              originalText: (deletedSnapshot?.originalText || originalTextContent),
-              fileName: (deletedSnapshot?.fileName || originalFileNameContent),
+              originalText: originalUntamperedText,
+              fileName: originalUntamperedFileName,
               sender: { ...user, ip: ws.userIp },
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public delete dispatch notice:", err.message));
           }

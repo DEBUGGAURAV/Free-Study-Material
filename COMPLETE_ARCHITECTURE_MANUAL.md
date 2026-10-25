@@ -27,7 +27,7 @@
 ### PART 2: ADMINISTRATOR & OPERATOR CONTROL MANUAL
 17. [Admin Panel Access, Authentication & FIDO2 Passkeys](#17-admin-panel-access-authentication--fido2-passkeys)
 18. [Tab-by-Tab Master Operator Guide (All 12 Administration Tabs)](#18-tab-by-tab-master-operator-guide-all-12-administration-tabs)
-19. [Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 37)](#19-telegram-forum-topics-specification--binding-manual-topics-1-35-31-33-37)
+19. [Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 114)](#19-telegram-forum-topics-specification--binding-manual-topics-1-35-31-33-114)
 20. [Device Dynamic LRU & 48-Hour Auto-Delete Maintenance Guide](#20-device-dynamic-lru--48-hour-auto-delete-maintenance-guide)
 21. [Deployment, Render Hosting & Zero-Leak Security Checklist](#21-deployment-render-hosting--zero-leak-security-checklist)
 22. [Hybrid Help & Support Desk — Strict Ticket Ownership Lock & Guest 2-Factor Verification Architecture](#22-hybrid-help--support-desk--strict-ticket-ownership-lock--guest-2-factor-verification-architecture)
@@ -480,7 +480,7 @@ flowchart TD
 
 ---
 
-## 19. Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 37)
+## 19. Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 114)
 
 ```
 +---------------------------------------------------------------------------------------------------+
