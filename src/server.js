@@ -59,7 +59,7 @@ const examRoutes = require("./routes/exam");
 const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
 
 const app = express();
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 
 // Trust reverse proxy (Cloudflare / Render)
 app.set("trust proxy", 1);
@@ -135,7 +135,7 @@ const allowedOrigins = [
   DEFAULT_DOMAIN,
   process.env.CF_WORKER_URL,
   ...(process.env.NODE_ENV !== "production"
-    ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:5001", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000", "http://127.0.0.1:5001"]
+    ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
     : []),
 ].filter(Boolean);
 

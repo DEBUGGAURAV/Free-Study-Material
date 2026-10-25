@@ -1377,6 +1377,10 @@ async function handleAdjustUserPurgeDays(chatId, threadId, query, { action, days
  */
 async function startChatAuditBotPoller() {
   if (pollerRunning) return;
+  if (!BOT_TOKEN) {
+    console.log("[CHAT-AUDIT-BOT] ⏸️ TELEGRAM_CHAT_AUDIT_BOT_TOKEN not configured or deleted in .env. Bot poller safely disabled (Web Chat 100% active).");
+    return;
+  }
   pollerRunning = true;
 
   console.log(`[CHAT-AUDIT-BOT] 🚀 Starting long-poller for @${BOT_USERNAME}...`);
@@ -1404,7 +1408,18 @@ async function startChatAuditBotPoller() {
           allowed_updates: ["message", "edited_message", "callback_query", "my_chat_member"],
         });
 
-        if (res.ok && Array.isArray(res.result) && res.result.length > 0) {
+        if (!res.ok) {
+          const desc = String(res.description || res.error || "").toLowerCase();
+          if (res.error_code === 401 || res.error_code === 404 || desc.includes("unauthorized") || desc.includes("not found")) {
+            console.warn(`[CHAT-AUDIT-BOT] 🚨 Bot token unauthorized or Bot ID deleted on Telegram (${res.description || "401 Unauthorized"}). Poller safely stopped. Web Chat remains 100% operational.`);
+            pollerRunning = false;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 5000));
+          continue;
+        }
+
+        if (Array.isArray(res.result) && res.result.length > 0) {
           for (const update of res.result) {
             lastUpdateId = update.update_id;
             await processUpdate(update);
