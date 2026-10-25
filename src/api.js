@@ -102,7 +102,9 @@ async function request(endpoint, options = {}) {
     let errMsg = data.message || data.error || data.details || (typeof data === "string" && data ? data : "");
     if (!errMsg) {
       if (res.status === 500) {
-        errMsg = "Backend server error (Status 500). Please verify your backend server is running on port 5000.";
+        errMsg = "Backend server error (Status 500). Please verify your backend server is running on port 5000 (`npm start`).";
+      } else if (res.status === 502 || res.status === 504) {
+        errMsg = "Backend server is offline or unreachable on port 5000. Please run `npm start` in your terminal.";
       } else {
         errMsg = `Request failed with status ${res.status}`;
       }
