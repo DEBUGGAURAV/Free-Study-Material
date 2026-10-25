@@ -95,6 +95,8 @@ export async function deleteOfflineNote(noteId) {
   }
 }
 
+import { getAllCachedNoteChunks, deleteCachedNote, clearAllCachedNotes, deleteP2PDatabase } from "./p2pMesh";
+
 /**
  * Completely clears all offline notes from device storage
  * @returns {Promise<boolean>}
@@ -105,12 +107,188 @@ export async function clearOfflineVault() {
     return new Promise((resolve) => {
       const tx = db.transaction([STORE_NOTES], 'readwrite');
       tx.objectStore(STORE_NOTES).clear();
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      tx.oncomplete = () => {
+        try { db.close(); } catch (_) {}
+        resolve(true);
+      };
+      tx.onerror = () => {
+        try { db.close(); } catch (_) {}
+        resolve(false);
+      };
     });
   } catch {
     return false;
   }
+}
+
+/**
+ * Drops the offline vault IndexedDB database completely
+ */
+export async function deleteOfflineDatabase() {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.indexedDB) return resolve(false);
+    const req = window.indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(false);
+  });
+}
+
+/**
+ * Retrieves all stored offline notes from both fsm_offline_vault and fsm_p2p_cache_v1
+ * Returns unified array with id, title, subject, course, branch, savedAt, sizeBytes, sizeMB
+ */
+export async function getAllStoredOfflineNotes() {
+  const notesMap = new Map();
+
+  // 1. Fetch from fsm_offline_vault
+  try {
+    const offlineList = await getOfflineNotes();
+    if (Array.isArray(offlineList)) {
+      for (const item of offlineList) {
+        if (!item || !item.id) continue;
+        const sizeBytes = item.buffer && item.buffer.byteLength ? item.buffer.byteLength : 0;
+        notesMap.set(String(item.id), {
+          id: String(item.id),
+          title: item.title || `Note #${item.id}`,
+          subject: item.subject || "General Notes",
+          course: item.course || "B.Tech",
+          branch: item.branch || "All Branches",
+          savedAt: item.savedAt || new Date().toISOString(),
+          sizeBytes,
+          sizeMB: (sizeBytes / (1024 * 1024)).toFixed(2),
+          source: "offline_vault",
+        });
+      }
+    }
+  } catch (err) {
+    console.debug("[OFFLINE-VAULT] Could not read offline notes store:", err.message);
+  }
+
+  // 2. Fetch from fsm_p2p_cache_v1 note_chunks
+  try {
+    const chunks = await getAllCachedNoteChunks();
+    if (Array.isArray(chunks)) {
+      for (const ch of chunks) {
+        const id = String(ch.noteId);
+        if (notesMap.has(id)) {
+          const existing = notesMap.get(id);
+          if ((!existing.sizeBytes || existing.sizeBytes === 0) && ch.sizeBytes) {
+            existing.sizeBytes = ch.sizeBytes;
+            existing.sizeMB = ch.sizeMB;
+          }
+        } else {
+          // If title isn't stored in p2p cache, try to infer from localStorage cached catalog
+          let title = `Cached Study Note #${id}`;
+          let subject = "Campus Mesh / Background Pre-cache";
+          let branch = "General";
+          try {
+            const rawCat = localStorage.getItem("fsm_notes_catalog");
+            if (rawCat) {
+              const cat = JSON.parse(rawCat);
+              const found = Array.isArray(cat) ? cat.find((x) => String(x.id) === id) : null;
+              if (found) {
+                title = found.title || title;
+                subject = found.subject || subject;
+                branch = found.branch || branch;
+              }
+            }
+          } catch (_) {}
+
+          notesMap.set(id, {
+            id,
+            title,
+            subject,
+            course: "B.Tech",
+            branch,
+            savedAt: new Date().toISOString(),
+            sizeBytes: ch.sizeBytes || 0,
+            sizeMB: ch.sizeMB || "0.00",
+            source: "p2p_cache",
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.debug("[P2P-CACHE] Could not read p2p cached chunks:", err.message);
+  }
+
+  return Array.from(notesMap.values());
+}
+
+/**
+ * Deletes an individual offline note completely from device storage
+ * @param {string} noteId
+ */
+export async function deleteSingleOfflineNote(noteId) {
+  const cleanId = String(noteId);
+  try {
+    await deleteOfflineNote(cleanId);
+  } catch (_) {}
+  try {
+    await deleteCachedNote(cleanId);
+  } catch (_) {}
+  try {
+    localStorage.removeItem(`fsm_cdn_${cleanId}`);
+    localStorage.removeItem(`fsm_prefer_p2p_${cleanId}`);
+  } catch (_) {}
+  return true;
+}
+
+/**
+ * Comprehensively wipes all offline notes, IndexedDB stores, CacheStorage, and localStorage flags
+ */
+export async function wipeAllDeviceOfflineStorage() {
+  // 1. Clear object stores
+  try {
+    await clearOfflineVault();
+  } catch (_) {}
+  try {
+    await clearAllCachedNotes();
+  } catch (_) {}
+
+  // 2. Delete the physical IndexedDB databases so disk files are immediately reclaimed by OS
+  try {
+    await deleteOfflineDatabase();
+  } catch (_) {}
+  try {
+    await deleteP2PDatabase();
+  } catch (_) {}
+
+  // 3. Clear all Service Worker caches in CacheStorage
+  try {
+    if (typeof window !== "undefined" && "caches" in window) {
+      const keys = await caches.keys();
+      for (const k of keys) {
+        await caches.delete(k);
+      }
+    }
+  } catch (err) {
+    console.warn("[STORAGE] Error deleting CacheStorage caches:", err.message);
+  }
+
+  // 4. Clear all note-related localStorage flags
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith("fsm_cdn_") || k.startsWith("fsm_prefer_p2p_") || k.startsWith("fsm_cached_"))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+    }
+  } catch (_) {}
+
+  // 5. Notify Service Worker to purge any in-memory or active stream clones
+  try {
+    if (typeof navigator !== "undefined" && navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: "PURGE_ALL_CACHES" });
+    }
+  } catch (_) {}
+
+  return true;
 }
 
 /**

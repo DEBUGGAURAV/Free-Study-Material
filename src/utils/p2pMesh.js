@@ -95,12 +95,64 @@ export async function clearAllCachedNotes() {
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).clear();
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      tx.oncomplete = () => {
+        try { db.close(); } catch (_) {}
+        resolve(true);
+      };
+      tx.onerror = () => {
+        try { db.close(); } catch (_) {}
+        resolve(false);
+      };
     });
   } catch {
     return false;
   }
+}
+
+// Retrieve all cached note IDs and their sizes from p2p mesh cache
+export async function getAllCachedNoteChunks() {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const items = [];
+      const cursorReq = store.openCursor();
+      cursorReq.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          const buf = cursor.value;
+          const sizeBytes = buf && buf.byteLength ? buf.byteLength : 0;
+          items.push({
+            noteId: String(cursor.key),
+            sizeBytes,
+            sizeMB: (sizeBytes / (1024 * 1024)).toFixed(2),
+          });
+          cursor.continue();
+        } else {
+          try { db.close(); } catch (_) {}
+          resolve(items);
+        }
+      };
+      cursorReq.onerror = () => {
+        try { db.close(); } catch (_) {}
+        resolve([]);
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// Drops the p2p cache IndexedDB database completely
+export async function deleteP2PDatabase() {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !window.indexedDB) return resolve(false);
+    const req = window.indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => resolve(false);
+    req.onblocked = () => resolve(false);
+  });
 }
 
 // Query device hardware storage usage and available browser quota

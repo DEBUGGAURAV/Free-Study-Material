@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
-import { getStorageUsage, clearAllCachedNotes } from "../utils/p2pMesh";
-import { clearOfflineVault } from "../utils/offlineQueue";
+import { getStorageUsage } from "../utils/p2pMesh";
+import { getAllStoredOfflineNotes, deleteSingleOfflineNote, wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -47,6 +47,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [supportsPasskey, setSupportsPasskey] = useState(true);
   const [storageInfo, setStorageInfo] = useState(null);
   const [clearingStorage, setClearingStorage] = useState(false);
+  const [storedNotes, setStoredNotes] = useState([]);
+  const [loadingStoredNotes, setLoadingStoredNotes] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState(null);
   const hwProfile = detectClientHardwareProfile();
 
   const fetchStorageInfo = async () => {
@@ -56,26 +59,46 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     } catch (_) {}
   };
 
+  const loadStoredNotes = async () => {
+    try {
+      setLoadingStoredNotes(true);
+      const notes = await getAllStoredOfflineNotes();
+      setStoredNotes(notes);
+    } catch (_) {
+      setStoredNotes([]);
+    } finally {
+      setLoadingStoredNotes(false);
+    }
+  };
+
   useEffect(() => {
     if (tab === "storage") {
       fetchStorageInfo();
+      loadStoredNotes();
     }
   }, [tab]);
+
+  const handleDeleteSingleNote = async (noteId, noteTitle) => {
+    if (!window.confirm(`Are you sure you want to delete "${noteTitle || 'this note'}" from offline storage?`)) return;
+    try {
+      setDeletingNoteId(noteId);
+      await deleteSingleOfflineNote(noteId);
+      setMsg({ type: "success", text: `Deleted "${noteTitle || noteId}" from local offline cache.` });
+      await loadStoredNotes();
+      await fetchStorageInfo();
+    } catch (err) {
+      setMsg({ type: "error", text: "Failed to delete offline note: " + err.message });
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
 
   const handleWipeStorage = async () => {
     if (!window.confirm("Are you sure you want to delete all offline notes cached on this device? This will free up storage space.")) return;
     try {
       setClearingStorage(true);
-      await clearAllCachedNotes();
-      await clearOfflineVault();
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          if (k.startsWith("fsm-")) {
-            await caches.delete(k);
-          }
-        }
-      }
+      await wipeAllDeviceOfflineStorage();
+      setStoredNotes([]);
       setMsg({ type: "success", text: "Offline notes and storage cache successfully cleared from this device!" });
       await fetchStorageInfo();
     } catch (err) {
@@ -889,6 +912,114 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </div>
                 <span style={{ fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>CacheStorage</span>
               </div>
+            </div>
+
+            {/* Stored Offline Notes Section */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 700, color: "#f8fafc", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <FileText size={15} style={{ color: "#38bdf8" }} />
+                  <span>Stored Offline Notes Vault ({storedNotes.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadStoredNotes}
+                  disabled={loadingStoredNotes}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "6px",
+                    color: "var(--text-muted)",
+                    padding: "3px 8px",
+                    cursor: "pointer",
+                    fontSize: "0.7rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <RefreshCw size={11} className={loadingStoredNotes ? "spin" : ""} />
+                  Refresh List
+                </button>
+              </div>
+
+              {loadingStoredNotes ? (
+                <div style={{ padding: "14px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                  Scanning device IndexedDB for cached notes...
+                </div>
+              ) : storedNotes.length === 0 ? (
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px dashed rgba(255, 255, 255, 0.12)",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    textAlign: "center",
+                    color: "var(--text-dim)",
+                    fontSize: "0.76rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>📭</div>
+                  <div style={{ color: "#f8fafc", fontWeight: 600, marginBottom: "2px" }}>No Offline Notes Stored</div>
+                  <div>Open any note in the Virtual PDF Reader or click "Save Offline" on any card to read 100% without internet.</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "230px", overflowY: "auto", paddingRight: "4px" }}>
+                  {storedNotes.map((n) => (
+                    <div
+                      key={n.id}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.03)",
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: "8px",
+                        padding: "10px 12px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {n.title}
+                        </div>
+                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "2px", flexWrap: "wrap" }}>
+                          <span>📚 {n.subject}</span>
+                          {n.branch && <span>• {n.branch}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                        <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                          {n.sizeMB && Number(n.sizeMB) > 0 ? `${n.sizeMB} MB` : "Cached"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteSingleNote(n.id, n.title)}
+                          disabled={deletingNoteId === n.id}
+                          title="Delete this note from device offline storage"
+                          style={{
+                            background: "rgba(244, 63, 94, 0.12)",
+                            border: "1px solid rgba(244, 63, 94, 0.3)",
+                            color: "#f43f5e",
+                            padding: "4px 8px",
+                            borderRadius: "6px",
+                            cursor: deletingNoteId === n.id ? "not-allowed" : "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontSize: "0.68rem",
+                            fontWeight: 600,
+                          }}
+                        >
+                          <Trash2 size={12} />
+                          {deletingNoteId === n.id ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Clear Storage Action Button */}

@@ -529,6 +529,15 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  if (event.data && event.data.type === 'PURGE_ALL_CACHES') {
+    caches.keys().then((keys) => {
+      return Promise.all(keys.map((k) => caches.delete(k)));
+    }).then(() => {
+      console.log('[SW] 🧹 All Service Worker caches purged successfully upon user request.');
+    }).catch((err) => {
+      console.warn('[SW] Cache purge error:', err.message);
+    });
+  }
   if (event.data && event.data.type === 'UPDATE_STUDENT_STUDY_CONTEXT' && event.data.context) {
     lastKnownStudentContext = event.data.context;
     console.log('[SW] 🎓 Received live student study context update:', event.data.context.userYear, event.data.context.userBranch);
