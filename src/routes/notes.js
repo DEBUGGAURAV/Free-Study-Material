@@ -1320,9 +1320,33 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // Explicit PDF Content-Type & RFC-compliant Content-Disposition with ACTUAL File Name
-    const rawFileName = note.originalName || `${note.title}.pdf`;
-    const baseClean = rawFileName.replace(/["\r\n\\]/g, "_").trim();
-    const sanitizedName = baseClean.toLowerCase().endsWith(".pdf") ? baseClean : `${baseClean}.pdf`;
+    const queryFilename = (req.query.filename || req.params.filename || "").trim();
+    const genericNames = [
+      "blob", "blob.pdf", "document", "document.pdf", "file", "file.pdf",
+      "stream", "stream.pdf", "download", "download.pdf", "null", "undefined",
+      "untitled", "untitled.pdf"
+    ];
+
+    let candidateName = "";
+    if (queryFilename && !genericNames.includes(queryFilename.toLowerCase())) {
+      candidateName = queryFilename;
+    } else if (note.originalName && !genericNames.includes(note.originalName.toLowerCase().trim())) {
+      candidateName = note.originalName.trim();
+    } else if (note.fileName && !genericNames.includes(note.fileName.toLowerCase().trim())) {
+      candidateName = note.fileName.trim();
+    } else if (note.title && !genericNames.includes(note.title.toLowerCase().trim())) {
+      candidateName = note.title.trim();
+    } else if (note.subject && note.subject !== "General Academic") {
+      candidateName = `${note.subject}_Notes`;
+    } else {
+      candidateName = "Free_Study_Material";
+    }
+
+    let baseClean = candidateName.replace(/[/\\?%*:|"<>]/g, "_").replace(/\s+/g, " ").trim();
+    if (!baseClean.toLowerCase().endsWith(".pdf")) {
+      baseClean = `${baseClean}.pdf`;
+    }
+    const sanitizedName = baseClean;
     const isPdf =
       (note.mimeType && note.mimeType.toLowerCase().includes("pdf")) ||
       sanitizedName.toLowerCase().endsWith(".pdf") ||
@@ -1381,7 +1405,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const dispositionType = (isDownload && (!isNoteDownloadDisabled || isAdminInspectBypass)) ? "attachment" : "inline";
 
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Disposition", `${dispositionType}; filename="${sanitizedName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);
+    const asciiSafeName = sanitizedName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+    res.setHeader("Content-Disposition", `${dispositionType}; filename="${asciiSafeName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);
     if (isNoteDownloadDisabled && !isAdminUser) {
       res.setHeader("X-Download-Options", "noopen");
     }

@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import VirtualPdfReader from "../VirtualPdfReader";
-import { formatFileSize, formatMB } from "../../utils/formatUtils";
+import { formatFileSize, formatMB, getNotePdfFileName } from "../../utils/formatUtils";
 import { detectClientHardwareProfile } from "../../utils/hardwareAdaptiveEngine";
 
 // Modular Tab Components
@@ -2895,13 +2895,18 @@ export default function AdminModal({
               onClick={(e) => e.stopPropagation()}
             >
               <VirtualPdfReader
-                url={api.getStreamUrl(previewNoteInAdmin.id)}
+                url={api.getStreamUrl(previewNoteInAdmin.id, getNotePdfFileName(previewNoteInAdmin))}
                 title={previewNoteInAdmin.title || previewNoteInAdmin.fileName || "Vault Document"}
                 subject={previewNoteInAdmin.subject || "Academic Vault"}
                 noteId={previewNoteInAdmin.id}
                 note={previewNoteInAdmin}
                 onClose={() => setPreviewNoteInAdmin(null)}
-                onDownload={() => window.open(api.getDownloadUrl(previewNoteInAdmin.id), "_blank")}
+                onDownload={() => {
+                  const pdfName = getNotePdfFileName(previewNoteInAdmin);
+                  api.downloadNoteWithProgress(previewNoteInAdmin.id, pdfName).catch(() => {
+                    window.open(api.getDownloadUrl(previewNoteInAdmin.id, pdfName), "_blank");
+                  });
+                }}
               />
             </div>
           </div>

@@ -8,7 +8,7 @@ import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
 import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
-import { formatFileSize } from "./utils/formatUtils";
+import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
@@ -800,8 +800,7 @@ export default function App() {
       return;
     }
 
-    const rawClean = (note.originalName || note.title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
-    const fileName = rawClean.toLowerCase().endsWith(".pdf") ? rawClean : `${rawClean}.pdf`;
+    const fileName = getNotePdfFileName(note);
 
     let fileHandle = null;
     if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
@@ -828,7 +827,7 @@ export default function App() {
       );
     } catch (err) {
       console.warn("Table download error, fallback to direct url:", err.message);
-      window.open(api.getDownloadUrl(note.id), "_blank");
+      window.open(api.getDownloadUrl(note.id, fileName), "_blank");
     } finally {
       setTableDownloads((prev) => {
         const copy = { ...prev };

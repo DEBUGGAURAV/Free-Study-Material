@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2 } from "lucide-react";
 import { api } from "../api";
 import { downloadFromPeerMesh, cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
-import { formatFileSize, formatMB } from "../utils/formatUtils";
+import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 
@@ -90,7 +90,8 @@ export default function NoteCard({
   const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
   const isNoteDownloadBlocked = Boolean(isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false");
 
-  const directDownloadUrl = api.getDownloadUrl(note?.id);
+  const fileName = getNotePdfFileName(note);
+  const directDownloadUrl = api.getDownloadUrl(note?.id, fileName);
 
   // 1. One-Tap Native Web Share API (WhatsApp/Telegram/System Sheet)
   const handleShareNote = async (e) => {
@@ -171,8 +172,7 @@ export default function NoteCard({
     // 🎓 Record student read/download activity for personalized 6 AM exam pre-fetch
     recordStudentNoteRead(note, currentUser);
 
-    const rawClean = (note.originalName || note.title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
-    const fileName = rawClean.toLowerCase().endsWith(".pdf") ? rawClean : `${rawClean}.pdf`;
+    const fileName = getNotePdfFileName(note);
     let fileHandle = null;
 
     // 🌟 Native File System Access API: Prompt Windows/Chrome "Save As" file explorer on user click

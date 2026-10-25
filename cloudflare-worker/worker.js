@@ -111,6 +111,18 @@ export default {
         headers.set('X-Edge-Location', edgeColo);
         applyCors(headers, request);
 
+        if (url.searchParams.get('download') === '1') {
+          const reqFilename = url.searchParams.get('filename') || url.searchParams.get('name');
+          if (reqFilename) {
+            headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(reqFilename)}"; filename*=UTF-8''${encodeURIComponent(reqFilename)}`);
+          } else {
+            const curDisp = headers.get('Content-Disposition') || '';
+            if (curDisp.startsWith('inline')) {
+              headers.set('Content-Disposition', curDisp.replace(/^inline/, 'attachment'));
+            }
+          }
+        }
+
         // Handle Byte-Range requests on Edge-cached buffer
         if (rangeHeader) {
           const arrayBuffer = await cachedResponse.arrayBuffer();
@@ -246,7 +258,7 @@ export default {
     if (url.pathname.startsWith('/stream')) {
       const parts = url.pathname.split('/').filter(Boolean);
       const fileId = parts[1] || url.searchParams.get('fileId');
-      const filename = url.searchParams.get('name') || 'document.pdf';
+      const filename = url.searchParams.get('filename') || url.searchParams.get('name') || 'document.pdf';
 
       if (!fileId) {
         return new Response('Missing fileId parameter', { 
@@ -311,7 +323,9 @@ export default {
         // Step C: Build Edge Cached Response (7-day caching)
         const headers = new Headers();
         headers.set('Content-Type', fileStreamRes.headers.get('Content-Type') || 'application/pdf');
-        headers.set('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+        const isDownload = url.searchParams.get('download') === '1';
+        const disposition = isDownload ? 'attachment' : 'inline';
+        headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
         headers.set('Cache-Control', 'public, max-age=604800, s-maxage=604800');
         headers.set('X-Real-Source', 'ACADEMIC_CLOUD_VAULT');
         headers.set('X-Source-Label', '☁️ Primary Academic Cloud Storage (Encrypted Vault)');

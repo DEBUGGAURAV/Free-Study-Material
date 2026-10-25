@@ -37,3 +37,41 @@ export function formatMB(bytes) {
   return mb < 0.01 ? "0.01" : mb.toFixed(2);
 }
 
+/**
+ * Resolves the accurate, user-expected PDF download file name from note metadata.
+ * Strips illegal characters and guarantees the .pdf extension.
+ */
+export function getNotePdfFileName(note) {
+  if (!note) return "Free_Study_Material.pdf";
+  const genericNames = [
+    "blob", "blob.pdf", "document", "document.pdf", "file", "file.pdf",
+    "stream", "stream.pdf", "download", "download.pdf", "null", "undefined",
+    "untitled", "untitled.pdf"
+  ];
+
+  let candidate = "";
+  const orig = (note.originalName || note.fileName || "").trim();
+  const origLower = orig.toLowerCase();
+  const title = (note.title || "").trim();
+  const titleLower = title.toLowerCase();
+
+  // Prefer originalName if valid and not generic
+  if (orig && !genericNames.includes(origLower)) {
+    candidate = orig;
+  } else if (title && !genericNames.includes(titleLower)) {
+    candidate = title;
+  } else if (note.subject && note.subject !== "General Academic") {
+    candidate = `${note.subject}_Notes`;
+  } else {
+    candidate = "Free_Study_Material";
+  }
+
+  // Remove illegal filesystem characters across Windows/Linux/Mac
+  let clean = candidate.replace(/[/\\?%*:|"<>]/g, "_").replace(/\s+/g, " ").trim();
+  if (!clean.toLowerCase().endsWith(".pdf")) {
+    clean = `${clean}.pdf`;
+  }
+  return clean;
+}
+
+

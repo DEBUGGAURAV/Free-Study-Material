@@ -24,6 +24,11 @@ const pendingPasswordResets = new Map();
 // Key: Telegram chat_id -> { action, mobile, email, expiresAt }
 const userBotStates = new Map();
 
+// 🛡️ Zero-Duplicate & Anti-Double-Dispatch Protection Engine
+const processedUpdateIds = new Set();
+const recentDetailsSentTimestamps = new Map(); // `${chatId}_${token}` -> timestamp
+const recentOtpSentTimestamps = new Map();     // `${chatId}_${token}` -> timestamp
+
 const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 
@@ -563,6 +568,16 @@ async function sendTelegramDirect(chatId, text, replyMarkup = null) {
  * Dispatches Registration Passcode to user's Telegram chat
  */
 async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
+  if (!record) return;
+  const otpKey = `${chatId}_${record.regToken || record.mobile}`;
+  const lastOtp = recentOtpSentTimestamps.get(otpKey) || (record.otpDispatchedAt || 0);
+  if (Date.now() - lastOtp < 15000) {
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Registration OTP dispatch for ${otpKey}`);
+    return;
+  }
+  recentOtpSentTimestamps.set(otpKey, Date.now());
+  record.otpDispatchedAt = Date.now();
+
   const userObj = tgUser || {};
   const tgFullName = [userObj.first_name, userObj.last_name].filter(Boolean).join(" ");
   const tgUsername = userObj.username ? `@${userObj.username}` : "";
@@ -664,6 +679,15 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
  */
 async function dispatchPasswordResetOtp(chatId, record) {
   if (!record) return;
+  const resetKey = `${chatId}_${record.resetToken || record.mobile}`;
+  const lastReset = recentOtpSentTimestamps.get(resetKey) || (record.otpDispatchedAt || 0);
+  if (Date.now() - lastReset < 15000) {
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Password Reset OTP dispatch for ${resetKey}`);
+    return;
+  }
+  recentOtpSentTimestamps.set(resetKey, Date.now());
+  record.otpDispatchedAt = Date.now();
+
   record.tgChatId = chatId;
   record.phoneVerified = true;
   record.verified = true;
@@ -775,6 +799,15 @@ async function startSecurityBotPoller() {
 
       for (const update of data.result) {
         securityPollerOffset = update.update_id + 1;
+        if (processedUpdateIds.has(update.update_id)) {
+          continue;
+        }
+        processedUpdateIds.add(update.update_id);
+        if (processedUpdateIds.size > 2000) {
+          const firstItem = processedUpdateIds.values().next().value;
+          processedUpdateIds.delete(firstItem);
+        }
+
         const msg = update.message;
         if (!msg || !msg.from) continue;
 
@@ -849,6 +882,17 @@ async function startSecurityBotPoller() {
           if (param.startsWith("reg_")) {
             const regRecord = await getPendingRegistration(param);
             if (regRecord) {
+              const detailsKey = `${chatId}_${regRecord.regToken || param}`;
+              const lastDetails = recentDetailsSentTimestamps.get(detailsKey) || (regRecord.detailsSentAt || 0);
+              if (Date.now() - lastDetails < 12000) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey}`);
+                continue;
+              }
+              recentDetailsSentTimestamps.set(detailsKey, Date.now());
+              regRecord.detailsSentAt = Date.now();
+              storeRegistrationInRam(regRecord);
+              saveVerificationToFirestore("reg", regRecord).catch(() => {});
+
               userBotStates.set(chatId, {
                 action: "waiting_verified_contact_reg",
                 regRecord,
@@ -897,6 +941,17 @@ async function startSecurityBotPoller() {
           if (param.startsWith("reset_")) {
             const resetRecord = await getPendingReset(param);
             if (resetRecord) {
+              const resetDetailsKey = `${chatId}_${resetRecord.resetToken || param}`;
+              const lastResetDetails = recentDetailsSentTimestamps.get(resetDetailsKey) || (resetRecord.detailsSentAt || 0);
+              if (Date.now() - lastResetDetails < 12000) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey}`);
+                continue;
+              }
+              recentDetailsSentTimestamps.set(resetDetailsKey, Date.now());
+              resetRecord.detailsSentAt = Date.now();
+              storeResetInRam(resetRecord);
+              saveVerificationToFirestore("reset", resetRecord).catch(() => {});
+
               userBotStates.set(chatId, {
                 action: "waiting_verified_contact_reset",
                 resetRecord,

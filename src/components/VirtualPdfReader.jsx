@@ -45,6 +45,7 @@ import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingl
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders } from "../utils/cdnFailover";
+import { getNotePdfFileName } from "../utils/formatUtils";
 
 // Setup PDF.js worker
 if (typeof window !== "undefined") {
@@ -707,8 +708,7 @@ export default function VirtualPdfReader({
     }
     if (isDownloadingPdf) return;
 
-    const rawClean = (note?.originalName || title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
-    const fileName = rawClean.toLowerCase().endsWith(".pdf") ? rawClean : `${rawClean}.pdf`;
+    const fileName = getNotePdfFileName(note || { title, id: noteId });
 
     let fileHandle = null;
     if (typeof window !== "undefined" && "showSaveFilePicker" in window) {

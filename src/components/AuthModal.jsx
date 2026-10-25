@@ -269,6 +269,32 @@ export default function AuthModal({
     onClose();
   };
 
+  const handleRegistrationSuccess = (authenticatedUser) => {
+    if (!authenticatedUser) {
+      onClose();
+      return;
+    }
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("vault_last_active", String(Date.now()));
+      localStorage.setItem("academic_vault_login_pref", "password");
+    }
+
+    // Always ask user if they want to apply Passkey on this device (Google, Telegram Bot, or Email)
+    if (supportsPasskey && !authenticatedUser.hasPasskey) {
+      setPostRegUser(authenticatedUser);
+      setShowPostRegPasskeyPrompt(true);
+      setError(null);
+      setFieldErrors({});
+      setSuccessMsg(null);
+    } else {
+      // If passkey is not supported or already setup, immediately authenticate & land on notes page!
+      if (onAuthSuccess) {
+        onAuthSuccess(authenticatedUser);
+      }
+      onClose();
+    }
+  };
+
   // Forgot Password State
   const [forgotMode, setForgotMode] = useState("telebot"); // "telebot" | "email"
   const [forgotMobile, setForgotMobile] = useState("");
@@ -644,20 +670,8 @@ export default function AuthModal({
 
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("vault_last_active", String(Date.now()));
-          localStorage.setItem("academic_vault_login_pref", "password");
-        }
         setSuccessMsg("Profile completed! Welcome to Academic Vault.");
-        if (onAuthSuccess) {
-          onAuthSuccess(authenticatedUser);
-        }
-        onClose();
-        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
-          }, 600);
-        }
+        handleRegistrationSuccess(authenticatedUser);
       } else {
         onClose();
       }
@@ -908,24 +922,15 @@ export default function AuthModal({
         mobile: mobile.trim(),
         email: email.trim().toLowerCase(),
         otp: regTgOtpCode.trim(),
+        password: signUpPassword,
+        name: name.trim(),
+        college: college.trim(),
+        year: year.trim(),
       });
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("vault_last_active", String(Date.now()));
-          localStorage.setItem("academic_vault_login_pref", "password");
-        }
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        // Immediately authenticate and close modal to land student directly on Notes Download page!
-        if (onAuthSuccess) {
-          onAuthSuccess(authenticatedUser);
-        }
-        onClose();
-        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
-          }, 600);
-        }
+        handleRegistrationSuccess(authenticatedUser);
       } else {
         onClose();
       }
@@ -1005,21 +1010,8 @@ export default function AuthModal({
       const res = await api.verifyRegisterOtp(email.trim().toLowerCase(), signUpOtpCode.trim());
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("vault_last_active", String(Date.now()));
-          localStorage.setItem("academic_vault_login_pref", "password");
-        }
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        // Immediately authenticate and close modal to land student directly on Notes Download page!
-        if (onAuthSuccess) {
-          onAuthSuccess(authenticatedUser);
-        }
-        onClose();
-        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
-          setTimeout(() => {
-            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
-          }, 600);
-        }
+        handleRegistrationSuccess(authenticatedUser);
       } else {
         onClose();
       }

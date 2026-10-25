@@ -494,15 +494,21 @@ export const api = {
   getDownloadUrl: (id, fileName = null) => {
     const token = getAuthToken();
     const tokenParam = token ? `token=${token}&` : "";
-    const nameParam = fileName ? `&filename=${encodeURIComponent(fileName)}` : "";
-    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}download=1${nameParam}`;
+    let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
+    if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
+    const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+    const nameParam = cleanName ? `&filename=${encodeURIComponent(cleanName)}` : "";
+    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}download=1${nameParam}`;
   },
 
   getStreamUrl: (id, fileName = null) => {
     const token = getAuthToken();
     const tokenParam = token ? `token=${token}&` : "";
-    const nameParam = fileName ? `&filename=${encodeURIComponent(fileName)}` : "";
-    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}${nameParam}`;
+    let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
+    if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
+    const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+    const nameParam = cleanName ? `&filename=${encodeURIComponent(cleanName)}` : "";
+    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}${nameParam}`;
   },
 
   updateNote: async (id, noteData) => {
@@ -601,7 +607,7 @@ export const api = {
     let prevTime = startTime;
 
     // Resilient Multi-Tier CDN auto-failover fetch (Zero-Downtime Guarantee)
-    const res = await fetchWithCdnFailover(id, { signal, isDownload: true, token });
+    const res = await fetchWithCdnFailover(id, { signal, isDownload: true, token, fileName });
     const contentType = res.headers.get("Content-Type") || "";
     if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
       let errMessage = `Document is unavailable (${res.status})`;
@@ -683,6 +689,29 @@ export const api = {
     // Convert streamed chunks into downloadable blob
     const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "application/pdf" });
 
+    // 🌟 Determine precise PDF file name from parameter or server Content-Disposition header
+    let finalFileName = (fileName || "").trim();
+    if (!finalFileName) {
+      const disposition = res.headers.get("Content-Disposition");
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match && utf8Match[1]) {
+          try { finalFileName = decodeURIComponent(utf8Match[1]); } catch (_) {}
+        }
+        if (!finalFileName) {
+          const normalMatch = disposition.match(/filename="?([^";]+)"?/i);
+          if (normalMatch && normalMatch[1]) {
+            finalFileName = normalMatch[1].trim();
+          }
+        }
+      }
+    }
+    if (!finalFileName) {
+      finalFileName = "Free_Study_Material.pdf";
+    }
+    finalFileName = finalFileName.replace(/[/\\?%*:|"<>]/g, "_").trim();
+    if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
+
     // 🌟 Native File System Access API: Save directly into student's chosen folder
     if (fileHandle) {
       try {
@@ -695,11 +724,11 @@ export const api = {
       }
     }
 
-    // Standard fallback download via anchor tag
+    // Standard fallback download via anchor tag (Local blob: URL ensures browsers honor a.download name)
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = downloadUrl;
-    a.download = fileName || "Free_Study_Material.pdf";
+    a.download = finalFileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

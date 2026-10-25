@@ -108,16 +108,20 @@ export function parseSourceFromHeaders(headers) {
  * @param {string} ticket (optional ephemeral single-use 60s ticket)
  * @returns {string} streamUrl
  */
-export function getSmartStreamUrl(noteId, ticket = null) {
+export function getSmartStreamUrl(noteId, ticket = null, fileName = null) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
   const primaryEndpoint = (!isLocal && CF_WORKER) ? CF_WORKER : localOrigin;
   const base = primaryEndpoint || CDN_ENDPOINTS[activeCdnIndex] || "";
   const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+  let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
+  if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
+  const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
   const params = [];
   if (ticket) params.push(`ticket=${encodeURIComponent(ticket)}`);
   if (token) params.push(`token=${encodeURIComponent(token)}`);
+  if (cleanName) params.push(`filename=${encodeURIComponent(cleanName)}`);
   const query = params.length > 0 ? `?${params.join("&")}` : "";
-  return `${base}/api/notes/${noteId}/stream.pdf${query}`;
+  return `${base}/api/notes/${noteId}/${pathSegment}${query}`;
 }
 
 /**
@@ -131,10 +135,14 @@ export function getSmartStreamUrl(noteId, ticket = null) {
 export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwitch = () => {}) {
   const isDownload = Boolean(fetchOptions.isDownload);
   const token = fetchOptions.token || (typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "");
+  let cleanName = (fetchOptions.fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
+  if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
+  const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
   const params = [];
   if (isDownload) params.push("download=1");
   if (fetchOptions.ticket) params.push(`ticket=${encodeURIComponent(fetchOptions.ticket)}`);
   if (token) params.push(`token=${encodeURIComponent(token)}`);
+  if (cleanName) params.push(`filename=${encodeURIComponent(cleanName)}`);
   const query = params.length > 0 ? `?${params.join("&")}` : "";
 
   const baseHeaders = {
@@ -144,7 +152,7 @@ export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwit
 
   for (let i = 0; i < CDN_ENDPOINTS.length; i++) {
     const candidateBase = CDN_ENDPOINTS[(activeCdnIndex + i) % CDN_ENDPOINTS.length];
-    const candidateUrl = `${candidateBase}/api/notes/${noteId}/stream.pdf${query}`;
+    const candidateUrl = `${candidateBase}/api/notes/${noteId}/${pathSegment}${query}`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second timeout guard

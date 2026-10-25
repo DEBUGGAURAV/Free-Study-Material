@@ -2,6 +2,7 @@ import React from "react";
 import VirtualPdfReader from "./VirtualPdfReader";
 import { api } from "../api";
 import { getSmartStreamUrl } from "../utils/cdnFailover";
+import { getNotePdfFileName } from "../utils/formatUtils";
 
 export default function PreviewModal({
   note,
@@ -22,27 +23,25 @@ export default function PreviewModal({
   const isBlocked = Boolean(!allowNotesDownload || allowNotesDownload === "false" || isSingleNoteDisabled);
   const effectiveReason = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Download for this specific note has been disabled by the administrator. You can still read and study all pages here in the Online Reader!" : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
 
+  const finalFileName = getNotePdfFileName(note);
+
   // Stream through Cloudflare Global Edge CDN with resilient auto-failover (using httpOnly session cookie)
-  const streamUrl = getSmartStreamUrl(note.id);
-  const directDownloadUrl = api.getDownloadUrl(note.id);
+  const streamUrl = getSmartStreamUrl(note.id, null, finalFileName);
+  const directDownloadUrl = api.getDownloadUrl(note.id, finalFileName);
   const isPdf = (note.mimeType || "").includes("pdf") || (note.originalName || "").toLowerCase().endsWith(".pdf") || true;
 
   // Auto-transfer and live stream source transitions are managed inside VirtualPdfReader
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (isBlocked) {
       alert(effectiveReason);
       return;
     }
-    const rawName = (note.originalName || note.title || "Free_Study_Material").replace(/[/\\?%*:|"<>]/g, "_").trim();
-    const finalFileName = rawName.toLowerCase().endsWith(".pdf") ? rawName : `${rawName}.pdf`;
-    const downloadUrl = `${streamUrl}${streamUrl.includes("?") ? "&" : "?"}download=1&filename=${encodeURIComponent(finalFileName)}`;
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = finalFileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      await api.downloadNoteWithProgress(note.id, finalFileName);
+    } catch (err) {
+      window.open(api.getDownloadUrl(note.id, finalFileName), "_blank");
+    }
   };
 
   return (
