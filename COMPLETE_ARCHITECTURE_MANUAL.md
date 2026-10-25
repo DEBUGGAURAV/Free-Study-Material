@@ -74,7 +74,7 @@ flowchart TD
 
     subgraph TelegramTier["Telegram Automation Matrix (3 Dedicated Bots)"]
         SecBot["@fsm_security_otp_bot (Topics 2, 3, 5, 6, 7, 8, 55)"]
-        ChatBot["@fsm_chat_bot (Topics 31, 33, 35, 39, 114)"]
+        ChatBot["@fsm_chat_bot (Topics 1, 31, 33, 35, 114 & Admin Bot DM)"]
         HelpBot["@fsm_help_bot (Topics 1, 2 - Support Desk)"]
     end
 
@@ -353,7 +353,7 @@ Cached offline notes are managed and purged through four distinct channels:
 ## 13. Telegram Multi-Bot Ecosystem & Forum Matrix
 
 - **FSM Security Bot (`@fsm_security_otp_bot`)**: Handles Topics 2 (Registrations), 3 (Logins), 5 (Logouts), 6 (Account Dossiers — strictly zero chat data), 7 (Admin OTPs), 8 (Downloads), and 55 (Student OTPs).
-- **Chat Audit Bot (`@fsm_chat_bot`)**: Handles Topics 31 (Pod Forensics & 3-condition purges), 33 (Private Media Vault: PDF/IMG only), 35 (Public Chat Deleted & Tamper Logs), 39/1 (Live Public Chat Two-Way Sync), and 114 (Student Presence & Full Cascade Purge Reports).
+- **Chat Audit Bot (`@fsm_chat_bot`)**: Handles Topics 1 (Live Public Chat Two-Way Sync & Bot Control Center), 31 (Pod Forensics & 3-condition purges), 33 (Private Media Vault: PDF/IMG only), 35 (Public Chat Deleted & Tamper Logs), 114 (Student Presence & Full Cascade Purge Reports), and full two-way Admin Bot DM control.
 - **Support Desk Bot (`@fsm_help_bot`)**: Real-time two-way ticket synchronization across Topic 1 (Live Inquiries) and Topic 2 (Closed Resolutions).
 - **AI Exam Buddy ([`src/services/examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js))**: Daily 7:00 AM IST revision pulse and zero-CPU native Telegram quiz polls (`sendPoll`).
 
@@ -418,7 +418,7 @@ Tested using continuous virtual user concurrency pools across the Express HTTP p
 
 ### 16.1 Backend Core Services (`src/services/`)
 - [`accountPurgeService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/accountPurgeService.js): 7-day inactivity sweeper with admin immunity.
-- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit engine for topics 31, 33, 35, 39, and 114.
+- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit and bidirectional control engine for topics 1, 31, 33, 35, and 114 with full 1-on-1 Admin Bot DM control.
 - [`compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js) & [`pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js): WebAssembly `pdf-lib` worker thread compressor.
 - [`dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js): SHA-256 document deduplication engine.
 - [`emailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/emailService.js): Brevo SMTP & Telegram notices (topics 2, 3, 5, 6, 7, 8, 55).

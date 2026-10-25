@@ -27,21 +27,25 @@ let auditTopics = {
   tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
   forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "31").trim(),
   presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "114").trim(),
-  stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "39").trim(),
-  publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "39").trim(),
+  stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "1").trim(),
+  publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "1").trim(),
 };
 
 /**
  * ⚡ Topic 1 Public Chat Option:
- * When publicChat is configured as "1", all public messages, images, PDFs, and deleted message tamper alerts
- * are routed through Topic 1 (Telegram General Topic).
+ * Defaulted to "1" (General Topic) because Topic 39 does not belong to standard Telegram supergroups.
+ * When publicChat is "1", all public messages, images, PDFs, and deleted message tamper alerts
+ * are routed through Topic 1 (Telegram General Topic) or direct Bot DM.
  */
 function isTopic1PublicMode() {
-  return String(auditTopics.publicChat || "").trim() === "1";
+  const topic = String(auditTopics.publicChat || "").trim();
+  return !topic || topic === "1" || topic === "39";
 }
 
 function getTargetPublicChatTopic() {
-  return isTopic1PublicMode() ? "1" : (auditTopics.publicChat || "39").trim();
+  const topic = String(auditTopics.publicChat || "").trim();
+  if (!topic || topic === "39" || topic === "1") return "1";
+  return topic;
 }
 
 function getTargetPublicDeletedTopic() {
@@ -68,7 +72,7 @@ let chatBotSettings = {
   enableMediaVaultUpload: true,
   enableDeletedMessageAlerts: true,
   enablePublicChatSync: true,
-  enableAdminDmMirror: false, // 🛡️ Keep Admin DM clean: Do NOT dump public chat messages into 1-on-1 DM
+  enableAdminDmMirror: true, // 🛡️ Enabled: Gives Admin direct 1-on-1 Bot DM control over Public Chat
   chatRetentionDays: 7, // Delete messages older than X days
   privateRoomInactivityDays: 7, // Purge private rooms with no activity for 7 days
   adminId: activeAdminId || "",
@@ -113,9 +117,13 @@ async function initChatBotSettings() {
     if (doc.exists) {
       const data = doc.data() || {};
       const savedTopics = data.topics || {};
+      const cleanPublicChat = (savedTopics.publicChat && savedTopics.publicChat.trim() !== "39") ? savedTopics.publicChat.trim() : "1";
+      const cleanStealth = (savedTopics.stealth && savedTopics.stealth.trim() !== "39") ? savedTopics.stealth.trim() : "1";
+
       chatBotSettings = {
         ...chatBotSettings,
         ...data,
+        enableAdminDmMirror: data.enableAdminDmMirror !== undefined ? data.enableAdminDmMirror : true,
         supergroupId: (data.supergroupId && data.supergroupId.trim()) || supergroupId || "",
         topics: {
           podAudits: (savedTopics.podAudits && savedTopics.podAudits.trim()) || "31",
@@ -124,8 +132,8 @@ async function initChatBotSettings() {
           tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
           forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "31",
           presence: (savedTopics.presence && savedTopics.presence.trim()) || "114",
-          stealth: (savedTopics.stealth && savedTopics.stealth.trim()) || "39",
-          publicChat: (savedTopics.publicChat && savedTopics.publicChat.trim()) || "39",
+          stealth: cleanStealth,
+          publicChat: cleanPublicChat,
         },
       };
       if (chatBotSettings.adminId) {
@@ -133,9 +141,18 @@ async function initChatBotSettings() {
       }
       supergroupId = chatBotSettings.supergroupId;
       auditTopics = { ...chatBotSettings.topics };
+
+      // If old topic 39 was persisted in Firestore, auto-correct it to Topic 1
+      if (savedTopics.publicChat === "39" || savedTopics.stealth === "39") {
+        dbRef.collection("settings").doc("chat_bot").set({
+          topics: { publicChat: "1", stealth: "1" }
+        }, { merge: true }).catch(() => {});
+      }
+
       console.log("[CHAT-AUDIT-BOT] ⚙️ Loaded settings from Firestore doc settings/chat_bot:", {
         supergroupId,
         topics: auditTopics,
+        adminDmMirror: chatBotSettings.enableAdminDmMirror,
       });
     } else {
       await dbRef.collection("settings").doc("chat_bot").set(chatBotSettings, { merge: true });
@@ -200,7 +217,7 @@ async function updateChatBotSettings(updates = {}) {
 }
 
 /**
- * Helper to call Telegram Bot API
+ * Helper to call Telegram Bot API with automatic Topic fallback
  */
 async function callTelegram(method, body = {}) {
   if (!BOT_TOKEN) return { ok: false, error: "BOT_TOKEN not configured" };
@@ -210,7 +227,38 @@ async function callTelegram(method, body = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    return await res.json();
+    const data = await res.json();
+    if (!data.ok && body.message_thread_id) {
+      const desc = String(data.description || "").toLowerCase();
+      if (desc.includes("thread not found") || desc.includes("message thread") || desc.includes("thread_id")) {
+        console.warn(`[CHAT-AUDIT-BOT] Topic thread ${body.message_thread_id} not found in chat ${body.chat_id}. Retrying with General Topic (1)...`);
+        const fallbackBody = { ...body };
+        if (String(fallbackBody.message_thread_id) !== "1") {
+          fallbackBody.message_thread_id = 1;
+        } else {
+          delete fallbackBody.message_thread_id;
+        }
+        const retryRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(fallbackBody),
+        });
+        const retryData = await retryRes.json();
+        if (retryData.ok) {
+          return retryData;
+        }
+        if (fallbackBody.message_thread_id) {
+          delete fallbackBody.message_thread_id;
+          const rootRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(fallbackBody),
+          });
+          return await rootRes.json();
+        }
+      }
+    }
+    return data;
   } catch (err) {
     console.warn(`[CHAT-AUDIT-BOT] API error on ${method}:`, err.message);
     return { ok: false, error: err.message };
@@ -1215,11 +1263,16 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
       chatId: currentSupergroupId,
       threadId: getTargetPublicChatTopic(),
     });
-  } else if (effectiveAdminId) {
-    targetChats.push({
-      chatId: effectiveAdminId,
-      threadId: null,
-    });
+  }
+
+  // Dual-delivery & Bot Control: Mirror public messages to Admin Bot DM so Admin has full 1-on-1 supervision & control
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+      });
+    }
   }
 
   if (targetChats.length === 0) return false;
@@ -1259,12 +1312,36 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          let resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
-          const photoRes = await resp.json().catch(() => ({}));
+          let photoRes = await resp.json().catch(() => ({}));
+
+          // Fallback if threadId was rejected
+          if (!photoRes.ok && threadId) {
+            const desc = String(photoRes.description || "").toLowerCase();
+            if (desc.includes("thread not found") || desc.includes("message thread")) {
+              const retryBoundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+              let retryHeader = `--${retryBoundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
+              const retryPayload = Buffer.concat([
+                Buffer.from(retryHeader),
+                fileBuffer,
+                Buffer.from(`\r\n--${retryBoundary}--\r\n`),
+              ]);
+              resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+                method: "POST",
+                headers: { "Content-Type": `multipart/form-data; boundary=${retryBoundary}` },
+                body: retryPayload,
+              });
+              photoRes = await resp.json().catch(() => ({}));
+            }
+          }
+
           if (photoRes.ok && photoRes.result?.message_id) {
             const teleMsgId = photoRes.result.message_id;
             message.telegramMsgId = teleMsgId;
@@ -1322,12 +1399,36 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+          let resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
-          const docRes = await resp.json().catch(() => ({}));
+          let docRes = await resp.json().catch(() => ({}));
+
+          // Fallback if threadId was rejected
+          if (!docRes.ok && threadId) {
+            const desc = String(docRes.description || "").toLowerCase();
+            if (desc.includes("thread not found") || desc.includes("message thread")) {
+              const retryBoundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+              let retryHeader = `--${retryBoundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+              retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+              const retryPayload = Buffer.concat([
+                Buffer.from(retryHeader),
+                fileBuffer,
+                Buffer.from(`\r\n--${retryBoundary}--\r\n`),
+              ]);
+              resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+                method: "POST",
+                headers: { "Content-Type": `multipart/form-data; boundary=${retryBoundary}` },
+                body: retryPayload,
+              });
+              docRes = await resp.json().catch(() => ({}));
+            }
+          }
+
           if (docRes.ok && docRes.result?.message_id) {
             const teleMsgId = docRes.result.message_id;
             message.telegramMsgId = teleMsgId;
@@ -1388,7 +1489,7 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
-  // 1. Edit the mirrored message in Telegram Topic 39 in-place
+  // 1. Edit the mirrored message in Telegram Topic 1 in-place
   const teleMsgId = webToTelegramMsgMap.get(String(messageId));
   if (teleMsgId && currentSupergroupId) {
     try {
@@ -1455,7 +1556,7 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
-  // 1. Delete or clear the mirrored message in Telegram Topic 39
+  // 1. Delete or clear the mirrored message in Telegram Topic 1
   const teleMsgId = webToTelegramMsgMap.get(String(messageId));
   if (teleMsgId && currentSupergroupId) {
     try {
@@ -2067,7 +2168,7 @@ async function dispatchActiveStudentsReportToTelegram() {
 
 /**
  * Dispatches Complete Chat Purge / Clear History Alert
- * (Topic: deletedMessages / 35 and publicChat / 39)
+ * (Topic: deletedMessages / 35 and publicChat / 1)
  */
 async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
@@ -2084,7 +2185,7 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
       if (!isTopic1PublicMode() && auditTopics.publicChat) {
         targetChats.push({
           chatId: currentSupergroupId,
-          threadId: auditTopics.publicChat || "39",
+          threadId: auditTopics.publicChat || "1",
         });
       }
     } else {

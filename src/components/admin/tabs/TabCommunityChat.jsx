@@ -898,42 +898,20 @@ export default function TabCommunityChat(props) {
                               />
                             </div>
                             <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: "6px", marginTop: "2px" }}>
-                              <span style={{ color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "var(--text-dim)", fontSize: "0.7rem", fontWeight: 700 }}>
+                              <span style={{ color: "#4ade80", fontSize: "0.7rem", fontWeight: 700 }}>
                                 Public Chat Topic:
                               </span>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <input
                                   type="text"
-                                  value={chatBotSettings.topics?.publicChat || "39"}
+                                  value={chatBotSettings.topics?.publicChat || "1"}
                                   onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: e.target.value } }))}
-                                  placeholder="39 or 1"
-                                  style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: chatBotSettings.topics?.publicChat === "1" ? "1.5px solid #4ade80" : "1px solid rgba(255,255,255,0.15)", color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#fff", fontSize: "0.72rem", textAlign: "center", fontWeight: 800 }}
+                                  placeholder="1"
+                                  style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1.5px solid #4ade80", color: "#4ade80", fontSize: "0.72rem", textAlign: "center", fontWeight: 800 }}
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextVal = chatBotSettings.topics?.publicChat === "1" ? "39" : "1";
-                                    setChatBotSettings((prev) => ({
-                                      ...prev,
-                                      topics: {
-                                        ...prev.topics,
-                                        publicChat: nextVal,
-                                      },
-                                    }));
-                                  }}
-                                  style={{
-                                    padding: "2px 6px",
-                                    fontSize: "0.66rem",
-                                    fontWeight: 700,
-                                    borderRadius: "4px",
-                                    background: chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.2)" : "rgba(6, 182, 212, 0.2)",
-                                    color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#38bdf8",
-                                    border: `1px solid ${chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.4)" : "rgba(6, 182, 212, 0.4)"}`,
-                                    cursor: "pointer",
-                                  }}
-                                >
-                                  {chatBotSettings.topics?.publicChat === "1" ? "Reset (39)" : "⚡ Use Topic 1"}
-                                </button>
+                                <span style={{ fontSize: "0.68rem", color: "#4ade80", fontWeight: 700 }}>
+                                  (General Topic 1)
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -945,17 +923,13 @@ export default function TabCommunityChat(props) {
                               padding: "6px 8px",
                               borderRadius: "6px",
                               fontSize: "0.68rem",
-                              background: chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                              border: `1px solid ${chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.3)" : "rgba(255, 255, 255, 0.06)"}`,
-                              color: chatBotSettings.topics?.publicChat === "1" ? "#86efac" : "var(--text-dim)",
+                              background: "rgba(34, 197, 94, 0.12)",
+                              border: "1px solid rgba(34, 197, 94, 0.3)",
+                              color: "#86efac",
                               lineHeight: 1.35,
                             }}
                           >
-                            {chatBotSettings.topics?.publicChat === "1" ? (
-                              <span>🟢 <strong>Topic 1 Unified Mode Active:</strong> Public chat messages, deleted messages &amp; media route directly through Topic 1!</span>
-                            ) : (
-                              <span>ℹ️ <strong>Multi-Topic Active:</strong> Public deleted msgs go to Topic 35, media in 39, sessions/purge in 114. Set to <strong>1</strong> to merge public chat into Topic 1.</span>
-                            )}
+                            <span>🟢 <strong>Topic 1 &amp; Bot DM Control Active:</strong> Public chat syncs via Topic 1 &amp; 1-on-1 Admin Bot DM with real-time bidirectional control!</span>
                           </div>
                         </div>
                       </div>

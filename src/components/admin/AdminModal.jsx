@@ -356,7 +356,7 @@ export default function AdminModal({
     enableMediaVaultUpload: true,
     enableDeletedMessageAlerts: true,
     enablePublicChatSync: true,
-    enableAdminDmMirror: false,
+    enableAdminDmMirror: true,
     chatRetentionDays: 7,
     privateRoomInactivityDays: 7,
     supergroupId: "",
@@ -365,7 +365,7 @@ export default function AdminModal({
       mediaVault: "33",
       deletedMessages: "35",
       presence: "114",
-      publicChat: "39",
+      publicChat: "1",
     },
   });
   const [chatTelemetry, setChatTelemetry] = useState(null);
