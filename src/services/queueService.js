@@ -233,7 +233,7 @@ function enqueueUpload(task) {
         
         // Instant completion via deduplication
         if (db) {
-          await db.collection("notes").doc(noteId).update({
+          const dupUpdates = {
             status: "ready",
             telegramMessageId: duplicate.telegramMessageId || null,
             telegramFileId: duplicate.telegramFileId || null,
@@ -247,7 +247,16 @@ function enqueueUpload(task) {
             thumbnailUrl: duplicate.thumbnailUrl || null,
             downloadUrl: `/api/notes/${noteId}/stream`,
             updatedAt: new Date().toISOString(),
-          });
+          };
+          await db.collection("notes").doc(noteId).update(dupUpdates);
+
+          try {
+            const { upsertNoteInCache } = require("./tursoNotesCacheService");
+            const { upsertNoteToTurso } = require("./tursoService");
+            const fullDupData = { id: noteId, ...meta, ...dupUpdates };
+            upsertNoteInCache(fullDupData).catch(() => {});
+            upsertNoteToTurso(fullDupData).catch(() => {});
+          } catch (_) {}
         }
 
         // Clean up temp file immediately
@@ -395,7 +404,7 @@ function enqueueUpload(task) {
       });
 
       if (db) {
-        await db.collection("notes").doc(noteId).update({
+        const readyUpdates = {
           status: "ready",
           telegramMessageId: uploadResult.messageId,
           telegramDocumentId: uploadResult.documentId || null,
@@ -409,12 +418,22 @@ function enqueueUpload(task) {
           hasOcr: Boolean(ocrText && ocrText.length > 0),
           downloadUrl: `/api/notes/${noteId}/stream`,
           updatedAt: new Date().toISOString(),
-        });
+        };
+
+        await db.collection("notes").doc(noteId).update(readyUpdates);
+
+        try {
+          const { upsertNoteInCache } = require("./tursoNotesCacheService");
+          const { upsertNoteToTurso } = require("./tursoService");
+          const fullReadyData = { id: noteId, ...meta, ...readyUpdates };
+          upsertNoteInCache(fullReadyData).catch(() => {});
+          upsertNoteToTurso(fullReadyData).catch(() => {});
+        } catch (_) {}
 
         try {
           const { recordSyncEvent } = require("../telegram/syncTracker");
           recordSyncEvent({
-            trigger: `Website Upload: "${title}"`,
+            trigger: `Website Upload: "${meta?.title || originalName || noteId}"`,
             details: "Uploaded to web and synchronized to Telegram Vault",
             importedCount: 1,
           });

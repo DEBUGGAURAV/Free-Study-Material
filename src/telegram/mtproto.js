@@ -55,10 +55,24 @@ function purgeNoteFromWebAndCdn(noteId) {
     invalidateAllCache();
   } catch (_) {}
 
-  // 3. Purge from Turso LibSQL Edge Database
+  // 3. Purge from Turso LibSQL Edge Database & Invalidate Turso Memory Cache
+  try {
+    const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+    if (typeof removeNoteFromCache === "function") {
+      removeNoteFromCache(noteId).catch(() => {});
+    }
+    if (typeof invalidateTursoNotesCache === "function") {
+      invalidateTursoNotesCache();
+    }
+  } catch (_) {}
+
   try {
     const { tursoClient } = require("../services/tursoService");
     if (tursoClient) {
+      tursoClient.execute({
+        sql: "DELETE FROM notes_cache WHERE id = ?",
+        args: [noteId],
+      }).catch(() => {});
       tursoClient.execute({
         sql: "DELETE FROM notes WHERE id = ?",
         args: [noteId],
@@ -694,6 +708,26 @@ async function syncTelegramChannel() {
         const vMsg = verifiedMsgs[j];
         if (!vMsg || !vMsg.media || !vMsg.media.document) {
           console.log(`[MTProto RECONCILE] Purging orphaned note "${batchNotes[j].title}" (Msg ID ${batchNotes[j].msgId})`);
+          try {
+            const curDoc = await db.collection("notes").doc(batchNotes[j].docId).get();
+            const noteData = curDoc.exists ? curDoc.data() : { title: batchNotes[j].title, telegramMessageId: batchNotes[j].msgId };
+            await db.collection("deleted_records").doc(`notes_${batchNotes[j].docId}`).set({
+              ...noteData,
+              originalId: batchNotes[j].docId,
+              collectionName: "notes",
+              typeLabel: "Note",
+              title: noteData.title || batchNotes[j].title || "Study Material",
+              archivedAt: new Date().toISOString(),
+              archivedBy: "Telegram Two-Way Sync Deletion",
+              reason: "Document deleted from Telegram academic storage channel",
+            }).catch(() => {});
+            await db.collection("deleted_notes").doc(batchNotes[j].docId).set({
+              ...noteData,
+              archivedAt: new Date().toISOString(),
+              archivedBy: "Telegram Two-Way Sync Deletion",
+              reason: "Document deleted from Telegram academic storage channel",
+            }).catch(() => {});
+          } catch (_) {}
           await db.collection("notes").doc(batchNotes[j].docId).delete();
           purgeNoteFromWebAndCdn(batchNotes[j].docId);
           purgedCount++;
@@ -756,7 +790,7 @@ async function syncTelegramChannel() {
         const nowIso = now.toISOString();
         const nowMs = now.getTime();
 
-        await noteRef.set({
+        const newSyncedNote = {
           id: noteRef.id,
           title,
           subject,
@@ -783,7 +817,20 @@ async function syncTelegramChannel() {
           createdAt: nowIso,
           updatedAt: nowIso,
           _sortTimestamp: nowMs,
-        });
+        };
+
+        await noteRef.set(newSyncedNote);
+
+        try {
+          const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+          const { upsertNoteToTurso } = require("../services/tursoService");
+          if (typeof upsertNoteInCache === "function") {
+            upsertNoteInCache(newSyncedNote).catch(() => {});
+          }
+          if (typeof upsertNoteToTurso === "function") {
+            upsertNoteToTurso(newSyncedNote).catch(() => {});
+          }
+        } catch (_) {}
 
         knownMsgIds.add(msgId);
         if (docIdStr) processingDocIds.add(docIdStr);
@@ -946,6 +993,9 @@ async function uploadToStorageChannel(filePath, caption = "", fileName = null, o
     workers: 16,
   });
 
+  if (message.id) processingMsgIds.add(Number(message.id));
+  if (message.media?.document?.id) processingDocIds.add(message.media.document.id.toString());
+
   return {
     messageId: message.id,
     channelId: targetChannel,
@@ -971,7 +1021,10 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
   const targetChannel = (process.env.TELEGRAM_STORAGE_CHAT_ID || storageChatId || "").trim();
   const messages = await c.getMessages(targetChannel, { ids: [Number(messageId)] });
   if (!messages || !messages[0] || !messages[0].media || !messages[0].media.document) {
-    throw new Error(`Document not found for message ID ${messageId}`);
+    const err = new Error(`Document not found for message ID ${messageId}`);
+    err.isDeleted = true;
+    err.code = "TELEGRAM_MESSAGE_DELETED";
+    throw err;
   }
 
   const doc = messages[0].media.document;
@@ -1063,7 +1116,10 @@ async function getDocumentBufferFromChannel(messageId) {
   const targetChannel = (process.env.TELEGRAM_STORAGE_CHAT_ID || storageChatId || "").trim();
   const messages = await c.getMessages(targetChannel, { ids: [Number(messageId)] });
   if (!messages || !messages[0] || !messages[0].media || !messages[0].media.document) {
-    throw new Error(`Document not found for message ID ${messageId}`);
+    const err = new Error(`Document not found for message ID ${messageId}`);
+    err.isDeleted = true;
+    err.code = "TELEGRAM_MESSAGE_DELETED";
+    throw err;
   }
 
   const doc = messages[0].media.document;
@@ -1152,29 +1208,29 @@ let autoSyncTimer = null;
 let isAutoSyncing = false;
 
 /**
- * 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync Engine
+ * 5-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync Engine
  * 1. Executes initial sync at boot.
- * 2. Runs lightweight 30-minute background sweep (saving maximum network & database quota).
+ * 2. Runs lightweight 5-minute background sweep (promptly detecting Telegram deletions).
  * 3. Catches real-time instant uploads and deletions as they happen.
  */
-function startAutoSyncWorker(intervalMs = 30 * 60 * 1000) {
+function startAutoSyncWorker(intervalMs = 5 * 60 * 1000) {
   if (autoSyncTimer) return;
-  console.log(`[MTProto AUTOSYNC] ⚡ 30-Minute Quota-Saver Auto-Sync active (Interval: ${intervalMs / 1000 / 60}m).`);
+  console.log(`[MTProto AUTOSYNC] ⚡ 5-Minute Two-Way Auto-Sync active (Interval: ${intervalMs / 1000 / 60}m).`);
 
   const runSync = async () => {
     if (isAutoSyncing) return;
     isAutoSyncing = true;
     try {
-      console.log("[MTProto AUTOSYNC] 🔄 Executing 30-minute periodic two-way sync cycle...");
+      console.log("[MTProto AUTOSYNC] 🔄 Executing 5-minute periodic two-way sync cycle...");
       await syncTelegramChannel();
       recordSyncEvent({
-        trigger: "30-Minute Quota-Saver Auto-Sync",
+        trigger: "5-Minute Two-Way Auto-Sync",
         details: "Auto-Sync Cycle Verified (Database & Telegram Online)",
       });
     } catch (e) {
       console.warn("[MTProto AUTOSYNC] Periodic sync notice:", e.message);
       recordSyncEvent({
-        trigger: "30-Min Periodic Heartbeat",
+        trigger: "5-Min Periodic Heartbeat",
         details: "Heartbeat Verified (Database & Telegram Online)",
       });
     } finally {
@@ -1185,7 +1241,7 @@ function startAutoSyncWorker(intervalMs = 30 * 60 * 1000) {
   // Run initial auto-sync after 4 seconds of startup to catch any offline changes
   setTimeout(runSync, 4000);
 
-  // 30-minute recurring quota-saving interval
+  // 5-minute recurring quota-saving interval
   autoSyncTimer = setInterval(runSync, intervalMs);
 }
 

@@ -6,7 +6,7 @@ import NoteCard from "./components/NoteCard";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
@@ -212,6 +212,21 @@ export default function App() {
   const [allowNotesDownload, setAllowNotesDownload] = useState(true);
   const [downloadDisabledReason, setDownloadDisabledReason] = useState("");
   const [tableDownloads, setTableDownloads] = useState({});
+
+  // 🔑 Non-blocking Post-Registration Passkey Consent Prompt (Never blocks Notes page!)
+  const [passkeyPromptUser, setPasskeyPromptUser] = useState(null);
+  const [passkeyPromptLoading, setPasskeyPromptLoading] = useState(false);
+  const [passkeyPromptSuccess, setPasskeyPromptSuccess] = useState(false);
+
+  useEffect(() => {
+    const handlePasskeyPrompt = (e) => {
+      if (e?.detail) {
+        setPasskeyPromptUser(e.detail);
+      }
+    };
+    window.addEventListener("fsm:prompt-passkey", handlePasskeyPrompt);
+    return () => window.removeEventListener("fsm:prompt-passkey", handlePasskeyPrompt);
+  }, []);
 
   // 🛡️ Inactivity Session Guardian Setting ("auto", 15, 30, 60, 0)
   const [inactivityTimeoutSetting, setInactivityTimeoutSetting] = useState("auto");
@@ -616,6 +631,18 @@ export default function App() {
     }
   };
 
+  const handleDeleteNoteFromState = (noteId) => {
+    if (!noteId) return;
+    setNotes((prevNotes) => {
+      const next = prevNotes.filter((n) => n.id !== noteId);
+      try {
+        safeStorage.setItem("fsm_cached_notes", JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+    setPreviewNote((prev) => (prev && prev.id === noteId ? null : prev));
+  };
+
   useEffect(() => {
     const handleNotesSynced = (e) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
@@ -634,8 +661,27 @@ export default function App() {
         setNotes(sorted);
       }
     };
+
+    const handleNoteDeleted = (e) => {
+      const { noteId } = e.detail || {};
+      if (noteId) {
+        setNotes((prevNotes) => {
+          const next = prevNotes.filter((n) => n.id !== noteId);
+          try {
+            safeStorage.setItem("fsm_cached_notes", JSON.stringify(next));
+          } catch (_) {}
+          return next;
+        });
+        setPreviewNote((prev) => (prev && prev.id === noteId ? null : prev));
+      }
+    };
+
     window.addEventListener("fsm:notes-synced", handleNotesSynced);
-    return () => window.removeEventListener("fsm:notes-synced", handleNotesSynced);
+    window.addEventListener("fsm:note-deleted", handleNoteDeleted);
+    return () => {
+      window.removeEventListener("fsm:notes-synced", handleNotesSynced);
+      window.removeEventListener("fsm:note-deleted", handleNoteDeleted);
+    };
   }, []);
 
   const fetchNotes = async (activeUser = null, forceBypass = false) => {
@@ -671,6 +717,12 @@ export default function App() {
         try {
           if (!searchTerm && (!selectedBranch || selectedBranch === "All") && (!selectedCourse || selectedCourse === "All Courses") && (!selectedYear || selectedYear === "All Years")) {
             safeStorage.setItem("fsm_cached_notes", JSON.stringify(sorted));
+          }
+        } catch (_) {}
+      } else {
+        try {
+          if (!searchTerm && (!selectedBranch || selectedBranch === "All") && (!selectedCourse || selectedCourse === "All Courses") && (!selectedYear || selectedYear === "All Years")) {
+            safeStorage.setItem("fsm_cached_notes", JSON.stringify([]));
           }
         } catch (_) {}
       }
@@ -1807,6 +1859,7 @@ export default function App() {
               }}
               notes={notes}
               onRefreshNotes={() => fetchNotes(null, true)}
+              onDeleteNote={handleDeleteNoteFromState}
               branches={branches}
               allowNotesDownload={allowNotesDownload}
               onToggleDownloadAllowed={(val, reason) => {
@@ -1842,6 +1895,7 @@ export default function App() {
             onAuthSuccess={(user) => {
               setAutoLogoutNotice(null);
               setCurrentUser(user);
+              setIsAuthOpen(false);
               safeStorage.setItem("vault_last_active", String(Date.now()));
               fetchNotes(user);
             }}
@@ -1988,6 +2042,129 @@ export default function App() {
         onCompleted={handleQueueCompleted}
         onDismiss={() => setActiveJob(null)}
       />
+
+      {/* 🔑 Non-blocking Post-Registration Passkey Consent Prompt (Student is ALREADY on Notes Page!) */}
+      {passkeyPromptUser && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "24px",
+            right: "24px",
+            maxWidth: "380px",
+            width: "calc(100% - 48px)",
+            background: "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.98))",
+            border: "1.5px solid rgba(56, 189, 248, 0.45)",
+            borderRadius: "14px",
+            padding: "16px 18px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.55), 0 0 20px rgba(56, 189, 248, 0.25)",
+            zIndex: 9999,
+            animation: "fadeIn 0.3s ease",
+            backdropFilter: "blur(12px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+            <div
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.25))",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              <Fingerprint size={22} color="#38bdf8" />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "#fff", marginBottom: "3px" }}>
+                Enable 1-Click Biometric Login?
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.4, marginBottom: "12px" }}>
+                Welcome, <strong>{passkeyPromptUser.name || "Scholar"}</strong>! Would you like to activate Passkey on this device to sign in instantly next time with <strong>Fingerprint</strong> or <strong>Face ID</strong>?
+              </div>
+              {passkeyPromptSuccess ? (
+                <div style={{ color: "#34d399", fontSize: "0.8rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                  <CheckCircle size={15} /> Passkey enrolled successfully!
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button
+                    type="button"
+                    disabled={passkeyPromptLoading}
+                    onClick={async () => {
+                      try {
+                        setPasskeyPromptLoading(true);
+                        const { registerDevicePasskey } = await import("./utils/passkeyClient");
+                        await registerDevicePasskey("", "registration");
+                        localStorage.setItem("academic_vault_has_passkey", "true");
+                        localStorage.setItem("academic_vault_login_pref", "passkey");
+                        setPasskeyPromptSuccess(true);
+                        setTimeout(() => setPasskeyPromptUser(null), 1800);
+                      } catch (err) {
+                        if (err.message && err.message.includes("cancelled")) {
+                          setPasskeyPromptUser(null);
+                        } else {
+                          alert(err.message || "Failed to set up passkey.");
+                          setPasskeyPromptUser(null);
+                        }
+                      } finally {
+                        setPasskeyPromptLoading(false);
+                      }
+                    }}
+                    style={{
+                      background: "linear-gradient(135deg, #0284c7, #38bdf8)",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "7px 14px",
+                      fontSize: "0.78rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    {passkeyPromptLoading ? "Waiting for Sensor..." : "⚡ Enable Passkey"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPasskeyPromptUser(null)}
+                    style={{
+                      background: "transparent",
+                      color: "var(--text-dim)",
+                      border: "none",
+                      padding: "7px 10px",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Skip
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setPasskeyPromptUser(null)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                padding: "2px",
+                display: "flex",
+              }}
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

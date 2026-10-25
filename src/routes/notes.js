@@ -11,7 +11,7 @@ const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel, getDocumentBufferFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
-const { getLastSyncState } = require("../telegram/syncTracker");
+const { getLastSyncState, recordSyncEvent } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 
 // In-Memory Edge CDN & RAM Buffer Cache for Instant 1ms Streaming (Max 100 items)
@@ -153,6 +153,85 @@ function purgeCdnDiskBuffer(noteId) {
   } catch (e) {
     console.warn("[CDN-DISK] Purge error:", e.message);
   }
+}
+
+async function purgeDeletedTelegramNote(noteId, noteTitle = "") {
+  if (!noteId) return;
+  console.log(`[TELEGRAM-PURGE] 🗑️ Auto-purging note "${noteTitle || noteId}" (${noteId}) because it was deleted from Telegram channel.`);
+  try {
+    if (db) {
+      const docSnap = await db.collection("notes").doc(noteId).get().catch(() => null);
+      if (docSnap && docSnap.exists) {
+        const noteData = docSnap.data();
+        await Promise.all([
+          db.collection("deleted_records").doc(`notes_${noteId}`).set({
+            ...noteData,
+            originalId: noteId,
+            collectionName: "notes",
+            typeLabel: "Note",
+            title: noteData.title || noteTitle || "Study Material",
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Storage Deletion Sync",
+            reason: "Document deleted from Telegram academic storage channel",
+          }).catch(() => {}),
+          db.collection("deleted_notes").doc(noteId).set({
+            ...noteData,
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Storage Deletion Sync",
+            reason: "Document deleted from Telegram academic storage channel",
+          }).catch(() => {}),
+          db.collection("notes").doc(noteId).delete().catch(() => {}),
+        ]);
+      }
+    }
+  } catch (e) {
+    console.warn("[TELEGRAM-PURGE] Firestore error:", e.message);
+  }
+
+  // Purge from Turso LibSQL Edge Cache
+  try {
+    const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+    if (typeof removeNoteFromCache === "function") {
+      await removeNoteFromCache(noteId);
+    }
+    if (typeof invalidateTursoNotesCache === "function") {
+      invalidateTursoNotesCache();
+    }
+  } catch (_) {}
+
+  try {
+    const { tursoClient } = require("../services/tursoService");
+    if (tursoClient) {
+      tursoClient.execute({ sql: "DELETE FROM notes_cache WHERE id = ?", args: [noteId] }).catch(() => {});
+      tursoClient.execute({ sql: "DELETE FROM notes WHERE id = ?", args: [noteId] }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // Purge from local RAM and buffers
+  try {
+    ramCache.delete(`note_${noteId}`);
+    ramCache.delete("all_raw_notes");
+    invalidateAllCache();
+    purgeCdnDiskBuffer(noteId);
+    noteBufferCache.delete(noteId);
+  } catch (_) {}
+
+  // Purge from Cloudflare Edge Worker worldwide POP cache
+  try {
+    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) {
+      fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // Record audit sync event
+  try {
+    recordSyncEvent({
+      trigger: `Telegram Deletion Detected: "${noteTitle || noteId}"`,
+      details: "Document removed from Telegram channel. Auto-purged from Website feed & Edge CDN.",
+      purgedCount: 1,
+    });
+  } catch (_) {}
 }
 
 let getCdnRetentionSeconds = null;
@@ -1442,6 +1521,25 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       docData = await getDocumentBufferFromChannel(note.telegramMessageId);
     } catch (docErr) {
       console.warn(`[CLOUD-VAULT] Buffer fetch notice for ${id}:`, docErr.message);
+      const isTgDeleted =
+        docErr.isDeleted ||
+        docErr.code === "TELEGRAM_MESSAGE_DELETED" ||
+        docErr.message?.includes("Document not found for message ID") ||
+        docErr.message?.includes("MESSAGE_ID_INVALID") ||
+        docErr.message?.includes("FILE_REFERENCE_EXPIRED");
+
+      if (isTgDeleted && !note.driveLink && !note.fileUrl) {
+        await purgeDeletedTelegramNote(id, note?.title);
+        if (!res.headersSent) {
+          return res.status(404).json({
+            success: false,
+            noteDeleted: true,
+            isDeletedFromTelegram: true,
+            noteId: id,
+            message: "This study material has been removed from Telegram and has been automatically cleaned up from the website.",
+          });
+        }
+      }
     }
 
     if (docData && docData.buffer) {
@@ -1563,6 +1661,28 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
   } catch (err) {
     console.error("[STREAM] Error streaming note:", err.message);
+
+    const isTgDeleted =
+      err.isDeleted ||
+      err.code === "TELEGRAM_MESSAGE_DELETED" ||
+      err.message?.includes("Document not found for message ID") ||
+      err.message?.includes("MESSAGE_ID_INVALID") ||
+      err.message?.includes("FILE_REFERENCE_EXPIRED") ||
+      err.message?.includes("message to get is not found");
+
+    if (isTgDeleted) {
+      await purgeDeletedTelegramNote(id, note?.title);
+      if (!res.headersSent) {
+        return res.status(404).json({
+          success: false,
+          noteDeleted: true,
+          isDeletedFromTelegram: true,
+          noteId: id,
+          message: "This study material has been removed from Telegram and has been automatically cleaned up from the website.",
+        });
+      }
+    }
+
     if (!res.headersSent) {
       res.status(500).json({ success: false, message: "Streaming error: " + err.message, retryable: true });
     }

@@ -10,10 +10,9 @@ const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_C
 
 const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
 
-export const CDN_ENDPOINTS = [
-  originBase,
-  CF_WORKER,
-].filter(Boolean);
+export const CDN_ENDPOINTS = (!isLocal && CF_WORKER)
+  ? [CF_WORKER, originBase].filter(Boolean)
+  : [originBase, CF_WORKER].filter(Boolean);
 
 let activeCdnIndex = 0;
 let lastFailoverTimestamp = 0;
@@ -111,7 +110,8 @@ export function parseSourceFromHeaders(headers) {
  */
 export function getSmartStreamUrl(noteId, ticket = null) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
-  const base = localOrigin || CDN_ENDPOINTS[activeCdnIndex] || "";
+  const primaryEndpoint = (!isLocal && CF_WORKER) ? CF_WORKER : localOrigin;
+  const base = primaryEndpoint || CDN_ENDPOINTS[activeCdnIndex] || "";
   const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
   const params = [];
   if (ticket) params.push(`ticket=${encodeURIComponent(ticket)}`);
@@ -158,6 +158,17 @@ export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwit
       });
 
       clearTimeout(timeoutId);
+
+      // Explicit 404 (e.g. note deleted from Telegram or moved to Restore Vault)
+      if (response.status === 404) {
+        try {
+          const bodyClone = await response.clone().json();
+          if (bodyClone?.isDeletedFromTelegram || bodyClone?.noteDeleted || bodyClone?.inRecycleBin) {
+            // Note is permanently removed. Stop retrying secondary tiers!
+            return response;
+          }
+        } catch (_) {}
+      }
 
       // Explicit authentication or permission failure (e.g. downloads paused by admin)
       if (response.status === 403 || response.status === 401) {

@@ -68,21 +68,23 @@ export default function AuthModal({
     setPurgedAccountNotice(false);
   };
 
-  const setFormError = (msg, specificField = null) => {
-    setError(msg);
-    if (!msg) {
+  const setFormError = (errOrMsg, specificField = null) => {
+    if (!errOrMsg) {
+      setError(null);
       setFieldErrors({});
       return;
     }
 
-    let targetField = specificField;
+    let msg = typeof errOrMsg === "string" ? errOrMsg : (errOrMsg?.data?.message || errOrMsg?.message || "An error occurred.");
+    let targetField = specificField || errOrMsg?.data?.field || errOrMsg?.field || null;
+
     if (!targetField) {
       const lower = String(msg).toLowerCase();
       if (lower.includes("name") && !lower.includes("college") && !lower.includes("user")) {
         targetField = "name";
-      } else if (lower.includes("mobile") || lower.includes("phone") || lower.includes("10-digit")) {
+      } else if (lower.includes("mobile") || lower.includes("phone") || lower.includes("10-digit") || lower.includes("number")) {
         if (isGoogleOnboarding) targetField = "googleMobile";
-        else if (tab === "forgot") targetField = "forgotMobile";
+        else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotMobile" : "forgotEmail";
         else targetField = "mobile";
       } else if (lower.includes("email") || lower.includes("e-mail") || lower.includes("@gmail.com") || lower.includes("mail")) {
         if (tab === "signin") targetField = "signInIdentifier";
@@ -90,11 +92,13 @@ export default function AuthModal({
         else targetField = "email";
       } else if (lower.includes("college") || lower.includes("university")) {
         targetField = isGoogleOnboarding ? "googleCollege" : "college";
+      } else if (lower.includes("year") || lower.includes("academic year")) {
+        targetField = isGoogleOnboarding ? "googleYear" : "year";
       } else if (lower.includes("password") || lower.includes("credentials")) {
         if (tab === "signin") targetField = "signInPassword";
         else if (tab === "forgot") targetField = "forgotNewPassword";
         else targetField = "signUpPassword";
-      } else if (lower.includes("otp") || lower.includes("code") || lower.includes("passcode") || lower.includes("recovery")) {
+      } else if (lower.includes("otp") || lower.includes("code") || lower.includes("passcode") || lower.includes("telegram") || lower.includes("attempts")) {
         if (tab === "signin") targetField = "loginOtpCode";
         else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotTgOtpCode" : "forgotOtpCode";
         else targetField = regMode === "telebot" ? "regTgOtpCode" : "signUpOtpCode";
@@ -102,16 +106,31 @@ export default function AuthModal({
     }
 
     if (targetField) {
+      // If error is about an earlier step field (e.g. email/mobile already registered) but student is on OTP screen, bring them back so they can see and edit the field!
+      if (regTgStep && (targetField === "name" || targetField === "mobile" || targetField === "email" || targetField === "college" || targetField === "year" || targetField === "signUpPassword")) {
+        setRegTgStep(false);
+      }
+      if (signUpOtpStep && (targetField === "name" || targetField === "mobile" || targetField === "email" || targetField === "college" || targetField === "year" || targetField === "signUpPassword")) {
+        setSignUpOtpStep(false);
+      }
+
       setFieldErrors({ [targetField]: msg });
+      setError(msg);
+
       setTimeout(() => {
-        const el = document.getElementById(`field-group-${targetField}`) || document.getElementById(`input-${targetField}`);
+        const el =
+          document.getElementById(`field-group-${targetField}`) ||
+          document.getElementById(`field-group-${targetField}-email`) ||
+          document.getElementById(`input-${targetField}`) ||
+          document.getElementById(`input-${targetField}-email`);
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
-          const input = el.tagName === "INPUT" ? el : el.querySelector("input, select");
+          const input = el.tagName === "INPUT" || el.tagName === "SELECT" ? el : el.querySelector("input, select");
           if (input) input.focus();
         }
-      }, 60);
+      }, 70);
     } else {
+      setError(msg);
       setFieldErrors({});
     }
   };
@@ -121,23 +140,26 @@ export default function AuthModal({
     if (!msg) return null;
     return (
       <div
+        className="fsm-field-error-banner"
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "6px",
-          background: "rgba(244, 63, 94, 0.16)",
-          border: "1px solid rgba(244, 63, 94, 0.45)",
-          color: "#f43f5e",
-          padding: "6px 10px",
+          gap: "8px",
+          background: "rgba(239, 68, 68, 0.16)",
+          border: "1.5px solid #ef4444",
+          color: "#fca5a5",
+          padding: "7px 12px",
           borderRadius: "6px",
-          fontSize: "0.76rem",
-          fontWeight: 600,
-          marginBottom: "6px",
+          fontSize: "0.8rem",
+          fontWeight: 700,
+          marginBottom: "8px",
+          marginTop: "4px",
+          boxShadow: "0 2px 10px rgba(239, 68, 68, 0.25)",
           animation: "fadeIn 0.2s ease",
         }}
       >
-        <AlertCircle size={14} style={{ flexShrink: 0 }} />
-        <span>{msg}</span>
+        <AlertCircle size={15} style={{ flexShrink: 0, color: "#f87171" }} />
+        <span style={{ lineHeight: 1.35 }}>{msg}</span>
       </div>
     );
   };
@@ -216,15 +238,19 @@ export default function AuthModal({
       localStorage.setItem("academic_vault_login_pref", "passkey");
       setLoginViewMode("passkey");
       setSuccessMsg(res?.message || "🎉 Passkey registered successfully! 1-Click login is now active.");
+      const finalUser = {
+        ...(postRegUser || {}),
+        hasPasskey: true,
+      };
       setTimeout(() => {
-        if (onAuthSuccess && postRegUser) onAuthSuccess(postRegUser);
+        if (onAuthSuccess && finalUser) onAuthSuccess(finalUser);
         setShowPostRegPasskeyPrompt(false);
         setPostRegUser(null);
         onClose();
       }, 750);
     } catch (err) {
-      if (err.message && err.message.includes("cancelled")) {
-        setError("Biometric prompt was cancelled. You can retry or skip to continue.");
+      if (err.message && (err.message.includes("cancelled") || err.message.includes("NotAllowedError"))) {
+        setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now' below to continue to notes.");
       } else {
         setError(err.message || "Failed to set up passkey on this device.");
       }
@@ -236,9 +262,10 @@ export default function AuthModal({
   const handlePostRegSkipPasskey = () => {
     localStorage.setItem("academic_vault_login_pref", "password");
     setLoginViewMode("password");
-    if (onAuthSuccess && postRegUser) onAuthSuccess(postRegUser);
+    const userToLogin = postRegUser;
     setShowPostRegPasskeyPrompt(false);
     setPostRegUser(null);
+    if (onAuthSuccess && userToLogin) onAuthSuccess(userToLogin);
     onClose();
   };
 
@@ -615,16 +642,27 @@ export default function AuthModal({
         signupToken: googleUser.signupToken || "",
       });
 
-      if (supportsPasskey) {
-        setPostRegUser(res.user);
-        setShowPostRegPasskeyPrompt(true);
-        setSuccessMsg(null);
+      const authenticatedUser = res?.user;
+      if (authenticatedUser) {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("vault_last_active", String(Date.now()));
+          localStorage.setItem("academic_vault_login_pref", "password");
+        }
+        setSuccessMsg("Profile completed! Welcome to Academic Vault.");
+        if (onAuthSuccess) {
+          onAuthSuccess(authenticatedUser);
+        }
+        onClose();
+        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
+          }, 600);
+        }
       } else {
-        onAuthSuccess(res.user);
         onClose();
       }
     } catch (err) {
-      setFormError(err.message || "Failed to complete profile.");
+      setFormError(err, "googleMobile");
     } finally {
       setLoading(false);
     }
@@ -847,7 +885,7 @@ export default function AuthModal({
       setRegTgOtpCode("");
       setSuccessMsg("Registration session ready! Open @fsm_security_otp_bot and tap [ 📲 Verify & Share My Telegram Number ] to get your 6-digit passcode.");
     } catch (err) {
-      setFormError(err.message || "Failed to initialize Telegram registration.");
+      setFormError(err, "mobile");
     } finally {
       setLoading(false);
     }
@@ -871,19 +909,28 @@ export default function AuthModal({
         email: email.trim().toLowerCase(),
         otp: regTgOtpCode.trim(),
       });
-      if (supportsPasskey) {
-        setPostRegUser(res.user);
-        setShowPostRegPasskeyPrompt(true);
-        setSuccessMsg(null);
-      } else {
+      const authenticatedUser = res?.user;
+      if (authenticatedUser) {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("vault_last_active", String(Date.now()));
+          localStorage.setItem("academic_vault_login_pref", "password");
+        }
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        setTimeout(() => {
-          onAuthSuccess(res.user);
-          onClose();
-        }, 150);
+        // Immediately authenticate and close modal to land student directly on Notes Download page!
+        if (onAuthSuccess) {
+          onAuthSuccess(authenticatedUser);
+        }
+        onClose();
+        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
+          }, 600);
+        }
+      } else {
+        onClose();
       }
     } catch (err) {
-      setFormError(err.message || "Failed to verify Telegram OTP code.", "regTgOtpCode");
+      setFormError(err, "regTgOtpCode");
     } finally {
       setLoading(false);
     }
@@ -937,7 +984,7 @@ export default function AuthModal({
         setSuccessMsg(res.message || "Verification code sent to your Gmail.");
       }
     } catch (err) {
-      setFormError(err.message || "Failed to dispatch registration OTP.");
+      setFormError(err, "email");
     } finally {
       setLoading(false);
     }
@@ -956,19 +1003,28 @@ export default function AuthModal({
 
     try {
       const res = await api.verifyRegisterOtp(email.trim().toLowerCase(), signUpOtpCode.trim());
-      if (supportsPasskey) {
-        setPostRegUser(res.user);
-        setShowPostRegPasskeyPrompt(true);
-        setSuccessMsg(null);
-      } else {
+      const authenticatedUser = res?.user;
+      if (authenticatedUser) {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("vault_last_active", String(Date.now()));
+          localStorage.setItem("academic_vault_login_pref", "password");
+        }
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        setTimeout(() => {
-          onAuthSuccess(res.user);
-          onClose();
-        }, 150);
+        // Immediately authenticate and close modal to land student directly on Notes Download page!
+        if (onAuthSuccess) {
+          onAuthSuccess(authenticatedUser);
+        }
+        onClose();
+        if (typeof window !== "undefined" && supportsPasskey && !authenticatedUser.hasPasskey) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent("fsm:prompt-passkey", { detail: authenticatedUser }));
+          }, 600);
+        }
+      } else {
+        onClose();
       }
     } catch (err) {
-      setFormError(err.message || "Failed to verify registration OTP.", "signUpOtpCode");
+      setFormError(err, "signUpOtpCode");
     } finally {
       setLoading(false);
     }
@@ -1004,6 +1060,10 @@ export default function AuthModal({
     <div
       className="modal-overlay"
       onClick={() => {
+        if (showPostRegPasskeyPrompt) {
+          handlePostRegSkipPasskey();
+          return;
+        }
         // Prevent accidental closing when user is awaiting OTP!
         if (regTgStep || forgotTgStep || signUpOtpStep || loginOtpStep) return;
         onClose();
@@ -1124,8 +1184,8 @@ export default function AuthModal({
           </div>
         )}
 
-        {/* Regular Error Alert Box */}
-        {error && !purgedAccountNotice && (
+        {/* Regular Error Alert Box - Shown only when no specific field holds the error */}
+        {error && !purgedAccountNotice && Object.keys(fieldErrors).length === 0 && (
           <div
             style={{
               background: "rgba(244, 63, 94, 0.12)",
@@ -1350,12 +1410,18 @@ export default function AuthModal({
                 />
               </div>
 
-              <div className="form-group">
+              <div className="form-group" id="field-group-googleYear">
                 <label className="form-label">Academic Year</label>
+                <FieldNotice fieldKey="googleYear" />
                 <select
+                  id="input-googleYear"
                   className="form-select"
+                  style={fieldErrors.googleYear ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
                   value={googleYear}
-                  onChange={(e) => setGoogleYear(e.target.value)}
+                  onChange={(e) => {
+                    setGoogleYear(e.target.value);
+                    clearFieldError("googleYear");
+                  }}
                 >
                   <option value="1st Year">1st Year</option>
                   <option value="2nd Year">2nd Year</option>
@@ -2518,12 +2584,18 @@ export default function AuthModal({
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                      <div className="form-group">
+                      <div className="form-group" id="field-group-year">
                         <label className="form-label">Academic Year</label>
+                        <FieldNotice fieldKey="year" />
                         <select
+                          id="input-year"
                           className="form-select"
+                          style={fieldErrors.year ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
                           value={year}
-                          onChange={(e) => setYear(e.target.value)}
+                          onChange={(e) => {
+                            setYear(e.target.value);
+                            clearFieldError("year");
+                          }}
                         >
                           <option value="1st Year">1st Year</option>
                           <option value="2nd Year">2nd Year</option>
@@ -2804,12 +2876,18 @@ export default function AuthModal({
                     </div>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                      <div className="form-group">
+                      <div className="form-group" id="field-group-year">
                         <label className="form-label">Academic Year</label>
+                        <FieldNotice fieldKey="year" />
                         <select
+                          id="input-year"
                           className="form-select"
+                          style={fieldErrors.year ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
                           value={year}
-                          onChange={(e) => setYear(e.target.value)}
+                          onChange={(e) => {
+                            setYear(e.target.value);
+                            clearFieldError("year");
+                          }}
                         >
                           <option value="1st Year">1st Year</option>
                           <option value="2nd Year">2nd Year</option>

@@ -1025,6 +1025,38 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
       });
     }
 
+    // Purge single note from Turso LibSQL Edge Cache
+    try {
+      const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      if (typeof removeNoteFromCache === "function") {
+        await removeNoteFromCache(id);
+      }
+      if (typeof invalidateTursoNotesCache === "function") {
+        invalidateTursoNotesCache();
+      }
+    } catch (_) {}
+
+    try {
+      const { tursoClient } = require("../services/tursoService");
+      if (tursoClient) {
+        tursoClient.execute({ sql: "DELETE FROM notes_cache WHERE id = ?", args: [id] }).catch(() => {});
+        tursoClient.execute({ sql: "DELETE FROM notes WHERE id = ?", args: [id] }).catch(() => {});
+      }
+    } catch (_) {}
+
+    // Purge from NVMe SSD Disk Cache and RAM Buffer
+    try {
+      const notesRouter = require("./notes");
+      if (notesRouter?.purgeCdnDiskBuffer) notesRouter.purgeCdnDiskBuffer(id);
+      if (notesRouter?.noteBufferCache) notesRouter.noteBufferCache.delete(id);
+    } catch (_) {}
+
+    // Purge from Cloudflare Edge Worker worldwide POP cache
+    try {
+      const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+      if (cfWorker) fetch(`${cfWorker}/api/notes/${id}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+    } catch (_) {}
+
     invalidateAllCache();
     return res.json({ success: true, message: "Note safely moved to Restore Vault and synced with Telegram." });
   } catch (err) {
@@ -1086,6 +1118,31 @@ router.post("/notes/delete-all", authenticateToken, checkAdminOrPermission("mana
         console.warn("[ADMIN] Batch Telegram deletion warning:", err.message);
       });
     }
+
+    // Purge ALL notes from Turso LibSQL Edge Cache
+    try {
+      const { pruneNotesCacheOlderThan, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      if (typeof pruneNotesCacheOlderThan === "function") {
+        await pruneNotesCacheOlderThan(0);
+      }
+      if (typeof invalidateTursoNotesCache === "function") {
+        invalidateTursoNotesCache();
+      }
+    } catch (_) {}
+
+    try {
+      const { tursoClient } = require("../services/tursoService");
+      if (tursoClient) {
+        tursoClient.execute("DELETE FROM notes_cache").catch(() => {});
+        tursoClient.execute("DELETE FROM notes").catch(() => {});
+      }
+    } catch (_) {}
+
+    // Clear RAM Buffers and NVMe SSD Disk Cache
+    try {
+      const notesRouter = require("./notes");
+      if (notesRouter?.noteBufferCache) notesRouter.noteBufferCache.clear();
+    } catch (_) {}
 
     invalidateAllCache();
 
@@ -1239,6 +1296,12 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
     await db.collection("deleted_notes").doc(originalDocId).delete().catch(() => {});
 
     if (targetCollection === "notes") {
+      try {
+        const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+        if (typeof upsertNoteInCache === "function") {
+          upsertNoteInCache({ id: originalDocId, ...data });
+        }
+      } catch (_) {}
       invalidateAllCache();
     }
 

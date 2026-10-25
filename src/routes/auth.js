@@ -171,19 +171,19 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
     const { name, mobile, email, college, year, password } = req.body;
 
     if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, message: "Full Name is mandatory." });
+      return res.status(400).json({ success: false, message: "Full Name is mandatory.", field: "name" });
     }
     if (!mobile || !mobile.trim() || mobile.trim().length < 10) {
-      return res.status(400).json({ success: false, message: "Valid 10-digit Mobile Number is mandatory." });
+      return res.status(400).json({ success: false, message: "Valid 10-digit Mobile Number is mandatory.", field: "mobile" });
     }
     if (!email || !email.trim()) {
-      return res.status(400).json({ success: false, message: "Email Address is mandatory." });
+      return res.status(400).json({ success: false, message: "Email Address is mandatory.", field: "email" });
     }
     if (!college || !college.trim()) {
-      return res.status(400).json({ success: false, message: "College Name is mandatory." });
+      return res.status(400).json({ success: false, message: "College Name is mandatory.", field: "college" });
     }
     if (!password || password.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long.", field: "signUpPassword" });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -193,6 +193,7 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Only @gmail.com email addresses are allowed for account registration.",
+        field: "email",
       });
     }
 
@@ -203,18 +204,18 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
     // Check if email already registered
     const emailSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!emailSnap.empty) {
-      return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
+      return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
 
     // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
     const mHash = blindIndex(cleanMobile);
     const hashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
     if (!hashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
     const mobileSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
     if (!mobileSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
     // Create pending session in Telegram Bot Engine (Zero email sent via Brevo!)
@@ -250,16 +251,16 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
   try {
     const { regToken, mobile, email, otp } = req.body;
     if (!otp) {
-      return res.status(400).json({ success: false, message: "Verification OTP code is required." });
+      return res.status(400).json({ success: false, message: "Verification OTP code is required.", field: "regTgOtpCode" });
     }
 
     if (!regToken && !mobile && !email) {
-      return res.status(400).json({ success: false, message: "Registration session reference or mobile number is required." });
+      return res.status(400).json({ success: false, message: "Registration session reference or mobile number is required.", field: "regTgOtpCode" });
     }
 
     const verification = await verifyRegistrationOtp({ regToken, mobile, email }, otp);
     if (!verification.valid) {
-      return res.status(400).json({ success: false, message: verification.message });
+      return res.status(400).json({ success: false, message: verification.message, field: "regTgOtpCode" });
     }
 
     const cleanMobile = String(verification.data.mobile || req.body.mobile || "").trim();
@@ -272,10 +273,10 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
     const tgDetails = verification.data.tgDetails || null;
 
     if (!cleanEmail) {
-      return res.status(400).json({ success: false, message: "E-mail address is required to complete registration." });
+      return res.status(400).json({ success: false, message: "E-mail address is required to complete registration.", field: "email" });
     }
     if (!studentPassword || studentPassword.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters." });
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters.", field: "signUpPassword" });
     }
 
     if (!db) {
@@ -285,7 +286,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
     // Double check email uniqueness before creation
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!existingSnap.empty) {
-      return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
+      return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
 
     // Format Name: Final Name = User Input Name + (Telegram Name) e.g. Rahul Yadav (Rahul / @rahul_tg)
@@ -336,12 +337,15 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
+    // ⚡ Cache user in RAM cache for instant 0ms lookup
+    ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 600);
+
     // Send Real-time Telegram Security Notice to Security Bot with full manual + telegram breakdown
     sendTelegramAuthNotice({
       event: "REGISTER",
       user: {
         name: newUser.name,
-        userInputName: name,
+        userInputName: rawName || newUser.userInputName || "Scholar",
         telegramName: tgName,
         email: newUser.email,
         mobile: newUser.mobile,
@@ -358,6 +362,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       success: true,
       message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH-TG-REG-VERIFY] Error:", err);
@@ -755,10 +760,14 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       method: "Manual Form (Brevo OTP Verified)",
     }).catch(() => {});
 
+    // ⚡ Cache user in RAM cache for instant 0ms lookup
+    ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 600);
+
     return res.status(201).json({
       success: true,
       message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH] Register OTP Verification error:", err);
@@ -894,10 +903,14 @@ router.post("/register", authLimiter, async (req, res) => {
       method: "Manual Form Registration",
     }).catch(() => {});
 
+    // ⚡ Cache user in RAM cache for instant 0ms lookup
+    ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 600);
+
     return res.status(201).json({
       success: true,
       message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
+      token,
     });
   } catch (err) {
     console.error("[AUTH] Register error:", err);

@@ -468,6 +468,14 @@ async function processIncomingMessage(message) {
 
     await noteRef.set(noteData);
     upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-BOT] Sync notice:", e.message));
+    try {
+      const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+      const { invalidateAllCache } = require("../utils/ramCache");
+      if (typeof upsertNoteInCache === "function") {
+        upsertNoteInCache(noteData).catch(() => {});
+      }
+      invalidateAllCache();
+    } catch (_) {}
 
     // Auto-post to Notice Board
     await db.collection("notices").add({

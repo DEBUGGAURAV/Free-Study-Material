@@ -582,12 +582,12 @@ export default function VirtualPdfReader({
               warmupClientOcr();
             }, 800);
 
-            // Asynchronously pre-cache buffer into P2P mesh seeder & IndexedDB Offline Vault ONLY if not blocked
-            if (!isBlocked) {
-              fetch(fallbackSameOrigin, { credentials: "include" })
-                .then((r) => r.arrayBuffer())
-                .then((buf) => {
-                  if (noteId) {
+            // Asynchronously pre-cache buffer from memory into P2P mesh seeder & IndexedDB Offline Vault ONLY if not blocked (Zero extra network requests)
+            if (!isBlocked && doc && typeof doc.getData === "function") {
+              doc.getData()
+                .then((uint8) => {
+                  if (uint8 && noteId) {
+                    const buf = uint8.buffer;
                     cacheNoteBuffer(noteId, buf);
                     saveNoteOffline(note || { id: noteId, title }, buf);
                   }
@@ -628,8 +628,25 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine on PDF.js errors
-          if (url || note?.fileUrl || note?.driveLink) {
+          // Check if document was deleted or removed from Telegram cloud storage
+          const isDeletedNote =
+            errMsg.includes("404") ||
+            errMsg.includes("not found") ||
+            errMsg.includes("deleted") ||
+            errMsg.includes("cleaned up") ||
+            errMsg.includes("Restore Vault");
+
+          if (isDeletedNote) {
+            if (noteId && typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("fsm:note-deleted", { detail: { noteId } }));
+            }
+            setError("This study material was removed from Telegram and has been automatically cleaned up from the website.");
+            setLoading(false);
+            return;
+          }
+
+          // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if external backup URL exists
+          if ((note?.fileUrl || note?.driveLink) && !isDeletedNote) {
             console.log("[AUTO-FAILOVER] ⚡ Switching to Native Browser Engine (<500ms)");
             setUseNativeViewer(true);
             setLoading(false);
@@ -638,9 +655,6 @@ export default function VirtualPdfReader({
             return;
           }
 
-          if (errMsg.includes("400") || errMsg.includes("Unexpected server response") || errMsg.includes("404") || errMsg.includes("not found")) {
-            errMsg = "Document Notice: This file is currently being synced in cloud storage or re-indexed. You can also view it using the Native Browser Engine.";
-          }
           setError(errMsg);
           setLoading(false);
         }

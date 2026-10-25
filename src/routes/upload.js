@@ -156,6 +156,12 @@ router.post(
         await docRef.set(noteData);
         invalidateAllCache();
         upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-UPLOAD] Sync notice:", e.message));
+        try {
+          const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+          if (typeof upsertNoteInCache === "function") {
+            upsertNoteInCache(noteData).catch(() => {});
+          }
+        } catch (_) {}
 
         // 🧠 Smart Caching: Under 50MB cached in RAM for 0ms latency; >50MB bypasses RAM cache to protect 512MB limit
         if (file.size <= 50 * 1024 * 1024) {

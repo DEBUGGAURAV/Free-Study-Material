@@ -88,6 +88,7 @@ export default function AdminModal({
   onLoginSuccess,
   notes = [],
   onRefreshNotes,
+  onDeleteNote,
   branches = [],
   allowNotesDownload,
   onToggleDownloadAllowed,
@@ -96,6 +97,7 @@ export default function AdminModal({
   onMaintenanceChange,
 }) {
   const [activeTab, setActiveTab] = useState("notes");
+  const [deletedNoteIds, setDeletedNoteIds] = useState(new Set());
   const isHalfAdmin = currentUser?.role === "half_admin";
 
   // Platform Maintenance Mode State (Declared before DASHBOARD_TABS)
@@ -1537,12 +1539,24 @@ export default function AdminModal({
 
   const handleDeleteNote = async (noteId) => {
     if (!window.confirm("Move this note to the Restore Vault?\n\nYou can restore it anytime with zero data loss.")) return;
+
+    // Instant Optimistic UI Update: Disappear from screen immediately!
+    setDeletedNoteIds((prev) => new Set([...prev, noteId]));
+    if (typeof onDeleteNote === "function") {
+      onDeleteNote(noteId);
+    }
+
     try {
       await api.deleteNote(noteId);
       if (onRefreshNotes) onRefreshNotes();
       loadRecycleBinItems();
       loadStats();
     } catch (err) {
+      setDeletedNoteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(noteId);
+        return next;
+      });
       alert("Failed to delete note: " + err.message);
     }
   };
@@ -1571,6 +1585,7 @@ export default function AdminModal({
       alert(res.message || "All notes moved to Restore Vault!");
       setShowDeleteAllModal(false);
       setDeleteAllPassword("");
+      setDeletedNoteIds(new Set(notes.map((n) => n.id)));
       if (onRefreshNotes) onRefreshNotes();
       loadRecycleBinItems();
     } catch (err) {
@@ -2143,6 +2158,13 @@ export default function AdminModal({
     try {
       const res = await api.restoreItem(itemId);
       alert(res.message || "Item restored successfully!");
+      setDeletedNoteIds((prev) => {
+        const next = new Set(prev);
+        const origId = itemId.replace(/^notes_/, "");
+        next.delete(itemId);
+        next.delete(origId);
+        return next;
+      });
       loadRecycleBinItems();
       if (onRefreshNotes) onRefreshNotes();
       loadStudents();
@@ -2168,6 +2190,7 @@ export default function AdminModal({
     try {
       const res = await api.restoreAllItems();
       alert(res.message || "All items restored successfully!");
+      setDeletedNoteIds(new Set());
       loadRecycleBinItems();
       if (onRefreshNotes) onRefreshNotes();
       loadStudents();
@@ -2232,6 +2255,7 @@ export default function AdminModal({
 
   // Filter Notes Vault
   const filteredNotes = notes.filter((n) => {
+    if (deletedNoteIds.has(n.id)) return false;
     const override = noteOverrides[n.id];
     const currentAllow = override?.allowDownload !== undefined ? override.allowDownload : n.allowDownload;
     const isLocked = currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0";
@@ -2252,12 +2276,14 @@ export default function AdminModal({
 
   // Calculate download stats across all vault notes
   const activeDownloadsCount = notes.filter((n) => {
+    if (deletedNoteIds.has(n.id)) return false;
     const override = noteOverrides[n.id];
     const currentAllow = override?.allowDownload !== undefined ? override.allowDownload : n.allowDownload;
     return !(currentAllow === false || String(currentAllow) === "false" || currentAllow === 0 || String(currentAllow) === "0");
   }).length;
 
-  const lockedDownloadsCount = notes.length - activeDownloadsCount;
+  const totalActiveNotesCount = notes.filter((n) => !deletedNoteIds.has(n.id)).length;
+  const lockedDownloadsCount = Math.max(0, totalActiveNotesCount - activeDownloadsCount);
 
   // Filter Recycle Bin Items
   const filteredRecycleItems = recycleBinItems.filter((item) => {
@@ -2619,7 +2645,7 @@ export default function AdminModal({
           <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
             <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</div>
             <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-              {stats?.totalNotes ?? notes.length}
+              {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
             </div>
           </div>
 
@@ -2740,7 +2766,7 @@ export default function AdminModal({
                 title={tab.title}
               >
                 {tab.label}
-                {tab.id === "notes" && ` (${notes.length})`}
+                {tab.id === "notes" && ` (${notes.filter((n) => !deletedNoteIds.has(n.id)).length})`}
                 {tab.id === "students" && ` (${studentsTotal || stats?.totalStudents || 0})`}
                 {tab.id === "hardware" && " (Live)"}
                 {tab.id === "pipeline" &&

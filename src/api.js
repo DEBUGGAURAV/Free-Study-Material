@@ -52,6 +52,11 @@ export function invalidateClientNotesCache() {
   try {
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem("fsm_offline_notes");
+      localStorage.removeItem("fsm_cached_notes");
+    }
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("fsm_offline_notes");
+      sessionStorage.removeItem("fsm_cached_notes");
     }
   } catch (_) {}
 }
@@ -537,6 +542,8 @@ export const api = {
           prevLoaded = e.loaded;
           prevTime = now;
 
+          const percent = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0;
+
           // ⚡ Full-Throttle Maximum Fiber Ingestion Pipeline (68.5 - 89.4 MB/s Full Speed)
           const dynamicUploadJitter = Number(((e.loaded % 7) * 2.3 + (percent % 4) * 1.6).toFixed(1));
           const hardcodedUploadMB = (68.5 + dynamicUploadJitter).toFixed(1);
@@ -601,6 +608,11 @@ export const api = {
       try {
         const errorJson = await res.json();
         if (errorJson && errorJson.message) errMessage = errorJson.message;
+        if (errorJson?.noteDeleted || errorJson?.isDeletedFromTelegram || res.status === 404) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("fsm:note-deleted", { detail: { noteId: id } }));
+          }
+        }
       } catch {}
       throw new Error(errMessage);
     }
@@ -790,6 +802,9 @@ export const api = {
       method: "DELETE",
     });
     invalidateClientNotesCache();
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("fsm:note-deleted", { detail: { noteId } }));
+    }
     return res;
   },
 

@@ -4,6 +4,20 @@
  * Concept: Note Storage -> Cloudflare Worker Edge -> Client View/Download (with RAM/Disk cache fallback)
  */
 
+function applyCors(headers, req) {
+  const o = req ? req.headers.get('Origin') : null;
+  if (o) {
+    headers.set('Access-Control-Allow-Origin', o);
+    headers.set('Access-Control-Allow-Credentials', 'true');
+  } else {
+    headers.set('Access-Control-Allow-Origin', '*');
+  }
+  headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS, PURGE, DELETE');
+  headers.set('Access-Control-Allow-Headers', '*');
+  headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache');
+  headers.set('Access-Control-Max-Age', '86400');
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -28,15 +42,11 @@ export default {
 
     // 1. Handle CORS Preflight (OPTIONS)
     if (request.method === 'OPTIONS') {
+      const optHeaders = new Headers();
+      applyCors(optHeaders, request);
       return new Response(null, {
         status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-          'Access-Control-Allow-Headers': '*',
-          'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache',
-          'Access-Control-Max-Age': '86400',
-        },
+        headers: optHeaders,
       });
     }
 
@@ -99,8 +109,7 @@ export default {
         headers.set('CF-Cache-Status', 'HIT');
         headers.set('X-Cache', 'HIT');
         headers.set('X-Edge-Location', edgeColo);
-        headers.set('Access-Control-Allow-Origin', '*');
-        headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache');
+        applyCors(headers, request);
 
         // Handle Byte-Range requests on Edge-cached buffer
         if (rangeHeader) {
@@ -160,8 +169,7 @@ export default {
 
         // Build Response Headers
         const responseHeaders = new Headers(originRes.headers);
-        responseHeaders.set('Access-Control-Allow-Origin', '*');
-        responseHeaders.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache');
+        applyCors(responseHeaders, request);
         responseHeaders.set('Cache-Control', 'public, max-age=604800, s-maxage=604800, immutable');
         responseHeaders.set('Accept-Ranges', 'bytes');
         responseHeaders.set('X-Edge-Location', edgeColo);
@@ -225,9 +233,11 @@ export default {
           headers: responseHeaders,
         });
       } catch (err) {
+        const errHeaders = new Headers({ 'Content-Type': 'application/json' });
+        applyCors(errHeaders, request);
         return new Response(JSON.stringify({ error: 'Origin fetch failed: ' + err.message }), {
           status: 502,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          headers: errHeaders,
         });
       }
     }
