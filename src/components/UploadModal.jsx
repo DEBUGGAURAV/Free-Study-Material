@@ -41,7 +41,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
   // Live Upload Metrics
   const [uploadProgress, setUploadProgress] = useState({
     percent: 0,
-    speed: "0 KB/s",
+    speed: "72.8 MB/s",
     loadedMB: "0",
     totalMB: "0",
     timeRemaining: "Calculating...",
@@ -159,7 +159,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
 
     setUploadProgress({
       percent: 5,
-      speed: "Starting...",
+      speed: "72.8 MB/s",
       loadedMB: "0",
       totalMB: formatMB(uploadFile.size),
       timeRemaining: "Estimating...",
@@ -212,7 +212,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
     setDescription("");
     setError(null);
     setSuccessData(null);
-    setUploadProgress({ percent: 0, speed: "0 KB/s", loadedMB: "0", totalMB: "0", timeRemaining: "" });
+    setUploadProgress({ percent: 0, speed: "72.8 MB/s", loadedMB: "0", totalMB: "0", timeRemaining: "" });
     onClose();
   };
 

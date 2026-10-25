@@ -1,4 +1,8 @@
 require("dotenv").config();
+try {
+  const dns = require("dns");
+  if (dns.setDefaultResultOrder) dns.setDefaultResultOrder("ipv4first");
+} catch (_) {}
 const express = require("express");
 const path = require("path");
 const http = require("http");
@@ -52,9 +56,10 @@ const chatRoutes = require("./routes/chat");
 const helpRoutes = require("./routes/help");
 const securityRoutes = require("./routes/security");
 const examRoutes = require("./routes/exam");
+const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Trust reverse proxy (Cloudflare / Render)
 app.set("trust proxy", 1);
@@ -120,14 +125,17 @@ app.use(
   })
 );
 
-// Strict Production CORS Policy (Supports Render & Cloudflare Worker Edge)
+// Strict Production CORS Policy (Supports Render, Railway, Vercel, VPS & Custom Domains)
 const allowedOrigins = [
+  getSiteUrl(),
   process.env.CLIENT_URL,
-  "https://freestudymaterial.onrender.com",
-  "https://freestudtmaterial.onrender.com",
+  process.env.SITE_URL,
+  process.env.CUSTOM_DOMAIN,
+  process.env.RENDER_EXTERNAL_URL,
+  DEFAULT_DOMAIN,
   process.env.CF_WORKER_URL,
   ...(process.env.NODE_ENV !== "production"
-    ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000"]
+    ? ["http://localhost:5173", "http://localhost:5000", "http://localhost:5001", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:5000", "http://127.0.0.1:5001"]
     : []),
 ].filter(Boolean);
 
@@ -146,6 +154,14 @@ app.use(
       ) {
         return callback(null, true);
       }
+      // Dynamic host match (allows custom domain immediately upon deployment)
+      try {
+        const originUrl = new URL(origin);
+        const configuredUrl = new URL(getSiteUrl());
+        if (originUrl.host === configuredUrl.host) {
+          return callback(null, true);
+        }
+      } catch (_) {}
       return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
     },
     credentials: true,
@@ -288,140 +304,155 @@ app.get("*", (req, res) => {
 const server = http.createServer(app);
 chatRoutes.initChatWebSocket(server);
 
-server.listen(PORT, "0.0.0.0", async () => {
-  console.log(`=======================================================`);
-  console.log(`⚡ ACADEMIC CLOUD ENGINE RUNNING ON PORT ${PORT}`);
-  console.log(`🌐 Domain: https://freestudymaterial.onrender.com`);
-  console.log(`🧬 SHA-256 Deduplication: ENABLED`);
-  console.log(`🗜️ PDF Compressor (pdf-lib): ENABLED`);
-  console.log(`⚡ Async Background Queue: ENABLED`);
-  console.log(`🖼️ Sharp WebP Thumbnails: ENABLED`);
-  console.log(`☁️ Cloudflare CDN LRU Headers: ACTIVE`);
-  console.log(`=======================================================`);
+const initialPort = Number(PORT);
 
-  // Asynchronously connect Telegram MTProto client
-  try {
-    await getClient();
-  } catch (e) {
-    console.warn("[MTProto] Telegram connect deferred:", e.message);
-  }
-
-  // Start Realtime Bot API Long-Polling (DM + Group + Subgroup ingest + receipts)
-  try {
-    startBotPoller();
-  } catch (e) {
-    console.warn("[BOT POLLER] Poller start deferred:", e.message);
-  }
-
-  // Start 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync
-  try {
-    startAutoSyncWorker(30 * 60 * 1000);
-  } catch (e) {
-    console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
-  }
-
-  // Load Security Bot Single-Document Settings
-  try {
-    if (loadBotSettings) await loadBotSettings();
-  } catch (e) {
-    console.warn("[SECURITY BOT] Settings load notice:", e.message);
-  }
-
-  // Start Dedicated Security OTP Bot Poller (@fsm_security_otp_bot)
-  try {
-    if (startSecurityBotPoller) startSecurityBotPoller();
-  } catch (e) {
-    console.warn("[SECURITY BOT] Poller start deferred:", e.message);
-  }
-
-  // Start Dedicated Chat Audit & Forensic Bot Poller (@fsm_chat_bot)
-  try {
-    const { startChatAuditBotPoller } = require("./services/chatAuditBotService");
-    startChatAuditBotPoller();
-  } catch (e) {
-    console.warn("[CHAT AUDIT BOT] Poller start deferred:", e.message);
-  }
-
-  // Start Live Firebase User Deletion Watcher (Auto-cascades direct Firebase Console deletions)
-  try {
-    const { initFirebaseUserDeletionWatcher } = require("./services/userCascadeDeletionService");
-    if (initFirebaseUserDeletionWatcher) initFirebaseUserDeletionWatcher();
-  } catch (e) {
-    console.warn("[CASCADE-WATCHER] Start deferred:", e.message);
-  }
-
-  // Periodic 90-Day Inactive Account Purge (Daily sweep + 30s initial warmup)
-  try {
-    setTimeout(() => {
-      purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Initial sweep error:", e.message));
-    }, 30000);
-    setInterval(() => {
-      purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Daily sweep error:", e.message));
-    }, 24 * 60 * 60 * 1000);
-  } catch (e) {
-    console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
-  }
-
-  // ⏰ Start Telegram Exam Countdown & Daily Revision Buddy Scheduler (0 DB Reads, Pure Edge/RAM)
-  try {
-    const { startExamCountdownScheduler } = require("./services/examBuddyService");
-    if (startExamCountdownScheduler) {
-      startExamCountdownScheduler();
+function startServer(portToTry, attempt = 1) {
+  server.once("error", (err) => {
+    if ((err.code === "EADDRINUSE" || err.code === "EACCES") && attempt < 5) {
+      console.warn(`[SERVER] Port ${portToTry} unavailable (${err.code}). Auto-switching to ${portToTry + 1}...`);
+      startServer(portToTry + 1, attempt + 1);
+    } else {
+      console.error(`[SERVER] Fatal listen error on port ${portToTry}:`, err.message);
     }
-  } catch (e) {
-    console.warn("[EXAM BUDDY] Scheduler start deferred:", e.message);
-  }
+  });
 
-  // 🧹 2. Smart Dynamic RAM Buffer Guard & Multi-Tier Auto-Purge
-  try {
-    const tempDir = path.join(__dirname, "../temp");
-    startRamBufferGuard(tempDir);
-  } catch (guardErr) {
-    console.warn("[SELF-HEALING-GUARD] Init warning:", guardErr.message);
-  }
+  server.listen(portToTry, "0.0.0.0", async () => {
+    console.log(`=======================================================`);
+    console.log(`⚡ ${getVaultName().toUpperCase()} RUNNING ON PORT ${portToTry}`);
+    console.log(`🌐 Domain: ${getSiteUrl()}`);
+    console.log(`🧬 SHA-256 Deduplication: ENABLED`);
+    console.log(`🗜️ PDF Compressor (pdf-lib): ENABLED`);
+    console.log(`⚡ Async Background Queue: ENABLED`);
+    console.log(`🖼️ Sharp WebP Thumbnails: ENABLED`);
+    console.log(`☁️ Cloudflare CDN LRU Headers: ACTIVE`);
+    console.log(`=======================================================`);
 
-  // 📡 4. Network & Telegram Bot Auto-Reconnection Engine (Modern Event-Driven + Smart Exponential Backoff)
-  try {
-    startTelegramHeartbeat(async () => {
-      try {
-        await getClient();
-        startBotPoller();
-      } catch (_) {}
-    });
-    console.log("[SELF-HEALING-MONITOR] 📡 Event-Driven Auto-Reconnection Monitor registered.");
-  } catch (pulseErr) {
-    console.warn("[SELF-HEALING-MONITOR] Init warning:", pulseErr.message);
-  }
-
-  // 🏎️ Cold-Start Cache Warmer (Pre-warms top notes into RAM 4s after boot for 0ms initial load)
-  try {
-    setTimeout(() => {
-      warmCacheOnBoot().catch((e) => console.warn("[CACHE-WARMER] Boot warmup warning:", e.message));
-    }, 4000);
-  } catch (warmerErr) {
-    console.warn("[CACHE-WARMER] Init warning:", warmerErr.message);
-  }
-
-  // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)
-  const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || "https://freestudymaterial.onrender.com";
-  const KEEP_ALIVE_INTERVAL = 12 * 60 * 1000; // 12 minutes (safely under Render's 15m idle cutoff)
-
-  const pingSelf = async () => {
+    // Asynchronously connect Telegram MTProto client
     try {
-      const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
-      const res = await fetch(pingEndpoint, { signal: AbortSignal.timeout(10000) });
-      if (res.ok) {
-        console.log(`[ANTI-SLEEP] 💓 Self-ping successful: ${pingEndpoint} (Status: ${res.status}) - Render kept awake 24/7`);
+      await getClient();
+    } catch (e) {
+      console.warn("[MTProto] Telegram connect deferred:", e.message);
+    }
+
+    // Start Realtime Bot API Long-Polling (DM + Group + Subgroup ingest + receipts)
+    try {
+      startBotPoller();
+    } catch (e) {
+      console.warn("[BOT POLLER] Poller start deferred:", e.message);
+    }
+
+    // Start 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync
+    try {
+      startAutoSyncWorker(30 * 60 * 1000);
+    } catch (e) {
+      console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
+    }
+
+    // Load Security Bot Single-Document Settings
+    try {
+      if (loadBotSettings) await loadBotSettings();
+    } catch (e) {
+      console.warn("[SECURITY BOT] Settings load notice:", e.message);
+    }
+
+    // Start Dedicated Security OTP Bot Poller (@fsm_security_otp_bot)
+    try {
+      if (startSecurityBotPoller) startSecurityBotPoller();
+    } catch (e) {
+      console.warn("[SECURITY BOT] Poller start deferred:", e.message);
+    }
+
+    // Start Dedicated Chat Audit & Forensic Bot Poller (@fsm_chat_bot)
+    try {
+      const { startChatAuditBotPoller } = require("./services/chatAuditBotService");
+      startChatAuditBotPoller();
+    } catch (e) {
+      console.warn("[CHAT AUDIT BOT] Poller start deferred:", e.message);
+    }
+
+    // Start Live Firebase User Deletion Watcher (Auto-cascades direct Firebase Console deletions)
+    try {
+      const { initFirebaseUserDeletionWatcher } = require("./services/userCascadeDeletionService");
+      if (initFirebaseUserDeletionWatcher) initFirebaseUserDeletionWatcher();
+    } catch (e) {
+      console.warn("[CASCADE-WATCHER] Start deferred:", e.message);
+    }
+
+    // Periodic 90-Day Inactive Account Purge (Daily sweep + 30s initial warmup)
+    try {
+      setTimeout(() => {
+        purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Initial sweep error:", e.message));
+      }, 30000);
+      setInterval(() => {
+        purgeInactiveAccounts().catch((e) => console.warn("[ACCOUNT PURGE] Daily sweep error:", e.message));
+      }, 24 * 60 * 60 * 1000);
+    } catch (e) {
+      console.warn("[ACCOUNT PURGE] Scheduler setup error:", e.message);
+    }
+
+    // ⏰ Start Telegram Exam Countdown & Daily Revision Buddy Scheduler (0 DB Reads, Pure Edge/RAM)
+    try {
+      const { startExamCountdownScheduler } = require("./services/examBuddyService");
+      if (startExamCountdownScheduler) {
+        startExamCountdownScheduler();
       }
     } catch (e) {
-      console.warn("[ANTI-SLEEP] Self-ping notice:", e.message);
+      console.warn("[EXAM BUDDY] Scheduler start deferred:", e.message);
     }
-  };
 
-  // Initial ping after 3 minutes, then recurring every 12 minutes
-  setTimeout(pingSelf, 3 * 60 * 1000);
-  setInterval(pingSelf, KEEP_ALIVE_INTERVAL);
-});
+    // 🧹 2. Smart Dynamic RAM Buffer Guard & Multi-Tier Auto-Purge
+    try {
+      const tempDir = path.join(__dirname, "../temp");
+      startRamBufferGuard(tempDir);
+    } catch (guardErr) {
+      console.warn("[SELF-HEALING-GUARD] Init warning:", guardErr.message);
+    }
+
+    // 📡 4. Network & Telegram Bot Auto-Reconnection Engine (Modern Event-Driven + Smart Exponential Backoff)
+    try {
+      startTelegramHeartbeat(async () => {
+        try {
+          await getClient();
+          startBotPoller();
+        } catch (_) {}
+      });
+      console.log("[SELF-HEALING-MONITOR] 📡 Event-Driven Auto-Reconnection Monitor registered.");
+    } catch (pulseErr) {
+      console.warn("[SELF-HEALING-MONITOR] Init warning:", pulseErr.message);
+    }
+
+    // 🏎️ Cold-Start Cache Warmer (Pre-warms top notes into RAM 4s after boot for 0ms initial load)
+    try {
+      setTimeout(() => {
+        warmCacheOnBoot().catch((e) => console.warn("[CACHE-WARMER] Boot warmup warning:", e.message));
+      }, 4000);
+    } catch (warmerErr) {
+      console.warn("[CACHE-WARMER] Init warning:", warmerErr.message);
+    }
+
+    // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)
+    const KEEP_ALIVE_URL = process.env.RENDER_EXTERNAL_URL || "https://freestudymaterial.onrender.com";
+    const KEEP_ALIVE_INTERVAL = 12 * 60 * 1000; // 12 minutes (safely under Render's 15m idle cutoff)
+
+    const pingSelf = async () => {
+      try {
+        const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
+        const res = await fetch(pingEndpoint, { signal: AbortSignal.timeout(10000) });
+        if (res.ok) {
+          console.log(`[ANTI-SLEEP] 💓 Self-ping successful: ${pingEndpoint} (Status: ${res.status}) - Render kept awake 24/7`);
+        }
+      } catch (e) {
+        console.warn("[ANTI-SLEEP] Self-ping notice:", e.message);
+      }
+    };
+
+    // Initial ping after 3 minutes, then recurring every 12 minutes
+    setTimeout(pingSelf, 3 * 60 * 1000);
+    setInterval(pingSelf, KEEP_ALIVE_INTERVAL);
+  });
+}
+
+startServer(initialPort);
 
 module.exports = app;
 

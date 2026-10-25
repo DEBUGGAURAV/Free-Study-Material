@@ -45,7 +45,7 @@ function getRpInfo(req) {
   let origin = originHeader;
 
   if (!origin) {
-    const host = req.get("host") || "localhost:5000";
+    const host = req.get("host") || "localhost:5001";
     const proto = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
     origin = `${proto}://${host}`;
   }
@@ -56,7 +56,7 @@ function getRpInfo(req) {
     const expectedOrigin = url.origin;
     return { rpID, expectedOrigin };
   } catch (_) {
-    return { rpID: "localhost", expectedOrigin: "http://localhost:5000" };
+    return { rpID: "localhost", expectedOrigin: `http://${req.get("host") || "localhost:5001"}` };
   }
 }
 

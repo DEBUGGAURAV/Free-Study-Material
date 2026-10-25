@@ -531,6 +531,7 @@ export default function TabHelpDesk() {
                           </div>
                           <div style={{ color: "var(--text-dim)", fontSize: "0.72rem" }}>
                             {t.user_email || "Guest Student"}
+                            {t.user_mobile && <span style={{ color: "var(--accent-cyan)", marginLeft: "4px" }}>• 📱 {t.user_mobile}</span>}
                           </div>
                         </td>
 
@@ -687,6 +688,7 @@ export default function TabHelpDesk() {
                 </div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "4px" }}>
                   Student: <strong style={{ color: "#fff" }}>{selectedTicket.user_name}</strong> • {selectedTicket.user_email || "Guest"}
+                  {selectedTicket.user_mobile && <span style={{ color: "var(--accent-cyan)", marginLeft: "4px" }}>• 📱 {selectedTicket.user_mobile}</span>}
                 </div>
               </div>
 

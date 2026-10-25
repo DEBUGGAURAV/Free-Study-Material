@@ -122,15 +122,16 @@ async function dispatchDailyRevisionAlert(botToken, chatId, threadId = null, bra
     `• <b>Unit ${dossier.todayTarget.unit}:</b> <i>${dossier.todayTarget.title}</i>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Revision Actions:</b>`,
-    `📄 <b>Open Booster PDF:</b> <a href="https://freestudymaterial.onrender.com/?search=${encodeURIComponent(dossier.subject)}">Read Verified Notes</a>`,
-    `🧠 <b>Peer Study Pod:</b> <a href="https://freestudymaterial.onrender.com/?pod=exam-${encodeURIComponent(dossier.subjectCode)}">Join Live Canvas Pod</a>`,
+    `📄 <b>Open Booster PDF:</b> <a href="${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/?search=${encodeURIComponent(dossier.subject)}">Read Verified Notes</a>`,
+    `🧠 <b>Peer Study Pod:</b> <a href="${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/?pod=exam-${encodeURIComponent(dossier.subjectCode)}">Join Live Canvas Pod</a>`,
   ].join("\n");
 
+  const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
   const inlineKeyboard = {
     inline_keyboard: [
       [
-        { text: "📖 Open Booster PDF Notes", url: `https://freestudymaterial.onrender.com/?search=${encodeURIComponent(dossier.subject)}` },
-        { text: "🚀 Join Live Study Pod", url: `https://freestudymaterial.onrender.com/?pod=exam-${encodeURIComponent(dossier.subjectCode)}` },
+        { text: "📖 Open Booster PDF Notes", url: `${siteUrl}/?search=${encodeURIComponent(dossier.subject)}` },
+        { text: "🚀 Join Live Study Pod", url: `${siteUrl}/?pod=exam-${encodeURIComponent(dossier.subjectCode)}` },
       ],
       [
         { text: "🎯 Take 60-Second Rapid Quiz", callback_data: `exam:quiz:${dossier.subjectCode}` },

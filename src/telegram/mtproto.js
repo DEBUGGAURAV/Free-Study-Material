@@ -793,14 +793,15 @@ async function syncTelegramChannel() {
         try {
           if (syncLock.canSendReceipt(storageChatId, msgId)) {
             const formatMb = (docSize / (1024 * 1024)).toFixed(2);
+            const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
             const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
               `✅ <b>Note Successfully Indexed to Website!</b>\n` +
               `📄 <b>Title:</b> ${title}\n` +
               `📚 <b>Subject:</b> ${subject}\n` +
               `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
               `💾 <b>Size:</b> ${formatMb} MB\n` +
-              `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${noteRef.id}/stream\n` +
-              `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
+              `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${noteRef.id}/stream\n` +
+              `🌐 <b>Website:</b> ${siteUrl}\n\n` +
               `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
             const activeBotToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();

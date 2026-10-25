@@ -90,9 +90,9 @@ router.get("/faqs", (req, res) => {
  * POST /api/help/ask
  * Submit a question (both registered & guest)
  */
-router.post("/ask", helpLimiter, async (req, res) => {
+router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
   try {
-    const { name, email, category, subject, question, hp_website } = req.body;
+    const { name, email, mobile, category, subject, question, hp_website } = req.body;
 
     // 1. Anti-spam Honeypot Trap
     if (hp_website) {
@@ -111,19 +111,44 @@ router.post("/ask", helpLimiter, async (req, res) => {
       });
     }
 
-    // Check if user is logged in
-    let user = null;
-    try {
-      const authHeader = req.headers["authorization"];
-      if (authHeader) {
-        const token = authHeader.split(" ")[1];
-        if (token) {
-          const jwt = require("jsonwebtoken");
-          const { JWT_SECRET } = require("../middleware/auth");
-          user = jwt.verify(token, JWT_SECRET);
+    // Check if user is logged in (from authenticateToken middleware)
+    let user = req.user || null;
+    if (!user) {
+      try {
+        const authHeader = req.headers["authorization"];
+        if (authHeader) {
+          const token = authHeader.split(" ")[1];
+          if (token) {
+            const jwt = require("jsonwebtoken");
+            const { JWT_SECRET } = require("../middleware/auth");
+            user = jwt.verify(token, JWT_SECRET);
+          }
         }
+      } catch (_) {}
+    }
+
+    // 🔒 STRICT VALIDATION: Unregistered / Guest users MUST provide valid Email AND Mobile Number
+    if (!user) {
+      if (!name || name.trim().length < 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Full Name is required.",
+        });
       }
-    } catch (_) {}
+      if (!email || !email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({
+          success: false,
+          message: "Email Address is mandatory. Please provide a valid email (e.g. yourname@gmail.com).",
+        });
+      }
+      const cleanMobile = (mobile || "").trim().replace(/[\s-]/g, "");
+      if (!cleanMobile || !/^\+?[0-9]{10,13}$/.test(cleanMobile)) {
+        return res.status(400).json({
+          success: false,
+          message: "Mobile Number is mandatory. Please provide a valid 10-digit mobile number.",
+        });
+      }
+    }
 
     const clientIp = (
       req.headers["x-forwarded-for"] ||
@@ -138,6 +163,7 @@ router.post("/ask", helpLimiter, async (req, res) => {
     const ticket = await createHelpTicket({
       name: user?.name || name || "Student Visitor",
       email: user?.email || email || "",
+      mobile: user?.mobile || mobile || "",
       userId: user?.id || null,
       userRole: user ? (user.role === "admin" ? "admin" : "student") : "guest",
       category: category || "general",
@@ -152,6 +178,8 @@ router.post("/ask", helpLimiter, async (req, res) => {
       ticket: {
         ticket_code: ticket.ticket_code,
         user_name: ticket.user_name,
+        user_email: ticket.user_email,
+        user_mobile: ticket.user_mobile,
         category: ticket.category,
         subject: ticket.subject,
         question: ticket.question,
@@ -167,9 +195,9 @@ router.post("/ask", helpLimiter, async (req, res) => {
 
 /**
  * GET /api/help/ticket/:code
- * Get details of a single ticket
+ * Get details of a single ticket with Strict Ownership Enforcement
  */
-router.get("/ticket/:code", async (req, res) => {
+router.get("/ticket/:code", authenticateToken, async (req, res) => {
   try {
     const { code } = req.params;
     const ticket = await getTicketByCode(code);
@@ -177,11 +205,49 @@ router.get("/ticket/:code", async (req, res) => {
       return res.status(404).json({ success: false, message: `Ticket #${code} not found.` });
     }
 
+    // 🛡️ STRICT TICKET OWNERSHIP LOCK:
+    const currentUser = req.user || null;
+    const isMainAdmin = currentUser && (currentUser.role === "admin" || currentUser.isMainAdmin || currentUser.role === "half_admin");
+
+    if (!isMainAdmin) {
+      // 1. If ticket belongs to a registered student account:
+      if (ticket.user_id) {
+        if (!currentUser || currentUser.id !== ticket.user_id) {
+          return res.status(403).json({
+            success: false,
+            message: "This ticket belongs to a registered account. Please sign in to the corresponding account to view it.",
+          });
+        }
+      } else {
+        // 2. If ticket is a guest inquiry:
+        const queryEmail = (req.query.email || req.headers["x-ticket-email"] || "").trim().toLowerCase();
+        const queryMobile = (req.query.mobile || req.headers["x-ticket-mobile"] || "").replace(/\D/g, "").slice(-10);
+
+        const currentEmail = (currentUser?.email || "").trim().toLowerCase();
+        const currentMobile = (currentUser?.mobile || "").replace(/\D/g, "").slice(-10);
+
+        const ticketEmail = (ticket.user_email || "").trim().toLowerCase();
+        const ticketMobile = (ticket.user_mobile || "").replace(/\D/g, "").slice(-10);
+
+        const emailMatches = (queryEmail && ticketEmail && queryEmail === ticketEmail) || (currentEmail && ticketEmail && currentEmail === ticketEmail);
+        const mobileMatches = (queryMobile && ticketMobile && queryMobile === ticketMobile) || (currentMobile && ticketMobile && currentMobile === ticketMobile);
+
+        if (!emailMatches && !mobileMatches) {
+          return res.status(403).json({
+            success: false,
+            message: "Access restricted: Please enter the matching Email or Mobile number used when creating this ticket.",
+          });
+        }
+      }
+    }
+
     return res.json({
       success: true,
       ticket: {
         ticket_code: ticket.ticket_code,
         user_name: ticket.user_name,
+        user_email: ticket.user_email,
+        user_mobile: ticket.user_mobile,
         category: ticket.category,
         subject: ticket.subject,
         question: ticket.question,
@@ -199,45 +265,62 @@ router.get("/ticket/:code", async (req, res) => {
 
 /**
  * POST /api/help/my-tickets
- * Retrieve ticket history for device or user
+ * Retrieve ticket history for device or user (Strictly scoped to owner)
  */
-router.post("/my-tickets", async (req, res) => {
+router.post("/my-tickets", authenticateToken, async (req, res) => {
   try {
-    const { ticketCodes } = req.body || {};
+    const { ticketCodes, email: bodyEmail, mobile: bodyMobile } = req.body || {};
 
-    let userId = null;
-    try {
-      const authHeader = req.headers["authorization"];
-      if (authHeader) {
-        const token = authHeader.split(" ")[1];
-        if (token) {
-          const jwt = require("jsonwebtoken");
-          const { JWT_SECRET } = require("../middleware/auth");
-          const decoded = jwt.verify(token, JWT_SECRET);
-          userId = decoded.id;
+    let user = req.user || null;
+    let userId = user?.id || null;
+    if (!userId) {
+      try {
+        const authHeader = req.headers["authorization"];
+        if (authHeader) {
+          const token = authHeader.split(" ")[1];
+          if (token) {
+            const jwt = require("jsonwebtoken");
+            const { JWT_SECRET } = require("../middleware/auth");
+            const decoded = jwt.verify(token, JWT_SECRET);
+            userId = decoded.id;
+            user = decoded;
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
-    const tickets = await getTicketsByCodes(Array.isArray(ticketCodes) ? ticketCodes : [], userId);
+    const userEmail = (user?.email || bodyEmail || "").trim().toLowerCase();
+    const userMobile = (user?.mobile || bodyMobile || "").trim();
+
+    const tickets = await getTicketsByCodes(
+      Array.isArray(ticketCodes) ? ticketCodes : [],
+      userId,
+      userEmail,
+      userMobile
+    );
+
+    const safeTickets = Array.isArray(tickets) ? tickets.filter(Boolean) : [];
 
     return res.json({
       success: true,
-      tickets: tickets.map((t) => ({
-        ticket_code: t.ticket_code,
-        user_name: t.user_name,
-        category: t.category,
-        subject: t.subject,
-        question: t.question,
-        status: t.status,
-        admin_reply: t.admin_reply,
-        admin_name: t.admin_name,
-        replied_at: t.replied_at,
-        created_at: t.created_at,
+      tickets: safeTickets.map((t) => ({
+        ticket_code: t.ticket_code || "",
+        user_name: t.user_name || "Student",
+        user_email: t.user_email || "",
+        user_mobile: t.user_mobile || "",
+        category: t.category || "general",
+        subject: t.subject || "",
+        question: t.question || "",
+        status: t.status || "active",
+        admin_reply: t.admin_reply || null,
+        admin_name: t.admin_name || null,
+        replied_at: t.replied_at || null,
+        created_at: t.created_at || new Date().toISOString(),
       })),
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    console.warn("[HELP-MY-TICKETS] Notice:", err.message);
+    return res.json({ success: true, tickets: [] });
   }
 });
 

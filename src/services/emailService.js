@@ -429,7 +429,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
         `👤 <b>Uploaded By:</b> <code>${user.name || "Student Contributor"}</code>\n` +
         (user.email ? `📧 <b>Email:</b> <code>${user.email}</code>\n` : "") +
-        `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${note?.id}/stream\n` +
+        `🔗 <b>Direct Link:</b> ${(process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "")}/api/notes/${note?.id}/stream\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
     } else if (event === "NOTE_DOWNLOAD") {

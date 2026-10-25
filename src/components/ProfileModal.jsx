@@ -982,7 +982,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v9 (Service Worker)</div>
+                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v10 (Service Worker)</div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Application shell, offline catalog JSON, and stream clones</div>
                 </div>
                 <span style={{ fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>CacheStorage</span>

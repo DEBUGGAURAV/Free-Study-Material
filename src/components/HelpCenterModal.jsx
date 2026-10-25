@@ -17,6 +17,7 @@ import {
   Ticket,
   User,
   Mail,
+  Phone,
   Copy,
   Check,
 } from "lucide-react";
@@ -31,6 +32,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
   // Form State
   const [name, setName] = useState(currentUser?.name || "");
   const [email, setEmail] = useState(currentUser?.email || "");
+  const [mobile, setMobile] = useState(currentUser?.mobile || "");
   const [category, setCategory] = useState("general");
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
@@ -57,17 +59,23 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
       .catch(() => {});
   }, [isOpen]);
 
-  // Load user's tickets
+  // Load user's tickets (Strictly scoped to owner)
   const fetchTickets = () => {
     setLoadingTickets(true);
     let storedCodes = [];
+    let guestEmail = email || "";
+    let guestMobile = mobile || "";
     try {
       const stored = localStorage.getItem("fsm_help_ticket_codes");
       if (stored) storedCodes = JSON.parse(stored);
+      if (!currentUser) {
+        guestEmail = guestEmail || localStorage.getItem("fsm_help_guest_email") || "";
+        guestMobile = guestMobile || localStorage.getItem("fsm_help_guest_mobile") || "";
+      }
     } catch (_) {}
 
     api
-      .getMyHelpTickets(storedCodes)
+      .getMyHelpTickets(storedCodes, guestEmail, guestMobile)
       .then((res) => {
         if (res.tickets) setMyTickets(res.tickets);
       })
@@ -86,6 +94,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
     if (currentUser) {
       setName(currentUser.name || "");
       setEmail(currentUser.email || "");
+      setMobile(currentUser.mobile || "");
     }
   }, [currentUser]);
 
@@ -95,6 +104,33 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
   const handleSubmitQuestion = async (e) => {
     e.preventDefault();
     setFormError(null);
+
+    // Strict validation: Email and Mobile are MANDATORY for users without login
+    if (!currentUser) {
+      if (!name || name.trim().length < 2) {
+        setFormError("Please enter your full name.");
+        return;
+      }
+      if (!email || !email.trim()) {
+        setFormError("Email Address is mandatory. Please enter your email.");
+        return;
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        setFormError("Please enter a valid email address (e.g. yourname@gmail.com).");
+        return;
+      }
+      if (!mobile || !mobile.trim()) {
+        setFormError("Mobile Number is mandatory. Please enter your 10-digit mobile number.");
+        return;
+      }
+      const cleanMobile = mobile.trim().replace(/[\s-]/g, "");
+      if (!/^\+?[0-9]{10,13}$/.test(cleanMobile)) {
+        setFormError("Please enter a valid 10-digit mobile number.");
+        return;
+      }
+    }
+
     if (!question || question.trim().length < 5) {
       setFormError("Please enter your question with at least 5 characters.");
       return;
@@ -105,6 +141,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
       const res = await api.askHelpQuestion({
         name,
         email,
+        mobile,
         category,
         subject,
         question,
@@ -116,13 +153,17 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
         setQuestion("");
         setSubject("");
 
-        // Store ticket code in localStorage for guests
+        // Store ticket code and guest credentials in localStorage for guests
         try {
           const stored = localStorage.getItem("fsm_help_ticket_codes");
           const arr = stored ? JSON.parse(stored) : [];
           if (!arr.includes(res.ticket.ticket_code)) {
             arr.unshift(res.ticket.ticket_code);
             localStorage.setItem("fsm_help_ticket_codes", JSON.stringify(arr));
+          }
+          if (!currentUser) {
+            if (email) localStorage.setItem("fsm_help_guest_email", email.trim().toLowerCase());
+            if (mobile) localStorage.setItem("fsm_help_guest_mobile", mobile.trim());
           }
         } catch (_) {}
       } else {
@@ -135,15 +176,18 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
     }
   };
 
-  // Lookup single ticket
+  // Lookup single ticket (With Strict 2-Factor Ownership Verification)
   const handleLookupTicket = async (e) => {
     e.preventDefault();
     setLookupError(null);
     if (!manualTicketLookup || !manualTicketLookup.trim()) return;
 
     const code = manualTicketLookup.trim().toUpperCase();
+    const guestEmail = email || (!currentUser ? localStorage.getItem("fsm_help_guest_email") || "" : "");
+    const guestMobile = mobile || (!currentUser ? localStorage.getItem("fsm_help_guest_mobile") || "" : "");
+
     try {
-      const res = await api.getHelpTicket(code);
+      const res = await api.getHelpTicket(code, guestEmail, guestMobile);
       if (res.ticket) {
         setMyTickets((prev) => {
           const exists = prev.some((t) => t.ticket_code === res.ticket.ticket_code);
@@ -154,7 +198,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
         setLookupError(`Ticket #${code} not found.`);
       }
     } catch (err) {
-      setLookupError(err.message || "Ticket not found.");
+      setLookupError(err.message || "Ticket not found or access restricted.");
     }
   };
 
@@ -551,38 +595,60 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                     >
                       <User size={16} color="#38bdf8" />
                       <div>
-                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email || "Student Account"})
+                        Signed in as <strong>{currentUser.name}</strong> ({currentUser.email || "Student Account"}{currentUser.mobile ? ` • 📱 ${currentUser.mobile}` : ""})
                       </div>
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "12px",
-                        marginBottom: "14px",
-                      }}
-                    >
-                      <div>
-                        <label className="form-label">Your Name *</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="e.g. Aman Verma"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          required
-                        />
+                    <div style={{ marginBottom: "14px" }}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr 1fr",
+                          gap: "12px",
+                        }}
+                      >
+                        <div>
+                          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <User size={12} color="#38bdf8" /> Name *
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="e.g. Aman Verma"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Mail size={12} color="#38bdf8" /> Email *
+                          </label>
+                          <input
+                            type="email"
+                            className="form-input"
+                            placeholder="yourname@gmail.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Phone size={12} color="#38bdf8" /> Mobile No *
+                          </label>
+                          <input
+                            type="tel"
+                            className="form-input"
+                            placeholder="10-digit Mobile"
+                            value={mobile}
+                            onChange={(e) => setMobile(e.target.value)}
+                            required
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="form-label">Email (Optional)</label>
-                        <input
-                          type="email"
-                          className="form-input"
-                          placeholder="yourname@gmail.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                        />
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "6px" }}>
+                        🔒 Email &amp; Mobile Number are mandatory so our academic team can contact and assist you.
                       </div>
                     </div>
                   )}

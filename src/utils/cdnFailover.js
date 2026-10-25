@@ -8,7 +8,7 @@ const isLocal = typeof window !== "undefined" && (window.location.hostname === "
 
 const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "";
 
-const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
+const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5001";
 
 export const CDN_ENDPOINTS = [
   originBase,

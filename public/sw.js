@@ -1,10 +1,10 @@
 /**
- * FreeStudyMaterial PWA Service Worker v9
+ * FreeStudyMaterial PWA Service Worker v10
  * 100% Offline Mode & Network-First Caching
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v9';
+const CACHE_NAME = 'fsm-cache-v10';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -84,8 +84,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 0. Completely bypass Vite dev server modules, source files & HMR channels
-  // Ensures Service Worker never intercepts, caches, or corrupts local dev JSX modules
+  // 0. Completely bypass Vite dev server modules, source files, HMR channels & API routes (except /api/notes)
+  // Ensures Service Worker never intercepts, caches, or corrupts live API or local dev JSX modules
   if (
     url.origin === self.location.origin &&
     (url.pathname.startsWith('/src/') ||
@@ -93,7 +93,9 @@ self.addEventListener('fetch', (event) => {
      url.pathname.startsWith('/node_modules/') ||
      url.pathname.endsWith('.jsx') ||
      url.pathname.endsWith('.tsx') ||
-     url.searchParams.has('t'))
+     url.searchParams.has('t') ||
+     url.pathname.startsWith('/ws') ||
+     (url.pathname.startsWith('/api/') && url.pathname !== '/api/notes'))
   ) {
     return;
   }
@@ -271,12 +273,15 @@ export default {};`,
           } catch (_) {}
         }
 
-        console.log('[SW] 📴 Offline: Serving cached notes vault');
-        try {
-          self.clients.matchAll().then((clients) => {
-            clients.forEach((c) => c.postMessage({ type: 'FSM_NETWORK_STATUS', isOffline: true }));
-          });
-        } catch (_) {}
+        // Only broadcast offline status if device is ACTUALLY disconnected from the network
+        if (!self.navigator.onLine) {
+          console.log('[SW] 📴 Offline: Serving cached notes vault');
+          try {
+            self.clients.matchAll().then((clients) => {
+              clients.forEach((c) => c.postMessage({ type: 'FSM_NETWORK_STATUS', isOffline: true }));
+            });
+          } catch (_) {}
+        }
 
         const cached =
           (await cache.match(request)) ||
@@ -294,8 +299,8 @@ export default {};`,
     return;
   }
 
-  // 4. Same-Origin Assets (Vite dev modules, source code, CSS, JS, Fonts, Images)
-  if (url.origin === self.location.origin) {
+  // 4. Same-Origin Assets (CSS, JS, Fonts, Images - strictly bypasses API and WebSocket)
+  if (url.origin === self.location.origin && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/ws')) {
     const cleanUrl = url.origin + url.pathname;
 
     event.respondWith(

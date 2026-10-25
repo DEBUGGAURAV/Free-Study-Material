@@ -24,6 +24,8 @@ const pendingPasswordResets = new Map();
 // Key: Telegram chat_id -> { action, mobile, email, expiresAt }
 const userBotStates = new Map();
 
+const getSiteUrl = () => (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+
 
 // Runtime Security Bot Controls (Single Document Commit Pattern to prevent database bloat)
 let botSettings = {
@@ -885,7 +887,7 @@ async function startSecurityBotPoller() {
                 `⚠️ <b>Registration Session Expired or Invalid</b>\n\n` +
                   `Your website registration session has expired or the link is invalid.\n` +
                   `Please open the website, complete the registration form, and click the new verification link.\n\n` +
-                  `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
+                  `🌐 <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>`,
                 { remove_keyboard: true }
               );
               continue;
@@ -932,7 +934,7 @@ async function startSecurityBotPoller() {
                 `⚠️ <b>Password Reset Session Expired or Invalid</b>\n\n` +
                   `Your password reset session has expired or the link is invalid.\n` +
                   `Please open the website, complete the Forgot Password form, and click the new verification link.\n\n` +
-                  `🌐 <a href="https://freestudymaterial.com">freestudymaterial.com</a>`,
+                  `🌐 <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>`,
                 { remove_keyboard: true }
               );
               continue;
@@ -948,7 +950,7 @@ async function startSecurityBotPoller() {
               `🛡️ <b>Security Policy:</b>\n` +
               `One-Time Passcodes (OTP) cannot be generated directly from Telegram without submitting the website form first.\n\n` +
               `👉 <b>Action Steps:</b>\n` +
-              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `1️⃣ Open the website: <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>\n` +
               `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
               `3️⃣ After submitting, click the <b>"Verify via Telegram"</b> button.\n\n` +
               `The bot will display your submitted details and deliver your verification OTP once your mobile number is confirmed!`,
@@ -974,7 +976,7 @@ async function startSecurityBotPoller() {
             chatId,
             `⚠️ <b>Website Form Submission Required!</b>\n\n` +
               `Direct OTP generation from Telegram is disabled.\n\n` +
-              `Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a>, submit the form, and follow the Telegram verification link!`,
+              `Please visit <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>, submit the form, and follow the Telegram verification link!`,
             { remove_keyboard: true }
           );
           continue;
@@ -997,7 +999,7 @@ async function startSecurityBotPoller() {
               `⚠️ <b>Website Form Submission Required!</b>\n` +
               `One-Time Passcodes (OTP) cannot be generated directly from Telegram without submitting the website form first.\n\n` +
               `👉 <b>Steps:</b>\n` +
-              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `1️⃣ Open the website: <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>\n` +
               `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
               `3️⃣ Click the <b>"Verify via Telegram"</b> button provided on the confirmation screen.\n\n` +
               `Upon submission, the bot will display your form data and generate your OTP once phone verification is completed!`,
@@ -1086,7 +1088,7 @@ async function startSecurityBotPoller() {
               `You have not submitted the Registration or Forgot Password form on the website.\n` +
               `One-Time Passcodes (OTP) cannot be generated directly through Telegram without website form submission.\n\n` +
               `👉 <b>Please follow these steps:</b>\n` +
-              `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+              `1️⃣ Open the website: <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>\n` +
               `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
               `3️⃣ Click the <b>"Verify via Telegram"</b> button.\n\n` +
               `The bot will automatically present your details and deliver your OTP upon phone number verification!`,
@@ -1170,7 +1172,7 @@ async function startSecurityBotPoller() {
             chatId,
             `⚠️ <b>Website Session Not Found!</b>\n\n` +
               `No pending registration or password reset session found for mobile number <code>${digitsOnly}</code>.\n\n` +
-              `👉 Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a> and complete the form first!`,
+              `👉 Please visit <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a> and complete the form first!`,
             { remove_keyboard: true }
           );
           continue;
@@ -1227,7 +1229,7 @@ async function startSecurityBotPoller() {
             chatId,
             `⚠️ <b>Website Form Submission Required!</b>\n\n` +
               `One-Time Passcodes (OTP) cannot be generated directly without submitting the form first.\n\n` +
-              `👉 Please visit <a href="https://freestudymaterial.com">freestudymaterial.com</a> and complete the Registration or Forgot Password form!`,
+              `👉 Please visit <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a> and complete the Registration or Forgot Password form!`,
             { remove_keyboard: true }
           );
           continue;
@@ -1257,7 +1259,7 @@ async function startSecurityBotPoller() {
           `⚠️ <b>Website Form Submission Required!</b>\n\n` +
             `One-Time Passcodes (OTP) cannot be generated directly through Telegram without website form submission.\n\n` +
             `👉 <b>Action Steps:</b>\n` +
-            `1️⃣ Open the website: <a href="https://freestudymaterial.com">freestudymaterial.com</a>\n` +
+            `1️⃣ Open the website: <a href="${getSiteUrl()}">${getSiteUrl().replace(/^https?:\/\//, "")}</a>\n` +
             `2️⃣ Complete the <b>Registration</b> or <b>Forgot Password</b> form.\n` +
             `3️⃣ Click the <b>"Verify via Telegram"</b> button.\n\n` +
             `The bot will automatically present your details and deliver your OTP once mobile verification is completed!`,

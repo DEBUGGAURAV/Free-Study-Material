@@ -46,11 +46,24 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.VITE_BACKEND_URL || 'http://localhost:5001',
         changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, res) => {
+            console.warn('[Vite Proxy Warning] Backend unreachable on port 5001:', err.message);
+            if (res && !res.headersSent) {
+              res.writeHead(502, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                success: false,
+                message: 'Backend server is offline or unreachable on port 5001. Please ensure `npm start` is running in your terminal.'
+              }));
+            }
+          });
+        },
       },
       '/ws': {
-        target: 'ws://localhost:5000',
+        target: process.env.VITE_WS_URL || 'ws://localhost:5001',
         ws: true,
       },
     },

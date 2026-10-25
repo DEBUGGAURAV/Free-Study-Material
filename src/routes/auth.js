@@ -1285,9 +1285,19 @@ router.post("/login", authLimiter, async (req, res) => {
 
     const cleanPassword = (password || "").trim();
     const envAdminPassword = getAdminPassword();
+    const unquotedPass = cleanPassword.replace(/^["']|["']$/g, "");
+    const unquotedEnv = (envAdminPassword || "").replace(/^["']|["']$/g, "");
 
     // ⚡ 1. ULTRA-FAST MASTER ADMIN FAST-PATH (0ms latency, zero database wait):
-    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || cleanPassword === envAdminPassword)) {
+    if (
+      isMainAdminAlias &&
+      envAdminPassword &&
+      (password === envAdminPassword ||
+        cleanPassword === envAdminPassword ||
+        unquotedPass === unquotedEnv ||
+        cleanPassword === unquotedEnv ||
+        unquotedPass === envAdminPassword)
+    ) {
       const payload = {
         id: "admin-root",
         email: MAIN_ADMIN_EMAIL || (process.env.ADMIN_EMAIL || "admin@studyvault.in").trim(),
@@ -1517,7 +1527,7 @@ router.post("/login", authLimiter, async (req, res) => {
     });
   } catch (err) {
     console.error("[AUTH] Login error:", err);
-    return res.status(500).json({ success: false, message: "Server error during authentication." });
+    return res.status(500).json({ success: false, message: err.message || "Server error during authentication." });
   }
 });
 

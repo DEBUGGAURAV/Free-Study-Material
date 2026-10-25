@@ -377,14 +377,15 @@ async function processIncomingMessage(message) {
         }
         const realSize = formatRealSize(fileSize);
 
+        const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
         const dupNotice = `♻️ <b>Free Study Material — Duplicate Notice Receipt</b>\n\n` +
           `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
           `📄 <b>Title:</b> ${dupData.title || title}\n` +
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
           `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
           `💾 <b>Size:</b> ${realSize}\n` +
-          `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${duplicateDoc.id}/stream\n` +
-          `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
+          `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${duplicateDoc.id}/stream\n` +
+          `🌐 <b>Website:</b> ${siteUrl}\n\n` +
           `<i>🛡️ <b>Deduplication Shield:</b> This document is already indexed and live on the website. Duplicate re-upload was safely prevented to conserve cloud storage. Students can access it directly.</i>`;
 
         // 1. Send receipt directly to the chat where the student sent the message
@@ -494,14 +495,15 @@ async function processIncomingMessage(message) {
       }
       const realSize = formatRealSize(fileSize);
 
+      const siteUrl2 = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
       const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
         `✅ <b>Note Successfully Indexed to Website!</b>\n` +
         `📄 <b>Title:</b> ${title}\n` +
         `📚 <b>Subject:</b> ${subject}\n` +
         `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
         `💾 <b>Size:</b> ${realSize}\n` +
-        `🔗 <b>Direct Link:</b> https://freestudymaterial.onrender.com/api/notes/${noteRef.id}/stream\n` +
-        `🌐 <b>Website:</b> https://freestudymaterial.onrender.com\n\n` +
+        `🔗 <b>Direct Link:</b> ${siteUrl2}/api/notes/${noteRef.id}/stream\n` +
+        `🌐 <b>Website:</b> ${siteUrl2}\n\n` +
         `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
       // 1. Send receipt directly to the chat where the student uploaded the note

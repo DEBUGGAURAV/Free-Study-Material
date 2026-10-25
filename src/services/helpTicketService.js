@@ -88,6 +88,7 @@ async function initHelpTable() {
         user_id TEXT,
         user_name TEXT,
         user_email TEXT,
+        user_mobile TEXT,
         user_role TEXT DEFAULT 'guest',
         category TEXT DEFAULT 'general',
         subject TEXT,
@@ -106,6 +107,8 @@ async function initHelpTable() {
     `);
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_code ON help_tickets(ticket_code);`).catch(() => {});
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_status ON help_tickets(status);`).catch(() => {});
+    // Safe hot-migration for existing databases
+    await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN user_mobile TEXT;`).catch(() => {});
     console.log("[HELP-TURSO] ✅ Support help_tickets table ready.");
   } catch (err) {
     console.warn("[HELP-TURSO] Table init warning:", err.message);
@@ -140,13 +143,15 @@ async function dispatchTelegramHelpNotice(ticket) {
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Registered Student" : "👤 Guest Visitor";
   const userDisplay = `${ticket.user_name || "Guest"} (${roleLabel})`;
-  const emailDisplay = ticket.user_email || "Not Provided (Guest)";
+  const emailDisplay = ticket.user_email || "Not Provided";
+  const mobileDisplay = ticket.user_mobile || "Not Provided";
 
   const text = [
     `📩 <b>NEW HELP DESK QUERY #${ticket.ticket_code}</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👤 <b>Student:</b> ${userDisplay}`,
     `📧 <b>Email:</b> <code>${emailDisplay}</code>`,
+    `📱 <b>Mobile:</b> <code>${mobileDisplay}</code>`,
     `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
     ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
     `❓ <b>Question:</b>`,
@@ -211,6 +216,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👤 <b>Student:</b> ${ticket.user_name || "Guest"} (${roleLabel})`,
     `📧 <b>Email:</b> <code>${ticket.user_email || "Not Provided"}</code>`,
+    `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "Not Provided"}</code>`,
     `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
     ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
     `❓ <b>Original Inquiry:</b>`,
@@ -248,6 +254,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
 async function createHelpTicket({
   name,
   email,
+  mobile = "",
   userId = null,
   userRole = "guest",
   category = "general",
@@ -265,6 +272,7 @@ async function createHelpTicket({
     user_id: userId,
     user_name: (name || "Guest Scholar").trim(),
     user_email: (email || "").trim().toLowerCase(),
+    user_mobile: (mobile || "").trim(),
     user_role: userRole,
     category: category || "general",
     subject: (subject || "").trim(),
@@ -306,9 +314,9 @@ async function createHelpTicket({
       await helpTursoClient.execute({
         sql: `
           INSERT INTO help_tickets (
-            id, ticket_code, user_id, user_name, user_email, user_role,
+            id, ticket_code, user_id, user_name, user_email, user_mobile, user_role,
             category, subject, question, status, ip_address, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
           id,
@@ -316,6 +324,7 @@ async function createHelpTicket({
           userId,
           ticketObj.user_name,
           ticketObj.user_email,
+          ticketObj.user_mobile,
           ticketObj.user_role,
           ticketObj.category,
           ticketObj.subject,
@@ -366,45 +375,87 @@ async function getTicketByCode(ticketCode) {
 }
 
 /**
- * Get multiple tickets by list of codes or userId
+ * Get multiple tickets by list of codes or userId with Strict Ownership Enforcement
  */
-async function getTicketsByCodes(ticketCodes = [], userId = null) {
+async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = null, userMobile = null) {
   const results = [];
+  const addedCodes = new Set();
+  const cleanEmail = (userEmail || "").trim().toLowerCase();
+  const cleanMobileDigits = (userMobile || "").replace(/\D/g, "").slice(-10);
   const validCodes = (ticketCodes || [])
     .map((c) => String(c).trim().toUpperCase())
     .filter((c) => c.startsWith("FSM-H"));
 
+  // 🛡️ Strict ownership verifier: guarantees a user only receives their own tickets
+  const isTicketOwner = (t) => {
+    if (!t) return false;
+    // 1. If ticket belongs to a registered student account:
+    if (t.user_id) {
+      return Boolean(userId && t.user_id === userId);
+    }
+    // 2. If ticket is a guest inquiry (user_id IS NULL):
+    const tEmail = (t.user_email || "").trim().toLowerCase();
+    const tMobile = (t.user_mobile || "").replace(/\D/g, "").slice(-10);
+
+    if (cleanEmail && tEmail && tEmail === cleanEmail) return true;
+    if (cleanMobileDigits && tMobile && tMobile === cleanMobileDigits) return true;
+
+    // If requested via stored device ticketCodes from guest browser session
+    if (!userId && validCodes.includes(t.ticket_code)) {
+      if (!cleanEmail && !cleanMobileDigits) return true;
+    }
+    return false;
+  };
+
+  // 1. Fetch from in-memory pool with ownership check
   for (const code of validCodes) {
     if (memoryTickets.has(code)) {
-      results.push(memoryTickets.get(code));
+      const cached = memoryTickets.get(code);
+      if (isTicketOwner(cached) && !addedCodes.has(cached.ticket_code)) {
+        results.push(cached);
+        addedCodes.add(cached.ticket_code);
+      }
     }
   }
 
-  if (helpTursoClient && (validCodes.length > 0 || userId)) {
+  // 2. Fetch from Turso Edge Database
+  if (helpTursoClient && (validCodes.length > 0 || userId || cleanEmail || cleanMobileDigits)) {
     try {
       await ensureHelpTable();
       let querySql = "";
       let args = [];
 
-      if (validCodes.length > 0 && userId) {
-        const placeholders = validCodes.map(() => "?").join(",");
-        querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) OR user_id = ? ORDER BY created_at DESC LIMIT 50`;
-        args = [...validCodes, userId];
+      if (userId) {
+        // Authenticated user: own tickets + any past guest inquiries matching their verified email/mobile
+        if (cleanEmail || cleanMobileDigits) {
+          querySql = `SELECT * FROM help_tickets WHERE user_id = ? OR (user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?)) ORDER BY created_at DESC LIMIT 50`;
+          args = [userId, cleanEmail, `%${cleanMobileDigits}`];
+        } else {
+          querySql = `SELECT * FROM help_tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`;
+          args = [userId];
+        }
       } else if (validCodes.length > 0) {
+        // Guest user: strictly guest inquiries (user_id IS NULL), NEVER expose registered student tickets
         const placeholders = validCodes.map(() => "?").join(",");
-        querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) ORDER BY created_at DESC LIMIT 50`;
-        args = validCodes;
-      } else if (userId) {
-        querySql = `SELECT * FROM help_tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`;
-        args = [userId];
+        if (cleanEmail || cleanMobileDigits) {
+          querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) AND user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?) ORDER BY created_at DESC LIMIT 50`;
+          args = [...validCodes, cleanEmail, `%${cleanMobileDigits}`];
+        } else {
+          querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) AND user_id IS NULL ORDER BY created_at DESC LIMIT 50`;
+          args = validCodes;
+        }
+      } else if (cleanEmail || cleanMobileDigits) {
+        // Guest inquiry tracking by verified email/mobile
+        querySql = `SELECT * FROM help_tickets WHERE user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?) ORDER BY created_at DESC LIMIT 50`;
+        args = [cleanEmail, `%${cleanMobileDigits}`];
       }
 
       if (querySql) {
         const res = await helpTursoClient.execute({ sql: querySql, args });
-        const existingCodes = new Set(results.map((r) => r.ticket_code));
         for (const row of res.rows) {
-          if (!existingCodes.has(row.ticket_code)) {
+          if (!addedCodes.has(row.ticket_code) && isTicketOwner(row)) {
             results.push(row);
+            addedCodes.add(row.ticket_code);
             memoryTickets.set(row.ticket_code, row);
           }
         }
