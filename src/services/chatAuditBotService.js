@@ -2509,37 +2509,25 @@ async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, acti
 
 /**
  * Dispatches Comprehensive Student Chat Deletion & Cascade Audit Report
- * Sent to Chat Audit Bot Supergroup (Topic 37: Live Active Students & Session Logs) and Admin DM
+ * 🛡️ STRICT USER REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 114 (NOT Topic 37). NEVER to Admin DM.
  */
 async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSummary = {} }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
-  const targetTopic = auditTopics.presence || "37";
 
   const targetChats = [];
 
-  // Deliver to configured Public Chat Topic
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
+  // 🛡️ STRICT USER REQUIREMENT: Send ONLY to Chat Audit Supergroup Topic 114 (NOT Topic 37). NEVER to Admin DM.
+  const targetThreadId = process.env.TELEGRAM_CHAT_TOPIC_PURGE_114 || "114";
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: targetTopic,
+      threadId: targetThreadId,
       isDirect: false,
     });
   }
 
-  // Deliver to Admin DM
-  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId || !targetTopic)) {
-    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
-      targetChats.push({
-        chatId: effectiveAdminId,
-        threadId: null,
-        isDirect: true,
-      });
-    }
-  }
-
   if (targetChats.length === 0) {
-    console.log("[CHAT-AUDIT-BOT] ⚠️ No target chat configured for deletion report; skipping Telegram broadcast.");
+    console.log("[CHAT-AUDIT-BOT] ⚠️ No Chat Audit Supergroup configured; skipping Telegram broadcast.");
     return false;
   }
 
