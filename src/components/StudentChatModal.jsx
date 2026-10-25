@@ -717,6 +717,15 @@ export default function StudentChatModal({
           if (currentRoom.id === data.roomId) {
             handleSwitchRoom({ id: "public", name: "💬 Public Community Chat", isPrivate: false });
           }
+        } else if (data.type === "remote_storage_wipe" || data.type === "remote_storage_wipe_all") {
+          import("../utils/offlineQueue").then(({ wipeAllDeviceOfflineStorage }) => {
+            wipeAllDeviceOfflineStorage().then(() => {
+              if (data.epoch) {
+                localStorage.setItem("fsm_device_cache_epoch", String(data.epoch));
+              }
+              console.log("[STORAGE] 🧹 Executed remote storage reset from administrator via WebSocket.");
+            }).catch(() => {});
+          });
         } else if (data.type === "blocked_status_update") {
           setIsBlocked(Boolean(data.isBlocked));
           if (data.message) {

@@ -25,7 +25,6 @@ const {
   dispatchPrivateMediaToTelegramVault,
   dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
-  dispatchPrivateChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,
   dispatchChatPresenceAlertToTelegram,
@@ -1354,13 +1353,15 @@ function initChatWebSocket(server) {
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public send dispatch notice:", err.message));
           } else {
-            // 🔒 Private Chat on-demand Routing: Dispatches to Telegram ONLY when admin explicitly configures a privateChat topic
-            dispatchPrivateChatMessageToTelegram({
-              message: newMsg,
-              room: currentRoom,
-              chatMediaDir: CHAT_MEDIA_DIR,
-              sender: { ...user, ip: ws.userIp },
-            }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private chat dispatch notice:", err.message));
+            // 🔒 Private Chat Media Vault (Topic 33): Real-time vaulting for PDF, IMG, Documents (pure text excluded)
+            if (newMsg.fileUrl || ["pdf", "image", "document", "audio"].includes(newMsg.type)) {
+              dispatchPrivateMediaToTelegramVault({
+                message: newMsg,
+                room: currentRoom,
+                chatMediaDir: CHAT_MEDIA_DIR,
+                sender: { ...user, ip: ws.userIp },
+              }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private media vault dispatch notice:", err.message));
+            }
           }
 
           // Update lastActivity for private pod
@@ -3410,6 +3411,56 @@ async function handlePurgePublicChatFromTelegram(adminInfo = {}) {
   return { success: true };
 }
 
+/**
+ * ⚡ Real-Time Zero-Cost Remote Storage Wipe Dispatches
+ * Zero database reads/writes, zero server CPU overhead. Dispatches directly over existing WebSockets.
+ */
+function broadcastRemoteStorageWipe({ studentId, email }) {
+  if (!wssInstance || !wssInstance.clients) return false;
+  let delivered = false;
+  const targetId = String(studentId || "").trim();
+  const targetEmail = String(email || "").trim().toLowerCase();
+
+  wssInstance.clients.forEach((clientWs) => {
+    if (clientWs && clientWs.readyState === 1 && clientWs.user) {
+      const uid = String(clientWs.user.id || "").trim();
+      const uemail = String(clientWs.user.email || "").trim().toLowerCase();
+      if ((targetId && uid === targetId) || (targetEmail && uemail === targetEmail)) {
+        try {
+          clientWs.send(JSON.stringify({
+            type: "remote_storage_wipe",
+            targetUserId: uid,
+            reason: "Administrator remote storage refresh",
+            timestamp: new Date().toISOString(),
+          }));
+          delivered = true;
+        } catch (_) {}
+      }
+    }
+  });
+  return delivered;
+}
+
+function broadcastRemoteStorageWipeAll(epoch = 1) {
+  if (!wssInstance || !wssInstance.clients) return 0;
+  let count = 0;
+  const payload = JSON.stringify({
+    type: "remote_storage_wipe_all",
+    epoch,
+    reason: "Global storage refresh to latest catalog epoch",
+    timestamp: new Date().toISOString(),
+  });
+
+  wssInstance.clients.forEach((clientWs) => {
+    if (clientWs && clientWs.readyState === 1) {
+      try {
+        clientWs.send(payload);
+        count++;
+      } catch (_) {}
+    }
+  });
+  return count;
+}
 
 router.initChatWebSocket = initChatWebSocket;
 router.purgeUserChatHistory = purgeUserChatHistory;
@@ -3424,5 +3475,7 @@ router.handleBlockUserFromTelegram = handleBlockUserFromTelegram;
 router.handleUnblockUserFromTelegram = handleUnblockUserFromTelegram;
 router.getBlockedUsersList = getBlockedUsersList;
 router.handlePurgePublicChatFromTelegram = handlePurgePublicChatFromTelegram;
+router.broadcastRemoteStorageWipe = broadcastRemoteStorageWipe;
+router.broadcastRemoteStorageWipeAll = broadcastRemoteStorageWipeAll;
 
 module.exports = router;

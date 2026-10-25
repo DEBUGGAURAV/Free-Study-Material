@@ -879,6 +879,87 @@ export default function TabTechNexus(props) {
                       />
                     </div>
 
+                    {/* Remote Client Storage & Cache Purge Controller */}
+                    <div style={{ padding: "12px", background: "rgba(168, 85, 247, 0.08)", border: "1px solid rgba(168, 85, 247, 0.25)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <HardDrive size={16} color="#c084fc" />
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc" }}>Student Device Cache &amp; Storage Controller</span>
+                        </div>
+                        <span style={{ fontSize: "0.68rem", color: "#34d399", background: "rgba(16, 185, 129, 0.15)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                          ⚡ 0 DB Reads/Writes
+                        </span>
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+                        Remotely purges client IndexedDB tables (<code style={{ color: "#c084fc" }}>fsm_offline_vault</code>, <code style={{ color: "#c084fc" }}>fsm_p2p_cache_v1</code>) and Service Worker caches across student devices via real-time WebSocket or CDN epoch headers. 0.0% Server CPU overhead.
+                      </p>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!window.confirm("⚠️ Force an offline storage reset on ALL student devices platform-wide?\n\nThis bumps the global cache epoch and triggers an immediate local cache wipe on all student devices with 0 database reads and 0 database writes.")) return;
+                            try {
+                              const res = await api.resetAllUsersStorageCache();
+                              alert(`✅ ${res.message || "Global storage reset dispatched."}`);
+                            } catch (err) {
+                              alert(`❌ Global reset failed: ${err.message}`);
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: "160px",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            background: "rgba(168, 85, 247, 0.2)",
+                            border: "1px solid rgba(168, 85, 247, 0.5)",
+                            color: "#c084fc",
+                            fontWeight: 700,
+                            fontSize: "0.74rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <RotateCcw size={13} />
+                          <span>Reset All Student Caches</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const query = window.prompt("Enter student email or ID to remotely wipe their device offline cache:");
+                            if (!query) return;
+                            try {
+                              const res = await api.resetSingleUserStorageCache(query, query);
+                              alert(`✅ ${res.message || "Targeted storage reset dispatched."}`);
+                            } catch (err) {
+                              alert(`❌ Reset failed: ${err.message}`);
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: "160px",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            background: "rgba(56, 189, 248, 0.15)",
+                            border: "1px solid rgba(56, 189, 248, 0.4)",
+                            color: "#38bdf8",
+                            fontWeight: 700,
+                            fontSize: "0.74rem",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <Search size={13} />
+                          <span>Target Single Student Reset</span>
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Collaborative Study Room Toggle */}
                     <div style={{ display: "flex", flexDirection: "column", gap: "8px", padding: "8px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

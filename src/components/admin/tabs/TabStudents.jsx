@@ -62,6 +62,24 @@ export default function TabStudents(props) {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm("⚠️ Remotely wipe and reset offline storage & IndexedDB cache for ALL students across the platform?\n\nThis increments the global cache epoch and triggers a background reset on all student phones with 0 database reads and 0 database writes.")) return;
+                      try {
+                        const res = await api.resetAllUsersStorageCache();
+                        alert(`✅ ${res.message || "Global storage reset dispatched."}`);
+                      } catch (err) {
+                        alert(`❌ Global reset failed: ${err.message}`);
+                      }
+                    }}
+                    className="btn-secondary"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 12px", border: "1px solid rgba(168, 85, 247, 0.4)", color: "#c084fc", background: "rgba(168, 85, 247, 0.1)" }}
+                    title="Zero Database Cost: Remote-purges IndexedDB & Service Worker caches on all student phones"
+                  >
+                    <RotateCcw size={14} />
+                    <span>Reset All Student Caches (0 DB Cost)</span>
+                  </button>
+
                   {!isHalfAdmin && (
                     <button
                       onClick={handleDeleteAllStudents}
@@ -293,6 +311,23 @@ export default function TabStudents(props) {
                                 title="Inspect Activity Logs"
                               >
                                 <Activity size={15} />
+                              </button>
+
+                              <button
+                                onClick={async () => {
+                                  if (!window.confirm(`Remotely wipe and reset offline IndexedDB storage & caches for ${student.name} (${student.email})?\n\nThis executes immediately over WebSocket or when they next open the app with 0 database cost.`)) return;
+                                  try {
+                                    const res = await api.resetSingleUserStorageCache(student.id, student.email);
+                                    alert(`✅ ${res.message || "Storage reset command dispatched."}`);
+                                  } catch (err) {
+                                    alert(`❌ Reset failed: ${err.message}`);
+                                  }
+                                }}
+                                className="btn-icon"
+                                style={{ width: "32px", height: "32px", background: "rgba(168, 85, 247, 0.15)", color: "#c084fc", fontSize: "0.82rem" }}
+                                title="Remotely Wipe & Reset Student's Device Offline Storage (0 DB Cost)"
+                              >
+                                🧹
                               </button>
 
                               <button

@@ -219,9 +219,22 @@ export default function App() {
         return;
       }
       try {
-        const res = await fetch("/api/health", { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(2500) });
+        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch("/api/health", { method: "HEAD", headers, cache: "no-store", signal: AbortSignal.timeout(2500) });
         if (res.ok) {
           setIsOffline(false);
+          // Zero-Cost Automatic Cache Epoch Verification (0 DB reads/writes)
+          const serverEpoch = Number(res.headers.get("x-fsm-cache-epoch") || 1);
+          const localEpoch = Number(localStorage.getItem("fsm_device_cache_epoch") || 1);
+          const forceWipe = res.headers.get("x-fsm-wipe-cache") === "1";
+
+          if (forceWipe || serverEpoch > localEpoch) {
+            localStorage.setItem("fsm_device_cache_epoch", String(serverEpoch));
+            import("./utils/offlineQueue").then(({ wipeAllDeviceOfflineStorage }) => {
+              wipeAllDeviceOfflineStorage().catch(() => {});
+            });
+          }
         } else {
           setIsOffline(true);
         }

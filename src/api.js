@@ -1029,6 +1029,18 @@ export const api = {
       method: "POST",
     }),
 
+  // 📱 Zero-Cost Remote Device Storage & Cache Purge Controller
+  resetSingleUserStorageCache: (studentId, email) =>
+    request("/admin/client-storage/reset-user", {
+      method: "POST",
+      body: JSON.stringify({ studentId, email }),
+    }),
+  resetAllUsersStorageCache: () =>
+    request("/admin/client-storage/reset-all", {
+      method: "POST",
+    }),
+  getClientStorageStatus: () => request("/admin/client-storage/status"),
+
   // 🔑 Passkey / WebAuthn Biometrics (Face ID, Fingerprint, Windows Hello)
   getPasskeyRegisterOptions: () => request("/auth/passkey/register-options"),
   verifyPasskeyRegister: (credential, deviceName, context = "") =>

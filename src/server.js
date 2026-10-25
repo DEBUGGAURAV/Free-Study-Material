@@ -172,11 +172,42 @@ app.use(cookieParser());
 // 🛡️ Pillar 2: Global Input Sanitizer & Prototype Pollution Guard
 app.use(globalSanitizer);
 
-// Real-Time Health & Keep-Alive Endpoint (Zero Database Quota Used - Information Leakage Protected)
-app.get(["/health", "/api/health"], (req, res) => {
+// Real-Time Health & Keep-Alive Endpoint (Zero Database Quota Used - Zero-Cost Cache Epoch Sync)
+app.all(["/health", "/api/health"], (req, res) => {
+  let epoch = 1;
+  let wipeRequired = false;
+  try {
+    const adminRouter = require("./routes/admin");
+    if (adminRouter) {
+      if (typeof adminRouter.getClientCacheEpoch === "function") {
+        epoch = adminRouter.getClientCacheEpoch();
+      }
+      const authHeader = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "").trim();
+      const token = authHeader || (req.cookies && req.cookies.vault_token);
+      if (token) {
+        try {
+          const jwt = require("jsonwebtoken");
+          const decoded = jwt.decode(token);
+          if (decoded && (adminRouter.isPendingUserStorageWipe(decoded.id) || adminRouter.isPendingUserStorageWipe(decoded.email))) {
+            wipeRequired = true;
+            adminRouter.clearPendingUserStorageWipe(decoded.id);
+            adminRouter.clearPendingUserStorageWipe(decoded.email);
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  res.set("x-fsm-cache-epoch", String(epoch));
+  if (wipeRequired) {
+    res.set("x-fsm-wipe-cache", "1");
+  }
+
   res.json({
     status: "online",
     service: "freestudymaterial",
+    epoch,
+    wipeRequired,
     timestamp: new Date().toISOString(),
   });
 });
