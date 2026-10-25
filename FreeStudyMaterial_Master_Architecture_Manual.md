@@ -528,9 +528,19 @@ flowchart TD
    - Row 1: Stored Offline Notes Vault (`fsm_offline_vault` + `fsm_p2p_cache_v1`).
    - Row 2: Browser PWA Shell & Tesseract OCR WASM Runtime (~42 MB).
 2. **48-Hour Default Auto-Delete:** Unpinned notes are deleted automatically after 48 hours to prevent device bloat.
-3. **User Pinning Override ("Keep Note"):** Students can toggle `[ 📌 Keep Note ]` to grant permanent immunity against both 48h expiration and LRU eviction.
-4. **Device Dynamic LRU Eviction:** Adapts to device RAM (guaranteeing a minimum of 2 notes preserved on all devices).
-5. **1-Click Wipe:** Students can click "Wipe All Device Offline Storage" to cleanly unregister service workers, drop IndexedDB databases, and free memory in 0ms.
+3. **User Selection & Pinning Control ("Keep Note"):**
+   - **Direct Card Pinning:** Every note card in the student catalog displays an offline status bar with a **`[ 📌 Keep Note ]`** toggle and individual **`[ 🗑️ Delete ]`** button.
+   - **In-Reader Pinning:** The Virtual PDF Reader toolbar provides instant 1-tap **`[ 📌 Keep Note ]`** access while reading.
+   - **Profile Vault Management:** Profile Tab 4 lists all cached notes with real-time expiration countdowns, pin toggles, and individual delete controls.
+   - Pinned notes gain permanent immunity against both 48h expiration and dynamic LRU eviction.
+4. **Device Dynamic LRU Eviction (Min 2 Notes Guaranteed):**
+   - Automatically inspects client RAM via `navigator.deviceMemory`:
+     - Budget / Low-End Devices (≤2 GB RAM): 2 Notes (Strict protection).
+     - Mid-Range Devices (≤4 GB RAM): 5 Notes.
+     - Flagship / Desktop Devices (>8 GB RAM): 12–25 Notes.
+   - **Strict Guarantee:** Regardless of device hardware, minimum 2 notes are ALWAYS retained (`Math.max(2, capacity)`).
+5. **Periodic Background Maintenance:** Automatically runs on app launch and every 30 minutes to clean expired notes silently without user interruption.
+6. **1-Click Wipe:** Students can click "Wipe All Device Offline Storage" to cleanly unregister service workers, drop IndexedDB databases, and free memory in 0ms.
 
 ---
 

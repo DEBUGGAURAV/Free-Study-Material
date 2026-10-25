@@ -7,6 +7,7 @@ const { authenticateToken, requireAdmin } = require("../middleware/auth");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
 const { encrypt, decrypt, blindIndex, decryptUserObject } = require("../utils/cryptoVault");
+const { getSiteDomain } = require("../config/siteConfig");
 
 let deleteTelegramMessages = null;
 let getMTProtoDetails = null;
@@ -2061,7 +2062,7 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       cfRay: rawRay || "CF-RAY-ANYCAST-ACTIVE",
       clientIp: clientIp,
       protocol: `${forwardedProto.toUpperCase()} / HTTP/2 (TLS 1.3)`,
-      hostDomain: req.headers["host"] || "freestudymaterial.onrender.com",
+      hostDomain: req.headers["host"] || getSiteDomain(req),
       proxyChain: rawRay ? "Cloudflare Anycast POP -> Express Engine" : "Direct Reverse Proxy -> Node.js Express",
       serverRegion: process.env.RENDER_REGION || "ap-south-1 (Mumbai / Delhi Edge Node)",
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata",

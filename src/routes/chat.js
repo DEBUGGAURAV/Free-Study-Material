@@ -7,6 +7,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { authenticateToken, requireAuth, JWT_SECRET } = require("../middleware/auth");
+const { getSiteUrl } = require("../config/siteConfig");
 const {
   savePrivateRoomAudit,
   recordChatMessageToTurso,
@@ -695,7 +696,7 @@ async function archiveAndPurgePrivateRoom(room, closeReason = "zero_members", cl
     const pdfCount = auditMsgs.filter((m) => m.type === "pdf").length;
     const imgCount = auditMsgs.filter((m) => m.type === "image").length;
 
-    const clientUrl = process.env.CLIENT_URL || "https://freestudymaterial.onrender.com";
+    const clientUrl = getSiteUrl();
 
     // 4. Deletion Mode & Reason Formatting
     const isUserDelete = closeReason === "closed_by_user";

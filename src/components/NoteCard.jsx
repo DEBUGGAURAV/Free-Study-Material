@@ -1,9 +1,9 @@
-import React, { useState, useRef } from "react";
-import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2 } from "lucide-react";
 import { api } from "../api";
-import { downloadFromPeerMesh, cacheNoteBuffer } from "../utils/p2pMesh";
+import { downloadFromPeerMesh, cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB } from "../utils/formatUtils";
-import { saveNoteOffline } from "../utils/offlineQueue";
+import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 
 export default function NoteCard({
@@ -32,6 +32,58 @@ export default function NoteCard({
     totalMB: "0",
     timeRemaining: "",
   });
+
+  // Device Dynamic LRU & 48h Cache State
+  const [isCachedOffline, setIsCachedOffline] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!note?.id) return;
+    setIsPinned(isNotePinnedOffline(note.id));
+    getCachedNoteBuffer(note.id)
+      .then((buf) => {
+        if (active) setIsCachedOffline(Boolean(buf && buf.byteLength > 0));
+      })
+      .catch(() => {});
+
+    const handleSync = () => {
+      if (active && note?.id) {
+        setIsPinned(isNotePinnedOffline(note.id));
+        getCachedNoteBuffer(note.id)
+          .then((buf) => {
+            if (active) setIsCachedOffline(Boolean(buf && buf.byteLength > 0));
+          })
+          .catch(() => {});
+      }
+    };
+
+    window.addEventListener("fsm:offline-notes-changed", handleSync);
+    window.addEventListener("fsm:pinned-notes-changed", handleSync);
+    return () => {
+      active = false;
+      window.removeEventListener("fsm:offline-notes-changed", handleSync);
+      window.removeEventListener("fsm:pinned-notes-changed", handleSync);
+    };
+  }, [note?.id]);
+
+  const handleToggleCardPin = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const nextPinned = togglePinOfflineNote(note.id);
+    setIsPinned(nextPinned);
+    window.dispatchEvent(new CustomEvent("fsm:pinned-notes-changed", { detail: { noteId: note.id, isPinned: nextPinned } }));
+  };
+
+  const handleDeleteOfflineCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${note.title}" from local device offline storage?`)) return;
+    await deleteSingleOfflineNote(note.id);
+    setIsCachedOffline(false);
+    setIsPinned(false);
+    window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
+  };
 
   const formattedSize = formatFileSize(note?.compressedSize || note?.fileSize);
 
@@ -170,6 +222,10 @@ export default function NoteCard({
             await writable.write(blob);
             await writable.close();
             setSavedOffline(true);
+          setIsCachedOffline(true);
+          window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
+            setIsCachedOffline(true);
+            window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
             return;
           }
 
@@ -183,6 +239,8 @@ export default function NoteCard({
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
           setSavedOffline(true);
+          setIsCachedOffline(true);
+          window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
           return;
         }
       } catch (p2pErr) {
@@ -519,6 +577,80 @@ export default function NoteCard({
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)" }}>
               <span>{downloadProgress.loadedMB} MB / {downloadProgress.totalMB} MB</span>
               <span>{downloadProgress.timeRemaining}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Device Offline Cache Control Bar (48h Auto-Delete / User Pin / Delete) */}
+        {isCachedOffline && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "8px",
+              padding: "5px 10px",
+              background: isPinned ? "rgba(16, 185, 129, 0.08)" : "rgba(245, 158, 11, 0.08)",
+              border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.28)" : "rgba(245, 158, 11, 0.28)"}`,
+              borderRadius: "var(--radius-sm)",
+              fontSize: "0.72rem",
+            }}
+          >
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                color: isPinned ? "#34d399" : "#fbbf24",
+                fontWeight: 600,
+              }}
+              title={isPinned ? "Kept Forever: Exempt from 48h auto-deletion and dynamic LRU" : "Will auto-delete after 48h to prevent phone storage bloat"}
+            >
+              <HardDrive size={12} />
+              <span>{isPinned ? "📌 Kept Forever (Offline)" : "⏳ 48h Auto-Delete"}</span>
+            </span>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                onClick={handleToggleCardPin}
+                title={isPinned ? "Click to set 48h auto-expire" : "Click to keep note forever"}
+                style={{
+                  background: isPinned ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                  border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.45)" : "rgba(255, 255, 255, 0.15)"}`,
+                  color: isPinned ? "#34d399" : "#e2e8f0",
+                  borderRadius: "4px",
+                  padding: "2px 8px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <Pin size={10} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
+                <span>{isPinned ? "Pinned" : "Keep Note"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeleteOfflineCopy}
+                title="Delete this note from device offline storage"
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#f87171",
+                  borderRadius: "4px",
+                  padding: "3px 6px",
+                  fontSize: "0.68rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                <Trash2 size={11} />
+              </button>
             </div>
           </div>
         )}

@@ -10,6 +10,7 @@ const crypto = require("crypto");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
 const { recordSyncEvent, getLastSyncState } = require("./syncTracker");
+const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
 const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();
@@ -793,8 +794,8 @@ async function syncTelegramChannel() {
         try {
           if (syncLock.canSendReceipt(storageChatId, msgId)) {
             const formatMb = (docSize / (1024 * 1024)).toFixed(2);
-            const siteUrl = (process.env.CLIENT_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
-            const receiptText = `⚡ <b>Free Study Material Vault Receipt</b>\n\n` +
+            const siteUrl = getSiteUrl();
+            const receiptText = `⚡ <b>${getVaultName()} Receipt</b>\n\n` +
               `✅ <b>Note Successfully Indexed to Website!</b>\n` +
               `📄 <b>Title:</b> ${title}\n` +
               `📚 <b>Subject:</b> ${subject}\n` +

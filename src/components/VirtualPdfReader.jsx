@@ -33,13 +33,15 @@ import {
   Zap,
   Cloud,
   Wifi,
+  Pin,
+  Trash2,
 } from "lucide-react";
 import { cacheNoteBuffer, getCachedNoteBuffer, findPeersForNote } from "../utils/p2pMesh";
 import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
 import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
-import { saveNoteOffline } from "../utils/offlineQueue";
+import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders } from "../utils/cdnFailover";
@@ -127,6 +129,28 @@ export default function VirtualPdfReader({
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(null);
   const downloadAbortRef = useRef(null);
+
+  // 📌 48h Auto-Delete Immunity Pin State
+  const [isPinnedOffline, setIsPinnedOffline] = useState(() => (noteId ? isNotePinnedOffline(noteId) : false));
+
+  useEffect(() => {
+    if (noteId) {
+      setIsPinnedOffline(isNotePinnedOffline(noteId));
+    }
+  }, [noteId]);
+
+  const handleToggleReaderPin = () => {
+    if (!noteId) return;
+    const nextPinned = togglePinOfflineNote(noteId);
+    setIsPinnedOffline(nextPinned);
+    setOcrStatusText(
+      nextPinned
+        ? "📌 Kept Forever: Note will NOT be auto-deleted after 48h and is exempt from LRU eviction."
+        : "⏳ 48h Auto-Expire: Note will auto-delete in 48 hours to save local device storage."
+    );
+    window.dispatchEvent(new CustomEvent("fsm:pinned-notes-changed", { detail: { noteId, isPinned: nextPinned } }));
+    setTimeout(() => setOcrStatusText(""), 4500);
+  };
 
   // 1. Client-Side Basic RAG Search (MiniSearch)
   const ragIndexRef = useRef(new PdfRagSearchIndex());
@@ -2447,6 +2471,31 @@ export default function VirtualPdfReader({
                   <span>Save</span>
                 </>
               )}
+            </button>
+          )}
+
+          {noteId && !isBlocked && (
+            <button
+              type="button"
+              onClick={handleToggleReaderPin}
+              style={{
+                padding: "7px 12px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                borderRadius: "6px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: isPinnedOffline ? "rgba(16, 185, 129, 0.18)" : "rgba(255, 255, 255, 0.06)",
+                border: `1px solid ${isPinnedOffline ? "rgba(16, 185, 129, 0.45)" : "rgba(255, 255, 255, 0.15)"}`,
+                color: isPinnedOffline ? "#34d399" : "#cbd5e1",
+                transition: "all 0.15s ease",
+              }}
+              title={isPinnedOffline ? "Kept Forever: Exempt from 48h auto-deletion and dynamic LRU" : "Click to Keep Note permanently (exempt from 48h auto-delete)"}
+            >
+              <Pin size={12} style={{ transform: isPinnedOffline ? "rotate(-45deg)" : "none" }} />
+              <span>{isPinnedOffline ? "Pinned (Kept Forever)" : "Keep Note"}</span>
             </button>
           )}
 

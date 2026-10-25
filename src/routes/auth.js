@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
 const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie } = require("../middleware/auth");
+const { getSiteName, getVaultName } = require("../config/siteConfig");
 const { authLimiter } = require("../middleware/rateLimit");
 const { sendLoginOtpEmail, sendForgotPasswordOtpEmail, sendSignupOtpEmail, sendProfileMobileOtpEmail, sendTelegramAuthNotice } = require("../services/emailService");
 const {
@@ -355,7 +356,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful! Welcome to Free Study Material Vault.",
+      message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
     });
   } catch (err) {
@@ -756,7 +757,7 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful! Welcome to Free Study Material Vault.",
+      message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
     });
   } catch (err) {
@@ -895,7 +896,7 @@ router.post("/register", authLimiter, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful! Welcome to Free Study Material Vault.",
+      message: `Registration successful! Welcome to ${getVaultName()}.`,
       user: payload,
     });
   } catch (err) {
@@ -1245,7 +1246,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration completed successfully! Welcome to Free Study Material.",
+      message: `Registration completed successfully! Welcome to ${getSiteName()}.`,
       user: payload,
       token,
     });

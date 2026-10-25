@@ -276,13 +276,15 @@ export default function App() {
     });
 
     // 🕒 Run 48-Hour Auto-Delete & Device-Aware Dynamic LRU maintenance silently in background
-    setTimeout(() => {
+    const executeVaultMaintenance = () => {
       import("./utils/offlineQueue").then((m) => {
         if (m && m.runOfflineVaultAutoMaintenance) {
           m.runOfflineVaultAutoMaintenance().catch(() => {});
         }
       }).catch(() => {});
-    }, 2000);
+    };
+    setTimeout(executeVaultMaintenance, 2000);
+    const vaultMaintenanceInterval = setInterval(executeVaultMaintenance, 30 * 60 * 1000);
 
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
@@ -351,6 +353,7 @@ export default function App() {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       clearInterval(probeTimer);
+      clearInterval(vaultMaintenanceInterval);
       if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
         navigator.serviceWorker.removeEventListener("message", handleSwMessage);
       }

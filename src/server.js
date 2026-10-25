@@ -430,26 +430,41 @@ function startServer(portToTry, attempt = 1) {
       console.warn("[CACHE-WARMER] Init warning:", warmerErr.message);
     }
 
-    // Anti-Sleep Keep-Alive Self-Ping Engine (Prevents Render Free Tier 15-Minute Sleep)
+    // 🛡️ 24/7 Anti-Sleep Immortality Engine (Prevents Render Free Tier 15-Minute Sleep)
     if (process.env.DISABLE_KEEP_ALIVE !== "true") {
-      const KEEP_ALIVE_URL = process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || getSiteUrl();
-      const KEEP_ALIVE_INTERVAL = 12 * 60 * 1000; // 12 minutes (safely under Render's 15m idle cutoff)
+      const KEEP_ALIVE_URL = (process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || getSiteUrl()).replace(/\/+$/, "");
+      const KEEP_ALIVE_INTERVAL = 8 * 60 * 1000; // 8 minutes (Render sleeps at 15m, 8m guarantees 100% continuous uptime)
 
-      const pingSelf = async () => {
+      const pingSelf = async (retryCount = 0) => {
         try {
           const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
-          const res = await fetch(pingEndpoint, { signal: AbortSignal.timeout(10000) });
+          const res = await fetch(pingEndpoint, {
+            headers: {
+              "User-Agent": "AcademicCloud-KeepAlive/2.0",
+              "Cache-Control": "no-cache, no-store",
+              "Pragma": "no-cache",
+            },
+            signal: AbortSignal.timeout(12000),
+          });
           if (res.ok) {
-            console.log(`[ANTI-SLEEP] 💓 Self-ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform kept awake 24/7`);
+            console.log(`[ANTI-SLEEP] 💓 24/7 Keep-Alive Ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform stays ACTIVE 24/7`);
+          } else {
+            console.warn(`[ANTI-SLEEP] ⚠️ Ping returned status ${res.status} from ${pingEndpoint}. Retrying in 25s...`);
+            if (retryCount < 3) {
+              setTimeout(() => pingSelf(retryCount + 1), 25000);
+            }
           }
         } catch (e) {
-          console.warn("[ANTI-SLEEP] Self-ping notice:", e.message);
+          console.warn(`[ANTI-SLEEP] ⚠️ Keep-Alive Ping notice: ${e.message}. Retrying in 25s...`);
+          if (retryCount < 3) {
+            setTimeout(() => pingSelf(retryCount + 1), 25000);
+          }
         }
       };
 
-      // Initial ping after 3 minutes, then recurring every 12 minutes
-      setTimeout(pingSelf, 3 * 60 * 1000);
-      setInterval(pingSelf, KEEP_ALIVE_INTERVAL);
+      // Initial ping after 30 seconds of boot, then recurring every 8 minutes
+      setTimeout(() => pingSelf(0), 30 * 1000);
+      setInterval(() => pingSelf(0), KEEP_ALIVE_INTERVAL);
     }
   });
 }
