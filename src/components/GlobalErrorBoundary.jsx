@@ -23,16 +23,20 @@ export default class GlobalErrorBoundary extends Component {
         errStr.includes("error loading dynamic script");
 
       if (isChunkOrImportError && typeof window !== "undefined") {
-        const reloadKey = "fsm_boundary_chunk_reload";
-        const lastReload = Number(sessionStorage.getItem(reloadKey) || 0);
-        const now = Date.now();
-        // Auto-reload once within 12 seconds to recover cleanly from stale chunks / dev restarts
-        if (now - lastReload > 12000) {
-          sessionStorage.setItem(reloadKey, String(now));
-          console.warn("[GlobalErrorBoundary] Auto-recovering from dynamic chunk error...");
+        const reloadKey = "fsm_boundary_auto_recovered";
+        const hasRecovered = sessionStorage.getItem(reloadKey);
+        if (!hasRecovered) {
+          sessionStorage.setItem(reloadKey, "true");
+          // Cleanly purge stale cache & unregister old service workers immediately
+          if ("caches" in window) {
+            caches.keys().then((names) => names.forEach((n) => caches.delete(n)));
+          }
+          if ("serviceWorker" in navigator) {
+            navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+          }
           setTimeout(() => {
-            window.location.reload();
-          }, 350);
+            window.location.replace(window.location.origin + "/?clean=" + Date.now());
+          }, 150);
         }
       }
     } catch (_) {}
@@ -45,23 +49,30 @@ export default class GlobalErrorBoundary extends Component {
     } catch (_) {}
   };
 
-  handleClearCacheAndReload = () => {
+  handleClearCacheAndReload = async () => {
     try {
-      localStorage.removeItem("fsm_offline_flags");
-      localStorage.removeItem("fsm_cached_notes_index");
+      this.setState({ isResetting: true });
+      localStorage.clear();
       sessionStorage.clear();
-      if ("caches" in window) {
-        caches.keys().then((names) => {
-          names.forEach((name) => caches.delete(name));
-        });
-      }
+
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.getRegistrations().then((regs) => {
-          regs.forEach((r) => r.update());
-        });
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const reg of regs) {
+          try { await reg.unregister(); } catch (_) {}
+        }
       }
-    } catch (_) {}
-    window.location.href = window.location.origin + "/?fresh=" + Date.now();
+
+      if ("caches" in window) {
+        const names = await caches.keys();
+        for (const name of names) {
+          try { await caches.delete(name); } catch (_) {}
+        }
+      }
+
+      window.location.replace(window.location.origin + "/?reset=" + Date.now());
+    } catch (_) {
+      window.location.replace(window.location.origin + "/");
+    }
   };
 
   render() {
@@ -163,18 +174,19 @@ export default class GlobalErrorBoundary extends Component {
               <button
                 type="button"
                 onClick={this.handleClearCacheAndReload}
+                disabled={Boolean(this.state.isResetting)}
                 style={{
                   padding: "11px 20px",
                   background: "rgba(255, 255, 255, 0.06)",
-                  color: "#cbd5e1",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  color: this.state.isResetting ? "#38bdf8" : "#cbd5e1",
+                  border: `1px solid ${this.state.isResetting ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.15)"}`,
                   borderRadius: "10px",
-                  cursor: "pointer",
+                  cursor: this.state.isResetting ? "not-allowed" : "pointer",
                   fontWeight: 600,
                   fontSize: "0.85rem",
                 }}
               >
-                🧹 Purge Stale Cache &amp; Restart
+                {this.state.isResetting ? "🧹 Purging Stale Cache & Restarting..." : "🧹 Purge Stale Cache & Restart"}
               </button>
             </div>
           </div>

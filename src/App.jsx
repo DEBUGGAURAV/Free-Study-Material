@@ -12,7 +12,15 @@ import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 
-// ⚡ Ultra-Resilient Code Splitting with Retry & Chunk Reload Recovery
+import ModalErrorBoundary from "./components/ModalErrorBoundary";
+import AuthModal from "./components/AuthModal";
+import PreviewModal from "./components/PreviewModal";
+import NoticeBoardModal from "./components/NoticeBoardModal";
+import ProfileModal from "./components/ProfileModal";
+import UploadModal from "./components/UploadModal";
+import HelpCenterModal from "./components/HelpCenterModal";
+
+// ⚡ Heavy Modals: Code-split with retry & recovery
 function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
   return React.lazy(() =>
     new Promise((resolve, reject) => {
@@ -20,11 +28,10 @@ function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
         componentFactory()
           .then(resolve)
           .catch((error) => {
-            console.warn(`[LazyImport] Modal chunk load attempt failed (${remainingRetries} retries left):`, error?.message || error);
+            console.warn(`[LazyImport] Chunk load attempt failed (${remainingRetries} retries left):`, error?.message || error);
             if (remainingRetries > 0) {
               setTimeout(() => attempt(remainingRetries - 1), interval);
             } else {
-              // If dynamic import failed permanently (stale chunk hash after new deployment / dev restart)
               const reloadKey = "fsm_lazy_reload_" + (typeof window !== "undefined" ? window.location.pathname : "");
               const hasRefreshed = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(reloadKey) : null;
               if (!hasRefreshed && typeof window !== "undefined") {
@@ -42,14 +49,8 @@ function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
   );
 }
 
-const UploadModal = lazyWithRetry(() => import("./components/UploadModal"));
-const PreviewModal = lazyWithRetry(() => import("./components/PreviewModal"));
 const AdminModal = lazyWithRetry(() => import("./components/AdminModal"));
-const NoticeBoardModal = lazyWithRetry(() => import("./components/NoticeBoardModal"));
-const AuthModal = lazyWithRetry(() => import("./components/AuthModal"));
-const ProfileModal = lazyWithRetry(() => import("./components/ProfileModal"));
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
-const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
@@ -1725,28 +1726,30 @@ export default function App() {
         )}
 
         {isAdminOpen && (
-          <AdminModal
-            isOpen={isAdminOpen}
-            onClose={() => setIsAdminOpen(false)}
-            currentUser={currentUser}
-            onLoginSuccess={(user) => {
-              setAutoLogoutNotice(null);
-              setCurrentUser(user);
-              safeStorage.setItem("vault_last_active", String(Date.now()));
-              fetchNotes(user);
-            }}
-            notes={notes}
-            onRefreshNotes={() => fetchNotes(null, true)}
-            branches={branches}
-            allowNotesDownload={allowNotesDownload}
-            onToggleDownloadAllowed={(val, reason) => {
-              setAllowNotesDownload(Boolean(val));
-              if (reason) setDownloadDisabledReason(reason);
-            }}
-            onToggleNoteDownload={handleToggleNoteDownloadInState}
-            maintenanceState={maintenanceState}
-            onMaintenanceChange={setMaintenanceState}
-          />
+          <ModalErrorBoundary onClose={() => setIsAdminOpen(false)}>
+            <AdminModal
+              isOpen={isAdminOpen}
+              onClose={() => setIsAdminOpen(false)}
+              currentUser={currentUser}
+              onLoginSuccess={(user) => {
+                setAutoLogoutNotice(null);
+                setCurrentUser(user);
+                safeStorage.setItem("vault_last_active", String(Date.now()));
+                fetchNotes(user);
+              }}
+              notes={notes}
+              onRefreshNotes={() => fetchNotes(null, true)}
+              branches={branches}
+              allowNotesDownload={allowNotesDownload}
+              onToggleDownloadAllowed={(val, reason) => {
+                setAllowNotesDownload(Boolean(val));
+                if (reason) setDownloadDisabledReason(reason);
+              }}
+              onToggleNoteDownload={handleToggleNoteDownloadInState}
+              maintenanceState={maintenanceState}
+              onMaintenanceChange={setMaintenanceState}
+            />
+          </ModalErrorBoundary>
         )}
 
         {isNoticeBoardOpen && (
@@ -1789,7 +1792,7 @@ export default function App() {
         )}
 
         {isChatOpen && (
-          <GlobalErrorBoundary>
+          <ModalErrorBoundary onClose={() => setIsChatOpen(false)}>
             <StudentChatModal
               isOpen={isChatOpen}
               onClose={() => setIsChatOpen(false)}
@@ -1797,12 +1800,17 @@ export default function App() {
               onPreviewNote={(note) => setPreviewNote(note)}
               onOpenAuth={(mode) => openAuth(mode || "signin")}
             />
-          </GlobalErrorBoundary>
+          </ModalErrorBoundary>
         )}
 
         {/* Collaborative Live Study Pod with Real-time Canvas & PDF Sync */}
         {isStudyPodOpen && (
-          <GlobalErrorBoundary>
+          <ModalErrorBoundary
+            onClose={() => {
+              setIsStudyPodOpen(false);
+              setStudyPodNote(null);
+            }}
+          >
             <StudyPodModal
               isOpen={isStudyPodOpen}
               onClose={() => {
@@ -1813,7 +1821,7 @@ export default function App() {
               note={studyPodNote}
               initialRoomCode={studyPodRoomCode}
             />
-          </GlobalErrorBoundary>
+          </ModalErrorBoundary>
         )}
 
         {/* Hybrid Smart Help & Support Center Modal */}
