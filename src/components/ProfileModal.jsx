@@ -50,6 +50,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [storedNotes, setStoredNotes] = useState([]);
   const [loadingStoredNotes, setLoadingStoredNotes] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState(null);
+  const [refreshingStorage, setRefreshingStorage] = useState(false);
   const hwProfile = detectClientHardwareProfile();
 
   const fetchStorageInfo = async () => {
@@ -68,6 +69,17 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
       setStoredNotes([]);
     } finally {
       setLoadingStoredNotes(false);
+    }
+  };
+
+  const handleRefreshAllStorage = async () => {
+    try {
+      setRefreshingStorage(true);
+      await Promise.all([fetchStorageInfo(), loadStoredNotes()]);
+      setMsg({ type: "success", text: "Storage meter & offline vaults refreshed successfully!" });
+    } catch (_) {
+    } finally {
+      setTimeout(() => setRefreshingStorage(false), 500);
     }
   };
 
@@ -290,6 +302,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
       setLoading(false);
     }
   };
+
+  const totalNotesBytes = storedNotes.reduce((acc, n) => acc + (n.sizeBytes || 0), 0);
+  const totalNotesMB = (totalNotesBytes / (1024 * 1024)).toFixed(2);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -839,29 +854,45 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </div>
                 <button
                   type="button"
-                  onClick={fetchStorageInfo}
+                  onClick={handleRefreshAllStorage}
+                  disabled={refreshingStorage}
                   style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: refreshingStorage ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                    border: `1px solid ${refreshingStorage ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
                     borderRadius: "6px",
-                    color: "var(--text-muted)",
-                    padding: "4px 8px",
+                    color: refreshingStorage ? "#38bdf8" : "var(--text-muted)",
+                    padding: "4px 10px",
                     fontSize: "0.72rem",
-                    cursor: "pointer",
+                    cursor: refreshingStorage ? "not-allowed" : "pointer",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "5px",
+                    fontWeight: 600,
                   }}
+                  title="Refresh local storage meter, IndexedDB chunks, and stored notes"
                 >
-                  <RefreshCw size={12} />
-                  Refresh
+                  <RefreshCw
+                    size={12}
+                    className={refreshingStorage ? "spin" : ""}
+                    style={{ animation: refreshingStorage ? "spin 0.8s linear infinite" : "none" }}
+                  />
+                  <span>{refreshingStorage ? "Refreshing..." : "Refresh"}</span>
                 </button>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "6px" }}>
-                <span style={{ color: "var(--text-muted)" }}>FSM Cached Notes & Vault:</span>
-                <span style={{ fontWeight: 700, color: "#38bdf8" }}>
-                  {storageInfo ? `${storageInfo.usageMB} MB Used` : "Calculating..."}
+              {/* Primary Metric: Stored Offline Notes Vault */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", marginBottom: "6px" }}>
+                <span style={{ color: "var(--text-muted)" }}>📚 Stored Offline Notes Vault:</span>
+                <span style={{ fontWeight: 800, color: totalNotesBytes > 0 ? "#38bdf8" : "#34d399", background: totalNotesBytes > 0 ? "rgba(56, 189, 248, 0.12)" : "rgba(16, 185, 129, 0.12)", border: `1px solid ${totalNotesBytes > 0 ? "rgba(56, 189, 248, 0.25)" : "rgba(16, 185, 129, 0.25)"}`, padding: "2px 8px", borderRadius: "6px" }}>
+                  {totalNotesMB} MB ({storedNotes.length} {storedNotes.length === 1 ? "Note" : "Notes"} Cached)
+                </span>
+              </div>
+
+              {/* Secondary Metric: Total Browser Origin Quota */}
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "var(--text-dim)", marginBottom: "8px" }}>
+                <span>PWA App Shell, Tesseract WASM &amp; Cache:</span>
+                <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                  {storageInfo ? `${storageInfo.usageMB} MB` : "Calculating..."}
                 </span>
               </div>
 
@@ -870,7 +901,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 <div
                   style={{
                     height: "100%",
-                    width: `${Math.min(100, Math.max(2, Number(storageInfo?.percentUsed || 0.5)))}%`,
+                    width: `${Math.min(100, Math.max(2, Number(storageInfo?.percentUsed || 0.41)))}%`,
                     background: "linear-gradient(90deg, #38bdf8, #818cf8)",
                     borderRadius: "4px",
                   }}
