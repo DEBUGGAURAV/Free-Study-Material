@@ -488,12 +488,12 @@ flowchart TD
 +---------+-----------------------------------------+-----------------------------------------------+
 | Topic   | Official Dedicated Name                 | Payload & Operational Scope                   |
 +---------+-----------------------------------------+-----------------------------------------------+
-| Topic 35| ⚠️ Public Deleted Messages & Tamper Log | ONLY Public Hall deleted & edited messages    |
-| Topic 31| 📜 Private Pod Vault & Forensic Dossier | Unredacted pod transcripts & forensic dossiers|
-| Topic 33| 📎 Private Chat Media Vault             | Permanent retention of private PDFs/Images    |
-| Topic 37| 👥 Live Active Students & Session Logs  | Real-time online counts & 30-min idle timeouts|
-| Topic 1 | 💬 Unified Public Channel Option        | Unified stream of public chat, media & alerts |
-+---------+-----------------------------------------+-----------------------------------------------+
+| Topic 35 | ⚠️ Public Deleted Messages & Tamper Log | ONLY Public Hall deleted & edited messages    |
+| Topic 31 | 📜 Private Pod Vault & Forensic Dossier | Unredacted pod transcripts & forensic dossiers|
+| Topic 33 | 📎 Private Chat Media Vault             | Permanent retention of private PDFs/Images    |
+| Topic 114| 👥 Public Presence, Sessions & Purges   | Public online count, 30m idle & account purge |
+| Topic 1  | 💬 Unified Public Channel Option        | Unified stream of public chat, media & alerts |
++----------+-----------------------------------------+-----------------------------------------------+
 ```
 
 ### Detailed Topic Behaviors:
@@ -501,14 +501,15 @@ flowchart TD
    - **Strict Rule:** Contains **ONLY** Public Group (General Hall) deleted messages and edit logs. Private room messages and student presence logs are strictly excluded.
    - **Payload:** Original untampered message text, sender name, email, registered mobile, client IP, and exact timestamp.
 2. **Topic 31 (📜 Private Pod Vault & Forensic Dossier):**
-   - Dispatched automatically when a private study pod closes.
+   - **Strict Rule:** Exclusively for Private Study Pods. Dispatched automatically when a private study pod closes.
    - Generates unredacted `.txt` transcript file, ledger of all deleted messages, deletion times, deleting user ID, IP addresses, and profile photo hashes.
 3. **Topic 33 (📎 Private Chat Media Vault):**
-   - Permanent Retention: Archives all PDFs, images, and documents from private chats. Even if deleted from the web chat, the file remains permanently preserved in Topic 33.
+   - **Strict Rule:** Exclusively for Private Study Pods. Permanent Retention: Archives all PDFs, images, and documents from private chats. Even if deleted from the web chat, the file remains permanently preserved in Topic 33.
    - Caption labels Private Pod Name, Room ID, Secret Key, and Sender details.
-4. **Topic 37 (👥 Live Active Students & Session Logs):**
+4. **Topic 114 (👥 Public Active Students, Session Logs & Account Purges):**
+   - **Strict Rule:** Exclusively for Public Chat presence & account lifecycles. Private study pods are completely separate and excluded!
    - Online student count: `🟢 X Students Online`.
-   - Session start and disconnect logs, 30-minute idle timeouts, student IP, mobile, email, and room location.
+   - Session start and disconnect logs, 30-minute idle timeouts, student IP, mobile, email, and full cascade deletion purge dossiers.
 5. **Topic 1 (💬 Unified Public Channel Option):**
    - When set to `1` in settings, engages Unified Mode where all public chat messages, attached images, PDFs, and deleted message forensic alerts route directly into Topic 1 as a single feed.
 

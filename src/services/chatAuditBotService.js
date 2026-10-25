@@ -27,7 +27,7 @@ let auditTopics = {
   deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35").trim(),
   tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
   forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "31").trim(),
-  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "37").trim(),
+  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "114").trim(),
   stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "1").trim(),
   publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "1").trim(),
 };
@@ -37,7 +37,7 @@ let auditTopics = {
  * Topic 35: ONLY Public Group (General Hall) deleted messages & edit logs. Never private rooms or student presence.
  * Topic 31: Private Study Rooms / Pods complete forensic dossiers & transcripts upon close.
  * Topic 33: Private Chat Media Vault (Permanent Retention for PDF, IMG, Docs).
- * Topic 37: Live Active Students Count & Session Logs (Presence).
+ * Topic 114: Public Chat Student Presence, Live Active Students, Session Logs & Purge Reports (Private Pods Separate).
  * Topic 1: Unified Public Channel Option (When publicChat is set to '1', public chat messages + deleted alerts + media route to Topic 1).
  */
 function isUnifiedTopic1Mode() {
@@ -138,7 +138,7 @@ async function initChatBotSettings() {
           deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || "35",
           tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
           forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "31",
-          presence: (savedTopics.presence && savedTopics.presence.trim()) || "37",
+          presence: (savedTopics.presence && savedTopics.presence.trim()) || "114",
           stealth: cleanStealth,
           publicChat: cleanPublicChat,
         },
@@ -2174,15 +2174,21 @@ async function sendTestChatBotAlert(event = "PING") {
 
 /**
  * Dispatches an Inactivity or Presence alert to Telegram Supergroup
- * (Topic: presence / 37)
+ * (Topic: presence / 114 - Strictly for Public Chat; Private Pods are Separate)
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
+  // 🛡️ Strict Separation: Topic 114 is EXCLUSIVELY for Public Chat presence.
+  // Private Study Pods are completely separate and NEVER routed to Topic 114 (they go to Topic 31 / 33).
+  if (roomId && roomId !== "public") {
+    return false;
+  }
+
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetTopic = auditTopics.presence || "37";
+  const targetTopic = auditTopics.presence || "114";
 
   const targetChats = [];
 
-  // Strictly route Presence & Session Logs to Topic 37
+  // Strictly route Public Chat Presence & Session Logs to Topic 114
   if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
     targetChats.push({
       chatId: currentSupergroupId,
@@ -2308,18 +2314,18 @@ async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomI
 }
 
 /**
- * 👥 Dispatches Live Active Students Count & Session Logs to Topic 37
+ * 👥 Dispatches Live Active Students Count & Session Logs to Topic 114 (Public Chat)
  */
 async function dispatchActiveStudentsReportToTelegram() {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetThreadId = auditTopics.presence || "37";
+  const targetThreadId = auditTopics.presence || "114";
   if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
 
   const activeUsers = typeof chatHandlers.getActiveUsers === "function" ? chatHandlers.getActiveUsers() : [];
   let bodyText = "";
 
   if (activeUsers.length === 0) {
-    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 37]</b>\n\n` +
+    bodyText = `👥 <b>[PUBLIC LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
       `🟢 <b>Active Students Online:</b> <b>0</b>\n` +
       `ℹ️ No students are currently connected to live chat sockets.\n\n` +
       `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
@@ -2334,7 +2340,7 @@ async function dispatchActiveStudentsReportToTelegram() {
         `   ⏱️ Connected: <b>${connMins} mins ago</b> (Last active ${lastSecs}s ago)`;
     }).join("\n\n");
 
-    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 37]</b>\n\n` +
+    bodyText = `👥 <b>[PUBLIC LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
       `🟢 <b>Total Students Currently Active:</b> <b>${activeUsers.length} Online</b>\n\n` +
       lines + `\n\n` +
       `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;

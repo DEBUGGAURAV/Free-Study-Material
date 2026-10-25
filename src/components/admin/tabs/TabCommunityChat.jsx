@@ -964,7 +964,7 @@ export default function TabCommunityChat(props) {
                               <span style={{ color: "#c084fc", fontWeight: 700 }}>📎 Topic 33:</span> Private Chat Media Vault (Permanent Retention)
                             </div>
                             <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "6px 8px" }}>
-                              <span style={{ color: "#34d399", fontWeight: 700 }}>👥 Topic 37:</span> Live Active Students &amp; Session Logs
+                              <span style={{ color: "#34d399", fontWeight: 700 }}>👥 Topic 114:</span> Public Active Students &amp; Session Logs (Private Separate)
                             </div>
                           </div>
 
