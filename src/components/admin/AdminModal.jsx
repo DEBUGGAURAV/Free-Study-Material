@@ -427,6 +427,8 @@ export default function AdminModal({
         return () => clearInterval(hwTimer);
       } else if (activeTab === "software") {
         loadSoftwareInfo();
+        const swTimer = setInterval(() => loadSoftwareInfo(false), 3000);
+        return () => clearInterval(swTimer);
       } else if (activeTab === "pipeline") {
         loadUploadPipelines();
         const pipelineTimer = setInterval(loadUploadPipelines, 2000);
@@ -480,9 +482,9 @@ export default function AdminModal({
     }
   };
 
-  const loadSoftwareInfo = async () => {
+  const loadSoftwareInfo = async (showLoading = true) => {
     try {
-      setSoftwareLoading(true);
+      if (showLoading) setSoftwareLoading(true);
       const res = await api.getSoftwareSpecs();
       if (res?.software) {
         setSoftwareInfo(res.software);
@@ -506,7 +508,7 @@ export default function AdminModal({
     } catch (err) {
       console.warn("[ADMIN] Software specs load error:", err.message);
     } finally {
-      setSoftwareLoading(false);
+      if (showLoading) setSoftwareLoading(false);
     }
   };
 

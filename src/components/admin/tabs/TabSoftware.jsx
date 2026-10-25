@@ -31,7 +31,33 @@ export default function TabSoftware(props) {
     testingSmtp,
   } = props;
 
-  
+  // ⚡ Live Real-Time Multi-Engine Speed Monitor (Turso • Telegram • Firebase)
+  const [liveSpeeds, setLiveSpeeds] = useState(null);
+  const [speedMeasuring, setSpeedMeasuring] = useState(false);
+  const [pulseCount, setPulseCount] = useState(0);
+
+  const measureSpeeds = async (showSpin = false) => {
+    try {
+      if (showSpin) setSpeedMeasuring(true);
+      const res = await api.getLiveEngineSpeeds();
+      if (res?.success && res?.speeds) {
+        setLiveSpeeds(res.speeds);
+        setPulseCount((c) => c + 1);
+      }
+    } catch (_) {
+    } finally {
+      if (showSpin) setSpeedMeasuring(false);
+    }
+  };
+
+  useEffect(() => {
+    measureSpeeds(false);
+    // Real-time ping ticker every 2 seconds
+    const speedInterval = setInterval(() => {
+      measureSpeeds(false);
+    }, 2000);
+    return () => clearInterval(speedInterval);
+  }, []);
 
   return (
             <div>
@@ -95,7 +121,7 @@ export default function TabSoftware(props) {
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Live microsecond ping latencies, stream throughput, and read-only diagnostics across all cloud backends.
+                        Live microsecond ping latencies, stream throughput, and read-only diagnostics updating in real time.
                       </div>
                     </div>
                   </div>
@@ -105,15 +131,42 @@ export default function TabSoftware(props) {
                       style={{
                         fontSize: "0.72rem",
                         fontWeight: 700,
-                        padding: "4px 10px",
+                        padding: "3px 9px",
                         borderRadius: "999px",
-                        background: "rgba(16, 185, 129, 0.15)",
+                        background: "rgba(16, 185, 129, 0.18)",
                         color: "#34d399",
-                        border: "1px solid rgba(16, 185, 129, 0.3)",
+                        border: "1px solid rgba(16, 185, 129, 0.35)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "5px",
                       }}
                     >
-                      🛡️ 100% Safe: Read-Only Pings • Zero Database Writes
+                      <span style={{ display: "inline-block", width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
+                      LIVE 2s REAL-TIME (Pulse #{pulseCount})
                     </span>
+
+                    <button
+                      type="button"
+                      onClick={() => measureSpeeds(true)}
+                      disabled={speedMeasuring}
+                      style={{
+                        background: "rgba(6, 182, 212, 0.2)",
+                        border: "1px solid rgba(6, 182, 212, 0.4)",
+                        color: "var(--accent-cyan)",
+                        borderRadius: "6px",
+                        padding: "4px 10px",
+                        fontSize: "0.74rem",
+                        fontWeight: 800,
+                        cursor: speedMeasuring ? "not-allowed" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                      title="Measure round-trip speed of all 5 engines right now"
+                    >
+                      <Zap size={12} className={speedMeasuring ? "spinner" : ""} />
+                      {speedMeasuring ? "Testing..." : "⚡ Ping All"}
+                    </button>
                   </div>
                 </div>
 
@@ -123,7 +176,7 @@ export default function TabSoftware(props) {
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(6, 182, 212, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 1: Primary Vault</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#38bdf8", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {softwareInfo?.tursoVault?.latencyMs != null ? `${softwareInfo.tursoVault.latencyMs} ms` : "< 8 ms"}
+                      <Zap size={16} /> {liveSpeeds?.tursoVault?.latencyMs != null ? `${liveSpeeds.tursoVault.latencyMs} ms` : (softwareInfo?.tursoVault?.latencyMs != null ? `${softwareInfo.tursoVault.latencyMs} ms` : "< 8 ms")}
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>● AWS Mumbai (ap-south-1) Edge</div>
                   </div>
@@ -132,7 +185,7 @@ export default function TabSoftware(props) {
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(168, 85, 247, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 2: Notes Cache</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#c084fc", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {softwareInfo?.tursoNotesCache?.latencyMs != null ? `${softwareInfo.tursoNotesCache.latencyMs} ms` : "< 2 ms"}
+                      <Zap size={16} /> {liveSpeeds?.tursoNotesCache?.latencyMs != null ? `${liveSpeeds.tursoNotesCache.latencyMs} ms` : (softwareInfo?.tursoNotesCache?.latencyMs != null ? `${softwareInfo.tursoNotesCache.latencyMs} ms` : "< 2 ms")}
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#c084fc", marginTop: "4px", fontWeight: 600 }}>● Microsecond RAM/LibSQL Shield</div>
                   </div>
@@ -141,7 +194,7 @@ export default function TabSoftware(props) {
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 3: Support Vault</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#34d399", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {softwareInfo?.tursoHelp?.latencyMs || "< 12 ms"}
+                      <Zap size={16} /> {liveSpeeds?.tursoHelp?.latencyMs != null ? `${liveSpeeds.tursoHelp.latencyMs} ms` : (softwareInfo?.tursoHelp?.latencyMs || "< 12 ms")}
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>● Direct Cloud Helpdesk Tickets</div>
                   </div>
@@ -150,7 +203,7 @@ export default function TabSoftware(props) {
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Google Firestore DB</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {softwareInfo?.database?.pingMs || "< 15 ms"}
+                      <Zap size={16} /> {liveSpeeds?.firebase?.latencyMs != null ? `${liveSpeeds.firebase.latencyMs} ms` : (softwareInfo?.database?.pingMs || "< 15 ms")}
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#fbbf24", marginTop: "4px", fontWeight: 600 }}>● gRPC HTTP/2 Streamed (Mumbai)</div>
                   </div>
@@ -159,10 +212,14 @@ export default function TabSoftware(props) {
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Telegram MTProto DC</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#38bdf8", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {softwareInfo?.mtproto?.pingMs || "< 35 ms"}
+                      <Zap size={16} /> {liveSpeeds?.telegram?.latencyMs != null ? `${liveSpeeds.telegram.latencyMs} ms` : (softwareInfo?.mtproto?.pingMs || "< 35 ms")}
                     </div>
-                    <div style={{ fontSize: "0.68rem", color: "#38bdf8", marginTop: "4px", fontWeight: 600 }}>● DC #5 Singapore • {softwareInfo?.mtproto?.bandwidthMbps || "120 MB/s"}</div>
+                    <div style={{ fontSize: "0.68rem", color: "#38bdf8", marginTop: "4px", fontWeight: 600 }}>● DC #5 Singapore • {liveSpeeds?.bandwidthMbps || softwareInfo?.mtproto?.bandwidthMbps || "120 MB/s"}</div>
                   </div>
+                </div>
+
+                <div style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>🛡️ <strong>Safety Guarantee:</strong> All speed measurements are 100% read-only pings. Zero writes, zero deletions, zero data altered.</span>
                 </div>
               </div>
 
@@ -256,7 +313,7 @@ export default function TabSoftware(props) {
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
                         <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
                         <span style={{ color: "#38bdf8", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Zap size={12} /> {softwareInfo?.tursoVault?.latencyMs != null ? `${softwareInfo.tursoVault.latencyMs}ms (Live Speed)` : "< 8ms (Ultra-Fast Edge)"}
+                          <Zap size={12} /> {liveSpeeds?.tursoVault?.latencyMs != null ? `${liveSpeeds.tursoVault.latencyMs}ms (Live Speed)` : (softwareInfo?.tursoVault?.latencyMs != null ? `${softwareInfo.tursoVault.latencyMs}ms (Live Speed)` : "< 8ms (Ultra-Fast Edge)")}
                         </span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
@@ -323,7 +380,7 @@ export default function TabSoftware(props) {
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
                         <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
                         <span style={{ color: "#c084fc", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Zap size={12} /> {softwareInfo?.tursoNotesCache?.latencyMs != null ? `${softwareInfo.tursoNotesCache.latencyMs}ms` : "< 2ms (Microsecond Serving)"}
+                          <Zap size={12} /> {liveSpeeds?.tursoNotesCache?.latencyMs != null ? `${liveSpeeds.tursoNotesCache.latencyMs}ms (Live Speed)` : (softwareInfo?.tursoNotesCache?.latencyMs != null ? `${softwareInfo.tursoNotesCache.latencyMs}ms` : "< 2ms (Microsecond Serving)")}
                         </span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
@@ -396,7 +453,7 @@ export default function TabSoftware(props) {
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
                         <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
                         <span style={{ color: "#34d399", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Zap size={12} /> {softwareInfo?.tursoHelp?.latencyMs || "< 12ms (Direct Edge)"}
+                          <Zap size={12} /> {liveSpeeds?.tursoHelp?.latencyMs != null ? `${liveSpeeds.tursoHelp.latencyMs}ms (Live Speed)` : (softwareInfo?.tursoHelp?.latencyMs || "< 12ms (Direct Edge)")}
                         </span>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
@@ -532,7 +589,7 @@ export default function TabSoftware(props) {
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>gRPC Ping Latency:</span>
                       <span style={{ color: "#34d399", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Zap size={12} /> {softwareInfo?.database?.pingMs ? `${softwareInfo.database.pingMs} (Live gRPC Speed)` : "< 15ms"}
+                        <Zap size={12} /> {liveSpeeds?.firebase?.latencyMs != null ? `${liveSpeeds.firebase.latencyMs}ms (Live Speed)` : (softwareInfo?.database?.pingMs || "< 15ms")}
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
@@ -657,13 +714,13 @@ export default function TabSoftware(props) {
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Socket Ping Speed:</span>
                       <span style={{ color: "#38bdf8", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Zap size={12} /> {softwareInfo?.mtproto?.pingMs ? `${softwareInfo.mtproto.pingMs} (Live Socket)` : "< 35ms (Direct Socket)"}
+                        <Zap size={12} /> {liveSpeeds?.telegram?.latencyMs != null ? `${liveSpeeds.telegram.latencyMs}ms (Live Socket Speed)` : (softwareInfo?.mtproto?.pingMs || "< 35ms")}
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>MTProto Throughput:</span>
                       <span style={{ color: "#34d399", fontWeight: 700 }}>
-                        {softwareInfo?.mtproto?.bandwidthMbps || "94.8 - 124.6 MB/s (Direct Stream)"}
+                        {liveSpeeds?.bandwidthMbps || softwareInfo?.mtproto?.bandwidthMbps || "94.8 - 124.6 MB/s (Direct Stream)"}
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>

@@ -29,6 +29,33 @@ const processedUpdateIds = new Set();
 const recentDetailsSentTimestamps = new Map(); // `${chatId}_${token}` -> timestamp
 const recentOtpSentTimestamps = new Map();     // `${chatId}_${token}` -> timestamp
 
+/**
+ * Distributed multi-instance lock using Firestore to ensure only 1 server instance
+ * dispatches messages to Telegram (prevents duplicates when Render + Localhost or multi-workers run)
+ */
+async function acquireDistributedLock(lockKey, ttlMs = 20000) {
+  if (!db) return true;
+  try {
+    const lockRef = db.collection("telegram_bot_locks").doc(lockKey);
+    const now = Date.now();
+    const result = await db.runTransaction(async (t) => {
+      const snap = await t.get(lockRef);
+      if (snap.exists) {
+        const data = snap.data();
+        if (data && data.timestamp && (now - data.timestamp < ttlMs)) {
+          return false; // Active lock held by another instance!
+        }
+      }
+      t.set(lockRef, { timestamp: now, key: lockKey, expiresAt: now + ttlMs });
+      return true;
+    });
+    return result;
+  } catch (err) {
+    console.warn(`[DISTRIBUTED-LOCK] Lock check notice: ${err.message}`);
+    return true; // fail-open so message is delivered if DB check errors
+  }
+}
+
 const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 
@@ -420,10 +447,15 @@ async function getPendingRegistration(keyOrObj) {
   if (!keyOrObj) return null;
   const candidateKeys = extractCandidateKeys(keyOrObj);
   let record = getPendingFromMemory(pendingRegistrations, candidateKeys);
-  if (!record) {
-    record = await getVerificationFromFirestore("reg", candidateKeys);
-    if (record) {
-      storeRegistrationInRam(record);
+  // CRITICAL FIX: If record is not found in RAM, OR if the in-RAM record has not yet had phoneVerified confirmed,
+  // query Firestore to pick up Telegram contact verifications across instances / restarts!
+  if (!record || !record.phoneVerified) {
+    const firestoreRecord = await getVerificationFromFirestore("reg", candidateKeys);
+    if (firestoreRecord) {
+      if (firestoreRecord.phoneVerified || !record) {
+        record = firestoreRecord;
+        storeRegistrationInRam(record);
+      }
     }
   }
   return record;
@@ -504,10 +536,15 @@ async function getPendingReset(keyOrObj) {
   if (!keyOrObj) return null;
   const candidateKeys = extractCandidateKeys(keyOrObj);
   let record = getPendingFromMemory(pendingPasswordResets, candidateKeys);
-  if (!record) {
-    record = await getVerificationFromFirestore("reset", candidateKeys);
-    if (record) {
-      storeResetInRam(record);
+  // CRITICAL FIX: If record is not found in RAM, OR if the in-RAM record has not yet had phoneVerified confirmed,
+  // query Firestore to pick up Telegram contact verifications across instances / restarts!
+  if (!record || !record.phoneVerified) {
+    const firestoreRecord = await getVerificationFromFirestore("reset", candidateKeys);
+    if (firestoreRecord) {
+      if (firestoreRecord.phoneVerified || !record) {
+        record = firestoreRecord;
+        storeResetInRam(record);
+      }
     }
   }
   return record;
@@ -572,7 +609,12 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
   const otpKey = `${chatId}_${record.regToken || record.mobile}`;
   const lastOtp = recentOtpSentTimestamps.get(otpKey) || (record.otpDispatchedAt || 0);
   if (Date.now() - lastOtp < 15000) {
-    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Registration OTP dispatch for ${otpKey}`);
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Registration OTP dispatch for ${otpKey} (in-memory)`);
+    return;
+  }
+  const lockAcquired = await acquireDistributedLock(`otp_${otpKey}`, 20000);
+  if (!lockAcquired) {
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Registration OTP dispatch for ${otpKey} (distributed lock)`);
     return;
   }
   recentOtpSentTimestamps.set(otpKey, Date.now());
@@ -682,7 +724,12 @@ async function dispatchPasswordResetOtp(chatId, record) {
   const resetKey = `${chatId}_${record.resetToken || record.mobile}`;
   const lastReset = recentOtpSentTimestamps.get(resetKey) || (record.otpDispatchedAt || 0);
   if (Date.now() - lastReset < 15000) {
-    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Password Reset OTP dispatch for ${resetKey}`);
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Password Reset OTP dispatch for ${resetKey} (in-memory)`);
+    return;
+  }
+  const lockAcquired = await acquireDistributedLock(`otp_${resetKey}`, 20000);
+  if (!lockAcquired) {
+    console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Password Reset OTP dispatch for ${resetKey} (distributed lock)`);
     return;
   }
   recentOtpSentTimestamps.set(resetKey, Date.now());
@@ -884,8 +931,13 @@ async function startSecurityBotPoller() {
             if (regRecord) {
               const detailsKey = `${chatId}_${regRecord.regToken || param}`;
               const lastDetails = recentDetailsSentTimestamps.get(detailsKey) || (regRecord.detailsSentAt || 0);
-              if (Date.now() - lastDetails < 12000) {
-                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey}`);
+              if (Date.now() - lastDetails < 15000) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey} (in-memory)`);
+                continue;
+              }
+              const lockAcquired = await acquireDistributedLock(`details_${detailsKey}`, 20000);
+              if (!lockAcquired) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey} (distributed lock)`);
                 continue;
               }
               recentDetailsSentTimestamps.set(detailsKey, Date.now());
@@ -943,8 +995,13 @@ async function startSecurityBotPoller() {
             if (resetRecord) {
               const resetDetailsKey = `${chatId}_${resetRecord.resetToken || param}`;
               const lastResetDetails = recentDetailsSentTimestamps.get(resetDetailsKey) || (resetRecord.detailsSentAt || 0);
-              if (Date.now() - lastResetDetails < 12000) {
-                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey}`);
+              if (Date.now() - lastResetDetails < 15000) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey} (in-memory)`);
+                continue;
+              }
+              const lockAcquired = await acquireDistributedLock(`details_${resetDetailsKey}`, 20000);
+              if (!lockAcquired) {
+                console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey} (distributed lock)`);
                 continue;
               }
               recentDetailsSentTimestamps.set(resetDetailsKey, Date.now());
@@ -1078,9 +1135,22 @@ async function startSecurityBotPoller() {
 
           const verifiedTgMobile = contact.phone_number.replace(/\D/g, "").slice(-10);
 
+          // Find or recover active registration or reset session
+          let regRec = (currentState && currentState.action === "waiting_verified_contact_reg") ? currentState.regRecord : null;
+          let resetRec = (currentState && currentState.action === "waiting_verified_contact_reset") ? currentState.resetRecord : null;
+
+          // Fail-safe auto-recovery: If userBotStates in RAM was missing, expired, or handled on another server,
+          // look up active registration or reset session directly by verified mobile number:
+          if (!regRec && !resetRec) {
+            regRec = await getPendingRegistration(verifiedTgMobile);
+            if (!regRec) {
+              resetRec = await getPendingReset(verifiedTgMobile);
+            }
+          }
+
           // Case A: User was in registration verification flow
-          if (currentState && currentState.action === "waiting_verified_contact_reg" && currentState.regRecord) {
-            const formMobile = currentState.regRecord.mobile.replace(/\D/g, "").slice(-10);
+          if (regRec) {
+            const formMobile = (regRec.mobile || "").replace(/\D/g, "").slice(-10);
 
             // STRICT VALIDATION MATCH: Form Mobile Number === Telegram Verified Contact
             if (verifiedTgMobile !== formMobile) {
@@ -1107,14 +1177,14 @@ async function startSecurityBotPoller() {
             }
 
             // SUCCESS! Numbers match 100%! Single consolidated notification:
-            await dispatchRegistrationOtp(chatId, currentState.regRecord, user);
+            await dispatchRegistrationOtp(chatId, regRec, user);
             userBotStates.delete(chatId);
             continue;
           }
 
           // Case A2: User was in password reset verification flow (/start reset_...)
-          if (currentState && currentState.action === "waiting_verified_contact_reset" && currentState.resetRecord) {
-            const formMobile = currentState.resetRecord.mobile.replace(/\D/g, "").slice(-10);
+          if (resetRec) {
+            const formMobile = (resetRec.mobile || "").replace(/\D/g, "").slice(-10);
 
             if (verifiedTgMobile !== formMobile) {
               await sendTelegramDirect(
@@ -1131,7 +1201,7 @@ async function startSecurityBotPoller() {
 
             // SUCCESS! Both Mobile & Email were already filled & verified on website form!
             // Directly dispatch OTP and mark session verified so website auto-fills it!
-            await dispatchPasswordResetOtp(chatId, currentState.resetRecord);
+            await dispatchPasswordResetOtp(chatId, resetRec);
             userBotStates.delete(chatId);
             continue;
           }
@@ -1160,6 +1230,22 @@ async function startSecurityBotPoller() {
           const pendingReg = await getPendingRegistration(digitsOnly);
 
           if (pendingReset) {
+            const resetDetailsKey = `${chatId}_${pendingReset.resetToken || digitsOnly}`;
+            const lastResetDetails = recentDetailsSentTimestamps.get(resetDetailsKey) || (pendingReset.detailsSentAt || 0);
+            if (Date.now() - lastResetDetails < 15000) {
+              console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey} (in-memory)`);
+              continue;
+            }
+            const lockAcquired = await acquireDistributedLock(`details_${resetDetailsKey}`, 20000);
+            if (!lockAcquired) {
+              console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate Reset details prompt for ${resetDetailsKey} (distributed lock)`);
+              continue;
+            }
+            recentDetailsSentTimestamps.set(resetDetailsKey, Date.now());
+            pendingReset.detailsSentAt = Date.now();
+            storeResetInRam(pendingReset);
+            saveVerificationToFirestore("reset", pendingReset).catch(() => {});
+
             userBotStates.set(chatId, {
               action: "waiting_verified_contact_reset",
               resetRecord: pendingReset,
@@ -1191,6 +1277,22 @@ async function startSecurityBotPoller() {
           }
 
           if (pendingReg) {
+            const detailsKey = `${chatId}_${pendingReg.regToken || digitsOnly}`;
+            const lastDetails = recentDetailsSentTimestamps.get(detailsKey) || (pendingReg.detailsSentAt || 0);
+            if (Date.now() - lastDetails < 15000) {
+              console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey} (in-memory)`);
+              continue;
+            }
+            const lockAcquired = await acquireDistributedLock(`details_${detailsKey}`, 20000);
+            if (!lockAcquired) {
+              console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate details prompt for ${detailsKey} (distributed lock)`);
+              continue;
+            }
+            recentDetailsSentTimestamps.set(detailsKey, Date.now());
+            pendingReg.detailsSentAt = Date.now();
+            storeRegistrationInRam(pendingReg);
+            saveVerificationToFirestore("reg", pendingReg).catch(() => {});
+
             userBotStates.set(chatId, {
               action: "waiting_verified_contact_reg",
               regRecord: pendingReg,

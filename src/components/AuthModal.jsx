@@ -473,16 +473,19 @@ export default function AuthModal({
           email: email,
         });
         if (!isCancelled && res?.ready && res?.phoneVerified && res?.otp) {
-          setRegTgOtpCode(String(res.otp).trim());
-          clearFieldError("regTgOtpCode");
-          setSuccessMsg(`✅ Telegram mobile verified! Passcode received: ${res.otp}`);
+          const cleanOtp = String(res.otp).trim();
+          if (cleanOtp && cleanOtp.length === 6) {
+            setRegTgOtpCode(cleanOtp);
+            clearFieldError("regTgOtpCode");
+            setSuccessMsg(`✅ Mobile verified via Telegram! Passcode auto-filled: ${cleanOtp}`);
+          }
         }
       } catch (_) {}
     };
 
-    // Immediate initial check at 500ms, then every 1800ms (< 2 seconds)
-    const initialTimer = setTimeout(checkRegStatus, 500);
-    const intervalId = setInterval(checkRegStatus, 1800);
+    // Immediate initial check at 300ms, then snappy 1.5s interval
+    const initialTimer = setTimeout(checkRegStatus, 300);
+    const intervalId = setInterval(checkRegStatus, 1500);
 
     return () => {
       isCancelled = true;
@@ -2117,6 +2120,25 @@ export default function AuthModal({
                         autoFocus
                         required
                       />
+                      {forgotTgOtpCode && forgotTgOtpCode.length === 6 && (
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          marginTop: "8px",
+                          color: "#10b981",
+                          fontSize: "0.84rem",
+                          fontWeight: 600,
+                          background: "rgba(16, 185, 129, 0.12)",
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                        }}>
+                          <span>⚡</span>
+                          <span>Passcode auto-filled from Telegram! Tap button below to continue.</span>
+                        </div>
+                      )}
                     </div>
 
                     <div className="form-group" id="field-group-forgotNewPassword">
@@ -2742,6 +2764,25 @@ export default function AuthModal({
                         autoFocus
                         required
                       />
+                      {regTgOtpCode && regTgOtpCode.length === 6 && (
+                        <div style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          marginTop: "8px",
+                          color: "#10b981",
+                          fontSize: "0.84rem",
+                          fontWeight: 600,
+                          background: "rgba(16, 185, 129, 0.12)",
+                          padding: "6px 12px",
+                          borderRadius: "8px",
+                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                        }}>
+                          <span>⚡</span>
+                          <span>Passcode auto-filled from Telegram! Tap button below to continue.</span>
+                        </div>
+                      )}
                     </div>
 
                     <button

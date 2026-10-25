@@ -868,6 +868,7 @@ export const api = {
   getHardwareSpecs: () => request("/admin/system/hardware"),
   getSoftwareSpecs: () => request("/admin/system/software"),
   getSoftwareInfo: () => request("/admin/system/software"),
+  getLiveEngineSpeeds: () => request("/admin/system/speeds"),
   getUploadPipelines: () => request("/admin/upload-pipeline"),
   cleanupSystem: () => request("/admin/system/cleanup", { method: "POST" }),
   syncTelegram: () => request("/admin/telegram/sync", { method: "POST" }),
