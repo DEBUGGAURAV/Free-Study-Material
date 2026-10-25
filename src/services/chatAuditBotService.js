@@ -1696,14 +1696,25 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
     } catch (_) {}
   }
 
-  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Forensic Topic (Topic 35) & Admin Bot DM
   const targetChats = [];
-  const targetThreadId = getTargetPublicDeletedTopic();
+  const forensicTopic = auditTopics.deletedMessages || "35";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: targetThreadId,
+      threadId: forensicTopic,
     });
+  }
+
+  // Also deliver directly to Bot (Admin 1-on-1 DM) so Admin sees in @fsm_chat_bot what was edited
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+      });
+    }
   }
 
   if (targetChats.length === 0) return false;
@@ -1758,14 +1769,25 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
     } catch (_) {}
   }
 
-  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
+  // 2. Strict Audit Log: Send Tamper Alert to Dedicated Forensic Topic (Topic 35) & Admin Bot DM
   const targetChats = [];
-  const targetThreadId = getTargetPublicDeletedTopic();
+  const forensicTopic = auditTopics.deletedMessages || "35";
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChats.push({
       chatId: currentSupergroupId,
-      threadId: targetThreadId,
+      threadId: forensicTopic,
     });
+  }
+
+  // Also deliver directly to Bot (Admin 1-on-1 DM) so Admin sees in @fsm_chat_bot what was edited
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId)) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+      });
+    }
   }
 
   if (targetChats.length === 0) return false;
