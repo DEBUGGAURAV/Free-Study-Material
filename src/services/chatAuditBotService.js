@@ -358,16 +358,6 @@ async function autoCreateTopicsForSupergroup(chatId) {
 
   return { publicChat: publicChatThreadId };
 }
-      `• ⚠️ Deleted Messages: Thread <code>${createdTopics.deletedMessages || "N/A"}</code>\n` +
-      `• 👥 Student Presence: Thread <code>${createdTopics.presence || "N/A"}</code>\n` +
-      `• 👻 Admin Stealth: Thread <code>${createdTopics.stealth || "N/A"}</code>\n` +
-      `• 💬 Public Community Chat: Thread <code>${createdTopics.publicChat || "N/A"}</code>\n\n` +
-      `All future private group purges, public chat sync & original media will be processed here!`,
-    parse_mode: "HTML",
-  });
-
-  return { success: true, supergroupId: cleanChatId, topics: createdTopics };
-}
 
 /**
  * Download a file from Telegram and save to local chat media cache
@@ -2392,10 +2382,6 @@ async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count
         threadId: null,
       });
     }
-  }
-      chatId: effectiveAdminId,
-      threadId: null,
-    });
   }
 
   if (targetChats.length === 0) return false;
