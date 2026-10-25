@@ -21,14 +21,15 @@ const BOT_USERNAME = "fsm_chat_bot";
 
 let supergroupId = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "").trim();
 let auditTopics = {
-  podAudits: (process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "31").trim(),
-  mediaVault: (process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "33").trim(),
-  deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35").trim(),
-  tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
-  forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "31").trim(),
-  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "114").trim(),
+  podAudits: (process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "").trim(),
+  mediaVault: (process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "").trim(),
+  deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "").trim(),
+  tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "").trim(),
+  forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "").trim(),
+  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "").trim(),
   stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "1").trim(),
   publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "1").trim(),
+  privateChat: (process.env.TELEGRAM_CHAT_TOPIC_PRIVATE_CHAT || "").trim(),
 };
 
 /**
@@ -86,6 +87,7 @@ let chatBotSettings = {
     presence: auditTopics.presence,
     stealth: auditTopics.stealth,
     publicChat: auditTopics.publicChat,
+    privateChat: auditTopics.privateChat,
   },
   updatedAt: new Date().toISOString(),
 };
@@ -119,6 +121,7 @@ async function initChatBotSettings() {
       const savedTopics = data.topics || {};
       const cleanPublicChat = (savedTopics.publicChat && savedTopics.publicChat.trim() !== "39") ? savedTopics.publicChat.trim() : "1";
       const cleanStealth = (savedTopics.stealth && savedTopics.stealth.trim() !== "39") ? savedTopics.stealth.trim() : "1";
+      const cleanPrivateChat = (savedTopics.privateChat && savedTopics.privateChat.trim() !== "off" && savedTopics.privateChat.trim() !== "none") ? savedTopics.privateChat.trim() : (process.env.TELEGRAM_CHAT_TOPIC_PRIVATE_CHAT || "").trim();
 
       chatBotSettings = {
         ...chatBotSettings,
@@ -126,14 +129,15 @@ async function initChatBotSettings() {
         enableAdminDmMirror: data.enableAdminDmMirror !== undefined ? data.enableAdminDmMirror : true,
         supergroupId: (data.supergroupId && data.supergroupId.trim()) || supergroupId || "",
         topics: {
-          podAudits: (savedTopics.podAudits && savedTopics.podAudits.trim()) || "31",
-          mediaVault: (savedTopics.mediaVault && savedTopics.mediaVault.trim()) || "33",
-          deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || "35",
-          tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
-          forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "31",
-          presence: (savedTopics.presence && savedTopics.presence.trim()) || "114",
+          podAudits: (savedTopics.podAudits && savedTopics.podAudits.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_POD_AUDITS || "").trim(),
+          mediaVault: (savedTopics.mediaVault && savedTopics.mediaVault.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_MEDIA_VAULT || "").trim(),
+          deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "").trim(),
+          tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "").trim(),
+          forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "").trim(),
+          presence: (savedTopics.presence && savedTopics.presence.trim()) || (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "").trim(),
           stealth: cleanStealth,
           publicChat: cleanPublicChat,
+          privateChat: cleanPrivateChat,
         },
       };
       if (chatBotSettings.adminId) {
@@ -693,7 +697,8 @@ async function processUpdate(update) {
           `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
           `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
           `• <code>/blocked</code> - List restricted students\n` +
-          `• <code>/clearchat</code> - Purge public chat hall\n\n` +
+          `• <code>/clearchat</code> - Purge public chat hall\n` +
+          `• <code>/setprivatetopic &lt;id|off&gt;</code> - Route private pod messages to a topic\n\n` +
           `💬 <i>Type any message, photo, or PDF to broadcast directly to Public Hall with your official Admin badge! Reply to any message with <code>/del</code> to delete it.</i>\n\n` +
           `⏱️ <i>Purge Days Control: <code>/purgedays &lt;email&gt; &lt;+days|-days&gt;</code></i>`,
         parse_mode: "HTML",
@@ -858,6 +863,70 @@ async function processUpdate(update) {
           parse_mode: "HTML",
         });
       }
+      return;
+    }
+
+    // Direct Admin Command: /setprivatetopic or /privatetopic
+    if (text.startsWith("/setprivatetopic") || text.startsWith("/privatetopic")) {
+      const parts = text.trim().split(/\s+/);
+      const targetArg = parts[1] ? parts[1].trim() : "";
+
+      if (!targetArg) {
+        const currentVal = auditTopics.privateChat || chatBotSettings.topics?.privateChat || "";
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: `ℹ️ <b>Private Chat Mirroring Status:</b>\n\n` +
+            `• Current Topic: <b>${currentVal ? `Topic ${currentVal}` : "Disabled (Off)"}</b>\n\n` +
+            `<b>Usage:</b>\n` +
+            `• <code>/setprivatetopic 5</code> - Enable private pod mirroring to Topic 5\n` +
+            `• <code>/setprivatetopic off</code> - Disable private pod mirroring`,
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      if (targetArg.toLowerCase() === "off" || targetArg.toLowerCase() === "disable" || targetArg.toLowerCase() === "none") {
+        auditTopics.privateChat = "";
+        chatBotSettings.topics = { ...chatBotSettings.topics, privateChat: "" };
+        updateEnvFile("TELEGRAM_CHAT_TOPIC_PRIVATE_CHAT", "");
+        if (dbRef) {
+          dbRef.collection("settings").doc("chat_bot").set({ topics: { privateChat: "" } }, { merge: true }).catch(() => {});
+        }
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: "🛑 <b>Private Chat Mirroring Disabled:</b>\n\nNo private pod/room messages will be sent to Telegram.",
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      const newTopicId = targetArg.replace(/[^0-9]/g, "");
+      if (!newTopicId) {
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: "⚠️ <b>Invalid Topic ID:</b> Please specify a numeric Telegram topic ID, e.g. <code>/setprivatetopic 5</code> or <code>/setprivatetopic off</code>.",
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      auditTopics.privateChat = newTopicId;
+      chatBotSettings.topics = { ...chatBotSettings.topics, privateChat: newTopicId };
+      updateEnvFile("TELEGRAM_CHAT_TOPIC_PRIVATE_CHAT", newTopicId);
+      if (dbRef) {
+        dbRef.collection("settings").doc("chat_bot").set({ topics: { privateChat: newTopicId } }, { merge: true }).catch(() => {});
+      }
+      await callTelegram("sendMessage", {
+        chat_id: chatId,
+        message_thread_id: threadId,
+        text: `✅ <b>Private Chat Topic Configured:</b>\n\n` +
+          `All private room and study pod messages (text, photos, PDFs) will now be mirrored in real-time to <b>Topic ${newTopicId}</b>.\n\n` +
+          `<i>To disable at any time, use <code>/setprivatetopic off</code>.</i>`,
+        parse_mode: "HTML",
+      });
       return;
     }
 
@@ -1482,6 +1551,137 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
 }
 
 /**
+ * Dispatches a Private Pod / Room message to Telegram ONLY when privateChat topic is configured by Admin
+ */
+async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDir, sender }) {
+  const targetTopic = String(auditTopics.privateChat || chatBotSettings.topics?.privateChat || "").trim();
+  // STRICT REQUIREMENT: Only dispatch if admin has explicitly configured a privateChat topic!
+  if (!targetTopic || targetTopic === "off" || targetTopic === "disabled" || targetTopic === "0") {
+    return false;
+  }
+
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
+  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+
+  const roomName = room?.name || "Private Pod";
+  const senderName = sender?.name || message?.sender?.name || "Student";
+  const senderBranch = sender?.branch || message?.sender?.branch || "General";
+  const senderIp = sender?.ip || message?.sender?.ip || message?.ip || null;
+  const ipBadge = senderIp ? ` • 🌐 <code>${escapeHtml(senderIp)}</code>` : "";
+  const text = message?.text || "";
+
+  try {
+    // 1. If Image message
+    if (message.type === "image" && message.fileUrl) {
+      let fileBuffer = null;
+      if (chatMediaDir) {
+        const filenameOnDisk = path.basename(message.fileUrl.split("?")[0]);
+        const potentialPath = path.join(chatMediaDir, filenameOnDisk);
+        if (fs.existsSync(potentialPath)) {
+          try { fileBuffer = fs.readFileSync(potentialPath); } catch {}
+        }
+      }
+
+      const caption = `🔒 <b>[PRIVATE POD: ${escapeHtml(roomName)}]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`;
+
+      if (fileBuffer && fileBuffer.length <= 10 * 1024 * 1024) {
+        const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+        let formHeader = `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${currentSupergroupId}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${targetTopic}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
+
+        const payload = Buffer.concat([
+          Buffer.from(formHeader),
+          fileBuffer,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]);
+
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          method: "POST",
+          headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+          body: payload,
+        });
+        return true;
+      } else {
+        const clientUrl = process.env.CLIENT_URL || "https://freestudymaterial.onrender.com";
+        const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
+        await callTelegram("sendPhoto", {
+          chat_id: currentSupergroupId,
+          message_thread_id: targetTopic,
+          photo: fullUrl,
+          caption,
+          parse_mode: "HTML",
+        });
+        return true;
+      }
+    }
+
+    // 2. If PDF or Document message
+    if ((message.type === "pdf" || message.type === "document") && message.fileUrl) {
+      let fileBuffer = null;
+      if (chatMediaDir) {
+        const filenameOnDisk = path.basename(message.fileUrl.split("?")[0]);
+        const potentialPath = path.join(chatMediaDir, filenameOnDisk);
+        if (fs.existsSync(potentialPath)) {
+          try { fileBuffer = fs.readFileSync(potentialPath); } catch {}
+        }
+      }
+
+      const originalName = message.fileName || (message.type === "pdf" ? "Document.pdf" : "File");
+      const caption = `🔒 <b>[PRIVATE POD: ${escapeHtml(roomName)}]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}) shared <code>${escapeHtml(originalName)}</code>\n${escapeHtml(text)}`;
+
+      if (fileBuffer && fileBuffer.length <= 50 * 1024 * 1024) {
+        const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+        let formHeader = `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${currentSupergroupId}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${targetTopic}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+        formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+
+        const payload = Buffer.concat([
+          Buffer.from(formHeader),
+          fileBuffer,
+          Buffer.from(`\r\n--${boundary}--\r\n`),
+        ]);
+
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+          method: "POST",
+          headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+          body: payload,
+        });
+        return true;
+      } else {
+        const clientUrl = process.env.CLIENT_URL || "https://freestudymaterial.onrender.com";
+        const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
+        await callTelegram("sendDocument", {
+          chat_id: currentSupergroupId,
+          message_thread_id: targetTopic,
+          document: fullUrl,
+          caption,
+          parse_mode: "HTML",
+        });
+        return true;
+      }
+    }
+
+    // 3. Regular Text Message
+    await callTelegram("sendMessage", {
+      chat_id: currentSupergroupId,
+      message_thread_id: targetTopic,
+      text: `🔒 <b>[PRIVATE POD: ${escapeHtml(roomName)}]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`,
+      parse_mode: "HTML",
+      disable_web_page_preview: false,
+    });
+    return true;
+  } catch (err) {
+    console.warn(`[CHAT-AUDIT-BOT] Error sending private pod message to topic ${targetTopic}:`, err.message);
+    return false;
+  }
+}
+
+/**
  * Dispatches an Edit alert to Telegram when a Public Chat message is edited
  */
 async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, sender }) {
@@ -1620,9 +1820,10 @@ async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir
   if (!chatBotSettings.enableMediaVaultUpload) return false;
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetThreadId = auditTopics.mediaVault || "33";
+  const targetThreadId = (auditTopics.mediaVault || chatBotSettings.topics?.mediaVault || "").trim();
 
-  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+  // If mediaVault subtopic is not explicitly configured by Admin, do NOT send!
+  if (!targetThreadId || !currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
 
   const roomName = room?.name || "Private Pod";
   const roomId = room?.id || message?.roomId || "private";
@@ -1732,11 +1933,14 @@ async function dispatchChatForensicAudit({
   const threadMap = {};
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const podAuditTopic = (auditTopics.podAudits || chatBotSettings.topics?.podAudits || "").trim();
+
+  // If podAudits subtopic is not configured by Admin, do NOT send!
+  if (!podAuditTopic) return false;
+
   if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
     targetChatIds.push(currentSupergroupId);
-    if (auditTopics.podAudits) {
-      threadMap[currentSupergroupId] = auditTopics.podAudits;
-    }
+    threadMap[currentSupergroupId] = podAuditTopic;
   }
 
   if (targetChatIds.length === 0) return false;
@@ -1980,17 +2184,16 @@ async function sendTestChatBotAlert(event = "PING") {
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const presenceTopic = (auditTopics.presence || chatBotSettings.topics?.presence || "").trim();
 
-  const targetChats = [];
+  // If presence subtopic is not configured by Admin, do NOT send!
+  if (!presenceTopic || !currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
 
-  // 🛡️ STRICT REQUIREMENT: Send ONLY to Supergroup Topic 114 (Presence & Session Logs)
-  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
-    targetChats.push({
-      chatId: currentSupergroupId,
-      threadId: auditTopics.presence || "114",
-      isDirect: false,
-    });
-  }
+  const targetChats = [{
+    chatId: currentSupergroupId,
+    threadId: presenceTopic,
+    isDirect: false,
+  }];
 
   if (targetChats.length === 0) return false;
 
@@ -2113,8 +2316,9 @@ async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomI
  */
 async function dispatchActiveStudentsReportToTelegram() {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetThreadId = auditTopics.presence || "114";
-  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+  const targetThreadId = (auditTopics.presence || chatBotSettings.topics?.presence || "").trim();
+  // If presence subtopic is not configured by Admin, do NOT send!
+  if (!targetThreadId || !currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
 
   const activeUsers = typeof chatHandlers.getActiveUsers === "function" ? chatHandlers.getActiveUsers() : [];
   let bodyText = "";
@@ -2412,6 +2616,7 @@ module.exports = {
   dispatchPrivateMediaToTelegramVault,
   dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
+  dispatchPrivateChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,
   dispatchChatPresenceAlertToTelegram,

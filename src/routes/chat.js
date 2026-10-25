@@ -25,6 +25,7 @@ const {
   dispatchPrivateMediaToTelegramVault,
   dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
+  dispatchPrivateChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,
   dispatchChatPresenceAlertToTelegram,
@@ -1353,15 +1354,13 @@ function initChatWebSocket(server) {
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public send dispatch notice:", err.message));
           } else {
-            // 🔒 Private Chat Media Vault (Topic 33): Real-time vaulting for PDF, IMG, Documents (pure text excluded)
-            if (newMsg.fileUrl || ["pdf", "image", "document", "audio"].includes(newMsg.type)) {
-              dispatchPrivateMediaToTelegramVault({
-                message: newMsg,
-                room: currentRoom,
-                chatMediaDir: CHAT_MEDIA_DIR,
-                sender: { ...user, ip: ws.userIp },
-              }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private media vault dispatch notice:", err.message));
-            }
+            // 🔒 Private Chat on-demand Routing: Dispatches to Telegram ONLY when admin explicitly configures a privateChat topic
+            dispatchPrivateChatMessageToTelegram({
+              message: newMsg,
+              room: currentRoom,
+              chatMediaDir: CHAT_MEDIA_DIR,
+              sender: { ...user, ip: ws.userIp },
+            }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private chat dispatch notice:", err.message));
           }
 
           // Update lastActivity for private pod

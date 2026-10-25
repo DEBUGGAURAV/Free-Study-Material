@@ -880,19 +880,21 @@ export default function TabCommunityChat(props) {
                               />
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 35: Public Deleted Messages & Tamper Logs">Public Del (35):</span>
+                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 35: Public Deleted Messages & Tamper Logs">Public Del:</span>
                               <input
                                 type="text"
-                                value={chatBotSettings.topics?.deletedMessages || "35"}
+                                value={chatBotSettings.topics?.deletedMessages || ""}
+                                placeholder="Off"
                                 onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, deletedMessages: e.target.value } }))}
                                 style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
                               />
                             </div>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 114: Active Students, Session Logs & Purge Reports">Sessions (114):</span>
+                              <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }} title="Topic 114: Active Students, Session Logs & Purge Reports">Sessions:</span>
                               <input
                                 type="text"
-                                value={chatBotSettings.topics?.presence || "114"}
+                                value={chatBotSettings.topics?.presence || ""}
+                                placeholder="Off"
                                 onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, presence: e.target.value } }))}
                                 style={{ width: "42px", padding: "2px 4px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem", textAlign: "center" }}
                               />
@@ -914,6 +916,23 @@ export default function TabCommunityChat(props) {
                                 </span>
                               </div>
                             </div>
+                            <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed rgba(255,255,255,0.1)", paddingTop: "6px", marginTop: "2px" }}>
+                              <span style={{ color: chatBotSettings.topics?.privateChat ? "#38bdf8" : "var(--text-dim)", fontSize: "0.7rem", fontWeight: 700 }}>
+                                Private Chat Topic:
+                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input
+                                  type="text"
+                                  value={chatBotSettings.topics?.privateChat || ""}
+                                  onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, privateChat: e.target.value } }))}
+                                  placeholder="Off (e.g. 5)"
+                                  style={{ width: "65px", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: chatBotSettings.topics?.privateChat ? "1.5px solid #38bdf8" : "1px solid rgba(255,255,255,0.15)", color: chatBotSettings.topics?.privateChat ? "#38bdf8" : "#fff", fontSize: "0.72rem", textAlign: "center", fontWeight: 700 }}
+                                />
+                                <span style={{ fontSize: "0.68rem", color: chatBotSettings.topics?.privateChat ? "#38bdf8" : "var(--text-dim)" }}>
+                                  {chatBotSettings.topics?.privateChat ? `(Topic ${chatBotSettings.topics?.privateChat})` : "(Disabled)"}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
                           {/* Dynamic Topic 1 Mode Helper Banner */}
@@ -929,7 +948,7 @@ export default function TabCommunityChat(props) {
                               lineHeight: 1.35,
                             }}
                           >
-                            <span>🟢 <strong>Topic 1 &amp; Bot DM Control Active:</strong> Public chat syncs via Topic 1 &amp; 1-on-1 Admin Bot DM with real-time bidirectional control!</span>
+                            <span>🟢 <strong>Public Chat Active (Topic 1 &amp; Bot DM):</strong> Subtopics are silenced. Set <strong>Private Chat Topic</strong> above whenever you want private pod messages routed to Telegram!</span>
                           </div>
                         </div>
                       </div>

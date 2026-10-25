@@ -361,11 +361,12 @@ export default function AdminModal({
     privateRoomInactivityDays: 7,
     supergroupId: "",
     topics: {
-      podAudits: "31",
-      mediaVault: "33",
-      deletedMessages: "35",
-      presence: "114",
+      podAudits: "",
+      mediaVault: "",
+      deletedMessages: "",
+      presence: "",
       publicChat: "1",
+      privateChat: "",
     },
   });
   const [chatTelemetry, setChatTelemetry] = useState(null);
