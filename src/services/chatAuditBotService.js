@@ -1795,12 +1795,18 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir, sender }) {
   if (!chatBotSettings.enableMediaVaultUpload) return false;
 
-  // 🛡️ User requirement: Strictly suppress subtopics / private pods. Only public chat allowed.
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
+
+  const targetThreadId = auditTopics.mediaVault || "33";
+
+  // Strict Rule: Topic 33 is EXCLUSIVELY for Private Chat Media (PDF, Images, Documents).
+  // Public chat media routes to Topic 1 / 39.
   const roomId = room?.id || message?.roomId || "private";
-  if (roomId !== "public") {
-    console.log(`[CHAT-AUDIT-BOT] 🔇 Suppressed private pod media vault dispatch for "${roomId}" (Public Chat Only mode).`);
+  if (roomId === "public") {
     return false;
   }
+  const roomName = room?.name || "Private Study Room";
   const secretCode = room?.secretCode || "N/A";
 
   const senderName = sender?.name || message?.sender?.name || "Student";
@@ -1901,12 +1907,7 @@ async function dispatchChatForensicAudit({
     return false;
   }
 
-  // 🛡️ User requirement: Strictly suppress subtopics & study pods.
-  // ONLY public chat and its controller actions are permitted in the bot.
-  if (room && room.id !== "public") {
-    console.log(`[CHAT-AUDIT-BOT] 🔇 Suppressed subtopic audit for "${room.name || room.id}" (Public Chat Only Mode).`);
-    return false;
-  }
+  // Dispatches complete unredacted transcript, deleted messages ledger, and participants to Topic 31 (Pod Vault)
 
   // 🛡️ STRICT REQUIREMENT: Send forensic dossiers & media vault ONLY to Supergroup topics.
   // NEVER send bulky .txt transcripts, media files, or avatars to Admin 1-on-1 DM!
@@ -2161,17 +2162,12 @@ async function sendTestChatBotAlert(event = "PING") {
  * (Topic: presence / 37)
  */
 async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomId = "public", roomName = "" }) {
-  // 🛡️ User requirement: Strictly suppress subtopics / private pods. Only public chat allowed.
-  if (roomId && roomId !== "public") {
-    return false;
-  }
-
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetTopic = getTargetPublicChatTopic();
+  const targetTopic = auditTopics.presence || "37";
 
   const targetChats = [];
 
-  // Deliver to configured Public Chat Topic
+  // Strictly route Presence & Session Logs to Topic 37
   if (currentSupergroupId && currentSupergroupId.startsWith("-100") && targetTopic) {
     targetChats.push({
       chatId: currentSupergroupId,
