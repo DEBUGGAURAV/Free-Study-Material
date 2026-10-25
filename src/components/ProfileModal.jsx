@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -51,6 +51,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [loadingStoredNotes, setLoadingStoredNotes] = useState(false);
   const [deletingNoteId, setDeletingNoteId] = useState(null);
   const [refreshingStorage, setRefreshingStorage] = useState(false);
+  const [refreshSuccess, setRefreshSuccess] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
   const hwProfile = detectClientHardwareProfile();
 
   const fetchStorageInfo = async () => {
@@ -75,11 +77,15 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const handleRefreshAllStorage = async () => {
     try {
       setRefreshingStorage(true);
+      setRefreshSuccess(false);
       await Promise.all([fetchStorageInfo(), loadStoredNotes()]);
-      setMsg({ type: "success", text: "Storage meter & offline vaults refreshed successfully!" });
+      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      setLastRefreshedAt(nowStr);
+      setRefreshSuccess(true);
+      setTimeout(() => setRefreshSuccess(false), 3500);
     } catch (_) {
     } finally {
-      setTimeout(() => setRefreshingStorage(false), 500);
+      setTimeout(() => setRefreshingStorage(false), 600);
     }
   };
 
@@ -845,38 +851,47 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 padding: "16px",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                   <HardDrive size={18} style={{ color: "#38bdf8" }} />
-                  <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "#f8fafc" }}>
-                    Device Hardware Storage Meter
-                  </span>
+                  <div>
+                    <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "#f8fafc" }}>
+                      Device Hardware Storage Meter
+                    </span>
+                    {lastRefreshedAt && (
+                      <div style={{ fontSize: "0.68rem", color: refreshSuccess ? "#34d399" : "var(--text-dim)", display: "flex", alignItems: "center", gap: "4px" }}>
+                        {refreshSuccess ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+                        <span>{refreshSuccess ? `Audited successfully at ${lastRefreshedAt}` : `Last checked: ${lastRefreshedAt}`}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleRefreshAllStorage}
                   disabled={refreshingStorage}
                   style={{
-                    background: refreshingStorage ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                    border: `1px solid ${refreshingStorage ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                    background: refreshingStorage ? "rgba(56, 189, 248, 0.2)" : refreshSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                    border: `1px solid ${refreshingStorage ? "rgba(56, 189, 248, 0.5)" : refreshSuccess ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
                     borderRadius: "6px",
-                    color: refreshingStorage ? "#38bdf8" : "var(--text-muted)",
-                    padding: "4px 10px",
+                    color: refreshingStorage ? "#38bdf8" : refreshSuccess ? "#34d399" : "var(--text-muted)",
+                    padding: "5px 12px",
                     fontSize: "0.72rem",
                     cursor: refreshingStorage ? "not-allowed" : "pointer",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "5px",
+                    gap: "6px",
                     fontWeight: 600,
+                    transition: "all 0.2s ease",
                   }}
-                  title="Refresh local storage meter, IndexedDB chunks, and stored notes"
+                  title="Scan hardware storage meter, IndexedDB chunks, and stored notes"
                 >
                   <RefreshCw
                     size={12}
                     className={refreshingStorage ? "spin" : ""}
                     style={{ animation: refreshingStorage ? "spin 0.8s linear infinite" : "none" }}
                   />
-                  <span>{refreshingStorage ? "Refreshing..." : "Refresh"}</span>
+                  <span>{refreshingStorage ? "Auditing Vault..." : refreshSuccess ? "Storage Synced!" : "Refresh Meter"}</span>
                 </button>
               </div>
 
@@ -889,11 +904,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </div>
 
               {/* Secondary Metric: Total Browser Origin Quota */}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "var(--text-dim)", marginBottom: "8px" }}>
-                <span>PWA App Shell, Tesseract WASM &amp; Cache:</span>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "var(--text-dim)", marginBottom: "4px" }}>
+                <span>Browser PWA Engine, WASM &amp; Font Cache:</span>
                 <span style={{ color: "#94a3b8", fontWeight: 600 }}>
                   {storageInfo ? `${storageInfo.usageMB} MB` : "Calculating..."}
                 </span>
+              </div>
+              <div style={{ fontSize: "0.68rem", color: "#64748b", marginBottom: "8px", lineHeight: "1.4" }}>
+                ℹ️ Required by Chrome for 0ms offline launch &amp; PDF reader canvas. Your saved offline study notes use {totalNotesMB} MB.
               </div>
 
               {/* Progress Bar */}
@@ -901,7 +919,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 <div
                   style={{
                     height: "100%",
-                    width: `${Math.min(100, Math.max(2, Number(storageInfo?.percentUsed || 0.41)))}%`,
+                    width: `${Math.min(100, Math.max(1, Number(storageInfo?.percentUsed || 0)))}%`,
                     background: "linear-gradient(90deg, #38bdf8, #818cf8)",
                     borderRadius: "4px",
                   }}
@@ -910,7 +928,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
                 <span>Available Browser Quota: {storageInfo ? `${(Number(storageInfo.quotaMB) / 1024).toFixed(1)} GB` : "Unlimited"}</span>
-                <span>{storageInfo ? `${storageInfo.percentUsed}% Utilized` : "Normal"}</span>
+                <span>{storageInfo ? `${storageInfo.percentUsed}% Utilized` : "0.00% Utilized"}</span>
               </div>
             </div>
 
@@ -938,7 +956,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v8 (Service Worker)</div>
+                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v9 (Service Worker)</div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Application shell, offline catalog JSON, and stream clones</div>
                 </div>
                 <span style={{ fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>CacheStorage</span>

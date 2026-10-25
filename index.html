@@ -45,13 +45,24 @@
             .filter(function(src) {
               try {
                 var u = new URL(src);
-                return u.origin === window.location.origin && !u.pathname.startsWith('/api/') && !u.pathname.startsWith('/ws');
+                if (u.origin !== window.location.origin) return false;
+                if (u.pathname.startsWith('/api/') || u.pathname.startsWith('/ws')) return false;
+                // Exclude Vite dev server modules & raw source files
+                if (u.pathname.startsWith('/src/') || u.pathname.startsWith('/@') || u.pathname.startsWith('/node_modules/') || u.pathname.endsWith('.jsx') || u.pathname.endsWith('.tsx') || u.searchParams.has('t')) return false;
+                return true;
               } catch (_) { return false; }
             });
 
           Array.from(document.querySelectorAll('link[rel="stylesheet"], script[src]')).forEach(function(el) {
             var s = el.href || el.src;
-            if (s && s.startsWith(window.location.origin)) urls.push(s);
+            if (s && s.startsWith(window.location.origin)) {
+              try {
+                var u = new URL(s);
+                if (!u.pathname.startsWith('/src/') && !u.pathname.startsWith('/@') && !u.pathname.startsWith('/node_modules/') && !u.pathname.endsWith('.jsx') && !u.pathname.endsWith('.tsx')) {
+                  urls.push(s);
+                }
+              } catch (_) {}
+            }
           });
 
           urls.push(window.location.origin + '/');

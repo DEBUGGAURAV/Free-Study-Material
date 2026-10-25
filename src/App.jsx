@@ -12,16 +12,45 @@ import { formatFileSize } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 
-// ⚡ Ultra-Fast Code Splitting & Dynamic Lazy Loading for All Modals
-const UploadModal = React.lazy(() => import("./components/UploadModal"));
-const PreviewModal = React.lazy(() => import("./components/PreviewModal"));
-const AdminModal = React.lazy(() => import("./components/AdminModal"));
-const NoticeBoardModal = React.lazy(() => import("./components/NoticeBoardModal"));
-const AuthModal = React.lazy(() => import("./components/AuthModal"));
-const ProfileModal = React.lazy(() => import("./components/ProfileModal"));
-const StudentChatModal = React.lazy(() => import("./components/StudentChatModal"));
-const HelpCenterModal = React.lazy(() => import("./components/HelpCenterModal"));
-const StudyPodModal = React.lazy(() => import("./components/StudyPodModal"));
+// ⚡ Ultra-Resilient Code Splitting with Retry & Chunk Reload Recovery
+function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
+  return React.lazy(() =>
+    new Promise((resolve, reject) => {
+      const attempt = (remainingRetries) => {
+        componentFactory()
+          .then(resolve)
+          .catch((error) => {
+            console.warn(`[LazyImport] Modal chunk load attempt failed (${remainingRetries} retries left):`, error?.message || error);
+            if (remainingRetries > 0) {
+              setTimeout(() => attempt(remainingRetries - 1), interval);
+            } else {
+              // If dynamic import failed permanently (stale chunk hash after new deployment / dev restart)
+              const reloadKey = "fsm_lazy_reload_" + (typeof window !== "undefined" ? window.location.pathname : "");
+              const hasRefreshed = typeof sessionStorage !== "undefined" ? sessionStorage.getItem(reloadKey) : null;
+              if (!hasRefreshed && typeof window !== "undefined") {
+                sessionStorage.setItem(reloadKey, "true");
+                console.log("[LazyImport] Auto-reloading page to fetch latest application chunks...");
+                window.location.reload();
+                return;
+              }
+              reject(error);
+            }
+          });
+      };
+      attempt(retries);
+    })
+  );
+}
+
+const UploadModal = lazyWithRetry(() => import("./components/UploadModal"));
+const PreviewModal = lazyWithRetry(() => import("./components/PreviewModal"));
+const AdminModal = lazyWithRetry(() => import("./components/AdminModal"));
+const NoticeBoardModal = lazyWithRetry(() => import("./components/NoticeBoardModal"));
+const AuthModal = lazyWithRetry(() => import("./components/AuthModal"));
+const ProfileModal = lazyWithRetry(() => import("./components/ProfileModal"));
+const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
+const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal"));
+const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -202,6 +231,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem("fsm_lazy_reload_" + window.location.pathname);
+        sessionStorage.removeItem("fsm_boundary_chunk_reload");
+      }
+    } catch (_) {}
+
     // 👑 Multi-Tab Leader Sync (Web Locks API + BroadcastChannel)
     initTabLeaderElection(() => {
       console.log("[FSM] 👑 Active tab elected as primary sync leader.");

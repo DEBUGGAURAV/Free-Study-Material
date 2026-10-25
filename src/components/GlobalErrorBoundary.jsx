@@ -13,6 +13,29 @@ export default class GlobalErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     console.error("[GLOBAL SHIELD RECOVERY]", error, errorInfo);
     this.setState({ errorInfo });
+
+    try {
+      const errStr = (error?.toString() || "").toLowerCase();
+      const isChunkOrImportError =
+        errStr.includes("failed to fetch dynamically imported module") ||
+        errStr.includes("loading chunk") ||
+        errStr.includes("dynamically imported module") ||
+        errStr.includes("error loading dynamic script");
+
+      if (isChunkOrImportError && typeof window !== "undefined") {
+        const reloadKey = "fsm_boundary_chunk_reload";
+        const lastReload = Number(sessionStorage.getItem(reloadKey) || 0);
+        const now = Date.now();
+        // Auto-reload once within 12 seconds to recover cleanly from stale chunks / dev restarts
+        if (now - lastReload > 12000) {
+          sessionStorage.setItem(reloadKey, String(now));
+          console.warn("[GlobalErrorBoundary] Auto-recovering from dynamic chunk error...");
+          setTimeout(() => {
+            window.location.reload();
+          }, 350);
+        }
+      }
+    } catch (_) {}
   }
 
   handleReload = () => {
@@ -30,6 +53,11 @@ export default class GlobalErrorBoundary extends Component {
       if ("caches" in window) {
         caches.keys().then((names) => {
           names.forEach((name) => caches.delete(name));
+        });
+      }
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.update());
         });
       }
     } catch (_) {}

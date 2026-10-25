@@ -1,10 +1,10 @@
 /**
- * FreeStudyMaterial PWA Service Worker v7
+ * FreeStudyMaterial PWA Service Worker v9
  * 100% Offline Mode & Network-First Caching
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v8';
+const CACHE_NAME = 'fsm-cache-v9';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -12,15 +12,6 @@ const PRECACHE_CORE = [
   '/index.html',
   '/manifest.json',
   '/favicon.ico',
-];
-
-// Development core shell modules
-const PRECACHE_DEV = [
-  '/@react-refresh',
-  '/@vite/client',
-  '/src/main.jsx',
-  '/src/App.jsx',
-  '/src/styles.css',
 ];
 
 // Production bundle chunks (cached on best-effort basis, never blocks install)
@@ -37,7 +28,7 @@ const OPTIONAL_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      console.log('[SW] 📦 Pre-caching resilient core app shell v6');
+      console.log('[SW] 📦 Pre-caching resilient core app shell v9');
 
       // 1. Cache critical core files with allSettled
       await Promise.allSettled(
@@ -53,21 +44,7 @@ self.addEventListener('install', (event) => {
         )
       );
 
-      // 2. Best-effort cache for Vite dev assets
-      await Promise.allSettled(
-        PRECACHE_DEV.map((url) =>
-          fetch(url)
-            .then((res) => {
-              if (res && res.ok) {
-                const c1 = res.clone();
-                return cache.put(url, c1);
-              }
-            })
-            .catch(() => {})
-        )
-      );
-
-      // 3. Best-effort cache for build assets
+      // 2. Best-effort cache for build assets
       await Promise.allSettled(
         OPTIONAL_ASSETS.map((url) =>
           fetch(url)
@@ -104,6 +81,20 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests or browser extension protocols
   if (request.method !== 'GET' || !url.protocol.startsWith('http')) {
+    return;
+  }
+
+  // 0. Completely bypass Vite dev server modules, source files & HMR channels
+  // Ensures Service Worker never intercepts, caches, or corrupts local dev JSX modules
+  if (
+    url.origin === self.location.origin &&
+    (url.pathname.startsWith('/src/') ||
+     url.pathname.startsWith('/@') ||
+     url.pathname.startsWith('/node_modules/') ||
+     url.pathname.endsWith('.jsx') ||
+     url.pathname.endsWith('.tsx') ||
+     url.searchParams.has('t'))
+  ) {
     return;
   }
 
@@ -348,12 +339,13 @@ export default {};`,
             );
           }
 
-          // If script / module
+          // If script / module unavailable, return 503 so dynamic imports can handle with retry
           if (url.pathname.endsWith('.js') || url.pathname.endsWith('.jsx') || request.destination === 'script') {
-            return new Response(
-              'export default function() { return null; }; export const api = {}; export const getCurrentUser = () => null;',
-              { headers: { 'Content-Type': 'application/javascript; charset=utf-8' } }
-            );
+            return new Response('/* Offline module unavailable */', {
+              status: 503,
+              statusText: 'Offline Module Unavailable',
+              headers: { 'Content-Type': 'application/javascript; charset=utf-8' },
+            });
           }
 
           return new Response('', { status: 408, statusText: 'Offline Resource Unavailable' });
@@ -550,6 +542,20 @@ self.addEventListener('message', (event) => {
     if (self.navigator.onLine) {
       caches.open(CACHE_NAME).then((cache) => {
         event.data.urls.forEach((assetUrl) => {
+          try {
+            const u = new URL(assetUrl, self.location.origin);
+            if (
+              u.origin === self.location.origin &&
+              (u.pathname.startsWith('/src/') ||
+               u.pathname.startsWith('/@') ||
+               u.pathname.startsWith('/node_modules/') ||
+               u.pathname.endsWith('.jsx') ||
+               u.pathname.endsWith('.tsx') ||
+               u.searchParams.has('t'))
+            ) {
+              return;
+            }
+          } catch (_) {}
           fetch(assetUrl)
             .then((res) => {
               if (res && res.ok) {
