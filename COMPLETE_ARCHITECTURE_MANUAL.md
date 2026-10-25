@@ -6,6 +6,7 @@
 ---
 
 ## Complete Table of Contents
+### PART 1: TECHNICAL CODEBASE ARCHITECTURE & ENGINEERING DOSSIER
 1. [Executive Summary & High-Level Architectural Topology](#1-executive-summary--high-level-architectural-topology)
 2. [Zero-Cost Distributed Cloud Storage Engine (MTProto 2.0 & GramJS)](#2-zero-cost-distributed-cloud-storage-engine-mtproto-20--gramjs)
 3. [Dual-Tier WebAssembly PDF Compression Engine](#3-dual-tier-webassembly-pdf-compression-engine)
@@ -23,12 +24,39 @@
 15. [Performance Benchmarks & Empirical Stress Test Results](#15-performance-benchmarks--empirical-stress-test-results)
 16. [Complete File-by-File Technical Directory & Operational Traces](#16-complete-file-by-file-technical-directory--operational-traces)
 
+### PART 2: ADMINISTRATOR & OPERATOR CONTROL MANUAL
+17. [Admin Panel Access, Authentication & FIDO2 Passkeys](#17-admin-panel-access-authentication--fido2-passkeys)
+18. [Tab-by-Tab Master Operator Guide (All 12 Administration Tabs)](#18-tab-by-tab-master-operator-guide-all-12-administration-tabs)
+19. [Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 37)](#19-telegram-forum-topics-specification--binding-manual-topics-1-35-31-33-37)
+20. [Device Dynamic LRU & 48-Hour Auto-Delete Maintenance Guide](#20-device-dynamic-lru--48-hour-auto-delete-maintenance-guide)
+21. [Deployment, Render Hosting & Zero-Leak Security Checklist](#21-deployment-render-hosting--zero-leak-security-checklist)
+
+---
+
+# PART 1: TECHNICAL CODEBASE ARCHITECTURE & ENGINEERING DOSSIER
+
 ---
 
 ## 1. Executive Summary & High-Level Architectural Topology
 
 ### 1.1 Platform Mission & Core Breakthroughs
 **Free Study Material (FSM)** is an enterprise-grade academic cloud ecosystem designed to provide students, researchers, and universities with sub-150ms access to high-performance study notes, engineering schematics, cloud lecture archives, and collaborative study pods.
+
+```
++---------------------------------------------------------------------------------------------------+
+|                                 ARCHITECTURAL BENCHMARK COMPARISON                                 |
++------------------------------+------------------------------------+-------------------------------+
+| Feature Dimension            | Standard Industry Enterprise Stack  | Free Study Material (FSM)     |
++------------------------------+------------------------------------+-------------------------------+
+| Database Read/Write Cost     | High ($0.06/100K reads)            | ZERO ($0.00) via RAM & Edge   |
+| CDN Bandwidth Egress         | Paid per GB ($90/TB)               | Unlimited Free Edge + P2P Mesh|
+| PDF Ingestion & OCR          | Heavy Server Instances (EC2 GPU)   | Client WASM + 0-RAM Pipelines |
+| Offline Train/Village Mode   | None (requires constant 4G/5G)     | 100% Offline via IndexedDB/SW |
+| Session & Presence Heartbeat | Polling DB every 10s (High I/O)    | Ephemeral RAM Sockets (0 DB)  |
+| Disaster Recovery / Backup   | Manual Cloud SQL Dumps             | Dual-Mirror Telegram Vault    |
+| Authentication Security      | Basic Passwords / SMS OTP (Costly) | Passkeys (FIDO2) + Free OTP   |
++------------------------------+------------------------------------+-------------------------------+
+```
 
 1. **Zero Persistent Server Disk Storage**: Academic files stream directly into and out of Telegram Data Center 5 (Singapore) via raw MTProto 2.0 TCP sockets. Not a single byte is saved to server NVMe/SSD disks.
 2. **Zero Firestore Real-Time Overhead**: Live Study Pods and interactive canvas collaboration run on pure peer-to-peer (P2P) WebRTC data channels utilizing Y.js CRDTs and Google public STUN servers—generating **0% server CPU, 0 MB server RAM, and 0 database writes**.
@@ -140,7 +168,6 @@ Implemented in [`src/telegram/mtproto.js`](file:///c:/Users/GAURAV%20YADAV/Deskt
 ## 5. Autonomous Self-Healing Watchdog & Process Immortality Suite
 
 Implemented in [`src/utils/selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js):
-
 1. **Process Immortality Shield (`initProcessImmortalityShield`)**: Catches `uncaughtException` and `unhandledRejection` globally, logs security telemetry, and prevents Node.js process termination.
 2. **Event Loop Lag Detector (`startEventLoopLagDetector`)**: Measures event loop latency every 1,000ms. If CPU lag exceeds 150ms, alerts and triggers proactive thread cooling.
 3. **3-Minute Idle Memory Cleaner (`startIdleMemoryCleaner`)**: If zero HTTP requests occur for 3 minutes, automatically flushes inactive buffers and calls `global.gc()`, dropping RSS memory to base level (~60MB).
@@ -197,21 +224,6 @@ Implemented in [`src/components/StudyPodModal.jsx`](file:///c:/Users/GAURAV%20YA
 - **Dual PDF Sync**: Synchronizes active PDF document ID and current page coordinates across all connected peers.
 - **Campus P2P Mesh ([`src/utils/p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js))**: Seeds document chunks across campus Wi-Fi peers directly from IndexedDB without internet access.
 
-### 9.2 Multi-Hop Mesh Routing & Web Bluetooth Relay Protocol
-Extending single-hop P2P into a distributed campus mesh:
-
-```mermaid
-flowchart LR
-    DevA["Device A (Host)\nIndexedDB Cached"] -->|Local Wi-Fi\nWebRTC 100Mbps| DevB["Device B (Relay)\nIndexedDB Cache"]
-    DevB -->|Web Bluetooth\nBLE 512B MTU| DevC["Device C (Bridge)\nIndexedDB Cache"]
-    DevC -->|Local Hotspot\n192.168.43.x| DevD["Device D (Target)\nOffline PDF Render"]
-```
-
-- **Delay-Tolerant Networking (DTN) Store-and-Forward**: Intermediate student devices act as "mule nodes." When a student walks between campus blocks, cached chunks in their IndexedDB (`fsm_p2p_cache_v1`) are discovered and streamed to nearby peers without active internet.
-- **Web Bluetooth Fallback (`navigator.bluetooth`)**: In environments where Wi-Fi is disabled, devices advertise custom GATT Service UUIDs (`0000f501-...`), fragmenting binary PDFs into 512-byte MTU characteristics.
-- **Cryptographic Merkle Chunk Verification**: Prevents relay tampering. The recipient computes `crypto.subtle.digest('SHA-256', chunk)` against the expected root hash, dropping corrupted packets immediately.
-- **0 KB Cellular Data Mesh**: Operates across local subnet IPs (`192.168.43.x`) over 2.4GHz / 5GHz radio frequencies with zero mobile SIM data consumption.
-
 ---
 
 ## 10. Service Worker Local Proxy Architecture & 6:00 AM Offline Sync Engine
@@ -240,105 +252,33 @@ flowchart TD
     end
 ```
 
-### 10.1 Service Worker as In-Browser Local Proxy Server (`public/sw.js`)
-Traditional web platforms fail immediately when cellular networks drop, displaying the standard browser Dinosaur (`DNS_PROBE_FINISHED_NO_INTERNET`) error. Free Study Material eliminates offline failures by running `public/sw.js` as an **In-Browser Local Proxy Server**:
-- **Zero-Network Interception**: Every outbound HTTP and asset request initiated by the student's browser is intercepted at the kernel level by the Service Worker before it touches the physical network interface or cellular modem.
-- **Instant 0ms App Launch**: When opening the web app or PWA in Airplane Mode, the Service Worker fulfills the request directly from device flash storage (`CacheStorage`), rendering the application shell in `<10ms` with zero cellular data consumption.
+### 10.1 In-Browser Local Proxy Server (`public/sw.js`)
+- Runs as an in-browser kernel-level proxy, intercepting requests before they reach the cellular modem.
+- Serves application shell from `CacheStorage` in `<10ms` in Airplane mode.
 
-### 10.2 5-Tier Request Interception Pipeline inside `public/sw.js`
-1. **Tier 1: SPA Navigation Shell (`request.mode === 'navigate'`)**:
-   - Intercepts root `/` and `/index.html` navigations.
-   - Network-First when online (updating `fsm-cache-v8` in background).
-   - Instant Cache-Fallback when offline: Serves cached `index.html`. If the app was never visited, returns an emergency standalone offline bootstrap page.
-2. **Tier 2: Vite Dev Server & React Runtime Stubs (`/@react-refresh`, `/@vite/client`)**:
-   - Intercepts Hot Module Replacement (HMR) endpoints during offline launch.
-   - Injects virtual ES module stubs with complete mock implementations (`createHotContext`, `updateStyle`, `$RefreshReg$`), guaranteeing that React never throws unhandled fatal errors when offline.
-3. **Tier 3: Notes API Interceptor (`/api/notes`)**:
-   - Network-First when online; automatically caches incoming catalog JSON clones into `fsm-cache-v8`.
-   - When `navigator.onLine === false`, intercepts `/api/notes` and serves the 6:00 AM pre-fetched personalized catalog JSON. Broadcasts `FSM_NETWORK_STATUS` event to frontend client tabs to activate the golden offline banner.
-4. **Tier 4: Same-Origin Static Asset Caching**:
-   - Caches compiled JavaScript bundles, CSS stylesheets, and icon assets.
-   - For image requests that miss cache while offline, dynamically constructs and returns a transparent 1x1 SVG graphic (`image/svg+xml`), preventing broken image icons in UI cards.
-5. **Tier 5: Cross-Origin CDN Cache (Google Fonts, Cloudflare CDN)**:
-   - Employs a Stale-While-Revalidate caching pattern for typography and external CDN libraries, ensuring typography remains crisp during complete offline sessions.
+### 10.2 W3C 6:00 AM Periodic Background Sync
+- Operates via `periodicSync` registration (`fsm-exam-prefetch`).
+- Uses `fsm_student_context_v1` in IndexedDB to identify student's Year, Branch, and preparation subjects.
+- Pre-downloads prioritized exam notes into CacheStorage and IndexedDB while student sleeps.
 
-### 10.3 W3C 6:00 AM Periodic Background Sync Engine
-Students heading to campus early on examination mornings frequently encounter cellular congestion or dead zones. Free Study Material implements an automated background pre-fetch engine:
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Student as Student Reading Notes
-    participant IDB as IndexedDB (fsm_student_context_v1)
-    participant OS as Android / Windows OS (Alarm Scheduler)
-    participant SW as Service Worker (public/sw.js)
-    participant API as Notes API (/api/notes/exam-prefetch)
-    participant Vault as Dual Offline Vault (CacheStorage + IndexedDB)
-
-    Student->>IDB: Note read event saves Year, Branch, & Recent Subjects
-    Note over Student,OS: Student closes app & goes to sleep at night
-    OS->>SW: ⏰ 6:00 AM: OS fires 'periodicsync' event ('fsm-exam-prefetch')
-    SW->>IDB: SW wakes up in background; reads student context
-    SW->>API: GET /api/notes/exam-prefetch?year=4th&branch=CSE&recentIds=...
-    API-->>SW: Returns 4-Tier Prioritized Semester Exam Notes
-    SW->>Vault: Stores stream into CacheStorage (fsm-cache-v8)
-    SW->>Vault: Saves binary ArrayBuffer into IndexedDB (fsm_p2p_cache_v1)
-    Note over Student,Vault: Student wakes up: All notes 100% offline ready in Airplane Mode!
-```
-
-- **Zero User Interaction**: Students do NOT need to open the website or PWA at 6:00 AM.
-- **W3C Periodic Background Sync API**: Registered in `index.html` and `public/sw.js` (`reg.periodicSync.register('fsm-exam-prefetch')`). The operating system wakes the Service Worker silently in the background.
-- **Personalized Student Study Context ([`src/utils/studentStudyContext.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/studentStudyContext.js))**: Tracks student reading history (`userYear`, `userBranch`, `recentNoteIds`, `recentSubjects`) and saves it into **IndexedDB database `fsm_student_context_v1`** (store: `profile`, key: `active_student`), accessible by background Service Workers even when all browser tabs are closed.
-- **4-Tier Backend Sorting Priority (`/api/notes/exam-prefetch`)**:
-  1. *Priority 1*: Exact notes the student studied the previous night (direct revision).
-  2. *Priority 2*: Other top-rated notes matching the student's active subjects.
-  3. *Priority 3*: High-yield syllabus notes matching the student's registered Year & Branch.
-  4. *Priority 4*: General trending question banks and formula sheets as fallback.
-
-### 10.4 Dual Offline Vault Storage
-- **Tier 1 (CacheStorage `fsm-cache-v8`)**: Caches `/api/notes/:id/stream.pdf` for instant `<10ms` offline reading via Service Worker fetch interception.
-- **Tier 2 (IndexedDB `fsm_p2p_cache_v1`)**: Stores raw binary `ArrayBuffer` in table `note_chunks` with GB-scale browser quota limits, facilitating offline rendering and campus mesh seeding.
-
-### 10.5 Zero-Internet Local Wi-Fi & Hotspot Radio Mesh (0 KB SIM Data)
-- **Wi-Fi Radio Waves vs Cellular Internet**: Wi-Fi Access Points allocate local private IPs (`192.168.43.x`). Devices communicate over 2.4 GHz / 5 GHz radio frequencies without requiring an active cellular data plan or internet pack.
-- **WebRTC DataChannel Streaming ([`src/utils/p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js))**:
-  - Seeder phone retrieves raw `ArrayBuffer` from IndexedDB `fsm_p2p_cache_v1`.
-  - Chunks flow directly over local Wi-Fi router or mobile hotspot radio waves to peer devices at 50-100 Mbps.
-  - Cellular data consumption: **0 KB (Zero Internet Cost)**.
-
-### 10.6 IndexedDB & CacheStorage Deletion Lifecycle
-Cached offline notes are managed and purged through four distinct channels:
-1. **In-App User 1-Click Wipe Button ([`src/components/ProfileModal.jsx`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/components/ProfileModal.jsx))**:
-   - Students navigate to **My Account Settings ➔ Offline Storage Vault**.
-   - Displays a live **Device Hardware Storage Meter** (`usageMB` vs `quotaMB`).
-   - Tapping **"Free Up Device Space (Clear All Cached Notes)"** executes `clearAllCachedNotes()`, `clearOfflineVault()`, and deletes `fsm-*` CacheStorage entries, freeing device space in 0ms.
-2. **Native Mobile App & Browser Reset**:
-   - Under Android **App Info ➔ Storage & Cache ➔ Clear Storage** (or Chrome Site Settings ➔ Clear & Reset), the mobile OS completely removes IndexedDB databases and Service Worker registrations.
-3. **Automated W3C Low-Disk Space LRU Eviction**:
-   - Operating systems continuously track free disk space (`navigator.storage.estimate()`).
-   - When phone flash storage drops below 10% or <1GB free, the browser OS automatically executes Least Recently Used (LRU) eviction on temporary IndexedDB tables to prevent device storage exhaustion.
-4. **Service Worker Version Invalidation on Deployment (`public/sw.js`)**:
-   - When new application versions deploy (`fsm-cache-v8` ➔ `fsm-cache-v9`), the `activate` event scans CacheStorage keys and automatically wipes outdated streams and obsolete assets.
+### 10.3 Device-Aware Dynamic LRU & 48-Hour Auto-Delete Lifecycle
+1. **Dynamic LRU Calculation:** Evaluates `navigator.deviceMemory` (RAM) and free storage quota. Low-end phones ($\le 2\text{GB}$) allow 2–3 notes; mid-range allow 5; PCs allow 25. **Minimum 2 notes guaranteed**.
+2. **48-Hour Auto-Eviction:** Unpinned notes older than 48 hours are automatically purged on app startup.
+3. **User Pin Immunity ("Keep Note"):** Students can mark any note with `[ 📌 Keep Note ]` in Profile Settings. Pinned notes receive permanent immunity and are never deleted.
+4. **1-Click Device Storage Wipe:** ProfileModal Tab 4 provides a 1-click button to clear all cached notes, drop IndexedDB databases, and notify Service Workers.
 
 ---
 
 ## 11. Defense Firewall, Autonomous IP Jail & Anti-Tamper Shield
 
 - **Autonomous IP Jail ([`src/middleware/ipJail.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/ipJail.js))**: 60-second sliding windows. If traffic exceeds 600 req/min (10 req/s sustained), the IP is quarantined for 3 minutes, returning HTTP 429 and Retry-After headers with zero server CPU overhead.
-- **Anti-Tamper Integrity Defense ([`src/utils/antiTamperDefense.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/antiTamperDefense.js))**: Verifies runtime configuration integrity, protects administrative session cookies, and records threat metrics.
+- **Anti-Tamper Integrity Defense ([`src/utils/antiTamperDefense.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/antiTamperDefense.js))**: Verifies runtime configuration integrity, protects administrative session cookies, and records threat metrics. Bypassed in dev mode to allow Vite HMR.
 - **Maintenance Mode Curtain ([`src/middleware/maintenance.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/maintenance.js))**: Provides zero-downtime maintenance curtains to the public while granting access to administrators via `?admin_bypass=fsm_admin_override` or admin JWT sessions.
 - **Crash-Proof Rate Limiters ([`src/middleware/rateLimit.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/rateLimit.js))**:
   - `validate: false` (eliminates internal ERL validation crashes).
   - `passOnStoreError: true` (prevents memory store errors from dropping requests).
   - `createSafeLimiterHandler` checking `res.headersSent` to prevent `ERR_HTTP_HEADERS_SENT` crashes on active streams.
   - Preflight `OPTIONS` requests bypassed to prevent browser CORS errors.
-
-### 11.5 Autonomous Bug Fixer, Circuit Breaker & Crash Recovery Engine
-- **MTProto Circuit Breaker ([`src/utils/circuitBreaker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/circuitBreaker.js))**: Implements a 3-state state machine (`CLOSED`, `OPEN`, `HALF-OPEN`). If Telegram DC5 encounters consecutive network timeouts, the circuit breaker automatically trips to `OPEN`, failing over immediately to secondary edge CDNs or Google Drive mirrors without blocking client threads.
-- **Self-Healing Watchdog ([`src/utils/selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js))**: Background telemetry loop detecting event loop lag (>150ms) and memory heap growth. It autonomously purges stale LRU chunk buffers and emits keep-alive pulses to preserve zero-downtime availability.
-- **Resilient Chunk Download Streamer ([`src/utils/resilientDownload.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/resilientDownload.js))**: Handles mobile signal dropouts by auto-retrying failed byte ranges with exponential backoff (1s, 2s, 4s), seamlessly stitching incomplete ArrayBuffers without forcing the student to restart the download.
-- **IndexedDB Offline Transaction Queue ([`src/utils/offlineQueue.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/offlineQueue.js))**: Buffers offline user actions (note bookmarks, reading progress, study context) into IndexedDB and replays them automatically upon connection restoration.
-- **React Crash Boundary Guardian (`src/components/ErrorBoundary.jsx`)**: Catches unhandled runtime render exceptions in child UI trees, displaying a graceful recovery interface with state-reset buttons rather than allowing the application to display a white screen.
 
 ---
 
@@ -353,7 +293,7 @@ Cached offline notes are managed and purged through four distinct channels:
 ## 13. Telegram Multi-Bot Ecosystem & Forum Matrix
 
 - **FSM Security Bot (`@fsm_security_otp_bot`)**: Handles Topics 2 (Registrations), 3 (Logins), 5 (Logouts), 6 (Account Dossiers — strictly zero chat data), 7 (Admin OTPs), 8 (Downloads), and 55 (Student OTPs).
-- **Chat Audit Bot (`@fsm_chat_bot`)**: Handles Topics 1 (Live Public Chat Two-Way Sync & Bot Control Center), 31 (Pod Forensics & 3-condition purges), 33 (Private Media Vault: PDF/IMG only), 35 (Public Chat Deleted & Tamper Logs), 114 (Student Presence & Full Cascade Purge Reports), and full two-way Admin Bot DM control.
+- **Chat Audit Bot (`@fsm_chat_bot`)**: Handles Topics 1 (Live Public Chat Two-Way Sync & Bot Control Center), 31 (Pod Forensics & 3-condition purges), 33 (Private Media Vault: PDF/IMG only), 35 (Public Chat Deleted & Tamper Logs), 37 (Live Active Students & Session Logs), 114 (Student Presence & Full Cascade Purge Reports), and full two-way Admin Bot DM control.
 - **Support Desk Bot (`@fsm_help_bot`)**: Real-time two-way ticket synchronization across Topic 1 (Live Inquiries) and Topic 2 (Closed Resolutions).
 - **AI Exam Buddy ([`src/services/examBuddyService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/examBuddyService.js))**: Daily 7:00 AM IST revision pulse and zero-CPU native Telegram quiz polls (`sendPoll`).
 
@@ -395,10 +335,8 @@ Cached offline notes are managed and purged through four distinct channels:
 | **Server Memory Footprint (Peak)** | 85MB - 128MB RSS | < 380MB | Watchdog Buffer Guard |
 | **Server NVMe/SSD Disk Writes** | 0.00 KB | 0.00 KB | 100% Pure RAM Buffer |
 
-### 15.2 Empirical Concurrency Multi-Stage Stress Test Telemetry (27,500 Requests)
-Tested using continuous virtual user concurrency pools across the Express HTTP pipeline with active IP Jail and Global Sanitizers:
-
-| Concurrency Tier / Stage | Virtual Users (VUs) | Requests | Throughput (RPS) | P50 Median | P95 Latency | P99 Latency | Error Rate |
+### Empirical Multi-Stage Concurrency Stress Test Telemetry (27,500 Requests)
+| Stage / Concurrency Tier | Virtual Users (VUs) | Requests | Throughput (RPS) | P50 Median | P95 Latency | P99 Latency | Error Rate |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Stage 1: Base Warmup** | 50 VUs | 500 | 2,923 req/s | 13.7ms | 43.3ms | 44.1ms | **0.00%** |
 | **Stage 2: Classroom Batch** | 100 VUs | 1,500 | 5,619 req/s | 15.0ms | 50.4ms | 67.1ms | **0.00%** |
@@ -407,18 +345,13 @@ Tested using continuous virtual user concurrency pools across the Express HTTP p
 | **Stage 5: Multi-Campus Surge** | 200 VUs | 7,500 | 7,408 req/s | 19.7ms | 62.7ms | 84.3ms | **0.00%** |
 | **Stage 6: Enterprise Saturation**| 200 VUs | 10,000 | 9,663 req/s | 18.5ms | 30.8ms | 78.8ms | **0.00%** |
 
-- **Total Requests Handled**: 27,500 requests across all endpoints (`/api/health`, `/api/notes/exam-prefetch`, `/api/notices`, `/`).
-- **Peak Throughput**: **9,852 requests/second**.
-- **Success Rate**: **100.00%** (0 dropped connections, 0 TCP timeouts).
-- **Concurrency Verdict**: On a standard 512MB RAM cloud container (Render free tier / micro VM), with Cloudflare Anycast CDN caching static frontend assets and Turso LibSQL resolving notes queries, the system comfortably sustains **5,000 to 10,000 concurrent active students**.
-
 ---
 
 ## 16. Complete File-by-File Technical Directory & Operational Traces
 
 ### 16.1 Backend Core Services (`src/services/`)
 - [`accountPurgeService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/accountPurgeService.js): 7-day inactivity sweeper with admin immunity.
-- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit and bidirectional control engine for topics 1, 31, 33, 35, and 114 with full 1-on-1 Admin Bot DM control.
+- [`chatAuditBotService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/chatAuditBotService.js): Telegram chat audit and bidirectional control engine for topics 1, 31, 33, 35, 37, and 114 with full 1-on-1 Admin Bot DM control.
 - [`compressService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/compressService.js) & [`pdfCompressWorker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/pdfCompressWorker.js): WebAssembly `pdf-lib` worker thread compressor.
 - [`dedupService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/dedupService.js): SHA-256 document deduplication engine.
 - [`emailService.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/services/emailService.js): Brevo SMTP & Telegram notices (topics 2, 3, 5, 6, 7, 8, 55).
@@ -444,11 +377,205 @@ Tested using continuous virtual user concurrency pools across the Express HTTP p
 - [`middleware/maintenance.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/maintenance.js): Zero-downtime maintenance curtain with admin bypass keys.
 - [`middleware/sanitize.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/middleware/sanitize.js): Global prototype pollution and NoSQL injection scrubber.
 
-### 16.3 Client Architecture & Resilience Utilities
-- [`cryptoVault.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/cryptoVault.js): AES-256-GCM cipher with dynamic IVs for phone encryption.
-- [`circuitBreaker.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/circuitBreaker.js): Fault-isolation circuit breaker protecting against Telegram DC5 timeouts.
-- [`selfHealingWatchdog.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/selfHealingWatchdog.js): Memory sweeper, event loop lag detector, and keep-alive pulse generator.
-- [`studentStudyContext.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/studentStudyContext.js): Student reading footprint tracker synchronizing with IndexedDB for 6 AM prefetch.
-- [`webrtcStudyRoom.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/webrtcStudyRoom.js): Y.js CRDT provider and `y-webrtc` DataChannel mesh coordinator.
-- [`p2pMesh.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/p2pMesh.js): Campus Wi-Fi direct peer acceleration and local document discovery.
-- [`hardwareAdaptiveEngine.js`](file:///c:/Users/GAURAV%20YADAV/Desktop/New%20folder%20(6)/src/utils/hardwareAdaptiveEngine.js): Detects CPU cores and battery status to adaptively throttle animation frames.
+---
+
+# PART 2: ADMINISTRATOR & OPERATOR CONTROL MANUAL
+
+---
+
+## 17. Admin Panel Access, Authentication & FIDO2 Passkeys
+
+### 17.1 Accessing the Master Admin Console
+1. Navigate to the website root: `https://freestudymaterial.onrender.com`.
+2. Click **Sign In** in the top navigation bar.
+3. Enter your Master Administrator credentials:
+   - Identifier: Configured Master Admin Email or `admin` alias.
+   - Password: Master Admin Password.
+4. If configured, authenticate using **FIDO2 / WebAuthn Biometric Passkey** (Fingerprint, FaceID, or Hardware Key).
+5. Upon authentication, click **Admin Portal** in the navigation bar to launch the multi-tab management dashboard.
+
+---
+
+## 18. Tab-by-Tab Master Operator Guide (All 12 Administration Tabs)
+
+```
++---------------------------------------------------------------------------------------------------+
+|                                  ADMIN PANEL NAVIGATION BAR                                       |
++-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+---------------------------+
+| 1   | 2   | 3   | 4   | 5   | 6   | 7   | 8   | 9   | 10  | 11  | 12  | Tab Number                |
+| SFT | NOT | USR | PSK | PIP | SEC | CHA | TUR | RST | HLP | EXM | P2P | Tab Identifier            |
++-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+---------------------------+
+```
+
+### Tab 1: 🖥️ Software Engine & MTProto Sync Control
+* **Storage Channel ID:** Displays connected Telegram Channel ID used for storing note binary files.
+* **Force MTProto Sync:** Triggers an immediate audit comparing Firestore note records against Telegram Channel messages. Resolves missing documents and syncs new uploads.
+* **Reconcile Deleted Notes:** Scans for notes that were manually deleted inside Telegram and purges them from the website catalog.
+
+### Tab 2: 📚 Notes Master Inventory & Moderation
+* **Search & Filter:** Search notes by ID, title, subject, branch, or semester.
+* **Bulk Download Toggle:** Globally enable or disable the ability for regular students to download raw PDFs.
+* **Single Note Controls:**
+  - `👁️ View / Preview`: Launches the Virtual PDF Reader in moderator mode.
+  - `🗑️ Delete Note`: Removes the note from Firestore and sends a delete command to Telegram MTProto.
+  - `⬇️ Download Override`: Download the raw PDF file regardless of global download restrictions.
+
+### Tab 3: 👥 Student Accounts & Identity Management
+* **Active Students Roster:** Displays all registered accounts with Name, Email, Mobile, College, and Registration Date.
+* **Custom Inactivity Days:** Adjust the inactivity auto-purge threshold for individual students (e.g. increase from 90 to 180 days).
+* **Toggle Permanent Immunity:** Grant a student account permanent immunity so they are never purged by the automated database cleaner.
+* **Ban / Unban Account:** Revoke student session tokens and add their IP to the firewall jail.
+
+### Tab 4: 🔑 Passkey / FIDO2 Biometric Vault
+* **Registered Credentials:** Lists all active WebAuthn / Passkey registrations.
+* **Device Profiling:** Displays device operating system, authenticator type (Platform / Cross-Platform), and creation date.
+* **Revoke Passkey:** Instantly invalidates lost hardware keys or stolen devices.
+
+### Tab 5: ⚡ Processing Pipeline & Ingestion Queue
+* **Active Queue:** Monitors real-time file processing (PDF normalization, compression, thumbnail generation).
+* **Status Badges:** Displays `Queued`, `Processing`, `Uploaded to Telegram`, or `Failed`.
+* **Retry Failed Jobs:** Re-queues failed background jobs with exponential retry limits.
+
+### Tab 6: 🛡️ Security Bot & Anti-Tamper Shield
+* **Telegram Security Bot (@fsm_security_otp_bot):** Configure bot tokens and supergroup routing.
+* **7 Security Forum Topics:**
+  - `Topic 1`: New Student Registrations Feed
+  - `Topic 2`: Successful Logins
+  - `Topic 3`: Student Logouts
+  - `Topic 4`: Profile & Security Updates (Mobile / Password changes)
+  - `Topic 5`: OTP Audit Trail
+  - `Topic 6`: Anti-Tamper & Zero-Trust Incidents
+  - `Topic 7`: 90-Day Inactive Account Purges & Dossiers
+
+### Tab 7: 💬 Community Chat & Real-Time Moderation
+* **Live Sockets Monitor:** Shows real-time connected students and active study rooms.
+* **Chat Retention Days:** Automatically prunes messages older than $X$ days from LibSQL database to maintain zero storage cost.
+* **7-Day Inactive Pod Purger:** Automatically dissolves empty private study rooms after 7 days of inactivity.
+* **Bot Controller & Telegram Supergroup Integration:** Detailed in Section 19.
+
+### Tab 8: 🗄️ Database, LibSQL Turso & Zero-Cost Retention
+* **Storage Metrics:** Displays Turso LibSQL rows, disk usage, and query performance.
+* **0-Cost Ephemeral Buffer:** Explains how messages and logs are maintained in RAM and auto-flushed to Telegram to prevent database read/write tier limits.
+* **Manual Database Vacuum:** Optimizes SQLite tables and reclaims unused disk pages.
+
+### Tab 9: ♻️ Restore Vault & Undelete Engine
+* **Safeguard Buffer:** Deleted notes are held in the Restore Vault for 30 days before permanent destruction.
+* **1-Click Restore:** Restores deleted notes back to the live student catalog with original metadata.
+* **Hard Purge:** Immediately destroys binary files and records across cloud storage.
+
+### Tab 10: 🎧 Help Desk & Support Ticket System
+* **Ticket Inbox:** View missing note requests, bug reports, and academic queries.
+* **2-Way Reply:** Reply directly to students via real-time WebSocket messaging.
+* **Close & Send to Topic 2:** Closes ticket, generates an archival dossier, dispatches report to Telegram Topic 2, and deletes the database row.
+
+### Tab 11: ⏰ Exam Countdown & Revision Buddy
+* **Exam Countdown:** Automatically syncs university exam schedules.
+* **Daily Edge Revision:** Sends daily revision summaries and formula sheets at 6:00 AM via Service Worker periodic sync.
+
+### Tab 12: 🌐 Campus P2P Mesh & CDN Throttler
+* **Mesh Network Health:** Shows connected peer clusters and peer-to-peer data transferred.
+* **CDN Edge Fallback Threshold:** Configure bandwidth cutoffs to prioritize P2P transfers during peak traffic hours.
+
+---
+
+## 19. Telegram Forum Topics Specification & Binding Manual (Topics 1, 35, 31, 33, 37)
+
+```
++---------------------------------------------------------------------------------------------------+
+|                              TELEGRAM FORUM TOPICS ROUTING MATRIX                                 |
++---------+-----------------------------------------+-----------------------------------------------+
+| Topic   | Official Dedicated Name                 | Payload & Operational Scope                   |
++---------+-----------------------------------------+-----------------------------------------------+
+| Topic 35| ⚠️ Public Deleted Messages & Tamper Log | ONLY Public Hall deleted & edited messages    |
+| Topic 31| 📜 Private Pod Vault & Forensic Dossier | Unredacted pod transcripts & forensic dossiers|
+| Topic 33| 📎 Private Chat Media Vault             | Permanent retention of private PDFs/Images    |
+| Topic 37| 👥 Live Active Students & Session Logs  | Real-time online counts & 30-min idle timeouts|
+| Topic 1 | 💬 Unified Public Channel Option        | Unified stream of public chat, media & alerts |
++---------+-----------------------------------------+-----------------------------------------------+
+```
+
+### Detailed Topic Behaviors:
+1. **Topic 35 (⚠️ Public Deleted Messages & Tamper Log):**
+   - **Strict Rule:** Contains **ONLY** Public Group (General Hall) deleted messages and edit logs. Private room messages and student presence logs are strictly excluded.
+   - **Payload:** Original untampered message text, sender name, email, registered mobile, client IP, and exact timestamp.
+2. **Topic 31 (📜 Private Pod Vault & Forensic Dossier):**
+   - Dispatched automatically when a private study pod closes.
+   - Generates unredacted `.txt` transcript file, ledger of all deleted messages, deletion times, deleting user ID, IP addresses, and profile photo hashes.
+3. **Topic 33 (📎 Private Chat Media Vault):**
+   - Permanent Retention: Archives all PDFs, images, and documents from private chats. Even if deleted from the web chat, the file remains permanently preserved in Topic 33.
+   - Caption labels Private Pod Name, Room ID, Secret Key, and Sender details.
+4. **Topic 37 (👥 Live Active Students & Session Logs):**
+   - Online student count: `🟢 X Students Online`.
+   - Session start and disconnect logs, 30-minute idle timeouts, student IP, mobile, email, and room location.
+5. **Topic 1 (💬 Unified Public Channel Option):**
+   - When set to `1` in settings, engages Unified Mode where all public chat messages, attached images, PDFs, and deleted message forensic alerts route directly into Topic 1 as a single feed.
+
+### Step-by-Step Instructions: How to Bind & Switch Topics in Admin Panel
+1. Open Admin Panel ➔ Click **💬 11. Community Chat** (Tab 11).
+2. Click **🤖 Bot Controller & Turso Retention** card.
+3. Under "Telegram Supergroup ID & Forum Topics":
+   - For Unified Mode: Type `1` or click **`[ ⚡ Use Topic 1 ]`** (🟢 Topic 1 Unified Mode Active banner turns on).
+   - For Separated Mode: Type `39` or click **`[ 🎯 Topic 39 ]`** (Public Chat routes to 39, Deleted Alerts route to 35).
+4. Click **`💾 Save Bot & Retention Settings`**.
+5. *Instant In-Chat Binding:* Open any topic in your Telegram Supergroup and send `/set_topic` to immediately bind public chat to that topic.
+
+---
+
+## 20. Device Dynamic LRU & 48-Hour Auto-Delete Maintenance Guide
+
+1. **Hardware Storage Meter:** Profile ➔ Tab 4 (Storage Vault) shows a transparent dual breakdown:
+   - Row 1: Stored Offline Notes Vault (`fsm_offline_vault` + `fsm_p2p_cache_v1`).
+   - Row 2: Browser PWA Shell & Tesseract OCR WASM Runtime (~42 MB).
+2. **48-Hour Default Auto-Delete:** Unpinned notes are deleted automatically after 48 hours to prevent device bloat.
+3. **User Pinning Override ("Keep Note"):** Students can toggle `[ 📌 Keep Note ]` to grant permanent immunity against both 48h expiration and LRU eviction.
+4. **Device Dynamic LRU Eviction:** Adapts to device RAM (guaranteeing a minimum of 2 notes preserved on all devices).
+5. **1-Click Wipe:** Students can click "Wipe All Device Offline Storage" to cleanly unregister service workers, drop IndexedDB databases, and free memory in 0ms.
+
+---
+
+## 21. Deployment, Render Hosting & Zero-Leak Security Checklist
+
+```bash
+# Core Production Environment Variables (Render Dashboard -> Settings -> Environment)
+NODE_VERSION=20.18.0
+PORT=5000
+NODE_ENV=production
+CLIENT_URL=https://freestudymaterial.onrender.com
+
+# Core Security Secrets
+JWT_SECRET=your_super_secret_jwt_key_here
+ADMIN_EMAIL=admin@gmail.com
+ADMIN_PASSWORD=your_secure_password_here
+
+# Firebase Admin SDK Credentials
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgk...YOUR_KEY...\n-----END PRIVATE KEY-----"
+
+# Telegram MTProto & Channel Storage
+TELEGRAM_API_ID=12345678
+TELEGRAM_API_HASH=abcdef0123456789abcdef0123456789
+TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+TELEGRAM_STORAGE_CHAT_ID=-1001234567890
+
+# Dedicated Chat Audit Bot (@fsm_chat_bot)
+TELEGRAM_CHAT_AUDIT_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+TELEGRAM_CHAT_AUDIT_ADMIN_ID=987654321
+TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID=-1001234567890
+TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT=1
+TELEGRAM_CHAT_TOPIC_DELETED=35
+TELEGRAM_CHAT_TOPIC_POD_AUDITS=31
+TELEGRAM_CHAT_TOPIC_MEDIA_VAULT=33
+TELEGRAM_CHAT_TOPIC_PRESENCE=37
+
+# Turso (LibSQL Edge Database)
+TURSO_DATABASE_URL=libsql://your-database-name.turso.io
+TURSO_AUTH_TOKEN=your_turso_auth_token_here
+```
+
+* **Zero-Leak Security:** All secrets in `render.yaml` are marked `sync: false`, preventing credential leaks to GitHub.
+* **1-Click Recovery Screen:** If student browsers encounter stale chunks, the startup screen automatically surfaces **`⚡ Force Refresh Vault & Clear Stale Cache`** after 3 seconds, unregistering obsolete Service Workers and reloading fresh bundles from the CDN.
+
+---
+**End of Master Technical Architecture & Operator Manual**  
+*Authored by Antigravity Autonomous Engineering Core • Free Study Material Architecture Group*

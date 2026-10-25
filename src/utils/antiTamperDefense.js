@@ -224,6 +224,17 @@ export function initAntiTamperDefense() {
   if (typeof window === "undefined" || isDefenseInitialized) return;
   isDefenseInitialized = true;
 
+  const isDev =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      Boolean(import.meta.env?.DEV));
+
+  if (isDev) {
+    console.log("[SECURITY] Anti-tamper defense running in dev-permissive mode (Vite HMR active).");
+    return;
+  }
+
   // 1. Prototype & Fetch Trapping
   const originalFetch = window.fetch;
   let isFetchOverridden = false;

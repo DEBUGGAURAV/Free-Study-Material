@@ -244,6 +244,15 @@ export default function App() {
       console.log("[FSM] 👑 Active tab elected as primary sync leader.");
     });
 
+    // 🕒 Run 48-Hour Auto-Delete & Device-Aware Dynamic LRU maintenance silently in background
+    setTimeout(() => {
+      import("./utils/offlineQueue").then((m) => {
+        if (m && m.runOfflineVaultAutoMaintenance) {
+          m.runOfflineVaultAutoMaintenance().catch(() => {});
+        }
+      }).catch(() => {});
+    }, 2000);
+
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener("online", handleOnline);

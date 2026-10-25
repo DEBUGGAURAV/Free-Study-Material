@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
 import { getStorageUsage } from "../utils/p2pMesh";
-import { getAllStoredOfflineNotes, deleteSingleOfflineNote, wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
+import {
+  getAllStoredOfflineNotes,
+  deleteSingleOfflineNote,
+  wipeAllDeviceOfflineStorage,
+  getPinnedOfflineNotes,
+  togglePinOfflineNote,
+  getDeviceDynamicLRUCapacity,
+  runOfflineVaultAutoMaintenance,
+} from "../utils/offlineQueue";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -53,6 +61,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [refreshingStorage, setRefreshingStorage] = useState(false);
   const [refreshSuccess, setRefreshSuccess] = useState(false);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+  const [pinnedIds, setPinnedIds] = useState([]);
+  const [dynamicLRUCapacity, setDynamicLRUCapacity] = useState(5);
   const hwProfile = detectClientHardwareProfile();
 
   const fetchStorageInfo = async () => {
@@ -65,13 +75,29 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const loadStoredNotes = async () => {
     try {
       setLoadingStoredNotes(true);
+      // Run 48h auto-eviction & dynamic LRU check (protects pinned notes, keeps minimum 2)
+      await runOfflineVaultAutoMaintenance();
       const notes = await getAllStoredOfflineNotes();
-      setStoredNotes(notes);
+      setStoredNotes(notes || []);
+      setPinnedIds(getPinnedOfflineNotes());
+      setDynamicLRUCapacity(getDeviceDynamicLRUCapacity());
     } catch (_) {
       setStoredNotes([]);
     } finally {
       setLoadingStoredNotes(false);
     }
+  };
+
+  const handleTogglePin = (noteId, noteTitle) => {
+    const isNowPinned = togglePinOfflineNote(noteId);
+    setPinnedIds(getPinnedOfflineNotes());
+    setMsg({
+      type: "success",
+      text: isNowPinned
+        ? `📌 "${noteTitle || 'Note'}" pinned! Kept forever and exempt from 48h auto-delete.`
+        : `⏳ "${noteTitle || 'Note'}" unpinned. It will auto-expire in 48 hours to save device space.`,
+    });
+    setTimeout(() => setMsg(null), 4000);
   };
 
   const handleRefreshAllStorage = async () => {
@@ -992,6 +1018,27 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </button>
               </div>
 
+              {/* Dynamic Device LRU & 48h Auto-Delete Banner */}
+              <div
+                style={{
+                  background: "rgba(56, 189, 248, 0.08)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontSize: "0.72rem",
+                  color: "#7dd3fc",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  lineHeight: 1.4,
+                }}
+              >
+                <span>⚡ <strong>Device Dynamic LRU:</strong> {dynamicLRUCapacity} Notes Cached Max (Min: 2 Guaranteed)</span>
+                <span>🕒 <strong>48h Auto-Eviction:</strong> Active (Pinned notes are never deleted)</span>
+              </div>
+
               {loadingStoredNotes ? (
                 <div style={{ padding: "14px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.76rem" }}>
                   Scanning device IndexedDB for cached notes...
@@ -1014,59 +1061,95 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   <div>Open any note in the Virtual PDF Reader or click "Save Offline" on any card to read 100% without internet.</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "230px", overflowY: "auto", paddingRight: "4px" }}>
-                  {storedNotes.map((n) => (
-                    <div
-                      key={n.id}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.03)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
-                        borderRadius: "8px",
-                        padding: "10px 12px",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: "10px",
-                      }}
-                    >
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {n.title}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
+                  {storedNotes.map((n) => {
+                    const isPinned = pinnedIds.includes(String(n.id));
+                    const ageHours = n.savedAt ? Math.floor((Date.now() - new Date(n.savedAt).getTime()) / (3600 * 1000)) : 0;
+                    const remainingHours = Math.max(1, 48 - ageHours);
+
+                    return (
+                      <div
+                        key={n.id}
+                        style={{
+                          background: isPinned ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.03)",
+                          border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)"}`,
+                          borderRadius: "8px",
+                          padding: "10px 12px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {n.title}
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
+                            <span>📚 {n.subject}</span>
+                            {n.branch && <span>• {n.branch}</span>}
+                            {isPinned ? (
+                              <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                                <Pin size={10} /> Kept Forever
+                              </span>
+                            ) : (
+                              <span style={{ color: "#fbbf24", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                                <Clock size={10} /> Auto-expires in {remainingHours}h
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "2px", flexWrap: "wrap" }}>
-                          <span>📚 {n.subject}</span>
-                          {n.branch && <span>• {n.branch}</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                          <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                            {n.sizeMB && Number(n.sizeMB) > 0 ? `${n.sizeMB} MB` : "Cached"}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePin(n.id, n.title)}
+                            title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion and LRU)"}
+                            style={{
+                              background: isPinned ? "rgba(16, 185, 129, 0.16)" : "rgba(255, 255, 255, 0.06)",
+                              border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.14)"}`,
+                              color: isPinned ? "#34d399" : "#cbd5e1",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Pin size={11} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
+                            {isPinned ? "Pinned" : "Keep"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSingleNote(n.id, n.title)}
+                            disabled={deletingNoteId === n.id}
+                            title="Delete this note from device offline storage"
+                            style={{
+                              background: "rgba(244, 63, 94, 0.12)",
+                              border: "1px solid rgba(244, 63, 94, 0.3)",
+                              color: "#f43f5e",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: deletingNoteId === n.id ? "not-allowed" : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Trash2 size={11} />
+                            {deletingNoteId === n.id ? "..." : "Delete"}
+                          </button>
                         </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                        <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
-                          {n.sizeMB && Number(n.sizeMB) > 0 ? `${n.sizeMB} MB` : "Cached"}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSingleNote(n.id, n.title)}
-                          disabled={deletingNoteId === n.id}
-                          title="Delete this note from device offline storage"
-                          style={{
-                            background: "rgba(244, 63, 94, 0.12)",
-                            border: "1px solid rgba(244, 63, 94, 0.3)",
-                            color: "#f43f5e",
-                            padding: "4px 8px",
-                            borderRadius: "6px",
-                            cursor: deletingNoteId === n.id ? "not-allowed" : "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            fontSize: "0.68rem",
-                            fontWeight: 600,
-                          }}
-                        >
-                          <Trash2 size={12} />
-                          {deletingNoteId === n.id ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

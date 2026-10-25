@@ -29,10 +29,35 @@
         <div style="width:46px;height:46px;border:3px solid rgba(99,102,241,0.2);border-top:3px solid #6366f1;border-radius:50%;animation:fsm-spin 0.8s linear infinite;margin-bottom:18px;"></div>
         <div style="font-size:1.15rem;font-weight:800;color:#fff;letter-spacing:-0.02em;margin-bottom:6px;">Free Study Material Vault</div>
         <div style="font-size:0.82rem;color:#94a3b8;max-width:320px;line-height:1.5;">Connecting to Academic Cloud &amp; Indian Edge CDN...</div>
+        <div id="initial-vault-emergency" style="display:none;margin-top:16px;">
+          <button onclick="window.emergencyVaultReset && window.emergencyVaultReset()" style="background:linear-gradient(135deg, #0284c7 0%, #3b82f6 100%);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);">
+            ⚡ Force Refresh Vault &amp; Clear Stale Cache
+          </button>
+        </div>
       </div>
       <style>
         @keyframes fsm-spin { to { transform: rotate(360deg); } }
       </style>
+      <script>
+        window.emergencyVaultReset = function() {
+          try {
+            if ('caches' in window) {
+              caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+            }
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) { regs.forEach(function(r) { r.unregister(); }); });
+            }
+            sessionStorage.clear();
+          } catch (_) {}
+          window.location.replace('/?fresh=' + Date.now());
+        };
+        setTimeout(function() {
+          var emergencyEl = document.getElementById('initial-vault-emergency');
+          if (emergencyEl && document.getElementById('initial-vault-loader')) {
+            emergencyEl.style.display = 'block';
+          }
+        }, 3000);
+      </script>
     </div>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>

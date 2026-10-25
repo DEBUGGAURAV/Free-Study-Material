@@ -135,6 +135,146 @@ export async function deleteOfflineDatabase() {
 }
 
 /**
+ * 📌 Pinned Notes Store: User selection for which notes to keep forever vs auto-delete
+ */
+const PINNED_NOTES_KEY = 'fsm_pinned_offline_notes';
+
+export function getPinnedOfflineNotes() {
+  try {
+    if (typeof localStorage === 'undefined') return [];
+    const raw = localStorage.getItem(PINNED_NOTES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+export function isNotePinnedOffline(noteId) {
+  if (!noteId) return false;
+  const pinned = getPinnedOfflineNotes();
+  return pinned.includes(String(noteId));
+}
+
+export function togglePinOfflineNote(noteId, explicitlyPin) {
+  if (!noteId || typeof localStorage === 'undefined') return false;
+  const cleanId = String(noteId);
+  try {
+    let pinned = getPinnedOfflineNotes();
+    const shouldPin = explicitlyPin !== undefined ? Boolean(explicitlyPin) : !pinned.includes(cleanId);
+    if (shouldPin) {
+      if (!pinned.includes(cleanId)) pinned.push(cleanId);
+    } else {
+      pinned = pinned.filter((id) => id !== cleanId);
+    }
+    localStorage.setItem(PINNED_NOTES_KEY, JSON.stringify(pinned));
+    return shouldPin;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * ⚡ Calculates Device-Aware Dynamic LRU Note Capacity
+ * Adapts to device RAM (navigator.deviceMemory) & available browser storage.
+ * GUARANTEE: Minimum 2 notes are ALWAYS retained on any device.
+ */
+export function getDeviceDynamicLRUCapacity() {
+  let capacity = 5; // Default mid-tier capacity
+  try {
+    if (typeof navigator !== 'undefined' && typeof navigator.deviceMemory === 'number') {
+      const ram = navigator.deviceMemory; // in GB (e.g. 1, 2, 4, 8)
+      if (ram <= 2) {
+        capacity = 2; // Strict low-memory profile (minimum 2 guaranteed)
+      } else if (ram <= 4) {
+        capacity = 5;
+      } else if (ram <= 8) {
+        capacity = 12;
+      } else {
+        capacity = 25; // Flagship / PC
+      }
+    }
+  } catch (_) {}
+
+  // Strict User Mandate: Minimum 2 notes must always be kept!
+  return Math.max(2, capacity);
+}
+
+/**
+ * 🕒 48-Hour Default Auto-Delete & Device-Aware LRU Maintenance Engine
+ * 1. Automatically deletes unpinned notes older than 48 hours.
+ * 2. Enforces dynamic LRU eviction for excess unpinned notes based on device RAM.
+ * 3. User-pinned notes ("Keep Forever") are 100% immune from deletion.
+ * 4. Ensures minimum 2 notes are preserved.
+ */
+export async function runOfflineVaultAutoMaintenance() {
+  const DEFAULT_MAX_AGE_MS = 48 * 60 * 60 * 1000; // 48 Hours
+  const now = Date.now();
+  const pinnedList = getPinnedOfflineNotes();
+  const pinnedSet = new Set(pinnedList.map(String));
+  const dynamicCapacity = getDeviceDynamicLRUCapacity();
+
+  let expiredDeleted = 0;
+  let lruDeleted = 0;
+
+  try {
+    const allNotes = await getAllStoredOfflineNotes();
+    if (!Array.isArray(allNotes) || allNotes.length === 0) {
+      return { expiredDeleted: 0, lruDeleted: 0, totalRemaining: 0, dynamicCapacity };
+    }
+
+    const unpinnedNotes = [];
+
+    for (const note of allNotes) {
+      const noteId = String(note.id);
+      // Pinned notes are explicitly kept by user and never auto-deleted
+      if (pinnedSet.has(noteId)) {
+        continue;
+      }
+
+      const noteAgeMs = note.savedAt ? now - new Date(note.savedAt).getTime() : 0;
+      if (noteAgeMs > DEFAULT_MAX_AGE_MS) {
+        await deleteSingleOfflineNote(noteId);
+        expiredDeleted++;
+      } else {
+        unpinnedNotes.push(note);
+      }
+    }
+
+    // Dynamic LRU Eviction: If remaining unpinned notes exceed device dynamic capacity
+    if (unpinnedNotes.length > dynamicCapacity) {
+      // Sort oldest saved first (least recently used)
+      unpinnedNotes.sort((a, b) => {
+        const timeA = a.savedAt ? new Date(a.savedAt).getTime() : 0;
+        const timeB = b.savedAt ? new Date(b.savedAt).getTime() : 0;
+        return timeA - timeB;
+      });
+
+      // Evict excess unpinned notes while guaranteeing minimum 2 total unpinned notes
+      const allowedToKeep = Math.max(2, dynamicCapacity);
+      const excessCount = unpinnedNotes.length - allowedToKeep;
+
+      for (let i = 0; i < excessCount; i++) {
+        const toEvict = unpinnedNotes[i];
+        if (toEvict && toEvict.id) {
+          await deleteSingleOfflineNote(toEvict.id);
+          lruDeleted++;
+        }
+      }
+    }
+
+    return {
+      expiredDeleted,
+      lruDeleted,
+      totalRemaining: allNotes.length - expiredDeleted - lruDeleted,
+      dynamicCapacity,
+    };
+  } catch (err) {
+    console.debug('[OFFLINE-MAINTENANCE] Notice during auto-maintenance:', err?.message || err);
+    return { expiredDeleted: 0, lruDeleted: 0, totalRemaining: 0, dynamicCapacity };
+  }
+}
+
+/**
  * Retrieves all stored offline notes from both fsm_offline_vault and fsm_p2p_cache_v1
  * Returns unified array with id, title, subject, course, branch, savedAt, sizeBytes, sizeMB
  */

@@ -860,23 +860,106 @@ export default function TabCommunityChat(props) {
                               style={{ width: "135px", padding: "3px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "#fff", fontSize: "0.72rem" }}
                             />
                           </div>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(34, 197, 94, 0.08)", border: "1px solid rgba(34, 197, 94, 0.3)", borderRadius: "8px", padding: "10px 12px", marginTop: "4px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.12)" : "rgba(56, 189, 248, 0.08)", border: `1px solid ${chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.4)" : "rgba(56, 189, 248, 0.3)"}`, borderRadius: "8px", padding: "10px 12px", marginTop: "4px" }}>
                             <div>
-                              <div style={{ color: "#4ade80", fontSize: "0.8rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}>
+                              <div style={{ color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#38bdf8", fontSize: "0.8rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span>🎯 Target Public Chat Topic ID:</span>
                               </div>
                               <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
                                 Subtopics &amp; Pods: <strong style={{ color: "#f87171" }}>🔇 Suppressed (Public Chat Only)</strong>
                               </div>
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               <input
                                 type="text"
                                 value={chatBotSettings.topics?.publicChat || "1"}
                                 onChange={(e) => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: e.target.value } }))}
                                 placeholder="1"
-                                style={{ width: "55px", padding: "4px 6px", borderRadius: "6px", background: "rgba(0,0,0,0.5)", border: "1.5px solid #4ade80", color: "#4ade80", fontSize: "0.85rem", textAlign: "center", fontWeight: 800 }}
+                                style={{ width: "50px", padding: "4px 6px", borderRadius: "6px", background: "rgba(0,0,0,0.5)", border: `1.5px solid ${chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#38bdf8"}`, color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#38bdf8", fontSize: "0.85rem", textAlign: "center", fontWeight: 800 }}
                               />
+                              <button
+                                type="button"
+                                onClick={() => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: "1" } }))}
+                                style={{
+                                  background: chatBotSettings.topics?.publicChat === "1" ? "rgba(34, 197, 94, 0.25)" : "rgba(255, 255, 255, 0.06)",
+                                  border: `1px solid ${chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "rgba(255, 255, 255, 0.15)"}`,
+                                  color: chatBotSettings.topics?.publicChat === "1" ? "#4ade80" : "#cbd5e1",
+                                  padding: "4px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                                title="Switch to Unified Mode: sends messages, media and deleted logs directly to Topic 1"
+                              >
+                                ⚡ Use Topic 1
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setChatBotSettings((prev) => ({ ...prev, topics: { ...prev.topics, publicChat: "39" } }))}
+                                style={{
+                                  background: chatBotSettings.topics?.publicChat === "39" ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.06)",
+                                  border: `1px solid ${chatBotSettings.topics?.publicChat === "39" ? "#38bdf8" : "rgba(255, 255, 255, 0.15)"}`,
+                                  color: chatBotSettings.topics?.publicChat === "39" ? "#38bdf8" : "#cbd5e1",
+                                  padding: "4px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.68rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                }}
+                                title="Separate Mode: sends public messages to Topic 39, deleted alerts to Topic 35"
+                              >
+                                🎯 Topic 39
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Dynamic Topic Mode Banner */}
+                          {chatBotSettings.topics?.publicChat === "1" ? (
+                            <div
+                              style={{
+                                marginTop: "6px",
+                                padding: "8px 10px",
+                                borderRadius: "6px",
+                                fontSize: "0.72rem",
+                                background: "rgba(34, 197, 94, 0.12)",
+                                border: "1px solid rgba(34, 197, 94, 0.35)",
+                                color: "#4ade80",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              <div>🟢 <strong>Topic 1 Unified Mode Active:</strong> Public Chat messages + Deleted Alerts + Media are all routed together to <strong>Topic 1</strong>!</div>
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                marginTop: "6px",
+                                padding: "8px 10px",
+                                borderRadius: "6px",
+                                fontSize: "0.72rem",
+                                background: "rgba(56, 189, 248, 0.1)",
+                                border: "1px solid rgba(56, 189, 248, 0.25)",
+                                color: "#7dd3fc",
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              <div>📡 <strong>Separated Topics Mode Active:</strong> Public Chat routes to <strong>Topic {chatBotSettings.topics?.publicChat || "39"}</strong>. Deleted alerts route to <strong>Topic 35</strong>.</div>
+                            </div>
+                          )}
+
+                          {/* 4 Dedicated Forum Topics Breakdown */}
+                          <div style={{ marginTop: "6px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.68rem" }}>
+                            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "6px 8px" }}>
+                              <span style={{ color: "#fbbf24", fontWeight: 700 }}>⚠️ Topic 35:</span> ONLY Public Deleted Messages &amp; Tamper Log
+                            </div>
+                            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "6px 8px" }}>
+                              <span style={{ color: "#38bdf8", fontWeight: 700 }}>📜 Topic 31:</span> Private Pod Vault &amp; Forensic Dossier
+                            </div>
+                            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "6px 8px" }}>
+                              <span style={{ color: "#c084fc", fontWeight: 700 }}>📎 Topic 33:</span> Private Chat Media Vault (Permanent Retention)
+                            </div>
+                            <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "6px", padding: "6px 8px" }}>
+                              <span style={{ color: "#34d399", fontWeight: 700 }}>👥 Topic 37:</span> Live Active Students &amp; Session Logs
                             </div>
                           </div>
 

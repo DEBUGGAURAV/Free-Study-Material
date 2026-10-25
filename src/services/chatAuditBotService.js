@@ -26,31 +26,37 @@ let auditTopics = {
   deletedMessages: (process.env.TELEGRAM_CHAT_TOPIC_DELETED || "35").trim(),
   tamperAudit: (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim(),
   forensicPurge: (process.env.TELEGRAM_CHAT_TOPIC_FORENSIC_PURGE || "31").trim(),
-  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "114").trim(),
+  presence: (process.env.TELEGRAM_CHAT_TOPIC_PRESENCE || "37").trim(),
   stealth: (process.env.TELEGRAM_CHAT_TOPIC_STEALTH || "1").trim(),
   publicChat: (process.env.TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT || "1").trim(),
 };
 
 /**
- * ⚡ Public Chat Topic Router:
- * Subtopics (study pods, private rooms, presence logs) are strictly suppressed.
- * ONLY Public Chat messages and its Controller actions (moderation, active users, deletes, purge)
- * are routed to the user's explicitly configured topic (or 1-on-1 Admin DM).
+ * ⚡ Public Chat & Forum Topics Router:
+ * Topic 35: ONLY Public Group (General Hall) deleted messages & edit logs. Never private rooms or student presence.
+ * Topic 31: Private Study Rooms / Pods complete forensic dossiers & transcripts upon close.
+ * Topic 33: Private Chat Media Vault (Permanent Retention for PDF, IMG, Docs).
+ * Topic 37: Live Active Students Count & Session Logs (Presence).
+ * Topic 1: Unified Public Channel Option (When publicChat is set to '1', public chat messages + deleted alerts + media route to Topic 1).
  */
-function isTopic1PublicMode() {
+function isUnifiedTopic1Mode() {
   const topic = String(auditTopics.publicChat || "").trim();
-  return !topic || topic === "1" || topic === "39";
+  return topic === "1";
 }
 
 function getTargetPublicChatTopic() {
   const topic = String(auditTopics.publicChat || "").trim();
   if (!topic || topic === "off" || topic === "none" || topic === "dm") return null;
-  if (topic === "39") return "1"; // Auto-correct legacy 39 to 1
   return topic;
 }
 
 function getTargetPublicDeletedTopic() {
-  return getTargetPublicChatTopic() || "1";
+  // If Unified Topic 1 Mode is active, route deleted alerts to Topic 1
+  if (isUnifiedTopic1Mode()) {
+    return "1";
+  }
+  // Otherwise route strictly to Topic 35 (Public Deleted Messages & Tamper Log)
+  return auditTopics.deletedMessages || "35";
 }
 
 // Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID
@@ -117,8 +123,8 @@ async function initChatBotSettings() {
     if (doc.exists) {
       const data = doc.data() || {};
       const savedTopics = data.topics || {};
-      const cleanPublicChat = (savedTopics.publicChat && savedTopics.publicChat.trim() !== "39") ? savedTopics.publicChat.trim() : "1";
-      const cleanStealth = (savedTopics.stealth && savedTopics.stealth.trim() !== "39") ? savedTopics.stealth.trim() : "1";
+      const cleanPublicChat = (savedTopics.publicChat && savedTopics.publicChat.trim()) || "1";
+      const cleanStealth = (savedTopics.stealth && savedTopics.stealth.trim()) || "1";
 
       chatBotSettings = {
         ...chatBotSettings,
@@ -131,7 +137,7 @@ async function initChatBotSettings() {
           deletedMessages: (savedTopics.deletedMessages && savedTopics.deletedMessages.trim()) || "35",
           tamperAudit: (savedTopics.tamperAudit && savedTopics.tamperAudit.trim()) || "35",
           forensicPurge: (savedTopics.forensicPurge && savedTopics.forensicPurge.trim()) || "31",
-          presence: (savedTopics.presence && savedTopics.presence.trim()) || "114",
+          presence: (savedTopics.presence && savedTopics.presence.trim()) || "37",
           stealth: cleanStealth,
           publicChat: cleanPublicChat,
         },
@@ -2300,18 +2306,18 @@ async function dispatchChatPresenceAlertToTelegram({ event, user, details, roomI
 }
 
 /**
- * 👥 Dispatches Live Active Students Count & Session Logs to Topic 114
+ * 👥 Dispatches Live Active Students Count & Session Logs to Topic 37
  */
 async function dispatchActiveStudentsReportToTelegram() {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
-  const targetThreadId = auditTopics.presence || "114";
+  const targetThreadId = auditTopics.presence || "37";
   if (!currentSupergroupId || !currentSupergroupId.startsWith("-100")) return false;
 
   const activeUsers = typeof chatHandlers.getActiveUsers === "function" ? chatHandlers.getActiveUsers() : [];
   let bodyText = "";
 
   if (activeUsers.length === 0) {
-    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
+    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 37]</b>\n\n` +
       `🟢 <b>Active Students Online:</b> <b>0</b>\n` +
       `ℹ️ No students are currently connected to live chat sockets.\n\n` +
       `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
@@ -2326,7 +2332,7 @@ async function dispatchActiveStudentsReportToTelegram() {
         `   ⏱️ Connected: <b>${connMins} mins ago</b> (Last active ${lastSecs}s ago)`;
     }).join("\n\n");
 
-    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 114]</b>\n\n` +
+    bodyText = `👥 <b>[LIVE ACTIVE STUDENTS & SESSION LOGS - TOPIC 37]</b>\n\n` +
       `🟢 <b>Total Students Currently Active:</b> <b>${activeUsers.length} Online</b>\n\n` +
       lines + `\n\n` +
       `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`;
