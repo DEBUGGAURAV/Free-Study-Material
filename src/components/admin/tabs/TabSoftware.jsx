@@ -780,7 +780,7 @@ export default function TabSoftware(props) {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Render Anti-Sleep Engine:</span>
-                      <span style={{ color: "#fbbf24", fontWeight: 700 }}>12-Min Autonomous Pulse (24/7 Online)</span>
+                      <span style={{ color: "#34d399", fontWeight: 700 }}>12-Min Autonomous Pulse (24/7 Online)</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Event Loop Lag:</span>

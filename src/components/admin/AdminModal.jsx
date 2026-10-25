@@ -421,6 +421,8 @@ export default function AdminModal({
         loadStudents(studentPage, studentSearch);
       } else if (activeTab === "hardware") {
         loadHardwareInfo();
+        const hwTimer = setInterval(loadHardwareInfo, 3000);
+        return () => clearInterval(hwTimer);
       } else if (activeTab === "software") {
         loadSoftwareInfo();
       } else if (activeTab === "pipeline") {
@@ -2740,6 +2742,7 @@ export default function AdminModal({
                 {tab.label}
                 {tab.id === "notes" && ` (${notes.length})`}
                 {tab.id === "students" && ` (${studentsTotal || stats?.totalStudents || 0})`}
+                {tab.id === "hardware" && " (Live)"}
                 {tab.id === "pipeline" &&
                   ` (${uploadPipelines.filter((p) => p.status === "processing" || (p.currentStage && p.currentStage < 6)).length})`}
                 {tab.id === "recycle_bin" && ` (${recycleBinItems.length})`}

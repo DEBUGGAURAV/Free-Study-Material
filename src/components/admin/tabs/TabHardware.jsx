@@ -22,17 +22,70 @@ export default function TabHardware(props) {
     loadHardwareInfo,
   } = props;
 
-  
+  const [liveSeconds, setLiveSeconds] = useState(hardwareInfo?.process?.uptimeSeconds || 0);
+
+  useEffect(() => {
+    if (hardwareInfo?.process?.uptimeSeconds) {
+      setLiveSeconds(hardwareInfo.process.uptimeSeconds);
+    }
+  }, [hardwareInfo?.process?.uptimeSeconds]);
+
+  // Live second ticker: advances clock every 1 second continuously
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveSeconds((prev) => (prev > 0 ? prev + 1 : prev));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Format live seconds cleanly into d, h, m, s
+  const formatUptimeLive = (sec) => {
+    if (!sec || isNaN(sec) || sec <= 0) return hardwareInfo?.process?.uptimeFormatted || "Continuous";
+    const d = Math.floor(sec / (3600 * 24));
+    const h = Math.floor((sec % (3600 * 24)) / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    const parts = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0) parts.push(`${m}m`);
+    parts.push(`${s}s`);
+    return parts.join(" ");
+  };
 
   return (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-                    Bare-Metal Server &amp; Host Telemetry
-                  </h3>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "2px 0 0" }}>
-                    Real-time host environment metrics, physical multi-core CPU, RAM allocator, and network bindings.
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                      Bare-Metal Server &amp; Host Telemetry
+                    </h3>
+                    <div style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "rgba(16, 185, 129, 0.12)",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                      padding: "2px 8px",
+                      borderRadius: "20px",
+                      fontSize: "0.72rem",
+                      color: "#34d399",
+                      fontWeight: 700
+                    }}>
+                      <span style={{
+                        width: "7px",
+                        height: "7px",
+                        borderRadius: "50%",
+                        background: "#10b981",
+                        boxShadow: "0 0 8px #10b981",
+                        display: "inline-block"
+                      }}></span>
+                      LIVE STREAMING (3s Auto-Sync)
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+                    Real-time host environment metrics, physical multi-core CPU, RAM allocator, and live uptime ticker.
                   </p>
                 </div>
 
@@ -174,7 +227,16 @@ export default function TabHardware(props) {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Server Uptime:</span>
-                      <span style={{ color: "#34d399", fontWeight: 700 }}>{hardwareInfo?.process?.uptimeFormatted || "Continuous"}</span>
+                      <span style={{
+                        color: "#34d399",
+                        fontWeight: 700,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px"
+                      }}>
+                        <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", display: "inline-block" }}></span>
+                        {formatUptimeLive(liveSeconds)}
+                      </span>
                     </div>
                   </div>
                 </div>

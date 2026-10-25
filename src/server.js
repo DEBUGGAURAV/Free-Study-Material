@@ -433,7 +433,8 @@ function startServer(portToTry, attempt = 1) {
     // 🛡️ 24/7 Anti-Sleep Immortality Engine (Prevents Render Free Tier 15-Minute Sleep)
     if (process.env.DISABLE_KEEP_ALIVE !== "true") {
       const KEEP_ALIVE_URL = (process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || getSiteUrl()).replace(/\/+$/, "");
-      const KEEP_ALIVE_INTERVAL = 8 * 60 * 1000; // 8 minutes (Render sleeps at 15m, 8m guarantees 100% continuous uptime)
+      const intervalMinutes = Number(process.env.KEEP_ALIVE_INTERVAL_MINUTES) || 12;
+      const KEEP_ALIVE_INTERVAL = intervalMinutes * 60 * 1000; // 12 minutes (Render sleeps at 15m, 12m guarantees 100% continuous uptime)
 
       const pingSelf = async (retryCount = 0) => {
         try {
@@ -447,7 +448,7 @@ function startServer(portToTry, attempt = 1) {
             signal: AbortSignal.timeout(12000),
           });
           if (res.ok) {
-            console.log(`[ANTI-SLEEP] 💓 24/7 Keep-Alive Ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform stays ACTIVE 24/7`);
+            console.log(`[ANTI-SLEEP] 💓 24/7 Keep-Alive Ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform stays ACTIVE 24/7 (${intervalMinutes}m pulse)`);
           } else {
             console.warn(`[ANTI-SLEEP] ⚠️ Ping returned status ${res.status} from ${pingEndpoint}. Retrying in 25s...`);
             if (retryCount < 3) {
@@ -462,7 +463,7 @@ function startServer(portToTry, attempt = 1) {
         }
       };
 
-      // Initial ping after 30 seconds of boot, then recurring every 8 minutes
+      // Initial ping after 30 seconds of boot, then recurring every 12 minutes
       setTimeout(() => pingSelf(0), 30 * 1000);
       setInterval(() => pingSelf(0), KEEP_ALIVE_INTERVAL);
     }
