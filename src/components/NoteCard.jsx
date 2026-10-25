@@ -222,8 +222,6 @@ export default function NoteCard({
             await writable.write(blob);
             await writable.close();
             setSavedOffline(true);
-          setIsCachedOffline(true);
-          window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
             setIsCachedOffline(true);
             window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
             return;
@@ -258,6 +256,8 @@ export default function NoteCard({
         fileHandle
       );
       setSavedOffline(true);
+      setIsCachedOffline(true);
+      window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
     } catch (err) {
       if (err.name === "AbortError" || err.message?.includes("aborted")) {
         console.log("[DOWNLOAD] User cancelled active stream.");

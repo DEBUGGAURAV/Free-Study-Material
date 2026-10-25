@@ -78,7 +78,7 @@ let chatBotSettings = {
   enableChatAudit: true,
   enableMediaVaultUpload: true,
   enableDeletedMessageAlerts: true,
-  enablePublicChatSync: true,
+  enablePublicChatSync: process.env.TELEGRAM_ENABLE_PUBLIC_CHAT_SYNC === "true", // 🔒 Default Inactive (OFF) until activated from Chat Tab
   enableAdminDmMirror: true, // 🛡️ Enabled: Gives Admin direct 1-on-1 Bot DM control over Public Chat
   chatRetentionDays: 7, // Delete messages older than X days
   privateRoomInactivityDays: 7, // Purge private rooms with no activity for 7 days
@@ -2355,7 +2355,6 @@ async function dispatchActiveStudentsReportToTelegram() {
  * (Topic: deletedMessages / 35 and publicChat / 1)
  */
 async function dispatchChatPurgeAlertToTelegram({ roomId, roomName, admin, count }) {
-  // 🛡️ User requirement: Strictly suppress subtopics. Only public chat allowed.
   if (roomId !== "public") {
     return false;
   }
@@ -2510,12 +2509,12 @@ async function dispatchChatBlockAlertToTelegram({ targetUser, block, admin, acti
 
 /**
  * Dispatches Comprehensive Student Chat Deletion & Cascade Audit Report
- * Sent to Chat Audit Bot Supergroup (topic: deletedMessages or presence) and Admin DM
+ * Sent to Chat Audit Bot Supergroup (Topic 37: Live Active Students & Session Logs) and Admin DM
  */
 async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSummary = {} }) {
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
   const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
-  const targetTopic = getTargetPublicChatTopic();
+  const targetTopic = auditTopics.presence || "37";
 
   const targetChats = [];
 

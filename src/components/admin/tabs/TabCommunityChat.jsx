@@ -812,10 +812,15 @@ export default function TabCommunityChat(props) {
                           <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
                             <input
                               type="checkbox"
-                              checked={chatBotSettings.enablePublicChatSync !== false}
+                              checked={Boolean(chatBotSettings.enablePublicChatSync)}
                               onChange={(e) => setChatBotSettings((prev) => ({ ...prev, enablePublicChatSync: e.target.checked }))}
                             />
-                            <span>Sync Public Hall messages to Telegram (@fsm_chat_bot)</span>
+                            <span>
+                              Sync Public Hall messages to Telegram (@fsm_chat_bot){" "}
+                              <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: chatBotSettings.enablePublicChatSync ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.15)", color: chatBotSettings.enablePublicChatSync ? "#4ade80" : "#94a3b8" }}>
+                                {chatBotSettings.enablePublicChatSync ? "🟢 Active" : "⏸️ Inactive (Click to Activate)"}
+                              </span>
+                            </span>
                           </label>
                           <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
                             <input

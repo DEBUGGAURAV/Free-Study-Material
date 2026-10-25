@@ -355,7 +355,7 @@ export default function AdminModal({
     enableChatAudit: true,
     enableMediaVaultUpload: true,
     enableDeletedMessageAlerts: true,
-    enablePublicChatSync: true,
+    enablePublicChatSync: false,
     enableAdminDmMirror: true,
     chatRetentionDays: 7,
     privateRoomInactivityDays: 7,
