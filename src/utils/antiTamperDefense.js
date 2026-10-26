@@ -348,7 +348,7 @@ function triggerClientLockdown(reason) {
           border-radius: 8px;
           padding: 8px 12px;
         ">
-          💡 Unblock appeal ke liye Help Center me Category <strong style="color: #f87171;">Account Block Appeal</strong> select karke yeh Incident ID batayein taaki admin Tab 14 se turant pardon kar sake.
+          💡 To submit an unblock appeal, open the Help Center, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide this Incident ID for instant verification in Tab 14.
         </div>
       </div>
     </div>

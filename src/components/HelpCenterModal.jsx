@@ -71,28 +71,28 @@ const INITIAL_FAQS = [
     category: "security",
     question: "Why was my IP jailed or account blocked, and what are the detention time limits? (IP Jail Policy)",
     answer:
-      "Free Study Material employs an automated Zero-Trust Security Engine and Anti-DDoS Firewall. Platform security aur fair student access banaye rakhne ke liye automated detention policies apply hoti hain. Detention policies aur time limits niche diye gaye hain:",
+      "Free Study Material utilizes an automated Zero-Trust Security Engine and Anti-DDoS Firewall to safeguard academic resources. When excessive traffic surges or client-side tampering is detected, temporary security detention is enforced. Detention policies and limits are detailed in the matrix below:",
     table: [
       {
         reason: "DDoS / Traffic Surge (>600 req/min)",
         detentionTime: "3 Minutes",
         autoUnjail: "✅ Auto-release after 180s",
-        adminControl: "Tab 14 se turant release kar sakte hain",
+        adminControl: "Instant manual pardon via Tab 14",
       },
       {
         reason: "Client Script / DevTools Tamper (Strike 3)",
         detentionTime: "24 Hours",
         autoUnjail: "✅ Auto-release after 24h",
-        adminControl: "Tab 14 se turant release kar sakte hain",
+        adminControl: "Instant manual pardon via Tab 14",
       },
       {
         reason: "Admin Manual IP Jail (Tab 14)",
         detentionTime: "Admin Chosen (1h / 24h / Custom)",
-        autoUnjail: "✅ Expiry time par auto-release",
-        adminControl: "Tab 14 se single-click \"Release / Pardon\"",
+        autoUnjail: "✅ Auto-release on expiration",
+        adminControl: "Single-click 'Release / Pardon' via Tab 14",
       },
     ],
-    note: "Agar aapka account ya IP galti se block hua hai, to 'Ask Admin / Request' tab par Category 'Account Block / IP Jail Appeal' choose karein aur apna Incident ID (e.g. FSM-SEC-XXXXXX) zaroor batayein taaki admin Tab 14 se turant verify karke release kar sake.",
+    note: "If your account or IP was quarantined by mistake, go to the 'Ask Admin / Request' tab, select Category 'Account Block / IP Jail Appeal', and provide your Incident ID (e.g. FSM-SEC-XXXXXX) so administrators can verify and release it immediately via Tab 14.",
   },
 ];
 
@@ -212,7 +212,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
     if (category === "block_appeal") {
       const hasIncidentId = (subject && subject.trim().length > 3) || /FSM-SEC/i.test(question);
       if (!hasIncidentId) {
-        setFormError("Kripya apna Incident ID (e.g. FSM-SEC-XXXXXX) zaroor batayein taaki administrator Tab 14 me aapko unblock kar sake.");
+        setFormError("Please provide your Incident ID (e.g. FSM-SEC-XXXXXX) so administrators can locate and unblock your account in Tab 14.");
         return;
       }
     }
@@ -843,10 +843,10 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                       }}
                     >
                       <div style={{ fontWeight: 800, color: "#f87171", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                        <span>🚨</span> Incident ID Batana Zaroori Hai:
+                        <span>🚨</span> Incident ID Required:
                       </div>
                       <div>
-                        Aapko block screen par dikha hua <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong> zaroor batayein. Iske bina Administrator aapka account ya IP Tab 14 (Web Security) me identify karke turant unblock / pardon nahi kar payenge.
+                        Please specify the <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong> displayed on your lockdown screen. Without this Incident ID, administrators cannot identify and release your IP or account in Tab 14 (Web Security).
                       </div>
                     </div>
                   )}
@@ -860,7 +860,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                       rows={4}
                       placeholder={
                         category === "block_appeal"
-                          ? "Incident ID (FSM-SEC-XXXXXX), registered email/mobile aur block hone ka reason yahan likhein. Admin ise check karke Tab 14 se turant release kar denge."
+                          ? "Provide your Incident ID (e.g. FSM-SEC-XXXXXX), registered email/mobile number, and a brief description of the incident. Administrators will review the telemetry and unblock your account in Tab 14."
                           : "Type your question or requirement clearly here. Our admin team will receive this on Telegram and answer you directly."
                       }
                       value={question}
