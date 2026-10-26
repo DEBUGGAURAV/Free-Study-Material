@@ -68,3 +68,4 @@ module.exports = {
   requireStepUpAuth,
   STEP_UP_DURATION_SEC,
 };
+

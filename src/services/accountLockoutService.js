@@ -169,10 +169,59 @@ async function clearFailedAttempts(identifier) {
   }
 }
 
+/**
+ * Retrieves all currently active account lockouts (from RAM cache and Firestore)
+ */
+async function getActiveLockouts() {
+  const now = Date.now();
+  const list = [];
+  const seen = new Set();
+
+  // 1. From memory cache
+  for (const [key, state] of lockoutCache.entries()) {
+    if (state.lockedUntil && state.lockedUntil > now) {
+      seen.add(key);
+      list.push({
+        identifier: key,
+        attempts: state.attempts || MAX_FAILED_ATTEMPTS,
+        remainingMinutes: Math.max(1, Math.ceil((state.lockedUntil - now) / 60000)),
+        lockedUntil: new Date(state.lockedUntil).toISOString(),
+        lastAttempt: state.lastAttempt ? new Date(state.lastAttempt).toISOString() : new Date().toISOString(),
+      });
+    }
+  }
+
+  // 2. From Firestore
+  if (db) {
+    try {
+      const snap = await db.collection("account_lockouts").where("lockedUntil", ">", now).limit(50).get();
+      snap.forEach((doc) => {
+        const d = doc.data();
+        if (d && d.identifier && !seen.has(d.identifier)) {
+          seen.add(d.identifier);
+          list.push({
+            identifier: d.identifier,
+            attempts: d.attempts || MAX_FAILED_ATTEMPTS,
+            remainingMinutes: Math.max(1, Math.ceil((d.lockedUntil - now) / 60000)),
+            lockedUntil: new Date(d.lockedUntil).toISOString(),
+            lastAttempt: d.lastAttempt ? new Date(d.lastAttempt).toISOString() : new Date().toISOString(),
+            lastIp: d.lastIp || "Unknown",
+            lastUserAgent: d.lastUserAgent || "Unknown",
+          });
+        }
+      });
+    } catch (_) {}
+  }
+
+  return list;
+}
+
 module.exports = {
   checkAccountLockout,
   recordFailedAttempt,
   clearFailedAttempts,
+  getActiveLockouts,
   MAX_FAILED_ATTEMPTS,
   LOCKOUT_DURATION_MS,
 };
+

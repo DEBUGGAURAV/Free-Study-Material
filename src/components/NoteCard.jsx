@@ -500,10 +500,10 @@ export default function NoteCard({
                       alignItems: "center",
                       gap: "3px",
                     }}
-                    title="Origin Cloud Storage Vault ➔ Cloudflare Edge CDN Worker"
+                    title="Primary Academic Cloud Storage Vault"
                   >
                     <span>☁️</span>
-                    <span>Storage ➔ CDN</span>
+                    <span>Cloud Vault</span>
                   </span>
                 ) : (
                   <span

@@ -1294,6 +1294,19 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       });
     }
 
+    // 🚀 Check Storage Tier for Live Real-Time Telemetry
+    const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
+    const isDiskCached = fs.existsSync(binPath);
+    const isRamCached = Boolean(noteBufferCache.has(id));
+    let streamRealSource = "☁️ Primary Academic Cloud Vault (Singapore Origin Core)";
+    if (isRamCached) {
+      streamRealSource = "🧠 In-Memory RAM Buffer (0ms Microsecond Stream)";
+    } else if (isDiskCached) {
+      streamRealSource = "💽 Local NVMe SSD Cache (1ms High-Speed)";
+    } else if (req.headers["cf-ray"] || req.headers["x-worker-stream"] || note.isCdnCached) {
+      streamRealSource = "⚡ Indian Edge CDN Worker (1ms Indian Edge POP)";
+    }
+
     // Asynchronously dispatch Real-time Telegram security notice (Zero Database Writes, Instant Delivery)
     if (requestingUser) {
       const isStudent = requestingUser.id && requestingUser.id !== "admin-root";
@@ -1313,9 +1326,10 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
           subject: note.subject,
           course: note.course,
           branch: note.branch,
+          fileSize: note.fileSize,
           downloadsCount: note.downloadsCount || 0,
         },
-        method: isStudent ? "Cloudflare CDN Edge Stream" : "Admin Direct Stream",
+        method: streamRealSource,
       }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
     }
 
@@ -1454,10 +1468,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // 🚀 1. Check if file is already brought to Edge CDN / RAM / Disk Cache (Instant 1ms Stream)
-    const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
-    const isDiskCached = fs.existsSync(binPath);
     const cached = getCdnBuffer(id);
-    const isRamCached = Boolean(noteBufferCache.has(id));
 
     if (isDiskCached || cached) {
       // ⚡ If found on disk or RAM, make sure Firestore has isCdnCached: true
@@ -1561,7 +1572,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
             noteDeleted: true,
             isDeletedFromTelegram: true,
             noteId: id,
-            message: "This study material has been removed from Telegram and has been automatically cleaned up from the website.",
+            message: "This study material has been removed from cloud storage and has been automatically cleaned up from the website.",
           });
         }
       }
@@ -1703,7 +1714,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
           noteDeleted: true,
           isDeletedFromTelegram: true,
           noteId: id,
-          message: "This study material has been removed from Telegram and has been automatically cleaned up from the website.",
+          message: "This study material has been removed from cloud storage and has been automatically cleaned up from the website.",
         });
       }
     }

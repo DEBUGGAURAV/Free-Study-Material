@@ -68,3 +68,4 @@ module.exports = {
   verifyTurnstileToken,
   isTurnstileConfigured: () => Boolean(TURNSTILE_SECRET_KEY),
 };
+

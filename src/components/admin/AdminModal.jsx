@@ -79,6 +79,7 @@ import TabCommunityChat from "./tabs/TabCommunityChat";
 import TabTurso from "./tabs/TabTurso";
 import TabActivities from "./tabs/TabActivities";
 import TabHelpDesk from "./tabs/TabHelpDesk";
+import TabWebSecurity from "./tabs/TabWebSecurity";
 
 
 export default function AdminModal({
@@ -123,6 +124,7 @@ export default function AdminModal({
     { id: "community_chat", num: 11, label: "11. 💬 Community Chat", title: "Live Community Chat & Moderation Hub" },
     { id: "turso", num: 12, label: "12. ⚡ Turso Database", title: "Turso LibSQL Edge Database" },
     { id: "help_desk", num: 13, label: "13. 🎫 Support Desk", title: "Help & Support Tickets Desk" },
+    { id: "web_security", num: 14, label: "14. 🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
   ];
 
   const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
@@ -2870,6 +2872,7 @@ export default function AdminModal({
           {activeTab === "community_chat" && <TabCommunityChat {...tabProps} />}
           {activeTab === "turso" && <TabTurso {...tabProps} />}
           {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
+          {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
           {activeTab === "activities" && selectedStudentForActivity && <TabActivities {...tabProps} />}
 
         </div>

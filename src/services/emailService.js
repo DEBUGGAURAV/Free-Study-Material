@@ -459,7 +459,7 @@ async function sendTelegramAuthNotice({
         `🏛️ <b>Course & Branch:</b> <code>${note?.course || ""} - ${note?.branch || ""}</code>\n` +
         (note?.fileSize ? `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` : "") +
         (note?.downloadsCount !== undefined ? `📊 <b>Download Stream:</b> <code>#${note.downloadsCount + 1}</code>\n` : "") +
-        `⚡ <b>Stream Method:</b> <code>${method || "Cloudflare CDN Edge Stream"}</code>\n` +
+        `⚡ <b>Delivery Source:</b> <code>${method || "Indian Edge CDN Worker"}</code>\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🌐 <i>Real-time Academic Vault Streaming Monitor</i>`;
     } else if (event === "ACCOUNT_PURGE") {

@@ -641,7 +641,7 @@ export default function VirtualPdfReader({
             if (noteId && typeof window !== "undefined") {
               window.dispatchEvent(new CustomEvent("fsm:note-deleted", { detail: { noteId } }));
             }
-            setError("This study material was removed from Telegram and has been automatically cleaned up from the website.");
+            setError("This study material is currently unavailable or has been archived from the cloud vault.");
             setLoading(false);
             return;
           }

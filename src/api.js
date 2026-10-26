@@ -495,7 +495,7 @@ export const api = {
         const local = localStorage.getItem("fsm_offline_notes");
         if (local) {
           const parsed = JSON.parse(local);
-          console.log("[API] 📴 Offline Vault: Serving cached notes from persistent local storage");
+          console.log("[API] ðŸ“´ Offline Vault: Serving cached notes from persistent local storage");
           parsed.offline = true;
           return parsed;
         }
@@ -565,7 +565,7 @@ export const api = {
 
           const percent = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0;
 
-          // ⚡ Full-Throttle Maximum Fiber Ingestion Pipeline (68.5 - 89.4 MB/s Full Speed)
+          // âš¡ Full-Throttle Maximum Fiber Ingestion Pipeline (68.5 - 89.4 MB/s Full Speed)
           const dynamicUploadJitter = Number(((e.loaded % 7) * 2.3 + (percent % 4) * 1.6).toFixed(1));
           const hardcodedUploadMB = (68.5 + dynamicUploadJitter).toFixed(1);
           const speedFormatted = `${hardcodedUploadMB} MB/s`;
@@ -667,7 +667,7 @@ export const api = {
       prevLoaded = loaded;
       prevTime = now;
 
-      // ⚡ Full-Throttle Maximum Cloudflare Edge CDN Delivery (94.8 - 124.6 MB/s Full Speed)
+      // âš¡ Full-Throttle Maximum Cloudflare Edge CDN Delivery (94.8 - 124.6 MB/s Full Speed)
       const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 100;
       const dynamicJitter = Number(((loaded % 9) * 2.6 + (percent % 5) * 1.8).toFixed(1));
       const hardcodedSpeedMB = (94.8 + dynamicJitter).toFixed(1);
@@ -704,7 +704,7 @@ export const api = {
     // Convert streamed chunks into downloadable blob
     const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "application/pdf" });
 
-    // 🌟 Determine precise PDF file name from parameter or server Content-Disposition header
+    // ðŸŒŸ Determine precise PDF file name from parameter or server Content-Disposition header
     let finalFileName = (fileName || "").trim();
     if (!finalFileName) {
       const disposition = res.headers.get("Content-Disposition");
@@ -727,7 +727,7 @@ export const api = {
     finalFileName = finalFileName.replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
 
-    // 🌟 Native File System Access API: Save directly into student's chosen folder
+    // ðŸŒŸ Native File System Access API: Save directly into student's chosen folder
     if (fileHandle) {
       try {
         const writable = await fileHandle.createWritable();
@@ -991,7 +991,7 @@ export const api = {
     return res;
   },
 
-  // 💬 Student Chat & Private Pods API
+  // ðŸ’¬ Student Chat & Private Pods API
   getChatWsToken: () => request("/chat/ws-token"),
   getChatRooms: () => request("/chat/rooms"),
   createChatRoom: (name, secretCode, description) =>
@@ -1068,13 +1068,13 @@ export const api = {
     });
   },
 
-  // 🚀 Turso (LibSQL / Edge SQLite) API Alias
+  // ðŸš€ Turso (LibSQL / Edge SQLite) API Alias
   syncTursoDatabase: () =>
     request("/admin/turso/sync", {
       method: "POST",
     }),
 
-  // 🛡️ Real-Time Zero-Threat Radar & Anti-DDoS API
+  // ðŸ›¡ï¸ Real-Time Zero-Threat Radar & Anti-DDoS API
   getRealtimeThreats: () => request("/admin/threats/realtime"),
   unjailThreatIp: (ip, clearAll = false) =>
     request("/admin/threats/unjail", {
@@ -1085,8 +1085,18 @@ export const api = {
     request("/admin/threats/scan", {
       method: "POST",
     }),
+  jailThreatIp: (ip, reason, durationMinutes = 1440) =>
+    request("/admin/threats/jail", {
+      method: "POST",
+      body: JSON.stringify({ ip, reason, durationMinutes }),
+    }),
+  unlockAccount: (identifier) =>
+    request("/admin/threats/unlock-account", {
+      method: "POST",
+      body: JSON.stringify({ identifier }),
+    }),
 
-  // 🤖 Dedicated Chatbot Controller & Software Telemetry (@fsm_chat_bot & Turso)
+  // ðŸ¤– Dedicated Chatbot Controller & Software Telemetry (@fsm_chat_bot & Turso)
   getChatBotSettings: () => request("/admin/chat-bot/settings"),
   updateChatBotSettings: (data) =>
     request("/admin/chat-bot/settings", {
@@ -1109,7 +1119,7 @@ export const api = {
       method: "POST",
     }),
 
-  // 📱 Zero-Cost Remote Device Storage & Cache Purge Controller
+  // ðŸ“± Zero-Cost Remote Device Storage & Cache Purge Controller
   resetSingleUserStorageCache: (studentId, email) =>
     request("/admin/client-storage/reset-user", {
       method: "POST",
@@ -1121,7 +1131,7 @@ export const api = {
     }),
   getClientStorageStatus: () => request("/admin/client-storage/status"),
 
-  // 🔑 Passkey / WebAuthn Biometrics (Face ID, Fingerprint, Windows Hello)
+  // ðŸ”‘ Passkey / WebAuthn Biometrics (Face ID, Fingerprint, Windows Hello)
   getPasskeyRegisterOptions: () => request("/auth/passkey/register-options"),
   verifyPasskeyRegister: (credential, deviceName, context = "") =>
     request("/auth/passkey/register-verify", {
@@ -1149,10 +1159,10 @@ export const api = {
   getPasskeysList: () => request("/auth/passkey/list"),
   deletePasskey: (id) => request(`/auth/passkey/${id}`, { method: "DELETE" }),
 
-  // ⚡ Dedicated Turso Notes Cache Stats
+  // âš¡ Dedicated Turso Notes Cache Stats
   getNotesCacheStats: () => request("/notes/cache-stats"),
 
-  // 🚀 Turso LibSQL Database & Edge Cache Management
+  // ðŸš€ Turso LibSQL Database & Edge Cache Management
   getTursoStatus: () => request("/admin/turso/status"),
   syncTurso: () => request("/admin/turso/sync", { method: "POST" }),
   refreshTursoCache: () => request("/admin/turso/refresh-cache", { method: "POST" }),
@@ -1168,7 +1178,7 @@ export const api = {
     }
   },
 
-  // 🌟 Hybrid Smart Help & Support Desk
+  // ðŸŒŸ Hybrid Smart Help & Support Desk
   getHelpFaqs: () => request("/help/faqs"),
   askHelpQuestion: (payload) => request("/help/ask", { method: "POST", body: JSON.stringify(payload) }),
   getHelpTicket: (code, email = "", mobile = "") => {

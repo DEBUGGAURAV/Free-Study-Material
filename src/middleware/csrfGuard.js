@@ -95,3 +95,4 @@ function sameOriginGuard(req, res, next) {
 module.exports = {
   sameOriginGuard,
 };
+

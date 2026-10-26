@@ -19,7 +19,7 @@ let lastFailoverTimestamp = 0;
 
 /**
  * Extracts normalized Real Source metadata from HTTP response headers
- * Transparently reveals if note came from Cloudflare Worker, RAM, NVMe SSD Disk, or Telegram Storage
+ * Transparently reveals if note came from Cloudflare Worker, RAM, NVMe SSD Disk, or Primary Academic Cloud Vault
  */
 export function parseSourceFromHeaders(headers) {
   if (!headers) return { id: "unknown", label: "Connecting...", short: "Connecting...", colo: "", icon: "🌐", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.12)", borderColor: "rgba(56, 189, 248, 0.3)" };
@@ -35,9 +35,9 @@ export function parseSourceFromHeaders(headers) {
   if (realSource === "CLOUDFLARE_WORKER" || cfCache === "HIT" || xEdgeCache === "HIT") {
     return {
       id: "worker",
-      label: sourceLabel || `Cloudflare Edge Worker (${edgeLocation || "Global"} POP)`,
-      short: "Cloudflare Edge",
-      details: edgeLocation ? `Cloudflare Indian POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Cloudflare Global Edge CDN • 0ms Cache HIT",
+      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Mumbai"} POP)`,
+      short: "Edge CDN (1ms)",
+      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
       colo: edgeLocation || "Edge",
       icon: "⚡",
       color: "#38bdf8",
@@ -77,9 +77,9 @@ export function parseSourceFromHeaders(headers) {
   if (realSource === "ACADEMIC_CLOUD_VAULT" || realSource === "TELEGRAM_STORAGE" || dataSource === "storage") {
     return {
       id: "storage",
-      label: sourceLabel || "Primary Cloud Storage Vault",
-      short: "Cloud Storage",
-      details: "Primary Academic Cloud Storage Vault • Asia-Pacific Singapore DC",
+      label: sourceLabel || "Primary Academic Cloud Storage Vault",
+      short: "Cloud Vault",
+      details: "Primary Academic Cloud Storage Vault • Asia-Pacific Core Engine",
       colo: "Origin",
       icon: "☁️",
       color: "#fbbf24",

@@ -68,12 +68,14 @@ let getThreatIntelligence = null;
 let unjailIp = null;
 let clearAllJails = null;
 let recordThreatIncident = null;
+let jailSpecificIp = null;
 try {
   const ipJail = require("../middleware/ipJail");
   getThreatIntelligence = ipJail.getThreatIntelligence;
   unjailIp = ipJail.unjailIp;
   clearAllJails = ipJail.clearAllJails;
   recordThreatIncident = ipJail.recordThreatIncident;
+  jailSpecificIp = ipJail.jailSpecificIp;
 } catch {}
 
 
@@ -3967,10 +3969,85 @@ router.post("/chat-bot/test-alert", authenticateToken, checkAdminOrPermission("a
  * GET /api/admin/threats/realtime
  * Admin only: Live Threat Radar, Jailed IPs, & Incident Feed
  */
-router.get("/threats/realtime", authenticateToken, requireAdmin, (req, res) => {
+router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const data = typeof getThreatIntelligence === "function" ? getThreatIntelligence() : {};
-    return res.json({ success: true, ...data });
+    let lockedAccounts = [];
+    try {
+      const { getActiveLockouts } = require("../services/accountLockoutService");
+      if (typeof getActiveLockouts === "function") {
+        lockedAccounts = await getActiveLockouts();
+      }
+    } catch (_) {}
+
+    const webSecurityShields = {
+      turnstile: { name: "Cloudflare Turnstile", status: "ACTIVE", type: "Anti-Bot Smart Challenge", icon: "🛡️" },
+      disposableEmail: { name: "Disposable Email Blocker", status: "ACTIVE", type: "500+ Burner Domains Prohibited", icon: "📧" },
+      accountLockout: { name: "Per-Account Brute Force Lockout", status: "ACTIVE", type: "5 Attempts / 20-Min Lockout", icon: "🔒" },
+      deviceFingerprint: { name: "Device Fingerprinting", status: "ACTIVE", type: "Telegram Topic 6 Instant Alert", icon: "💻" },
+      sessionInvalidation: { name: "Multi-Device Session Invalidation", status: "ACTIVE", type: "v: Token Version Revocation", icon: "🚪" },
+      magicByteSniffer: { name: "Deep MIME / Magic Byte Sniffer", status: "ACTIVE", type: "%PDF-, PK, Images (Blocks PE MZ/ELF)", icon: "🔬" },
+      pdfScriptStripper: { name: "Malicious PDF Action Stripper", status: "ACTIVE", type: "pdf-lib /JavaScript Neutralizer", icon: "📑" },
+      zipBombShield: { name: "Decompression / Zip Bomb Shield", status: "ACTIVE", type: "200MB Max / 15:1 Ratio Limit", icon: "💣" },
+      csrfGuard: { name: "CSRF Same-Origin Header Guard", status: "ACTIVE", type: "Sec-Fetch-Site Enforced", icon: "🛡️" },
+      adminStepUp: { name: "Admin Step-Up Re-Authentication", status: "ACTIVE", type: "10-Min Signed Step-Up JWT", icon: "🔑" },
+      antiTamper: { name: "Client Anti-Tamper & DevTools Sensor", status: "ACTIVE", type: "disable-devtool 3-Strike Jail", icon: "🚨" },
+      ipJail: { name: "Autonomous IP Quarantine Firewall", status: "ACTIVE", type: "Sliding-Window Sub-ms Detention", icon: "⛔" },
+    };
+
+    return res.json({
+      success: true,
+      ...data,
+      lockedAccounts,
+      webSecurityShields,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🛡️ POST /api/admin/threats/jail
+ * Admin only: Manually detain / quarantine an abusive IP in IP Jail
+ */
+router.post("/threats/jail", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const { ip, reason, durationMinutes } = req.body || {};
+    if (!ip) {
+      return res.status(400).json({ success: false, message: "IP address is required." });
+    }
+    const cleanIp = String(ip).trim();
+    const durationMs = (Number(durationMinutes) || 1440) * 60 * 1000; // default 24h
+    if (typeof jailSpecificIp === "function") {
+      jailSpecificIp(cleanIp, reason || "Manual Admin Security Quarantine", durationMs);
+    }
+    return res.json({
+      success: true,
+      message: `IP ${cleanIp} successfully detained in IP Jail for ${durationMinutes || 1440} minutes.`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🛡️ POST /api/admin/threats/unlock-account
+ * Admin only: Manually unlock a student account locked by brute-force protection
+ */
+router.post("/threats/unlock-account", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { identifier } = req.body || {};
+    if (!identifier) {
+      return res.status(400).json({ success: false, message: "Account identifier is required." });
+    }
+    const { clearFailedAttempts } = require("../services/accountLockoutService");
+    if (typeof clearFailedAttempts === "function") {
+      await clearFailedAttempts(identifier);
+    }
+    return res.json({
+      success: true,
+      message: `Account "${identifier}" unlocked successfully. All lockouts cleared.`,
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

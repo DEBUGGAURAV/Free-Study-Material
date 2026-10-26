@@ -302,7 +302,7 @@ export default {
         const fileMeta = await fileMetaRes.json();
 
         if (!fileMeta.ok || !fileMeta.result?.file_path) {
-          return new Response(`Telegram file resolution failed: ${fileMeta.description || 'Not found'}`, { 
+          return new Response(`Cloud vault file resolution notice: ${fileMeta.description || 'Not found'}`, { 
             status: 404,
             headers: { 'Access-Control-Allow-Origin': '*' }
           });
@@ -311,10 +311,10 @@ export default {
         const filePath = fileMeta.result.file_path;
         const tgDownloadUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
 
-        // Step B: Stream file from Telegram API upstream
+        // Step B: Stream file from upstream core storage
         const fileStreamRes = await fetch(tgDownloadUrl);
         if (!fileStreamRes.ok) {
-          return new Response('Failed to stream file from Telegram upstream server', { 
+          return new Response('Failed to stream file from academic cloud upstream storage', { 
             status: 502,
             headers: { 'Access-Control-Allow-Origin': '*' }
           });
