@@ -41,11 +41,12 @@ async function dispatchTamperTelegramAlert({
   strikeCount,
   isBlocked,
   deviceInfo,
+  pageUrl,
 }) {
   const isBanned = strikeCount >= 3 || isBlocked;
   const statusBadge = isBanned
-    ? "🚫 <b>[CRITICAL: USER AUTO-BLOCKED - 3RD TAMPER ATTEMPT]</b>"
-    : `⚠️ <b>[SECURITY WARNING: SCRIPT TAMPERING DETECTED (Strike ${strikeCount}/3)]</b>`;
+    ? "🚫 <b>[CRITICAL: USER AUTO-BLOCKED - 3RD DEVTOOLS TAMPER ATTEMPT]</b>"
+    : `⚠️ <b>[SECURITY WARNING: DEVTOOLS / CONSOLE INSPECTION DETECTED (Strike ${strikeCount}/3)]</b>`;
 
   const actionText = isBanned
     ? "❌ <b>Account Permanently Banned in Database & IP Jailed for 24 Hours</b>"
@@ -56,12 +57,14 @@ async function dispatchTamperTelegramAlert({
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👤 <b>Student:</b> ${user.name || "Unauthenticated Guest"}`,
     `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>`,
-    user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>` : null,
-    user.college ? `🏛️ <b>College:</b> ${user.college}` : null,
+    user.mobile && user.mobile !== "N/A" ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>` : null,
+    user.college && user.college !== "N/A" ? `🏛️ <b>College:</b> ${user.college}` : null,
+    user.year && user.year !== "N/A" ? `🎓 <b>Year:</b> ${user.year}` : null,
     `🌐 <b>IP Address:</b> <code>${ip}</code>`,
+    pageUrl ? `📍 <b>Page / Route:</b> <code>${pageUrl}</code>` : null,
     `💻 <b>Client / Device:</b> ${deviceInfo || "Browser Console / DevTools"}`,
     `⚠️ <b>Tampering Detected:</b>`,
-    `<i>${detail || "Attempted to overwrite core API / Injected unauthorized script"}</i>`,
+    `<i>${detail || "Attempted to open DevTools / Inspect Mode"}</i>`,
     `🎯 <b>Total Strikes:</b> <b>${strikeCount} of 3</b>`,
     `🛡️ <b>Action Taken:</b> ${actionText}`,
     `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
@@ -80,7 +83,7 @@ async function dispatchTamperTelegramAlert({
         college: user.college || "N/A",
         ip: ip,
       },
-      method: "Client-Side Anti-Tamper Sensor",
+      method: "Client-Side Anti-Tamper & DevTools Sensor (disable-devtool)",
       detail: messageText,
     });
   } catch (err) {
@@ -95,7 +98,7 @@ async function dispatchTamperTelegramAlert({
 router.post("/tamper-alert", async (req, res) => {
   try {
     const clientIp = getClientIp(req);
-    const { detail, context, clientStrikes, deviceInfo } = req.body || {};
+    const { detail, context, clientStrikes, deviceInfo, pageUrl, user: clientUser } = req.body || {};
 
     // 1. Resolve Authenticated User if present
     let authUser = null;
@@ -105,15 +108,25 @@ router.post("/tamper-alert", async (req, res) => {
       const token =
         (authHeader ? authHeader.split(" ")[1] : null) ||
         req.cookies?.fsm_token ||
-        req.cookies?.token;
+        req.cookies?.token ||
+        req.cookies?.vault_token;
       if (token) {
         authUser = jwt.verify(token, JWT_SECRET);
         userId = authUser.id;
       }
     } catch (_) {}
 
-    // Fetch full user details from Firestore if possible
-    let fullUser = authUser || { name: "Guest Scholar", email: "N/A", mobile: "N/A" };
+    // Fetch full user details from Firestore if possible, fallback to clientUser or Guest
+    let fullUser = authUser || clientUser || { name: "Guest Scholar", email: "N/A", mobile: "N/A" };
+    if (clientUser && (!fullUser.email || fullUser.email === "N/A")) {
+      fullUser = {
+        name: clientUser.name || fullUser.name,
+        email: clientUser.email || fullUser.email,
+        mobile: clientUser.mobile || fullUser.mobile,
+        college: clientUser.college || fullUser.college,
+        year: clientUser.year || fullUser.year,
+      };
+    }
     if (db && userId && userId !== "admin-root") {
       try {
         const snap = await db.collection("users").doc(userId).get();
@@ -125,6 +138,7 @@ router.post("/tamper-alert", async (req, res) => {
             email: decrypted.email || fullUser.email,
             mobile: decrypted.mobile || fullUser.mobile,
             college: decrypted.college || fullUser.college,
+            year: decrypted.year || fullUser.year,
           };
         }
       } catch (_) {}
@@ -184,6 +198,7 @@ router.post("/tamper-alert", async (req, res) => {
         strikeCount: effectiveStrikes,
         isBlocked: true,
         deviceInfo,
+        pageUrl,
       });
 
       return res.json({
@@ -206,6 +221,7 @@ router.post("/tamper-alert", async (req, res) => {
       strikeCount: effectiveStrikes,
       isBlocked: false,
       deviceInfo,
+      pageUrl,
     });
 
     return res.json({

@@ -23,6 +23,7 @@ export default defineConfig({
     emptyOutDir: true,
     cssCodeSplit: true,
     minify: 'esbuild',
+    sourcemap: false,
     target: 'es2020',
     rollupOptions: {
       output: {

@@ -2,12 +2,16 @@
  * ============================================================================
  * 🛡️ CLIENT-SIDE ANTI-TAMPER & ZERO-TRUST DEFENSE SENSOR
  * ============================================================================
- * - Detects console tampering, prototype pollution, script injection & DevTools timing
+ * - Option 2: Powered by disable-devtool (Industry-Standard Shield)
+ * - Detects console tampering, prototype pollution, script injection & DevTools opening
  * - 3-Strike Warning & Auto-Block Defense Rule
+ * - Real-time Telegram Security Bot Supergroup Topic 6 reporting
  * - Strikes 1 & 2: Instant Warning Modal with attempt counter
  * - Strike 3+: Database Account Ban, Token Revocation, IP Jail & Red Screen Lockdown
  * ============================================================================
  */
+
+import disableDevtool from "disable-devtool";
 
 let strikeCount = 0;
 let isDefenseInitialized = false;
@@ -17,12 +21,86 @@ let activeWarningNotice = null;
 // Debounce so a single tamper event doesn't trigger multiple rapid alerts
 let lastTamperDispatch = 0;
 
+// Human-readable detector labels
+const DETECTOR_NAMES = {
+  [-1]: "Unknown Probe",
+  0: "RegExp String Serialization (Console Open)",
+  1: "Element ID Getter Evaluation",
+  2: "Window Dimension Split (DevTools Docked)",
+  3: "Date String Serialization",
+  4: "Function Callstack Profiling",
+  5: "Debugger Execution Trap",
+  6: "Performance Timing Vector",
+  7: "Debug Library Hook",
+};
+
 /**
- * Report Tampering Beacon to Server
+ * Checks if DevTools protection should be bypassed for local dev or Admin
  */
-async function reportTamperIncident(detail = "Unauthorized script tampering detected") {
+function isDevToolsBypassed() {
+  if (typeof window === "undefined") return true;
+
+  // 1. Dev environment bypass (localhost, 127.0.0.1, import.meta.env.DEV)
+  if (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    Boolean(import.meta.env?.DEV)
+  ) {
+    return true;
+  }
+
+  // 2. Admin URL parameters (?admin_inspect=1, ?admin_dev=1, ?debug=1)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("admin_inspect") === "1" || params.get("admin_dev") === "1" || params.get("debug") === "1") {
+      return true;
+    }
+  } catch (_) {}
+
+  // 3. Admin session check in localStorage / sessionStorage
+  try {
+    if (localStorage.getItem("fsm_admin_token") || sessionStorage.getItem("fsm_admin_token")) {
+      return true;
+    }
+    const userStr = localStorage.getItem("vault_user");
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      if (u.role === "admin" || u.role === "half_admin" || u.isMasterAdmin || u.isMainAdmin) {
+        return true;
+      }
+    }
+  } catch (_) {}
+
+  return false;
+}
+
+/**
+ * Safely extracts current student profile info for security alert
+ */
+function getCurrentUserData() {
+  try {
+    const userStr = localStorage.getItem("vault_user");
+    if (!userStr) return null;
+    const u = JSON.parse(userStr);
+    return {
+      name: u.name || "Student Scholar",
+      email: u.email || "N/A",
+      mobile: u.mobile || "N/A",
+      college: u.college || "N/A",
+      year: u.year || "N/A",
+      role: u.role || "student",
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Report Tampering Beacon to Server -> Telegram Supergroup Topic 6
+ */
+async function reportTamperIncident(detail = "Unauthorized script tampering detected", extra = {}) {
   const now = Date.now();
-  if (now - lastTamperDispatch < 2000) return; // 2s debounce
+  if (now - lastTamperDispatch < 2500) return; // 2.5s debounce
   lastTamperDispatch = now;
 
   strikeCount += 1;
@@ -38,7 +116,10 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
       body: JSON.stringify({
         detail,
         clientStrikes: currentStrike,
-        deviceInfo: `${navigator.userAgent || "Unknown"} (${navigator.platform || "Platform"})`,
+        deviceInfo: `${navigator.userAgent || "Unknown"} (${window.screen?.width || 0}x${window.screen?.height || 0})`,
+        pageUrl: window.location.pathname + window.location.search,
+        user: getCurrentUserData(),
+        ...extra,
       }),
     });
 
@@ -91,13 +172,13 @@ function showStrikeWarning(strike, customMessage) {
       <span style="font-size: 24px; line-height: 1;">${isFinalWarning ? "🚨" : "⚠️"}</span>
       <div style="flex: 1;">
         <div style="font-weight: 800; font-size: 0.95rem; color: ${isFinalWarning ? "#fca5a5" : "#fde68a"}; margin-bottom: 4px;">
-          ${isFinalWarning ? "FINAL SECURITY WARNING (Attempt 2 of 3)" : "SECURITY WARNING (Attempt 1 of 3)"}
+          ${isFinalWarning ? "🚨 FINAL SECURITY WARNING (Attempt 2 of 3)" : "⚠️ SECURITY SHIELD: DEVTOOLS PROHIBITED (Attempt 1 of 3)"}
         </div>
         <div style="font-size: 0.82rem; color: #f8fafc; line-height: 1.45; margin-bottom: 8px;">
-          ${customMessage || "Unauthorized script modification or console tampering detected. Please cease immediately."}
+          ${customMessage || "Free Study Material Vault par Developer Tools ya Console inspect karna prohibited hai. Academic integrity ke liye kripya DevTools band karein."}
         </div>
         <div style="font-size: 0.74rem; color: ${isFinalWarning ? "#f87171" : "#fbbf24"}; font-weight: 600;">
-          ⚠️ Notice: If you attempt tampering 3 times, your account will be automatically permanently blocked in database and your IP will be jailed.
+          ⚠️ Notice: 3 baar violation karne par aapka account database me permanent ban ho jayega aur IP jail ho jayegi.
         </div>
       </div>
       <button id="fsm-warning-dismiss-btn" style="
@@ -288,6 +369,39 @@ export function initAntiTamperDefense() {
       maxStrikes: 3,
     });
   } catch (_) {}
+
+  // 4. Option 2: Multi-Vector disable-devtool Guard
+  if (!isDevToolsBypassed()) {
+    try {
+      disableDevtool({
+        disableMenu: true, // Right-click contextmenu disabled
+        clearLog: true,    // Periodic log scrubbing
+        disableSelect: false, // Students MUST be able to select text for reading
+        disableCopy: false,   // Allow students to copy academic notes text
+        disableCut: false,
+        disablePaste: false,
+        interval: 250,
+        ignore: () => isDevToolsBypassed(),
+        ondevtoolopen: (type) => {
+          const detectorLabel = DETECTOR_NAMES[type] || `Detector #${type}`;
+          reportTamperIncident(
+            `Developer Tools / Console Inspection Attempt (disable-devtool: ${detectorLabel})`,
+            { detectorType: type }
+          );
+        },
+        ondevtoolclose: () => {
+          // Auto-dismiss warning overlay when user complies and closes DevTools
+          const overlay = document.getElementById("fsm-tamper-warning-overlay");
+          if (overlay && !isLockdownActive) {
+            overlay.remove();
+          }
+        },
+      });
+      console.log("[SECURITY] 🔒 Option 2: disable-devtool armed with Supergroup Topic 6 sensor.");
+    } catch (dtErr) {
+      console.warn("[SECURITY] disable-devtool init notice:", dtErr.message);
+    }
+  }
 
   console.log("[SECURITY] 🛡️ Client-Side Anti-Tamper & Zero-Trust Defense active (3-Strike Rule).");
 }

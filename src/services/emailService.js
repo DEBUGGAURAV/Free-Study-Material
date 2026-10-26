@@ -588,7 +588,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
         (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
         `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
-        (detail ? `⚠️ <b>Note:</b> <code>${detail}</code>\n` : "") +
+        (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🌐 <i>Real-time Academic Vault Security Core</i>`;
     }
