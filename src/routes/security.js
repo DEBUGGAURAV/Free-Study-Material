@@ -299,7 +299,7 @@ router.post("/anti-bot-alert", async (req, res) => {
       detail: messageText,
     });
 
-    return res.json({ success: true, message: "Forensic alert dispatched to Security Topic 6." });
+    return res.json({ success: true, message: "Forensic alert recorded." });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }

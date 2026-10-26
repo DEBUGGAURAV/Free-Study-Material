@@ -297,7 +297,7 @@ function triggerClientLockdown(reason) {
         </div>
         
         <p style="font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin: 0 0 24px 0;">
-          Your user account has been deactivated in the database. Active WebSocket connections have been killed, your authentication session has been revoked, and your IP address has been reported to the administrator security topic.
+          Your user account has been deactivated in the database. Active WebSocket connections have been killed, your authentication session has been revoked, and your IP address has been logged for security review.
         </p>
         
         <div style="
@@ -306,7 +306,7 @@ function triggerClientLockdown(reason) {
           border-top: 1px solid rgba(255, 255, 255, 0.08);
           padding-top: 16px;
         ">
-          Incident ID: <code style="color: #cbd5e1;">FSM-SEC-${Date.now().toString(36).toUpperCase()}</code> • Supergroup Topic 6 Alerted
+          Incident ID: <code style="color: #cbd5e1;">FSM-SEC-${Date.now().toString(36).toUpperCase()}</code>
         </div>
       </div>
     </div>
