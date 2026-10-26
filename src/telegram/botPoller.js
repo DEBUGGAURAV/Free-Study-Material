@@ -172,7 +172,11 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
         message: text,
         parseMode: "html",
       };
-      if (replyToMsgId) opts.replyTo = Number(replyToMsgId);
+      if (threadId && !isNaN(Number(threadId))) {
+        opts.replyTo = Number(threadId);
+      } else if (replyToMsgId) {
+        opts.replyTo = Number(replyToMsgId);
+      }
       const res = await client.sendMessage(chatId.toString(), opts);
       return { ok: true, result: { message_id: res.id } };
     }
@@ -268,6 +272,12 @@ async function processIncomingMessage(message) {
             },
             { merge: true }
           );
+          const { ramCache } = require("../utils/ramCache");
+          if (ramCache) {
+            ramCache.set("tg_sub_topic_" + normalizedKey, Number(threadId), 86400);
+            ramCache.set("tg_topic_sub_" + Number(threadId), cleanSubject, 86400);
+            ramCache.delete("subjects_list");
+          }
           console.log(`[BOT POLLER] 🔄 Telegram Forum Topic synced to Subjects: "${cleanSubject}" (Thread ID: ${threadId})`);
         }
       }
@@ -316,6 +326,15 @@ async function processIncomingMessage(message) {
   let threadTitle = "";
   if (message.reply_to_message?.forum_topic_created?.name) {
     threadTitle = message.reply_to_message.forum_topic_created.name;
+  }
+  if (!threadTitle && threadId) {
+    try {
+      const { getSubjectFromThreadId } = require("../services/emailService");
+      const matchedSubject = await getSubjectFromThreadId(threadId);
+      if (matchedSubject) {
+        threadTitle = matchedSubject;
+      }
+    } catch (_) {}
   }
 
   console.log(`[BOT POLLER] 📄 Incoming Document: "${fileName}" (${(fileSize / 1024 / 1024).toFixed(1)} MB) from Chat: ${chatId} (${chatTitle || "DM"})${threadTitle ? ` [Topic: ${threadTitle}]` : ""}`);
@@ -394,11 +413,13 @@ async function processIncomingMessage(message) {
 
         // 2. Also publish duplicate notice into subject topic in storage supergroup if different chat
         try {
-          const { getOrCreateSubjectForumTopic } = require("../services/emailService");
-          const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
           const storageChat = getStorageChatId();
-          if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
-            await sendTelegramMessage(storageChat, dupNotice, null, topicThreadId).catch(() => {});
+          if (storageChat && chatId.toString() !== storageChat.toString()) {
+            const { getOrCreateSubjectForumTopic } = require("../services/emailService");
+            const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
+            if (topicThreadId) {
+              await sendTelegramMessage(storageChat, dupNotice, null, topicThreadId).catch(() => {});
+            }
           }
         } catch {}
       }
@@ -520,11 +541,13 @@ async function processIncomingMessage(message) {
 
       // 2. Also publish receipt into the subject forum topic in central storage supergroup
       try {
-        const { getOrCreateSubjectForumTopic } = require("../services/emailService");
-        const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
         const storageChat = getStorageChatId();
-        if (storageChat && topicThreadId && chatId.toString() !== storageChat.toString()) {
-          await sendTelegramMessage(storageChat, receiptText, null, topicThreadId).catch(() => {});
+        if (storageChat && chatId.toString() !== storageChat.toString()) {
+          const { getOrCreateSubjectForumTopic } = require("../services/emailService");
+          const topicThreadId = await getOrCreateSubjectForumTopic(subject, chatId, getBotToken());
+          if (topicThreadId) {
+            await sendTelegramMessage(storageChat, receiptText, null, topicThreadId).catch(() => {});
+          }
         }
       } catch (topicNoticeErr) {
         console.warn("[BOT POLLER] Subject topic receipt notice warning:", topicNoticeErr.message);

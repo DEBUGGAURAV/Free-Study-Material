@@ -537,7 +537,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                       ) : (
                         !showCreateOption && (
                           <div style={{ padding: "10px 12px", fontSize: "0.82rem", color: "var(--text-muted)", textAlign: "center" }}>
-                            No subjects found
+                            {trimmedSubject ? "No matching subjects found" : "No subjects yet — type above to create one!"}
                           </div>
                         )
                       )}

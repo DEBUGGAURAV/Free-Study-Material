@@ -384,9 +384,25 @@ function setupChannelSyncListeners(c) {
       const sig = syncLock.getDocSignature(originalName, fileSize);
       if (sig && !syncLock.canProcess(sig)) return;
 
+      // Topic thread ID detection from GramJS message reply header
+      const topicThreadId = message.replyTo?.replyToTopId || message.replyTo?.replyToMsgId || null;
+      let threadTitle = "";
+      if (topicThreadId) {
+        try {
+          const { getSubjectFromThreadId } = require("../services/emailService");
+          const matchedSubject = await getSubjectFromThreadId(topicThreadId);
+          if (matchedSubject) {
+            threadTitle = matchedSubject;
+          }
+        } catch (_) {}
+      }
+
       // Extract dynamic academic metadata from filename & caption
-      const meta = extractAcademicMetadata({ fileName: originalName, caption });
-      const { title, subject, branch, course, year } = meta;
+      const meta = extractAcademicMetadata({ fileName: originalName, caption, threadTitle });
+      let { title, subject, branch, course, year } = meta;
+      if (threadTitle) {
+        subject = threadTitle;
+      }
       const fileHash = crypto.createHash("sha256").update(`${originalName}_${fileSize}`).digest("hex");
 
       // Comprehensive duplicate prevention check (Single-field queries, zero composite index needed)
@@ -402,6 +418,35 @@ function setupChannelSyncListeners(c) {
         processingMsgIds.add(msgId);
         if (docIdStr) processingDocIds.add(docIdStr);
         console.log(`[MTProto SYNC] 🛡️ Duplicate note ignored in channel: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
+
+        if (topicThreadId && syncLock.canSendReceipt(storageChatId, msgId)) {
+          function formatRealSize(bytes) {
+            const num = Number(bytes || 0);
+            if (!num || num <= 0) return "0.01 MB (10 KB)";
+            const mb = num / (1024 * 1024);
+            const kb = num / 1024;
+            if (mb < 0.1) return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+            return `${mb.toFixed(2)} MB`;
+          }
+          const realSize = formatRealSize(fileSize);
+          const siteUrl = getSiteUrl();
+          const dupNotice =
+            `♻️ <b>${getVaultName()} — Duplicate Notice Receipt</b>\n\n` +
+            `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
+            `📄 <b>Title:</b> ${title}\n` +
+            `📚 <b>Subject:</b> ${subject}\n` +
+            `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
+            `💾 <b>Size:</b> ${realSize}\n` +
+            `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${dup.id || dup.docId || ""}/stream\n` +
+            `🌐 <b>Website:</b> ${siteUrl}\n\n` +
+            `<i>🛡️ This document is already live on the platform. Duplicate re-upload was safely prevented.</i>`;
+
+          c.sendMessage(storageChatId, {
+            message: dupNotice,
+            parseMode: "html",
+            replyTo: Number(topicThreadId),
+          }).catch(() => {});
+        }
         return;
       }
 
@@ -436,6 +481,7 @@ function setupChannelSyncListeners(c) {
         savingsPercent: 0,
         telegramMessageId: Number(message.id),
         telegramDocumentId: doc.id?.toString() || null,
+        telegramThreadId: topicThreadId,
         status: "ready",
         uploadedBy: "telegram-channel-sync",
         uploaderName: "Direct Sync",
@@ -463,8 +509,52 @@ function setupChannelSyncListeners(c) {
         updatedAt: nowIso,
       }).catch(() => {});
 
-      // NOTE: We intentionally DO NOT send receipts into storageChatId.
-      // storageChatId is an internal backend vault, receipts should never clutter it!
+      // Sync to Turso database and RAM caches
+      try {
+        const { upsertNoteToTurso } = require("../services/tursoService");
+        const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+        const { invalidateAllCache } = require("../utils/ramCache");
+        upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-MTPROTO] Sync warning:", e.message));
+        if (typeof upsertNoteInCache === "function") {
+          upsertNoteInCache(noteData).catch(() => {});
+        }
+        invalidateAllCache();
+      } catch (_) {}
+
+      // Deliver instant rich HTML receipt back to the Topic in Telegram!
+      if (topicThreadId) {
+        function formatRealSize(bytes) {
+          const num = Number(bytes || 0);
+          if (!num || num <= 0) return "0.01 MB (10 KB)";
+          const mb = num / (1024 * 1024);
+          const kb = num / 1024;
+          if (mb < 0.1) return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+          return `${mb.toFixed(2)} MB`;
+        }
+        const realSize = formatRealSize(fileSize);
+        const siteUrl = getSiteUrl();
+        const receiptText =
+          `⚡ <b>${getVaultName()} Receipt</b>\n\n` +
+          `✅ <b>Note Successfully Indexed to Website!</b>\n` +
+          `📄 <b>Title:</b> ${title}\n` +
+          `📚 <b>Subject:</b> ${subject}\n` +
+          `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
+          `💾 <b>Size:</b> ${realSize}\n` +
+          `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${noteRef.id}/stream\n` +
+          `🌐 <b>Website:</b> ${siteUrl}\n\n` +
+          `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
+
+        try {
+          await c.sendMessage(storageChatId, {
+            message: receiptText,
+            parseMode: "html",
+            replyTo: Number(topicThreadId),
+          });
+          console.log(`[MTProto SYNC] ✅ Receipt successfully delivered to Topic #${topicThreadId}`);
+        } catch (receiptErr) {
+          console.warn("[MTProto SYNC] Topic receipt dispatch warning:", receiptErr.message);
+        }
+      }
 
       clearCache();
       console.log(`[MTProto SYNC] Note "${title}" successfully published to web platform!`);

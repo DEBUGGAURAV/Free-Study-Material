@@ -100,140 +100,244 @@ async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
   }
 }
 
+const pendingTopicCreations = new Map();
+
+/**
+ * Normalizes subject name to prevent duplicate creation for common variants/acronyms
+ */
+function normalizeSubjectName(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  let clean = raw.trim().replace(/^[📚📖📁📌\s]+/, "").trim();
+  const lower = clean.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (lower === "ai" || lower === "artificialintelligence") return "Artificial Intelligence";
+  if (lower === "dbms" || lower === "databasemanagementsystems" || lower === "databasemanagementsystem") return "Database Management Systems (DBMS)";
+  if (lower === "os" || lower === "operatingsystem" || lower === "operatingsystems") return "Operating Systems (OS)";
+  if (lower === "cd" || lower === "compilerdesign") return "Compiler Design (CD)";
+  if (lower === "cn" || lower === "computernetwork" || lower === "computernetworks") return "Computer Networks (CN)";
+  if (lower === "daa" || lower === "designandanalysisofalgorithms") return "Design & Analysis of Algorithms (DAA)";
+  if (lower === "dsa" || lower === "datastructuresandalgorithms" || lower === "datastructures") return "Data Structures & Algorithms (DSA)";
+  if (lower === "toc" || lower === "theoryofcomputation" || lower === "automata") return "Theory of Computation (TOC)";
+  if (lower === "se" || lower === "softwareengineering") return "Software Engineering (SE)";
+  if (lower === "wt" || lower === "webtechnology" || lower === "webtechnologies") return "Web Technology (WT)";
+  if (lower === "coa" || lower === "computerorganizationandarchitecture") return "Computer Organization & Architecture (COA)";
+  return clean;
+}
+
+/**
+ * Fast lookup helper: retrieves the exact subject name associated with a Telegram Forum Topic threadId
+ */
+async function getSubjectFromThreadId(threadId) {
+  if (!threadId) return null;
+  const numThreadId = Number(threadId);
+  if (isNaN(numThreadId) || numThreadId <= 0) return null;
+
+  if (ramCache) {
+    const cached = ramCache.get("tg_topic_sub_" + numThreadId);
+    if (cached) return cached;
+  }
+
+  try {
+    const { db } = require("../firebase");
+    if (db) {
+      const snap = await db.collection("subject_forum_topics").where("threadId", "==", numThreadId).limit(1).get();
+      if (!snap.empty) {
+        const data = snap.docs[0].data();
+        const subject = data?.subject;
+        if (subject) {
+          if (ramCache) ramCache.set("tg_topic_sub_" + numThreadId, subject, 86400);
+          return subject;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[SUBJECT-TOPIC] getSubjectFromThreadId error:", err.message);
+  }
+  return null;
+}
+
 /**
  * Auto-creates or retrieves dedicated Telegram Forum Topic for a Subject
  * When a student uploads a note, the bot automatically checks if a topic exists.
  * If not, it calls Telegram createForumTopic and saves the thread ID in Firestore.
+ * Includes in-flight deduplication mutex to prevent duplicate topic creations.
  */
 async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, botToken = null) {
   if (!subjectName) return null;
-  let cleanSubject = subjectName.trim();
+  const cleanSubject = normalizeSubjectName(subjectName);
   if (!cleanSubject) return null;
 
-  const lowerSub = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (lowerSub === "ai" || lowerSub === "artificialintelligence") {
-    cleanSubject = "Artificial Intelligence";
+  const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").slice(0, 60);
+
+  // 0. Concurrency Mutex Lock: If creation is already in flight for this subject, await same promise
+  if (pendingTopicCreations.has(normalizedKey)) {
+    return pendingTopicCreations.get(normalizedKey);
   }
 
-  // Prioritize @TechTitanNotesBot token specifically for topic operations
-  const effectiveBotToken = (process.env.TELEGRAM_BOT_TOKEN || botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
-  let effectiveChatId = (targetChatId || process.env.TELEGRAM_STORAGE_CHAT_ID || "").toString().trim();
-  if (!effectiveBotToken) return null;
+  const creationPromise = (async () => {
+    // Prioritize @TechTitanNotesBot token specifically for topic operations
+    const effectiveBotToken = (process.env.TELEGRAM_BOT_TOKEN || botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
+    let effectiveChatId = (process.env.TELEGRAM_STORAGE_CHAT_ID || targetChatId || "").toString().trim();
+    if (!effectiveBotToken || !effectiveChatId) return null;
 
-  const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+    // 1. Check RAM Cache (Instant 0ms lookup)
+    if (ramCache) {
+      const cachedThreadId = ramCache.get("tg_sub_topic_" + normalizedKey);
+      if (cachedThreadId) return Number(cachedThreadId);
+    }
 
-  // 1. Check RAM Cache (Instant 0ms lookup)
-  if (ramCache) {
-    const cachedThreadId = ramCache.get("tg_sub_topic_" + normalizedKey);
-    if (cachedThreadId) return Number(cachedThreadId);
-  }
+    // 2. Check Firestore Database (by normalizedKey and subject exact match)
+    try {
+      const { db } = require("../firebase");
+      if (db) {
+        const docRef = db.collection("subject_forum_topics").doc(normalizedKey);
+        const docSnap = await docRef.get();
+        if (docSnap.exists) {
+          const data = docSnap.data();
+          if (data && data.threadId) {
+            const threadNum = Number(data.threadId);
+            if (ramCache) {
+              ramCache.set("tg_sub_topic_" + normalizedKey, threadNum, 86400);
+              ramCache.set("tg_topic_sub_" + threadNum, cleanSubject, 86400);
+            }
+            return threadNum;
+          }
+        }
 
-  // 2. Check Firestore Database
-  try {
-    const { db } = require("../firebase");
-    if (db) {
-      const docRef = db.collection("subject_forum_topics").doc(normalizedKey);
-      const docSnap = await docRef.get();
-      if (docSnap.exists) {
-        const data = docSnap.data();
-        if (data && data.threadId) {
-          if (ramCache) ramCache.set("tg_sub_topic_" + normalizedKey, data.threadId, 86400);
-          return Number(data.threadId);
+        // Secondary query in case document ID differed slightly
+        const matchSnap = await db.collection("subject_forum_topics").where("subject", "==", cleanSubject).limit(1).get();
+        if (!matchSnap.empty) {
+          const matchData = matchSnap.docs[0].data();
+          if (matchData && matchData.threadId) {
+            const threadNum = Number(matchData.threadId);
+            if (ramCache) {
+              ramCache.set("tg_sub_topic_" + normalizedKey, threadNum, 86400);
+              ramCache.set("tg_topic_sub_" + threadNum, cleanSubject, 86400);
+            }
+            return threadNum;
+          }
         }
       }
-    }
-  } catch (dbErr) {
-    console.warn("[SUBJECT-TOPIC] Firestore read error:", dbErr.message);
-  }
-
-  // 3. Auto-create Forum Topic via Telegram Bot API with @TechTitanNotesBot
-  try {
-    const colors = [7322096, 16766590, 13338331, 9367192, 16749490, 16478047];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    const topicName = `📚 ${cleanSubject.slice(0, 120)}`;
-
-    let createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: effectiveChatId,
-        name: topicName,
-        icon_color: randomColor,
-      }),
-    });
-
-    let createData = await createRes.json();
-
-    // Fallback: If primary effectiveChatId failed or bot is not in that chat, try storage supergroup
-    const storageSupergroup = (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim();
-    if (!createData.ok && storageSupergroup && effectiveChatId !== storageSupergroup) {
-      effectiveChatId = storageSupergroup;
-      createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: effectiveChatId,
-          name: topicName,
-          icon_color: randomColor,
-        }),
-      });
-      createData = await createRes.json();
+    } catch (dbErr) {
+      console.warn("[SUBJECT-TOPIC] Firestore read error:", dbErr.message);
     }
 
-    if (createData.ok && createData.result?.message_thread_id) {
-      const newThreadId = createData.result.message_thread_id;
-      console.log(`[TELEGRAM TOPIC AUTO-CREATE] Successfully created new topic "${topicName}" via @TechTitanNotesBot (Thread ID: ${newThreadId}, Chat: ${effectiveChatId})`);
+    // 3. Auto-create Forum Topic via Telegram Bot API with @TechTitanNotesBot
+    try {
+      const colors = [7322096, 16766590, 13338331, 9367192, 16749490, 16478047];
+      const randomColor = colors[Math.floor(Math.random() * colors.length)];
+      const topicName = `📚 ${cleanSubject.slice(0, 120)}`;
 
-      // Save in Firestore database for persistent routing across all future notes
+      let newThreadId = null;
+
+      // Primary Attempt: HTTP Bot API createForumTopic
       try {
-        const { db } = require("../firebase");
-        if (db) {
-          await db.collection("subject_forum_topics").doc(normalizedKey).set({
-            subject: cleanSubject,
-            normalizedKey,
-            threadId: newThreadId,
+        const createRes = await fetch(`https://api.telegram.org/bot${effectiveBotToken}/createForumTopic`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: effectiveChatId,
             name: topicName,
-            chatId: effectiveChatId,
-            botUsername: "TechTitanNotesBot",
-            createdAt: new Date().toISOString(),
-          });
+            icon_color: randomColor,
+          }),
+          signal: AbortSignal.timeout(8000),
+        });
+        const createData = await createRes.json();
+        if (createData.ok && createData.result?.message_thread_id) {
+          newThreadId = createData.result.message_thread_id;
         }
-      } catch (saveErr) {
-        console.warn("[SUBJECT-TOPIC] Firestore save warning:", saveErr.message);
+      } catch (httpCreateErr) {
+        console.warn("[SUBJECT-TOPIC] HTTP createForumTopic warning:", httpCreateErr.message);
       }
 
-      if (ramCache) ramCache.set("tg_sub_topic_" + normalizedKey, newThreadId, 86400);
+      // Secondary Attempt Fallback: GramJS MTProto client if HTTP failed or timed out
+      if (!newThreadId) {
+        try {
+          const { getClient } = require("../telegram/mtproto");
+          const client = await getClient();
+          if (client) {
+            const { Api } = require("telegram");
+            const gRes = await client.invoke(
+              new Api.channels.CreateForumTopic({
+                channel: effectiveChatId,
+                title: topicName,
+                iconColor: randomColor,
+              })
+            );
+            if (gRes && gRes.updates) {
+              for (const u of gRes.updates) {
+                if (u.message?.id) {
+                  newThreadId = u.message.id;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (gErr) {
+          console.warn("[SUBJECT-TOPIC] GramJS CreateForumTopic warning:", gErr.message);
+        }
+      }
 
-      // Post introductory message in pure English
-      const introText =
-        `📌 <b>Free Study Material — Subject Forum Initialized</b>\n\n` +
-        `📚 <b>Subject:</b> <code>${cleanSubject}</code>\n` +
-        `📁 <i>All academic lecture notes, documents, and syllabus updates for <b>${cleanSubject}</b> will be automatically organized here.</i>\n\n` +
-        `🤖 <b>Managed by:</b> <code>@TechTitanNotesBot</code>\n` +
-        `🌐 <b>Academic Cloud Engine:</b> <code>Live Automated Topic Routing</code>`;
+      if (newThreadId) {
+        console.log(`[TELEGRAM TOPIC AUTO-CREATE] Successfully created single dedicated topic "${topicName}" via @TechTitanNotesBot (Thread ID: ${newThreadId}, Chat: ${effectiveChatId})`);
 
-      fetch(`https://api.telegram.org/bot${effectiveBotToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: effectiveChatId,
-          message_thread_id: newThreadId,
-          text: introText,
-          parse_mode: "HTML",
-        }),
-      }).catch(() => {});
+        // Save in Firestore database for persistent routing across all future notes
+        try {
+          const { db } = require("../firebase");
+          if (db) {
+            await db.collection("subject_forum_topics").doc(normalizedKey).set({
+              subject: cleanSubject,
+              normalizedKey,
+              threadId: newThreadId,
+              name: topicName,
+              chatId: effectiveChatId,
+              botUsername: "TechTitanNotesBot",
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          }
+        } catch (saveErr) {
+          console.warn("[SUBJECT-TOPIC] Firestore save warning:", saveErr.message);
+        }
 
-      return newThreadId;
-    } else {
-      console.warn(
-        `[TELEGRAM TOPIC AUTO-CREATE] Notice: Could not auto-create topic for "${cleanSubject}". Telegram response: ${createData.description || "Unknown error"}. (Ensure @TechTitanNotesBot is Administrator with 'Manage Topics' permission).`
-      );
+        if (ramCache) {
+          ramCache.set("tg_sub_topic_" + normalizedKey, newThreadId, 86400);
+          ramCache.set("tg_topic_sub_" + newThreadId, cleanSubject, 86400);
+          ramCache.delete("subjects_list"); // Instantly refresh subjects dropdown
+        }
+
+        // Post introductory message in pure English
+        const introText =
+          `📌 <b>Free Study Material — Subject Forum Initialized</b>\n\n` +
+          `📚 <b>Subject:</b> <code>${cleanSubject}</code>\n` +
+          `📁 <i>All academic lecture notes, documents, and syllabus updates for <b>${cleanSubject}</b> will be automatically organized here.</i>\n\n` +
+          `🤖 <b>Managed by:</b> <code>@TechTitanNotesBot</code>\n` +
+          `🌐 <b>Academic Cloud Engine:</b> <code>Live Automated Topic Routing</code>`;
+
+        fetch(`https://api.telegram.org/bot${effectiveBotToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: effectiveChatId,
+            message_thread_id: newThreadId,
+            text: introText,
+            parse_mode: "HTML",
+          }),
+        }).catch(() => {});
+
+        return newThreadId;
+      } else {
+        console.warn(`[TELEGRAM TOPIC AUTO-CREATE] Notice: Could not auto-create topic for "${cleanSubject}". Ensure @TechTitanNotesBot is Administrator with 'Manage Topics' permission.`);
+        return null;
+      }
+    } catch (netErr) {
+      console.warn("[TELEGRAM TOPIC AUTO-CREATE] Error:", netErr.message);
       return null;
     }
-  } catch (netErr) {
-    console.warn("[TELEGRAM TOPIC AUTO-CREATE] Network error:", netErr.message);
-    return null;
-  }
+  })().finally(() => {
+    pendingTopicCreations.delete(normalizedKey);
+  });
+
+  pendingTopicCreations.set(normalizedKey, creationPromise);
+  return creationPromise;
 }
 
 /**
@@ -1115,6 +1219,7 @@ module.exports = {
   sendTelegramOtpBackup,
   sendTelegramAuthNotice,
   getOrCreateSubjectForumTopic,
+  getSubjectFromThreadId,
   getOrCreateDownloadManagerForumTopic,
 };
 

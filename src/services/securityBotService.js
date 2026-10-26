@@ -907,12 +907,20 @@ async function startSecurityBotPoller() {
               await db.collection("subject_forum_topics").doc(normalizedKey).set({
                 subject: cleanName,
                 normalizedKey,
-                threadId: threadId,
+                threadId: Number(threadId),
                 name: rawName,
                 chatId: String(msg.chat.id),
                 createdAt: new Date().toISOString(),
               }, { merge: true }).catch(() => {});
             }
+            try {
+              const { ramCache } = require("../utils/ramCache");
+              if (ramCache) {
+                ramCache.set("tg_sub_topic_" + normalizedKey, Number(threadId), 86400);
+                ramCache.set("tg_topic_sub_" + Number(threadId), cleanName, 86400);
+                ramCache.delete("subjects_list");
+              }
+            } catch (_) {}
           }
         } else if (msg.forum_topic_edited && msg.forum_topic_edited.name) {
           const rawName = msg.forum_topic_edited.name || "";
@@ -923,11 +931,19 @@ async function startSecurityBotPoller() {
             await db.collection("subject_forum_topics").doc(normalizedKey).set({
               subject: cleanName,
               normalizedKey,
-              threadId: threadId,
+              threadId: Number(threadId),
               name: rawName,
               chatId: String(msg.chat.id),
               updatedAt: new Date().toISOString(),
             }, { merge: true }).catch(() => {});
+            try {
+              const { ramCache } = require("../utils/ramCache");
+              if (ramCache) {
+                ramCache.set("tg_sub_topic_" + normalizedKey, Number(threadId), 86400);
+                ramCache.set("tg_topic_sub_" + Number(threadId), cleanName, 86400);
+                ramCache.delete("subjects_list");
+              }
+            } catch (_) {}
           }
         }
 

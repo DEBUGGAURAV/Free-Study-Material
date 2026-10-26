@@ -276,39 +276,19 @@ router.get("/branches", async (req, res) => {
 
 /**
  * GET /api/notes/subjects
- * Returns all dynamically existing subjects from:
+ * Returns all dynamically created subjects from:
  * 1. Telegram Supergroup Forum Topics (subject_forum_topics)
  * 2. Uploaded notes in database
- * 3. Curated default university subjects
+ * If none exist yet, returns [] allowing users or Telegram to create fresh subjects.
  */
 router.get("/subjects", async (req, res) => {
-  const defaultSubjects = [
-    "Operating Systems",
-    "Data Structures & Algorithms",
-    "Database Management Systems",
-    "Computer Networks",
-    "Web Design & Development",
-    "Machine Learning",
-    "Artificial Intelligence",
-    "Software Engineering",
-    "Theory of Computation",
-    "Compiler Design",
-    "Computer Organization & Architecture",
-    "Object Oriented Programming (OOP)",
-    "Cyber Security & Cryptography",
-    "Cloud Computing",
-    "Discrete Mathematics",
-    "Digital Electronics",
-    "Computer Graphics",
-  ];
-
   try {
     const cachedSubjects = ramCache.get("subjects_list");
     if (cachedSubjects) {
       return res.json({ success: true, subjects: cachedSubjects });
     }
 
-    const subjectSet = new Set(defaultSubjects);
+    const subjectSet = new Set();
 
     if (db) {
       // 1. Fetch from Telegram Supergroup Forum Topics
@@ -335,7 +315,7 @@ router.get("/subjects", async (req, res) => {
 
     return res.json({ success: true, subjects: subjectList });
   } catch (err) {
-    return res.json({ success: true, subjects: defaultSubjects });
+    return res.json({ success: true, subjects: [] });
   }
 });
 
