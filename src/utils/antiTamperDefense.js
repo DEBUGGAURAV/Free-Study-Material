@@ -218,10 +218,10 @@ function showStrikeWarning(strike, customMessage) {
           <span style="background: ${isFinalWarning ? "#ef4444" : "#f59e0b"}; color: #000; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; font-weight: 900;">ATTEMPT ${strike} OF 3</span>
         </div>
         <div style="font-size: 0.83rem; color: #f8fafc; line-height: 1.5; margin-bottom: 8px;">
-          ${customMessage || "Free Study Material Vault par Developer Tools ya Console inspect karna strictly prohibited hai. Academic integrity ke liye kripya DevTools band karein."}
+          ${customMessage || "Inspecting console or opening Developer Tools is strictly prohibited on Free Study Material Vault. To maintain academic integrity, please close DevTools."}
         </div>
         <div style="font-size: 0.75rem; color: ${isFinalWarning ? "#f87171" : "#fbbf24"}; font-weight: 600; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 6px;">
-          ⚠️ Notice: 3 baar violation karne par aapka account database me permanent ban ho jayega aur IP jail ho jayegi.
+          ⚠️ Notice: Violating 3 times will result in a permanent database ban and IP detention quarantine.
         </div>
       </div>
       <button id="fsm-warning-dismiss-btn" style="
