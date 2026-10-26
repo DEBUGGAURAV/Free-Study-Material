@@ -348,7 +348,7 @@ function triggerClientLockdown(reason) {
           border-radius: 8px;
           padding: 8px 12px;
         ">
-          💡 To submit an unblock appeal, open the Help Center, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide this Incident ID for instant verification in Tab 14.
+          💡 To submit an unblock appeal, open the Help Center, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide this Incident ID for instant administrator review.
         </div>
       </div>
     </div>

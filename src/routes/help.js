@@ -82,22 +82,22 @@ const CURATED_FAQS = [
         reason: "DDoS / Traffic Surge (>600 req/min)",
         detentionTime: "3 Minutes",
         autoUnjail: "✅ Auto-release after 180s",
-        adminControl: "Instant manual pardon via Tab 14",
+        adminControl: "Can be instantly pardoned by Administrator",
       },
       {
         reason: "Client Script / DevTools Tamper (Strike 3)",
         detentionTime: "24 Hours",
         autoUnjail: "✅ Auto-release after 24h",
-        adminControl: "Instant manual pardon via Tab 14",
+        adminControl: "Can be instantly pardoned by Administrator",
       },
       {
-        reason: "Admin Manual IP Jail (Tab 14)",
+        reason: "Administrative Security Detention",
         detentionTime: "Admin Chosen (1h / 24h / Custom)",
         autoUnjail: "✅ Auto-release on expiration",
-        adminControl: "Single-click 'Release / Pardon' via Tab 14",
+        adminControl: "Single-click pardon by Administrator",
       },
     ],
-    note: "If your account or IP was quarantined by mistake, go to the 'Ask Admin / Request' tab, select Category 'Account Block / IP Jail Appeal', and provide your Incident ID (e.g. FSM-SEC-XXXXXX) so administrators can verify and release it immediately via Tab 14.",
+    note: "If your account or IP was quarantined by mistake, go to the 'Ask Admin / Request' tab, select Category 'Account Block / IP Jail Appeal', and provide your Incident ID (e.g. FSM-SEC-XXXXXX) so administrators can verify and release it immediately.",
   },
 ];
 
