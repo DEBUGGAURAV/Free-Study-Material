@@ -80,6 +80,7 @@ import TabTurso from "./tabs/TabTurso";
 import TabActivities from "./tabs/TabActivities";
 import TabHelpDesk from "./tabs/TabHelpDesk";
 import TabWebSecurity from "./tabs/TabWebSecurity";
+import TabNotices from "./tabs/TabNotices";
 
 
 export default function AdminModal({
@@ -125,6 +126,7 @@ export default function AdminModal({
     { id: "turso", num: 12, label: "12. ⚡ Turso Database", title: "Turso LibSQL Edge Database" },
     { id: "help_desk", num: 13, label: "13. 🎫 Support Desk", title: "Help & Support Tickets Desk" },
     { id: "web_security", num: 14, label: "14. 🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
+    { id: "notices_board", num: 15, label: "15. 📢 Notice Board & Alerts", title: "Notice Board & Global Broadcast Studio" },
   ];
 
   const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
@@ -2873,6 +2875,7 @@ export default function AdminModal({
           {activeTab === "turso" && <TabTurso {...tabProps} />}
           {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
           {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
+          {activeTab === "notices_board" && <TabNotices {...tabProps} currentUser={currentUser} />}
           {activeTab === "activities" && selectedStudentForActivity && <TabActivities {...tabProps} />}
 
         </div>

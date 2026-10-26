@@ -774,6 +774,29 @@ export const api = {
       method: "DELETE",
     }),
 
+  togglePinNotice: (id, isPinned) =>
+    request(`/notices/${id}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPinned }),
+    }),
+
+  updateNoticeExpiry: (id, retentionDays) =>
+    request(`/notices/${id}/expiry`, {
+      method: "PATCH",
+      body: JSON.stringify({ retentionDays }),
+    }),
+
+  bulkDeleteNotices: (noticeIds) =>
+    request("/notices/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ noticeIds }),
+    }),
+
+  deleteAllNotices: () =>
+    request("/notices/delete-all", {
+      method: "POST",
+    }),
+
   // Admin & Student Management
   getStats: () => request("/admin/stats"),
 
