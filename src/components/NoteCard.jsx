@@ -380,7 +380,7 @@ export default function NoteCard({
           <div className="note-subject">{note.subject || "General Academic"}</div>
           {note.description && (
             <p className="note-desc">
-              {note.description.includes("TECH TITAN STORAGE") || note.description.includes("Synced from Telegram")
+              {note.description.toLowerCase().includes("telegram") || note.description.includes("TECH TITAN STORAGE")
                 ? "📚 Verified Academic Notes • Free Study Material"
                 : note.description}
             </p>
