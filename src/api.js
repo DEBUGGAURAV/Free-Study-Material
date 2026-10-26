@@ -797,6 +797,13 @@ export const api = {
       method: "POST",
     }),
 
+  syncNoticesCache: () =>
+    request("/notices/sync-cache", {
+      method: "POST",
+    }),
+
+  getNoticesTelemetry: () => request("/notices/telemetry"),
+
   // Admin & Student Management
   getStats: () => request("/admin/stats"),
 

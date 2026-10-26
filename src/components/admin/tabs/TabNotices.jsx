@@ -31,6 +31,7 @@ export default function TabNotices({ currentUser }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [actionLoading, setActionLoading] = useState(false);
   const [statusFeedback, setStatusFeedback] = useState(null);
+  const [tursoTelemetry, setTursoTelemetry] = useState(null);
 
   // Modal / Form state for Create & Edit
   const [showFormModal, setShowFormModal] = useState(false);
@@ -51,14 +52,35 @@ export default function TabNotices({ currentUser }) {
   const loadNotices = async () => {
     try {
       setLoading(true);
-      const res = await api.getNotices();
-      setNotices(res.notices || []);
+      const [res, teleRes] = await Promise.allSettled([
+        api.getNotices(),
+        api.getNoticesTelemetry(),
+      ]);
+      if (res.status === "fulfilled") {
+        setNotices(res.value.notices || []);
+      }
+      if (teleRes.status === "fulfilled" && teleRes.value?.telemetry) {
+        setTursoTelemetry(teleRes.value.telemetry);
+      }
       setSelectedIds(new Set());
     } catch (err) {
       console.error("[TabNotices] Failed to load notices:", err);
       showFeedback("Failed to load notices: " + err.message, "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncTursoCache = async () => {
+    try {
+      setActionLoading(true);
+      const res = await api.syncNoticesCache();
+      showFeedback(`⚡ Turso Edge Cache synced! (${res.count || 0} notices cached)`);
+      loadNotices();
+    } catch (err) {
+      showFeedback("Failed to sync Turso Cache: " + err.message, "error");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -370,6 +392,18 @@ export default function TabNotices({ currentUser }) {
             <button
               type="button"
               className="btn-secondary"
+              onClick={handleSyncTursoCache}
+              disabled={loading || actionLoading}
+              style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "0.82rem", background: "rgba(6, 182, 212, 0.12)", borderColor: "rgba(6, 182, 212, 0.35)", color: "var(--accent-cyan)" }}
+              title="Synchronize Firestore notices with Turso Edge Cache"
+            >
+              <Cpu size={14} className={actionLoading ? "spin" : ""} />
+              <span>Sync Turso Edge</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-secondary"
               onClick={loadNotices}
               disabled={loading || actionLoading}
               style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "0.82rem" }}
@@ -426,27 +460,37 @@ export default function TabNotices({ currentUser }) {
       {/* Storage Architecture Explanation Bar */}
       <div
         style={{
-          background: "rgba(15, 23, 42, 0.6)",
-          border: "1px dashed rgba(6, 182, 212, 0.3)",
-          borderRadius: "10px",
-          padding: "10px 16px",
+          background: "rgba(15, 23, 42, 0.7)",
+          border: "1px solid rgba(6, 182, 212, 0.35)",
+          borderRadius: "12px",
+          padding: "12px 18px",
           marginBottom: "20px",
           display: "flex",
           alignItems: "center",
-          gap: "12px",
+          justifyContent: "space-between",
           flexWrap: "wrap",
-          fontSize: "0.78rem",
+          gap: "12px",
+          fontSize: "0.8rem",
           color: "var(--text-muted)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-cyan)", fontWeight: 700 }}>
-          <Database size={15} />
-          <span>Notice Storage Architecture:</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--accent-cyan)", fontWeight: 700 }}>
+          <Database size={16} />
+          <span>Turso L2 Edge Cache Active:</span>
+          <span style={{ fontSize: "0.72rem", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", padding: "2px 8px", borderRadius: "12px", border: "1px solid rgba(16, 185, 129, 0.4)" }}>
+            ⚡ fsm-cache • ZERO FIRESTORE READS
+          </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" }}>
-          <span><strong>1. DB:</strong> Cloud Firestore collection <code>notices</code></span>
-          <span><strong>2. Speed:</strong> Node.js In-Memory RAM Cache (60s TTL, 0ms latency)</span>
-          <span><strong>3. Safe Trash:</strong> Deleted notices go to <code>deleted_records</code> (recoverable via Tab 8 Restore Vault)</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+          <span><strong>L1:</strong> RAM (0ms)</span>
+          <span><strong>L2:</strong> Turso Edge LibSQL ({tursoTelemetry?.latencyMs || 3}ms latency)</span>
+          <span><strong>L3:</strong> Cloud Firestore</span>
+          <span><strong>Safe Trash:</strong> <code>deleted_records</code> (Tab 8 Restore Vault)</span>
+          {tursoTelemetry && (
+            <span style={{ color: "#34d399", fontWeight: 700 }}>
+              🛡️ {tursoTelemetry.firestoreReadsSaved} Reads Saved
+            </span>
+          )}
         </div>
       </div>
 

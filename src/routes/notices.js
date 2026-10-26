@@ -3,6 +3,17 @@ const router = express.Router();
 const { db } = require("../firebase");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
 const { ramCache } = require("../utils/ramCache");
+const {
+  getAllCachedNotices,
+  upsertNoticeInCache,
+  removeNoticeFromCache,
+  bulkRemoveNoticesFromCache,
+  clearAllNoticesFromCache,
+  updateNoticePinInCache,
+  updateNoticeExpiryInCache,
+  refreshNoticesCacheFromFirestore,
+  getTursoNoticesTelemetry,
+} = require("../services/tursoNoticesCacheService");
 
 // Notice Board Lifetime Retention Policy (Default: 7 Days)
 const NOTICE_RETENTION_DAYS = parseInt(process.env.NOTICE_RETENTION_DAYS || "7", 10);
@@ -22,103 +33,55 @@ function calculateExpiresAt(retentionDays, baseDate = Date.now()) {
 /**
  * GET /api/notices
  * Fetches all active notices (ordered by pinned first, then newest)
- * High-Speed 0ms RAM Cache + Automatic Purge of expired notices
+ * 3-Tier Layered Caching:
+ *  - L1: Node.js In-Memory RAM (0ms)
+ *  - L2: Turso LibSQL Edge Database on Dedicated Cache Cloud (sub-5ms, ZERO Firestore Reads)
+ *  - L3: Firestore fallback (Only on cold start)
  */
 router.get("/", async (req, res) => {
   try {
-    const cachedNotices = ramCache.get("active_notices_board");
-    if (cachedNotices) {
-      res.setHeader("X-Cache", "HIT");
-      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
-      return res.json({ success: true, notices: cachedNotices, defaultRetentionDays: NOTICE_RETENTION_DAYS });
-    }
+    const notices = await getAllCachedNotices();
 
-    if (!db) return res.json({ success: true, notices: [], defaultRetentionDays: NOTICE_RETENTION_DAYS });
-
-    const snap = await db.collection("notices").orderBy("createdAt", "desc").limit(100).get();
-    const now = Date.now();
-    const defaultCutoff = now - NOTICE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-
-    const activeNotices = [];
-    const expiredDocs = [];
-
-    snap.forEach((doc) => {
-      const data = doc.data();
-      const createdTime = data.createdAt ? new Date(data.createdAt).getTime() : 0;
-      let isExpired = false;
-
-      // 1. If pinned, never auto-expire
-      if (data.isPinned) {
-        isExpired = false;
-      }
-      // 2. If retentionDays is explicitly -1 (Never), do not expire
-      else if (data.retentionDays === -1 || data.retentionDays === "-1") {
-        isExpired = false;
-      }
-      // 3. If explicit expiresAt timestamp is set
-      else if (data.expiresAt) {
-        const expTime = new Date(data.expiresAt).getTime();
-        if (!isNaN(expTime) && now > expTime) {
-          isExpired = true;
-        }
-      }
-      // 4. If retentionDays is custom positive number
-      else if (data.retentionDays && !isNaN(parseInt(data.retentionDays, 10)) && parseInt(data.retentionDays, 10) > 0) {
-        const customCutoff = createdTime + parseInt(data.retentionDays, 10) * 24 * 60 * 60 * 1000;
-        if (now > customCutoff) {
-          isExpired = true;
-        }
-      }
-      // 5. Fallback to global retention policy
-      else if (createdTime > 0 && createdTime < defaultCutoff) {
-        isExpired = true;
-      }
-
-      if (isExpired) {
-        expiredDocs.push({ id: doc.id, ...data });
-      } else {
-        activeNotices.push({ id: doc.id, ...data });
-      }
-    });
-
-    // Auto-archive expired notices in background to deleted_records (allows recovery in Restore Vault)
-    if (expiredDocs.length > 0) {
-      Promise.all(
-        expiredDocs.map(async (item) => {
-          try {
-            await db.collection("deleted_records").doc(`notices_${item.id}`).set({
-              ...item,
-              originalId: item.id,
-              collectionName: "notices",
-              typeLabel: "Notice",
-              title: item.title || "Campus Notice",
-              archivedAt: new Date().toISOString(),
-              archivedReason: `Auto-deleted: Exceeded notice expiry lifetime policy`,
-            });
-            await db.collection("notices").doc(item.id).delete();
-          } catch {}
-        })
-      ).catch(() => {});
-    }
-
-    // Sort: pinned notices first, then newest createdAt
-    activeNotices.sort((a, b) => {
-      if (b.isPinned !== a.isPinned) {
-        return (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0);
-      }
-      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return tB - tA;
-    });
-
-    ramCache.set("active_notices_board", activeNotices, 60);
-
-    res.setHeader("X-Cache", "MISS");
+    res.setHeader("X-Cache", "TURSO-EDGE-ACTIVE");
     res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
-    return res.json({ success: true, notices: activeNotices, defaultRetentionDays: NOTICE_RETENTION_DAYS });
+    return res.json({
+      success: true,
+      notices: notices || [],
+      defaultRetentionDays: NOTICE_RETENTION_DAYS,
+    });
   } catch (err) {
     console.error("[NOTICES] Fetch error:", err);
     return res.status(500).json({ success: false, message: "Error fetching notices." });
+  }
+});
+
+/**
+ * GET /api/notices/telemetry
+ * Telemetry status of Turso Edge Notice Cache
+ */
+router.get("/telemetry", async (req, res) => {
+  try {
+    const telemetry = await getTursoNoticesTelemetry();
+    return res.json({ success: true, telemetry });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/notices/sync-cache
+ * Force resync Turso Edge Cache from Firestore (Admin only)
+ */
+router.post("/sync-cache", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const syncedNotices = await refreshNoticesCacheFromFirestore();
+    return res.json({
+      success: true,
+      message: `Successfully synchronized ${syncedNotices.length} notices into Turso Edge Cache!`,
+      count: syncedNotices.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -155,12 +118,16 @@ router.post("/", authenticateToken, requireAdmin, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
+    // 1. Write to Master Firestore
     await docRef.set(newNotice);
+
+    // 2. Synchronize to Turso Edge Cache (L2) & In-Memory RAM (L1)
+    await upsertNoticeInCache(newNotice);
     ramCache.delete("active_notices_board");
 
     return res.status(201).json({
       success: true,
-      message: "Notice published successfully!",
+      message: "Notice published & cached on Turso Edge successfully!",
       notice: newNotice,
     });
   } catch (err) {
@@ -203,10 +170,15 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
       updatedBy: req.user?.email || "Admin",
     };
 
+    // 1. Update Master Firestore
     await db.collection("notices").doc(id).update(updateData);
+
+    // 2. Update Turso Edge Cache & RAM
+    const mergedNotice = { id, ...existingData, ...updateData };
+    await upsertNoticeInCache(mergedNotice);
     ramCache.delete("active_notices_board");
 
-    return res.json({ success: true, message: "Notice updated successfully.", notice: { id, ...existingData, ...updateData } });
+    return res.json({ success: true, message: "Notice updated & synced on Turso Edge.", notice: mergedNotice });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -235,7 +207,10 @@ router.patch("/:id/pin", authenticateToken, requireAdmin, async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
+    // Mirror in Turso Cache
+    await updateNoticePinInCache(id, nextPinned);
     ramCache.delete("active_notices_board");
+
     return res.json({
       success: true,
       message: nextPinned ? "Notice pinned to top!" : "Notice unpinned.",
@@ -273,7 +248,10 @@ router.patch("/:id/expiry", authenticateToken, requireAdmin, async (req, res) =>
       updatedAt: new Date().toISOString(),
     });
 
+    // Mirror in Turso Cache
+    await updateNoticeExpiryInCache(id, rDays, expiresAt);
     ramCache.delete("active_notices_board");
+
     return res.json({
       success: true,
       message: rDays === -1 ? "Notice set to Never Expire." : `Notice expiry updated to ${rDays} days.`,
@@ -296,6 +274,7 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
 
     const doc = await db.collection("notices").doc(id).get();
     if (doc.exists) {
+      // Archive to Restore Vault
       await db.collection("deleted_records").doc(`notices_${id}`).set({
         ...doc.data(),
         originalId: id,
@@ -307,9 +286,12 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
         archivedReason: "Admin manual delete",
       });
       await db.collection("notices").doc(id).delete();
+
+      // Purge from Turso Edge Cache
+      await removeNoticeFromCache(id);
       ramCache.delete("active_notices_board");
     }
-    return res.json({ success: true, message: "Notice safely moved to Restore Vault." });
+    return res.json({ success: true, message: "Notice safely moved to Restore Vault & purged from Turso." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -353,6 +335,9 @@ router.post("/bulk-delete", authenticateToken, requireAdmin, async (req, res) =>
     });
 
     await Promise.all(batchOps);
+
+    // Purge bulk IDs from Turso Edge Cache
+    await bulkRemoveNoticesFromCache(noticeIds);
     ramCache.delete("active_notices_board");
 
     return res.json({
@@ -376,6 +361,7 @@ router.post("/delete-all", authenticateToken, requireAdmin, async (req, res) => 
 
     const snap = await db.collection("notices").get();
     if (snap.empty) {
+      await clearAllNoticesFromCache();
       return res.json({ success: true, message: "Notice board is already empty.", deletedCount: 0 });
     }
 
@@ -400,6 +386,9 @@ router.post("/delete-all", authenticateToken, requireAdmin, async (req, res) => 
     });
 
     await Promise.all(deletePromises);
+
+    // Clear Turso Edge Cache
+    await clearAllNoticesFromCache();
     ramCache.delete("active_notices_board");
 
     return res.json({

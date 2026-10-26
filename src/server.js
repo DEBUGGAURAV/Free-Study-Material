@@ -44,6 +44,8 @@ startRamBufferGuard(path.join(__dirname, "../temp")); // Dynamic Self-Adapting R
 
 // ⚡ Pillar 2: Turso (LibSQL / Edge SQLite) Cloud Initialization
 initTursoTables().catch((err) => console.warn("[TURSO] Boot init warning:", err.message));
+const { initTursoNoticesCacheTables } = require("./services/tursoNoticesCacheService");
+initTursoNoticesCacheTables().catch((err) => console.warn("[TURSO-NOTICES-CACHE] Boot init warning:", err.message));
 
 const authRoutes = require("./routes/auth");
 const passkeyRoutes = require("./routes/passkey");
