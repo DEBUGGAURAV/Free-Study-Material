@@ -469,6 +469,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "No registered student account was found with mobile number " + cleanMobile + ". Please check your number.",
+        field: "forgotMobile",
       });
     }
 
@@ -480,6 +481,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "The entered email does not match the account registered with mobile number " + cleanMobile + ".",
+        field: "forgotEmail",
       });
     }
 
@@ -593,19 +595,19 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
     const { name, mobile, email, college, year, password } = req.body;
 
     if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, message: "Full Name is mandatory." });
+      return res.status(400).json({ success: false, message: "Full Name is mandatory.", field: "name" });
     }
     if (!mobile || !mobile.trim() || mobile.trim().length < 10) {
-      return res.status(400).json({ success: false, message: "Valid 10-digit Mobile Number is mandatory." });
+      return res.status(400).json({ success: false, message: "Valid 10-digit Mobile Number is mandatory.", field: "mobile" });
     }
     if (!email || !email.trim()) {
-      return res.status(400).json({ success: false, message: "Email Address is mandatory." });
+      return res.status(400).json({ success: false, message: "Email Address is mandatory.", field: "email" });
     }
     if (!college || !college.trim()) {
-      return res.status(400).json({ success: false, message: "College Name is mandatory." });
+      return res.status(400).json({ success: false, message: "College Name is mandatory.", field: "college" });
     }
     if (!password || password.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long." });
+      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long.", field: "signUpPassword" });
     }
 
     const cleanEmail = email.trim().toLowerCase();
@@ -615,6 +617,7 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Please enter a valid academic or personal email address (disposable/temporary emails are prohibited).",
+        field: "email",
       });
     }
 
@@ -625,18 +628,18 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
     // Check if email already registered
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!existingSnap.empty) {
-      return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
+      return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
 
     // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
     const mHash = blindIndex(cleanMobile);
     const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
     if (!mHashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
     const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
     if (!legacyMobSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
     // Generate 6-digit cryptographic OTP
@@ -838,18 +841,18 @@ router.post("/register", authLimiter, async (req, res) => {
     // Check if email already registered
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!existingSnap.empty) {
-      return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
+      return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
 
     // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
     const mHash = blindIndex(cleanMobile);
     const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
     if (!mHashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
     const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
     if (!legacyMobSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number." });
+      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -1285,7 +1288,11 @@ router.post("/login", authLimiter, async (req, res) => {
     let inputIdentity = (identifier || email || "").trim().toLowerCase();
 
     if (!inputIdentity || !password) {
-      return res.status(400).json({ success: false, message: "Email and password are required." });
+      return res.status(400).json({
+        success: false,
+        message: !inputIdentity ? "Email address or username is required." : "Password is required.",
+        field: !inputIdentity ? "signInIdentifier" : "signInPassword",
+      });
     }
 
     // 🛡️ Category 2 Feature 3: Smart Anti-Bot (Turnstile) Check
@@ -1315,6 +1322,7 @@ router.post("/login", authLimiter, async (req, res) => {
         return res.status(400).json({
           success: false,
           message: "Please enter a valid email address (disposable emails are not permitted).",
+          field: "signInIdentifier",
         });
       }
     }
@@ -1500,7 +1508,10 @@ router.post("/login", authLimiter, async (req, res) => {
       }
       return res.status(401).json({
         success: false,
-        message: `Invalid email/username or password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary lockout.`,
+        message: !userRecord
+          ? `No registered student account was found with "${inputIdentity}". Please check your email/mobile or sign up.`
+          : `Incorrect password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary lockout.`,
+        field: !userRecord ? "signInIdentifier" : "signInPassword",
       });
     }
 
@@ -1624,7 +1635,11 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     let inputIdentity = (identifier || email || "").trim().toLowerCase();
 
     if (!inputIdentity || !password) {
-      return res.status(400).json({ success: false, message: "Email and password are required." });
+      return res.status(400).json({
+        success: false,
+        message: !inputIdentity ? "Email address or username is required." : "Password is required.",
+        field: !inputIdentity ? "signInIdentifier" : "signInPassword",
+      });
     }
 
     const isMainAdminAlias = ADMIN_ALIASES.includes(inputIdentity) || inputIdentity === MAIN_ADMIN_EMAIL;
@@ -1635,6 +1650,7 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
         return res.status(400).json({
           success: false,
           message: "Please enter a valid email address (disposable emails are not permitted).",
+          field: "signInIdentifier",
         });
       }
     }
@@ -1847,6 +1863,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Please enter a valid registered email address.",
+        field: "forgotEmail",
       });
     }
 
@@ -1866,6 +1883,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "No registered account found with this email address. Please check your spelling or sign up.",
+        field: "forgotEmail",
       });
     }
 

@@ -68,50 +68,122 @@ export default function AuthModal({
     setPurgedAccountNotice(false);
   };
 
-  const setFormError = (errOrMsg, specificField = null) => {
+  const setFormError = (errOrMsg, fallbackField = null) => {
     if (!errOrMsg) {
       setError(null);
       setFieldErrors({});
       return;
     }
 
-    let msg = typeof errOrMsg === "string" ? errOrMsg : (errOrMsg?.data?.message || errOrMsg?.message || "An error occurred.");
-    let targetField = specificField || errOrMsg?.data?.field || errOrMsg?.field || null;
+    const msg = typeof errOrMsg === "string" ? errOrMsg : (errOrMsg?.data?.message || errOrMsg?.message || "An error occurred.");
+    const lower = String(msg).toLowerCase();
 
+    // 1. First Priority: Check if backend explicitly provided invalid field key
+    let targetField = errOrMsg?.field || errOrMsg?.data?.field || null;
+
+    // 2. Map generic field keys from backend to current tab's exact input field
+    if (targetField === "email") {
+      if (tab === "signin") targetField = "signInIdentifier";
+      else if (tab === "forgot") targetField = "forgotEmail";
+      else targetField = "email";
+    } else if (targetField === "mobile") {
+      if (isGoogleOnboarding) targetField = "googleMobile";
+      else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotMobile" : "forgotEmail";
+      else targetField = "mobile";
+    } else if (targetField === "password") {
+      if (tab === "signin") targetField = "signInPassword";
+      else if (tab === "forgot") targetField = "forgotNewPassword";
+      else targetField = "signUpPassword";
+    } else if (targetField === "college") {
+      if (isGoogleOnboarding) targetField = "googleCollege";
+      else targetField = "college";
+    } else if (targetField === "year") {
+      if (isGoogleOnboarding) targetField = "googleYear";
+      else targetField = "year";
+    }
+
+    // 3. Second Priority: Intelligent Message Content Disambiguation (Prevents wrong field highlight)
     if (!targetField) {
-      const lower = String(msg).toLowerCase();
-      if (lower.includes("name") && !lower.includes("college") && !lower.includes("user")) {
-        targetField = "name";
-      } else if (lower.includes("mobile") || lower.includes("phone") || lower.includes("10-digit") || lower.includes("number")) {
-        if (isGoogleOnboarding) targetField = "googleMobile";
-        else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotMobile" : "forgotEmail";
-        else targetField = "mobile";
-      } else if (lower.includes("email") || lower.includes("e-mail") || lower.includes("@gmail.com") || lower.includes("mail")) {
+      if (
+        lower.includes("email") ||
+        lower.includes("e-mail") ||
+        lower.includes("gmail") ||
+        lower.includes("@") ||
+        lower.includes("mail address")
+      ) {
         if (tab === "signin") targetField = "signInIdentifier";
         else if (tab === "forgot") targetField = "forgotEmail";
         else targetField = "email";
-      } else if (lower.includes("college") || lower.includes("university")) {
-        targetField = isGoogleOnboarding ? "googleCollege" : "college";
-      } else if (lower.includes("year") || lower.includes("academic year")) {
-        targetField = isGoogleOnboarding ? "googleYear" : "year";
-      } else if (lower.includes("password") || lower.includes("credentials")) {
+      } else if (
+        lower.includes("mobile") ||
+        lower.includes("phone") ||
+        lower.includes("10-digit") ||
+        lower.includes("mobile number") ||
+        lower.includes("phone number")
+      ) {
+        if (isGoogleOnboarding) targetField = "googleMobile";
+        else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotMobile" : "forgotEmail";
+        else targetField = "mobile";
+      } else if (
+        lower.includes("password") ||
+        lower.includes("credentials") ||
+        lower.includes("passphrase") ||
+        lower.includes("secret")
+      ) {
         if (tab === "signin") targetField = "signInPassword";
         else if (tab === "forgot") targetField = "forgotNewPassword";
         else targetField = "signUpPassword";
-      } else if (lower.includes("otp") || lower.includes("code") || lower.includes("passcode") || lower.includes("telegram") || lower.includes("attempts")) {
+      } else if (
+        lower.includes("full name") ||
+        (lower.includes("name") && !lower.includes("college") && !lower.includes("university") && !lower.includes("username") && !lower.includes("user"))
+      ) {
+        targetField = "name";
+      } else if (
+        lower.includes("college") ||
+        lower.includes("university") ||
+        lower.includes("institute")
+      ) {
+        targetField = isGoogleOnboarding ? "googleCollege" : "college";
+      } else if (
+        lower.includes("academic year") ||
+        (lower.includes("year") && !lower.includes("already"))
+      ) {
+        targetField = isGoogleOnboarding ? "googleYear" : "year";
+      } else if (
+        lower.includes("otp") ||
+        lower.includes("passcode") ||
+        lower.includes("verification code") ||
+        lower.includes("recovery code")
+      ) {
         if (tab === "signin") targetField = "loginOtpCode";
-        else if (tab === "forgot") targetField = forgotMode === "telebot" ? "forgotTgOtpCode" : "forgotOtpCode";
-        else targetField = regMode === "telebot" ? "regTgOtpCode" : "signUpOtpCode";
+        else if (tab === "forgot") targetField = forgotTgOtpStep ? "forgotTgOtpCode" : "forgotOtpCode";
+        else targetField = regTgStep ? "regTgOtpCode" : "signUpOtpCode";
+      } else if (
+        tab === "signin" &&
+        (lower.includes("not found") || lower.includes("no account") || lower.includes("no registered student") || lower.includes("user does not exist"))
+      ) {
+        targetField = "signInIdentifier";
       }
     }
 
+    // 4. Third Priority: Fallback to caller-provided field only if neither server nor message inspection matched
+    if (!targetField && fallbackField) {
+      targetField = fallbackField;
+    }
+
     if (targetField) {
-      // If error is about an earlier step field (e.g. email/mobile already registered) but student is on OTP screen, bring them back so they can see and edit the field!
+      // If error is about a Step 1 field (e.g. email/mobile already registered) but student is on OTP screen, bring them back so they can see and edit the field!
       if (regTgStep && (targetField === "name" || targetField === "mobile" || targetField === "email" || targetField === "college" || targetField === "year" || targetField === "signUpPassword")) {
         setRegTgStep(false);
       }
       if (signUpOtpStep && (targetField === "name" || targetField === "mobile" || targetField === "email" || targetField === "college" || targetField === "year" || targetField === "signUpPassword")) {
         setSignUpOtpStep(false);
+      }
+      if (forgotTgOtpStep && (targetField === "forgotMobile" || targetField === "forgotEmail")) {
+        setForgotTgOtpStep(false);
+      }
+      if (forgotOtpStep && targetField === "forgotEmail") {
+        setForgotOtpStep(false);
       }
 
       setFieldErrors({ [targetField]: msg });
@@ -686,7 +758,7 @@ export default function AuthModal({
         onClose();
       }
     } catch (err) {
-      setFormError(err, "googleMobile");
+      setFormError(err);
     } finally {
       setLoading(false);
     }
@@ -720,7 +792,7 @@ export default function AuthModal({
         setError("Your old account was safely and successfully deleted due to 90 days of inactivity. Please create a new account to continue.");
       } else {
         setPurgedAccountNotice(false);
-        setFormError(err.message || "Failed to sign in. Please verify your credentials.", "signInPassword");
+        setFormError(err);
       }
     } finally {
       setLoading(false);
@@ -751,7 +823,7 @@ export default function AuthModal({
         setSuccessMsg(res.message || "Password recovery OTP code sent to your Gmail.");
       }
     } catch (err) {
-      setFormError(err.message || "Failed to dispatch password recovery OTP.", "forgotEmail");
+      setFormError(err);
     } finally {
       setLoading(false);
     }
@@ -822,7 +894,7 @@ export default function AuthModal({
       setForgotTgOtpCode("");
       setSuccessMsg("Mobile and Email verified! Open @fsm_security_otp_bot to view your 6-digit recovery code.");
     } catch (err) {
-      setFormError(err.message || "Failed to verify registered credentials.");
+      setFormError(err);
     } finally {
       setLoading(false);
     }
@@ -909,7 +981,7 @@ export default function AuthModal({
       setRegTgOtpCode("");
       setSuccessMsg("Registration session ready! Open @fsm_security_otp_bot and tap [ 📲 Verify & Share My Telegram Number ] to get your 6-digit passcode.");
     } catch (err) {
-      setFormError(err, "mobile");
+      setFormError(err);
     } finally {
       setLoading(false);
     }
@@ -999,7 +1071,7 @@ export default function AuthModal({
         setSuccessMsg(res.message || "Verification code sent to your Gmail.");
       }
     } catch (err) {
-      setFormError(err, "email");
+      setFormError(err);
     } finally {
       setLoading(false);
     }

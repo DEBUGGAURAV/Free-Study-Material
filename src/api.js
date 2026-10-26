@@ -116,6 +116,7 @@ async function request(endpoint, options = {}) {
     }
     const err = new Error(errMsg);
     err.data = data;
+    err.field = data?.field || (data && typeof data === "object" ? data.field : null);
     err.status = res.status;
     if (data.maintenance || res.status === 503) {
       err.maintenance = Boolean(data.maintenance);
