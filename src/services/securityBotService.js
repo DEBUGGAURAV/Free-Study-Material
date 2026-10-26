@@ -881,7 +881,14 @@ async function startSecurityBotPoller() {
               expiresAt: Date.now() + 24 * 60 * 60 * 1000,
             });
           } catch (createErr) {
-            if (createErr.code === 6 || createErr.code === "ALREADY_EXISTS" || createErr.message?.includes("ALREADY_EXISTS")) {
+            const errStr = String(createErr?.message || "").toLowerCase();
+            if (
+              createErr.code === 6 ||
+              createErr.code === "6" ||
+              createErr.code === "ALREADY_EXISTS" ||
+              errStr.includes("already exists") ||
+              errStr.includes("already_exists")
+            ) {
               console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate message ${msgDedupKey} (already claimed by another server instance)`);
               continue;
             }

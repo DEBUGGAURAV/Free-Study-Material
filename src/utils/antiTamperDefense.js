@@ -35,24 +35,20 @@ const DETECTOR_NAMES = {
 };
 
 /**
- * Checks if DevTools protection should be bypassed for local dev or Admin
+ * Checks if DevTools protection should be bypassed for Admin
  */
 function isDevToolsBypassed() {
   if (typeof window === "undefined") return true;
 
-  // 1. Dev environment bypass (localhost, 127.0.0.1, import.meta.env.DEV)
-  if (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1" ||
-    Boolean(import.meta.env?.DEV)
-  ) {
-    return true;
-  }
-
-  // 2. Admin URL parameters (?admin_inspect=1, ?admin_dev=1, ?debug=1)
+  // 1. Admin URL parameters (?admin_inspect=1, ?admin_dev=1, ?debug=1, ?admin_bypass=1)
   try {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("admin_inspect") === "1" || params.get("admin_dev") === "1" || params.get("debug") === "1") {
+    if (
+      params.get("admin_inspect") === "1" ||
+      params.get("admin_dev") === "1" ||
+      params.get("debug") === "1" ||
+      params.get("admin_bypass") === "1"
+    ) {
       return true;
     }
   } catch (_) {}
@@ -305,17 +301,6 @@ export function initAntiTamperDefense() {
   if (typeof window === "undefined" || isDefenseInitialized) return;
   isDefenseInitialized = true;
 
-  const isDev =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" ||
-      window.location.hostname === "127.0.0.1" ||
-      Boolean(import.meta.env?.DEV));
-
-  if (isDev) {
-    console.log("[SECURITY] Anti-tamper defense running in dev-permissive mode (Vite HMR active).");
-    return;
-  }
-
   // 1. Prototype & Fetch Trapping
   const originalFetch = window.fetch;
   let isFetchOverridden = false;
@@ -342,7 +327,7 @@ export function initAntiTamperDefense() {
           if (node.nodeName === "SCRIPT" && !node.getAttribute("data-fsm-allowed")) {
             // Check if script was injected dynamically outside build
             const src = node.getAttribute("src") || "";
-            const isLocalAsset = src.startsWith("/assets/") || src.startsWith("./assets/") || src.includes("vite");
+            const isLocalAsset = src.startsWith("/assets/") || src.startsWith("./assets/") || src.includes("vite") || src.includes("@vite");
             if (!isLocalAsset && node.innerHTML) {
               console.warn("[ANTI-TAMPER] 🚨 Unauthorized dynamic script tag injected into DOM!");
               try {
@@ -375,12 +360,12 @@ export function initAntiTamperDefense() {
     try {
       disableDevtool({
         disableMenu: true, // Right-click contextmenu disabled
-        clearLog: true,    // Periodic log scrubbing
+        clearLog: false,   // Lightweight logging without layout thrashing
         disableSelect: false, // Students MUST be able to select text for reading
         disableCopy: false,   // Allow students to copy academic notes text
         disableCut: false,
         disablePaste: false,
-        interval: 250,
+        interval: 350,     // 350ms high-speed periodic scan (instant console/devtools interception)
         ignore: () => isDevToolsBypassed(),
         ondevtoolopen: (type) => {
           const detectorLabel = DETECTOR_NAMES[type] || `Detector #${type}`;

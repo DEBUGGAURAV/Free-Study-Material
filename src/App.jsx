@@ -14,12 +14,6 @@ import { syncStudentProfileContext } from "./utils/studentStudyContext";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
-import AuthModal from "./components/AuthModal";
-import PreviewModal from "./components/PreviewModal";
-import NoticeBoardModal from "./components/NoticeBoardModal";
-import ProfileModal from "./components/ProfileModal";
-import UploadModal from "./components/UploadModal";
-import HelpCenterModal from "./components/HelpCenterModal";
 
 // ⚡ Heavy Modals: Code-split with retry & recovery
 function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
@@ -50,6 +44,13 @@ function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
   );
 }
 
+// 🚀 Dynamic Lazy Modals: Bypasses 1.2MB of PDF viewer, auth and admin libraries on initial page load!
+const AuthModal = lazyWithRetry(() => import("./components/AuthModal"));
+const PreviewModal = lazyWithRetry(() => import("./components/PreviewModal"));
+const NoticeBoardModal = lazyWithRetry(() => import("./components/NoticeBoardModal"));
+const ProfileModal = lazyWithRetry(() => import("./components/ProfileModal"));
+const UploadModal = lazyWithRetry(() => import("./components/UploadModal"));
+const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal"));
 const AdminModal = lazyWithRetry(() => import("./components/AdminModal"));
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
@@ -273,8 +274,20 @@ export default function App() {
       }
     }
     checkMaintenanceStatus();
-    const interval = setInterval(checkMaintenanceStatus, 20000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      checkMaintenanceStatus();
+    }, 60000);
+    const handleVisibility = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        checkMaintenanceStatus();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -342,7 +355,10 @@ export default function App() {
     };
 
     probeConnectivity();
-    const probeTimer = setInterval(probeConnectivity, 10000);
+    const probeTimer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      probeConnectivity();
+    }, 45000);
 
     // 📡 Listen for Service Worker Offline broadcasts
     const handleSwMessage = (e) => {

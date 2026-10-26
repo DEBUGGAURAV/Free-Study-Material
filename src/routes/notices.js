@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { db } = require("../firebase");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { ramCache } = require("../utils/ramCache");
 
 // Notice Board Lifetime Retention Policy (Default: 7 Days)
 const NOTICE_RETENTION_DAYS = parseInt(process.env.NOTICE_RETENTION_DAYS || "7", 10);
@@ -9,10 +10,17 @@ const NOTICE_RETENTION_DAYS = parseInt(process.env.NOTICE_RETENTION_DAYS || "7",
 /**
  * GET /api/notices
  * Fetches all active notices within retention days (ordered by pinned first, then newest)
- * Automatically purges and archives notices older than NOTICE_RETENTION_DAYS to Restore Vault.
+ * High-Speed 0ms RAM Cache + Automatic Purge
  */
 router.get("/", async (req, res) => {
   try {
+    const cachedNotices = ramCache.get("active_notices_board");
+    if (cachedNotices) {
+      res.setHeader("X-Cache", "HIT");
+      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+      return res.json({ success: true, notices: cachedNotices, retentionDays: NOTICE_RETENTION_DAYS });
+    }
+
     if (!db) return res.json({ success: true, notices: [] });
 
     const snap = await db.collection("notices").orderBy("createdAt", "desc").limit(50).get();
@@ -54,7 +62,10 @@ router.get("/", async (req, res) => {
 
     // Sort: pinned notices first
     activeNotices.sort((a, b) => (b.isPinned ? 1 : 0) - (a.isPinned ? 1 : 0));
+    ramCache.set("active_notices_board", activeNotices, 60);
 
+    res.setHeader("X-Cache", "MISS");
+    res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
     return res.json({ success: true, notices: activeNotices, retentionDays: NOTICE_RETENTION_DAYS });
   } catch (err) {
     console.error("[NOTICES] Fetch error:", err);
@@ -91,6 +102,7 @@ router.post("/", authenticateToken, requireAdmin, async (req, res) => {
     };
 
     await docRef.set(newNotice);
+    ramCache.delete("active_notices_board");
 
     return res.status(201).json({
       success: true,
@@ -125,6 +137,7 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
     };
 
     await db.collection("notices").doc(id).update(updateData);
+    ramCache.delete("active_notices_board");
 
     return res.json({ success: true, message: "Notice updated successfully." });
   } catch (err) {
@@ -153,6 +166,7 @@ router.delete("/:id", authenticateToken, requireAdmin, async (req, res) => {
         archivedBy: req.user?.email || "Admin",
       });
       await db.collection("notices").doc(id).delete();
+      ramCache.delete("active_notices_board");
     }
     return res.json({ success: true, message: "Notice safely moved to Restore Vault." });
   } catch (err) {

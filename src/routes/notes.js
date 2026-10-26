@@ -247,6 +247,7 @@ router.get("/branches", async (req, res) => {
   try {
     const cachedBranches = ramCache.get("branches_list");
     if (cachedBranches) {
+      res.setHeader("Cache-Control", "public, max-age=180, s-maxage=300, stale-while-revalidate=600");
       return res.json({ success: true, branches: cachedBranches });
     }
 
@@ -266,6 +267,7 @@ router.get("/branches", async (req, res) => {
     const branchList = Array.from(branchSet);
     ramCache.set("branches_list", branchList, 120);
 
+    res.setHeader("Cache-Control", "public, max-age=180, s-maxage=300, stale-while-revalidate=600");
     return res.json({ success: true, branches: branchList });
   } catch (err) {
     return res.json({ success: true, branches: ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"] });
@@ -389,6 +391,7 @@ router.get("/", authenticateToken, async (req, res) => {
 
     if (cachedData) {
       res.setHeader("X-Cache", "HIT");
+      res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
       return res.json({ success: true, notes: cachedData.notes, totalCount: cachedData.totalCount, lastSync: getLastSyncState() });
     }
 
@@ -479,6 +482,7 @@ router.get("/", authenticateToken, async (req, res) => {
     ramCache.set(cacheKey, { notes, totalCount }, 45);
 
     res.setHeader("X-Cache", "MISS");
+    res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
     return res.json({ success: true, notes, totalCount, lastSync: getLastSyncState() });
   } catch (err) {
     console.error("[NOTES] Query error:", err);

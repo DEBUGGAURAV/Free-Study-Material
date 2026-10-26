@@ -3492,6 +3492,7 @@ router.post("/cdn/prewarm-popular", authenticateToken, checkAdminOrPermission("a
  * Public lightweight endpoint for frontend components to read active tech toggles & maintenance status
  */
 router.get("/tech-flags", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=20, s-maxage=30, stale-while-revalidate=60");
   let isMaint = false;
   try {
     const { isMaintenanceActive } = require("../middleware/maintenance");

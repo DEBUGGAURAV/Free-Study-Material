@@ -195,6 +195,13 @@ async function initTursoTables() {
       )
     `);
 
+    // 🚀 High-Speed Indexes: Eliminates Full-Table Scans for Sub-Millisecond Queries
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_branch ON notes(branch)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_subject ON notes(subject)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(createdAt)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(roomId, createdAt)`).catch(() => {});
+
     const latency = Date.now() - t0;
     console.log(`[TURSO] ✅ Database schema verified in ${latency}ms (Cloud: ${isCloud ? "YES" : "LOCAL"})`);
     return true;

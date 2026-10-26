@@ -1,10 +1,10 @@
 /**
- * FreeStudyMaterial PWA Service Worker v10
- * 100% Offline Mode & Network-First Caching
+ * FreeStudyMaterial PWA Service Worker v11
+ * High-Performance Stale-While-Revalidate Caching & 100% Offline Vault
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v10';
+const CACHE_NAME = 'fsm-cache-v11';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -302,12 +302,35 @@ export default {};`,
   // 4. Same-Origin Assets (CSS, JS, Fonts, Images - strictly bypasses API and WebSocket)
   if (url.origin === self.location.origin && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/ws')) {
     const cleanUrl = url.origin + url.pathname;
+    const isImmutableAsset = url.pathname.startsWith('/assets/') || url.pathname.includes('/tesseract/');
 
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
 
-        // Network-First: Always fetch freshest assets if online
+        // ⚡ Performance Accelerator: Stale-While-Revalidate for /assets/ (Instant 0ms Load!)
+        if (isImmutableAsset) {
+          const cachedAsset =
+            (await cache.match(request)) ||
+            (await cache.match(cleanUrl)) ||
+            (await cache.match(request, { ignoreSearch: true }));
+
+          if (cachedAsset) {
+            // Revalidate in background if online (never blocks browser execution)
+            if (self.navigator.onLine) {
+              fetch(request)
+                .then((networkResponse) => {
+                  if (networkResponse && networkResponse.status === 200) {
+                    cache.put(cleanUrl, networkResponse.clone()).catch(() => {});
+                  }
+                })
+                .catch(() => {});
+            }
+            return cachedAsset;
+          }
+        }
+
+        // Network fetch for other non-asset resources or cache misses
         if (self.navigator.onLine) {
           try {
             const networkResponse = await fetch(request);
