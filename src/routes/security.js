@@ -31,8 +31,16 @@ setInterval(() => {
   }
 }, 60 * 60 * 1000);
 
+function safeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 /**
- * Dispatch Telegram Security Alert directly to Supergroup Topic 6
+ * Dispatch Telegram Security Alert directly to Supergroup Topic 6 & Topic 35
  */
 async function dispatchTamperTelegramAlert({
   user,
@@ -55,16 +63,16 @@ async function dispatchTamperTelegramAlert({
   const messageText = [
     statusBadge,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `👤 <b>Student:</b> ${user.name || "Unauthenticated Guest"}`,
-    `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>`,
-    user.mobile && user.mobile !== "N/A" ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>` : null,
-    user.college && user.college !== "N/A" ? `🏛️ <b>College:</b> ${user.college}` : null,
-    user.year && user.year !== "N/A" ? `🎓 <b>Year:</b> ${user.year}` : null,
-    `🌐 <b>IP Address:</b> <code>${ip}</code>`,
-    pageUrl ? `📍 <b>Page / Route:</b> <code>${pageUrl}</code>` : null,
-    `💻 <b>Client / Device:</b> ${deviceInfo || "Browser Console / DevTools"}`,
+    `👤 <b>Student:</b> ${safeHtml(user.name || "Unauthenticated Guest")}`,
+    `📧 <b>Email:</b> <code>${safeHtml(user.email || "N/A")}</code>`,
+    user.mobile && user.mobile !== "N/A" ? `📱 <b>Mobile:</b> <code>${safeHtml(user.mobile)}</code>` : null,
+    user.college && user.college !== "N/A" ? `🏛️ <b>College:</b> ${safeHtml(user.college)}` : null,
+    user.year && user.year !== "N/A" ? `🎓 <b>Year:</b> ${safeHtml(user.year)}` : null,
+    `🌐 <b>IP Address:</b> <code>${safeHtml(ip)}</code>`,
+    pageUrl ? `📍 <b>Page / Route:</b> <code>${safeHtml(pageUrl)}</code>` : null,
+    `💻 <b>Client / Device:</b> ${safeHtml(deviceInfo || "Browser Console / DevTools")}`,
     `⚠️ <b>Tampering Detected:</b>`,
-    `<i>${detail || "Attempted to open DevTools / Inspect Mode"}</i>`,
+    `<i>${safeHtml(detail || "Attempted to open DevTools / Inspect Mode")}</i>`,
     `🎯 <b>Total Strikes:</b> <b>${strikeCount} of 3</b>`,
     `🛡️ <b>Action Taken:</b> ${actionText}`,
     `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
@@ -72,10 +80,10 @@ async function dispatchTamperTelegramAlert({
     .filter(Boolean)
     .join("\n");
 
-  // Dispatch using existing Supergroup Topic 6 pipeline
+  // 1. Dispatch directly to Security Supergroup Topic 6 (@fsm_security_otp_bot)
   try {
     await sendTelegramAuthNotice({
-      event: "SECURITY_ALERT",
+      event: "DEVTOOLS_VIOLATION",
       user: {
         name: user.name || "Tamper Attacker",
         email: user.email || "N/A",
@@ -85,9 +93,31 @@ async function dispatchTamperTelegramAlert({
       },
       method: "Client-Side Anti-Tamper & DevTools Sensor (disable-devtool)",
       detail: messageText,
+      threadId: process.env.TELEGRAM_TOPIC_SECURITY || "6",
     });
   } catch (err) {
-    console.warn("[ANTI-TAMPER] Telegram alert notice:", err.message);
+    console.warn("[ANTI-TAMPER] Telegram Topic 6 alert notice:", err.message);
+  }
+
+  // 2. Also dispatch to Chat Audit Supergroup Topic 35 (@fsm_chat_bot) if configured
+  const chatAuditToken = (process.env.TELEGRAM_CHAT_AUDIT_BOT_TOKEN || "").trim();
+  const chatAuditGroup = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "").trim();
+  const tamperAuditTopic = (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim();
+  if (chatAuditToken && chatAuditGroup) {
+    try {
+      await fetch(`https://api.telegram.org/bot${chatAuditToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatAuditGroup,
+          message_thread_id: Number(tamperAuditTopic) || 35,
+          text: messageText,
+          parse_mode: "HTML",
+        }),
+      });
+    } catch (auditErr) {
+      console.warn("[ANTI-TAMPER] Chat Audit Topic 35 notice:", auditErr.message);
+    }
   }
 }
 

@@ -249,7 +249,19 @@ async function getOrCreateDownloadManagerForumTopic(targetChatId = null, botToke
  * Alerts Master Admin on EVERY Login, Logout, and Registration!
  * If Google Sign-In with photo: Dispatches photo directly to Telegram, but NEVER saves photo in DB.
  */
-async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, method = "Email/Password", detail = "", note = null, otp = "", admin = null, context = "" }) {
+async function sendTelegramAuthNotice({
+  event,
+  user = {},
+  photoUrl = null,
+  method = "Email/Password",
+  detail = "",
+  note = null,
+  otp = "",
+  admin = null,
+  context = "",
+  threadId: customThreadId = null,
+  targetChatId: customTargetChatId = null,
+}) {
   try {
     let currentSettings = null;
     if (getBotSettings) {
@@ -266,7 +278,7 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         console.log("[SECURITY-BOT] ⏸️ LOGOUT alert suppressed by admin setting.");
         return;
       }
-      if ((event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") && currentSettings.enableSecurityNotice === false) {
+      if ((event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "DEVTOOLS_VIOLATION") && currentSettings.enableSecurityNotice === false) {
         console.log("[SECURITY-BOT] ⏸️ SECURITY_ALERT suppressed by admin setting.");
         return;
       }
@@ -299,48 +311,49 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
       : (process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
 
     const supergroupId = (process.env.TELEGRAM_TOPIC_GROUP_ID || "").trim();
-    let targetChatId = isNoteUpload
+    let targetChatId = customTargetChatId || (isNoteUpload
       ? (process.env.TELEGRAM_STORAGE_CHAT_ID || "").trim()
-      : (supergroupId || currentSettings?.topicGroupChatId || "").trim();
+      : (supergroupId || currentSettings?.topicGroupChatId || "").trim());
 
     if (!isNoteUpload && (!targetChatId || !targetChatId.startsWith("-100"))) {
       targetChatId = supergroupId;
     }
     if (!botToken || !targetChatId) return;
 
-    // Resolve target message_thread_id for Topics (Managed dynamically via Admin Studio)
-    let threadId = null;
+    // Resolve target message_thread_id for Topics (Managed dynamically via Admin Studio or explicit param)
+    let threadId = customThreadId;
     const topics = currentSettings?.topics || {};
-    if (event === "REGISTER") {
-      threadId = topics.newRegistration || process.env.TELEGRAM_TOPIC_REGISTRATION || "2";
-    } else if (event === "LOGIN") {
-      threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || "3";
-    } else if (event === "LOGOUT") {
-      threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
-    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
-      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
-    } else if (event === "OTP_AUDIT") {
-      threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
-    } else if (event === "USER_OTP") {
-      threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
-    } else if (event === "NOTE_UPLOAD") {
-      // Auto-Topic Creation: Check if dedicated topic exists for this note's Subject or auto-create it!
-      const subjectName = (note?.subject || "").trim();
-      if (subjectName) {
-        threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
+    if (!threadId) {
+      if (event === "REGISTER") {
+        threadId = topics.newRegistration || process.env.TELEGRAM_TOPIC_REGISTRATION || "2";
+      } else if (event === "LOGIN") {
+        threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || "3";
+      } else if (event === "LOGOUT") {
+        threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
+      } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "DEVTOOLS_VIOLATION" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
+        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
+      } else if (event === "OTP_AUDIT") {
+        threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
+      } else if (event === "USER_OTP") {
+        threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
+      } else if (event === "NOTE_UPLOAD") {
+        // Auto-Topic Creation: Check if dedicated topic exists for this note's Subject or auto-create it!
+        const subjectName = (note?.subject || "").trim();
+        if (subjectName) {
+          threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
+        }
+        if (!threadId) {
+          threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
+        }
+      } else if (event === "NOTE_DOWNLOAD") {
+        // Route note downloads to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
+        threadId = await getOrCreateDownloadManagerForumTopic(targetChatId, botToken);
+        if (!threadId) {
+          threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
+        }
+      } else if (event === "ACCOUNT_PURGE") {
+        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
       }
-      if (!threadId) {
-        threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
-      }
-    } else if (event === "NOTE_DOWNLOAD") {
-      // Route note downloads to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
-      threadId = await getOrCreateDownloadManagerForumTopic(targetChatId, botToken);
-      if (!threadId) {
-        threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
-      }
-    } else if (event === "ACCOUNT_PURGE") {
-      // 🛡️ User Request: Security dossier delivered safely to FSM Security Bot Topic 6 (No chat details shared in Topic 6)
-      threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
     }
 
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -578,19 +591,23 @@ async function sendTelegramAuthNotice({ event, user = {}, photoUrl = null, metho
         methodLabel = "📝 Registration Method";
       }
 
-      caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
-        nameAndIdentityBlock +
-        (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
-        (user.newMobile ? `📲 <b>New Verified Mobile:</b> <code>${user.newMobile}</code>\n` : (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "")) +
-        `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
-        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
-        (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
-        (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
-        (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
-        `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
-        (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +
-        `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
-        `🌐 <i>Real-time Academic Vault Security Core</i>`;
+      if (event === "DEVTOOLS_VIOLATION" && detail) {
+        caption = detail;
+      } else {
+        caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
+          nameAndIdentityBlock +
+          (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
+          (user.newMobile ? `📲 <b>New Verified Mobile:</b> <code>${user.newMobile}</code>\n` : (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "")) +
+          `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
+          (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+          (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
+          (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
+          (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
+          `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
+          (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +
+          `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
+          `🌐 <i>Real-time Academic Vault Security Core</i>`;
+      }
     }
 
     // Helper to prevent Server-Side Request Forgery (SSRF)
