@@ -174,8 +174,9 @@ router.post("/tamper-alert", async (req, res) => {
       } catch (_) {}
     }
 
-    // 2. Track Strike Count per User ID or IP
-    const strikeKey = userId || clientIp;
+    // 2. Track Strike Count per User ID, Anonymous Guest UID, or IP Address
+    const guestUid = clientUser?.guestUid || null;
+    const strikeKey = userId || guestUid || clientIp;
     let currentRecord = tamperStrikes.get(strikeKey) || { count: 0, violations: [], lastAt: Date.now() };
 
     currentRecord.count += 1;
@@ -184,6 +185,7 @@ router.post("/tamper-alert", async (req, res) => {
       time: new Date().toISOString(),
       detail: detail || "Core API tampering",
       ip: clientIp,
+      guestUid,
     });
     tamperStrikes.set(strikeKey, currentRecord);
 
@@ -191,9 +193,9 @@ router.post("/tamper-alert", async (req, res) => {
 
     // 3. Check 3-Strike Threshold
     if (effectiveStrikes >= 3) {
-      console.warn(`[ANTI-TAMPER] 🚨 3RD STRIKE DETECTED for ${strikeKey} (${fullUser.email}). AUTO-BLOCKING!`);
+      console.warn(`[ANTI-TAMPER] 🚨 3RD STRIKE DETECTED for ${strikeKey} (${fullUser.name} • ${fullUser.email}). AUTO-BLOCKING!`);
 
-      // A. Permanent Block in Firestore Database
+      // A. Permanent Block in Firestore Database (if user was authenticated)
       if (db && userId && userId !== "admin-root") {
         try {
           await db.collection("users").doc(userId).update({
@@ -208,7 +210,7 @@ router.post("/tamper-alert", async (req, res) => {
       }
 
       // B. Permanent Block in Turso Database
-      if (tursoClient && fullUser.email && fullUser.email !== "N/A") {
+      if (tursoClient && fullUser.email && fullUser.email !== "N/A" && fullUser.email !== "Unauthenticated Guest") {
         try {
           await tursoClient.execute({
             sql: `UPDATE users SET is_blocked = 1 WHERE email = ?`,
@@ -217,8 +219,8 @@ router.post("/tamper-alert", async (req, res) => {
         } catch (_) {}
       }
 
-      // C. 24-Hour IP Detention in Firewall
-      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.email})`);
+      // C. 24-Hour IP Detention in Firewall (Jails IP for all unauthenticated or authenticated traffic)
+      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`);
 
       // D. Dispatch Critical Ban Alert to Telegram Supergroup Topic 6
       await dispatchTamperTelegramAlert({

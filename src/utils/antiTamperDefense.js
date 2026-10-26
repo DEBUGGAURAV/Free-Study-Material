@@ -84,23 +84,53 @@ function isDevToolsBypassed() {
 
 /**
  * Safely extracts current student profile info for security alert
+ * If user is unlogged / guest, generates deep hardware forensics & persistent anonymous beacon
  */
 function getCurrentUserData() {
   try {
     const userStr = localStorage.getItem("vault_user");
-    if (!userStr) return null;
-    const u = JSON.parse(userStr);
-    return {
-      name: u.name || "Student Scholar",
-      email: u.email || "N/A",
-      mobile: u.mobile || "N/A",
-      college: u.college || "N/A",
-      year: u.year || "N/A",
-      role: u.role || "student",
-    };
-  } catch (_) {
-    return null;
-  }
+    if (userStr) {
+      const u = JSON.parse(userStr);
+      return {
+        isLoggedIn: true,
+        name: u.name || "Student Scholar",
+        email: u.email || "N/A",
+        mobile: u.mobile || "N/A",
+        college: u.college || "N/A",
+        year: u.year || "N/A",
+        role: u.role || "student",
+      };
+    }
+  } catch (_) {}
+
+  // 🕵️ Unauthenticated Guest Identity Tracking & Hardware Forensics
+  let anonUid = "guest_anon";
+  try {
+    anonUid = localStorage.getItem("fsm_anon_uid");
+    if (!anonUid) {
+      anonUid = "anon_" + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+      localStorage.setItem("fsm_anon_uid", anonUid);
+    }
+  } catch (_) {}
+
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "N/A";
+  const cores = navigator.hardwareConcurrency || "N/A";
+  const mem = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "N/A";
+  const screenSpec = window.screen ? `${window.screen.width}x${window.screen.height} (${window.screen.colorDepth}-bit)` : "N/A";
+
+  return {
+    isLoggedIn: false,
+    name: `Anonymous Visitor [${anonUid.slice(-6).toUpperCase()}]`,
+    email: "Unauthenticated Guest",
+    mobile: "N/A",
+    college: `Hardware: ${cores} Cores • ${mem} RAM • TZ: ${tz}`,
+    year: `Resolution: ${screenSpec}`,
+    role: "guest",
+    guestUid: anonUid,
+    timezone: tz,
+    hardwareCores: cores,
+    memoryEstimate: mem,
+  };
 }
 
 /**

@@ -71,6 +71,34 @@ const CURATED_FAQS = [
     answer:
       "You can connect through our official Telegram Bot (@fsm_chat_bot or @fsm_security_otp_bot) or join official FSM broadcast channels to receive daily semester updates, exam datesheets, and new study material alerts.",
   },
+  {
+    id: "faq_security_jail",
+    category: "security",
+    question: "Why was my IP jailed or account blocked, and what are the detention time limits? (IP Jail Policy)",
+    answer:
+      "Free Study Material employs an automated Zero-Trust Security Engine and Anti-DDoS Firewall. Platform security aur fair student access banaye rakhne ke liye automated detention policies apply hoti hain. Detention policies aur time limits niche diye gaye hain:",
+    table: [
+      {
+        reason: "DDoS / Traffic Surge (>600 req/min)",
+        detentionTime: "3 Minutes",
+        autoUnjail: "✅ Auto-release after 180s",
+        adminControl: "Tab 14 se turant release kar sakte hain",
+      },
+      {
+        reason: "Client Script / DevTools Tamper (Strike 3)",
+        detentionTime: "24 Hours",
+        autoUnjail: "✅ Auto-release after 24h",
+        adminControl: "Tab 14 se turant release kar sakte hain",
+      },
+      {
+        reason: "Admin Manual IP Jail (Tab 14)",
+        detentionTime: "Admin Chosen (1h / 24h / Custom)",
+        autoUnjail: "✅ Expiry time par auto-release",
+        adminControl: "Tab 14 se single-click \"Release / Pardon\"",
+      },
+    ],
+    note: "Agar aapka account ya IP galti se block hua hai, to 'Ask Admin / Request' tab par Category 'Account Block / IP Jail Appeal' choose karein aur apna Incident ID (e.g. FSM-SEC-XXXXXX) zaroor batayein taaki admin Tab 14 se turant verify karke release kar sake.",
+  },
 ];
 
 // Note: Anti-Spam helpLimiter imported from ../middleware/rateLimit with proxy isolation & immunity
