@@ -3985,23 +3985,34 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
     let blockedUsers = [];
     if (db) {
       try {
-        const snap = await db.collection("users").where("isBlocked", "==", true).get();
+        let snap = null;
+        try {
+          snap = await db.collection("users").where("isBlocked", "==", true).get();
+        } catch (_) {
+          snap = null;
+        }
+        if (!snap || snap.empty) {
+          // Fallback scan in case single-field index is missing or building
+          snap = await db.collection("users").get();
+        }
         snap.forEach((doc) => {
           const d = doc.data();
-          let decrypted = d;
-          try {
-            decrypted = decryptUserObject(d);
-          } catch (_) {}
-          blockedUsers.push({
-            id: doc.id,
-            name: decrypted.name || "Student Scholar",
-            email: decrypted.email || "N/A",
-            mobile: decrypted.mobile || "N/A",
-            college: decrypted.college || "N/A",
-            role: decrypted.role || "student",
-            blockedReason: d.blockedReason || "Security Violation: Auto-blocked for script/console tampering (3 strikes)",
-            blockedAt: d.blockedAt || d.updatedAt || new Date().toISOString(),
-          });
+          if (Boolean(d.isBlocked)) {
+            let decrypted = d;
+            try {
+              decrypted = decryptUserObject(d);
+            } catch (_) {}
+            blockedUsers.push({
+              id: doc.id,
+              name: decrypted.name || d.name || "Student Scholar",
+              email: decrypted.email || d.email || "N/A",
+              mobile: decrypted.mobile || d.mobile || d.plainMobile || "N/A",
+              college: decrypted.college || d.college || "N/A",
+              role: decrypted.role || d.role || "student",
+              blockedReason: d.blockedReason || "Security Violation: Auto-blocked for script/console tampering (3 strikes)",
+              blockedAt: d.blockedAt || d.updatedAt || new Date().toISOString(),
+            });
+          }
         });
       } catch (err) {
         console.warn("[ADMIN-THREATS] Error fetching blocked users from Firestore:", err.message);

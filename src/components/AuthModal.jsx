@@ -194,7 +194,9 @@ export default function AuthModal({
           document.getElementById(`field-group-${targetField}`) ||
           document.getElementById(`field-group-${targetField}-email`) ||
           document.getElementById(`input-${targetField}`) ||
-          document.getElementById(`input-${targetField}-email`);
+          document.getElementById(`input-${targetField}-email`) ||
+          document.getElementById("auth-bottom-error-banner") ||
+          document.getElementById("auth-top-error-banner");
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "center" });
           const input = el.tagName === "INPUT" || el.tagName === "SELECT" ? el : el.querySelector("input, select");
@@ -204,6 +206,12 @@ export default function AuthModal({
     } else {
       setError(msg);
       setFieldErrors({});
+      setTimeout(() => {
+        const el = document.getElementById("auth-bottom-error-banner") || document.getElementById("auth-top-error-banner");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 70);
     }
   };
 
@@ -1261,21 +1269,32 @@ export default function AuthModal({
         {/* Regular Error Alert Box - Shown only when no specific field holds the error */}
         {error && !purgedAccountNotice && Object.keys(fieldErrors).length === 0 && (
           <div
+            id="auth-top-error-banner"
             style={{
-              background: "rgba(244, 63, 94, 0.12)",
-              border: "1px solid rgba(244, 63, 94, 0.35)",
-              color: "#f43f5e",
-              padding: "10px 14px",
+              background: error.toLowerCase().includes("blocked")
+                ? "linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(15, 23, 42, 0.95))"
+                : "rgba(244, 63, 94, 0.12)",
+              border: error.toLowerCase().includes("blocked")
+                ? "1.5px solid #ef4444"
+                : "1px solid rgba(244, 63, 94, 0.35)",
+              color: error.toLowerCase().includes("blocked") ? "#fca5a5" : "#f43f5e",
+              padding: "12px 14px",
               borderRadius: "var(--radius-md)",
               marginBottom: "14px",
               fontSize: "0.85rem",
               display: "flex",
-              alignItems: "center",
-              gap: "8px",
+              alignItems: "flex-start",
+              gap: "10px",
+              boxShadow: error.toLowerCase().includes("blocked") ? "0 4px 20px rgba(239, 68, 68, 0.25)" : "none",
             }}
           >
-            <AlertCircle size={16} style={{ flexShrink: 0 }} />
-            <span>{error}</span>
+            <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
+                {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
+              </div>
+              <div style={{ lineHeight: "1.45" }}>{error}</div>
+            </div>
           </div>
         )}
 
@@ -1917,6 +1936,45 @@ export default function AuthModal({
                 </button>
               </div>
             </div>
+
+            {/* Mobile-Optimized Instant Visibility Error Banner (Directly Above Action Button) */}
+            {error && (
+              <div
+                id="auth-bottom-error-banner"
+                style={{
+                  background: error.toLowerCase().includes("blocked")
+                    ? "linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(15, 23, 42, 0.95))"
+                    : "rgba(244, 63, 94, 0.15)",
+                  border: error.toLowerCase().includes("blocked")
+                    ? "1.5px solid #ef4444"
+                    : "1px solid rgba(244, 63, 94, 0.4)",
+                  color: error.toLowerCase().includes("blocked") ? "#fca5a5" : "#f43f5e",
+                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  marginTop: "14px",
+                  marginBottom: "4px",
+                  fontSize: "0.85rem",
+                  lineHeight: "1.45",
+                  boxShadow: error.toLowerCase().includes("blocked") ? "0 4px 20px rgba(239, 68, 68, 0.35)" : "none",
+                  animation: "fsmSlideIn 0.25s ease",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                  <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
+                      {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
+                    </div>
+                    <div style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
+                    {error.toLowerCase().includes("blocked") && (
+                      <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "0.76rem", color: "#cbd5e1" }}>
+                        💬 Contact platform administration via <b>Help Desk</b> or Telegram <b>@fsm_security_otp_bot</b> to request account review.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"
