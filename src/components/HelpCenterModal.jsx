@@ -23,10 +23,83 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 
+const INITIAL_FAQS = [
+  {
+    id: "faq_1",
+    category: "download",
+    question: "How do I download PDF notes, or what should I do if a download is paused?",
+    answer:
+      "Free Study Material employs an autonomous 3-layer resilient failover network. Download requests seamlessly cycle through the Primary Storage Vault, Cloudflare Edge CDN, and native streaming fallback. If a download pauses, click 'Retry Download' or use 'Online Preview' for instant in-browser reading.",
+  },
+  {
+    id: "faq_2",
+    category: "offline",
+    question: "How can I access and read notes offline without an active internet connection?",
+    answer:
+      "Click the 'Save Offline' button next to any study material. The document will be cached securely in your browser's local IndexedDB vault, allowing instant 0ms access even with zero internet connectivity.",
+  },
+  {
+    id: "faq_3",
+    category: "passkey",
+    question: "How do I set up and use Biometric Passkey (Fingerprint / Face ID) sign-in?",
+    answer:
+      "After signing in, navigate to your Profile or Security settings and click 'Register Biometric Passkey'. You can then authenticate in sub-second time using Touch ID, Face ID, or Windows Hello without entering passwords.",
+  },
+  {
+    id: "faq_4",
+    category: "request_notes",
+    question: "How can I request missing syllabus notes or previous year exam papers?",
+    answer:
+      "Navigate to the 'Ask Question / Request' tab in this Help Center, select 'Request Missing Notes', and provide your Subject Name, University, and Semester. Our academic team curates and uploads verified materials within 24 to 48 hours.",
+  },
+  {
+    id: "faq_5",
+    category: "account",
+    question: "Is Free Study Material completely free for all college and university students?",
+    answer:
+      "Yes, 100% free! All handwritten lecture notes, university exam papers, and engineering textbooks are provided with zero subscription fees, zero paywalls, and unlimited access.",
+  },
+  {
+    id: "faq_6",
+    category: "telegram",
+    question: "How can I connect with the official Telegram Academic Community & notifications?",
+    answer:
+      "You can connect through our official Telegram Bot (@fsm_chat_bot or @fsm_security_otp_bot) or join official FSM broadcast channels to receive daily semester updates, exam datesheets, and new study material alerts.",
+  },
+  {
+    id: "faq_security_jail",
+    category: "security",
+    question: "Why was my IP jailed or account blocked, and what are the detention time limits? (IP Jail Policy)",
+    answer:
+      "Free Study Material employs an automated Zero-Trust Security Engine and Anti-DDoS Firewall. Platform security aur fair student access banaye rakhne ke liye automated detention policies apply hoti hain. Detention policies aur time limits niche diye gaye hain:",
+    table: [
+      {
+        reason: "DDoS / Traffic Surge (>600 req/min)",
+        detentionTime: "3 Minutes",
+        autoUnjail: "✅ Auto-release after 180s",
+        adminControl: "Tab 14 se turant release kar sakte hain",
+      },
+      {
+        reason: "Client Script / DevTools Tamper (Strike 3)",
+        detentionTime: "24 Hours",
+        autoUnjail: "✅ Auto-release after 24h",
+        adminControl: "Tab 14 se turant release kar sakte hain",
+      },
+      {
+        reason: "Admin Manual IP Jail (Tab 14)",
+        detentionTime: "Admin Chosen (1h / 24h / Custom)",
+        autoUnjail: "✅ Expiry time par auto-release",
+        adminControl: "Tab 14 se single-click \"Release / Pardon\"",
+      },
+    ],
+    note: "Agar aapka account ya IP galti se block hua hai, to 'Ask Admin / Request' tab par Category 'Account Block / IP Jail Appeal' choose karein aur apna Incident ID (e.g. FSM-SEC-XXXXXX) zaroor batayein taaki admin Tab 14 se turant verify karke release kar sake.",
+  },
+];
+
 export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
   const [activeTab, setActiveTab] = useState("faqs"); // 'faqs' | 'ask' | 'tickets'
   const [searchQuery, setSearchQuery] = useState("");
-  const [faqs, setFaqs] = useState([]);
+  const [faqs, setFaqs] = useState(INITIAL_FAQS);
   const [expandedFaq, setExpandedFaq] = useState(null);
 
   // Form State
@@ -136,6 +209,14 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
       return;
     }
 
+    if (category === "block_appeal") {
+      const hasIncidentId = (subject && subject.trim().length > 3) || /FSM-SEC/i.test(question);
+      if (!hasIncidentId) {
+        setFormError("Kripya apna Incident ID (e.g. FSM-SEC-XXXXXX) zaroor batayein taaki administrator Tab 14 me aapko unblock kar sake.");
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const res = await api.askHelpQuestion({
@@ -212,7 +293,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
     (f) =>
       !searchQuery ||
       f.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      f.answer.toLowerCase().includes(searchQuery.toLowerCase())
+      f.answer.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (f.table && JSON.stringify(f.table).toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (f.note && f.note.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   return (
@@ -476,7 +559,61 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                               paddingTop: "10px",
                             }}
                           >
-                            {faq.answer}
+                            <p style={{ margin: "0 0 10px 0" }}>{faq.answer}</p>
+                            {faq.table && (
+                              <div
+                                style={{
+                                  overflowX: "auto",
+                                  margin: "12px 0",
+                                  borderRadius: "8px",
+                                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                                  background: "rgba(15, 23, 42, 0.6)",
+                                }}
+                              >
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", minWidth: "540px" }}>
+                                  <thead>
+                                    <tr style={{ background: "rgba(30, 41, 59, 0.95)", textAlign: "left", color: "#38bdf8" }}>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Reason</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Detention Time</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Auto-Unjail?</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Admin Manual Control</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {faq.table.map((row, idx) => (
+                                      <tr
+                                        key={idx}
+                                        style={{
+                                          borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                                          background: idx % 2 === 0 ? "rgba(15, 23, 42, 0.4)" : "rgba(30, 41, 59, 0.2)",
+                                        }}
+                                      >
+                                        <td style={{ padding: "8px 12px", fontWeight: 700, color: "#f8fafc" }}>{row.reason}</td>
+                                        <td style={{ padding: "8px 12px", color: "#fbbf24", fontWeight: 700 }}>{row.detentionTime}</td>
+                                        <td style={{ padding: "8px 12px", color: "#34d399", fontWeight: 600 }}>{row.autoUnjail}</td>
+                                        <td style={{ padding: "8px 12px", color: "#38bdf8", fontWeight: 500 }}>{row.adminControl}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            {faq.note && (
+                              <div
+                                style={{
+                                  marginTop: "10px",
+                                  padding: "10px 12px",
+                                  borderRadius: "8px",
+                                  background: "rgba(239, 68, 68, 0.1)",
+                                  border: "1px solid rgba(239, 68, 68, 0.25)",
+                                  color: "#fca5a5",
+                                  fontSize: "0.78rem",
+                                  lineHeight: "1.45",
+                                }}
+                              >
+                                💡 <strong>Appeal Advice:</strong> {faq.note}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -673,27 +810,59 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                         <option value="missing_notes">📚 Request Missing Notes</option>
                         <option value="download">📥 Download / Preview Issue</option>
                         <option value="login_security">🛡️ Account / Passkey Help</option>
+                        <option value="block_appeal">🚨 Account Block / IP Jail Appeal</option>
                         <option value="syllabus">📋 Syllabus & PYQ Query</option>
                       </select>
                     </div>
                     <div>
-                      <label className="form-label">Subject / Topic Name (Optional)</label>
+                      <label className="form-label">
+                        {category === "block_appeal" ? "Incident ID (e.g. FSM-SEC-XXXXXX) *" : "Subject / Topic Name (Optional)"}
+                      </label>
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="e.g. OS Unit 3, DBMS"
+                        placeholder={category === "block_appeal" ? "e.g. FSM-SEC-XXXXXX" : "e.g. OS Unit 3, DBMS"}
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
+                        required={category === "block_appeal"}
                       />
                     </div>
                   </div>
 
+                  {category === "block_appeal" && (
+                    <div
+                      style={{
+                        marginBottom: "14px",
+                        padding: "12px 14px",
+                        borderRadius: "10px",
+                        background: "rgba(239, 68, 68, 0.12)",
+                        border: "1px solid rgba(239, 68, 68, 0.35)",
+                        color: "#fca5a5",
+                        fontSize: "0.82rem",
+                        lineHeight: "1.45",
+                      }}
+                    >
+                      <div style={{ fontWeight: 800, color: "#f87171", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                        <span>🚨</span> Incident ID Batana Zaroori Hai:
+                      </div>
+                      <div>
+                        Aapko block screen par dikha hua <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong> zaroor batayein. Iske bina Administrator aapka account ya IP Tab 14 (Web Security) me identify karke turant unblock / pardon nahi kar payenge.
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ marginBottom: "18px" }}>
-                    <label className="form-label">Your Question / Details *</label>
+                    <label className="form-label">
+                      {category === "block_appeal" ? "Block Appeal Details & Reason *" : "Your Question / Details *"}
+                    </label>
                     <textarea
                       className="form-input"
                       rows={4}
-                      placeholder="Type your question or requirement clearly here. Our admin team will receive this on Telegram and answer you directly."
+                      placeholder={
+                        category === "block_appeal"
+                          ? "Incident ID (FSM-SEC-XXXXXX), registered email/mobile aur block hone ka reason yahan likhein. Admin ise check karke Tab 14 se turant release kar denge."
+                          : "Type your question or requirement clearly here. Our admin team will receive this on Telegram and answer you directly."
+                      }
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       required

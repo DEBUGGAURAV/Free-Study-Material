@@ -338,6 +338,18 @@ function triggerClientLockdown(reason) {
         ">
           Incident ID: <code style="color: #cbd5e1;">FSM-SEC-${Date.now().toString(36).toUpperCase()}</code>
         </div>
+        <div style="
+          margin-top: 12px;
+          font-size: 0.75rem;
+          color: #94a3b8;
+          line-height: 1.45;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 8px;
+          padding: 8px 12px;
+        ">
+          💡 Unblock appeal ke liye Help Center me Category <strong style="color: #f87171;">Account Block Appeal</strong> select karke yeh Incident ID batayein taaki admin Tab 14 se turant pardon kar sake.
+        </div>
       </div>
     </div>
   `;
