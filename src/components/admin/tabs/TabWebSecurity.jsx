@@ -147,8 +147,27 @@ export default function TabWebSecurity(props) {
     }
   };
 
+  // 4. Unblock permanently blocked / banned student account
+  const handleUnblockUser = async (userId, email) => {
+    setActionLoading(true);
+    try {
+      const res = await api.unblockThreatUser(userId, email);
+      if (res.success) {
+        showToast(res.message || `Account ${email || userId} unblocked successfully.`);
+        fetchThreatData();
+      } else {
+        showToast(res.message || "Failed to unblock account.", "error");
+      }
+    } catch (err) {
+      showToast(err.message || "Unblock error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const activeJails = data?.activeJailedIps || [];
   const lockedAccounts = data?.lockedAccounts || [];
+  const blockedUsers = data?.blockedUsers || [];
   const incidents = data?.recentIncidents || [];
   const shields = data?.webSecurityShields || {};
 
@@ -313,6 +332,28 @@ export default function TabWebSecurity(props) {
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
             Total Detained: {data?.totalJailedCount || 0}
+          </div>
+        </div>
+
+        {/* Blocked Student Accounts (Anti-Tamper & Security Bans) */}
+        <div style={{
+          background: "rgba(15, 23, 42, 0.6)",
+          border: `1px solid ${blockedUsers.length > 0 ? "rgba(239, 68, 68, 0.5)" : "rgba(239, 68, 68, 0.3)"}`,
+          borderRadius: "12px",
+          padding: "14px 16px",
+          boxShadow: blockedUsers.length > 0 ? "0 0 15px rgba(239, 68, 68, 0.25)" : "none",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "#f87171", fontWeight: 700, textTransform: "uppercase" }}>
+              Blocked Accounts (Security Bans)
+            </span>
+            <Ban size={16} color="#ef4444" />
+          </div>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: blockedUsers.length > 0 ? "#ef4444" : "#f1f5f9", marginTop: "4px" }}>
+            {blockedUsers.length}
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
+            Anti-Tamper 3-Strike Bans
           </div>
         </div>
 
@@ -714,6 +755,97 @@ export default function TabWebSecurity(props) {
               </table>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* SECTION 3B: Permanently Blocked Accounts (Anti-Tamper 3-Strike Bans & Security Violations) */}
+      <div style={{
+        background: "rgba(15, 23, 42, 0.7)",
+        border: `1px solid ${blockedUsers.length > 0 ? "rgba(239, 68, 68, 0.45)" : "rgba(239, 68, 68, 0.25)"}`,
+        borderRadius: "14px",
+        padding: "18px 20px",
+        marginBottom: "24px",
+        boxShadow: blockedUsers.length > 0 ? "0 0 20px rgba(239, 68, 68, 0.15)" : "none",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: "0.98rem", fontWeight: 800, color: "#ef4444", display: "flex", alignItems: "center", gap: "8px" }}>
+              <Ban size={18} />
+              Blocked Student Accounts & Anti-Tamper Bans ({blockedUsers.length} Blocked)
+            </h4>
+            <span style={{ fontSize: "0.74rem", color: "var(--text-dim, #94a3b8)" }}>
+              Accounts permanently banned in database due to client script tampering (3 strikes), console inspection, or administrative ban.
+            </span>
+          </div>
+        </div>
+
+        <div style={{ maxHeight: "320px", overflowY: "auto", borderRadius: "8px", border: "1px solid rgba(51, 65, 85, 0.6)" }}>
+          {blockedUsers.length === 0 ? (
+            <div style={{ padding: "30px 16px", textAlign: "center", color: "var(--text-dim, #94a3b8)" }}>
+              <CheckCircle size={32} style={{ color: "#10b981", margin: "0 auto 8px", display: "block" }} />
+              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff" }}>Zero Blocked Student Accounts</div>
+              <div style={{ fontSize: "0.76rem", marginTop: "4px" }}>
+                All registered student accounts are clean with zero active security bans.
+              </div>
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+              <thead>
+                <tr style={{ background: "rgba(30, 41, 59, 0.9)", textAlign: "left", color: "#94a3b8" }}>
+                  <th style={{ padding: "10px 12px" }}>Student Name & ID</th>
+                  <th style={{ padding: "10px 12px" }}>Contact Info</th>
+                  <th style={{ padding: "10px 12px" }}>Block Reason</th>
+                  <th style={{ padding: "10px 12px" }}>Blocked Timestamp</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blockedUsers.map((u) => (
+                  <tr key={u.id} style={{ borderBottom: "1px solid rgba(51, 65, 85, 0.4)", background: "rgba(15, 23, 42, 0.4)" }}>
+                    <td style={{ padding: "8px 12px" }}>
+                      <div style={{ fontWeight: 800, color: "#f87171" }}>{u.name}</div>
+                      <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontFamily: "var(--font-mono, monospace)" }}>
+                        ID: {u.id}
+                      </div>
+                    </td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <div style={{ color: "#cbd5e1" }}>{u.email}</div>
+                      <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>{u.mobile}</div>
+                    </td>
+                    <td style={{ padding: "8px 12px", color: "#fca5a5", maxWidth: "260px" }}>
+                      {u.blockedReason}
+                    </td>
+                    <td style={{ padding: "8px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>
+                      {new Date(u.blockedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "short" })}
+                    </td>
+                    <td style={{ padding: "8px 12px", textAlign: "right" }}>
+                      <button
+                        type="button"
+                        disabled={actionLoading}
+                        onClick={() => handleUnblockUser(u.id, u.email)}
+                        style={{
+                          padding: "5px 12px",
+                          background: "rgba(16, 185, 129, 0.18)",
+                          border: "1px solid rgba(16, 185, 129, 0.45)",
+                          color: "#34d399",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <Unlock size={13} />
+                        Unblock ID
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 

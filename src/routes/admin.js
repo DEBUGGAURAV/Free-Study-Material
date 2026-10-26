@@ -3981,6 +3981,33 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       }
     } catch (_) {}
 
+    // 🔒 Fetch all permanently blocked / banned student accounts (Anti-Tamper Strikes, Security Violations, Manual Bans)
+    let blockedUsers = [];
+    if (db) {
+      try {
+        const snap = await db.collection("users").where("isBlocked", "==", true).get();
+        snap.forEach((doc) => {
+          const d = doc.data();
+          let decrypted = d;
+          try {
+            decrypted = decryptUserObject(d);
+          } catch (_) {}
+          blockedUsers.push({
+            id: doc.id,
+            name: decrypted.name || "Student Scholar",
+            email: decrypted.email || "N/A",
+            mobile: decrypted.mobile || "N/A",
+            college: decrypted.college || "N/A",
+            role: decrypted.role || "student",
+            blockedReason: d.blockedReason || "Security Violation: Auto-blocked for script/console tampering (3 strikes)",
+            blockedAt: d.blockedAt || d.updatedAt || new Date().toISOString(),
+          });
+        });
+      } catch (err) {
+        console.warn("[ADMIN-THREATS] Error fetching blocked users from Firestore:", err.message);
+      }
+    }
+
     const webSecurityShields = {
       turnstile: { name: "Cloudflare Turnstile", status: "ACTIVE", type: "Anti-Bot Smart Challenge", icon: "🛡️" },
       disposableEmail: { name: "Disposable Email Blocker", status: "ACTIVE", type: "500+ Burner Domains Prohibited", icon: "📧" },
@@ -4000,7 +4027,48 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       success: true,
       ...data,
       lockedAccounts,
+      blockedUsers,
       webSecurityShields,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🛡️ POST /api/admin/threats/unblock-user
+ * Admin only: Manually unblock / restore a student account blocked by Anti-Tamper or Admin
+ */
+router.post("/threats/unblock-user", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId, email } = req.body || {};
+    if (!userId && !email) {
+      return res.status(400).json({ success: false, message: "User ID or email is required." });
+    }
+    if (db && userId) {
+      await db.collection("users").doc(userId).update({
+        isBlocked: false,
+        blockedReason: null,
+        unblockedAt: new Date().toISOString(),
+      });
+    }
+    if (tursoClient && email && email !== "N/A") {
+      try {
+        await tursoClient.execute({
+          sql: `UPDATE users SET is_blocked = 0 WHERE email = ?`,
+          args: [email.toLowerCase().trim()],
+        });
+      } catch (_) {}
+    }
+    try {
+      const securityRouter = require("./security");
+      if (securityRouter && typeof securityRouter.clearTamperStrikes === "function") {
+        securityRouter.clearTamperStrikes(userId);
+      }
+    } catch (_) {}
+    return res.json({
+      success: true,
+      message: `User account (${email || userId}) unblocked and platform access restored.`,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

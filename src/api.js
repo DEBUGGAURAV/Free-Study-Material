@@ -1096,6 +1096,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ identifier }),
     }),
+  unblockThreatUser: (userId, email) =>
+    request("/admin/threats/unblock-user", {
+      method: "POST",
+      body: JSON.stringify({ userId, email }),
+    }),
 
   // ðŸ¤– Dedicated Chatbot Controller & Software Telemetry (@fsm_chat_bot & Turso)
   getChatBotSettings: () => request("/admin/chat-bot/settings"),

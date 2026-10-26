@@ -305,5 +305,12 @@ router.post("/anti-bot-alert", async (req, res) => {
   }
 });
 
+function clearTamperStrikes(key) {
+  if (key) {
+    tamperStrikes.delete(key);
+  }
+}
+router.clearTamperStrikes = clearTamperStrikes;
+
 module.exports = router;
 
