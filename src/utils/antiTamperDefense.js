@@ -3,11 +3,11 @@
  * 🛡️ CLIENT-SIDE ANTI-TAMPER & ZERO-TRUST DEFENSE SENSOR
  * ============================================================================
  * - Option 2: Powered by disable-devtool (Industry-Standard Shield)
- * - Detects console tampering, prototype pollution, script injection & DevTools opening
- * - 3-Strike Warning & Auto-Block Defense Rule
- * - Real-time Telegram Security Bot Supergroup Topic 6 reporting
- * - Strikes 1 & 2: Instant Warning Modal with attempt counter
+ * - Multi-Detector: RegToString, DefineId, Size (Docked DevTools), DateToString, Debugger, Performance
+ * - Native Docked DevTools (Window Dimension Differential) & Keydown Traps
+ * - Instant 0ms Visual Strike Feedback (Strike 1 & 2 Warning Card)
  * - Strike 3+: Database Account Ban, Token Revocation, IP Jail & Red Screen Lockdown
+ * - Real-time Telegram Security Bot Supergroup Topic 6 reporting
  * ============================================================================
  */
 
@@ -16,7 +16,6 @@ import disableDevtool from "disable-devtool";
 let strikeCount = 0;
 let isDefenseInitialized = false;
 let isLockdownActive = false;
-let activeWarningNotice = null;
 
 // Debounce so a single tamper event doesn't trigger multiple rapid alerts
 let lastTamperDispatch = 0;
@@ -35,14 +34,18 @@ const DETECTOR_NAMES = {
 };
 
 /**
- * Checks if DevTools protection should be bypassed for Admin
+ * Checks if DevTools protection should be bypassed
  */
 function isDevToolsBypassed() {
   if (typeof window === "undefined") return true;
 
-  // 1. Admin URL parameters (?admin_inspect=1, ?admin_dev=1, ?debug=1, ?admin_bypass=1)
+  // 1. Force test override (?test_tamper=1 or ?tamper_test=1) -> ALWAYS test anti-tamper
   try {
     const params = new URLSearchParams(window.location.search);
+    if (params.get("test_tamper") === "1" || params.get("tamper_test") === "1") {
+      return false;
+    }
+    // Explicit admin debug parameters
     if (
       params.get("admin_inspect") === "1" ||
       params.get("admin_dev") === "1" ||
@@ -53,17 +56,26 @@ function isDevToolsBypassed() {
     }
   } catch (_) {}
 
-  // 3. Admin session check in localStorage / sessionStorage
+  // 2. Active logged-in student check:
+  // If the currently active logged-in user is a student, NEVER bypass,
+  // even if an old fsm_admin_token was left in localStorage!
   try {
-    if (localStorage.getItem("fsm_admin_token") || sessionStorage.getItem("fsm_admin_token")) {
-      return true;
-    }
     const userStr = localStorage.getItem("vault_user");
     if (userStr) {
       const u = JSON.parse(userStr);
       if (u.role === "admin" || u.role === "half_admin" || u.isMasterAdmin || u.isMainAdmin) {
         return true;
       }
+      return false; // Student is active -> Anti-tamper must protect!
+    }
+  } catch (_) {}
+
+  // 3. Admin token check ONLY applies if user is actually on admin URL or hash
+  try {
+    const hasAdminToken = localStorage.getItem("fsm_admin_token") || sessionStorage.getItem("fsm_admin_token");
+    const isAdminUrl = window.location.pathname.startsWith("/admin") || window.location.hash.includes("admin");
+    if (hasAdminToken && isAdminUrl) {
+      return true;
     }
   } catch (_) {}
 
@@ -96,11 +108,18 @@ function getCurrentUserData() {
  */
 async function reportTamperIncident(detail = "Unauthorized script tampering detected", extra = {}) {
   const now = Date.now();
-  if (now - lastTamperDispatch < 2500) return; // 2.5s debounce
+  if (now - lastTamperDispatch < 1800) return; // 1.8s debounce
   lastTamperDispatch = now;
 
   strikeCount += 1;
   const currentStrike = strikeCount;
+
+  // ⚡ 0ms INSTANT VISUAL FEEDBACK: Render warning before waiting for network fetch!
+  if (currentStrike >= 3) {
+    triggerClientLockdown("Security violation: Maximum tampering attempts exceeded (3/3).");
+  } else {
+    showStrikeWarning(currentStrike);
+  }
 
   try {
     const res = await fetch("/api/security/tamper-alert", {
@@ -123,14 +142,10 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
 
     if (data.action === "BAN" || data.isBlocked || currentStrike >= 3) {
       triggerClientLockdown(data.message || "Account permanently blocked for repeated script tampering.");
-    } else {
-      showStrikeWarning(currentStrike, data.warningMessage);
     }
   } catch (err) {
     if (currentStrike >= 3) {
       triggerClientLockdown("Security violation: Maximum tampering attempts exceeded.");
-    } else {
-      showStrikeWarning(currentStrike);
     }
   }
 }
@@ -149,39 +164,41 @@ function showStrikeWarning(strike, customMessage) {
   overlay.id = "fsm-tamper-warning-overlay";
   overlay.style.cssText = `
     position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 999999;
-    max-width: 440px;
+    top: 24px;
+    right: 24px;
+    z-index: 2147483647;
+    max-width: 460px;
     background: ${isFinalWarning ? "linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)" : "linear-gradient(135deg, #78350f 0%, #451a03 100%)"};
     border: 2px solid ${isFinalWarning ? "#ef4444" : "#f59e0b"};
-    border-radius: 12px;
-    padding: 16px 20px;
+    border-radius: 14px;
+    padding: 18px 22px;
     color: #fff;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px ${isFinalWarning ? "rgba(239, 68, 68, 0.4)" : "rgba(245, 158, 11, 0.4)"};
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 30px ${isFinalWarning ? "rgba(239, 68, 68, 0.5)" : "rgba(245, 158, 11, 0.5)"};
     font-family: system-ui, -apple-system, sans-serif;
+    pointer-events: auto;
     animation: fsmSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   `;
 
   overlay.innerHTML = `
-    <div style="display: flex; align-items: flex-start; gap: 12px;">
-      <span style="font-size: 24px; line-height: 1;">${isFinalWarning ? "🚨" : "⚠️"}</span>
+    <div style="display: flex; align-items: flex-start; gap: 14px;">
+      <span style="font-size: 28px; line-height: 1;">${isFinalWarning ? "🚨" : "⚠️"}</span>
       <div style="flex: 1;">
-        <div style="font-weight: 800; font-size: 0.95rem; color: ${isFinalWarning ? "#fca5a5" : "#fde68a"}; margin-bottom: 4px;">
-          ${isFinalWarning ? "🚨 FINAL SECURITY WARNING (Attempt 2 of 3)" : "⚠️ SECURITY SHIELD: DEVTOOLS PROHIBITED (Attempt 1 of 3)"}
+        <div style="font-weight: 800; font-size: 0.96rem; color: ${isFinalWarning ? "#fca5a5" : "#fde68a"}; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+          <span>${isFinalWarning ? "FINAL SECURITY WARNING" : "SECURITY SHIELD: DEVTOOLS PROHIBITED"}</span>
+          <span style="background: ${isFinalWarning ? "#ef4444" : "#f59e0b"}; color: #000; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; font-weight: 900;">ATTEMPT ${strike} OF 3</span>
         </div>
-        <div style="font-size: 0.82rem; color: #f8fafc; line-height: 1.45; margin-bottom: 8px;">
-          ${customMessage || "Free Study Material Vault par Developer Tools ya Console inspect karna prohibited hai. Academic integrity ke liye kripya DevTools band karein."}
+        <div style="font-size: 0.83rem; color: #f8fafc; line-height: 1.5; margin-bottom: 8px;">
+          ${customMessage || "Free Study Material Vault par Developer Tools ya Console inspect karna strictly prohibited hai. Academic integrity ke liye kripya DevTools band karein."}
         </div>
-        <div style="font-size: 0.74rem; color: ${isFinalWarning ? "#f87171" : "#fbbf24"}; font-weight: 600;">
+        <div style="font-size: 0.75rem; color: ${isFinalWarning ? "#f87171" : "#fbbf24"}; font-weight: 600; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 6px;">
           ⚠️ Notice: 3 baar violation karne par aapka account database me permanent ban ho jayega aur IP jail ho jayegi.
         </div>
       </div>
       <button id="fsm-warning-dismiss-btn" style="
         background: none;
         border: none;
-        color: rgba(255,255,255,0.6);
-        font-size: 18px;
+        color: rgba(255,255,255,0.7);
+        font-size: 20px;
         cursor: pointer;
         padding: 0;
         line-height: 1;
@@ -214,14 +231,16 @@ function triggerClientLockdown(reason) {
     sessionStorage.clear();
   } catch (_) {}
 
-  // 2. Clear all cookies
+  // 2. Kill all active intervals & timers
   try {
-    document.cookie.split(";").forEach((c) => {
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-    });
+    const highestTimeoutId = setTimeout(() => {}, 0);
+    for (let i = 0; i < highestTimeoutId; i++) {
+      clearTimeout(i);
+      clearInterval(i);
+    }
   } catch (_) {}
 
-  // 3. Render Full-Screen Permanent Red Lockdown Screen
+  // 3. Render Permanent Red Lockdown Screen
   document.body.innerHTML = `
     <div style="
       position: fixed;
@@ -230,7 +249,7 @@ function triggerClientLockdown(reason) {
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 9999999;
+      z-index: 2147483647;
       font-family: system-ui, -apple-system, sans-serif;
       padding: 24px;
       color: #fff;
@@ -325,7 +344,6 @@ export function initAntiTamperDefense() {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (node.nodeName === "SCRIPT" && !node.getAttribute("data-fsm-allowed")) {
-            // Check if script was injected dynamically outside build
             const src = node.getAttribute("src") || "";
             const isLocalAsset = src.startsWith("/assets/") || src.startsWith("./assets/") || src.includes("vite") || src.includes("@vite");
             if (!isLocalAsset && node.innerHTML) {
@@ -355,7 +373,7 @@ export function initAntiTamperDefense() {
     });
   } catch (_) {}
 
-  // 4. Option 2: Multi-Vector disable-devtool Guard
+  // 4. Option 2: Multi-Vector disable-devtool Guard with ALL Detectors
   if (!isDevToolsBypassed()) {
     try {
       disableDevtool({
@@ -365,7 +383,17 @@ export function initAntiTamperDefense() {
         disableCopy: false,   // Allow students to copy academic notes text
         disableCut: false,
         disablePaste: false,
-        interval: 350,     // 350ms high-speed periodic scan (instant console/devtools interception)
+        interval: 300,     // 300ms high-speed periodic scan (instant console/devtools interception)
+        detectors: [
+          disableDevtool.DetectorType.RegToString,
+          disableDevtool.DetectorType.DefineId,
+          disableDevtool.DetectorType.Size,
+          disableDevtool.DetectorType.DateToString,
+          disableDevtool.DetectorType.FuncToString,
+          disableDevtool.DetectorType.Debugger,
+          disableDevtool.DetectorType.Performance,
+          disableDevtool.DetectorType.DebugLib,
+        ],
         ignore: () => isDevToolsBypassed(),
         ondevtoolopen: (type) => {
           const detectorLabel = DETECTOR_NAMES[type] || `Detector #${type}`;
@@ -375,19 +403,47 @@ export function initAntiTamperDefense() {
           );
         },
         ondevtoolclose: () => {
-          // Auto-dismiss warning overlay when user complies and closes DevTools
           const overlay = document.getElementById("fsm-tamper-warning-overlay");
           if (overlay && !isLockdownActive) {
             overlay.remove();
           }
         },
       });
-      console.log("[SECURITY] 🔒 Option 2: disable-devtool armed with Supergroup Topic 6 sensor.");
+      console.log("[SECURITY] 🔒 Option 2: disable-devtool armed with all detectors (Size, RegExp, Debugger).");
     } catch (dtErr) {
       console.warn("[SECURITY] disable-devtool init notice:", dtErr.message);
     }
+
+    // 5. Native Docked DevTools Dimension Sensor (Catches docked inspect window instantly)
+    const checkDockedDevTools = () => {
+      if (isDevToolsBypassed()) return;
+      const widthDiff = window.outerWidth - window.innerWidth;
+      const heightDiff = window.outerHeight - window.innerHeight;
+      if (widthDiff > 160 || heightDiff > 160) {
+        reportTamperIncident(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
+      }
+    };
+    window.addEventListener("resize", checkDockedDevTools);
+    setInterval(checkDockedDevTools, 400);
+
+    // 6. Native Keyboard Shortcut Interception (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U)
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (isDevToolsBypassed()) return;
+        const isF12 = e.key === "F12" || e.keyCode === 123;
+        const isInspectKey =
+          (e.ctrlKey || e.metaKey) && e.shiftKey && ["I", "i", "J", "j", "C", "c"].includes(e.key);
+        const isViewSource = (e.ctrlKey || e.metaKey) && ["U", "u"].includes(e.key);
+        if (isF12 || isInspectKey || isViewSource) {
+          e.preventDefault();
+          e.stopPropagation();
+          reportTamperIncident(`Developer Tools keyboard shortcut (${e.key}) intercepted`);
+        }
+      },
+      true
+    );
   }
 
   console.log("[SECURITY] 🛡️ Client-Side Anti-Tamper & Zero-Trust Defense active (3-Strike Rule).");
 }
-
