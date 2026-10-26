@@ -8,6 +8,7 @@ const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
 const { encrypt, decrypt, blindIndex, decryptUserObject } = require("../utils/cryptoVault");
 const { getSiteDomain } = require("../config/siteConfig");
+const { createStepUpToken, requireStepUpAuth } = require("../middleware/adminStepUp");
 
 let deleteTelegramMessages = null;
 let getMTProtoDetails = null;
