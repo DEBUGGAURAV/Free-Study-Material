@@ -6,6 +6,9 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { db } = require("../firebase");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
+const { sameOriginGuard } = require("../middleware/csrfGuard");
+const { verifyFileMagicBytes, sanitizeAndScanPdf, inspectZipBombSafety } = require("../utils/fileSecurityInspector");
+const { verifyTurnstileToken } = require("../utils/turnstileGuard");
 const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
@@ -73,6 +76,7 @@ function formatRealSize(bytes) {
 router.post(
   "/",
   uploadLimiter,
+  sameOriginGuard,
   authenticateToken,
   requireAuth,
   (req, res, next) => {
@@ -87,6 +91,39 @@ router.post(
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: "No file uploaded." });
+      }
+
+      // 🛡️ Category 2 Feature 3: Smart Anti-Bot (Turnstile) Check on uploads
+      const turnstileToken = req.body?.turnstileToken || req.headers["x-turnstile-token"];
+      const turnstileCheck = await verifyTurnstileToken(turnstileToken, req.ip);
+      if (!turnstileCheck.success) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+        return res.status(400).json({ success: false, message: turnstileCheck.error });
+      }
+
+      // 🛡️ Category 2 Feature 1: File Magic Byte / Deep MIME Sniffing
+      const magicCheck = verifyFileMagicBytes(req.file.path, req.file.originalname);
+      if (!magicCheck.isValid) {
+        try { fs.unlinkSync(req.file.path); } catch (_) {}
+        return res.status(400).json({ success: false, message: magicCheck.error });
+      }
+
+      // 🛡️ Category 2 Feature 6: Decompression & Zip Bomb Shield
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      if (ext === ".zip" || ext === ".rar" || ext === ".7z") {
+        const zipCheck = inspectZipBombSafety(req.file.path);
+        if (!zipCheck.isSafe) {
+          try { fs.unlinkSync(req.file.path); } catch (_) {}
+          return res.status(400).json({ success: false, message: zipCheck.error });
+        }
+      }
+
+      // 🛡️ Category 2 Feature 2: Malicious PDF Script Stripper
+      if (ext === ".pdf") {
+        const pdfScan = await sanitizeAndScanPdf(req.file.path);
+        if (pdfScan.strippedCount > 0) {
+          console.log(`[UPLOAD-SECURITY] Neutralized ${pdfScan.strippedCount} dangerous script/action tag(s) from "${req.file.originalname}".`);
+        }
       }
 
       const {

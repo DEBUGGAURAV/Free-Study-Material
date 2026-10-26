@@ -224,19 +224,27 @@ export const api = {
     return data;
   },
 
-  login: async (identifier, password, deviceSpecs = null) => {
+  login: async (identifier, password, deviceSpecs = null, turnstileToken = null) => {
     let specs = deviceSpecs;
-    if (!specs && typeof window !== "undefined") {
+    let fingerprint = "";
+    if (typeof window !== "undefined") {
       try {
         const cores = navigator.hardwareConcurrency || 4;
         const memoryGB = navigator.deviceMemory || 4;
         const isMobile = window.innerWidth < 768;
-        specs = { cores, memoryGB, isMobile };
+        specs = specs || { cores, memoryGB, isMobile };
+        fingerprint = `${screen.width}x${screen.height}:${Intl.DateTimeFormat().resolvedOptions().timeZone}:${navigator.language}`;
       } catch (_) {}
     }
     const data = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ identifier, password, deviceSpecs: specs }),
+      body: JSON.stringify({
+        identifier,
+        password,
+        deviceSpecs: specs,
+        deviceFingerprint: fingerprint,
+        turnstileToken,
+      }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -280,6 +288,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ deviceSpecs }),
     }).catch(() => ({ success: true }));
+  },
+
+  logoutAllDevices: async () => {
+    try {
+      await request("/auth/logout-all-devices", { method: "POST" });
+    } catch (_) {}
+    return api.logout("Logout From All Devices");
   },
 
   logout: async (reason = "Manual Session Logout", fallbackUser = null) => {

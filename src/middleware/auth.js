@@ -3,6 +3,21 @@ const crypto = require("crypto");
 
 const JWT_SECRET = (process.env.JWT_SECRET || crypto.randomBytes(64).toString("hex")).trim();
 
+// 🛡️ Multi-Device Session Invalidation Cache (Category 1 Feature 4)
+// Stores minimum valid tokenVersion per userId: Map<userId, { minVersion: number, revokedAt: number }>
+const userRevokedTokenVersions = new Map();
+
+/**
+ * Updates revoked token version for a user (called on password reset, change, or logout-all-devices)
+ */
+function setRevokedTokenVersion(userId, minVersion = 1) {
+  if (!userId) return;
+  userRevokedTokenVersions.set(String(userId), {
+    minVersion: Number(minVersion),
+    revokedAt: Date.now(),
+  });
+}
+
 function authenticateToken(req, res, next) {
   // 1. High-security httpOnly cookie (fsm_token)
   // 2. Standard Authorization header (Bearer token)
@@ -22,6 +37,18 @@ function authenticateToken(req, res, next) {
     if (err) {
       req.user = null;
       return next();
+    }
+
+    // 🛡️ Category 1 Feature 4: Multi-Device Session Invalidation Check
+    if (user && user.id) {
+      const revocation = userRevokedTokenVersions.get(String(user.id));
+      const userTokenVersion = typeof user.v === "number" ? user.v : 0;
+      if (revocation && userTokenVersion < revocation.minVersion) {
+        console.log(`[AUTH-MIDDLEWARE] 🚪 Revoked session detected for user ${user.id} (token v:${userTokenVersion} < required v:${revocation.minVersion}). Invalidating.`);
+        clearAuthCookie(res, req);
+        req.user = null;
+        return next();
+      }
     }
 
     // 🛡️ 30-Minute Student Inactivity Check (Server-Side Shield for Mobile & Web)
@@ -143,6 +170,6 @@ module.exports = {
   requireAdmin,
   setAuthCookie,
   clearAuthCookie,
+  setRevokedTokenVersion,
   JWT_SECRET,
 };
-

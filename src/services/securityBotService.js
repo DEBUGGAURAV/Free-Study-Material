@@ -859,9 +859,34 @@ async function startSecurityBotPoller() {
         if (!msg || !msg.from) continue;
 
         const chatId = msg.chat.id;
+        const msgId = msg.message_id;
         const text = (msg.text || "").trim();
         const contact = msg.contact;
         const user = msg.from;
+
+        // 🛡️ Multi-Instance Atomic Deduplication: Drop duplicate message if already processed
+        const msgDedupKey = `${chatId}_${msgId}`;
+        if (processedUpdateIds.has(msgDedupKey)) {
+          continue;
+        }
+        processedUpdateIds.add(msgDedupKey);
+
+        if (db) {
+          try {
+            const dedupRef = db.collection("telegram_processed_messages").doc(msgDedupKey);
+            await dedupRef.create({
+              processedAt: Date.now(),
+              chatId: String(chatId),
+              msgId: String(msgId),
+              expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+            });
+          } catch (createErr) {
+            if (createErr.code === 6 || createErr.code === "ALREADY_EXISTS" || createErr.message?.includes("ALREADY_EXISTS")) {
+              console.log(`[SECURITY-BOT] ⚡ Suppressing duplicate message ${msgDedupKey} (already claimed by another server instance)`);
+              continue;
+            }
+          }
+        }
 
         // Auto-detect when a new Topic is created or edited directly in Telegram Supergroup!
         if (msg.forum_topic_created) {
@@ -966,7 +991,7 @@ async function startSecurityBotPoller() {
                 `🎓 <b>Student Registration Details (Form Filled Data)</b>\n` +
                   `━━━━━━━━━━━━━━━━━━━━━━\n` +
                   `👤 <b>Student Name:</b> <code>${regRecord.name}</code>\n` +
-                  `📧 <b>Gmail Address:</b> <code>${regRecord.email}</code>\n` +
+                  `📧 <b>Email Address:</b> <code>${regRecord.email}</code>\n` +
                   `📱 <b>Mobile Number:</b> <code>${regRecord.mobile}</code>\n` +
                   (regRecord.college ? `🏛️ <b>College / University:</b> <code>${regRecord.college}</code>\n` : "") +
                   (regRecord.year ? `📚 <b>Academic Year:</b> <code>${regRecord.year}</code>\n` : "") +
@@ -1312,7 +1337,7 @@ async function startSecurityBotPoller() {
               `🎓 <b>Student Registration Details (Form Filled Data)</b>\n` +
                 `━━━━━━━━━━━━━━━━━━━━━━\n` +
                 `👤 <b>Student Name:</b> <code>${pendingReg.name}</code>\n` +
-                `📧 <b>Gmail Address:</b> <code>${pendingReg.email}</code>\n` +
+                `📧 <b>Email Address:</b> <code>${pendingReg.email}</code>\n` +
                 `📱 <b>Mobile Number:</b> <code>${pendingReg.mobile}</code>\n` +
                 (pendingReg.college ? `🏛️ <b>College / University:</b> <code>${pendingReg.college}</code>\n` : "") +
                 (pendingReg.year ? `📚 <b>Academic Year:</b> <code>${pendingReg.year}</code>\n` : "") +

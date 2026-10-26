@@ -5,7 +5,11 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
-const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie } = require("../middleware/auth");
+const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie, setRevokedTokenVersion } = require("../middleware/auth");
+const { validateStudentEmail, isDisposableEmail } = require("../utils/disposableEmailBlocker");
+const { checkAccountLockout, recordFailedAttempt, clearFailedAttempts } = require("../services/accountLockoutService");
+const { processLoginDevice } = require("../services/deviceSecurityService");
+const { verifyTurnstileToken } = require("../utils/turnstileGuard");
 const { getSiteName, getVaultName } = require("../config/siteConfig");
 const { authLimiter } = require("../middleware/rateLimit");
 const { sendLoginOtpEmail, sendForgotPasswordOtpEmail, sendSignupOtpEmail, sendProfileMobileOtpEmail, sendTelegramAuthNotice } = require("../services/emailService");
@@ -139,7 +143,8 @@ function getAdminPassword() {
  */
 function isGmail(email) {
   if (!email || typeof email !== "string") return false;
-  return email.trim().toLowerCase().endsWith("@gmail.com");
+  const result = validateStudentEmail(email);
+  return result.isValid;
 }
 
 const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -192,7 +197,7 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
     if (!isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Only @gmail.com email addresses are allowed for account registration.",
+        message: "Please enter a valid academic or personal email address (disposable/temporary emails are prohibited).",
         field: "email",
       });
     }
@@ -609,7 +614,7 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
     if (!isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Only @gmail.com email addresses are allowed for account registration & OTP verification.",
+        message: "Please enter a valid academic or personal email address (disposable/temporary emails are prohibited).",
       });
     }
 
@@ -809,7 +814,7 @@ router.post("/register", authLimiter, async (req, res) => {
     if (!isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Only @gmail.com email addresses are allowed for account registration & OTP verification.",
+        message: "Please enter a valid academic or personal email address (disposable/temporary emails are prohibited).",
       });
     }
 
@@ -1283,6 +1288,23 @@ router.post("/login", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Email and password are required." });
     }
 
+    // 🛡️ Category 2 Feature 3: Smart Anti-Bot (Turnstile) Check
+    const turnstileCheck = await verifyTurnstileToken(req.body?.turnstileToken, getClientIp(req));
+    if (!turnstileCheck.success) {
+      return res.status(400).json({ success: false, message: turnstileCheck.error });
+    }
+
+    // 🛡️ Category 1 Feature 2: Per-Account Brute Force Lockout Guard
+    const lockout = await checkAccountLockout(inputIdentity);
+    if (lockout.isLocked) {
+      return res.status(423).json({
+        success: false,
+        isLocked: true,
+        remainingMinutes: lockout.remainingMinutes,
+        message: `Account temporarily locked due to 5 consecutive failed attempts. Please retry in ${lockout.remainingMinutes} minutes.`,
+      });
+    }
+
     // Check if input is Main Admin alias
     const isMainAdminAlias = ADMIN_ALIASES.includes(inputIdentity) || inputIdentity === MAIN_ADMIN_EMAIL;
     if (isMainAdminAlias) {
@@ -1292,7 +1314,7 @@ router.post("/login", authLimiter, async (req, res) => {
       if (inputIdentity.includes("@") && !isGmail(inputIdentity)) {
         return res.status(400).json({
           success: false,
-          message: "Please enter a valid @gmail.com email address.",
+          message: "Please enter a valid email address (disposable emails are not permitted).",
         });
       }
     }
@@ -1464,8 +1486,30 @@ router.post("/login", authLimiter, async (req, res) => {
     }
 
     if (!passwordValid) {
-      return res.status(401).json({ success: false, message: "Invalid email/username or password." });
+      const lockResult = await recordFailedAttempt(inputIdentity, {
+        ip: getClientIp(req),
+        userAgent: req.headers["user-agent"],
+      });
+      if (lockResult.isLocked) {
+        return res.status(423).json({
+          success: false,
+          isLocked: true,
+          remainingMinutes: lockResult.remainingMinutes,
+          message: `Account temporarily locked for 20 minutes due to 5 consecutive failed attempts.`,
+        });
+      }
+      return res.status(401).json({
+        success: false,
+        message: `Invalid email/username or password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary lockout.`,
+      });
     }
+
+    // 🛡️ Reset failed attempt counter upon successful authentication
+    await clearFailedAttempts(inputIdentity);
+
+    // 🛡️ Category 1 Feature 3: Device Fingerprinting & New Login Alert
+    const clientFingerprint = req.body?.deviceFingerprint || req.headers["x-client-fingerprint"] || "";
+    const deviceResult = await processLoginDevice(userRecord, req, clientFingerprint);
 
     // Record login activity in user's history in background (Zero blocking lag!)
     if (db && docId) {
@@ -1590,7 +1634,7 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       if (inputIdentity.includes("@") && !isGmail(inputIdentity)) {
         return res.status(400).json({
           success: false,
-          message: "Please enter a valid @gmail.com email address.",
+          message: "Please enter a valid email address (disposable emails are not permitted).",
         });
       }
     }
@@ -1802,7 +1846,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Only @gmail.com email addresses are supported for password recovery.",
+        message: "Please enter a valid registered email address.",
       });
     }
 
@@ -1821,7 +1865,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
     if (!snap || snap.empty) {
       return res.status(404).json({
         success: false,
-        message: "No registered account found with this @gmail.com address. Please check your spelling or sign up.",
+        message: "No registered account found with this email address. Please check your spelling or sign up.",
       });
     }
 
@@ -1951,7 +1995,7 @@ router.post("/send-otp", authLimiter, async (req, res) => {
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Only @gmail.com email addresses are supported for OTP verification.",
+        message: "Please enter a valid registered email address.",
       });
     }
 
@@ -2418,6 +2462,36 @@ router.get("/me", authenticateToken, async (req, res) => {
   }
 
   return res.json({ success: true, user: req.user });
+});
+
+
+/**
+ * 🛡️ Category 1 Feature 4: Multi-Device Session Invalidation
+ * POST /api/auth/logout-all-devices
+ * Bumps user's tokenVersion in Firestore and server cache, invalidating all other active JWTs.
+ */
+router.post("/logout-all-devices", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  try {
+    const newVersion = Date.now();
+    setRevokedTokenVersion(req.user.id, newVersion);
+    if (db && req.user.id !== "admin-root") {
+      await db.collection("users").doc(req.user.id).update({
+        tokenVersion: newVersion,
+        sessionRevokedAt: Date.now(),
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+    clearAuthCookie(res, req);
+    return res.json({
+      success: true,
+      message: "Successfully logged out from all devices. All other active sessions have been revoked.",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to invalidate sessions: " + err.message });
+  }
 });
 
 module.exports = router;

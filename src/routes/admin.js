@@ -3230,7 +3230,37 @@ router.post("/security-bot/test-alert", authenticateToken, checkAdminOrPermissio
  * POST /api/admin/run-inactivity-purge
  * Manually executes the 90-day inactive student account auto-purge sweeper
  */
-router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+
+/**
+ * 🛡️ Category 2 Feature 5: Admin Step-Up Re-Authentication Endpoint
+ * POST /api/admin/step-up-verify
+ * Verifies Master Admin credentials before unlocking destructive actions for 10 minutes.
+ */
+router.post("/step-up-verify", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, message: "Admin password confirmation is required." });
+    }
+
+    const isValid = await verifyAdminPassword(req.user, password);
+    if (!isValid) {
+      return res.status(401).json({ success: false, message: "Invalid administrator password confirmation." });
+    }
+
+    const stepUpToken = createStepUpToken(req.user);
+    return res.json({
+      success: true,
+      message: "Step-up authorization granted for 10 minutes.",
+      stepUpToken,
+      expiresIn: 600,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
   try {
     const { purgeInactiveAccounts } = require("../services/accountPurgeService");
     const result = await purgeInactiveAccounts();
@@ -3411,7 +3441,7 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
  * POST /api/admin/cdn/purge-memory
  * Purges the in-memory RAM Edge CDN cache for notes
  */
-router.post("/cdn/purge-memory", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.post("/cdn/purge-memory", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
   try {
     let notesRouter = null;
     try {
@@ -3867,7 +3897,7 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
  * POST /api/admin/chat-bot/purge-inactive
  * Admin only: On-demand execution of 7-Day Inactivity Auto-Purge Guardian
  */
-router.post("/chat-bot/purge-inactive", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.post("/chat-bot/purge-inactive", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
   try {
     const customDays = req.body?.days ? Number(req.body.days) : null;
     const result = typeof chatRoutesRef.runInactivityPurge === "function"

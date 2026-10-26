@@ -497,8 +497,15 @@ export default function AuthModal({
   if (!isOpen) return null;
 
   const isGmail = (str) => {
-    if (!str) return false;
-    return str.trim().toLowerCase().endsWith("@gmail.com");
+    if (!str || typeof str !== "string") return false;
+    const clean = str.trim().toLowerCase();
+    // Allow any standard academic, corporate, or personal email domain
+    const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+    if (!emailRegex.test(clean)) return false;
+    // Block disposable email domains
+    const disposable = ["10minutemail", "tempmail", "temp-mail", "guerrillamail", "mailinator", "yopmail", "throwawaymail", "sharklasers", "dispostable", "trashmail", "fakeinbox"];
+    const domain = clean.split("@")[1] || "";
+    return !disposable.some((d) => domain.includes(d));
   };
 
   // Google Auth Core Processor
@@ -697,7 +704,7 @@ export default function AuthModal({
 
     if (cleanInput.includes("@") && !isGmail(cleanInput)) {
       setLoading(false);
-      return setFormError("Email must end with @gmail.com (e.g. yourname@gmail.com).", "signInIdentifier");
+      return setFormError("Please enter a valid academic or personal email address.", "signInIdentifier");
     }
 
     try {
@@ -726,7 +733,7 @@ export default function AuthModal({
     const cleanEmail = forgotEmail.trim().toLowerCase();
 
     if (!cleanEmail || !isGmail(cleanEmail)) {
-      return setFormError("Please enter a valid registered @gmail.com address.", "forgotEmail");
+      return setFormError("Please enter your registered email address.", "forgotEmail");
     }
 
     setLoading(true);
@@ -795,7 +802,7 @@ export default function AuthModal({
       return setFormError("Valid 10-digit registered Mobile Number is mandatory.", "forgotMobile");
     }
     if (!cleanEmail || !isGmail(cleanEmail)) {
-      return setFormError("Valid registered @gmail.com address is mandatory.", "forgotEmail");
+      return setFormError("Valid registered email address is mandatory.", "forgotEmail");
     }
 
     setLoading(true);
@@ -875,7 +882,7 @@ export default function AuthModal({
     }
     if (!email.trim() || !isGmail(email)) {
       setLoading(false);
-      return setFormError("Email MUST end with @gmail.com.", "email");
+      return setFormError("Please enter a valid academic or personal email address (disposable emails prohibited).", "email");
     }
     if (!college.trim()) {
       setLoading(false);
@@ -963,7 +970,7 @@ export default function AuthModal({
     }
     if (!email.trim() || !isGmail(email)) {
       setLoading(false);
-      return setFormError("Email MUST end with @gmail.com (Required for OTP verification).", "email");
+      return setFormError("Please enter a valid academic or personal email address.", "email");
     }
     if (!college.trim()) {
       setLoading(false);
@@ -1766,7 +1773,7 @@ export default function AuthModal({
                 type="text"
                 className="form-input"
                 style={fieldErrors.signInIdentifier ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                placeholder="yourname@gmail.com or admin"
+                placeholder="student@example.com or admin"
                 value={signInIdentifier}
                 onChange={(e) => {
                   setSignInIdentifier(e.target.value);
@@ -1776,7 +1783,7 @@ export default function AuthModal({
                 required
               />
               <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "3px" }}>
-                Must be an <strong>@gmail.com</strong> address (or admin alias).
+                Enter your registered email address (or admin alias).
               </span>
             </div>
 
@@ -2004,7 +2011,7 @@ export default function AuthModal({
                         type="email"
                         className="form-input"
                         style={fieldErrors.forgotEmail ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="yourname@gmail.com"
+                        placeholder="student@example.com"
                         value={forgotEmail}
                         onChange={(e) => {
                           setForgotEmail(e.target.value);
@@ -2013,7 +2020,7 @@ export default function AuthModal({
                         required
                       />
                       <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "3px" }}>
-                        Must match the @gmail.com account registered with this mobile number.
+                        Must match the email account registered with this mobile number.
                       </span>
                     </div>
 
@@ -2249,7 +2256,7 @@ export default function AuthModal({
                         type="email"
                         className="form-input"
                         style={fieldErrors.forgotEmail ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="yourname@gmail.com"
+                        placeholder="student@example.com"
                         value={forgotEmail}
                         onChange={(e) => {
                           setForgotEmail(e.target.value);
@@ -2258,7 +2265,7 @@ export default function AuthModal({
                         required
                       />
                       <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "3px" }}>
-                        Only registered <strong>@gmail.com</strong> accounts can be recovered.
+                        Enter your registered email address to receive your password reset passcode.
                       </span>
                     </div>
 
@@ -2561,14 +2568,14 @@ export default function AuthModal({
                       </div>
 
                       <div className="form-group" id="field-group-email">
-                        <label className="form-label">Gmail Address * (@gmail.com)</label>
+                        <label className="form-label">Email Address *</label>
                         <FieldNotice fieldKey="email" />
                         <input
                           id="input-email"
                           type="email"
                           className="form-input"
                           style={fieldErrors.email ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                          placeholder="name@gmail.com"
+                          placeholder="student@example.com"
                           value={email}
                           onChange={(e) => {
                             setEmail(e.target.value);
@@ -2872,14 +2879,14 @@ export default function AuthModal({
                       </div>
 
                       <div className="form-group" id="field-group-email-email">
-                        <label className="form-label">Gmail Address * (@gmail.com)</label>
+                        <label className="form-label">Email Address *</label>
                         <FieldNotice fieldKey="email" />
                         <input
                           id="input-email-email"
                           type="email"
                           className="form-input"
                           style={fieldErrors.email ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                          placeholder="name@gmail.com"
+                          placeholder="student@example.com"
                           value={email}
                           onChange={(e) => {
                             setEmail(e.target.value);
