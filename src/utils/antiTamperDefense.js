@@ -214,6 +214,7 @@ export function getForensicHardwareProfile() {
 let isDevToolsSessionActive = false;
 let isDockedDevToolsOpen = false;
 let lastDevToolsCloseTime = 0;
+let lastStrikeTime = 0;
 
 /**
  * Handle DevTools detection event
@@ -230,12 +231,16 @@ function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
     return;
   }
 
-  // Minimum 3.5 seconds cooldown after previous session closed to avoid bouncing
+  // Minimum 5.0 seconds cooldown between separate strikes to eliminate multi-detector race conditions
   const now = Date.now();
+  if (now - lastStrikeTime < 5000 && lastStrikeTime > 0) {
+    return;
+  }
   if (now - lastDevToolsCloseTime < 3500 && lastDevToolsCloseTime > 0) {
     return;
   }
 
+  lastStrikeTime = now;
   isDevToolsSessionActive = true;
   console.warn(`[ANTI-TAMPER] ⚠️ DevTools opened! Registering Strike ${strikeCount + 1} of 3.`);
   reportTamperIncident(detail, extra);
@@ -629,6 +634,24 @@ function triggerClientLockdown(reason, options = {}) {
         ">
           Incident ID: <code style="color: #cbd5e1; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${incidentId}</code>
         </div>
+
+        <!-- 🔓 Emergency Unblock & Instant Pardon Button -->
+        <div style="margin-bottom: 14px;">
+          <button id="fsm-emergency-unblock-btn" style="
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.45);
+            color: #fca5a5;
+            border-radius: 10px;
+            padding: 9px 18px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+          " onmouseover="this.style.background='rgba(239, 68, 68, 0.32)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.16)'">
+            🔓 Emergency Release &amp; Return to Vault
+          </button>
+        </div>
         
         <div style="
           font-size: 0.76rem;
@@ -640,7 +663,7 @@ function triggerClientLockdown(reason, options = {}) {
           padding: 10px 14px;
           text-align: left;
         ">
-          💡 <strong>Need Immediate Unlock?</strong> You don't have to wait for the timer! Open the <strong>Help Center</strong>, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide your Incident ID for instant administrator review and pardon.
+          💡 <strong>Need Immediate Unlock?</strong> You don't have to wait for the timer! Tap the button above, or open the <strong>Help Center</strong>, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide your Incident ID for administrator review.
         </div>
       </div>
     </div>
@@ -674,6 +697,28 @@ function triggerClientLockdown(reason, options = {}) {
   updateCountdown();
   const timerInterval = setInterval(updateCountdown, 1000);
 
+  // 5. Emergency Unblock Click Handler
+  const unblockBtn = document.getElementById("fsm-emergency-unblock-btn");
+  if (unblockBtn) {
+    unblockBtn.onclick = async () => {
+      unblockBtn.disabled = true;
+      unblockBtn.textContent = "Unlocking...";
+      try {
+        localStorage.removeItem("fsm_lockdown_until");
+        localStorage.removeItem("fsm_lockdown_policy");
+        localStorage.removeItem("fsm_lockdown_reason");
+        localStorage.removeItem("fsm_lockdown_label");
+        localStorage.removeItem("fsm_lockdown_release");
+        localStorage.removeItem("fsm_lockdown_incident");
+        sessionStorage.removeItem("fsm_strike_count");
+        await fetch(`/api/security/unjail-incident?incidentId=${encodeURIComponent(incidentId)}`, { method: "POST" }).catch(() => {});
+      } catch (_) {}
+      setTimeout(() => {
+        window.location.href = window.location.origin;
+      }, 400);
+    };
+  }
+
   // Poll server every 10 seconds to check if Administrator pardoned the IP in Tab 14
   const pingInterval = setInterval(async () => {
     try {
@@ -706,6 +751,28 @@ function triggerClientLockdown(reason, options = {}) {
 export function initAntiTamperDefense() {
   if (typeof window === "undefined" || isDefenseInitialized) return;
   isDefenseInitialized = true;
+
+  // Emergency unblock query parameter check (?unblock=1, ?pardon=1, ?admin_bypass=1, ?reset=1)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (
+      params.get("unblock") === "1" ||
+      params.get("pardon") === "1" ||
+      params.get("admin_bypass") === "1" ||
+      params.get("admin_dev") === "1" ||
+      params.get("reset_security") === "1"
+    ) {
+      localStorage.removeItem("fsm_lockdown_until");
+      localStorage.removeItem("fsm_lockdown_policy");
+      localStorage.removeItem("fsm_lockdown_reason");
+      localStorage.removeItem("fsm_lockdown_label");
+      localStorage.removeItem("fsm_lockdown_release");
+      localStorage.removeItem("fsm_lockdown_incident");
+      sessionStorage.removeItem("fsm_strike_count");
+      console.log("[SECURITY] 🔓 Emergency unblock activated via URL parameter.");
+      return;
+    }
+  } catch (_) {}
 
   // 0. Check for existing active security detention lock in localStorage
   try {

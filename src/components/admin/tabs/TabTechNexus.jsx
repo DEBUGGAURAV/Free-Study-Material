@@ -1,17 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  X, Mail, Shield, Trash2, Eye, EyeOff, Edit3, UserCheck, UserX, Activity,
-  Search, CheckCircle, Clock, ChevronLeft, ChevronRight, Save, RefreshCw,
-  Database, Cpu, Server, HardDrive, Globe, Code, Cloud, Send, Download,
-  Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
-  Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Megaphone, Plus, Lock,
-  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug
+  X, Shield, Trash2, Search, Clock, Save, RefreshCw,
+  Database, Cpu, Server, HardDrive, Globe, Cloud, Download,
+  Upload, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles,
+  FileText, Sliders, Layers, Scissors, RotateCcw, Lock
 } from "lucide-react";
-import { api, getAuthToken } from "../../../api";
-import { formatFileSize, formatMB } from "../../../utils/formatUtils";
+import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
-import VirtualPdfReader from "../../VirtualPdfReader";
 
 export default function TabTechNexus(props) {
   const {

@@ -19,6 +19,25 @@ async function calculateFileHash(filePath) {
 }
 
 /**
+ * Extracts a standardized duplicate metadata payload from a Firestore document
+ */
+function extractDuplicatePayload(doc) {
+  const data = doc.data();
+  return {
+    id: doc.id,
+    telegramMessageId: data.telegramMessageId || null,
+    telegramFileId: data.telegramFileId || null,
+    driveLink: data.driveLink || null,
+    fileUrl: data.fileUrl || null,
+    fileSize: data.fileSize,
+    compressedSize: data.compressedSize,
+    mimeType: data.mimeType,
+    thumbnailUrl: data.thumbnailUrl,
+    downloadUrl: data.downloadUrl,
+  };
+}
+
+/**
  * Checks Firestore if this exact file hash has already been stored
  * @param {string} fileHash 
  * @returns {Promise<object|null>} Existing document data or null
@@ -43,18 +62,7 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
           if (!data.telegramMessageId && !data.driveLink && !data.fileUrl) continue;
 
           console.log(`[DEDUP] Duplicate match found via SHA-256! (Existing Doc: ${doc.id})`);
-          return {
-            id: doc.id,
-            telegramMessageId: data.telegramMessageId || null,
-            telegramFileId: data.telegramFileId || null,
-            driveLink: data.driveLink || null,
-            fileUrl: data.fileUrl || null,
-            fileSize: data.fileSize,
-            compressedSize: data.compressedSize,
-            mimeType: data.mimeType,
-            thumbnailUrl: data.thumbnailUrl,
-            downloadUrl: data.downloadUrl,
-          };
+          return extractDuplicatePayload(doc);
         }
       }
     }
@@ -82,18 +90,7 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
             cleanInput.replace(/[^a-z0-9]/g, "") === cleanDoc.replace(/[^a-z0-9]/g, "")
           ) {
             console.log(`[DEDUP] Duplicate match found via File Signature! (Existing Doc: ${doc.id})`);
-            return {
-              id: doc.id,
-              telegramMessageId: data.telegramMessageId || null,
-              telegramFileId: data.telegramFileId || null,
-              driveLink: data.driveLink || null,
-              fileUrl: data.fileUrl || null,
-              fileSize: data.fileSize,
-              compressedSize: data.compressedSize,
-              mimeType: data.mimeType,
-              thumbnailUrl: data.thumbnailUrl,
-              downloadUrl: data.downloadUrl,
-            };
+            return extractDuplicatePayload(doc);
           }
         }
       }
@@ -130,18 +127,7 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
                       console.log(
                         `[DEDUP] 🧬 Smart Size Variance match! New: ${(Number(fileSize) / (1024 * 1024)).toFixed(2)}MB, Existing: ${(existingSize / (1024 * 1024)).toFixed(2)}MB (Variance: ${(sizeDiff / 1024).toFixed(1)}KB <= ${(maxVarianceBytes / (1024 * 1024)).toFixed(2)}MB limit). Doc: ${doc.id}`
                       );
-                      return {
-                        id: doc.id,
-                        telegramMessageId: data.telegramMessageId || null,
-                        telegramFileId: data.telegramFileId || null,
-                        driveLink: data.driveLink || null,
-                        fileUrl: data.fileUrl || null,
-                        fileSize: data.fileSize,
-                        compressedSize: data.compressedSize,
-                        mimeType: data.mimeType,
-                        thumbnailUrl: data.thumbnailUrl,
-                        downloadUrl: data.downloadUrl,
-                      };
+                      return extractDuplicatePayload(doc);
                     }
                   }
                 }

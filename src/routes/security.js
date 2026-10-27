@@ -512,6 +512,35 @@ router.get("/status", (req, res) => {
   });
 });
 
+/**
+ * POST /api/security/unjail-incident
+ * Release connection or incident from security quarantine
+ */
+router.post("/unjail-incident", (req, res) => {
+  try {
+    const incidentId = (req.query?.incidentId || req.body?.incidentId || "").trim();
+    const clientIp = getClientIp(req);
+    let ok = false;
+    if (incidentId && typeof unjailByIncident === "function") {
+      ok = unjailByIncident(incidentId) || ok;
+    }
+    if (clientIp && typeof unjailIp === "function") {
+      ok = unjailIp(clientIp) || ok;
+    }
+    // Clear strikes cache
+    if (incidentId) tamperStrikes.delete(incidentId);
+    if (clientIp) tamperStrikes.delete(clientIp);
+
+    return res.json({
+      success: true,
+      released: ok,
+      message: "Quarantine detention released.",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 function clearTamperStrikes(key) {
   if (key) {
     tamperStrikes.delete(key);
