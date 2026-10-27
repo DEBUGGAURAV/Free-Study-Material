@@ -215,6 +215,84 @@ let isDevToolsSessionActive = false;
 let isDockedDevToolsOpen = false;
 let lastDevToolsCloseTime = 0;
 let lastStrikeTime = 0;
+let debuggerFreezeInterval = null;
+
+/**
+ * Anti-Scrape Curtain: Immediately conceals and blurs all page content while DevTools is open.
+ * Guarantees that opening DevTools 1 time gives 0% visibility of notes or student data!
+ */
+function applyAntiScrapeCurtain() {
+  if (isDevToolsBypassed() || isLockdownActive) return;
+  let curtain = document.getElementById("fsm-anti-scrape-curtain");
+  if (!curtain) {
+    curtain = document.createElement("div");
+    curtain.id = "fsm-anti-scrape-curtain";
+    curtain.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 2147483645;
+      background: rgba(11, 15, 25, 0.95);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      text-align: center;
+      user-select: none;
+      pointer-events: auto;
+    `;
+    curtain.innerHTML = `
+      <div style="max-width: 500px; width: 100%; background: #111827; border: 2px solid #ef4444; border-radius: 16px; padding: 32px 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.8);">
+        <div style="font-size: 42px; margin-bottom: 12px;">🛡️</div>
+        <div style="font-size: 1.25rem; font-weight: 800; color: #ef4444; margin-bottom: 8px;">
+          CONTENT PROTECTED • DEVTOOLS DETECTED
+        </div>
+        <p style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.6; margin-bottom: 16px;">
+          Developer Tools or Console Inspection is currently active. To safeguard student privacy, copyrighted lecture notes, and API integrity, all viewport data is protected.
+        </p>
+        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 12px 14px; font-size: 0.82rem; color: #fca5a5; font-weight: 700;">
+          ⚠️ Action Required: Close Developer Tools (Inspect / Console) to restore view.
+        </div>
+      </div>
+    `;
+    document.body.appendChild(curtain);
+  }
+}
+
+function removeAntiScrapeCurtain() {
+  const curtain = document.getElementById("fsm-anti-scrape-curtain");
+  if (curtain && !isLockdownActive) {
+    curtain.remove();
+  }
+}
+
+/**
+ * Thread Freeze Debugger Trap: Pauses execution thread in browser Sources tab
+ * so attacker cannot type scraping loops or inspect objects via console!
+ */
+function startDebuggerTrap() {
+  if (isDevToolsBypassed() || isLockdownActive) return;
+  if (!debuggerFreezeInterval) {
+    debuggerFreezeInterval = setInterval(() => {
+      if (isDevToolsSessionActive && !isDevToolsBypassed() && !isLockdownActive) {
+        try {
+          Function("debugger")();
+        } catch (_) {}
+      }
+    }, 250);
+  }
+}
+
+function stopDebuggerTrap() {
+  if (debuggerFreezeInterval) {
+    clearInterval(debuggerFreezeInterval);
+    debuggerFreezeInterval = null;
+  }
+}
 
 /**
  * Handle DevTools detection event
@@ -223,6 +301,13 @@ let lastStrikeTime = 0;
  * Strike 3 only happens if DevTools was closed and RE-OPENED a 3rd time.
  */
 function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
+  // 🛡️ Instant Anti-Scraping Shield: Conceal page and freeze thread immediately!
+  applyAntiScrapeCurtain();
+  startDebuggerTrap();
+  try {
+    console.clear();
+  } catch (_) {}
+
   // If DevTools is ALREADY open and we are in an active session, DO NOT ADD ANOTHER STRIKE!
   if (isDevToolsSessionActive) {
     if (!isLockdownActive && strikeCount < 3) {
@@ -257,6 +342,10 @@ function onDevToolsClosed() {
   isDevToolsSessionActive = false;
   isDockedDevToolsOpen = false;
   lastDevToolsCloseTime = Date.now();
+
+  // Remove anti-scraping curtain and stop debugger trap when DevTools is closed
+  removeAntiScrapeCurtain();
+  stopDebuggerTrap();
 
   // Dismiss warning overlay when DevTools is closed
   const overlay = document.getElementById("fsm-tamper-warning-overlay");
