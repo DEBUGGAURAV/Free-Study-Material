@@ -207,12 +207,59 @@ export function getForensicHardwareProfile() {
   };
 }
 
+// Active inspection session tracking (Prevents multiple strikes during a single inspect session)
+let isDevToolsSessionActive = false;
+let lastDevToolsCloseTime = 0;
+
+/**
+ * Handle DevTools detection event
+ * Strict Rule: One continuous inspect session = EXACTLY 1 STRIKE!
+ * Strike 2 only happens if DevTools was closed and RE-OPENED.
+ * Strike 3 only happens if DevTools was closed and RE-OPENED a 3rd time.
+ */
+function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
+  // If DevTools is ALREADY open and we are in an active session, DO NOT ADD ANOTHER STRIKE!
+  if (isDevToolsSessionActive) {
+    if (!isLockdownActive && strikeCount < 3) {
+      showStrikeWarning(strikeCount);
+    }
+    return;
+  }
+
+  // Minimum 3.5 seconds cooldown after previous session closed to avoid bouncing
+  const now = Date.now();
+  if (now - lastDevToolsCloseTime < 3500 && lastDevToolsCloseTime > 0) {
+    return;
+  }
+
+  isDevToolsSessionActive = true;
+  console.warn(`[ANTI-TAMPER] ⚠️ DevTools opened! Registering Strike ${strikeCount + 1} of 3.`);
+  reportTamperIncident(detail, extra);
+}
+
+/**
+ * Handle DevTools closure event
+ * Allows the next inspect attempt to register as a separate strike.
+ */
+function onDevToolsClosed() {
+  if (!isDevToolsSessionActive) return;
+
+  console.log("[ANTI-TAMPER] 🟢 DevTools closed. Inspect session ended.");
+  isDevToolsSessionActive = false;
+  lastDevToolsCloseTime = Date.now();
+
+  // Dismiss warning overlay when DevTools is closed
+  const overlay = document.getElementById("fsm-tamper-warning-overlay");
+  if (overlay && !isLockdownActive) {
+    overlay.remove();
+  }
+}
+
 /**
  * Report Tampering Beacon to Server -> Telegram Supergroup Topic 6
  */
 async function reportTamperIncident(detail = "Unauthorized script tampering detected", extra = {}) {
   const now = Date.now();
-  if (now - lastTamperDispatch < 1800) return; // 1.8s debounce
   lastTamperDispatch = now;
 
   strikeCount += 1;
@@ -321,29 +368,33 @@ function showStrikeWarning(strike, customMessage) {
           <span style="background: ${isFinalWarning ? "#ef4444" : "#f59e0b"}; color: #000; font-size: 0.72rem; padding: 2px 8px; border-radius: 10px; font-weight: 900;">ATTEMPT ${strike} OF 3</span>
         </div>
         <div style="font-size: 0.83rem; color: #f8fafc; line-height: 1.5; margin-bottom: 8px;">
-          ${customMessage || "Inspecting console or opening Developer Tools is strictly prohibited on Free Study Material Vault. To maintain academic integrity, please close DevTools."}
+          ${customMessage || "Inspecting console or opening Developer Tools is strictly prohibited on Free Study Material Vault. To maintain academic integrity, please close Developer Tools."}
         </div>
         <div style="font-size: 0.75rem; color: ${isFinalWarning ? "#f87171" : "#fbbf24"}; font-weight: 600; background: rgba(0,0,0,0.25); padding: 5px 8px; border-radius: 6px;">
-          ⚠️ Notice: Violating 3 times will result in a permanent database ban and IP detention quarantine.
+          ${isFinalWarning 
+            ? "⚠️ FINAL ATTEMPT WARNING: If you open DevTools 1 more time, you will be locked out for 24 Hours!" 
+            : `⚠️ Notice: Opening DevTools ${3 - strike} more time(s) will result in a 24-hour security quarantine.`}
         </div>
       </div>
       <button id="fsm-warning-dismiss-btn" style="
         background: none;
         border: none;
-        color: rgba(255,255,255,0.7);
-        font-size: 20px;
+        color: #94a3b8;
         cursor: pointer;
-        padding: 0;
+        font-size: 18px;
+        padding: 0 4px;
         line-height: 1;
-      ">✕</button>
+      " title="Dismiss">&times;</button>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  const dismissBtn = document.getElementById("fsm-warning-dismiss-btn");
+  const dismissBtn = overlay.querySelector("#fsm-warning-dismiss-btn");
   if (dismissBtn) {
-    dismissBtn.onclick = () => overlay.remove();
+    dismissBtn.onclick = () => {
+      overlay.remove();
+    };
   }
 
   // Auto-dismiss warning after 8 seconds
@@ -752,16 +803,13 @@ export function initAntiTamperDefense() {
         ignore: () => isDevToolsBypassed(),
         ondevtoolopen: (type) => {
           const detectorLabel = DETECTOR_NAMES[type] || `Detector #${type}`;
-          reportTamperIncident(
+          onDevToolsDetected(
             `Developer Tools / Console Inspection Attempt (disable-devtool: ${detectorLabel})`,
             { detectorType: type }
           );
         },
         ondevtoolclose: () => {
-          const overlay = document.getElementById("fsm-tamper-warning-overlay");
-          if (overlay && !isLockdownActive) {
-            overlay.remove();
-          }
+          onDevToolsClosed();
         },
       });
       console.log("[SECURITY] 🔒 Option 2: disable-devtool armed with all detectors (Size, RegExp, Debugger).");
@@ -774,8 +822,13 @@ export function initAntiTamperDefense() {
       if (isDevToolsBypassed()) return;
       const widthDiff = window.outerWidth - window.innerWidth;
       const heightDiff = window.outerHeight - window.innerHeight;
-      if (widthDiff > 160 || heightDiff > 160) {
-        reportTamperIncident(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
+      const isDocked = widthDiff > 160 || heightDiff > 160;
+
+      if (isDocked) {
+        onDevToolsDetected(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
+      } else if (!isDocked && isDevToolsSessionActive) {
+        // Docked DevTools was closed! End the inspect session so user can use the web normally
+        onDevToolsClosed();
       }
     };
     window.addEventListener("resize", checkDockedDevTools);
@@ -793,7 +846,7 @@ export function initAntiTamperDefense() {
         if (isF12 || isInspectKey || isViewSource) {
           e.preventDefault();
           e.stopPropagation();
-          reportTamperIncident(`Developer Tools keyboard shortcut (${e.key}) intercepted`);
+          onDevToolsDetected(`Developer Tools keyboard shortcut (${e.key}) intercepted`);
         }
       },
       true

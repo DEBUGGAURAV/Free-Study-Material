@@ -15,12 +15,21 @@ const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("../middleware/auth");
 const { db } = require("../firebase");
 const { tursoClient } = require("../services/tursoService");
-const { jailSpecificIp, getClientIp } = require("../middleware/ipJail");
+const {
+  jailSpecificIp,
+  jailSpecificDevice,
+  unjailDevice,
+  unjailIp,
+  unjailByIncident,
+  getJailStatus,
+  getClientIp,
+} = require("../middleware/ipJail");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { decryptUserObject } = require("../utils/cryptoVault");
 
 // Memory cache to track strikes per IP & user (TTL 24 hours)
 const tamperStrikes = new Map(); // key -> { count: number, violations: Array, lastAt: number }
+const recentAppeals = new Map(); // key -> timestamp (rate limit appeals)
 
 setInterval(() => {
   const now = Date.now();
@@ -228,10 +237,22 @@ router.post("/tamper-alert", async (req, res) => {
     // 2. Track Strike Count per User ID, Anonymous Guest UID, or IP Address
     const guestUid = clientUser?.guestUid || null;
     const strikeKey = userId || guestUid || clientIp;
-    let currentRecord = tamperStrikes.get(strikeKey) || { count: 0, violations: [], lastAt: Date.now() };
+    const now = Date.now();
+    let currentRecord = tamperStrikes.get(strikeKey) || { count: 0, violations: [], lastAt: 0 };
 
-    currentRecord.count += 1;
-    currentRecord.lastAt = Date.now();
+    // De-bounce rapid multi-detector bursts: Enforce session separation
+    const timeSinceLast = now - (currentRecord.lastAt || 0);
+    const clientStrikeNum = Number(clientStrikes);
+
+    if (!isNaN(clientStrikeNum) && clientStrikeNum > 0) {
+      // Sync strictly with verified client strike state
+      currentRecord.count = clientStrikeNum;
+    } else if (timeSinceLast > 3500 || currentRecord.count === 0) {
+      // Only increment if at least 3.5 seconds have elapsed since last strike event
+      currentRecord.count += 1;
+    }
+
+    currentRecord.lastAt = now;
     currentRecord.violations.push({
       time: new Date().toISOString(),
       detail: detail || "Core API tampering",
@@ -240,7 +261,7 @@ router.post("/tamper-alert", async (req, res) => {
     });
     tamperStrikes.set(strikeKey, currentRecord);
 
-    const effectiveStrikes = Math.max(currentRecord.count, Number(clientStrikes || 0));
+    const effectiveStrikes = currentRecord.count;
 
     // 3. Check 3-Strike Threshold
     if (effectiveStrikes >= 3) {
@@ -270,8 +291,14 @@ router.post("/tamper-alert", async (req, res) => {
         } catch (_) {}
       }
 
-      // C. 24-Hour IP Detention in Firewall (Jails IP for all unauthenticated or authenticated traffic)
-      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`);
+      // C. 24-Hour IP & Device Dual-Key Detention in Firewall
+      const incidentId = req.body?.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || forensics?.deviceHash || guestUid || "").trim();
+
+      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId);
+      if (rawDeviceId) {
+        jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp);
+      }
 
       // D. Dispatch Critical Ban Alert to Telegram Supergroup Topic 6
       await dispatchTamperTelegramAlert({
@@ -291,16 +318,17 @@ router.post("/tamper-alert", async (req, res) => {
       return res.json({
         success: true,
         action: "BAN",
+        incidentId,
         strikeCount: effectiveStrikes,
         isBlocked: true,
         durationMs: detentionMs,
         durationLabel: "24 Hours",
         policyName: "Client Script / DevTools Tamper (Strike 3)",
         autoReleasePolicy: "✅ Auto-release after 24h",
-        adminPardon: "Can be instantly pardoned by Administrator",
+        adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
         targetTimestamp: autoReleaseTime,
         autoReleaseAt: new Date(autoReleaseTime).toISOString(),
-        message: "Security Violation: Repeated script tampering detected (3/3 strikes). Your IP is detained in security quarantine for 24 Hours.",
+        message: `Security Violation: Repeated script tampering detected (3/3 strikes). Your connection is detained in security quarantine for 24 Hours. Incident: ${incidentId}`,
       });
     }
 
@@ -368,6 +396,120 @@ router.post("/anti-bot-alert", async (req, res) => {
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
+});
+
+/**
+ * POST /api/security/jail-appeal
+ * Allows a quarantined user or shared-campus student to appeal detention
+ * Strictly dispatches to Topic 750 (🛡️ IP Jail & Security Appeals)
+ */
+router.post("/jail-appeal", async (req, res) => {
+  try {
+    const clientIp = getClientIp(req);
+    const { incidentId, name, email, mobile, message, deviceId } = req.body || {};
+    const effectiveDevId = (deviceId || req.headers["x-device-id"] || req.cookies?.fsm_device_id || "").trim();
+
+    const dedupKey = `${clientIp}_${effectiveDevId}`;
+    const now = Date.now();
+    if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 3 * 60 * 1000)) {
+      return res.status(429).json({
+        success: false,
+        message: "An appeal was recently submitted for this connection. Please wait a few moments for admin review in Telegram Topic 750.",
+      });
+    }
+    recentAppeals.set(dedupKey, now);
+
+    const safeIncId = (incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`).trim();
+
+    const messageText = [
+      `🛡️ <b>[SECURITY QUARANTINE / IP JAIL APPEAL]</b>`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `🆔 <b>Incident ID:</b> <code>${safeHtml(safeIncId)}</code>`,
+      `👤 <b>Student Name:</b> ${safeHtml(name || "Student Visitor")}`,
+      `📧 <b>Email:</b> <code>${safeHtml(email || "Not Provided")}</code>`,
+      mobile ? `📱 <b>Mobile:</b> <code>${safeHtml(mobile)}</code>` : null,
+      `🌐 <b>Public IP:</b> <code>${safeHtml(clientIp)}</code>`,
+      effectiveDevId ? `📱 <b>Device Hash:</b> <code>${safeHtml(effectiveDevId.slice(0, 16))}...</code>` : null,
+      `💬 <b>Appeal Statement:</b>`,
+      `<i>${safeHtml(message || "Student submitted pardon request for security detention.")}</i>`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `🎯 <b>Target:</b> <b>🛡️ IP Jail & Security Appeals (Topic 750)</b>`,
+      `⚡ <b>Admin Action Choices:</b>`,
+      `• <b>Pardon Device Only:</b> Releases only this student's device (safeguards campus network)`,
+      `• <b>Pardon Entire IP:</b> Unjails the entire public IP address for all students`,
+      `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: "📱 Pardon Device Only", callback_data: `appeal:pardon_dev:${safeIncId}:${effectiveDevId || "none"}` },
+          { text: "🌐 Pardon Entire IP", callback_data: `appeal:pardon_ip:${safeIncId}:${clientIp}` },
+        ],
+        [
+          { text: "❌ Reject Appeal", callback_data: `appeal:deny:${safeIncId}` },
+        ]
+      ],
+    };
+
+    // Dispatch strictly to Topic 750 in Security Supergroup
+    await sendTelegramAuthNotice({
+      event: "IP_JAIL_APPEAL",
+      user: {
+        name: name || "Appealing Student",
+        email: email || "N/A",
+        mobile: mobile || "N/A",
+        ip: clientIp,
+      },
+      method: "Web Security Appeal Form",
+      detail: messageText,
+      threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+      replyMarkup,
+    });
+
+    // Save record to database if available
+    if (db) {
+      try {
+        await db.collection("jail_appeals").add({
+          incidentId: safeIncId,
+          name: name || "Student",
+          email: email || "",
+          mobile: mobile || "",
+          message: message || "",
+          ip: clientIp,
+          deviceId: effectiveDevId,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        });
+      } catch (_) {}
+    }
+
+    return res.json({
+      success: true,
+      message: `Appeal for incident ${safeIncId} has been successfully logged and sent to Administrator in Telegram Topic 750.`,
+      incidentId: safeIncId,
+    });
+  } catch (err) {
+    console.error("[SECURITY-APPEAL-ERROR]", err);
+    return res.status(500).json({ success: false, message: "Appeal processing error: " + err.message });
+  }
+});
+
+/**
+ * GET /api/security/status
+ * Check current IP & Device security detention status
+ */
+router.get("/status", (req, res) => {
+  const clientIp = getClientIp(req);
+  const deviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.query?.deviceId || "").trim();
+  const status = getJailStatus(clientIp, deviceId);
+  return res.json({
+    success: true,
+    ip: clientIp,
+    ...status,
+  });
 });
 
 function clearTamperStrikes(key) {
