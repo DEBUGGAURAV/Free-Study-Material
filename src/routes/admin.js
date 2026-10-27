@@ -3349,6 +3349,11 @@ let techSettings = {
   downloadSchedule: "manual",
   downloadDisabledReason: "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.",
 
+  // 🧬 Smart SHA-256 & Size Variance Deduplication Engine (Tab 10 Controller)
+  enableSmartDeduplication: true,
+  dedupMaxVarianceMB: 4, // Default 4 MB (Updated from 3MB per admin directive)
+  dedupMaxVarianceBytes: 4 * 1024 * 1024, // 4,194,304 Bytes
+
   updatedAt: new Date().toISOString(),
 };
 
@@ -3362,6 +3367,11 @@ let techSettings = {
         console.log("[TECH-NEXUS] Next-Gen tech settings successfully loaded from Firestore.");
       }
     }
+    // Sync with smart deduplication engine
+    try {
+      const { updateDedupSettings } = require("../services/dedupSettings");
+      updateDedupSettings(techSettings);
+    } catch (_) {}
     // Sync with maintenance middleware
     try {
       const { updateMaintenanceConfig } = require("../middleware/maintenance");
@@ -3424,6 +3434,11 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
     if (db) {
       await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
     }
+
+    try {
+      const { updateDedupSettings } = require("../services/dedupSettings");
+      updateDedupSettings(techSettings);
+    } catch (_) {}
 
     try {
       const { updateMaintenanceConfig } = require("../middleware/maintenance");
@@ -3596,6 +3611,11 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
     if (db) {
       await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
     }
+
+    try {
+      const { updateDedupSettings } = require("../services/dedupSettings");
+      updateDedupSettings(techSettings);
+    } catch (_) {}
 
     try {
       const { updateMaintenanceConfig } = require("../middleware/maintenance");

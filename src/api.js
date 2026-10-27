@@ -981,6 +981,7 @@ export const api = {
       body: JSON.stringify(settings),
     }),
   purgeCdnMemory: () => request("/admin/cdn/purge-memory", { method: "POST" }),
+  runDeduplicationSweep: () => request("/admin/telegram/deduplicate", { method: "POST" }),
   prewarmPopularNotes: (limit = 10) =>
     request("/admin/cdn/prewarm-popular", {
       method: "POST",

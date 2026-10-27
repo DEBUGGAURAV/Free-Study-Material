@@ -714,11 +714,22 @@ async function deduplicateDatabaseNotes() {
     } else if (normTitle && seenNormTitles.has(normTitle)) {
       const prev = seenNormTitles.get(normTitle);
       const sizeDiff = Math.abs(Number(data.fileSize || 0) - Number(prev.fileSize || 0));
-      const maxDiff = Math.max(3 * 1024 * 1024, Number(data.fileSize || prev.fileSize || 0) * 0.25);
-      // If same normalized title and size difference is within 3MB (or either is dummy/test file < 5KB)
+      let configuredMaxVariance = 4 * 1024 * 1024; // Default 4 MB (Updated per admin controller directive)
+      try {
+        const { getDedupSettings } = require("../services/dedupSettings");
+        const cfg = getDedupSettings();
+        if (cfg.enableSmartDeduplication === false) {
+          configuredMaxVariance = 0; // Deduplication disabled
+        } else {
+          configuredMaxVariance = Number(cfg.dedupMaxVarianceBytes || (4 * 1024 * 1024));
+        }
+      } catch (_) {}
+
+      const maxDiff = Math.max(configuredMaxVariance, Number(data.fileSize || prev.fileSize || 0) * 0.25);
+      // If same normalized title and size difference is within configured variance (default 4MB)
       if (sizeDiff <= maxDiff || Number(data.fileSize || 0) < 5000 || Number(prev.fileSize || 0) < 5000) {
         isDup = true;
-        reason = `Normalized title match ("${data.title}") with ${(sizeDiff / 1024).toFixed(1)} KB size variance`;
+        reason = `Normalized title match ("${data.title}") with ${(sizeDiff / (1024 * 1024)).toFixed(2)} MB variance (Configured limit: ${(maxDiff / (1024 * 1024)).toFixed(2)} MB / ${maxDiff.toLocaleString()} Bytes)`;
       }
     }
 

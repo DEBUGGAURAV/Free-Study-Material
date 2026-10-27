@@ -32,7 +32,70 @@ export default function TabTechNexus(props) {
     techTelemetry,
   } = props;
 
-  
+  const [sweepLoading, setSweepLoading] = useState(false);
+
+  const handleVarianceMbChange = (val) => {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num >= 0) {
+      const bytes = Math.round(num * 1024 * 1024);
+      setTechSettings((prev) => ({
+        ...prev,
+        dedupMaxVarianceMB: num,
+        dedupMaxVarianceBytes: bytes,
+      }));
+    } else {
+      setTechSettings((prev) => ({
+        ...prev,
+        dedupMaxVarianceMB: val,
+      }));
+    }
+  };
+
+  const handleVarianceBytesChange = (val) => {
+    const bytes = parseInt(val, 10);
+    if (!isNaN(bytes) && bytes >= 0) {
+      const mb = parseFloat((bytes / (1024 * 1024)).toFixed(2));
+      setTechSettings((prev) => ({
+        ...prev,
+        dedupMaxVarianceMB: mb,
+        dedupMaxVarianceBytes: bytes,
+      }));
+    } else {
+      setTechSettings((prev) => ({
+        ...prev,
+        dedupMaxVarianceBytes: val,
+      }));
+    }
+  };
+
+  const handleRunDedupSweep = async () => {
+    if (
+      !window.confirm(
+        "Run Automated Database Deduplication Sweep?\n\nThis will scan all study materials in Firestore and archive redundant duplicate copies based on your configured size variance tolerance limit."
+      )
+    )
+      return;
+    setSweepLoading(true);
+    try {
+      const res = await api.runDeduplicationSweep();
+      if (res && res.success) {
+        setTechActionMsg(
+          `✅ Deduplication sweep complete! ${res.cleanedCount || 0} duplicate files consolidated & storage reclaimed.`
+        );
+        if (typeof loadTechNexus === "function") loadTechNexus();
+      } else {
+        setTechActionMsg("Sweep notice: " + (res?.message || "Finished"));
+      }
+    } catch (err) {
+      setTechActionMsg("❌ Deduplication sweep error: " + err.message);
+    } finally {
+      setSweepLoading(false);
+      setTimeout(() => setTechActionMsg(""), 6000);
+    }
+  };
+
+  const currentDedupMB = Number(techSettings.dedupMaxVarianceMB ?? 4);
+  const currentDedupBytes = Number(techSettings.dedupMaxVarianceBytes ?? (currentDedupMB * 1024 * 1024));
 
   return (
             <div>
@@ -127,6 +190,9 @@ export default function TabTechNexus(props) {
                         enableFormulaClipper: true,
                         enableStudyRoom: true,
                         studyRoomMaxUsers: "auto",
+                        enableSmartDeduplication: true,
+                        dedupMaxVarianceMB: 4,
+                        dedupMaxVarianceBytes: 4 * 1024 * 1024,
                       };
 
                       setTechSettings((prev) => ({
@@ -990,6 +1056,301 @@ export default function TabTechNexus(props) {
                           </select>
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* CARD 9: Smart File Deduplication & Size Variance Shield */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid rgba(6, 182, 212, 0.35)",
+                    borderRadius: "12px",
+                    padding: "18px",
+                    boxShadow: "0 8px 24px rgba(6, 182, 212, 0.06)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Database size={18} color="var(--accent-cyan)" />
+                      <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
+                        9. Smart File Deduplication &amp; Size Variance Shield
+                      </h4>
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.8rem", color: techSettings.enableSmartDeduplication !== false ? "#10b981" : "var(--text-dim)", fontWeight: 600 }}>
+                      <input
+                        type="checkbox"
+                        checked={techSettings.enableSmartDeduplication !== false}
+                        onChange={() => handleToggleTechSetting("enableSmartDeduplication")}
+                        style={{ accentColor: "var(--accent-cyan)", width: "16px", height: "16px" }}
+                      />
+                      Smart Dedup Active
+                    </label>
+                  </div>
+
+                  <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginBottom: "14px", lineHeight: 1.5 }}>
+                    Prevents redundant duplicate uploads. If a student uploads a <strong>1.0 MB</strong> document and another uploads the same document at <strong>1.2 MB</strong> (variance &le; configured tolerance limit), the system automatically detects it as a duplicate, avoids wasting cloud storage, and reuses the existing encrypted cloud reference at 0s latency.
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {/* Dual Controller: Megabytes (MB) & Exact Bytes */}
+                    <div
+                      style={{
+                        padding: "14px",
+                        background: "rgba(15, 23, 42, 0.7)",
+                        border: "1px solid rgba(51, 65, 85, 0.6)",
+                        borderRadius: "10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                        <div>
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>
+                            Max File Size Variance Tolerance
+                          </span>
+                          <span style={{ fontSize: "0.72rem", color: "#94a3b8", display: "block", marginTop: "2px" }}>
+                            Maximum size difference permitted between duplicate versions of the same document
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontSize: "0.75rem", color: "#38bdf8", fontWeight: 700, background: "rgba(56, 189, 248, 0.15)", padding: "2px 8px", borderRadius: "6px" }}>
+                            {currentDedupMB} MB
+                          </span>
+                          <span style={{ fontSize: "0.75rem", color: "#a78bfa", fontWeight: 700, background: "rgba(167, 139, 250, 0.15)", padding: "2px 8px", borderRadius: "6px" }}>
+                            {currentDedupBytes.toLocaleString()} Bytes
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Slider Control for MB */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <span style={{ fontSize: "0.74rem", color: "#94a3b8", minWidth: "40px" }}>0.1 MB</span>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="20.0"
+                          step="0.1"
+                          value={currentDedupMB}
+                          onChange={(e) => handleVarianceMbChange(e.target.value)}
+                          style={{
+                            flex: 1,
+                            accentColor: "var(--accent-cyan)",
+                            cursor: "pointer",
+                          }}
+                        />
+                        <span style={{ fontSize: "0.74rem", color: "#94a3b8", minWidth: "45px" }}>20.0 MB</span>
+                      </div>
+
+                      {/* Dual Numeric Input Fields (MB & Bytes) */}
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: "10px",
+                          marginTop: "4px",
+                        }}
+                      >
+                        {/* MB Controller Input */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.72rem", color: "#cbd5e1", fontWeight: 600 }}>
+                            Tolerance in Megabytes (MB):
+                          </label>
+                          <div style={{ position: "relative" }}>
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              max="100"
+                              value={techSettings.dedupMaxVarianceMB ?? 4}
+                              onChange={(e) => handleVarianceMbChange(e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "7px 32px 7px 10px",
+                                background: "#080c16",
+                                border: "1px solid rgba(6, 182, 212, 0.5)",
+                                borderRadius: "6px",
+                                color: "#38bdf8",
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                outline: "none",
+                                boxSizing: "border-box",
+                              }}
+                            />
+                            <span style={{ position: "absolute", right: "8px", top: "7px", fontSize: "0.72rem", color: "#64748b", fontWeight: 700 }}>
+                              MB
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Exact Bytes Controller Input */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <label style={{ fontSize: "0.72rem", color: "#cbd5e1", fontWeight: 600 }}>
+                            Tolerance in Exact Bytes (B):
+                          </label>
+                          <div style={{ position: "relative" }}>
+                            <input
+                              type="number"
+                              step="1024"
+                              min="0"
+                              value={techSettings.dedupMaxVarianceBytes ?? 4194304}
+                              onChange={(e) => handleVarianceBytesChange(e.target.value)}
+                              style={{
+                                width: "100%",
+                                padding: "7px 42px 7px 10px",
+                                background: "#080c16",
+                                border: "1px solid rgba(167, 139, 250, 0.5)",
+                                borderRadius: "6px",
+                                color: "#a78bfa",
+                                fontSize: "0.82rem",
+                                fontWeight: 700,
+                                outline: "none",
+                                fontFamily: "var(--font-mono, monospace)",
+                                boxSizing: "border-box",
+                              }}
+                            />
+                            <span style={{ position: "absolute", right: "8px", top: "7px", fontSize: "0.72rem", color: "#64748b", fontWeight: 700 }}>
+                              Bytes
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick 1-Tap Presets */}
+                      <div style={{ marginTop: "6px" }}>
+                        <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 600, marginBottom: "5px" }}>
+                          ⚡ Quick Preset Tolerances:
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                          {[
+                            { label: "0.5 MB (512 KB)", mb: 0.5 },
+                            { label: "1.0 MB", mb: 1.0 },
+                            { label: "2.0 MB", mb: 2.0 },
+                            { label: "3.0 MB (Legacy)", mb: 3.0 },
+                            { label: "4.0 MB (Default 🟢)", mb: 4.0, isDefault: true },
+                            { label: "5.0 MB", mb: 5.0 },
+                            { label: "10.0 MB", mb: 10.0 },
+                          ].map((p, idx) => {
+                            const isSelected = Math.abs(currentDedupMB - p.mb) < 0.05;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleVarianceMbChange(p.mb)}
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "6px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: isSelected ? 800 : 600,
+                                  cursor: "pointer",
+                                  background: isSelected
+                                    ? "rgba(6, 182, 212, 0.25)"
+                                    : p.isDefault
+                                    ? "rgba(16, 185, 129, 0.12)"
+                                    : "rgba(255, 255, 255, 0.04)",
+                                  border: isSelected
+                                    ? "1px solid var(--accent-cyan)"
+                                    : p.isDefault
+                                    ? "1px solid rgba(16, 185, 129, 0.4)"
+                                    : "1px solid rgba(255, 255, 255, 0.08)",
+                                  color: isSelected ? "var(--accent-cyan)" : p.isDefault ? "#34d399" : "#cbd5e1",
+                                  transition: "all 0.15s ease",
+                                }}
+                              >
+                                {p.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Interactive Live Simulation / Example Card */}
+                    <div
+                      style={{
+                        padding: "12px",
+                        background: "rgba(6, 182, 212, 0.06)",
+                        border: "1px dashed rgba(6, 182, 212, 0.35)",
+                        borderRadius: "8px",
+                        fontSize: "0.74rem",
+                        color: "#cbd5e1",
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, color: "var(--accent-cyan)", marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span>🧪</span> Live Upload Scenario Simulation:
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", margin: "6px 0", background: "rgba(0,0,0,0.3)", padding: "8px 10px", borderRadius: "6px" }}>
+                        <div>
+                          <span style={{ color: "#94a3b8" }}>Existing File:</span>{" "}
+                          <strong style={{ color: "#fff" }}>1.0 MB (1,048,576 B)</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: "#94a3b8" }}>New Upload:</span>{" "}
+                          <strong style={{ color: "#fff" }}>1.2 MB (1,258,291 B)</strong>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "4px" }}>
+                        <span>
+                          Difference: <strong style={{ color: "#fcd34d" }}>0.20 MB (209,715 Bytes)</strong> &le; Limit (
+                          <strong style={{ color: "var(--accent-cyan)" }}>{currentDedupMB} MB / {currentDedupBytes.toLocaleString()} B</strong>)
+                        </span>
+                        <span style={{ color: "#34d399", fontWeight: 800, background: "rgba(16, 185, 129, 0.15)", padding: "2px 8px", borderRadius: "4px" }}>
+                          ✅ DUPLICATE DETECTED (0s Dedup Hit)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons: Run Sweep & Save */}
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+                      <button
+                        type="button"
+                        onClick={handleRunDedupSweep}
+                        disabled={sweepLoading}
+                        style={{
+                          flex: 1,
+                          minWidth: "180px",
+                          padding: "8px 14px",
+                          borderRadius: "8px",
+                          background: "rgba(6, 182, 212, 0.15)",
+                          border: "1px solid rgba(6, 182, 212, 0.45)",
+                          color: "var(--accent-cyan)",
+                          fontWeight: 700,
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "6px",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <RefreshCw size={13} className={sweepLoading ? "spin" : ""} />
+                        <span>{sweepLoading ? "Scanning Redundant Files..." : "Run Database Deduplication Sweep Now"}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => saveTechSettings()}
+                        disabled={techSaving}
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "8px",
+                          background: "linear-gradient(135deg, #06b6d4, #3b82f6)",
+                          border: "none",
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: "0.78rem",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Save size={13} />
+                        <span>{techSaving ? "Saving..." : "Save Dedup Setting"}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
