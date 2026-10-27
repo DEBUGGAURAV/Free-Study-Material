@@ -220,7 +220,16 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
 
   // ⚡ 0ms INSTANT VISUAL FEEDBACK: Render warning before waiting for network fetch!
   if (currentStrike >= 3) {
-    triggerClientLockdown("Security violation: Maximum tampering attempts exceeded (3/3).");
+    triggerClientLockdown(
+      "Security violation: Maximum script tampering attempts exceeded (3/3 strikes). Your IP is detained in security quarantine.",
+      {
+        policyName: "Client Script / DevTools Tamper (Strike 3)",
+        durationMs: 24 * 60 * 60 * 1000,
+        durationLabel: "24 Hours",
+        autoReleasePolicy: "✅ Auto-release after 24h",
+        adminPardon: "Can be instantly pardoned by Administrator",
+      }
+    );
   } else {
     showStrikeWarning(currentStrike);
   }
@@ -246,11 +255,30 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
     const data = await res.json().catch(() => ({}));
 
     if (data.action === "BAN" || data.isBlocked || currentStrike >= 3) {
-      triggerClientLockdown(data.message || "Account permanently blocked for repeated script tampering.");
+      triggerClientLockdown(
+        data.message || "Security violation: Account and IP detained in security quarantine for 24 Hours.",
+        {
+          policyName: data.policyName || "Client Script / DevTools Tamper (Strike 3)",
+          durationMs: data.durationMs || (24 * 60 * 60 * 1000),
+          durationLabel: data.durationLabel || "24 Hours",
+          autoReleasePolicy: data.autoReleasePolicy || "✅ Auto-release after 24h",
+          adminPardon: data.adminPardon || "Can be instantly pardoned by Administrator",
+          targetTimestamp: data.targetTimestamp || (data.autoReleaseAt ? new Date(data.autoReleaseAt).getTime() : undefined),
+        }
+      );
     }
   } catch (err) {
     if (currentStrike >= 3) {
-      triggerClientLockdown("Security violation: Maximum tampering attempts exceeded.");
+      triggerClientLockdown(
+        "Security violation: Maximum tampering attempts exceeded (3/3 strikes).",
+        {
+          policyName: "Client Script / DevTools Tamper (Strike 3)",
+          durationMs: 24 * 60 * 60 * 1000,
+          durationLabel: "24 Hours",
+          autoReleasePolicy: "✅ Auto-release after 24h",
+          adminPardon: "Can be instantly pardoned by Administrator",
+        }
+      );
     }
   }
 }
@@ -325,15 +353,34 @@ function showStrikeWarning(strike, customMessage) {
 }
 
 /**
- * Permanent Red Lockdown Screen (Strike 3+)
+ * Security Detention & Lockdown Screen with Live Countdown & Accurate Policy Time
  */
-function triggerClientLockdown(reason) {
+function triggerClientLockdown(reason, options = {}) {
   isLockdownActive = true;
 
-  // 1. Wipe client tokens & storage
+  const policyName = options.policyName || "Client Script / DevTools Tamper (Strike 3)";
+  const durationLabel = options.durationLabel || "24 Hours";
+  const autoReleasePolicy = options.autoReleasePolicy || "✅ Auto-release after 24h";
+  const adminPardon = options.adminPardon || "Can be instantly pardoned by Administrator";
+  const durationMs = options.durationMs || (24 * 60 * 60 * 1000);
+  const targetTimestamp = options.targetTimestamp || (Date.now() + durationMs);
+  const incidentId = options.incidentId || `FSM-SEC-${Date.now().toString(36).toUpperCase()}`;
+
+  // Persist detention state to localStorage across page reloads
   try {
-    localStorage.clear();
+    localStorage.setItem("fsm_lockdown_until", String(targetTimestamp));
+    localStorage.setItem("fsm_lockdown_policy", policyName);
+    localStorage.setItem("fsm_lockdown_reason", reason || "Security violation detected");
+    localStorage.setItem("fsm_lockdown_label", durationLabel);
+    localStorage.setItem("fsm_lockdown_release", autoReleasePolicy);
+    localStorage.setItem("fsm_lockdown_incident", incidentId);
+  } catch (_) {}
+
+  // 1. Wipe client auth tokens (keep detention storage)
+  try {
     sessionStorage.clear();
+    const tokenKeys = ["fsm_token", "token", "vault_token", "vault_user"];
+    tokenKeys.forEach((k) => localStorage.removeItem(k));
   } catch (_) {}
 
   // 2. Kill all active intervals & timers
@@ -345,7 +392,17 @@ function triggerClientLockdown(reason) {
     }
   } catch (_) {}
 
-  // 3. Render Permanent Red Lockdown Screen
+  const releaseDateStr = new Date(targetTimestamp).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  // 3. Render High-Tech Security Detention Screen with Live Countdown
   document.body.innerHTML = `
     <div style="
       position: fixed;
@@ -356,78 +413,230 @@ function triggerClientLockdown(reason) {
       justify-content: center;
       z-index: 2147483647;
       font-family: system-ui, -apple-system, sans-serif;
-      padding: 24px;
+      padding: 20px;
       color: #fff;
+      overflow-y: auto;
     ">
       <div style="
-        max-width: 520px;
+        max-width: 560px;
         width: 100%;
-        background: radial-gradient(circle at top, rgba(185, 28, 28, 0.25) 0%, rgba(15, 23, 42, 0.95) 100%);
+        background: radial-gradient(circle at top, rgba(185, 28, 28, 0.22) 0%, rgba(15, 23, 42, 0.98) 100%);
         border: 2px solid #ef4444;
-        border-radius: 20px;
-        padding: 36px 30px;
+        border-radius: 24px;
+        padding: 34px 28px;
         text-align: center;
-        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(239, 68, 68, 0.3);
+        box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(239, 68, 68, 0.35);
+        margin: auto;
       ">
+        <!-- Top Icon -->
         <div style="
-          width: 68px;
-          height: 68px;
-          margin: 0 auto 18px auto;
+          width: 70px;
+          height: 70px;
+          margin: 0 auto 16px auto;
           border-radius: 50%;
           background: rgba(239, 68, 68, 0.15);
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 32px;
-          border: 1px solid rgba(239, 68, 68, 0.4);
+          border: 1.5px solid rgba(239, 68, 68, 0.45);
+          box-shadow: 0 0 25px rgba(239, 68, 68, 0.3);
         ">
-          🚫
+          ⏳
         </div>
         
-        <h2 style="font-size: 1.4rem; font-weight: 800; color: #ef4444; margin: 0 0 10px 0; letter-spacing: -0.5px;">
-          SECURITY LOCKDOWN: ACCOUNT PERMANENTLY BLOCKED
+        <h2 style="font-size: 1.35rem; font-weight: 800; color: #ef4444; margin: 0 0 8px 0; letter-spacing: -0.3px; text-transform: uppercase;">
+          Security Lockdown: Temporary Detention
         </h2>
-        
+
+        <!-- Violation Badge -->
         <div style="
-          background: rgba(239, 68, 68, 0.12);
-          border: 1px solid rgba(239, 68, 68, 0.25);
-          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.5);
+          padding: 4px 14px;
+          border-radius: 20px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          color: #fca5a5;
+          margin-bottom: 16px;
+        ">
+          <span>Violation Policy:</span>
+          <span style="color: #fff;">${policyName}</span>
+        </div>
+        
+        <!-- Reason Box -->
+        <div style="
+          background: rgba(239, 68, 68, 0.1);
+          border: 1px solid rgba(239, 68, 68, 0.28);
+          border-radius: 12px;
           padding: 12px 16px;
-          font-size: 0.85rem;
+          font-size: 0.84rem;
           color: #fca5a5;
           margin-bottom: 20px;
           line-height: 1.45;
+          text-align: left;
         ">
-          ${reason || "Repeated script tampering and console modification detected (3/3 attempts)."}
+          ${reason || "Client script tampering or unauthorized inspection detected (3/3 attempts)."}
         </div>
         
-        <p style="font-size: 0.84rem; color: #94a3b8; line-height: 1.5; margin: 0 0 24px 0;">
-          Your user account has been deactivated in the database. Active WebSocket connections have been killed, your authentication session has been revoked, and your IP address has been logged for security review.
-        </p>
-        
+        <!-- ⏱️ Live Ticking Countdown Box (User Time) -->
+        <div style="
+          background: rgba(15, 23, 42, 0.85);
+          border: 1.5px solid rgba(245, 158, 11, 0.45);
+          border-radius: 16px;
+          padding: 18px 20px;
+          margin-bottom: 20px;
+          text-align: center;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+        ">
+          <div style="
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            color: #fcd34d;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+          ">
+            ⏳ Auto-Release Countdown (Your Remaining Time)
+          </div>
+
+          <div id="fsm-countdown-timer" style="
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: #fbbf24;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            letter-spacing: 2px;
+            text-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+            margin: 6px 0;
+          ">
+            Calculating...
+          </div>
+
+          <!-- Structured Policy Time Table -->
+          <div style="
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            margin-top: 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 10px;
+            text-align: left;
+          ">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #cbd5e1;">🛡️ Detention Window:</span>
+              <strong style="color: #fff;">${durationLabel}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #cbd5e1;">🔓 Auto-Release Policy:</span>
+              <strong style="color: #34d399;">${autoReleasePolicy}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #cbd5e1;">📅 Auto-Release At:</span>
+              <strong style="color: #f1f5f9;">${releaseDateStr}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="color: #cbd5e1;">⚡ Admin Pardon:</span>
+              <strong style="color: #38bdf8;">${adminPardon}</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Status Pulse -->
+        <div style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          font-size: 0.74rem;
+          color: #94a3b8;
+          margin-bottom: 16px;
+        ">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399;"></span>
+          <span>Auto-checking pardon status every 10s • Instant unlock if Admin pardons</span>
+        </div>
+
+        <!-- Incident ID & Appeal Notice -->
         <div style="
           font-size: 0.75rem;
           color: #64748b;
           border-top: 1px solid rgba(255, 255, 255, 0.08);
-          padding-top: 16px;
+          padding-top: 14px;
+          margin-bottom: 12px;
         ">
-          Incident ID: <code style="color: #cbd5e1;">FSM-SEC-${Date.now().toString(36).toUpperCase()}</code>
+          Incident ID: <code style="color: #cbd5e1; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${incidentId}</code>
         </div>
+        
         <div style="
-          margin-top: 12px;
-          font-size: 0.75rem;
+          font-size: 0.76rem;
           color: #94a3b8;
           line-height: 1.45;
           background: rgba(255, 255, 255, 0.03);
           border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 8px;
-          padding: 8px 12px;
+          border-radius: 10px;
+          padding: 10px 14px;
+          text-align: left;
         ">
-          💡 To submit an unblock appeal, open the Help Center, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide this Incident ID for instant administrator review.
+          💡 <strong>Need Immediate Unlock?</strong> You don't have to wait for the timer! Open the <strong>Help Center</strong>, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide your Incident ID for instant administrator review and pardon.
         </div>
       </div>
     </div>
   `;
+
+  // 4. Live Ticking Countdown Timer & Periodic Auto-Unlock Probe
+  function updateCountdown() {
+    const timerElem = document.getElementById("fsm-countdown-timer");
+    if (!timerElem) return;
+    const diff = Math.max(0, targetTimestamp - Date.now());
+    if (diff <= 0) {
+      timerElem.innerHTML = "<span style='color: #34d399;'>Detention Expired. Unlocking...</span>";
+      try {
+        localStorage.removeItem("fsm_lockdown_until");
+        localStorage.removeItem("fsm_lockdown_policy");
+        localStorage.removeItem("fsm_lockdown_reason");
+        localStorage.removeItem("fsm_lockdown_label");
+        localStorage.removeItem("fsm_lockdown_release");
+        localStorage.removeItem("fsm_lockdown_incident");
+      } catch (_) {}
+      setTimeout(() => window.location.reload(), 1500);
+      return;
+    }
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+    timerElem.textContent = `${hours.toString().padStart(2, "0")}h ${mins.toString().padStart(2, "0")}m ${secs.toString().padStart(2, "0")}s`;
+  }
+
+  updateCountdown();
+  const timerInterval = setInterval(updateCountdown, 1000);
+
+  // Poll server every 10 seconds to check if Administrator pardoned the IP in Tab 14
+  const pingInterval = setInterval(async () => {
+    try {
+      const res = await fetch("/api/health", { cache: "no-store" });
+      if (res.ok) {
+        clearInterval(timerInterval);
+        clearInterval(pingInterval);
+        const timerElem = document.getElementById("fsm-countdown-timer");
+        if (timerElem) {
+          timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+        }
+        try {
+          localStorage.removeItem("fsm_lockdown_until");
+          localStorage.removeItem("fsm_lockdown_policy");
+          localStorage.removeItem("fsm_lockdown_reason");
+          localStorage.removeItem("fsm_lockdown_label");
+          localStorage.removeItem("fsm_lockdown_release");
+          localStorage.removeItem("fsm_lockdown_incident");
+        } catch (_) {}
+        setTimeout(() => window.location.reload(), 1200);
+      }
+    } catch (_) {}
+  }, 10000);
 }
 
 /**
@@ -436,6 +645,35 @@ function triggerClientLockdown(reason) {
 export function initAntiTamperDefense() {
   if (typeof window === "undefined" || isDefenseInitialized) return;
   isDefenseInitialized = true;
+
+  // 0. Check for existing active security detention lock in localStorage
+  try {
+    const savedUntil = localStorage.getItem("fsm_lockdown_until");
+    const savedPolicy = localStorage.getItem("fsm_lockdown_policy") || "Client Script / DevTools Tamper (Strike 3)";
+    const savedReason = localStorage.getItem("fsm_lockdown_reason");
+    const savedLabel = localStorage.getItem("fsm_lockdown_label") || "24 Hours";
+    const savedRelease = localStorage.getItem("fsm_lockdown_release") || "✅ Auto-release after 24h";
+    const savedIncident = localStorage.getItem("fsm_lockdown_incident");
+
+    if (savedUntil && Number(savedUntil) > Date.now()) {
+      triggerClientLockdown(savedReason || "Security quarantine detention active.", {
+        policyName: savedPolicy,
+        targetTimestamp: Number(savedUntil),
+        durationLabel: savedLabel,
+        autoReleasePolicy: savedRelease,
+        adminPardon: "Can be instantly pardoned by Administrator",
+        incidentId: savedIncident,
+      });
+      return;
+    } else if (savedUntil) {
+      localStorage.removeItem("fsm_lockdown_until");
+      localStorage.removeItem("fsm_lockdown_policy");
+      localStorage.removeItem("fsm_lockdown_reason");
+      localStorage.removeItem("fsm_lockdown_label");
+      localStorage.removeItem("fsm_lockdown_release");
+      localStorage.removeItem("fsm_lockdown_incident");
+    }
+  } catch (_) {}
 
   // 1. Prototype & Fetch Trapping
   const originalFetch = window.fetch;

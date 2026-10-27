@@ -138,12 +138,35 @@ function ipJailFirewall(req, res, next) {
     const unjailTime = jailedIps.get(ip);
     if (now < unjailTime) {
       const remainingSec = Math.ceil((unjailTime - now) / 1000);
+      const details = jailedIpsDetails.get(ip) || {};
+      const reasonStr = details.reason || "Security violation detected";
+
+      let policyName = "Administrative Security Detention";
+      let durationLabel = "Admin Chosen Duration";
+      let autoReleasePolicy = "✅ Auto-release on expiration";
+
+      if (reasonStr.includes("Traffic") || reasonStr.includes("DoS") || details.requestCount > 600) {
+        policyName = "DDoS / Traffic Surge (>600 req/min)";
+        durationLabel = "3 Minutes";
+        autoReleasePolicy = "✅ Auto-release after 180s";
+      } else if (reasonStr.includes("Tamper") || reasonStr.includes("Script") || reasonStr.includes("DevTools")) {
+        policyName = "Client Script / DevTools Tamper (Strike 3)";
+        durationLabel = "24 Hours";
+        autoReleasePolicy = "✅ Auto-release after 24h";
+      }
+
       res.setHeader("Retry-After", remainingSec);
       return res.status(429).json({
         success: false,
         error: "SECURITY_JAIL",
-        message: `Too many requests or malicious activity detected. Your IP is detained in security quarantine for ${remainingSec} seconds.`,
+        message: `Security quarantine active: ${reasonStr}. Auto-release in ${remainingSec} seconds.`,
         retryAfter: remainingSec,
+        unjailTime,
+        autoReleaseAt: new Date(unjailTime).toISOString(),
+        policyName,
+        durationLabel,
+        autoReleasePolicy,
+        adminPardon: "Can be instantly pardoned by Administrator",
       });
     } else {
       jailedIps.delete(ip);

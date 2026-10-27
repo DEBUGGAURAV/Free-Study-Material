@@ -285,12 +285,22 @@ router.post("/tamper-alert", async (req, res) => {
         forensics,
       });
 
+      const detentionMs = 24 * 60 * 60 * 1000;
+      const autoReleaseTime = Date.now() + detentionMs;
+
       return res.json({
         success: true,
         action: "BAN",
         strikeCount: effectiveStrikes,
         isBlocked: true,
-        message: "Security Violation: Account permanently blocked for repeated script tampering. Your IP has been jailed.",
+        durationMs: detentionMs,
+        durationLabel: "24 Hours",
+        policyName: "Client Script / DevTools Tamper (Strike 3)",
+        autoReleasePolicy: "✅ Auto-release after 24h",
+        adminPardon: "Can be instantly pardoned by Administrator",
+        targetTimestamp: autoReleaseTime,
+        autoReleaseAt: new Date(autoReleaseTime).toISOString(),
+        message: "Security Violation: Repeated script tampering detected (3/3 strikes). Your IP is detained in security quarantine for 24 Hours.",
       });
     }
 
