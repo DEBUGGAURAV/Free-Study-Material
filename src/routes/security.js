@@ -39,8 +39,68 @@ function safeHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
+function parseCleanDeviceInfo(ua) {
+  if (!ua) return { device: "Unknown Device", browser: "Unknown Browser", os: "Unknown OS", cleanLabel: "Unknown Device" };
+
+  let device = "💻 PC / Desktop";
+  let os = "Desktop OS";
+  let browser = "Web Browser";
+
+  // OS & Device Detection
+  if (/iPhone/i.test(ua)) {
+    device = "📱 Apple iPhone";
+    const match = ua.match(/OS (\d+[_\d]*)/i);
+    os = match ? `iOS ${match[1].replace(/_/g, ".")}` : "iOS";
+  } else if (/iPad/i.test(ua)) {
+    device = "📱 Apple iPad";
+    os = "iPadOS";
+  } else if (/Android/i.test(ua)) {
+    device = "📱 Android Mobile / Tablet";
+    const match = ua.match(/Android (\d+(\.\d+)*)/i);
+    os = match ? `Android ${match[1]}` : "Android";
+  } else if (/Windows NT 10\.0/i.test(ua)) {
+    device = "💻 PC / Laptop";
+    os = "Windows 10/11";
+  } else if (/Macintosh/i.test(ua)) {
+    device = "💻 Apple Mac";
+    os = "macOS";
+  } else if (/Linux/i.test(ua)) {
+    device = "💻 Linux Workstation";
+    os = "Linux";
+  }
+
+  // Browser Detection (Special attention to iOS CriOS / FxiOS / EdgiOS)
+  if (/CriOS\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/CriOS\/(\d+(\.\d+)*)/i)[1];
+    browser = `Google Chrome for iOS (CriOS v${v})`;
+  } else if (/FxiOS\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/FxiOS\/(\d+(\.\d+)*)/i)[1];
+    browser = `Mozilla Firefox for iOS (v${v})`;
+  } else if (/EdgiOS\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/EdgiOS\/(\d+(\.\d+)*)/i)[1];
+    browser = `Microsoft Edge for iOS (v${v})`;
+  } else if (/Edg\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/Edg\/(\d+(\.\d+)*)/i)[1];
+    browser = `Microsoft Edge (v${v})`;
+  } else if (/Chrome\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/Chrome\/(\d+(\.\d+)*)/i)[1];
+    browser = `Google Chrome (v${v})`;
+  } else if (/Firefox\/(\d+(\.\d+)*)/i.test(ua)) {
+    const v = ua.match(/Firefox\/(\d+(\.\d+)*)/i)[1];
+    browser = `Mozilla Firefox (v${v})`;
+  } else if (/Version\/(\d+(\.\d+)*).*Safari/i.test(ua)) {
+    const v = ua.match(/Version\/(\d+(\.\d+)*)/i)[1];
+    browser = `Apple Safari (v${v})`;
+  } else if (/Safari/i.test(ua)) {
+    browser = `Apple Safari`;
+  }
+
+  return { device, os, browser, cleanLabel: `${device} • ${os} • ${browser}` };
+}
+
 /**
- * Dispatch Telegram Security Alert directly to Supergroup Topic 6 & Topic 35
+ * Dispatch Telegram Security Alert directly to Security Supergroup Topic 6
+ * (Stopped dispatch to Chat Audit Topic 35 per administrator directive)
  */
 async function dispatchTamperTelegramAlert({
   user,
@@ -50,6 +110,7 @@ async function dispatchTamperTelegramAlert({
   isBlocked,
   deviceInfo,
   pageUrl,
+  forensics,
 }) {
   const isBanned = strikeCount >= 3 || isBlocked;
   const statusBadge = isBanned
@@ -60,27 +121,36 @@ async function dispatchTamperTelegramAlert({
     ? "❌ <b>Account Permanently Banned in Database & IP Jailed for 24 Hours</b>"
     : "⚠️ <b>On-Screen Warning Modal Displayed to Student</b>";
 
+  const cleanInfo = parseCleanDeviceInfo(deviceInfo);
+
   const messageText = [
     statusBadge,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👤 <b>Student:</b> ${safeHtml(user.name || "Unauthenticated Guest")}`,
     `📧 <b>Email:</b> <code>${safeHtml(user.email || "N/A")}</code>`,
     user.mobile && user.mobile !== "N/A" ? `📱 <b>Mobile:</b> <code>${safeHtml(user.mobile)}</code>` : null,
-    user.college && user.college !== "N/A" ? `🏛️ <b>College:</b> ${safeHtml(user.college)}` : null,
-    user.year && user.year !== "N/A" ? `🎓 <b>Year:</b> ${safeHtml(user.year)}` : null,
+    `📱 <b>Device:</b> ${cleanInfo.device} (${cleanInfo.os})`,
+    `🌐 <b>Browser:</b> ${cleanInfo.browser}`,
+    forensics?.ram || user?.memoryEstimate
+      ? `⚙️ <b>Hardware:</b> ${safeHtml(forensics?.cores || user?.hardwareCores || "4 Cores")} • <b>${safeHtml(forensics?.ram || user?.memoryEstimate || "Standard RAM")}</b>`
+      : user.college && user.college !== "N/A" ? `🏛️ <b>Hardware Profile:</b> ${safeHtml(user.college)}` : null,
+    forensics?.gpu || user?.gpuRenderer ? `🎮 <b>GPU Renderer:</b> <code>${safeHtml(forensics?.gpu || user?.gpuRenderer)}</code>` : null,
+    forensics?.screen || user?.year ? `🖥️ <b>Display & Screen:</b> ${safeHtml(forensics?.screen || user?.year)}` : null,
+    forensics?.touch || user?.touchSpec ? `👆 <b>Input:</b> ${safeHtml(forensics?.touch || user?.touchSpec)}` : null,
+    forensics?.network || user?.networkType ? `📶 <b>Network:</b> ${safeHtml(forensics?.network || user?.networkType)}` : null,
     `🌐 <b>IP Address:</b> <code>${safeHtml(ip)}</code>`,
     pageUrl ? `📍 <b>Page / Route:</b> <code>${safeHtml(pageUrl)}</code>` : null,
-    `💻 <b>Client / Device:</b> ${safeHtml(deviceInfo || "Browser Console / DevTools")}`,
     `⚠️ <b>Tampering Detected:</b>`,
     `<i>${safeHtml(detail || "Attempted to open DevTools / Inspect Mode")}</i>`,
     `🎯 <b>Total Strikes:</b> <b>${strikeCount} of 3</b>`,
     `🛡️ <b>Action Taken:</b> ${actionText}`,
     `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+    `🔬 <b>Raw Client Agent:</b> <pre>${safeHtml(deviceInfo || "N/A")}</pre>`,
   ]
     .filter(Boolean)
     .join("\n");
 
-  // 1. Dispatch directly to Security Supergroup Topic 6 (@fsm_security_otp_bot)
+  // Dispatch strictly to Security Supergroup Topic 6 (@fsm_security_otp_bot)
   try {
     await sendTelegramAuthNotice({
       event: "DEVTOOLS_VIOLATION",
@@ -99,26 +169,7 @@ async function dispatchTamperTelegramAlert({
     console.warn("[ANTI-TAMPER] Telegram Topic 6 alert notice:", err.message);
   }
 
-  // 2. Also dispatch to Chat Audit Supergroup Topic 35 (@fsm_chat_bot) if configured
-  const chatAuditToken = (process.env.TELEGRAM_CHAT_AUDIT_BOT_TOKEN || "").trim();
-  const chatAuditGroup = (process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "").trim();
-  const tamperAuditTopic = (process.env.TELEGRAM_CHAT_TOPIC_TAMPER_AUDIT || "35").trim();
-  if (chatAuditToken && chatAuditGroup) {
-    try {
-      await fetch(`https://api.telegram.org/bot${chatAuditToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: chatAuditGroup,
-          message_thread_id: Number(tamperAuditTopic) || 35,
-          text: messageText,
-          parse_mode: "HTML",
-        }),
-      });
-    } catch (auditErr) {
-      console.warn("[ANTI-TAMPER] Chat Audit Topic 35 notice:", auditErr.message);
-    }
-  }
+  // Note: Topic 35 dispatch has been completely stopped per admin instruction to prevent alert spam in Chat Deletions Topic.
 }
 
 /**
@@ -128,7 +179,7 @@ async function dispatchTamperTelegramAlert({
 router.post("/tamper-alert", async (req, res) => {
   try {
     const clientIp = getClientIp(req);
-    const { detail, context, clientStrikes, deviceInfo, pageUrl, user: clientUser } = req.body || {};
+    const { detail, context, clientStrikes, deviceInfo, pageUrl, user: clientUser, forensics } = req.body || {};
 
     // 1. Resolve Authenticated User if present
     let authUser = null;
@@ -231,6 +282,7 @@ router.post("/tamper-alert", async (req, res) => {
         isBlocked: true,
         deviceInfo,
         pageUrl,
+        forensics,
       });
 
       return res.json({
@@ -254,6 +306,7 @@ router.post("/tamper-alert", async (req, res) => {
       isBlocked: false,
       deviceInfo,
       pageUrl,
+      forensics,
     });
 
     return res.json({

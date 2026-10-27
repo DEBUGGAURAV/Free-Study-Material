@@ -113,23 +113,97 @@ function getCurrentUserData() {
     }
   } catch (_) {}
 
-  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "N/A";
-  const cores = navigator.hardwareConcurrency || "N/A";
-  const mem = navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "N/A";
-  const screenSpec = window.screen ? `${window.screen.width}x${window.screen.height} (${window.screen.colorDepth}-bit)` : "N/A";
+  const forensics = getForensicHardwareProfile();
 
   return {
     isLoggedIn: false,
     name: `Anonymous Visitor [${anonUid.slice(-6).toUpperCase()}]`,
     email: "Unauthenticated Guest",
     mobile: "N/A",
-    college: `Hardware: ${cores} Cores • ${mem} RAM • TZ: ${tz}`,
-    year: `Resolution: ${screenSpec}`,
+    college: `Hardware: ${forensics.cores} • ${forensics.ram} • ${forensics.gpu}`,
+    year: `Resolution: ${forensics.screen}`,
     role: "guest",
     guestUid: anonUid,
+    timezone: forensics.timezone,
+    hardwareCores: forensics.cores,
+    memoryEstimate: forensics.ram,
+    gpuRenderer: forensics.gpu,
+    touchSpec: forensics.touch,
+    networkType: forensics.network,
+  };
+}
+
+/**
+ * Extract Deep Hardware & Environmental Forensics
+ * (Includes Apple WebKit / iOS RAM heuristic & WebGL GPU extraction)
+ */
+export function getForensicHardwareProfile() {
+  const tz = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "N/A";
+  const cores = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} Cores` : "4 Cores";
+
+  // 1. RAM Detection & Intelligent iOS Heuristics
+  let ramStr = "4GB - 6GB (Standard)";
+  if (typeof navigator !== "undefined" && navigator.deviceMemory) {
+    ramStr = `${navigator.deviceMemory} GB (Reported)`;
+  } else if (typeof performance !== "undefined" && performance.memory && performance.memory.jsHeapSizeLimit) {
+    const heapGb = (performance.memory.jsHeapSizeLimit / (1024 * 1024 * 1024)).toFixed(1);
+    ramStr = `~${Math.round(heapGb * 2)} GB (Heap Limit Scale)`;
+  } else if (typeof navigator !== "undefined" && /iPhone|iPad|iPod/i.test(navigator.userAgent || "")) {
+    // Apple WebKit deliberately hides navigator.deviceMemory for anti-fingerprinting.
+    // Determine generation via viewport, retina scale, and WebGL specs
+    const isRetina3x = (window.devicePixelRatio || 1) >= 3;
+    const isModernPhone = window.screen && (window.screen.height >= 844 || window.screen.width >= 390);
+    if (isRetina3x && isModernPhone) {
+      ramStr = "~6 GB (Apple A-Series Bionic / iOS Protected)";
+    } else {
+      ramStr = "~4 GB (Apple A-Series / iOS Protected)";
+    }
+  }
+
+  // 2. GPU & Graphics Renderer (WebGL context inspection)
+  let gpuRenderer = "WebGL Generic";
+  try {
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+    if (gl) {
+      const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+      if (debugInfo) {
+        const unmasked = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+        if (unmasked) gpuRenderer = unmasked;
+      } else {
+        const direct = gl.getParameter(gl.RENDERER);
+        if (direct) gpuRenderer = direct;
+      }
+    }
+  } catch (_) {}
+
+  // 3. Screen, DPI, and Touch Capabilities
+  const screenW = window.screen?.width || 0;
+  const screenH = window.screen?.height || 0;
+  const colorDepth = window.screen?.colorDepth || 24;
+  const dpr = window.devicePixelRatio || 1;
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const touchStr = touchPoints > 0 ? `${touchPoints}-pt Multi-Touch` : "Mouse/Trackpad";
+  const orientation = screen.orientation?.type || (screenW > screenH ? "Landscape" : "Portrait");
+
+  // 4. Network / Connection Details
+  let netType = "Online";
+  if (typeof navigator !== "undefined" && navigator.connection) {
+    const conn = navigator.connection;
+    const parts = [];
+    if (conn.effectiveType) parts.push(conn.effectiveType.toUpperCase());
+    if (conn.downlink) parts.push(`${conn.downlink}Mbps`);
+    if (parts.length > 0) netType = parts.join(" • ");
+  }
+
+  return {
+    cores,
+    ram: ramStr,
+    gpu: gpuRenderer,
+    screen: `${screenW}x${screenH} (${dpr}x Retina, ${colorDepth}-bit, ${orientation})`,
+    touch: touchStr,
+    network: netType,
     timezone: tz,
-    hardwareCores: cores,
-    memoryEstimate: mem,
   };
 }
 
@@ -164,6 +238,7 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
         deviceInfo: `${navigator.userAgent || "Unknown"} (${window.screen?.width || 0}x${window.screen?.height || 0})`,
         pageUrl: window.location.pathname + window.location.search,
         user: getCurrentUserData(),
+        forensics: getForensicHardwareProfile(),
         ...extra,
       }),
     });
