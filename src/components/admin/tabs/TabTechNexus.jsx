@@ -94,7 +94,7 @@ export default function TabTechNexus(props) {
     }
   };
 
-  const currentDedupMB = Number(techSettings.dedupMaxVarianceMB ?? 4);
+  const currentDedupMB = Number(techSettings.dedupMaxVarianceMB ?? 3);
   const currentDedupBytes = Number(techSettings.dedupMaxVarianceBytes ?? (currentDedupMB * 1024 * 1024));
 
   return (
@@ -191,8 +191,8 @@ export default function TabTechNexus(props) {
                         enableStudyRoom: true,
                         studyRoomMaxUsers: "auto",
                         enableSmartDeduplication: true,
-                        dedupMaxVarianceMB: 4,
-                        dedupMaxVarianceBytes: 4 * 1024 * 1024,
+                        dedupMaxVarianceMB: 3,
+                        dedupMaxVarianceBytes: 3 * 1024 * 1024,
                       };
 
                       setTechSettings((prev) => ({
@@ -1163,7 +1163,7 @@ export default function TabTechNexus(props) {
                               step="0.1"
                               min="0"
                               max="100"
-                              value={techSettings.dedupMaxVarianceMB ?? 4}
+                              value={techSettings.dedupMaxVarianceMB ?? 3}
                               onChange={(e) => handleVarianceMbChange(e.target.value)}
                               style={{
                                 width: "100%",
@@ -1194,7 +1194,7 @@ export default function TabTechNexus(props) {
                               type="number"
                               step="1024"
                               min="0"
-                              value={techSettings.dedupMaxVarianceBytes ?? 4194304}
+                              value={techSettings.dedupMaxVarianceBytes ?? 3145728}
                               onChange={(e) => handleVarianceBytesChange(e.target.value)}
                               style={{
                                 width: "100%",
@@ -1227,8 +1227,8 @@ export default function TabTechNexus(props) {
                             { label: "0.5 MB (512 KB)", mb: 0.5 },
                             { label: "1.0 MB", mb: 1.0 },
                             { label: "2.0 MB", mb: 2.0 },
-                            { label: "3.0 MB (Legacy)", mb: 3.0 },
-                            { label: "4.0 MB (Default 🟢)", mb: 4.0, isDefault: true },
+                            { label: "3.0 MB (Default 🟢)", mb: 3.0, isDefault: true },
+                            { label: "4.0 MB", mb: 4.0 },
                             { label: "5.0 MB", mb: 5.0 },
                             { label: "10.0 MB", mb: 10.0 },
                           ].map((p, idx) => {

@@ -99,14 +99,14 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
       }
     }
 
-    // 3. Smart Size Variance Check (e.g. 1.0MB vs 1.2MB same document with <= 4MB variance)
+    // 3. Smart Size Variance Check (e.g. 1.0MB vs 1.2MB same document with <= 3MB variance)
     if (fileSize && Number(fileSize) > 0 && fileName) {
       try {
         const { getDedupSettings } = require("./dedupSettings");
         const dedupCfg = getDedupSettings();
 
         if (dedupCfg.enableSmartDeduplication !== false) {
-          const maxVarianceBytes = Number(dedupCfg.dedupMaxVarianceBytes || (4 * 1024 * 1024));
+          const maxVarianceBytes = Number(dedupCfg.dedupMaxVarianceBytes || (3 * 1024 * 1024));
           const cleanInput = (fileName || "").toLowerCase().trim();
           const normInput = cleanInput.replace(/[^a-z0-9]/g, "");
 

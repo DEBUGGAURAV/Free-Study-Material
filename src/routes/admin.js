@@ -3351,8 +3351,8 @@ let techSettings = {
 
   // 🧬 Smart SHA-256 & Size Variance Deduplication Engine (Tab 10 Controller)
   enableSmartDeduplication: true,
-  dedupMaxVarianceMB: 4, // Default 4 MB (Updated from 3MB per admin directive)
-  dedupMaxVarianceBytes: 4 * 1024 * 1024, // 4,194,304 Bytes
+  dedupMaxVarianceMB: 3, // Default 3 MB (3,145,728 Bytes)
+  dedupMaxVarianceBytes: 3 * 1024 * 1024, // 3,145,728 Bytes
 
   updatedAt: new Date().toISOString(),
 };

@@ -2,7 +2,7 @@
  * ============================================================================
  * 🧬 SMART DEDUPLICATION & SIZE VARIANCE CONFIGURATION SERVICE
  * ============================================================================
- * - Default Variance: 4 MB (4,194,304 Bytes) - Updated from 3MB per admin directive
+ * - Default Variance: 3 MB (3,145,728 Bytes)
  * - Supports exact byte-level threshold tuning and dual MB/Byte controller
  * - Shared across real-time upload queue (dedupService.js) and database sweep (mtproto.js)
  * ============================================================================
@@ -10,8 +10,8 @@
 
 const { db } = require("../firebase");
 
-const DEFAULT_MB = 4;
-const DEFAULT_BYTES = 4 * 1024 * 1024; // 4,194,304 Bytes
+const DEFAULT_MB = 3;
+const DEFAULT_BYTES = 3 * 1024 * 1024; // 3,145,728 Bytes
 
 let cachedDedupSettings = {
   enableSmartDeduplication: true,
@@ -84,3 +84,4 @@ module.exports = {
   DEFAULT_MB,
   DEFAULT_BYTES,
 };
+
