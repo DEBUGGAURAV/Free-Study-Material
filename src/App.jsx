@@ -219,6 +219,43 @@ export default function App() {
   const [passkeyPromptLoading, setPasskeyPromptLoading] = useState(false);
   const [passkeyPromptSuccess, setPasskeyPromptSuccess] = useState(false);
 
+  // 🛡️ Zero-Trust Security Quarantine Shield State (Restricted Shield Mode)
+  const [securityDetention, setSecurityDetention] = useState(null);
+
+  useEffect(() => {
+    try {
+      const match = document.cookie.match(/fsm_security_detained=([^;]+)/);
+      if (match && match[1]) {
+        const decoded = JSON.parse(decodeURIComponent(match[1]));
+        if (decoded && (decoded.isDetained || decoded.incidentId)) {
+          setSecurityDetention(decoded);
+          setIsHelpOpen(true);
+        }
+      }
+    } catch (_) {}
+
+    // Failsafe server check
+    if (api && api.getSecurityStatus) {
+      api.getSecurityStatus()
+        .then((res) => {
+          if (res && res.isJailed) {
+            setSecurityDetention(res);
+            setIsHelpOpen(true);
+          }
+        })
+        .catch(() => {});
+    }
+
+    const handleDetentionEvent = (e) => {
+      if (e?.detail) {
+        setSecurityDetention(e.detail);
+        setIsHelpOpen(true);
+      }
+    };
+    window.addEventListener("fsm:security-detained", handleDetentionEvent);
+    return () => window.removeEventListener("fsm:security-detained", handleDetentionEvent);
+  }, []);
+
   useEffect(() => {
     const handlePasskeyPrompt = (e) => {
       if (e?.detail) {
@@ -1037,6 +1074,7 @@ export default function App() {
               isOpen={isHelpOpen}
               onClose={() => setIsHelpOpen(false)}
               currentUser={currentUser}
+              securityDetention={securityDetention}
             />
           )}
 
@@ -1059,6 +1097,73 @@ export default function App() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {/* 🛡️ Restricted Shield Mode Banner (Zero-Trust IP Quarantine) */}
+      {securityDetention && (
+        <div
+          style={{
+            background: "linear-gradient(90deg, #7f1d1d, #b91c1c)",
+            color: "#ffffff",
+            padding: "10px 18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            fontSize: "13px",
+            fontWeight: "600",
+            position: "sticky",
+            top: 0,
+            zIndex: 999999,
+            boxShadow: "0 4px 14px rgba(185, 28, 28, 0.4)",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px" }}>🛡️</span>
+            <span>
+              <strong>Restricted Security Shield:</strong> Incident ID <code>{securityDetention.incidentId || "FSM-SEC"}</code> • Heavy downloads paused.
+              {securityDetention.remainingSec ? ` (Detention: ${securityDetention.remainingSec}s)` : ""}
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setIsHelpOpen(true)}
+              style={{
+                background: "#ffffff",
+                color: "#991b1b",
+                border: "none",
+                padding: "5px 12px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              📝 Open Appeal Desk
+            </button>
+            <a
+              href={`https://t.me/fsm_security_otp_bot?start=appeal_${(securityDetention.incidentId || "").replace(/[^A-Za-z0-9_-]/g, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: "#0088cc",
+                color: "#ffffff",
+                padding: "5px 12px",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "700",
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              💬 1-Tap Telegram Unjail
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <Navbar
         searchTerm={searchTerm}
@@ -1967,6 +2072,7 @@ export default function App() {
             isOpen={isHelpOpen}
             onClose={() => setIsHelpOpen(false)}
             currentUser={currentUser}
+            securityDetention={securityDetention}
           />
         )}
       </React.Suspense>

@@ -365,6 +365,7 @@ async function sendTelegramAuthNotice({
   context = "",
   threadId: customThreadId = null,
   targetChatId: customTargetChatId = null,
+  replyMarkup = null,
 }) {
   try {
     let currentSettings = null;
@@ -457,6 +458,9 @@ async function sendTelegramAuthNotice({
         }
       } else if (event === "ACCOUNT_PURGE") {
         threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
+      } else if (event === "IP_JAIL_APPEAL") {
+        // Dedicated Forum Topic 750 specifically for Security Quarantine / IP Appeals
+        threadId = topics.ipAppeal || process.env.TELEGRAM_TOPIC_IP_APPEAL || "750";
       }
     }
 
@@ -615,6 +619,8 @@ async function sendTelegramAuthNotice({
         (admin ? `👮 <b>Action Executed By:</b> ${admin.name || "Admin"} (<code>${admin.email || "admin"}</code>)\n` : `⚙️ <b>Action Executed By:</b> <code>${method || "Automated Lifecycle Sweeper"}</code>\n`) +
         `⏰ <b>Action Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `💡 <i>Note: All uploaded study materials remain 100% safe in the Academic Cloud Vault for other students. Only the login account was removed.</i>`;
+    } else if (event === "IP_JAIL_APPEAL") {
+      caption = detail;
     } else if (event === "REGISTER") {
       const isGoogle = String(method).toLowerCase().includes("google");
       let regMethodDisplay = method;
@@ -859,6 +865,9 @@ async function sendTelegramAuthNotice({
     if (threadId && !isNaN(Number(threadId))) {
       msgPayload.message_thread_id = Number(threadId);
     }
+    if (replyMarkup) {
+      msgPayload.reply_markup = replyMarkup;
+    }
 
     let msgRes = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -867,10 +876,10 @@ async function sendTelegramAuthNotice({
       signal: AbortSignal.timeout(6000),
     });
 
-    // Fallback: If message_thread_id is invalid/closed, send without thread_id ONLY for non-note events
+    // Fallback: If message_thread_id is invalid/closed, send without thread_id ONLY for non-restricted events
     if (!msgRes.ok && msgPayload.message_thread_id) {
-      if (isNoteEvent) {
-        console.warn(`[TELEGRAM-AUTH-NOTICE] Topic ${threadId} send notice:`, await msgRes.text().catch(() => ""));
+      if (isNoteEvent || event === "IP_JAIL_APPEAL") {
+        console.warn(`[TELEGRAM-AUTH-NOTICE] Dedicated topic ${threadId} send notice:`, await msgRes.text().catch(() => ""));
         return;
       }
       delete msgPayload.message_thread_id;

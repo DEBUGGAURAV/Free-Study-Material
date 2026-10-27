@@ -14,6 +14,9 @@
 import disableDevtool from "disable-devtool";
 
 let strikeCount = 0;
+try {
+  strikeCount = Number(sessionStorage.getItem("fsm_strike_count") || 0);
+} catch (_) {}
 let isDefenseInitialized = false;
 let isLockdownActive = false;
 
@@ -209,6 +212,7 @@ export function getForensicHardwareProfile() {
 
 // Active inspection session tracking (Prevents multiple strikes during a single inspect session)
 let isDevToolsSessionActive = false;
+let isDockedDevToolsOpen = false;
 let lastDevToolsCloseTime = 0;
 
 /**
@@ -242,10 +246,11 @@ function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
  * Allows the next inspect attempt to register as a separate strike.
  */
 function onDevToolsClosed() {
-  if (!isDevToolsSessionActive) return;
+  if (!isDevToolsSessionActive && !isDockedDevToolsOpen) return;
 
   console.log("[ANTI-TAMPER] 🟢 DevTools closed. Inspect session ended.");
   isDevToolsSessionActive = false;
+  isDockedDevToolsOpen = false;
   lastDevToolsCloseTime = Date.now();
 
   // Dismiss warning overlay when DevTools is closed
@@ -263,6 +268,9 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
   lastTamperDispatch = now;
 
   strikeCount += 1;
+  try {
+    sessionStorage.setItem("fsm_strike_count", String(strikeCount));
+  } catch (_) {}
   const currentStrike = strikeCount;
 
   // ⚡ 0ms INSTANT VISUAL FEEDBACK: Render warning before waiting for network fetch!
@@ -652,6 +660,7 @@ function triggerClientLockdown(reason, options = {}) {
         localStorage.removeItem("fsm_lockdown_label");
         localStorage.removeItem("fsm_lockdown_release");
         localStorage.removeItem("fsm_lockdown_incident");
+        sessionStorage.removeItem("fsm_strike_count");
       } catch (_) {}
       setTimeout(() => window.location.reload(), 1500);
       return;
@@ -683,6 +692,7 @@ function triggerClientLockdown(reason, options = {}) {
           localStorage.removeItem("fsm_lockdown_label");
           localStorage.removeItem("fsm_lockdown_release");
           localStorage.removeItem("fsm_lockdown_incident");
+          sessionStorage.removeItem("fsm_strike_count");
         } catch (_) {}
         setTimeout(() => window.location.reload(), 1200);
       }
@@ -723,6 +733,7 @@ export function initAntiTamperDefense() {
       localStorage.removeItem("fsm_lockdown_label");
       localStorage.removeItem("fsm_lockdown_release");
       localStorage.removeItem("fsm_lockdown_incident");
+      sessionStorage.removeItem("fsm_strike_count");
     }
   } catch (_) {}
 
@@ -825,9 +836,13 @@ export function initAntiTamperDefense() {
       const isDocked = widthDiff > 160 || heightDiff > 160;
 
       if (isDocked) {
-        onDevToolsDetected(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
-      } else if (!isDocked && isDevToolsSessionActive) {
+        if (!isDockedDevToolsOpen) {
+          isDockedDevToolsOpen = true;
+          onDevToolsDetected(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
+        }
+      } else if (!isDocked && isDockedDevToolsOpen) {
         // Docked DevTools was closed! End the inspect session so user can use the web normally
+        isDockedDevToolsOpen = false;
         onDevToolsClosed();
       }
     };

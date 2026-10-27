@@ -66,16 +66,22 @@ try {
 
 let getThreatIntelligence = null;
 let unjailIp = null;
+let unjailDevice = null;
+let unjailByIncident = null;
 let clearAllJails = null;
 let recordThreatIncident = null;
 let jailSpecificIp = null;
+let jailSpecificDevice = null;
 try {
   const ipJail = require("../middleware/ipJail");
   getThreatIntelligence = ipJail.getThreatIntelligence;
   unjailIp = ipJail.unjailIp;
+  unjailDevice = ipJail.unjailDevice;
+  unjailByIncident = ipJail.unjailByIncident;
   clearAllJails = ipJail.clearAllJails;
   recordThreatIncident = ipJail.recordThreatIncident;
   jailSpecificIp = ipJail.jailSpecificIp;
+  jailSpecificDevice = ipJail.jailSpecificDevice;
 } catch {}
 
 
@@ -4019,10 +4025,31 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       }
     }
 
+    // 🛡️ Fetch recent Student Security / IP Jail Appeals
+    let jailAppeals = [];
+    if (db) {
+      try {
+        const appealSnap = await db.collection("jail_appeals")
+          .limit(30)
+          .get()
+          .catch(() => null);
+        if (appealSnap && !appealSnap.empty) {
+          appealSnap.forEach((doc) => {
+            jailAppeals.push({ id: doc.id, ...doc.data() });
+          });
+          jailAppeals.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        }
+      } catch (err) {
+        console.warn("[ADMIN-THREATS] Error fetching jail appeals:", err.message);
+      }
+    }
+
     const webSecurityShields = {
       turnstile: { name: "Cloudflare Turnstile", status: "ACTIVE", type: "Anti-Bot Smart Challenge", icon: "🛡️" },
       disposableEmail: { name: "Disposable Email Blocker", status: "ACTIVE", type: "500+ Burner Domains Prohibited", icon: "📧" },
       accountLockout: { name: "Per-Account Brute Force Lockout", status: "ACTIVE", type: "5 Attempts / 20-Min Lockout", icon: "🔒" },
+      dualKeyShield: { name: "Adaptive Dual-Key Shield", status: "ACTIVE", type: "Campus Wi-Fi Device Hash Isolation", icon: "📱" },
+      appealDeskTopic750: { name: "Security Appeals Desk", status: "ACTIVE", type: "Topic 750 Strict Supergroup Dispatch", icon: "💬" },
       deviceFingerprint: { name: "Device Fingerprinting", status: "ACTIVE", type: "Telegram Topic 6 Instant Alert", icon: "💻" },
       sessionInvalidation: { name: "Multi-Device Session Invalidation", status: "ACTIVE", type: "v: Token Version Revocation", icon: "🚪" },
       magicByteSniffer: { name: "Deep MIME / Magic Byte Sniffer", status: "ACTIVE", type: "%PDF-, PK, Images (Blocks PE MZ/ELF)", icon: "🔬" },
@@ -4039,6 +4066,13 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       ...data,
       lockedAccounts,
       blockedUsers,
+      jailAppeals,
+      appealTopicConfig: {
+        topicId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+        botUsername: "fsm_security_otp_bot",
+        groupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538",
+        status: "ACTIVE",
+      },
       webSecurityShields,
     });
   } catch (err) {
@@ -4135,26 +4169,118 @@ router.post("/threats/unlock-account", authenticateToken, requireAdmin, async (r
 
 /**
  * POST /api/admin/threats/unjail
- * Admin only: Release a specific IP from quarantine or flush all detentions
+ * Admin only: Release a specific IP, Device, Incident, or flush all detentions
  */
-router.post("/threats/unjail", authenticateToken, requireAdmin, (req, res) => {
+router.post("/threats/unjail", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { ip, clearAll } = req.body || {};
+    const { ip, deviceId, incidentId, appealId, clearAll } = req.body || {};
     if (clearAll) {
       const count = typeof clearAllJails === "function" ? clearAllJails() : 0;
-      return res.json({ success: true, message: `Emergency clearance executed: ${count} IPs released from quarantine.` });
+      return res.json({ success: true, message: `Emergency clearance executed: ${count} entries released from quarantine.` });
     }
-    if (!ip) {
-      return res.status(400).json({ success: false, message: "IP address is required." });
+
+    let ok = false;
+    let releasedMsg = "";
+
+    if (incidentId) {
+      ok = typeof unjailByIncident === "function" ? unjailByIncident(incidentId) : false;
+      releasedMsg = `Incident #${incidentId} released from quarantine (IP & Device unjailed).`;
+    } else if (deviceId) {
+      ok = typeof unjailDevice === "function" ? unjailDevice(deviceId) : false;
+      releasedMsg = `Device ${deviceId.slice(0, 12)}... released from quarantine.`;
+    } else if (ip) {
+      ok = typeof unjailIp === "function" ? unjailIp(ip) : false;
+      releasedMsg = `IP ${ip} released from security quarantine.`;
+    } else {
+      return res.status(400).json({ success: false, message: "IP, Device ID, or Incident ID is required." });
     }
-    const ok = typeof unjailIp === "function" ? unjailIp(ip) : false;
+
+    if (appealId && db) {
+      try {
+        await db.collection("jail_appeals").doc(appealId).update({
+          status: "pardoned",
+          pardonedAt: new Date().toISOString(),
+          pardonedBy: req.user?.email || "Admin",
+        });
+      } catch (_) {}
+    }
+
     return res.json({
       success: true,
       released: ok,
-      message: ok ? `IP ${ip} successfully released from security jail.` : `IP ${ip} was not detained in jail.`,
+      message: ok ? releasedMsg : "Quarantine release processed.",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/threats/dismiss-appeal
+ * Admin only: Mark an appeal as dismissed
+ */
+router.post("/threats/dismiss-appeal", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { appealId, reason } = req.body || {};
+    if (!appealId) {
+      return res.status(400).json({ success: false, message: "Appeal ID is required." });
+    }
+    if (db) {
+      await db.collection("jail_appeals").doc(appealId).update({
+        status: "dismissed",
+        dismissReason: reason || "Dismissed by Admin",
+        dismissedAt: new Date().toISOString(),
+        dismissedBy: req.user?.email || "Admin",
+      });
+    }
+    return res.json({ success: true, message: "Appeal marked as dismissed." });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/threats/test-appeal-topic
+ * Admin only: Dispatches a verified test message to Topic 750 (🛡️ IP Jail & Security Appeals)
+ */
+router.post("/threats/test-appeal-topic", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { sendTelegramAuthNotice } = require("../services/emailService");
+    const threadId = process.env.TELEGRAM_TOPIC_IP_APPEAL || "750";
+
+    const testNotice = [
+      `🛡️ <b>[ADMIN TAB 14 TELEMETRY PING]</b>`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `👤 <b>Initiated By:</b> ${req.user?.name || "Administrator"} (<code>${req.user?.email}</code>)`,
+      `🎯 <b>Target Topic:</b> <b>🛡️ IP Jail & Security Appeals (Topic ${threadId})</b>`,
+      `⚡ <b>Channel Status:</b> Operational & Verified`,
+      `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+    ].join("\n");
+
+    await sendTelegramAuthNotice({
+      event: "IP_JAIL_APPEAL",
+      user: {
+        name: req.user?.name || "Administrator",
+        email: req.user?.email || "admin@studymaterial.in",
+        mobile: "Admin Console",
+        ip: "Admin Console",
+      },
+      method: "Tab 14 Admin Diagnostic Ping",
+      detail: testNotice,
+      threadId,
+      replyMarkup: {
+        inline_keyboard: [
+          [{ text: "✅ Topic 750 Operational", callback_data: `appeal:deny:PING` }]
+        ]
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: `Verified telemetry ping dispatched to Topic ${threadId} in Security Supergroup!`,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Ping error: " + err.message });
   }
 });
 

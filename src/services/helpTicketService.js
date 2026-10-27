@@ -134,6 +134,56 @@ function generateTicketCode() {
  * Dispatch Telegram Alert to Supergroup Active Topic (NEVER sent to Bot DM!)
  */
 async function dispatchTelegramHelpNotice(ticket) {
+  // 🛡️ Security Instruction: IP Jail / Block Appeals MUST ONLY go to Security Supergroup Topic 750
+  if (ticket.category === "block_appeal") {
+    try {
+      const { sendTelegramAuthNotice } = require("./emailService");
+      const incMatch = ((ticket.subject || "") + " " + (ticket.question || "")).match(/FSM-SEC-\d+/i);
+      const incidentId = incMatch ? incMatch[0].toUpperCase() : `FSM-SEC-${ticket.ticket_code.replace(/\D/g, "")}`;
+      const appealText = [
+        `🛡️ <b>[SECURITY QUARANTINE / IP JAIL APPEAL]</b>`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        `🆔 <b>Incident ID:</b> <code>${incidentId}</code>`,
+        `🎫 <b>Help Ticket:</b> #${ticket.ticket_code}`,
+        `👤 <b>Student:</b> ${ticket.user_name || "Student Visitor"}`,
+        `📧 <b>Email:</b> <code>${ticket.user_email || "N/A"}</code>`,
+        `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "N/A"}</code>`,
+        `🌐 <b>Public IP:</b> <code>${ticket.ip_address || "N/A"}</code>`,
+        `💬 <b>Appeal Statement:</b>`,
+        `<i>${ticket.question.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        `🎯 <b>Target:</b> <b>🛡️ IP Jail & Security Appeals (Topic 750)</b>`,
+        `⚡ <b>Admin Action Choices:</b>`,
+        `• <b>Pardon Entire IP:</b> Unjails the student's IP address`,
+        `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+
+      const replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: "🌐 Pardon Entire IP", callback_data: `appeal:pardon_ip:${incidentId}:${ticket.ip_address || "none"}` },
+            { text: "❌ Reject Appeal", callback_data: `appeal:deny:${incidentId}` },
+          ],
+        ],
+      };
+
+      await sendTelegramAuthNotice({
+        event: "IP_JAIL_APPEAL",
+        user: { name: ticket.user_name, email: ticket.user_email, mobile: ticket.user_mobile, ip: ticket.ip_address },
+        method: "Help Center Block Appeal",
+        detail: appealText,
+        threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+        replyMarkup,
+      });
+      return "security_topic_750";
+    } catch (e) {
+      console.warn("[HELP-TICKET] Block appeal routing error:", e.message);
+      return null;
+    }
+  }
+
   const botToken = getHelpBotToken();
   const chatId = getHelpChatId();
   if (!botToken || !chatId) {

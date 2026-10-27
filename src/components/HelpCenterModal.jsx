@@ -96,7 +96,7 @@ const INITIAL_FAQS = [
   },
 ];
 
-export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
+export default function HelpCenterModal({ isOpen, onClose, currentUser, securityDetention }) {
   const [activeTab, setActiveTab] = useState("faqs"); // 'faqs' | 'ask' | 'tickets'
   const [searchQuery, setSearchQuery] = useState("");
   const [faqs, setFaqs] = useState(INITIAL_FAQS);
@@ -113,6 +113,19 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(null);
   const [formError, setFormError] = useState(null);
+
+  // Auto-focus and pre-populate if connection is under Security Detention
+  useEffect(() => {
+    if (securityDetention && isOpen) {
+      setActiveTab("ask");
+      setCategory("block_appeal");
+      const inc = securityDetention.incidentId || "FSM-SEC-QUARANTINE";
+      setSubject(inc);
+      if (!question) {
+        setQuestion(`Requesting pardon for Incident #${inc}. I am a genuine student studying for semester exams on college hostel/campus Wi-Fi.`);
+      }
+    }
+  }, [securityDetention, isOpen]);
 
   // Tickets State
   const [myTickets, setMyTickets] = useState([]);
@@ -843,10 +856,31 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser }) {
                       }}
                     >
                       <div style={{ fontWeight: 800, color: "#f87171", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
-                        <span>🚨</span> Incident ID Required:
+                        <span>🚨</span> Security Appeal & Shared Campus Wi-Fi Shield:
                       </div>
                       <div>
-                        Please specify the <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong> displayed on your lockdown screen. Without this Incident ID, administrators cannot identify and release your IP or account.
+                        Please provide your <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong>. If you are on a college/hostel Wi-Fi network, submitting an appeal allows administrators to unblock your specific device without affecting other students.
+                      </div>
+                      <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                        <a
+                          href={`https://t.me/fsm_security_otp_bot?start=appeal_${(subject || securityDetention?.incidentId || "").replace(/[^A-Za-z0-9_-]/g, "")}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "6px 12px",
+                            background: "#0088cc",
+                            color: "#ffffff",
+                            borderRadius: "6px",
+                            fontWeight: "700",
+                            textDecoration: "none",
+                            fontSize: "0.78rem",
+                          }}
+                        >
+                          <span>💬</span> 1-Tap Unjail via Telegram Bot (@fsm_security_otp_bot)
+                        </a>
                       </div>
                     </div>
                   )}

@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lock, Unlock,
   RefreshCw, Power, Globe, Server, Ban, Clock, CheckCircle,
-  AlertCircle, Bug, Eye, Search, Copy, Check, Filter, Trash2, Cpu
+  AlertCircle, Bug, Eye, Search, Copy, Check, Filter, Trash2, Cpu,
+  MessageSquare, Send, Smartphone, ExternalLink, Bell, Tag, UserCheck
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -23,6 +24,12 @@ export default function TabWebSecurity(props) {
   // Filter / Search in Jailed IPs & Incidents
   const [ipSearch, setIpSearch] = useState("");
   const [copiedIp, setCopiedIp] = useState(null);
+
+  // 🛡️ Live Security Appeals & Dual-Key State (Topic 750 Hub)
+  const [appealSearch, setAppealSearch] = useState("");
+  const [quarantineTab, setQuarantineTab] = useState("all"); // 'all' | 'ips' | 'devices'
+  const [pingLoading, setPingLoading] = useState(false);
+  const [lookupIncident, setLookupIncident] = useState("");
 
   const fetchThreatData = async (isManual = false) => {
     if (isManual) setScanning(true);
@@ -82,16 +89,104 @@ export default function TabWebSecurity(props) {
     }
   };
 
-  // 2. Clear all jailed IPs
+  // 2. Unjail single device
+  const handleUnjailDevice = async (deviceId) => {
+    setActionLoading(true);
+    try {
+      const res = await api.unjailThreatDevice(deviceId);
+      if (res.success) {
+        showToast(res.message || "Device released from quarantine.");
+        fetchThreatData();
+      }
+    } catch (err) {
+      showToast(err.message || "Unjail device error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 3. Unjail by Incident ID
+  const handleUnjailIncident = async (incidentId) => {
+    if (!incidentId || !incidentId.trim()) return;
+    setActionLoading(true);
+    try {
+      const res = await api.unjailThreatIncident(incidentId.trim());
+      if (res.success) {
+        showToast(res.message || `Incident #${incidentId} released.`);
+        setLookupIncident("");
+        fetchThreatData();
+      } else {
+        showToast(res.message || "Incident not found in quarantine.", "error");
+      }
+    } catch (err) {
+      showToast(err.message || "Unjail incident error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 4. Pardon Appeal (Device only vs Full IP)
+  const handlePardonAppeal = async (appeal, pardonMode = "device") => {
+    setActionLoading(true);
+    try {
+      let res;
+      if (pardonMode === "device" && appeal.deviceId && appeal.deviceId !== "none") {
+        res = await api.unjailThreatDevice(appeal.deviceId);
+      } else if (pardonMode === "ip" && appeal.ip && appeal.ip !== "Via Telegram Bot") {
+        res = await api.unjailThreatIp(appeal.ip);
+      } else {
+        res = await api.unjailThreatIncident(appeal.incidentId, appeal.id);
+      }
+      showToast(`✅ Appeal for Incident #${appeal.incidentId} pardoned! Access restored.`);
+      fetchThreatData();
+    } catch (err) {
+      showToast(err.message || "Pardon error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 5. Dismiss Appeal
+  const handleDismissAppeal = async (appealId) => {
+    setActionLoading(true);
+    try {
+      await api.dismissJailAppeal(appealId, "Dismissed by Admin");
+      showToast("Appeal marked as dismissed.");
+      fetchThreatData();
+    } catch (err) {
+      showToast(err.message || "Dismiss error.", "error");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 6. Test Ping Topic 750
+  const handleTestPingTopic750 = async () => {
+    setPingLoading(true);
+    try {
+      const res = await api.testPingAppealTopic();
+      if (res && res.success) {
+        showToast(res.message || "✅ Test alert dispatched to Topic 750 in Telegram!");
+      } else {
+        showToast(res?.message || "Ping failed.", "error");
+      }
+    } catch (err) {
+      showToast(err.message || "Ping error.", "error");
+    } finally {
+      setPingLoading(false);
+    }
+  };
+
+  // 7. Clear all jailed IPs & devices
   const handleClearAllJails = async () => {
-    if (!window.confirm("⚠️ EMERGENCY OVERRIDE: Are you sure you want to release ALL currently detained IPs from security quarantine?")) {
+    if (!window.confirm("⚠️ EMERGENCY OVERRIDE: Are you sure you want to release ALL currently detained IPs & Devices from security quarantine?")) {
       return;
     }
     setActionLoading(true);
     try {
       const res = await api.unjailThreatIp(null, true);
       if (res.success) {
-        showToast(res.message || "All detained IPs released from quarantine.");
+        showToast(res.message || "All detained connections released from quarantine.");
         fetchThreatData();
       }
     } catch (err) {
@@ -166,14 +261,35 @@ export default function TabWebSecurity(props) {
   };
 
   const activeJails = data?.activeJailedIps || [];
+  const activeJailedDevices = data?.activeJailedDevices || [];
+  const jailAppeals = data?.jailAppeals || [];
   const lockedAccounts = data?.lockedAccounts || [];
   const blockedUsers = data?.blockedUsers || [];
   const incidents = data?.recentIncidents || [];
   const shields = data?.webSecurityShields || {};
 
+  const totalQuarantineCount = activeJails.length + activeJailedDevices.length;
+  const pendingAppealsCount = jailAppeals.filter((a) => a.status === "pending" || !a.status).length;
+
   const filteredJails = activeJails.filter((j) =>
     (j.ip || "").toLowerCase().includes(ipSearch.toLowerCase()) ||
+    (j.incidentId || "").toLowerCase().includes(ipSearch.toLowerCase()) ||
     (j.reason || "").toLowerCase().includes(ipSearch.toLowerCase())
+  );
+
+  const filteredDevices = activeJailedDevices.filter((d) =>
+    (d.deviceId || "").toLowerCase().includes(ipSearch.toLowerCase()) ||
+    (d.incidentId || "").toLowerCase().includes(ipSearch.toLowerCase()) ||
+    (d.ip || "").toLowerCase().includes(ipSearch.toLowerCase()) ||
+    (d.reason || "").toLowerCase().includes(ipSearch.toLowerCase())
+  );
+
+  const filteredAppeals = jailAppeals.filter((a) =>
+    (a.name || "").toLowerCase().includes(appealSearch.toLowerCase()) ||
+    (a.email || "").toLowerCase().includes(appealSearch.toLowerCase()) ||
+    (a.incidentId || "").toLowerCase().includes(appealSearch.toLowerCase()) ||
+    (a.ip || "").toLowerCase().includes(appealSearch.toLowerCase()) ||
+    (a.message || "").toLowerCase().includes(appealSearch.toLowerCase())
   );
 
   const threatLevel = data?.threatLevel || "DEFCON 5 (ALL CLEAR • 100% SECURE)";
@@ -314,7 +430,7 @@ export default function TabWebSecurity(props) {
           </div>
         </div>
 
-        {/* Active Jailed IPs */}
+        {/* Dual-Key Active Quarantines (IPs + Devices) */}
         <div style={{
           background: "rgba(15, 23, 42, 0.6)",
           border: "1px solid rgba(239, 68, 68, 0.3)",
@@ -323,15 +439,37 @@ export default function TabWebSecurity(props) {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: "0.72rem", color: "#f87171", fontWeight: 700, textTransform: "uppercase" }}>
-              Active Jailed IPs
+              Active Quarantines (Dual-Key)
             </span>
             <Ban size={16} color="#f87171" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: activeJails.length > 0 ? "#ef4444" : "#f1f5f9", marginTop: "4px" }}>
-            {activeJails.length}
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: totalQuarantineCount > 0 ? "#ef4444" : "#f1f5f9", marginTop: "4px" }}>
+            {totalQuarantineCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
-            Total Detained: {data?.totalJailedCount || 0}
+            {activeJails.length} IPs • {activeJailedDevices.length} Hardware Devices
+          </div>
+        </div>
+
+        {/* Security Appeals & Topic 750 Hub */}
+        <div style={{
+          background: pendingAppealsCount > 0 ? "linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(15, 23, 42, 0.8))" : "rgba(15, 23, 42, 0.6)",
+          border: `1px solid ${pendingAppealsCount > 0 ? "rgba(56, 189, 248, 0.45)" : "rgba(56, 189, 248, 0.3)"}`,
+          borderRadius: "12px",
+          padding: "14px 16px",
+          boxShadow: pendingAppealsCount > 0 ? "0 0 15px rgba(56, 189, 248, 0.2)" : "none",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase" }}>
+              Appeals Desk (Topic 750)
+            </span>
+            <MessageSquare size={16} color="#38bdf8" />
+          </div>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: pendingAppealsCount > 0 ? "#38bdf8" : "#f1f5f9", marginTop: "4px" }}>
+            {pendingAppealsCount} Pending
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
+            {jailAppeals.length} Total Logged • Live Sync
           </div>
         </div>
 
@@ -421,10 +559,254 @@ export default function TabWebSecurity(props) {
         </div>
       </div>
 
-      {/* Grid: Left Column (IP Jail Table & Form) | Right Column (Locked Accounts & Shields) */}
+      {/* 🛡️ SECTION: LIVE SECURITY APPEALS & ADMIN PARDON DESK (TOPIC 750) */}
+      <div style={{
+        background: "rgba(15, 23, 42, 0.7)",
+        border: "1px solid rgba(56, 189, 248, 0.35)",
+        borderRadius: "14px",
+        padding: "18px 20px",
+        marginBottom: "24px",
+        boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <MessageSquare size={20} />
+            </div>
+            <div>
+              <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>Security Appeals &amp; Admin Pardon Desk</span>
+                <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)" }}>
+                  🛡️ Topic 750 Supergroup Dispatch
+                </span>
+                {pendingAppealsCount > 0 && (
+                  <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(239, 68, 68, 0.2)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.4)", fontWeight: 800 }}>
+                    {pendingAppealsCount} NEW
+                  </span>
+                )}
+              </h4>
+              <span style={{ fontSize: "0.74rem", color: "var(--text-dim, #94a3b8)" }}>
+                Student detention appeals from Help Center &amp; Telegram Bot. Admin can pardon a single device (safeguards campus Wi-Fi) or the entire IP.
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              disabled={pingLoading}
+              onClick={handleTestPingTopic750}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid rgba(16, 185, 129, 0.4)",
+                color: "#34d399",
+                borderRadius: "8px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <Send size={13} className={pingLoading ? "spin-animate" : ""} />
+              <span>{pingLoading ? "Pinging..." : "🔔 Test Ping Topic 750"}</span>
+            </button>
+
+            <a
+              href="https://t.me/c/3943130538/750"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: "6px 12px",
+                background: "rgba(0, 136, 204, 0.18)",
+                border: "1px solid rgba(0, 136, 204, 0.45)",
+                color: "#38bdf8",
+                borderRadius: "8px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <ExternalLink size={13} />
+              <span>Open Telegram Topic 750</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Search in Appeals */}
+        <div style={{ position: "relative", marginBottom: "12px" }}>
+          <Search size={14} style={{ position: "absolute", left: "10px", top: "10px", color: "var(--text-dim, #64748b)" }} />
+          <input
+            type="text"
+            placeholder="Search appeals by Incident ID, student name, email, or IP..."
+            value={appealSearch}
+            onChange={(e) => setAppealSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px 12px 8px 32px",
+              background: "rgba(30, 41, 59, 0.7)",
+              border: "1px solid rgba(51, 65, 85, 0.8)",
+              borderRadius: "8px",
+              color: "#fff",
+              fontSize: "0.8rem",
+              boxSizing: "border-box",
+              outline: "none",
+            }}
+          />
+        </div>
+
+        {/* Appeals Table */}
+        <div style={{ maxHeight: "280px", overflowY: "auto", borderRadius: "8px", border: "1px solid rgba(51, 65, 85, 0.6)" }}>
+          {filteredAppeals.length === 0 ? (
+            <div style={{ padding: "30px 16px", textAlign: "center", color: "var(--text-dim, #94a3b8)" }}>
+              <CheckCircle size={32} style={{ color: "#38bdf8", margin: "0 auto 8px", display: "block" }} />
+              <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff" }}>Zero Pending Student Appeals</div>
+              <div style={{ fontSize: "0.76rem", marginTop: "4px" }}>
+                {appealSearch ? "No appeals matching search criteria." : "All submitted security appeals have been reviewed and resolved."}
+              </div>
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+              <thead>
+                <tr style={{ background: "rgba(30, 41, 59, 0.9)", textAlign: "left", color: "#94a3b8" }}>
+                  <th style={{ padding: "10px 12px" }}>Incident ID</th>
+                  <th style={{ padding: "10px 12px" }}>Student &amp; Origin</th>
+                  <th style={{ padding: "10px 12px" }}>Appeal Statement</th>
+                  <th style={{ padding: "10px 12px" }}>Status</th>
+                  <th style={{ padding: "10px 12px", textAlign: "right" }}>Admin Action Choices</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAppeals.map((a) => {
+                  const isPending = a.status === "pending" || !a.status;
+                  const isPardoned = a.status === "pardoned";
+                  return (
+                    <tr key={a.id || a.incidentId} style={{ borderBottom: "1px solid rgba(51, 65, 85, 0.4)", background: "rgba(15, 23, 42, 0.4)" }}>
+                      <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
+                        <span style={{
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                          background: "rgba(239, 68, 68, 0.15)",
+                          color: "#f87171",
+                          fontWeight: 800,
+                          fontFamily: "var(--font-mono, monospace)",
+                          border: "1px solid rgba(239, 68, 68, 0.3)",
+                        }}>
+                          {a.incidentId || "FSM-SEC"}
+                        </span>
+                        <div style={{ fontSize: "0.68rem", color: "#94a3b8", marginTop: "4px" }}>
+                          {a.createdAt ? new Date(a.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "short", timeStyle: "short" }) : "Recent"}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
+                        <div style={{ fontWeight: 700, color: "#fff" }}>{a.name || "Student Visitor"}</div>
+                        <div style={{ color: "#38bdf8", fontSize: "0.72rem" }}>{a.email || "No email"}</div>
+                        {a.mobile && a.mobile !== "N/A" && (
+                          <div style={{ color: "#94a3b8", fontSize: "0.7rem" }}>📱 {a.mobile}</div>
+                        )}
+                        <div style={{ fontSize: "0.68rem", color: "#64748b", fontFamily: "var(--font-mono, monospace)", marginTop: "2px" }}>
+                          IP: {a.ip || "unknown"}
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#cbd5e1", maxWidth: "260px", verticalAlign: "top" }}>
+                        <div style={{ fontStyle: "italic", lineHeight: "1.4" }}>
+                          "{a.message || a.reason || "Student requested connection pardon."}"
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
+                        <span style={{
+                          fontSize: "0.68rem",
+                          fontWeight: 800,
+                          padding: "2px 8px",
+                          borderRadius: "4px",
+                          background: isPending ? "rgba(245, 158, 11, 0.2)" : isPardoned ? "rgba(16, 185, 129, 0.2)" : "rgba(148, 163, 184, 0.2)",
+                          color: isPending ? "#fbbf24" : isPardoned ? "#34d399" : "#94a3b8",
+                        }}>
+                          {isPending ? "PENDING REVIEW" : isPardoned ? "PARDONED" : "DISMISSED"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "10px 12px", textAlign: "right", verticalAlign: "top" }}>
+                        {isPending ? (
+                          <div style={{ display: "inline-flex", flexDirection: "column", gap: "6px", alignItems: "flex-end" }}>
+                            <div style={{ display: "flex", gap: "6px" }}>
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={() => handlePardonAppeal(a, "device")}
+                                title="Unjails only this student's device (safeguards campus Wi-Fi)"
+                                style={{
+                                  padding: "4px 8px",
+                                  background: "rgba(56, 189, 248, 0.15)",
+                                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                                  color: "#38bdf8",
+                                  borderRadius: "5px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                📱 Pardon Device
+                              </button>
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={() => handlePardonAppeal(a, "ip")}
+                                title="Unjails the entire public IP"
+                                style={{
+                                  padding: "4px 8px",
+                                  background: "rgba(16, 185, 129, 0.15)",
+                                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                                  color: "#34d399",
+                                  borderRadius: "5px",
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                🌐 Pardon Full IP
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => handleDismissAppeal(a.id)}
+                              style={{
+                                padding: "2px 8px",
+                                background: "none",
+                                border: "none",
+                                color: "#94a3b8",
+                                fontSize: "0.68rem",
+                                cursor: "pointer",
+                                textDecoration: "underline",
+                              }}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Resolved</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Grid: Left Column (Dual-Key Quarantine & Forms) | Right Column (Locked Accounts & Shields) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(460px, 1fr))", gap: "20px", marginBottom: "24px" }}>
         
-        {/* SECTION 1: Active IP Jail Quarantine Matrix */}
+        {/* SECTION 1: Dual-Key Security Quarantine Matrix (IPs & Hardware Devices) */}
         <div style={{
           background: "rgba(15, 23, 42, 0.7)",
           border: "1px solid rgba(239, 68, 68, 0.25)",
@@ -437,14 +819,14 @@ export default function TabWebSecurity(props) {
             <div>
               <h4 style={{ margin: 0, fontSize: "0.98rem", fontWeight: 800, color: "#f87171", display: "flex", alignItems: "center", gap: "8px" }}>
                 <Ban size={18} />
-                IP Jail Detention Quarantine ({activeJails.length} Active)
+                Dual-Key Quarantine Matrix ({totalQuarantineCount} Active)
               </h4>
               <span style={{ fontSize: "0.74rem", color: "var(--text-dim, #94a3b8)" }}>
-                Blocked traffic receives instant HTTP 429 &amp; Retry-After response. Zero CPU load.
+                Restricted Shield Mode active. Blocked traffic receives HTTP 429 &amp; Auto-Preloaded Help Center.
               </span>
             </div>
 
-            {activeJails.length > 0 && (
+            {totalQuarantineCount > 0 && (
               <button
                 type="button"
                 disabled={actionLoading}
@@ -464,9 +846,61 @@ export default function TabWebSecurity(props) {
                 }}
               >
                 <Trash2 size={13} />
-                Release All ({activeJails.length})
+                Flush All ({totalQuarantineCount})
               </button>
             )}
+          </div>
+
+          {/* Sub-Tabs: All / IPs / Devices */}
+          <div style={{ display: "flex", gap: "6px", marginBottom: "12px", borderBottom: "1px solid rgba(51, 65, 85, 0.5)", paddingBottom: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setQuarantineTab("all")}
+              style={{
+                padding: "4px 10px",
+                background: quarantineTab === "all" ? "rgba(239, 68, 68, 0.2)" : "transparent",
+                border: quarantineTab === "all" ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid transparent",
+                color: quarantineTab === "all" ? "#f87171" : "#94a3b8",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              All Quarantines ({totalQuarantineCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarantineTab("ips")}
+              style={{
+                padding: "4px 10px",
+                background: quarantineTab === "ips" ? "rgba(239, 68, 68, 0.2)" : "transparent",
+                border: quarantineTab === "ips" ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid transparent",
+                color: quarantineTab === "ips" ? "#f87171" : "#94a3b8",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              IP Addresses ({activeJails.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuarantineTab("devices")}
+              style={{
+                padding: "4px 10px",
+                background: quarantineTab === "devices" ? "rgba(56, 189, 248, 0.2)" : "transparent",
+                border: quarantineTab === "devices" ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid transparent",
+                color: quarantineTab === "devices" ? "#38bdf8" : "#94a3b8",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Hardware Devices ({activeJailedDevices.length})
+            </button>
           </div>
 
           {/* Search Box */}
@@ -474,7 +908,7 @@ export default function TabWebSecurity(props) {
             <Search size={14} style={{ position: "absolute", left: "10px", top: "10px", color: "var(--text-dim, #64748b)" }} />
             <input
               type="text"
-              placeholder="Search by IP address or detention reason..."
+              placeholder="Search by IP, Device Hash, Incident ID, or reason..."
               value={ipSearch}
               onChange={(e) => setIpSearch(e.target.value)}
               style={{
@@ -493,81 +927,131 @@ export default function TabWebSecurity(props) {
 
           {/* Table Container */}
           <div style={{ maxHeight: "280px", overflowY: "auto", borderRadius: "8px", border: "1px solid rgba(51, 65, 85, 0.6)" }}>
-            {filteredJails.length === 0 ? (
+            {((quarantineTab === "ips" ? filteredJails : quarantineTab === "devices" ? filteredDevices : [...filteredJails, ...filteredDevices])).length === 0 ? (
               <div style={{ padding: "30px 16px", textAlign: "center", color: "var(--text-dim, #94a3b8)" }}>
                 <CheckCircle size={32} style={{ color: "#10b981", margin: "0 auto 8px", display: "block" }} />
-                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff" }}>Zero Detained IPs in Jail</div>
+                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff" }}>Zero Active Quarantines</div>
                 <div style={{ fontSize: "0.76rem", marginTop: "4px" }}>
-                  {ipSearch ? "No matching IP found for query." : "All client connections are verified and within safe operating limits."}
+                  {ipSearch ? "No matching entries found for query." : "All client connections & devices are verified and safe."}
                 </div>
               </div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
                 <thead>
                   <tr style={{ background: "rgba(30, 41, 59, 0.9)", textAlign: "left", color: "#94a3b8" }}>
-                    <th style={{ padding: "10px 12px" }}>IP Address</th>
+                    <th style={{ padding: "10px 12px" }}>Target Identifier</th>
+                    <th style={{ padding: "10px 12px" }}>Incident ID</th>
                     <th style={{ padding: "10px 12px" }}>Detention Reason</th>
                     <th style={{ padding: "10px 12px" }}>Remaining</th>
                     <th style={{ padding: "10px 12px", textAlign: "right" }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredJails.map((j) => (
-                    <tr key={j.ip} style={{ borderBottom: "1px solid rgba(51, 65, 85, 0.4)", background: "rgba(15, 23, 42, 0.4)" }}>
-                      <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono, monospace)", color: "#f87171", fontWeight: 700 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span>{j.ip}</span>
+                  {(quarantineTab === "ips" ? filteredJails : quarantineTab === "devices" ? filteredDevices : [...filteredJails, ...filteredDevices]).map((entry, idx) => {
+                    const isDevice = Boolean(entry.deviceId && !entry.ip);
+                    const targetLabel = entry.ip || entry.deviceId || "Unknown";
+                    return (
+                      <tr key={idx} style={{ borderBottom: "1px solid rgba(51, 65, 85, 0.4)", background: "rgba(15, 23, 42, 0.4)" }}>
+                        <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono, monospace)", color: isDevice ? "#38bdf8" : "#f87171", fontWeight: 700 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span>{isDevice ? `📱 ${targetLabel.slice(0, 14)}...` : `🌐 ${targetLabel}`}</span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(targetLabel)}
+                              style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
+                              title="Copy"
+                            >
+                              {copiedIp === targetLabel ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+                            </button>
+                          </div>
+                        </td>
+                        <td style={{ padding: "8px 12px", color: "#fca5a5", fontFamily: "var(--font-mono, monospace)", fontSize: "0.72rem" }}>
+                          {entry.incidentId || "N/A"}
+                        </td>
+                        <td style={{ padding: "8px 12px", color: "#cbd5e1" }}>
+                          {entry.reason || "High Traffic Surge"}
+                        </td>
+                        <td style={{ padding: "8px 12px", color: "#fbbf24", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Clock size={12} />
+                            <span>{entry.remainingSec > 60 ? `${Math.ceil(entry.remainingSec / 60)} mins` : `${entry.remainingSec}s`}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "8px 12px", textAlign: "right" }}>
                           <button
                             type="button"
-                            onClick={() => copyToClipboard(j.ip)}
-                            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", padding: "2px" }}
-                            title="Copy IP"
+                            disabled={actionLoading}
+                            onClick={() => {
+                              if (entry.ip) handleUnjail(entry.ip);
+                              else if (entry.deviceId) handleUnjailDevice(entry.deviceId);
+                            }}
+                            style={{
+                              padding: "4px 10px",
+                              background: "rgba(16, 185, 129, 0.15)",
+                              border: "1px solid rgba(16, 185, 129, 0.4)",
+                              color: "#34d399",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
                           >
-                            {copiedIp === j.ip ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+                            <Unlock size={12} />
+                            Release
                           </button>
-                        </div>
-                      </td>
-                      <td style={{ padding: "8px 12px", color: "#cbd5e1" }}>
-                        {j.reason || "High Traffic Surge"}
-                      </td>
-                      <td style={{ padding: "8px 12px", color: "#fbbf24", fontWeight: 700, whiteSpace: "nowrap" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <Clock size={12} />
-                          <span>{j.remainingSec > 60 ? `${Math.ceil(j.remainingSec / 60)} mins` : `${j.remainingSec}s`}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "8px 12px", textAlign: "right" }}>
-                        <button
-                          type="button"
-                          disabled={actionLoading}
-                          onClick={() => handleUnjail(j.ip)}
-                          style={{
-                            padding: "4px 10px",
-                            background: "rgba(16, 185, 129, 0.15)",
-                            border: "1px solid rgba(16, 185, 129, 0.4)",
-                            color: "#34d399",
-                            borderRadius: "6px",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                          }}
-                        >
-                          <Unlock size={12} />
-                          Release
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
           </div>
 
+          {/* Quick Incident Pardon Box */}
+          <div style={{ marginTop: "14px", padding: "10px 12px", background: "rgba(30, 41, 59, 0.4)", borderRadius: "8px", border: "1px solid rgba(51, 65, 85, 0.4)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#cbd5e1" }}>⚡ Quick Release by Incident ID:</span>
+            <input
+              type="text"
+              placeholder="e.g. FSM-SEC-849201"
+              value={lookupIncident}
+              onChange={(e) => setLookupIncident(e.target.value)}
+              style={{
+                flex: 1,
+                minWidth: "140px",
+                padding: "6px 10px",
+                background: "rgba(15, 23, 42, 0.8)",
+                border: "1px solid rgba(51, 65, 85, 0.7)",
+                borderRadius: "6px",
+                color: "#fff",
+                fontSize: "0.76rem",
+                fontFamily: "var(--font-mono, monospace)",
+              }}
+            />
+            <button
+              type="button"
+              disabled={actionLoading || !lookupIncident.trim()}
+              onClick={() => handleUnjailIncident(lookupIncident)}
+              style={{
+                padding: "6px 12px",
+                background: "rgba(16, 185, 129, 0.2)",
+                border: "1px solid rgba(16, 185, 129, 0.4)",
+                color: "#34d399",
+                borderRadius: "6px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Release Incident
+            </button>
+          </div>
+
           {/* SECTION 2: Manual IP Quarantine Form */}
-          <form onSubmit={handleManualJail} style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px solid rgba(51, 65, 85, 0.5)" }}>
+          <form onSubmit={handleManualJail} style={{ marginTop: "14px", paddingTop: "12px", borderTop: "1px solid rgba(51, 65, 85, 0.5)" }}>
             <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
               <span>⛔</span>
               <span>Manual IP Quarantine Console (Lockout Any Abusive IP)</span>

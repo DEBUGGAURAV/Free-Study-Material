@@ -1131,6 +1131,25 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ userId, email }),
     }),
+  unjailThreatDevice: (deviceId) =>
+    request("/admin/threats/unjail", {
+      method: "POST",
+      body: JSON.stringify({ deviceId }),
+    }),
+  unjailThreatIncident: (incidentId, appealId = null) =>
+    request("/admin/threats/unjail", {
+      method: "POST",
+      body: JSON.stringify({ incidentId, appealId }),
+    }),
+  dismissJailAppeal: (appealId, reason = "") =>
+    request("/admin/threats/dismiss-appeal", {
+      method: "POST",
+      body: JSON.stringify({ appealId, reason }),
+    }),
+  testPingAppealTopic: () =>
+    request("/admin/threats/test-appeal-topic", {
+      method: "POST",
+    }),
 
   // ðŸ¤– Dedicated Chatbot Controller & Software Telemetry (@fsm_chat_bot & Turso)
   getChatBotSettings: () => request("/admin/chat-bot/settings"),
@@ -1239,4 +1258,8 @@ export const api = {
     request("/help/admin/create-topics", { method: "POST", body: JSON.stringify({ chatId }) }),
   getHelpTelemetry: () => request("/help/admin/telemetry"),
   getAdminHelpTickets: (status = null) => request(`/help/admin/tickets${status ? `?status=${status}` : ""}`),
+
+  // 🛡️ Zero-Trust Security & IP Jail Appeal
+  getSecurityStatus: () => request("/security/status"),
+  submitJailAppeal: (payload) => request("/security/jail-appeal", { method: "POST", body: JSON.stringify(payload) }),
 };

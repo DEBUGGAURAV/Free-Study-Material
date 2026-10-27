@@ -855,6 +855,81 @@ async function startSecurityBotPoller() {
           processedUpdateIds.delete(firstItem);
         }
 
+        // 🛡️ Handle Interactive Telegram Inline Buttons (e.g. IP Jail & Security Appeals in Topic 750)
+        if (update.callback_query) {
+          const cq = update.callback_query;
+          const cqId = cq.id;
+          const fromUser = cq.from;
+          const dataStr = cq.data || "";
+          const msgObj = cq.message;
+          const targetChatId = msgObj?.chat?.id;
+          const targetMsgId = msgObj?.message_id;
+
+          if (dataStr.startsWith("appeal:")) {
+            const parts = dataStr.split(":");
+            const action = parts[1];
+            const incidentId = parts[2];
+            const targetVal = parts[3];
+
+            const { unjailDevice, unjailIp, unjailByIncident } = require("../middleware/ipJail");
+            let alertMsg = "";
+            let statusSuffix = "";
+
+            if (action === "pardon_dev") {
+              if (targetVal === "all") {
+                unjailByIncident(incidentId);
+                alertMsg = `✅ Connection Pardoned & Unjailed! (Incident: ${incidentId})`;
+              } else {
+                if (targetVal && targetVal !== "none") {
+                  unjailDevice(targetVal);
+                }
+                unjailByIncident(incidentId);
+                alertMsg = `✅ Device Pardoned & Released! (Device: ${targetVal ? targetVal.slice(0, 8) : ""}...)`;
+              }
+              statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PARDONED BY ADMIN:</b> Device/Connection released by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
+            } else if (action === "pardon_ip") {
+              if (targetVal && targetVal !== "none") {
+                unjailIp(targetVal);
+              }
+              unjailByIncident(incidentId);
+              alertMsg = `✅ Full IP Pardoned & Unjailed! (IP: ${targetVal})`;
+              statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PARDONED BY ADMIN:</b> Full IP released by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
+            } else if (action === "deny") {
+              alertMsg = `❌ Appeal Rejected. Detention maintained.`;
+              statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n❌ <b>REJECTED BY ADMIN:</b> Detention kept active by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
+            }
+
+            try {
+              await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  callback_query_id: cqId,
+                  text: alertMsg,
+                  show_alert: true,
+                }),
+              });
+            } catch (_) {}
+
+            if (targetChatId && targetMsgId && msgObj?.text) {
+              try {
+                await fetch(`https://api.telegram.org/bot${botToken}/editMessageText`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    chat_id: targetChatId,
+                    message_id: targetMsgId,
+                    text: msgObj.text + statusSuffix,
+                    parse_mode: "HTML",
+                    reply_markup: { inline_keyboard: [] },
+                  }),
+                });
+              } catch (_) {}
+            }
+          }
+          continue;
+        }
+
         const msg = update.message;
         if (!msg || !msg.from) continue;
 
@@ -969,10 +1044,68 @@ async function startSecurityBotPoller() {
           continue;
         }
 
-        // 1. Check for /start with payload (e.g. /start reg_123 or /start reset_123)
+        // 1. Check for /start with payload (e.g. /start reg_123 or /start reset_123 or /start appeal_FSM-SEC-...)
         if (text.startsWith("/start")) {
           const parts = text.split(" ");
           const param = parts[1] ? parts[1].trim() : "";
+
+          // 🛡️ 1-Tap Telegram Unjail & IP Appeal Deep Link
+          if (param.startsWith("appeal_") || param.startsWith("unjail_")) {
+            const incidentId = param.replace(/^(appeal_|unjail_)/, "").trim().toUpperCase();
+            const tgUser = msg.from;
+            const tgName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ");
+            const tgUsername = tgUser.username ? `@${tgUser.username}` : "N/A";
+
+            await sendTelegramDirect(
+              chatId,
+              `🛡️ <b>Security Quarantine & Jail Appeal Desk</b>\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `🆔 <b>Incident ID:</b> <code>${incidentId}</code>\n` +
+                `👤 <b>Telegram User:</b> ${tgName} (${tgUsername})\n` +
+                `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                `Your 1-tap verification request has been received. Our Security Team has been alerted in <b>Topic 750 (🛡️ IP Jail & Security Appeals)</b>.\n\n` +
+                `If your connection was detained by mistake (e.g. shared college Wi-Fi or high-speed study session), your access will be restored shortly.\n\n` +
+                `🌐 <a href="${getSiteUrl()}">Return to Free Study Material</a>`,
+              { remove_keyboard: true }
+            );
+
+            // Forward 1-tap appeal alert strictly to Topic 750 with instant pardon choices
+            try {
+              const { sendTelegramAuthNotice } = require("./emailService");
+              await sendTelegramAuthNotice({
+                event: "IP_JAIL_APPEAL",
+                user: {
+                  name: `${tgName} (${tgUsername})`,
+                  email: "Telegram 1-Tap Verification",
+                  mobile: "Telegram ID: " + tgUser.id,
+                  ip: "Via Telegram Bot",
+                },
+                method: "Telegram Bot 1-Tap Unjail Link",
+                detail: [
+                  `⚡ <b>[1-TAP TELEGRAM UNJAIL REQUEST]</b>`,
+                  `━━━━━━━━━━━━━━━━━━━━━━`,
+                  `🆔 <b>Incident ID:</b> <code>${incidentId}</code>`,
+                  `👤 <b>Telegram User:</b> ${tgName} (${tgUsername})`,
+                  `🆔 <b>Telegram Chat ID:</b> <code>${tgUser.id}</code>`,
+                  `💬 <b>Status:</b> Student opened bot via 1-tap unjail deep link`,
+                  `━━━━━━━━━━━━━━━━━━━━━━`,
+                  `🎯 <b>Topic:</b> <b>🛡️ IP Jail & Security Appeals (Topic 750)</b>`,
+                ].join("\n"),
+                threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+                replyMarkup: {
+                  inline_keyboard: [
+                    [
+                      { text: "✅ Instant Pardon / Unjail", callback_data: `appeal:pardon_dev:${incidentId}:all` },
+                      { text: "❌ Reject Appeal", callback_data: `appeal:deny:${incidentId}` },
+                    ],
+                  ],
+                },
+              });
+            } catch (err) {
+              console.warn("[SECURITY-BOT] Failed to alert Topic 750 for 1-tap unjail:", err.message);
+            }
+            continue;
+          }
 
           if (param.startsWith("reg_")) {
             const regRecord = await getPendingRegistration(param);
