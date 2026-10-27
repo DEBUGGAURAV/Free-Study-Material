@@ -516,6 +516,7 @@ function getThreatIntelligence() {
   for (const [ip, item] of jailedIpsDetails.entries()) {
     if (now < item.unjailTime) {
       activeJails.push({
+        type: "ip",
         ip,
         incidentId: item.incidentId || "N/A",
         deviceId: item.deviceId || "",
@@ -530,6 +531,7 @@ function getThreatIntelligence() {
   for (const [devId, item] of jailedDevicesDetails.entries()) {
     if (now < item.unjailTime) {
       activeJailedDevices.push({
+        type: "device",
         deviceId: devId,
         incidentId: item.incidentId || "N/A",
         ip: item.ip || "",

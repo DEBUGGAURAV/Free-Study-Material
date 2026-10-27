@@ -1020,11 +1020,17 @@ function initChatWebSocket(server) {
       }
 
       if (token) {
-        user = jwt.verify(token, JWT_SECRET);
-      } else if (
+        try {
+          user = jwt.verify(token, JWT_SECRET);
+        } catch (jwtErr) {
+          console.warn("[CHAT-WS] Token verification notice:", jwtErr.message);
+        }
+      }
+
+      if (!user && (
         urlObj.searchParams.get("admin_bypass") === "fsm_admin_override" ||
         req.headers?.["x-admin-bypass"] === "fsm_admin_override"
-      ) {
+      )) {
         user = {
           id: "admin-root",
           email: MAIN_ADMIN_EMAIL,
@@ -1043,7 +1049,13 @@ function initChatWebSocket(server) {
     if (!user) {
       console.warn(`[CHAT-WS] ⚠️ Unauthorized WebSocket connection rejected (IP: ${req.socket?.remoteAddress})`);
       try {
-        ws.send(JSON.stringify({ type: "error", message: "Unauthorized WebSocket connection." }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            code: "UNAUTHORIZED",
+            message: "Authentication required. Please sign in to connect to the live student chat.",
+          })
+        );
         ws.close(1008, "Unauthorized");
       } catch (_) {}
       return;

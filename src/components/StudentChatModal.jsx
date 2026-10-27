@@ -430,6 +430,7 @@ export default function StudentChatModal({
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [joinError, setJoinError] = useState("");
   const [createSuccess, setCreateSuccess] = useState("");
+  const [authError, setAuthError] = useState(null);
 
   // Share Private Chat Modal State
   const [shareRoomModal, setShareRoomModal] = useState(null);
@@ -541,6 +542,13 @@ export default function StudentChatModal({
 
       if (isCancelled) return;
 
+      if (!token) {
+        console.warn("[CHAT-WS] No auth token available. Skipping WebSocket connection.");
+        setAuthError("Please sign in with your student account to join the live student chat.");
+        return;
+      }
+
+      setAuthError(null);
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const host = window.location.host;
       const wsUrl = `${protocol}//${host}/ws/chat?token=${encodeURIComponent(token || "")}`;
@@ -736,7 +744,19 @@ export default function StudentChatModal({
             setBlockedUserIds(new Set(data.blockedUserIds));
           }
         } else if (data.type === "error") {
-          alert(`⚠️ ${data.message}`);
+          console.warn("[CHAT-WS] Server error notice:", data);
+          if (
+            data.code === "UNAUTHORIZED" ||
+            String(data.message || "").toLowerCase().includes("unauthorized") ||
+            String(data.message || "").toLowerCase().includes("authentication")
+          ) {
+            setAuthError(data.message || "Your login session has expired. Please sign in again.");
+            try {
+              localStorage.removeItem("vault_token");
+            } catch (_) {}
+          } else {
+            console.error("[CHAT-WS] Chat error:", data.message);
+          }
         }
       } catch (e) {
         console.warn("[CHAT-WS] Parse error:", e.message);
@@ -2730,6 +2750,51 @@ export default function StudentChatModal({
               );
             })}
         </div>
+
+        {/* 🔒 Session / Auth State Banner */}
+        {authError && (
+          <div
+            style={{
+              padding: "9px 16px",
+              background: "linear-gradient(90deg, rgba(239, 68, 68, 0.18) 0%, rgba(185, 28, 28, 0.28) 100%)",
+              borderBottom: "1px solid rgba(239, 68, 68, 0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "10px",
+              fontSize: "0.8rem",
+              color: "#fca5a5",
+              fontWeight: 600,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>🔒</span>
+              <span>{authError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof onClose === "function") onClose();
+                if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("fsm:open-auth", { detail: { mode: "signin" } }));
+                }
+              }}
+              style={{
+                background: "#ef4444",
+                color: "#fff",
+                border: "none",
+                padding: "4px 12px",
+                borderRadius: "6px",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Sign In
+            </button>
+          </div>
+        )}
 
         {/* =========================================================
             PINNED NOTICE BANNER (WHATSAPP BROADCAST STYLE)

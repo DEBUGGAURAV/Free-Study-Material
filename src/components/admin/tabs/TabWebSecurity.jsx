@@ -948,13 +948,13 @@ export default function TabWebSecurity(props) {
                 </thead>
                 <tbody>
                   {(quarantineTab === "ips" ? filteredJails : quarantineTab === "devices" ? filteredDevices : [...filteredJails, ...filteredDevices]).map((entry, idx) => {
-                    const isDevice = Boolean(entry.deviceId && !entry.ip);
-                    const targetLabel = entry.ip || entry.deviceId || "Unknown";
+                    const isDevice = entry.type === "device" || Boolean(entry.deviceId && !entry.ip);
+                    const targetLabel = isDevice ? (entry.deviceId || "Unknown Device") : (entry.ip || "Unknown IP");
                     return (
                       <tr key={idx} style={{ borderBottom: "1px solid rgba(51, 65, 85, 0.4)", background: "rgba(15, 23, 42, 0.4)" }}>
                         <td style={{ padding: "8px 12px", fontFamily: "var(--font-mono, monospace)", color: isDevice ? "#38bdf8" : "#f87171", fontWeight: 700 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span>{isDevice ? `📱 ${targetLabel.slice(0, 14)}...` : `🌐 ${targetLabel}`}</span>
+                            <span>{isDevice ? `📱 ${targetLabel.slice(0, 16)}...` : `🌐 ${targetLabel}`}</span>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(targetLabel)}
@@ -982,8 +982,13 @@ export default function TabWebSecurity(props) {
                             type="button"
                             disabled={actionLoading}
                             onClick={() => {
-                              if (entry.ip) handleUnjail(entry.ip);
-                              else if (entry.deviceId) handleUnjailDevice(entry.deviceId);
+                              if (entry.type === "device" || (!entry.ip && entry.deviceId)) {
+                                handleUnjailDevice(entry.deviceId);
+                              } else if (entry.ip) {
+                                handleUnjail(entry.ip);
+                              } else if (entry.deviceId) {
+                                handleUnjailDevice(entry.deviceId);
+                              }
                             }}
                             style={{
                               padding: "4px 10px",
