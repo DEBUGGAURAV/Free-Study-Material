@@ -295,9 +295,9 @@ router.post("/tamper-alert", async (req, res) => {
       const incidentId = req.body?.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
       const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || forensics?.deviceHash || guestUid || "").trim();
 
-      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId);
+      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId, fullUser);
       if (rawDeviceId) {
-        jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp);
+        jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp, fullUser);
       }
 
       // D. Dispatch Critical Ban Alert to Telegram Supergroup Topic 6
@@ -411,10 +411,11 @@ router.post("/jail-appeal", async (req, res) => {
 
     const dedupKey = `${clientIp}_${effectiveDevId}`;
     const now = Date.now();
-    if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 3 * 60 * 1000)) {
+    // Allow re-submission after 15 seconds to prevent accidental double-clicks without blocking legitimate re-appeals
+    if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 15 * 1000)) {
       return res.status(429).json({
         success: false,
-        message: "An appeal was recently submitted for this connection. Please wait a few moments for admin review in Telegram Topic 750.",
+        message: "An appeal was just submitted a few seconds ago. Please wait a moment for admin review in Telegram Topic 750.",
       });
     }
     recentAppeals.set(dedupKey, now);
