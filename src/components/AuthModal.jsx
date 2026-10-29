@@ -84,8 +84,8 @@ export default function AuthModal({
       triggerClientLockdown(msg, {
         policyName: "Account Block Policy (Administrative Ban)",
         durationLabel: "Permanent / Admin Review",
-        autoReleasePolicy: "Contact Administrator in Telegram Topic 750",
-        adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+        autoReleasePolicy: "Contact Administrator via Help Desk",
+        adminPardon: "Can be instantly pardoned by Administrator upon review",
         incidentId: `FSM-BAN-${Date.now().toString(36).toUpperCase()}`,
       });
       return;
@@ -1979,11 +1979,6 @@ export default function AuthModal({
                       {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
                     </div>
                     <div style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
-                    {error.toLowerCase().includes("blocked") && (
-                      <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "0.76rem", color: "#cbd5e1" }}>
-                        💬 Contact platform administration via <b>Help Desk</b> to request account review.
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
