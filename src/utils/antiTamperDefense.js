@@ -653,6 +653,10 @@ function showStrikeWarning(strike, customMessage) {
 export function triggerClientLockdown(reason, options = {}) {
   isLockdownActive = true;
 
+  const cleanReason = (reason || "Security violation detected")
+    .replace(/\.?\s*Auto-release in \d+ seconds\.?/gi, "")
+    .trim();
+
   const policyName = options.policyName || "Client Script / DevTools Tamper (Strike 3)";
   const durationLabel = options.durationLabel || "24 Hours";
   const autoReleasePolicy = options.autoReleasePolicy || "✅ Auto-release after 24h";
@@ -672,7 +676,7 @@ export function triggerClientLockdown(reason, options = {}) {
   try {
     localStorage.setItem("fsm_lockdown_until", String(targetTimestamp));
     localStorage.setItem("fsm_lockdown_policy", policyName);
-    localStorage.setItem("fsm_lockdown_reason", reason || "Security violation detected");
+    localStorage.setItem("fsm_lockdown_reason", cleanReason || "Security violation detected");
     localStorage.setItem("fsm_lockdown_label", durationLabel);
     localStorage.setItem("fsm_lockdown_release", autoReleasePolicy);
     localStorage.setItem("fsm_lockdown_incident", incidentId);
@@ -781,7 +785,7 @@ export function triggerClientLockdown(reason, options = {}) {
           line-height: 1.45;
           text-align: left;
         ">
-          ${reason || "Client script tampering or unauthorized inspection detected (3/3 attempts)."}
+          ${cleanReason || "Client script tampering or unauthorized inspection detected (3/3 attempts)."}
         </div>
         
         <!-- ⏱️ Live Ticking Countdown Box (User Time) -->

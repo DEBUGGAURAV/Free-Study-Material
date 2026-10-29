@@ -147,6 +147,10 @@ function renderQuarantineHtml({
     second: "2-digit",
   });
 
+  const cleanReason = (reasonStr || "Security policy violation")
+    .replace(/\.?\s*Auto-release in \d+ seconds\.?/gi, "")
+    .trim();
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -348,7 +352,7 @@ function renderQuarantineHtml({
     </div>
     
     <div class="reason-box">
-      Security Violation: ${reasonStr}. Incident: ${incidentId}
+      Security Violation: ${cleanReason}. Incident: ${incidentId}
     </div>
     
     <div class="timer-card">
@@ -624,7 +628,7 @@ function ipJailFirewall(req, res, next) {
       success: false,
       error: "SECURITY_JAIL",
       incidentId,
-      message: `Security quarantine active: ${reasonStr}. Auto-release in ${remainingSec} seconds.`,
+      message: `Security quarantine active: ${reasonStr}.`,
       retryAfter: remainingSec,
       unjailTime,
       autoReleaseAt: new Date(unjailTime).toISOString(),
