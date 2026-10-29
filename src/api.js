@@ -114,6 +114,11 @@ async function request(endpoint, options = {}) {
         errMsg = `Request failed with status ${res.status}`;
       }
     }
+    if (res.status === 429 && (data.error === "SECURITY_JAIL" || data.incidentId || data.isJailed)) {
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fsm:security-detained", { detail: data }));
+      }
+    }
     const err = new Error(errMsg);
     err.data = data;
     err.field = data?.field || (data && typeof data === "object" ? data.field : null);

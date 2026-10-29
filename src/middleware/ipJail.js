@@ -234,20 +234,15 @@ function renderQuarantineHtml({ incidentId, reasonStr, remainingSec, policyName,
       btn.disabled = true;
       btn.innerText = "Submitting Appeal...";
       try {
-        const nameVal = (document.getElementById("name") || document.getElementById("studentName"))?.value || "Student Visitor";
-        const emailVal = (document.getElementById("email") || document.getElementById("studentEmail"))?.value || "Not Provided";
-        const mobileVal = document.getElementById("mobile")?.value || "";
-        const messageVal = document.getElementById("message")?.value || "Student submitted pardon request for security detention.";
-
         const res = await fetch("/api/security/jail-appeal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             incidentId: "${incidentId}",
-            name: nameVal,
-            email: emailVal,
-            mobile: mobileVal,
-            message: messageVal,
+            name: document.getElementById("name").value,
+            email: document.getElementById("email").value,
+            mobile: document.getElementById("mobile").value,
+            message: document.getElementById("message").value,
             deviceId: "${deviceId || ""}",
           })
         });
@@ -294,6 +289,8 @@ function ipJailFirewall(req, res, next) {
   const isWhitelistedPath =
     p === "/api/security/jail-appeal" ||
     p.startsWith("/api/security/jail-appeal") ||
+    p === "/api/security/unjail-incident" ||
+    p.startsWith("/api/security/unjail-incident") ||
     p === "/api/security/status" ||
     p.startsWith("/api/security/status") ||
     p === "/api/help/faqs" ||
@@ -354,39 +351,23 @@ function ipJailFirewall(req, res, next) {
       Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
 
     if (isBrowserHtml) {
-      // Check if it's an extreme volumetric DDoS flood (>1500 req/60s from raw IP)
-      const recentReqs = (ipRequestHistory.get(ip) || []).length;
-      if (recentReqs > 1500) {
-        res.setHeader("Retry-After", remainingSec);
-        return res.status(429).send(renderQuarantineHtml({
-          incidentId,
-          reasonStr,
-          remainingSec,
-          policyName,
-          ip,
-        }));
-      }
-
-      // Tier 2: Allow React SPA to load in "Restricted Shield Mode"!
+      res.setHeader("Retry-After", remainingSec);
       res.setHeader("X-Security-Detained", "true");
       res.setHeader("X-Incident-Id", incidentId);
       res.setHeader("X-Detention-Reason", reasonStr);
       res.setHeader("X-Detention-Policy", policyName);
-      res.setHeader("X-Retry-After", String(remainingSec));
 
-      try {
-        res.cookie("fsm_security_detained", JSON.stringify({
-          isDetained: true,
-          incidentId,
-          reasonStr,
-          policyName,
-          remainingSec,
-          unjailTime,
-          isDeviceOnly: !isIpJailed && isDeviceJailed,
-        }), { maxAge: remainingSec * 1000, httpOnly: false, sameSite: "lax" });
-      } catch (_) {}
-
-      return next();
+      return res.status(403).send(renderQuarantineHtml({
+        incidentId,
+        reasonStr,
+        remainingSec,
+        policyName,
+        durationLabel,
+        autoReleasePolicy,
+        ip,
+        deviceId,
+        unjailTime,
+      }));
     }
 
     // Block protected/heavy API requests with informative JSON
@@ -452,15 +433,6 @@ function ipJailFirewall(req, res, next) {
       actionTaken: "3_MIN_IP_DETENTION",
     });
 
-    notifyTopic750IpJail({
-      ip,
-      deviceId,
-      reason: `High Traffic Surge (${history.length} req/60s)`,
-      durationMs: jailDurationMs,
-      incidentId,
-      policyName: "DDoS / Traffic Surge (>600 req/min)",
-    }).catch(() => {});
-
     ipRequestHistory.delete(ip);
     console.warn(`[SECURITY-FIREWALL] 🚨 Detained abusive IP ${ip} in security jail for 3 minutes (Traffic spike: ${history.length} req/min). Incident: ${incidentId}`);
     res.setHeader("Retry-After", 180);
@@ -510,7 +482,6 @@ function reportFailedAuth(req) {
       requestCount: recentAuthFails.length,
     });
     totalJailedCount++;
-    const bruteIncId = `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
     recordThreatIncident({
       type: "BRUTE_FORCE_LOCKOUT",
       ip,
@@ -519,15 +490,6 @@ function reportFailedAuth(req) {
       actionTaken: "5_MIN_IP_DETENTION",
     });
     console.warn(`[SECURITY-FIREWALL] 🚨 Detained brute-force login IP ${ip} in security jail for 5 minutes.`);
-
-    notifyTopic750IpJail({
-      ip,
-      deviceId: "",
-      reason: "Brute-Force Credential Attack Detected (20+ failures)",
-      durationMs: 5 * 60 * 1000,
-      incidentId: bruteIncId,
-      policyName: "Brute-Force Credential Defense",
-    }).catch(() => {});
   }
 }
 
@@ -705,95 +667,10 @@ function clearAllJails() {
   return count;
 }
 
-// Rate-limit notifications to Topic 750 so we don't spam if an IP fires repeated requests after being jailed
-const recentTopic750Notices = new Map(); // key -> timestamp
-
-/**
- * Dispatches an automated IP/Device Quarantine notice directly to Telegram Topic 750 with instant pardon choices
- */
-async function notifyTopic750IpJail({
-  ip,
-  deviceId = "",
-  reason = "Security Violation",
-  durationMs = 24 * 60 * 60 * 1000,
-  incidentId,
-  policyName = "Security Firewall Detention",
-  user = null,
-}) {
-  if (!ip || ip === "unknown") return;
-  const isLoopback = (ip === "127.0.0.1" || ip === "::1" || ip === "localhost");
-  const throttleKey = `${ip}_${deviceId || "all"}`;
-  const now = Date.now();
-  if (recentTopic750Notices.has(throttleKey) && (now - recentTopic750Notices.get(throttleKey) < 30000)) {
-    return; // Don't spam Topic 750 if already notified within 30s
-  }
-  recentTopic750Notices.set(throttleKey, now);
-
-  try {
-    const { sendTelegramAuthNotice } = require("../services/emailService");
-    const safeIncId = incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
-    const durationMin = Math.round(durationMs / (60 * 1000));
-    const durationLabel = durationMin >= 1440 ? `${Math.round(durationMin / 1440)} Day(s) (24h)` : `${durationMin} Minute(s)`;
-    const autoReleaseTimeStr = new Date(Date.now() + durationMs).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-
-    const safeIp = String(ip || "Unknown IP").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const safeDev = String(deviceId || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const safeReason = String(reason || "Security violation detected").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const safePolicy = String(policyName || "Zero-Trust Autonomous Firewall").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-    const messageText = [
-      `🚨 <b>[SECURITY FIREWALL: CONNECTION QUARANTINED]</b>`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-      `🆔 <b>Incident ID:</b> <code>${safeIncId}</code>`,
-      `🌐 <b>Quarantined IP:</b> <code>${safeIp}</code>${isLoopback ? " <i>(Localhost Test)</i>" : ""}`,
-      safeDev ? `📱 <b>Device Hash:</b> <code>${safeDev.slice(0, 16)}...</code>` : null,
-      user?.name ? `👤 <b>Student:</b> ${user.name} (<code>${user.email || "N/A"}</code>)` : null,
-      `⚖️ <b>Policy Trigger:</b> <b>${safePolicy}</b>`,
-      `📝 <b>Detection Reason:</b> <i>${safeReason}</i>`,
-      `⏱️ <b>Detention Duration:</b> <b>${durationLabel}</b>`,
-      `🕒 <b>Auto-Release:</b> <code>${autoReleaseTimeStr} IST</code>`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
-      `🎯 <b>Target:</b> <b>🛡️ IP Jail & Security Appeals (Topic 750)</b>`,
-      `⚡ <b>Immediate Administrator Actions:</b>`,
-      `• <b>Pardon Device Only:</b> Releases this device while keeping network guarded`,
-      `• <b>Pardon Entire IP:</b> Unjails the full public IP address for all users`,
-      `🕒 <b>Logged At:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
-    ].filter(Boolean).join("\n");
-
-    const replyMarkup = {
-      inline_keyboard: [
-        [
-          { text: "📱 Pardon Device Only", callback_data: `appeal:pardon_dev:${safeIncId}:${deviceId || "all"}` },
-          { text: "🌐 Pardon Entire IP", callback_data: `appeal:pardon_ip:${safeIncId}:${ip || "none"}` },
-        ],
-        [
-          { text: "❌ Keep Jailed", callback_data: `appeal:deny:${safeIncId}` },
-        ]
-      ],
-    };
-
-    await sendTelegramAuthNotice({
-      event: "IP_JAIL_APPEAL",
-      user: {
-        name: user?.name || "Detained Connection",
-        email: user?.email || "Security Firewall",
-        ip: safeIp,
-      },
-      method: "Automated IP Jail Guard",
-      detail: messageText,
-      threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
-      replyMarkup,
-    });
-    console.log(`[IP-JAIL] 🚨 Dispatched IP jail notification to Topic 750 for ${safeIp} (Incident: ${safeIncId})`);
-  } catch (err) {
-    console.warn("[IP-JAIL] Failed to dispatch Topic 750 jail notice:", err.message);
-  }
-}
-
 /**
  * Instantly put a specific IP in jail for security tampering violations
  */
-function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, deviceId = "", user = null) {
+function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, deviceId = "") {
   if (!ip || ip === "unknown") return null;
   const isLoopback = (ip === "127.0.0.1" || ip === "::1" || ip === "localhost");
   const unjailTime = Date.now() + durationMs;
@@ -827,25 +704,13 @@ function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 
     actionTaken: isLoopback ? "RECORDED_TEST" : "JAILED_24H",
   });
   console.warn(`[IP-JAIL] 🚨 IP ${ip} jailed for 24h due to: ${reason}. Incident: ${incidentId}`);
-
-  // Dispatched alert to Topic 750 with instant pardon buttons
-  notifyTopic750IpJail({
-    ip,
-    deviceId,
-    reason,
-    durationMs,
-    incidentId,
-    policyName: reason.includes("Tamper") || reason.includes("Script") ? "Client Script / DevTools Tamper (Strike 3)" : "Security Quarantine / IP Jail",
-    user,
-  }).catch(() => {});
-
   return incidentId;
 }
 
 /**
  * Instantly put a specific Device in jail (Dual-Key protection for shared college Wi-Fi)
  */
-function jailSpecificDevice(deviceId, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, ip = "unknown", user = null) {
+function jailSpecificDevice(deviceId, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, ip = "unknown") {
   if (!deviceId) return null;
   const unjailTime = Date.now() + durationMs;
   const incidentId = customIncidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -875,18 +740,6 @@ function jailSpecificDevice(deviceId, reason = "Client Script Tampering", durati
     actionTaken: "JAILED_DEVICE_24H",
   });
   console.warn(`[IP-JAIL] 🚨 Device ${deviceId} jailed for 24h due to: ${reason}. Incident: ${incidentId}`);
-
-  // Dispatched alert to Topic 750 with instant pardon buttons
-  notifyTopic750IpJail({
-    ip,
-    deviceId,
-    reason,
-    durationMs,
-    incidentId,
-    policyName: "Client Device Fingerprint Quarantine",
-    user,
-  }).catch(() => {});
-
   return incidentId;
 }
 
@@ -906,6 +759,5 @@ module.exports = {
   getThreatIntelligence,
   clearAllJails,
   incidentsRegistry,
-  notifyTopic750IpJail,
 };
 

@@ -11,6 +11,7 @@ import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
+import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
@@ -219,7 +220,7 @@ export default function App() {
   const [passkeyPromptLoading, setPasskeyPromptLoading] = useState(false);
   const [passkeyPromptSuccess, setPasskeyPromptSuccess] = useState(false);
 
-  // 🛡️ Zero-Trust Security Quarantine Shield State (Restricted Shield Mode)
+  // 🛡️ Zero-Trust Security Quarantine Shield State (Strict Full-Page Lockdown Mode)
   const [securityDetention, setSecurityDetention] = useState(null);
 
   useEffect(() => {
@@ -229,7 +230,14 @@ export default function App() {
         const decoded = JSON.parse(decodeURIComponent(match[1]));
         if (decoded && (decoded.isDetained || decoded.incidentId)) {
           setSecurityDetention(decoded);
-          setIsHelpOpen(true);
+          triggerClientLockdown(decoded.reasonStr || "Security quarantine active.", {
+            policyName: decoded.policyName || "Client Script / DevTools Tamper (Strike 3)",
+            durationLabel: decoded.durationLabel || "24 Hours",
+            autoReleasePolicy: decoded.autoReleasePolicy || "✅ Auto-release after 24h",
+            targetTimestamp: decoded.unjailTime || (Date.now() + (decoded.remainingSec || 86400) * 1000),
+            incidentId: decoded.incidentId,
+          });
+          return;
         }
       }
     } catch (_) {}
@@ -240,7 +248,13 @@ export default function App() {
         .then((res) => {
           if (res && res.isJailed) {
             setSecurityDetention(res);
-            setIsHelpOpen(true);
+            triggerClientLockdown(res.reason || "Security violation detected", {
+              policyName: res.policyName || "Client Script / DevTools Tamper (Strike 3)",
+              durationLabel: res.durationLabel || "24 Hours",
+              autoReleasePolicy: res.autoReleasePolicy || "✅ Auto-release after 24h",
+              targetTimestamp: res.unjailTime || (Date.now() + (res.remainingSec || 86400) * 1000),
+              incidentId: res.incidentId,
+            });
           }
         })
         .catch(() => {});
@@ -249,12 +263,38 @@ export default function App() {
     const handleDetentionEvent = (e) => {
       if (e?.detail) {
         setSecurityDetention(e.detail);
-        setIsHelpOpen(true);
+        triggerClientLockdown(e.detail.reasonStr || e.detail.reason || e.detail.message || "Security violation detected", {
+          policyName: e.detail.policyName || "Client Script / DevTools Tamper (Strike 3)",
+          durationLabel: e.detail.durationLabel || "24 Hours",
+          autoReleasePolicy: e.detail.autoReleasePolicy || "✅ Auto-release after 24h",
+          targetTimestamp: e.detail.unjailTime || (e.detail.autoReleaseAt ? new Date(e.detail.autoReleaseAt).getTime() : Date.now() + (e.detail.remainingSec || 86400) * 1000),
+          incidentId: e.detail.incidentId,
+        });
       }
     };
     window.addEventListener("fsm:security-detained", handleDetentionEvent);
     return () => window.removeEventListener("fsm:security-detained", handleDetentionEvent);
   }, []);
+
+  // 🚫 Full Lockdown if Logged-in User Account is Blocked in Database
+  useEffect(() => {
+    if (currentUser && currentUser.isBlocked) {
+      setSecurityDetention({
+        isBlocked: true,
+        reason: currentUser.blockedReason || "Account blocked by Administrator",
+      });
+      triggerClientLockdown(
+        currentUser.blockedReason || "Security Violation: Your student account has been blocked by the Administrator.",
+        {
+          policyName: "Account Block Policy (Administrative Ban)",
+          durationLabel: "Permanent / Admin Review",
+          autoReleasePolicy: "Contact Administrator in Telegram Topic 750",
+          adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+          incidentId: `FSM-BAN-${(currentUser.id || currentUser.email || "ACC").toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`,
+        }
+      );
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const handlePasskeyPrompt = (e) => {
@@ -1095,75 +1135,13 @@ export default function App() {
     );
   }
 
+  // 🔒 If connection or account is detained/blocked, don't render normal website underneath
+  if (securityDetention || (currentUser && currentUser.isBlocked)) {
+    return null;
+  }
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* 🛡️ Restricted Shield Mode Banner (Zero-Trust IP Quarantine) */}
-      {securityDetention && (
-        <div
-          style={{
-            background: "linear-gradient(90deg, #7f1d1d, #b91c1c)",
-            color: "#ffffff",
-            padding: "10px 18px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            fontSize: "13px",
-            fontWeight: "600",
-            position: "sticky",
-            top: 0,
-            zIndex: 999999,
-            boxShadow: "0 4px 14px rgba(185, 28, 28, 0.4)",
-            flexWrap: "wrap",
-            gap: "10px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "16px" }}>🛡️</span>
-            <span>
-              <strong>Restricted Security Shield:</strong> Incident ID <code>{securityDetention.incidentId || "FSM-SEC"}</code> • Heavy downloads paused.
-              {securityDetention.remainingSec ? ` (Detention: ${securityDetention.remainingSec}s)` : ""}
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button
-              type="button"
-              onClick={() => setIsHelpOpen(true)}
-              style={{
-                background: "#ffffff",
-                color: "#991b1b",
-                border: "none",
-                padding: "5px 12px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: "700",
-                cursor: "pointer",
-              }}
-            >
-              📝 Open Appeal Desk
-            </button>
-            <a
-              href={`https://t.me/fsm_security_otp_bot?start=appeal_${(securityDetention.incidentId || "").replace(/[^A-Za-z0-9_-]/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                background: "#0088cc",
-                color: "#ffffff",
-                padding: "5px 12px",
-                borderRadius: "6px",
-                fontSize: "12px",
-                fontWeight: "700",
-                textDecoration: "none",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-            >
-              💬 1-Tap Telegram Unjail
-            </a>
-          </div>
-        </div>
-      )}
-
       {/* Top Navbar */}
       <Navbar
         searchTerm={searchTerm}

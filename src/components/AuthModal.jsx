@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { api } from "../api";
 import { loginWithPasskey, registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
+import { triggerClientLockdown } from "../utils/antiTamperDefense";
 
 const TelegramIcon = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -77,6 +78,18 @@ export default function AuthModal({
 
     const msg = typeof errOrMsg === "string" ? errOrMsg : (errOrMsg?.data?.message || errOrMsg?.message || "An error occurred.");
     const lower = String(msg).toLowerCase();
+
+    // 🔒 Full Screen Security Lockdown if User Account is Blocked
+    if (lower.includes("blocked")) {
+      triggerClientLockdown(msg, {
+        policyName: "Account Block Policy (Administrative Ban)",
+        durationLabel: "Permanent / Admin Review",
+        autoReleasePolicy: "Contact Administrator in Telegram Topic 750",
+        adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+        incidentId: `FSM-BAN-${Date.now().toString(36).toUpperCase()}`,
+      });
+      return;
+    }
 
     // 1. First Priority: Check if backend explicitly provided invalid field key
     let targetField = errOrMsg?.field || errOrMsg?.data?.field || null;

@@ -295,9 +295,9 @@ router.post("/tamper-alert", async (req, res) => {
       const incidentId = req.body?.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
       const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || forensics?.deviceHash || guestUid || "").trim();
 
-      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId, fullUser);
+      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId);
       if (rawDeviceId) {
-        jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp, fullUser);
+        jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp);
       }
 
       // D. Dispatch Critical Ban Alert to Telegram Supergroup Topic 6
@@ -411,11 +411,10 @@ router.post("/jail-appeal", async (req, res) => {
 
     const dedupKey = `${clientIp}_${effectiveDevId}`;
     const now = Date.now();
-    // Allow re-submission after 15 seconds to prevent accidental double-clicks without blocking legitimate re-appeals
-    if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 15 * 1000)) {
+    if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 3 * 60 * 1000)) {
       return res.status(429).json({
         success: false,
-        message: "An appeal was just submitted a few seconds ago. Please wait a moment for admin review in Telegram Topic 750.",
+        message: "An appeal was recently submitted for this connection. Please wait a few moments for admin review in Telegram Topic 750.",
       });
     }
     recentAppeals.set(dedupKey, now);
@@ -520,6 +519,7 @@ router.get("/status", (req, res) => {
 router.post("/unjail-incident", (req, res) => {
   try {
     const incidentId = (req.query?.incidentId || req.body?.incidentId || "").trim();
+    const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || req.query?.deviceId || "").trim();
     const clientIp = getClientIp(req);
     let ok = false;
     if (incidentId && typeof unjailByIncident === "function") {
@@ -528,9 +528,17 @@ router.post("/unjail-incident", (req, res) => {
     if (clientIp && typeof unjailIp === "function") {
       ok = unjailIp(clientIp) || ok;
     }
+    if (rawDeviceId && typeof unjailDevice === "function") {
+      ok = unjailDevice(rawDeviceId) || ok;
+    }
     // Clear strikes cache
     if (incidentId) tamperStrikes.delete(incidentId);
     if (clientIp) tamperStrikes.delete(clientIp);
+    if (rawDeviceId) tamperStrikes.delete(rawDeviceId);
+
+    try {
+      res.clearCookie("fsm_security_detained");
+    } catch (_) {}
 
     return res.json({
       success: true,

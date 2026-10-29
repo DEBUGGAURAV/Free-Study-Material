@@ -508,7 +508,7 @@ function showStrikeWarning(strike, customMessage) {
 /**
  * Security Detention & Lockdown Screen with Live Countdown & Accurate Policy Time
  */
-function triggerClientLockdown(reason, options = {}) {
+export function triggerClientLockdown(reason, options = {}) {
   isLockdownActive = true;
 
   const policyName = options.policyName || "Client Script / DevTools Tamper (Strike 3)";
@@ -725,34 +725,67 @@ function triggerClientLockdown(reason, options = {}) {
         </div>
 
         <!-- 🔓 Emergency Unblock & Instant Pardon Button -->
-        <div style="margin-bottom: 14px;">
+        <div style="margin-bottom: 10px;">
           <button id="fsm-emergency-unblock-btn" style="
             background: rgba(239, 68, 68, 0.16);
             border: 1px solid rgba(239, 68, 68, 0.45);
             color: #fca5a5;
             border-radius: 10px;
-            padding: 9px 18px;
-            font-size: 0.78rem;
+            padding: 10px 18px;
+            font-size: 0.8rem;
             font-weight: 700;
             cursor: pointer;
             transition: all 0.2s ease;
             box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            width: 100%;
           " onmouseover="this.style.background='rgba(239, 68, 68, 0.32)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.16)'">
             🔓 Emergency Release &amp; Return to Vault
           </button>
         </div>
-        
-        <div style="
-          font-size: 0.76rem;
-          color: #94a3b8;
-          line-height: 1.45;
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
+
+        <!-- 💬 1-Tap Telegram Unjail -->
+        <a href="https://t.me/fsm_security_otp_bot?start=appeal_${incidentId}" target="_blank" rel="noopener noreferrer" style="
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          background: #0088cc;
+          color: white;
+          padding: 11px 18px;
           border-radius: 10px;
-          padding: 10px 14px;
-          text-align: left;
+          font-weight: 700;
+          text-decoration: none;
+          font-size: 0.82rem;
+          transition: 0.2s;
+          width: 100%;
+          margin-bottom: 14px;
         ">
-          💡 <strong>Need Immediate Unlock?</strong> You don't have to wait for the timer! Tap the button above, or open the <strong>Help Center</strong>, select Category <strong style="color: #f87171;">Account Block Appeal</strong>, and provide your Incident ID for administrator review.
+          <span>💬</span> 1-Tap Pardon via Telegram Bot (@fsm_security_otp_bot)
+        </a>
+
+        <!-- 📝 Quick Appeal Desk -->
+        <div style="
+          margin-top: 14px;
+          text-align: left;
+          border-top: 1px solid rgba(255,255,255,0.08);
+          padding-top: 12px;
+        ">
+          <div style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+            <span>📝</span> Quick Appeal Desk to Admin (Topic 750)
+          </div>
+          <input type="text" id="fsm-appeal-name-input" placeholder="Your Full Name (Required)" style="
+            width: 100%; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.78rem; margin-bottom: 8px; outline: none;
+          " />
+          <input type="email" id="fsm-appeal-email-input" placeholder="Your College / Personal Email (Required)" style="
+            width: 100%; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.78rem; margin-bottom: 8px; outline: none;
+          " />
+          <textarea id="fsm-appeal-reason-input" rows="2" placeholder="Brief statement (e.g. Studying for exams on hostel Wi-Fi)" style="
+            width: 100%; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.78rem; margin-bottom: 8px; outline: none; resize: vertical;
+          "></textarea>
+          <button id="fsm-appeal-submit-btn" style="
+            width: 100%; background: #3b82f6; color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: 0.2s;
+          ">🚀 Submit Appeal to Admin (Topic 750)</button>
+          <div id="fsm-appeal-feedback" style="font-size: 12px; margin-top: 8px; text-align: center; display: none;"></div>
         </div>
       </div>
     </div>
