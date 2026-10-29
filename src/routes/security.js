@@ -325,7 +325,7 @@ router.post("/tamper-alert", async (req, res) => {
         durationLabel: "24 Hours",
         policyName: "Client Script / DevTools Tamper (Strike 3)",
         autoReleasePolicy: "✅ Auto-release after 24h",
-        adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+        adminPardon: "Can be instantly pardoned by Administrator upon review",
         targetTimestamp: autoReleaseTime,
         autoReleaseAt: new Date(autoReleaseTime).toISOString(),
         message: `Security Violation: Repeated script tampering detected (3/3 strikes). Your connection is detained in security quarantine for 24 Hours. Incident: ${incidentId}`,
@@ -414,7 +414,7 @@ router.post("/jail-appeal", async (req, res) => {
     if (recentAppeals.has(dedupKey) && (now - recentAppeals.get(dedupKey) < 3 * 60 * 1000)) {
       return res.status(429).json({
         success: false,
-        message: "An appeal was recently submitted for this connection. Please wait a few moments for admin review in Telegram Topic 750.",
+        message: "An appeal was recently submitted for this connection. Please wait a few moments for admin review.",
       });
     }
     recentAppeals.set(dedupKey, now);
@@ -488,7 +488,7 @@ router.post("/jail-appeal", async (req, res) => {
 
     return res.json({
       success: true,
-      message: `Appeal for incident ${safeIncId} has been successfully logged and sent to Administrator in Telegram Topic 750.`,
+      message: `Appeal for incident ${safeIncId} has been successfully logged and sent to Administrator for review.`,
       incidentId: safeIncId,
     });
   } catch (err) {

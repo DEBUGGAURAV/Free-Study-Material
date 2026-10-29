@@ -61,10 +61,10 @@ const INITIAL_FAQS = [
   },
   {
     id: "faq_6",
-    category: "telegram",
-    question: "How can I connect with the official Telegram Academic Community & notifications?",
+    category: "general",
+    question: "How can I receive updates about new study material and exam datesheets?",
     answer:
-      "You can connect through our official Telegram Bot (@fsm_chat_bot or @fsm_security_otp_bot) or join official FSM broadcast channels to receive daily semester updates, exam datesheets, and new study material alerts.",
+      "You can connect through our official community channels and student portal to receive daily semester updates, exam datesheets, and new study material alerts.",
   },
   {
     id: "faq_security_jail",
@@ -655,7 +655,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                     Question Submitted Successfully!
                   </h4>
                   <p style={{ margin: "0 0 16px 0", fontSize: "0.84rem", color: "rgba(226, 232, 240, 0.85)" }}>
-                    Admin has been notified on Telegram. You can track their reply anytime without logging in using your Ticket ID:
+                    Admin has been notified. You can track their reply anytime without logging in using your Ticket ID:
                   </p>
 
                   <div
@@ -861,27 +861,6 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       <div>
                         Please provide your <strong>Incident ID (e.g. <code>FSM-SEC-XXXXXX</code>)</strong>. If you are on a college/hostel Wi-Fi network, submitting an appeal allows administrators to unblock your specific device without affecting other students.
                       </div>
-                      <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                        <a
-                          href={`https://t.me/fsm_security_otp_bot?start=appeal_${(subject || securityDetention?.incidentId || "").replace(/[^A-Za-z0-9_-]/g, "")}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "6px 12px",
-                            background: "#0088cc",
-                            color: "#ffffff",
-                            borderRadius: "6px",
-                            fontWeight: "700",
-                            textDecoration: "none",
-                            fontSize: "0.78rem",
-                          }}
-                        >
-                          <span>💬</span> 1-Tap Unjail via Telegram Bot (@fsm_security_otp_bot)
-                        </a>
-                      </div>
                     </div>
                   )}
 
@@ -895,7 +874,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       placeholder={
                         category === "block_appeal"
                           ? "Provide your Incident ID (e.g. FSM-SEC-XXXXXX), registered email/mobile number, and a brief description of the incident. Administrators will review the telemetry and unblock your account."
-                          : "Type your question or requirement clearly here. Our admin team will receive this on Telegram and answer you directly."
+                          : "Type your question or requirement clearly here. Our admin team will review and answer you directly."
                       }
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
@@ -1133,7 +1112,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                               borderRadius: "6px",
                             }}
                           >
-                            ⏳ Your question has been forwarded to the Telegram admin desk. As soon as admin replies, their answer will appear right here.
+                            ⏳ Your question has been forwarded to the admin desk. As soon as admin replies, their answer will appear right here.
                           </div>
                         )}
                       </div>

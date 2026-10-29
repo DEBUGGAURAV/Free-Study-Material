@@ -1981,7 +1981,7 @@ export default function AuthModal({
                     <div style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
                     {error.toLowerCase().includes("blocked") && (
                       <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px solid rgba(239, 68, 68, 0.3)", fontSize: "0.76rem", color: "#cbd5e1" }}>
-                        💬 Contact platform administration via <b>Help Desk</b> or Telegram <b>@fsm_security_otp_bot</b> to request account review.
+                        💬 Contact platform administration via <b>Help Desk</b> to request account review.
                       </div>
                     )}
                   </div>

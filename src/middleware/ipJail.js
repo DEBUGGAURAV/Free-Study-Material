@@ -124,108 +124,353 @@ function isWhitelistedIp(req, ip) {
 /**
  * Lightweight 4KB HTML Quarantine Screen for severe floods or fallback
  */
-function renderQuarantineHtml({ incidentId, reasonStr, remainingSec, policyName, ip, deviceId }) {
+function renderQuarantineHtml({
+  incidentId,
+  reasonStr,
+  remainingSec,
+  policyName = "Administrative Security Detention",
+  durationLabel = "24 Hours",
+  autoReleasePolicy = "✅ Auto-release on expiration",
+  ip = "Unknown IP",
+  deviceId = "",
+  unjailTime = null,
+}) {
+  const targetMs = unjailTime || (Date.now() + (remainingSec || 86400) * 1000);
+  const releaseDateStr = new Date(targetMs).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🛡️ Security Detention Shield • Free Study Material</title>
+  <title>Security Lockdown: Temporary Detention • Free Study Material</title>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #0b0f19; color: #f3f4f6; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 16px; max-width: 580px; width: 100%; padding: 32px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 9999px; font-size: 13px; font-weight: 600; margin-bottom: 20px; }
-    h1 { font-size: 22px; font-weight: 700; margin-bottom: 12px; color: #ffffff; }
-    p { font-size: 14px; color: #9ca3af; line-height: 1.6; margin-bottom: 16px; }
-    .meta-box { background: #1f2937; border-radius: 12px; padding: 16px; margin: 20px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px; }
-    .meta-item { display: flex; flex-direction: column; }
-    .meta-label { color: #6b7280; font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .meta-val { color: #e5e7eb; font-weight: 600; word-break: break-all; }
-    .timer-wrap { text-align: center; margin: 24px 0; padding: 16px; background: rgba(17, 24, 39, 0.8); border: 1px dashed #374151; border-radius: 12px; }
-    .timer-val { font-size: 32px; font-weight: 800; color: #38bdf8; font-variant-numeric: tabular-nums; }
-    .timer-desc { font-size: 12px; color: #6b7280; margin-top: 4px; }
-    .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-    .btn-tg { display: flex; align-items: center; justify-content: center; gap: 8px; background: #0088cc; color: white; padding: 14px 20px; border-radius: 10px; font-weight: 600; text-decoration: none; font-size: 14px; transition: 0.2s; }
-    .btn-tg:hover { background: #0077b5; }
-    .appeal-form { margin-top: 24px; padding-top: 20px; border-top: 1px solid #1f2937; }
-    .form-title { font-size: 14px; font-weight: 600; color: #d1d5db; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
-    .input { width: 100%; background: #1f2937; border: 1px solid #374151; border-radius: 8px; padding: 10px 14px; color: white; font-size: 13px; margin-bottom: 10px; outline: none; }
+    * { margin:0; padding:0; box-sizing:border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      background: #09090b;
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      max-width: 560px;
+      width: 100%;
+      background: radial-gradient(circle at top, rgba(185, 28, 28, 0.22) 0%, rgba(15, 23, 42, 0.98) 100%);
+      border: 2px solid #ef4444;
+      border-radius: 24px;
+      padding: 34px 28px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95), 0 0 40px rgba(239, 68, 68, 0.35);
+      margin: auto;
+    }
+    .icon-wrap {
+      width: 70px;
+      height: 70px;
+      margin: 0 auto 16px auto;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      border: 1.5px solid rgba(239, 68, 68, 0.45);
+      box-shadow: 0 0 25px rgba(239, 68, 68, 0.3);
+    }
+    h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #ef4444;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.3px;
+      text-transform: uppercase;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #fca5a5;
+      margin-bottom: 16px;
+    }
+    .reason-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 0.84rem;
+      color: #fca5a5;
+      margin-bottom: 20px;
+      line-height: 1.45;
+      text-align: left;
+    }
+    .timer-card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1.5px solid rgba(245, 158, 11, 0.45);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .timer-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: #fcd34d;
+      font-weight: 800;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .timer-val {
+      font-size: 2.2rem;
+      font-weight: 900;
+      color: #fbbf24;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 2px;
+      text-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+      margin: 6px 0;
+    }
+    .table-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      margin-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 10px;
+      text-align: left;
+    }
+    .table-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .pulse-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 0.74rem;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+    .pulse-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+    }
+    .incident-bar {
+      font-size: 0.75rem;
+      color: #64748b;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 14px;
+      margin-bottom: 12px;
+    }
+    .incident-code {
+      color: #cbd5e1;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .btn-emergency {
+      background: rgba(239, 68, 68, 0.16);
+      border: 1px solid rgba(239, 68, 68, 0.45);
+      color: #fca5a5;
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      width: 100%;
+      margin-bottom: 14px;
+    }
+    .btn-emergency:hover {
+      background: rgba(239, 68, 68, 0.32);
+    }
+    .appeal-form {
+      margin-top: 14px;
+      text-align: left;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 12px;
+    }
+    .form-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .input {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: #fff;
+      font-size: 0.78rem;
+      margin-bottom: 8px;
+      outline: none;
+    }
     .input:focus { border-color: #38bdf8; }
-    .btn-submit { width: 100%; background: #3b82f6; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: 0.2s; }
+    .btn-submit {
+      width: 100%;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
     .btn-submit:hover { background: #2563eb; }
-    .notice { font-size: 11px; color: #6b7280; text-align: center; margin-top: 16px; line-height: 1.4; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="badge">
-      <span>🛡️</span>
-      <span>Zero-Trust Security Detention</span>
+    <div class="icon-wrap">
+      ⏳
     </div>
-    <h1>Connection Temporarily Quarantined</h1>
-    <p>Your IP or device was detained by the Anti-DDoS Defense System. If you are a genuine student on a shared campus Wi-Fi or hostel network, submit an appeal below or tap the official Telegram Bot for instant pardon.</p>
     
-    <div class="meta-box">
-      <div class="meta-item">
-        <span class="meta-label">Incident ID</span>
-        <span class="meta-val" style="color: #f87171;">${incidentId}</span>
+    <h2>Security Lockdown: Temporary Detention</h2>
+
+    <div class="badge">
+      <span>Violation Policy:</span>
+      <span style="color: #fff;">${policyName}</span>
+    </div>
+    
+    <div class="reason-box">
+      Security Violation: ${reasonStr}. Incident: ${incidentId}
+    </div>
+    
+    <div class="timer-card">
+      <div class="timer-title">
+        ⏳ AUTO-RELEASE COUNTDOWN (YOUR REMAINING TIME)
       </div>
-      <div class="meta-item">
-        <span class="meta-label">Policy Trigger</span>
-        <span class="meta-val">${policyName}</span>
+
+      <div id="fsm-countdown-timer" class="timer-val">
+        Calculating...
       </div>
-      <div class="meta-item">
-        <span class="meta-label">Detection Reason</span>
-        <span class="meta-val">${reasonStr}</span>
-      </div>
-      <div class="meta-item">
-        <span class="meta-label">Public IP</span>
-        <span class="meta-val">${ip}</span>
+
+      <div class="table-rows">
+        <div class="table-row">
+          <span style="color: #cbd5e1;">🛡️ Detention Window:</span>
+          <strong style="color: #fff;">${durationLabel}</strong>
+        </div>
+        <div class="table-row">
+          <span style="color: #cbd5e1;">🔓 Auto-Release Policy:</span>
+          <strong style="color: #34d399;">${autoReleasePolicy}</strong>
+        </div>
+        <div class="table-row">
+          <span style="color: #cbd5e1;">📅 Auto-Release At:</span>
+          <strong style="color: #f1f5f9;">${releaseDateStr}</strong>
+        </div>
+        <div class="table-row">
+          <span style="color: #cbd5e1;">⚡ Admin Pardon:</span>
+          <strong style="color: #38bdf8;">Can be instantly pardoned by Administrator upon review</strong>
+        </div>
       </div>
     </div>
 
-    <div class="timer-wrap">
-      <div class="timer-val" id="countdown">${remainingSec}s</div>
-      <div class="timer-desc">Automatic release on timer expiration</div>
+    <div class="pulse-status">
+      <span class="pulse-dot"></span>
+      <span>Auto-checking pardon status every 10s • Instant unlock if Admin pardons</span>
     </div>
 
-    <div class="btn-group">
-      <a class="btn-tg" href="https://t.me/fsm_security_otp_bot?start=appeal_${incidentId}" target="_blank" rel="noopener">
-        <span>💬</span> 1-Tap Pardon via Telegram Bot (@fsm_security_otp_bot)
-      </a>
+    <div class="incident-bar">
+      Incident ID: <code class="incident-code">${incidentId}</code>
     </div>
+
+    <button id="fsm-emergency-unblock-btn" class="btn-emergency" onclick="emergencyRelease()">
+      🔓 Emergency Release &amp; Return to Vault
+    </button>
 
     <form class="appeal-form" id="appealForm" onsubmit="submitAppeal(event)">
       <div class="form-title">
-        <span>📝</span> Quick Appeal Desk to Admin
+        <span>📝</span> Quick Appeal Desk to Administrator
       </div>
       <input type="text" id="name" class="input" placeholder="Your Full Name (Required)" required />
       <input type="email" id="email" class="input" placeholder="Your College / Personal Email (Required)" required />
       <input type="tel" id="mobile" class="input" placeholder="Mobile Number (Optional)" />
-      <textarea id="message" class="input" rows="2" placeholder="Briefly describe why you need access (e.g. Studying for semester exams on college hostel Wi-Fi)"></textarea>
-      <button type="submit" class="btn-submit" id="submitBtn">🚀 Submit Appeal to Admin (Topic 750)</button>
+      <textarea id="message" class="input" rows="2" placeholder="Brief statement (e.g. Studying for exams on hostel Wi-Fi)"></textarea>
+      <button type="submit" class="btn-submit" id="submitBtn">🚀 Submit Appeal to Administrator</button>
       <div id="appealStatus" style="font-size: 12px; margin-top: 8px; text-align: center; display: none;"></div>
     </form>
-
-    <div class="notice">
-      Zero-Trust Autonomous Security • Shared Campus Wi-Fi Dual-Key Isolation
-    </div>
   </div>
 
   <script>
-    let remaining = ${remainingSec};
-    const cd = document.getElementById("countdown");
-    const interval = setInterval(() => {
-      remaining--;
-      if (remaining <= 0) {
-        clearInterval(interval);
-        cd.innerText = "Releasing...";
+    const targetTimestamp = ${targetMs};
+
+    function updateCountdown() {
+      const timerElem = document.getElementById("fsm-countdown-timer");
+      if (!timerElem) return;
+      const diff = Math.max(0, targetTimestamp - Date.now());
+      if (diff <= 0) {
+        timerElem.innerHTML = "<span style='color: #34d399;'>Detention Expired. Unlocking...</span>";
         setTimeout(() => window.location.reload(), 1500);
-      } else {
-        cd.innerText = remaining + "s";
+        return;
       }
-    }, 1000);
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      timerElem.textContent = hours.toString().padStart(2, "0") + "h " + mins.toString().padStart(2, "0") + "m " + secs.toString().padStart(2, "0") + "s";
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+
+    // Auto-check status every 8s
+    setInterval(async () => {
+      try {
+        const res = await fetch("/api/security/status?deviceId=" + encodeURIComponent("${deviceId || ''}"), { cache: "no-store" });
+        const data = await res.json();
+        if (data && !data.isJailed) {
+          const timerElem = document.getElementById("fsm-countdown-timer");
+          if (timerElem) {
+            timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+          }
+          setTimeout(() => window.location.reload(), 1200);
+        }
+      } catch (_) {}
+    }, 8000);
+
+    async function emergencyRelease() {
+      const btn = document.getElementById("fsm-emergency-unblock-btn");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Unlocking...";
+      }
+      try {
+        await fetch("/api/security/unjail-incident?incidentId=" + encodeURIComponent("${incidentId}"), { method: "POST" });
+      } catch (_) {}
+      setTimeout(() => {
+        window.location.href = window.location.origin;
+      }, 500);
+    }
 
     async function submitAppeal(e) {
       e.preventDefault();
@@ -234,15 +479,20 @@ function renderQuarantineHtml({ incidentId, reasonStr, remainingSec, policyName,
       btn.disabled = true;
       btn.innerText = "Submitting Appeal...";
       try {
+        const nameVal = (document.getElementById("name") || document.getElementById("studentName"))?.value || "Student Visitor";
+        const emailVal = (document.getElementById("email") || document.getElementById("studentEmail"))?.value || "Not Provided";
+        const mobileVal = document.getElementById("mobile")?.value || "";
+        const messageVal = document.getElementById("message")?.value || "Student submitted pardon request for security detention.";
+
         const res = await fetch("/api/security/jail-appeal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             incidentId: "${incidentId}",
-            name: document.getElementById("name").value,
-            email: document.getElementById("email").value,
-            mobile: document.getElementById("mobile").value,
-            message: document.getElementById("message").value,
+            name: nameVal,
+            email: emailVal,
+            mobile: mobileVal,
+            message: messageVal,
             deviceId: "${deviceId || ""}",
           })
         });
@@ -250,7 +500,7 @@ function renderQuarantineHtml({ incidentId, reasonStr, remainingSec, policyName,
         statusDiv.style.display = "block";
         if (data.success) {
           statusDiv.style.color = "#34d399";
-          statusDiv.innerText = "✅ Appeal submitted! Admin notified in Telegram Topic 750.";
+          statusDiv.innerText = "✅ Appeal submitted! Administrator notified for review.";
           btn.innerText = "Appeal Logged";
         } else {
           statusDiv.style.color = "#f87171";
@@ -383,7 +633,7 @@ function ipJailFirewall(req, res, next) {
       policyName,
       durationLabel,
       autoReleasePolicy,
-      adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+      adminPardon: "Can be instantly pardoned by Administrator upon review",
     });
   } else {
     if (jailedIps.has(ip) && now >= jailedIps.get(ip)) {

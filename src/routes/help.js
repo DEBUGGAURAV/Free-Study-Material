@@ -66,10 +66,10 @@ const CURATED_FAQS = [
   },
   {
     id: "faq_6",
-    category: "telegram",
-    question: "How can I connect with the official Telegram Academic Community & notifications?",
+    category: "general",
+    question: "How can I receive updates about new study material and exam datesheets?",
     answer:
-      "You can connect through our official Telegram Bot (@fsm_chat_bot or @fsm_security_otp_bot) or join official FSM broadcast channels to receive daily semester updates, exam datesheets, and new study material alerts.",
+      "You can connect through our official community channels and student portal to receive daily semester updates, exam datesheets, and new study material alerts.",
   },
   {
     id: "faq_security_jail",

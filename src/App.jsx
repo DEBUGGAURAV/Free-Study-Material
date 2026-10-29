@@ -288,8 +288,8 @@ export default function App() {
         {
           policyName: "Account Block Policy (Administrative Ban)",
           durationLabel: "Permanent / Admin Review",
-          autoReleasePolicy: "Contact Administrator in Telegram Topic 750",
-          adminPardon: "Can be instantly pardoned by Administrator in Telegram Topic 750",
+          autoReleasePolicy: "Contact Administrator via Help Desk",
+          adminPardon: "Can be instantly pardoned by Administrator upon review",
           incidentId: `FSM-BAN-${(currentUser.id || currentUser.email || "ACC").toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`,
         }
       );

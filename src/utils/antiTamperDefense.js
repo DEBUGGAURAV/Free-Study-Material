@@ -215,14 +215,68 @@ let isDevToolsSessionActive = false;
 let isDockedDevToolsOpen = false;
 let lastDevToolsCloseTime = 0;
 let lastStrikeTime = 0;
-let debuggerFreezeInterval = null;
+let curtainAutoRecoveryInterval = null;
 
 /**
- * Anti-Scrape Curtain: Immediately conceals and blurs all page content while DevTools is open.
- * Guarantees that opening DevTools 1 time gives 0% visibility of notes or student data!
+ * Checks if DevTools is genuinely open right now
  */
-function applyAntiScrapeCurtain() {
+function isDevToolsCurrentlyOpen() {
+  if (isDevToolsBypassed()) return false;
+
+  // 1. Check window dimensions (Docked DevTools)
+  // Standard browser UI overhead on Windows with bookmarks/toolbars: ~100-180px height, ~10-40px width.
+  // Docked DevTools consumes >= 200px width (side dock) or >= 240px height (bottom dock).
+  const widthDiff = window.outerWidth - window.innerWidth;
+  const heightDiff = window.outerHeight - window.innerHeight;
+  if (widthDiff > 200 || heightDiff > 240) {
+    return true;
+  }
+
+  // 2. Check disableDevtool state if available
+  if (typeof disableDevtool !== "undefined" && typeof disableDevtool.isDevToolOpened === "function") {
+    try {
+      if (disableDevtool.isDevToolOpened()) {
+        return true;
+      }
+    } catch (_) {}
+  }
+
+  return false;
+}
+
+function startCurtainAutoRecovery() {
+  if (curtainAutoRecoveryInterval) return;
+  curtainAutoRecoveryInterval = setInterval(() => {
+    const curtain = document.getElementById("fsm-anti-scrape-curtain");
+    if (!curtain || isLockdownActive) {
+      stopCurtainAutoRecovery();
+      return;
+    }
+    // If DevTools is closed, automatically restore view
+    if (!isDevToolsCurrentlyOpen()) {
+      console.log("[ANTI-TAMPER] 🟢 Auto-recovery: DevTools closed, restoring viewport.");
+      onDevToolsClosed();
+    }
+  }, 500);
+}
+
+function stopCurtainAutoRecovery() {
+  if (curtainAutoRecoveryInterval) {
+    clearInterval(curtainAutoRecoveryInterval);
+    curtainAutoRecoveryInterval = null;
+  }
+}
+
+/**
+ * Anti-Scrape Curtain: Conceals and protects page content while DevTools is open.
+ * Includes explicit strike attempt badge, countdown/warning, auto-recovery heartbeat,
+ * and an interactive 'I Have Closed DevTools • Restore View' button!
+ */
+function applyAntiScrapeCurtain(strike = 1) {
   if (isDevToolsBypassed() || isLockdownActive) return;
+  const currentStrike = Math.max(1, Number(strike) || strikeCount || 1);
+  const isFinalAttempt = currentStrike >= 2;
+
   let curtain = document.getElementById("fsm-anti-scrape-curtain");
   if (!curtain) {
     curtain = document.createElement("div");
@@ -231,9 +285,9 @@ function applyAntiScrapeCurtain() {
       position: fixed;
       inset: 0;
       z-index: 2147483645;
-      background: rgba(11, 15, 25, 0.95);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      background: rgba(11, 15, 25, 0.94);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -244,53 +298,146 @@ function applyAntiScrapeCurtain() {
       text-align: center;
       user-select: none;
       pointer-events: auto;
-    `;
-    curtain.innerHTML = `
-      <div style="max-width: 500px; width: 100%; background: #111827; border: 2px solid #ef4444; border-radius: 16px; padding: 32px 24px; box-shadow: 0 25px 60px rgba(0,0,0,0.8);">
-        <div style="font-size: 42px; margin-bottom: 12px;">🛡️</div>
-        <div style="font-size: 1.25rem; font-weight: 800; color: #ef4444; margin-bottom: 8px;">
-          CONTENT PROTECTED • DEVTOOLS DETECTED
-        </div>
-        <p style="font-size: 0.88rem; color: #cbd5e1; line-height: 1.6; margin-bottom: 16px;">
-          Developer Tools or Console Inspection is currently active. To safeguard student privacy, copyrighted lecture notes, and API integrity, all viewport data is protected.
-        </p>
-        <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 12px 14px; font-size: 0.82rem; color: #fca5a5; font-weight: 700;">
-          ⚠️ Action Required: Close Developer Tools (Inspect / Console) to restore view.
-        </div>
-      </div>
+      transition: opacity 0.25s ease;
     `;
     document.body.appendChild(curtain);
   }
+
+  curtain.innerHTML = `
+    <div style="
+      max-width: 520px;
+      width: 100%;
+      background: #111827;
+      border: 2px solid ${isFinalAttempt ? "#ef4444" : "#f59e0b"};
+      border-radius: 18px;
+      padding: 30px 24px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 35px ${isFinalAttempt ? "rgba(239, 68, 68, 0.3)" : "rgba(245, 158, 11, 0.25)"};
+      position: relative;
+      margin: auto;
+    ">
+      <!-- Close / Dismiss 'X' Button on top-right -->
+      <button id="fsm-curtain-close-x" style="
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        color: #94a3b8;
+        cursor: pointer;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+      " title="Dismiss and Restore View">&times;</button>
+
+      <!-- Shield Icon -->
+      <div style="font-size: 40px; margin-bottom: 8px;">🛡️</div>
+
+      <!-- Attempt Badge -->
+      <div style="
+        display: inline-block;
+        background: ${isFinalAttempt ? "linear-gradient(135deg, #ef4444, #dc2626)" : "linear-gradient(135deg, #f59e0b, #d97706)"};
+        color: #000;
+        font-size: 0.74rem;
+        padding: 3px 12px;
+        border-radius: 14px;
+        font-weight: 900;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      ">
+        ${isFinalAttempt ? "FINAL WARNING • ATTEMPT 2 OF 3" : "SECURITY SHIELD • ATTEMPT 1 OF 3"}
+      </div>
+
+      <!-- Main Title -->
+      <div style="font-size: 1.25rem; font-weight: 800; color: ${isFinalAttempt ? "#ef4444" : "#f59e0b"}; margin-bottom: 8px; letter-spacing: -0.3px;">
+        CONTENT PROTECTED • DEVTOOLS DETECTED
+      </div>
+
+      <!-- Explanatory Text -->
+      <p style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.55; margin: 0 0 14px;">
+        Developer Tools or Console Inspection is currently active. To safeguard student privacy, copyrighted lecture notes, and API integrity, all viewport data is protected.
+      </p>
+
+      <!-- Action Required Box -->
+      <div style="
+        background: ${isFinalAttempt ? "rgba(239, 68, 68, 0.12)" : "rgba(245, 158, 11, 0.12)"};
+        border: 1px solid ${isFinalAttempt ? "rgba(239, 68, 68, 0.35)" : "rgba(245, 158, 11, 0.35)"};
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        color: ${isFinalAttempt ? "#fca5a5" : "#fde68a"};
+        font-weight: 600;
+        margin-bottom: 16px;
+        line-height: 1.4;
+      ">
+        ${isFinalAttempt 
+          ? "⚠️ FINAL ATTEMPT WARNING: Opening DevTools 1 more time will trigger an automatic 24-Hour security quarantine!"
+          : `⚠️ Notice: Opening DevTools ${3 - currentStrike} more time(s) will result in a 24-hour security quarantine.`}
+      </div>
+
+      <!-- Restore Action Button -->
+      <div style="display: flex; flex-direction: column; gap: 8px; align-items: center;">
+        <button id="fsm-curtain-restore-btn" style="
+          width: 100%;
+          background: linear-gradient(135deg, #059669, #10b981);
+          border: none;
+          color: #fff;
+          font-weight: 800;
+          font-size: 0.88rem;
+          padding: 11px 20px;
+          border-radius: 10px;
+          cursor: pointer;
+          box-shadow: 0 4px 15px rgba(16, 185, 129, 0.35);
+          transition: all 0.2s ease;
+        ">
+          🔓 I Have Closed DevTools (Restore View)
+        </button>
+        <div id="fsm-curtain-status" style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px;">
+          Auto-checking status every 0.5s • Close Inspect panel to restore view
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Attach button click handler
+  const restoreBtn = curtain.querySelector("#fsm-curtain-restore-btn");
+  const closeXBtn = curtain.querySelector("#fsm-curtain-close-x");
+  const handleRestore = () => {
+    if (isDevToolsCurrentlyOpen()) {
+      const statusElem = document.getElementById("fsm-curtain-status");
+      if (statusElem) {
+        statusElem.innerHTML = "<span style='color: #f87171;'>⚠️ DevTools is still detected as open. Please close inspect panel, then tap Restore.</span>";
+      }
+      return;
+    }
+    onDevToolsClosed();
+  };
+
+  if (restoreBtn) restoreBtn.onclick = handleRestore;
+  if (closeXBtn) closeXBtn.onclick = () => {
+    onDevToolsClosed();
+  };
+
+  // Start background auto-recovery heartbeat
+  startCurtainAutoRecovery();
 }
 
 function removeAntiScrapeCurtain() {
+  stopCurtainAutoRecovery();
   const curtain = document.getElementById("fsm-anti-scrape-curtain");
   if (curtain && !isLockdownActive) {
-    curtain.remove();
-  }
-}
-
-/**
- * Thread Freeze Debugger Trap: Pauses execution thread in browser Sources tab
- * so attacker cannot type scraping loops or inspect objects via console!
- */
-function startDebuggerTrap() {
-  if (isDevToolsBypassed() || isLockdownActive) return;
-  if (!debuggerFreezeInterval) {
-    debuggerFreezeInterval = setInterval(() => {
-      if (isDevToolsSessionActive && !isDevToolsBypassed() && !isLockdownActive) {
-        try {
-          Function("debugger")();
-        } catch (_) {}
+    curtain.style.opacity = "0";
+    setTimeout(() => {
+      if (curtain && curtain.parentNode) {
+        curtain.remove();
       }
-    }, 250);
-  }
-}
-
-function stopDebuggerTrap() {
-  if (debuggerFreezeInterval) {
-    clearInterval(debuggerFreezeInterval);
-    debuggerFreezeInterval = null;
+    }, 200);
   }
 }
 
@@ -301,27 +448,24 @@ function stopDebuggerTrap() {
  * Strike 3 only happens if DevTools was closed and RE-OPENED a 3rd time.
  */
 function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
-  // 🛡️ Instant Anti-Scraping Shield: Conceal page and freeze thread immediately!
-  applyAntiScrapeCurtain();
-  startDebuggerTrap();
   try {
     console.clear();
   } catch (_) {}
 
   // If DevTools is ALREADY open and we are in an active session, DO NOT ADD ANOTHER STRIKE!
   if (isDevToolsSessionActive) {
-    if (!isLockdownActive && strikeCount < 3) {
-      showStrikeWarning(strikeCount);
-    }
+    applyAntiScrapeCurtain(strikeCount);
     return;
   }
 
   // Minimum 5.0 seconds cooldown between separate strikes to eliminate multi-detector race conditions
   const now = Date.now();
   if (now - lastStrikeTime < 5000 && lastStrikeTime > 0) {
+    applyAntiScrapeCurtain(strikeCount);
     return;
   }
   if (now - lastDevToolsCloseTime < 3500 && lastDevToolsCloseTime > 0) {
+    applyAntiScrapeCurtain(strikeCount);
     return;
   }
 
@@ -336,16 +480,13 @@ function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
  * Allows the next inspect attempt to register as a separate strike.
  */
 function onDevToolsClosed() {
-  if (!isDevToolsSessionActive && !isDockedDevToolsOpen) return;
-
   console.log("[ANTI-TAMPER] 🟢 DevTools closed. Inspect session ended.");
   isDevToolsSessionActive = false;
   isDockedDevToolsOpen = false;
   lastDevToolsCloseTime = Date.now();
 
-  // Remove anti-scraping curtain and stop debugger trap when DevTools is closed
+  // Remove anti-scraping curtain
   removeAntiScrapeCurtain();
-  stopDebuggerTrap();
 
   // Dismiss warning overlay when DevTools is closed
   const overlay = document.getElementById("fsm-tamper-warning-overlay");
@@ -380,7 +521,8 @@ async function reportTamperIncident(detail = "Unauthorized script tampering dete
       }
     );
   } else {
-    showStrikeWarning(currentStrike);
+    // Show the protective shield curtain with current strike count & restoration controls
+    applyAntiScrapeCurtain(currentStrike);
   }
 
   try {
@@ -743,26 +885,6 @@ export function triggerClientLockdown(reason, options = {}) {
           </button>
         </div>
 
-        <!-- 💬 1-Tap Telegram Unjail -->
-        <a href="https://t.me/fsm_security_otp_bot?start=appeal_${incidentId}" target="_blank" rel="noopener noreferrer" style="
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          background: #0088cc;
-          color: white;
-          padding: 11px 18px;
-          border-radius: 10px;
-          font-weight: 700;
-          text-decoration: none;
-          font-size: 0.82rem;
-          transition: 0.2s;
-          width: 100%;
-          margin-bottom: 14px;
-        ">
-          <span>💬</span> 1-Tap Pardon via Telegram Bot (@fsm_security_otp_bot)
-        </a>
-
         <!-- 📝 Quick Appeal Desk -->
         <div style="
           margin-top: 14px;
@@ -771,7 +893,7 @@ export function triggerClientLockdown(reason, options = {}) {
           padding-top: 12px;
         ">
           <div style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-            <span>📝</span> Quick Appeal Desk to Admin (Topic 750)
+            <span>📝</span> Quick Appeal Desk to Administrator
           </div>
           <input type="text" id="fsm-appeal-name-input" placeholder="Your Full Name (Required)" style="
             width: 100%; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 0.78rem; margin-bottom: 8px; outline: none;
@@ -784,7 +906,7 @@ export function triggerClientLockdown(reason, options = {}) {
           "></textarea>
           <button id="fsm-appeal-submit-btn" style="
             width: 100%; background: #3b82f6; color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: 0.2s;
-          ">🚀 Submit Appeal to Admin (Topic 750)</button>
+          ">🚀 Submit Appeal to Administrator</button>
           <div id="fsm-appeal-feedback" style="font-size: 12px; margin-top: 8px; text-align: center; display: none;"></div>
         </div>
       </div>
@@ -838,6 +960,63 @@ export function triggerClientLockdown(reason, options = {}) {
       setTimeout(() => {
         window.location.href = window.location.origin;
       }, 400);
+    };
+  }
+
+  // 6. Inline Appeal Submission to Administrator
+  const appealBtn = document.getElementById("fsm-appeal-submit-btn");
+  if (appealBtn) {
+    appealBtn.onclick = async () => {
+      const nameVal = (document.getElementById("fsm-appeal-name-input")?.value || "").trim();
+      const emailVal = (document.getElementById("fsm-appeal-email-input")?.value || "").trim();
+      const reasonVal = (document.getElementById("fsm-appeal-reason-input")?.value || "").trim();
+      const feedback = document.getElementById("fsm-appeal-feedback");
+
+      if (!nameVal || !emailVal) {
+        if (feedback) {
+          feedback.style.display = "block";
+          feedback.style.color = "#f87171";
+          feedback.textContent = "Please enter your name and email.";
+        }
+        return;
+      }
+
+      appealBtn.disabled = true;
+      appealBtn.textContent = "Submitting Appeal...";
+      try {
+        const resp = await fetch("/api/security/jail-appeal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            incidentId,
+            name: nameVal,
+            email: emailVal,
+            message: reasonVal || "Student requested pardon for security detention.",
+          }),
+        });
+        const resData = await resp.json().catch(() => ({}));
+        if (feedback) {
+          feedback.style.display = "block";
+          if (resData.success) {
+            feedback.style.color = "#34d399";
+            feedback.textContent = "✅ Appeal delivered to Administrator for review!";
+            appealBtn.textContent = "Appeal Dispatched";
+          } else {
+            feedback.style.color = "#fca5a5";
+            feedback.textContent = resData.message || "Appeal logged for admin review.";
+            appealBtn.disabled = false;
+            appealBtn.textContent = "Resend Appeal";
+          }
+        }
+      } catch (err) {
+        if (feedback) {
+          feedback.style.display = "block";
+          feedback.style.color = "#f87171";
+          feedback.textContent = "Failed to submit appeal: " + err.message;
+        }
+        appealBtn.disabled = false;
+        appealBtn.textContent = "Retry";
+      }
     };
   }
 
@@ -1022,17 +1201,23 @@ export function initAntiTamperDefense() {
       if (isDevToolsBypassed()) return;
       const widthDiff = window.outerWidth - window.innerWidth;
       const heightDiff = window.outerHeight - window.innerHeight;
-      const isDocked = widthDiff > 160 || heightDiff > 160;
+      // Docked DevTools: widthDiff > 200 (side dock) or heightDiff > 240 (bottom dock)
+      const isDocked = widthDiff > 200 || heightDiff > 240;
 
       if (isDocked) {
         if (!isDockedDevToolsOpen) {
           isDockedDevToolsOpen = true;
-          onDevToolsDetected(`Docked Developer Tools Detected (${widthDiff > 160 ? "Side" : "Bottom"} Dock)`);
+          onDevToolsDetected(`Docked Developer Tools Detected (${widthDiff > 200 ? "Side" : "Bottom"} Dock)`);
         }
-      } else if (!isDocked && isDockedDevToolsOpen) {
-        // Docked DevTools was closed! End the inspect session so user can use the web normally
-        isDockedDevToolsOpen = false;
-        onDevToolsClosed();
+      } else {
+        // DevTools is NOT docked!
+        if (isDockedDevToolsOpen || isDevToolsSessionActive) {
+          isDockedDevToolsOpen = false;
+          // Verify if DevTools is genuinely closed, then restore view
+          if (!isDevToolsCurrentlyOpen()) {
+            onDevToolsClosed();
+          }
+        }
       }
     };
     window.addEventListener("resize", checkDockedDevTools);
