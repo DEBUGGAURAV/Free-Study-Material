@@ -885,9 +885,26 @@ function unjailByIncident(incidentId) {
   return true;
 }
 
+function addPardonedIncident(incidentId) {
+  if (incidentId) {
+    pardonedIncidents.add(String(incidentId).trim());
+  }
+}
+
 function isIncidentPardoned(incidentId, ip, deviceId) {
-  if (incidentId && pardonedIncidents.has(incidentId)) {
+  if (incidentId && pardonedIncidents.has(String(incidentId).trim())) {
     return true;
+  }
+  const now = Date.now();
+  const isIpJailed = Boolean(ip && jailedIps.has(ip) && now < jailedIps.get(ip));
+  const isDevJailed = Boolean(deviceId && jailedDevices.has(deviceId) && now < jailedDevices.get(deviceId));
+
+  // If neither IP nor Device is actively jailed:
+  if (!isIpJailed && !isDevJailed) {
+    // If it is not an active incident in incidentsRegistry, it has been released!
+    if (incidentId && !incidentsRegistry.has(incidentId) && !String(incidentId).startsWith("FSM-BAN-")) {
+      return true;
+    }
   }
   return false;
 }
@@ -920,6 +937,16 @@ function getJailStatus(ip, deviceId) {
 
 function clearAllJails() {
   const count = jailedIps.size + jailedDevices.size;
+  // Mark all active incidents as pardoned before clearing so polling clients unlock
+  for (const details of jailedIpsDetails.values()) {
+    if (details?.incidentId) pardonedIncidents.add(String(details.incidentId).trim());
+  }
+  for (const details of jailedDevicesDetails.values()) {
+    if (details?.incidentId) pardonedIncidents.add(String(details.incidentId).trim());
+  }
+  for (const incId of incidentsRegistry.keys()) {
+    pardonedIncidents.add(String(incId).trim());
+  }
   jailedIps.clear();
   jailedIpsDetails.clear();
   jailedDevices.clear();
@@ -1019,6 +1046,7 @@ module.exports = {
   unjailDevice,
   unjailByIncident,
   isIncidentPardoned,
+  addPardonedIncident,
   getJailStatus,
   renderQuarantineHtml,
   reportFailedAuth,

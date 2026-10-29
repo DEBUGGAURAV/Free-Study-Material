@@ -22,6 +22,7 @@ const {
   unjailIp,
   unjailByIncident,
   isIncidentPardoned,
+  addPardonedIncident,
   getJailStatus,
   getClientIp,
 } = require("../middleware/ipJail");
@@ -500,10 +501,11 @@ router.post("/jail-appeal", async (req, res) => {
 
 /**
  * GET /api/security/check-pardon
- * Dedicated safe endpoint: ONLY returns pardoned: true if Admin explicitly unjailed this incident
+ * Dedicated safe endpoint: Returns pardoned: true if Admin unjailed this incident,
+ * unblocked the student account, or released all device/IP detentions.
  * Never triggers false client reloads or resets the timer!
  */
-router.get("/check-pardon", (req, res) => {
+router.get("/check-pardon", async (req, res) => {
   const incidentId = (req.query?.incidentId || "").trim();
   const clientIp = getClientIp(req);
   const deviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.query?.deviceId || "").trim();
@@ -511,6 +513,41 @@ router.get("/check-pardon", (req, res) => {
   let pardoned = false;
   if (incidentId && typeof isIncidentPardoned === "function") {
     pardoned = isIncidentPardoned(incidentId, clientIp, deviceId);
+  }
+
+  // 🛡️ Intelligent Account Ban Auto-Pardon Check
+  if (!pardoned && incidentId.startsWith("FSM-BAN-")) {
+    const rawToken = incidentId.replace("FSM-BAN-", "").trim().toLowerCase();
+    try {
+      if (db) {
+        const snap = await db.collection("users").get();
+        snap.forEach((doc) => {
+          const data = doc.data();
+          const cleanDocId = (doc.id || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase();
+          const cleanEmail = (data.email || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase();
+          if (cleanDocId === rawToken || cleanEmail === rawToken || doc.id.toLowerCase() === rawToken) {
+            // Target user located: verify if active in database and not blocked
+            if (data.isBlocked === false || !data.isBlocked) {
+              pardoned = true;
+              if (typeof addPardonedIncident === "function") {
+                addPardonedIncident(incidentId);
+              }
+            }
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("[CHECK-PARDON] Error checking account unblock status in DB:", e.message);
+    }
+  }
+
+  // 🛡️ Intelligent Device / IP Auto-Pardon Check
+  // If the user's IP and Device are NOT jailed, and no active detention exists:
+  if (!pardoned && typeof getJailStatus === "function") {
+    const status = getJailStatus(clientIp, deviceId);
+    if (!status.isJailed && !incidentId.startsWith("FSM-BAN-")) {
+      pardoned = true;
+    }
   }
 
   return res.json({

@@ -279,20 +279,46 @@ export default function App() {
   // 🚫 Full Lockdown if Logged-in User Account is Blocked in Database
   useEffect(() => {
     if (currentUser && currentUser.isBlocked) {
-      setSecurityDetention({
-        isBlocked: true,
-        reason: currentUser.blockedReason || "Account blocked by Administrator",
-      });
-      triggerClientLockdown(
-        currentUser.blockedReason || "Security Violation: Your student account has been blocked by the Administrator.",
-        {
-          policyName: "Account Block Policy (Administrative Ban)",
-          durationLabel: "Permanent / Admin Review",
-          autoReleasePolicy: "Contact Administrator via Help Desk",
-          adminPardon: "Can be instantly pardoned by Administrator upon review",
-          incidentId: `FSM-BAN-${(currentUser.id || currentUser.email || "ACC").toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`,
-        }
-      );
+      // 🛡️ Live Server Verification: Check if Admin unblocked the user in DB
+      api.getMe()
+        .then((res) => {
+          if (res && res.user && !res.user.isBlocked) {
+            // User was unblocked in Database! Restore access instantly
+            setCurrentUser(res.user);
+            setSecurityDetention(null);
+            try {
+              localStorage.removeItem("fsm_lockdown_until");
+              localStorage.removeItem("fsm_lockdown_policy");
+              localStorage.removeItem("fsm_lockdown_reason");
+              localStorage.removeItem("fsm_lockdown_label");
+              localStorage.removeItem("fsm_lockdown_release");
+              localStorage.removeItem("fsm_lockdown_incident");
+              sessionStorage.removeItem("fsm_strike_count");
+            } catch (_) {}
+            return;
+          }
+          enforceAccountLockdown();
+        })
+        .catch(() => {
+          enforceAccountLockdown();
+        });
+
+      function enforceAccountLockdown() {
+        setSecurityDetention({
+          isBlocked: true,
+          reason: currentUser.blockedReason || "Account blocked by Administrator",
+        });
+        triggerClientLockdown(
+          currentUser.blockedReason || "Security Violation: Your student account has been blocked by the Administrator.",
+          {
+            policyName: "Account Block Policy (Administrative Ban)",
+            durationLabel: "Permanent / Admin Review",
+            autoReleasePolicy: "Contact Administrator via Help Desk",
+            adminPardon: "Can be instantly pardoned by Administrator upon review",
+            incidentId: `FSM-BAN-${(currentUser.id || currentUser.email || "ACC").toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`,
+          }
+        );
+      }
     }
   }, [currentUser]);
 

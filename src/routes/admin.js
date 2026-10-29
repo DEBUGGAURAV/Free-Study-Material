@@ -72,6 +72,7 @@ let clearAllJails = null;
 let recordThreatIncident = null;
 let jailSpecificIp = null;
 let jailSpecificDevice = null;
+let addPardonedIncident = null;
 try {
   const ipJail = require("../middleware/ipJail");
   getThreatIntelligence = ipJail.getThreatIntelligence;
@@ -82,6 +83,7 @@ try {
   recordThreatIncident = ipJail.recordThreatIncident;
   jailSpecificIp = ipJail.jailSpecificIp;
   jailSpecificDevice = ipJail.jailSpecificDevice;
+  addPardonedIncident = ipJail.addPardonedIncident;
 } catch {}
 
 
@@ -719,6 +721,11 @@ router.patch("/users/:id/block", authenticateToken, checkAdminOrPermission("mana
       isBlocked: Boolean(isBlocked),
       updatedAt: new Date().toISOString(),
     });
+
+    if (!isBlocked && typeof addPardonedIncident === "function") {
+      const banIncidentId = `FSM-BAN-${(id || targetUser.email || "ACC").toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`;
+      addPardonedIncident(banIncidentId);
+    }
 
     return res.json({
       success: true,
@@ -4131,6 +4138,10 @@ router.post("/threats/unblock-user", authenticateToken, requireAdmin, async (req
         securityRouter.clearTamperStrikes(userId);
       }
     } catch (_) {}
+    if (typeof addPardonedIncident === "function") {
+      if (userId) addPardonedIncident(`FSM-BAN-${userId.toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`);
+      if (email) addPardonedIncident(`FSM-BAN-${email.toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`);
+    }
     return res.json({
       success: true,
       message: `User account (${email || userId}) unblocked and platform access restored.`,

@@ -899,6 +899,9 @@ export function triggerClientLockdown(reason, options = {}) {
           <button id="fsm-appeal-submit-btn" style="
             width: 100%; background: #3b82f6; color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: 0.2s;
           ">🚀 Submit Appeal to Administrator</button>
+          <button id="fsm-verify-pardon-btn" style="
+            width: 100%; background: linear-gradient(135deg, #059669, #10b981); color: #fff; border: none; padding: 10px; border-radius: 8px; font-weight: 700; font-size: 0.8rem; cursor: pointer; transition: 0.2s; margin-top: 8px; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+          ">🔄 Check Unblock Status / Restore View</button>
           <div id="fsm-appeal-feedback" style="font-size: 12px; margin-top: 8px; text-align: center; display: none;"></div>
         </div>
       </div>
@@ -990,6 +993,50 @@ export function triggerClientLockdown(reason, options = {}) {
     };
   }
 
+  // 5b. Manual Check Pardon & Immediate Unlock Button
+  const verifyBtn = document.getElementById("fsm-verify-pardon-btn");
+  if (verifyBtn) {
+    verifyBtn.onclick = async () => {
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Checking Server Status...";
+      const feedback = document.getElementById("fsm-appeal-feedback");
+      try {
+        const incId = incidentId || (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_incident")) || "";
+        const res = await fetch(`/api/security/check-pardon?incidentId=${encodeURIComponent(incId)}`, { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (data && data.success && data.pardoned === true) {
+          verifyBtn.textContent = "🎉 Access Restored! Reloading...";
+          if (feedback) {
+            feedback.style.display = "block";
+            feedback.style.color = "#34d399";
+            feedback.textContent = "✅ Administrator unblock verified. Restoring platform view...";
+          }
+          try {
+            localStorage.removeItem("fsm_lockdown_until");
+            localStorage.removeItem("fsm_lockdown_policy");
+            localStorage.removeItem("fsm_lockdown_reason");
+            localStorage.removeItem("fsm_lockdown_label");
+            localStorage.removeItem("fsm_lockdown_release");
+            localStorage.removeItem("fsm_lockdown_incident");
+            sessionStorage.removeItem("fsm_strike_count");
+          } catch (_) {}
+          setTimeout(() => window.location.reload(), 800);
+        } else {
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = "🔄 Re-check Access";
+          if (feedback) {
+            feedback.style.display = "block";
+            feedback.style.color = "#fca5a5";
+            feedback.textContent = "Detention is still active on server. If you believe this is an error, please submit an appeal.";
+          }
+        }
+      } catch (err) {
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = "🔄 Retry Check";
+      }
+    };
+  }
+
   // 6. Poll server silently in background - ONLY reload if Administrator explicitly pardoned this incident
   const pingInterval = setInterval(async () => {
     try {
@@ -1019,7 +1066,7 @@ export function triggerClientLockdown(reason, options = {}) {
         }
       }
     } catch (_) {}
-  }, 15000);
+  }, 3000);
 }
 
 /**
@@ -1061,6 +1108,26 @@ export function initAntiTamperDefense() {
     const savedIncident = localStorage.getItem("fsm_lockdown_incident");
 
     if (savedUntil && Number(savedUntil) > Date.now()) {
+      // 🛡️ Live Server Verification: Check if Admin unblocked the user/device
+      try {
+        fetch(`/api/security/check-pardon?incidentId=${encodeURIComponent(savedIncident || "")}`, { cache: "no-store" })
+          .then((r) => r.json())
+          .then((d) => {
+            if (d && d.success && d.pardoned) {
+              console.log("[SECURITY] 🔓 Server confirmed pardon. Clearing lockdown state.");
+              localStorage.removeItem("fsm_lockdown_until");
+              localStorage.removeItem("fsm_lockdown_policy");
+              localStorage.removeItem("fsm_lockdown_reason");
+              localStorage.removeItem("fsm_lockdown_label");
+              localStorage.removeItem("fsm_lockdown_release");
+              localStorage.removeItem("fsm_lockdown_incident");
+              sessionStorage.removeItem("fsm_strike_count");
+              window.location.reload();
+            }
+          })
+          .catch(() => {});
+      } catch (_) {}
+
       triggerClientLockdown(savedReason || "Security quarantine detention active.", {
         policyName: savedPolicy,
         targetTimestamp: Number(savedUntil),
