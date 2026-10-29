@@ -510,6 +510,7 @@ function reportFailedAuth(req) {
       requestCount: recentAuthFails.length,
     });
     totalJailedCount++;
+    const bruteIncId = `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
     recordThreatIncident({
       type: "BRUTE_FORCE_LOCKOUT",
       ip,
@@ -518,6 +519,15 @@ function reportFailedAuth(req) {
       actionTaken: "5_MIN_IP_DETENTION",
     });
     console.warn(`[SECURITY-FIREWALL] 🚨 Detained brute-force login IP ${ip} in security jail for 5 minutes.`);
+
+    notifyTopic750IpJail({
+      ip,
+      deviceId: "",
+      reason: "Brute-Force Credential Attack Detected (20+ failures)",
+      durationMs: 5 * 60 * 1000,
+      incidentId: bruteIncId,
+      policyName: "Brute-Force Credential Defense",
+    }).catch(() => {});
   }
 }
 
