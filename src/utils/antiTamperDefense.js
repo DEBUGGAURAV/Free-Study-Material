@@ -656,10 +656,15 @@ export function triggerClientLockdown(reason, options = {}) {
   const policyName = options.policyName || "Client Script / DevTools Tamper (Strike 3)";
   const durationLabel = options.durationLabel || "24 Hours";
   const autoReleasePolicy = options.autoReleasePolicy || "✅ Auto-release after 24h";
-  const adminPardon = options.adminPardon || "Can be instantly pardoned by Administrator";
+  const adminPardon = options.adminPardon || "Can be instantly pardoned by Administrator upon review";
   const durationMs = options.durationMs || (24 * 60 * 60 * 1000);
-  const targetTimestamp = options.targetTimestamp || (Date.now() + durationMs);
-  const incidentId = options.incidentId || `FSM-SEC-${Date.now().toString(36).toUpperCase()}`;
+
+  // Persist original end timestamp so timer never restarts on re-trigger or reload!
+  const savedUntil = (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_until")) 
+    ? Number(localStorage.getItem("fsm_lockdown_until")) 
+    : null;
+  const targetTimestamp = options.targetTimestamp || (savedUntil && savedUntil > Date.now() ? savedUntil : Date.now() + durationMs);
+  const incidentId = options.incidentId || (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_incident")) || `FSM-SEC-${Date.now().toString(36).toUpperCase()}`;
 
   // Persist detention state to localStorage across page reloads
   try {
@@ -852,7 +857,7 @@ export function triggerClientLockdown(reason, options = {}) {
           margin-bottom: 16px;
         ">
           <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px #34d399;"></span>
-          <span>Auto-checking pardon status every 10s • Instant unlock if Admin pardons</span>
+          <span>Security Detention Active • Instant unlock upon Administrator pardon</span>
         </div>
 
         <!-- Incident ID & Appeal Notice -->
@@ -864,25 +869,6 @@ export function triggerClientLockdown(reason, options = {}) {
           margin-bottom: 12px;
         ">
           Incident ID: <code style="color: #cbd5e1; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">${incidentId}</code>
-        </div>
-
-        <!-- 🔓 Emergency Unblock & Instant Pardon Button -->
-        <div style="margin-bottom: 10px;">
-          <button id="fsm-emergency-unblock-btn" style="
-            background: rgba(239, 68, 68, 0.16);
-            border: 1px solid rgba(239, 68, 68, 0.45);
-            color: #fca5a5;
-            border-radius: 10px;
-            padding: 10px 18px;
-            font-size: 0.8rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-            width: 100%;
-          " onmouseover="this.style.background='rgba(239, 68, 68, 0.32)'" onmouseout="this.style.background='rgba(239, 68, 68, 0.16)'">
-            🔓 Emergency Release &amp; Return to Vault
-          </button>
         </div>
 
         <!-- 📝 Quick Appeal Desk -->
@@ -941,29 +927,7 @@ export function triggerClientLockdown(reason, options = {}) {
   updateCountdown();
   const timerInterval = setInterval(updateCountdown, 1000);
 
-  // 5. Emergency Unblock Click Handler
-  const unblockBtn = document.getElementById("fsm-emergency-unblock-btn");
-  if (unblockBtn) {
-    unblockBtn.onclick = async () => {
-      unblockBtn.disabled = true;
-      unblockBtn.textContent = "Unlocking...";
-      try {
-        localStorage.removeItem("fsm_lockdown_until");
-        localStorage.removeItem("fsm_lockdown_policy");
-        localStorage.removeItem("fsm_lockdown_reason");
-        localStorage.removeItem("fsm_lockdown_label");
-        localStorage.removeItem("fsm_lockdown_release");
-        localStorage.removeItem("fsm_lockdown_incident");
-        sessionStorage.removeItem("fsm_strike_count");
-        await fetch(`/api/security/unjail-incident?incidentId=${encodeURIComponent(incidentId)}`, { method: "POST" }).catch(() => {});
-      } catch (_) {}
-      setTimeout(() => {
-        window.location.href = window.location.origin;
-      }, 400);
-    };
-  }
-
-  // 6. Inline Appeal Submission to Administrator
+  // 5. Inline Appeal Submission to Administrator
   const appealBtn = document.getElementById("fsm-appeal-submit-btn");
   if (appealBtn) {
     appealBtn.onclick = async () => {
@@ -1020,30 +984,35 @@ export function triggerClientLockdown(reason, options = {}) {
     };
   }
 
-  // Poll server every 10 seconds to check if Administrator pardoned the IP in Tab 14
+  // 6. Poll server every 15s to check if Administrator explicitly pardoned the connection
   const pingInterval = setInterval(async () => {
     try {
-      const res = await fetch("/api/health", { cache: "no-store" });
+      const devId = (typeof localStorage !== "undefined" && localStorage.getItem("fsm_device_id")) || "";
+      const res = await fetch(`/api/security/status?deviceId=${encodeURIComponent(devId)}`, { cache: "no-store" });
       if (res.ok) {
-        clearInterval(timerInterval);
-        clearInterval(pingInterval);
-        const timerElem = document.getElementById("fsm-countdown-timer");
-        if (timerElem) {
-          timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+        const data = await res.json().catch(() => ({}));
+        // CRITICAL: Only unlock if the server explicitly confirms the user is NO LONGER JAILED (data.isJailed === false)
+        if (data && data.success && data.isJailed === false) {
+          clearInterval(timerInterval);
+          clearInterval(pingInterval);
+          const timerElem = document.getElementById("fsm-countdown-timer");
+          if (timerElem) {
+            timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+          }
+          try {
+            localStorage.removeItem("fsm_lockdown_until");
+            localStorage.removeItem("fsm_lockdown_policy");
+            localStorage.removeItem("fsm_lockdown_reason");
+            localStorage.removeItem("fsm_lockdown_label");
+            localStorage.removeItem("fsm_lockdown_release");
+            localStorage.removeItem("fsm_lockdown_incident");
+            sessionStorage.removeItem("fsm_strike_count");
+          } catch (_) {}
+          setTimeout(() => window.location.reload(), 1200);
         }
-        try {
-          localStorage.removeItem("fsm_lockdown_until");
-          localStorage.removeItem("fsm_lockdown_policy");
-          localStorage.removeItem("fsm_lockdown_reason");
-          localStorage.removeItem("fsm_lockdown_label");
-          localStorage.removeItem("fsm_lockdown_release");
-          localStorage.removeItem("fsm_lockdown_incident");
-          sessionStorage.removeItem("fsm_strike_count");
-        } catch (_) {}
-        setTimeout(() => window.location.reload(), 1200);
       }
     } catch (_) {}
-  }, 10000);
+  }, 15000);
 }
 
 /**

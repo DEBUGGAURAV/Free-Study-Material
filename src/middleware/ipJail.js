@@ -291,23 +291,6 @@ function renderQuarantineHtml({
       padding: 2px 6px;
       border-radius: 4px;
     }
-    .btn-emergency {
-      background: rgba(239, 68, 68, 0.16);
-      border: 1px solid rgba(239, 68, 68, 0.45);
-      color: #fca5a5;
-      border-radius: 10px;
-      padding: 10px 18px;
-      font-size: 0.8rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-      width: 100%;
-      margin-bottom: 14px;
-    }
-    .btn-emergency:hover {
-      background: rgba(239, 68, 68, 0.32);
-    }
     .appeal-form {
       margin-top: 14px;
       text-align: left;
@@ -398,16 +381,12 @@ function renderQuarantineHtml({
 
     <div class="pulse-status">
       <span class="pulse-dot"></span>
-      <span>Auto-checking pardon status every 10s • Instant unlock if Admin pardons</span>
+      <span>Security Detention Active • Instant unlock upon Administrator pardon</span>
     </div>
 
     <div class="incident-bar">
       Incident ID: <code class="incident-code">${incidentId}</code>
     </div>
-
-    <button id="fsm-emergency-unblock-btn" class="btn-emergency" onclick="emergencyRelease()">
-      🔓 Emergency Release &amp; Return to Vault
-    </button>
 
     <form class="appeal-form" id="appealForm" onsubmit="submitAppeal(event)">
       <div class="form-title">
@@ -443,34 +422,22 @@ function renderQuarantineHtml({
     updateCountdown();
     setInterval(updateCountdown, 1000);
 
-    // Auto-check status every 8s
+    // Auto-check status every 15s to see if Administrator pardoned connection
     setInterval(async () => {
       try {
         const res = await fetch("/api/security/status?deviceId=" + encodeURIComponent("${deviceId || ''}"), { cache: "no-store" });
-        const data = await res.json();
-        if (data && !data.isJailed) {
-          const timerElem = document.getElementById("fsm-countdown-timer");
-          if (timerElem) {
-            timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+        if (res.ok) {
+          const data = await res.json().catch(() => ({}));
+          if (data && data.success && data.isJailed === false) {
+            const timerElem = document.getElementById("fsm-countdown-timer");
+            if (timerElem) {
+              timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
+            }
+            setTimeout(() => window.location.reload(), 1200);
           }
-          setTimeout(() => window.location.reload(), 1200);
         }
       } catch (_) {}
-    }, 8000);
-
-    async function emergencyRelease() {
-      const btn = document.getElementById("fsm-emergency-unblock-btn");
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Unlocking...";
-      }
-      try {
-        await fetch("/api/security/unjail-incident?incidentId=" + encodeURIComponent("${incidentId}"), { method: "POST" });
-      } catch (_) {}
-      setTimeout(() => {
-        window.location.href = window.location.origin;
-      }, 500);
-    }
+    }, 15000);
 
     async function submitAppeal(e) {
       e.preventDefault();
