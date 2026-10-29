@@ -15,6 +15,7 @@ const jailedIpsDetails = new Map(); // ip -> { ip, unjailTime, jailedAt, reason,
 const jailedDevices = new Map(); // deviceId -> unjailTimestamp
 const jailedDevicesDetails = new Map(); // deviceId -> { deviceId, unjailTime, jailedAt, reason, incidentId }
 const incidentsRegistry = new Map(); // incidentId -> { incidentId, ip, deviceId, unjailTime, reason }
+const pardonedIncidents = new Set(); // incidentId -> Set of explicitly pardoned incident IDs
 const ipRequestHistory = new Map(); // ip -> Array of timestamps
 
 // Real-Time Threat Metrics & Event Buffer
@@ -402,7 +403,16 @@ function renderQuarantineHtml({
   </div>
 
   <script>
-    const targetTimestamp = ${targetMs};
+    // Preserve exact countdown deadline across page refreshes so timer never resets!
+    let targetTimestamp = ${targetMs};
+    try {
+      const stored = localStorage.getItem("fsm_lockdown_until");
+      if (stored && Number(stored) > Date.now()) {
+        targetTimestamp = Number(stored);
+      } else {
+        localStorage.setItem("fsm_lockdown_until", String(targetTimestamp));
+      }
+    } catch (_) {}
 
     function updateCountdown() {
       const timerElem = document.getElementById("fsm-countdown-timer");
@@ -410,6 +420,14 @@ function renderQuarantineHtml({
       const diff = Math.max(0, targetTimestamp - Date.now());
       if (diff <= 0) {
         timerElem.innerHTML = "<span style='color: #34d399;'>Detention Expired. Unlocking...</span>";
+        try {
+          localStorage.removeItem("fsm_lockdown_until");
+          localStorage.removeItem("fsm_lockdown_policy");
+          localStorage.removeItem("fsm_lockdown_reason");
+          localStorage.removeItem("fsm_lockdown_label");
+          localStorage.removeItem("fsm_lockdown_release");
+          localStorage.removeItem("fsm_lockdown_incident");
+        } catch (_) {}
         setTimeout(() => window.location.reload(), 1500);
         return;
       }
@@ -422,17 +440,28 @@ function renderQuarantineHtml({
     updateCountdown();
     setInterval(updateCountdown, 1000);
 
-    // Auto-check status every 15s to see if Administrator pardoned connection
+    // Auto-check pardon status silently in background - ONLY reload if explicitly pardoned by Admin!
     setInterval(async () => {
       try {
-        const res = await fetch("/api/security/status?deviceId=" + encodeURIComponent("${deviceId || ''}"), { cache: "no-store" });
+        const incId = "${incidentId}";
+        if (!incId) return;
+        const res = await fetch("/api/security/check-pardon?incidentId=" + encodeURIComponent(incId), { cache: "no-store" });
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
-          if (data && data.success && data.isJailed === false) {
+          // CRITICAL: NEVER reload unless data.pardoned === true!
+          if (data && data.success && data.pardoned === true) {
             const timerElem = document.getElementById("fsm-countdown-timer");
             if (timerElem) {
               timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
             }
+            try {
+              localStorage.removeItem("fsm_lockdown_until");
+              localStorage.removeItem("fsm_lockdown_policy");
+              localStorage.removeItem("fsm_lockdown_reason");
+              localStorage.removeItem("fsm_lockdown_label");
+              localStorage.removeItem("fsm_lockdown_release");
+              localStorage.removeItem("fsm_lockdown_incident");
+            } catch (_) {}
             setTimeout(() => window.location.reload(), 1200);
           }
         }
@@ -504,6 +533,8 @@ function ipJailFirewall(req, res, next) {
   // 2. Whitelist essential appeal, help FAQs, P2P WebRTC mesh & static asset paths
   const p = (req && (req.path || req.url)) ? (req.path || req.url) : "";
   const isWhitelistedPath =
+    p === "/api/security/check-pardon" ||
+    p.startsWith("/api/security/check-pardon") ||
     p === "/api/security/jail-appeal" ||
     p.startsWith("/api/security/jail-appeal") ||
     p === "/api/security/unjail-incident" ||
@@ -781,6 +812,10 @@ function getThreatIntelligence() {
 
 function unjailIp(ip) {
   if (jailedIps.has(ip)) {
+    const details = jailedIpsDetails.get(ip);
+    if (details && details.incidentId) {
+      pardonedIncidents.add(details.incidentId);
+    }
     jailedIps.delete(ip);
     jailedIpsDetails.delete(ip);
     recordThreatIncident({
@@ -797,6 +832,10 @@ function unjailIp(ip) {
 
 function unjailDevice(deviceId) {
   if (deviceId && jailedDevices.has(deviceId)) {
+    const details = jailedDevicesDetails.get(deviceId);
+    if (details && details.incidentId) {
+      pardonedIncidents.add(details.incidentId);
+    }
     jailedDevices.delete(deviceId);
     jailedDevicesDetails.delete(deviceId);
     recordThreatIncident({
@@ -813,6 +852,7 @@ function unjailDevice(deviceId) {
 
 function unjailByIncident(incidentId) {
   if (!incidentId) return false;
+  pardonedIncidents.add(incidentId);
   let found = false;
   const incident = incidentsRegistry.get(incidentId);
   if (incident) {
@@ -838,7 +878,14 @@ function unjailByIncident(incidentId) {
       found = true;
     }
   }
-  return found;
+  return true;
+}
+
+function isIncidentPardoned(incidentId, ip, deviceId) {
+  if (incidentId && pardonedIncidents.has(incidentId)) {
+    return true;
+  }
+  return false;
 }
 
 function getJailStatus(ip, deviceId) {
@@ -967,6 +1014,7 @@ module.exports = {
   unjailIp,
   unjailDevice,
   unjailByIncident,
+  isIncidentPardoned,
   getJailStatus,
   renderQuarantineHtml,
   reportFailedAuth,

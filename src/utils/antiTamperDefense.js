@@ -663,7 +663,9 @@ export function triggerClientLockdown(reason, options = {}) {
   const savedUntil = (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_until")) 
     ? Number(localStorage.getItem("fsm_lockdown_until")) 
     : null;
-  const targetTimestamp = options.targetTimestamp || (savedUntil && savedUntil > Date.now() ? savedUntil : Date.now() + durationMs);
+  const targetTimestamp = (savedUntil && savedUntil > Date.now()) 
+    ? savedUntil 
+    : (options.targetTimestamp || (Date.now() + durationMs));
   const incidentId = options.incidentId || (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_incident")) || `FSM-SEC-${Date.now().toString(36).toUpperCase()}`;
 
   // Persist detention state to localStorage across page reloads
@@ -984,15 +986,16 @@ export function triggerClientLockdown(reason, options = {}) {
     };
   }
 
-  // 6. Poll server every 15s to check if Administrator explicitly pardoned the connection
+  // 6. Poll server silently in background - ONLY reload if Administrator explicitly pardoned this incident
   const pingInterval = setInterval(async () => {
     try {
-      const devId = (typeof localStorage !== "undefined" && localStorage.getItem("fsm_device_id")) || "";
-      const res = await fetch(`/api/security/status?deviceId=${encodeURIComponent(devId)}`, { cache: "no-store" });
+      const incId = incidentId || (typeof localStorage !== "undefined" && localStorage.getItem("fsm_lockdown_incident")) || "";
+      if (!incId) return;
+      const res = await fetch(`/api/security/check-pardon?incidentId=${encodeURIComponent(incId)}`, { cache: "no-store" });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        // CRITICAL: Only unlock if the server explicitly confirms the user is NO LONGER JAILED (data.isJailed === false)
-        if (data && data.success && data.isJailed === false) {
+        // CRITICAL: NEVER reload unless the server explicitly confirms data.pardoned === true!
+        if (data && data.success && data.pardoned === true) {
           clearInterval(timerInterval);
           clearInterval(pingInterval);
           const timerElem = document.getElementById("fsm-countdown-timer");

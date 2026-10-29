@@ -21,6 +21,7 @@ const {
   unjailDevice,
   unjailIp,
   unjailByIncident,
+  isIncidentPardoned,
   getJailStatus,
   getClientIp,
 } = require("../middleware/ipJail");
@@ -495,6 +496,28 @@ router.post("/jail-appeal", async (req, res) => {
     console.error("[SECURITY-APPEAL-ERROR]", err);
     return res.status(500).json({ success: false, message: "Appeal processing error: " + err.message });
   }
+});
+
+/**
+ * GET /api/security/check-pardon
+ * Dedicated safe endpoint: ONLY returns pardoned: true if Admin explicitly unjailed this incident
+ * Never triggers false client reloads or resets the timer!
+ */
+router.get("/check-pardon", (req, res) => {
+  const incidentId = (req.query?.incidentId || "").trim();
+  const clientIp = getClientIp(req);
+  const deviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.query?.deviceId || "").trim();
+
+  let pardoned = false;
+  if (incidentId && typeof isIncidentPardoned === "function") {
+    pardoned = isIncidentPardoned(incidentId, clientIp, deviceId);
+  }
+
+  return res.json({
+    success: true,
+    incidentId,
+    pardoned,
+  });
 });
 
 /**
