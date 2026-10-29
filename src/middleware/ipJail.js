@@ -234,15 +234,20 @@ function renderQuarantineHtml({ incidentId, reasonStr, remainingSec, policyName,
       btn.disabled = true;
       btn.innerText = "Submitting Appeal...";
       try {
+        const nameVal = (document.getElementById("name") || document.getElementById("studentName"))?.value || "Student Visitor";
+        const emailVal = (document.getElementById("email") || document.getElementById("studentEmail"))?.value || "Not Provided";
+        const mobileVal = document.getElementById("mobile")?.value || "";
+        const messageVal = document.getElementById("message")?.value || "Student submitted pardon request for security detention.";
+
         const res = await fetch("/api/security/jail-appeal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             incidentId: "${incidentId}",
-            name: document.getElementById("name").value,
-            email: document.getElementById("email").value,
-            mobile: document.getElementById("mobile").value,
-            message: document.getElementById("message").value,
+            name: nameVal,
+            email: emailVal,
+            mobile: mobileVal,
+            message: messageVal,
             deviceId: "${deviceId || ""}",
           })
         });
@@ -446,6 +451,15 @@ function ipJailFirewall(req, res, next) {
       severity: "CRITICAL",
       actionTaken: "3_MIN_IP_DETENTION",
     });
+
+    notifyTopic750IpJail({
+      ip,
+      deviceId,
+      reason: `High Traffic Surge (${history.length} req/60s)`,
+      durationMs: jailDurationMs,
+      incidentId,
+      policyName: "DDoS / Traffic Surge (>600 req/min)",
+    }).catch(() => {});
 
     ipRequestHistory.delete(ip);
     console.warn(`[SECURITY-FIREWALL] 🚨 Detained abusive IP ${ip} in security jail for 3 minutes (Traffic spike: ${history.length} req/min). Incident: ${incidentId}`);
