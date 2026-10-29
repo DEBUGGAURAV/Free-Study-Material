@@ -60,13 +60,6 @@ const INITIAL_FAQS = [
       "Yes, 100% free! All handwritten lecture notes, university exam papers, and engineering textbooks are provided with zero subscription fees, zero paywalls, and unlimited access.",
   },
   {
-    id: "faq_6",
-    category: "general",
-    question: "How can I receive updates about new study material and exam datesheets?",
-    answer:
-      "You can connect through our official community channels and student portal to receive daily semester updates, exam datesheets, and new study material alerts.",
-  },
-  {
     id: "faq_security_jail",
     category: "security",
     question: "Why was my IP jailed or account blocked, and what are the detention time limits? (IP Jail Policy)",
