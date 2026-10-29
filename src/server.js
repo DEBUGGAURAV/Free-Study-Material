@@ -144,8 +144,8 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. server-side keep-alive self-ping, mobile apps, curl)
-      if (!origin) return callback(null, true);
+      // Allow requests with no origin or "null" (direct browser navigation, privacy browsers, mobile WebViews, curl, PWA)
+      if (!origin || origin === "null") return callback(null, true);
       const cfWorkerUrl = (process.env.CF_WORKER_URL || "").trim();
       if (
         allowedOrigins.includes(origin) ||
@@ -164,7 +164,8 @@ app.use(
           return callback(null, true);
         }
       } catch (_) {}
-      return callback(new Error("CORS policy violation: Access from this origin is not permitted."));
+      // Standard W3C CORS: Disallow cross-origin requests by omitting allow headers, NEVER throwing 500 error
+      return callback(null, false);
     },
     credentials: true,
   })
@@ -294,6 +295,40 @@ app.get("*", (req, res) => {
             <h1>🚀 Academic Cloud API Online</h1>
             <p>Domain: freestudymaterial.onrender.com</p>
             <p>Run <code>npm run build</code> to generate frontend bundle.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+  });
+});
+
+// 🛡️ Central Graceful Error Handler (Catches all unexpected errors & prevents raw 500 white screens)
+app.use((err, req, res, next) => {
+  console.warn(`[EXPRESS-ERROR-GUARD] ⚠️ Caught error on ${req.method} ${req.path}:`, err?.message || err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  if (req.path.startsWith("/api/")) {
+    return res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "An unexpected server condition occurred. Please try again.",
+    });
+  }
+  // For document/page requests, safely serve the React application shell
+  const indexPath = path.join(distPath, "index.html");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.status(200).sendFile(indexPath, (sendErr) => {
+    if (sendErr) {
+      res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+        <head><title>Free Study Material</title></head>
+        <body style="font-family:sans-serif;background:#090d16;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+          <div style="text-align:center;">
+            <h1>Free Study Material Vault</h1>
+            <p>Academic Cloud is connecting... Please refresh.</p>
+            <script>setTimeout(function(){ window.location.reload(); }, 2500);</script>
           </div>
         </body>
         </html>
