@@ -529,20 +529,30 @@ export default function StudentChatModal({
     let ws = null;
 
     const establishWebSocket = async () => {
-      let token = getAuthToken() || "";
+      let token = "";
+
+      // 1. Always attempt to acquire a fresh, ephemeral WebSocket ticket from server for zero-failure connectivity
+      try {
+        const res = await api.getChatWsToken({
+          userId: currentUser?.id,
+          email: currentUser?.email,
+        });
+        if (res?.token) {
+          token = res.token;
+          setAuthToken(token);
+        }
+      } catch (wsTokErr) {
+        console.warn("[CHAT-WS] Fresh token generation notice:", wsTokErr.message);
+      }
+
+      // 2. Fallback to existing stored token if available
       if (!token) {
-        try {
-          const res = await api.getChatWsToken();
-          if (res?.token) {
-            token = res.token;
-            setAuthToken(token);
-          }
-        } catch (_) {}
+        token = getAuthToken() || "";
       }
 
       if (isCancelled) return;
 
-      if (!token) {
+      if (!token && !currentUser) {
         console.warn("[CHAT-WS] No auth token available. Skipping WebSocket connection.");
         setAuthError("Please sign in with your student account to join the live student chat.");
         return;
@@ -750,10 +760,31 @@ export default function StudentChatModal({
             String(data.message || "").toLowerCase().includes("unauthorized") ||
             String(data.message || "").toLowerCase().includes("authentication")
           ) {
-            setAuthError(data.message || "Your login session has expired. Please sign in again.");
             try {
               localStorage.removeItem("vault_token");
             } catch (_) {}
+
+            // Auto-heal: If user is logged in, attempt automatic session refresh
+            if (currentUser && !wsRef.current?.reconnectAttempted) {
+              if (wsRef.current) wsRef.current.reconnectAttempted = true;
+              console.log("[CHAT-WS] 🔄 Auto-healing chat session for logged-in student...");
+              api.getChatWsToken({ userId: currentUser.id, email: currentUser.email })
+                .then((fresh) => {
+                  if (fresh?.token) {
+                    setAuthToken(fresh.token);
+                    setAuthError(null);
+                    establishWebSocket();
+                    return;
+                  }
+                  setAuthError(data.message || "Your login session has expired. Please sign in again.");
+                })
+                .catch(() => {
+                  setAuthError(data.message || "Your login session has expired. Please sign in again.");
+                });
+              return;
+            }
+
+            setAuthError(data.message || "Your login session has expired. Please sign in again.");
           } else {
             console.error("[CHAT-WS] Chat error:", data.message);
           }
@@ -2771,28 +2802,52 @@ export default function StudentChatModal({
               <span>🔒</span>
               <span>{authError}</span>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof onClose === "function") onClose();
-                if (typeof window !== "undefined") {
-                  window.dispatchEvent(new CustomEvent("fsm:open-auth", { detail: { mode: "signin" } }));
-                }
-              }}
-              style={{
-                background: "#ef4444",
-                color: "#fff",
-                border: "none",
-                padding: "4px 12px",
-                borderRadius: "6px",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Sign In
-            </button>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {currentUser && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthError(null);
+                    establishWebSocket();
+                  }}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.15)",
+                    color: "#fff",
+                    border: "1px solid rgba(255, 255, 255, 0.3)",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  🔄 Reconnect
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onClose === "function") onClose();
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("fsm:open-auth", { detail: { mode: "signin" } }));
+                  }
+                }}
+                style={{
+                  background: "#ef4444",
+                  color: "#fff",
+                  border: "none",
+                  padding: "4px 12px",
+                  borderRadius: "6px",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         )}
 

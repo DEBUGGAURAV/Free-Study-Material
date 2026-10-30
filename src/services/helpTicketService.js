@@ -63,16 +63,18 @@ function getHelpChatId() {
   ).trim();
 }
 
-// Supergroup Topic 1: Active Inquiries
+// Supergroup Topic: Active Inquiries (Topic 6: 🟢 Active Support Tickets)
 function getHelpActiveTopicId() {
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
-  return topic ? parseInt(topic, 10) : 1;
+  const parsed = topic ? parseInt(topic, 10) : 6;
+  return !isNaN(parsed) && parsed > 0 ? parsed : 6;
 }
 
-// Supergroup Topic 2: Closed Resolution Dossiers
+// Supergroup Topic: Closed Resolution Dossiers (Topic 7: 🔴 Closed & Resolved Tickets Report)
 function getHelpClosedTopicId() {
-  const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID || "2";
-  return topic ? parseInt(topic, 10) : 2;
+  const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID;
+  const parsed = topic ? parseInt(topic, 10) : 7;
+  return !isNaN(parsed) && parsed > 0 ? parsed : 7;
 }
 
 /**
@@ -231,15 +233,30 @@ async function dispatchTelegramHelpNotice(ticket) {
       reply_markup: inlineKeyboard,
     };
 
-    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    let data = await res.json();
     if (data.ok && data.result?.message_id) {
       return String(data.result.message_id);
+    }
+
+    // 🛡️ Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to main supergroup
+    if (!data.ok && (data.description?.includes("thread not found") || data.error_code === 400)) {
+      console.warn(`[HELP-BOT] Topic ${payload.message_thread_id} send failed (${data.description}), retrying to supergroup without thread ID...`);
+      delete payload.message_thread_id;
+      res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      data = await res.json();
+      if (data.ok && data.result?.message_id) {
+        return String(data.result.message_id);
+      }
     }
   } catch (err) {
     console.warn("[HELP-BOT] Telegram dispatch error:", err.message);
@@ -283,16 +300,28 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     .join("\n");
 
   try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    const payload = {
+      chat_id: chatId,
+      message_thread_id: closedTopicId,
+      text,
+      parse_mode: "HTML",
+    };
+
+    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_thread_id: closedTopicId,
-        text,
-        parse_mode: "HTML",
-      }),
+      body: JSON.stringify(payload),
     });
+
+    let data = await res.json().catch(() => null);
+    if (!data || (!data.ok && (data.description?.includes("thread not found") || data.error_code === 400))) {
+      delete payload.message_thread_id;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    }
   } catch (err) {
     console.warn("[HELP-BOT] Closed report dispatch error:", err.message);
   }
@@ -873,7 +902,7 @@ function startHelpBotPoller() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 callback_query_id: cb.id,
-                text: `✅ Ticket #${ticketCode} closed & archived to Topic 2!`,
+                text: `✅ Ticket #${ticketCode} closed & archived to Topic #${getHelpClosedTopicId()}!`,
                 show_alert: false,
               }),
             }).catch(() => {});
@@ -930,7 +959,7 @@ function startHelpBotPoller() {
             botToken,
             msg.chat.id,
             result.success
-              ? `✅ <b>Ticket #${ticketCode} Closed!</b>\nResolution dossier has been archived to Topic 2.`
+              ? `✅ <b>Ticket #${ticketCode} Closed!</b>\nResolution dossier has been archived to Topic #${getHelpClosedTopicId()}.`
               : `⚠️ <b>Could not close ticket:</b> ${result.message}`,
             msg.message_id,
             msg.message_thread_id
@@ -993,11 +1022,20 @@ async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null
     if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
     if (threadId) body.message_thread_id = threadId;
 
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    let data = await res.json().catch(() => null);
+    if (data && !data.ok && (data.description?.includes("thread not found") || data.error_code === 400)) {
+      delete body.message_thread_id;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    }
   } catch (_) {}
 }
 
@@ -1020,4 +1058,6 @@ module.exports = {
   getHelpClosedTopicId,
   getHelpTursoTelemetry,
   getHelpBotTelemetry,
+  dispatchTelegramHelpNotice,
+  dispatchClosedTicketReport,
 };

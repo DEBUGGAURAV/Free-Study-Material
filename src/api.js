@@ -1028,8 +1028,16 @@ export const api = {
     return res;
   },
 
-  // ðŸ’¬ Student Chat & Private Pods API
-  getChatWsToken: () => request("/chat/ws-token"),
+  // 💬 Student Chat & Private Pods API
+  getChatWsToken: (payload = null) => {
+    if (payload) {
+      return request("/chat/ws-token", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+    }
+    return request("/chat/ws-token");
+  },
   getChatRooms: () => request("/chat/rooms"),
   createChatRoom: (name, secretCode, description) =>
     request("/chat/rooms/create", {
