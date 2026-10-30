@@ -116,12 +116,15 @@ function isImmune(req) {
     const query = req.query || {};
     const headers = req.headers || {};
 
+    const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
     if (
-      query.admin_bypass === "fsm_admin_override" ||
-      query.bypass === "fsm_admin_override" ||
-      headers["x-admin-bypass"] === "fsm_admin_override"
+      query.admin_bypass === bypassKey ||
+      query.bypass === bypassKey ||
+      headers["x-admin-bypass"] === bypassKey
     ) {
-      return true;
+      if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || isUserAdmin(req)) {
+        return true;
+      }
     }
 
     const host = typeof headers["host"] === "string" ? headers["host"] : "";

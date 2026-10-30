@@ -5,8 +5,8 @@
  */
 
 const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("./auth");
 
-const JWT_SECRET = process.env.JWT_SECRET || "free_study_material_vault_jwt_secure_secret_2026";
 const STEP_UP_DURATION_SEC = 10 * 60; // 10 minutes
 
 /**

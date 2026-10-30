@@ -1072,20 +1072,42 @@ function initChatWebSocket(server) {
         }
       }
 
-      if (!user && (
-        urlObj.searchParams.get("admin_bypass") === "fsm_admin_override" ||
-        req.headers?.["x-admin-bypass"] === "fsm_admin_override"
-      )) {
-        user = {
-          id: "admin-root",
-          email: MAIN_ADMIN_EMAIL,
-          name: "Administrator",
-          role: "admin",
-          college: "FSM Network Hub",
-          branch: "Admin Team",
-          year: "Official",
-          permissions: ["all"],
-        };
+      const adminBypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
+      const hasBypassParam = (
+        urlObj.searchParams.get("admin_bypass") === adminBypassKey ||
+        req.headers?.["x-admin-bypass"] === adminBypassKey
+      );
+
+      if (!user && hasBypassParam) {
+        const clientIp = req.socket?.remoteAddress || "";
+        const isLoopback = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.includes("127.0.0.1");
+
+        let tokenClaims = null;
+        if (token) {
+          try { tokenClaims = jwt.decode(token); } catch (_) {}
+        }
+        const hasAdminClaims = tokenClaims && (
+          tokenClaims.role === "admin" ||
+          tokenClaims.role === "half_admin" ||
+          tokenClaims.isMainAdmin ||
+          (MAIN_ADMIN_EMAIL && tokenClaims.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL.toLowerCase().trim())
+        );
+
+        if (isLoopback || hasAdminClaims || process.env.ALLOW_INSECURE_ADMIN_BYPASS === "true") {
+          user = {
+            id: tokenClaims?.id || "admin-root",
+            email: tokenClaims?.email || MAIN_ADMIN_EMAIL,
+            name: tokenClaims?.name || "Administrator",
+            role: tokenClaims?.role || "admin",
+            college: tokenClaims?.college || "FSM Network Hub",
+            branch: tokenClaims?.branch || "Admin Team",
+            year: tokenClaims?.year || "Official",
+            permissions: tokenClaims?.permissions || ["all"],
+          };
+          console.log(`[CHAT-WS] 🛡️ Authorized Admin WebSocket session established for ${user.email} (${clientIp}).`);
+        } else {
+          console.warn(`[CHAT-WS] 🚨 Blocked unauthorized unauthenticated admin_bypass attempt from ${clientIp}`);
+        }
       }
     } catch (authErr) {
       console.warn("[CHAT-WS] Auth verification notice:", authErr.message);
@@ -2749,7 +2771,7 @@ router.post("/profile", authenticateToken, requireAuth, uploadChatAvatar.single(
           const ext = pUrl.includes("image/png") ? ".png" : pUrl.includes("image/webp") ? ".webp" : ".jpg";
           const fname = `dp-${userId}-${Date.now()}${ext}`;
           const outPath = path.join(CHAT_MEDIA_DIR, fname);
-          fs.writeFileSync(outPath, Buffer.from(base64Data, "base64"));
+          await fs.promises.writeFile(outPath, Buffer.from(base64Data, "base64"));
           newAvatarUrl = `/api/chat/media/${fname}`;
         } catch (e) {
           console.warn("[CHAT-PROFILE] Base64 avatar write error:", e.message);

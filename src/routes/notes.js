@@ -63,19 +63,21 @@ try {
 }
 
 function saveCdnBuffer(id, buffer, mimeType) {
-  try {
-    fs.writeFileSync(path.join(CDN_CACHE_DIR, `${id}.bin`), buffer);
-    fs.writeFileSync(
-      path.join(CDN_CACHE_DIR, `${id}.meta.json`),
-      JSON.stringify({
-        mimeType: mimeType || "application/pdf",
-        totalSize: buffer.length,
-        cachedAt: Date.now(),
-      })
-    );
-  } catch (err) {
+  // Asynchronously write to disk so the Node.js event loop thread remains 100% responsive
+  const binFile = path.join(CDN_CACHE_DIR, `${id}.bin`);
+  const metaFile = path.join(CDN_CACHE_DIR, `${id}.meta.json`);
+  const metaContent = JSON.stringify({
+    mimeType: mimeType || "application/pdf",
+    totalSize: buffer.length,
+    cachedAt: Date.now(),
+  });
+
+  Promise.all([
+    fs.promises.writeFile(binFile, buffer),
+    fs.promises.writeFile(metaFile, metaContent, "utf8"),
+  ]).catch((err) => {
     console.warn("[CDN-DISK] Write error:", err.message);
-  }
+  });
 }
 
 function getCdnBuffer(id) {
@@ -1795,7 +1797,7 @@ async function prewarmPopularNotes(limit = 10) {
       const binPath = path.join(CDN_CACHE_DIR, `${doc.id}.bin`);
       if (fs.existsSync(binPath)) {
         try {
-          const diskBuffer = fs.readFileSync(binPath);
+          const diskBuffer = await fs.promises.readFile(binPath);
           noteBufferCache.set(doc.id, {
             buffer: diskBuffer,
             totalSize: diskBuffer.length,

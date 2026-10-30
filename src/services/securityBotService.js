@@ -29,6 +29,22 @@ const processedUpdateIds = new Set();
 const recentDetailsSentTimestamps = new Map(); // `${chatId}_${token}` -> timestamp
 const recentOtpSentTimestamps = new Map();     // `${chatId}_${token}` -> timestamp
 
+// Periodic 10-minute sweep to prune tracking maps and prevent long-term memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, ts] of recentDetailsSentTimestamps.entries()) {
+    if (now - ts > 30 * 60 * 1000) recentDetailsSentTimestamps.delete(k);
+  }
+  for (const [k, ts] of recentOtpSentTimestamps.entries()) {
+    if (now - ts > 30 * 60 * 1000) recentOtpSentTimestamps.delete(k);
+  }
+  if (processedUpdateIds.size > 2000) {
+    const arr = Array.from(processedUpdateIds).slice(-1000);
+    processedUpdateIds.clear();
+    arr.forEach((id) => processedUpdateIds.add(id));
+  }
+}, 10 * 60 * 1000);
+
 /**
  * Distributed multi-instance lock using Firestore to ensure only 1 server instance
  * dispatches messages to Telegram (prevents duplicates when Render + Localhost or multi-workers run)
