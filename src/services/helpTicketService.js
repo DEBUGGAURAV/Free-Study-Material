@@ -366,18 +366,6 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
         body: JSON.stringify(payload),
       });
     }
-
-    // Also dispatch copy to Admin DM
-    const adminChatId = getHelpAdminChatId();
-    if (adminChatId && adminChatId !== chatId) {
-      delete payload.message_thread_id;
-      payload.chat_id = adminChatId;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    }
   } catch (err) {
     console.warn("[HELP-BOT] Closed report dispatch error:", err.message);
   }
