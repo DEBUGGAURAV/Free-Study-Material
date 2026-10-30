@@ -127,6 +127,11 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
   const [lookupError, setLookupError] = useState(null);
   const [copiedCode, setCopiedCode] = useState(null);
 
+  // Student Reply State
+  const [replyInputs, setReplyInputs] = useState({});
+  const [sendingReply, setSendingReply] = useState({});
+  const [replyNotice, setReplyNotice] = useState({});
+
   // Load FAQs on mount
   useEffect(() => {
     if (!isOpen) return;
@@ -138,35 +143,73 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
       .catch(() => {});
   }, [isOpen]);
 
-  // Load user's tickets (Strictly scoped to owner)
+  // Load user's tickets (Strictly scoped to owner with device retention)
   const fetchTickets = () => {
     setLoadingTickets(true);
     let storedCodes = [];
-    let guestEmail = email || "";
-    let guestMobile = mobile || "";
+    let guestEmail = (currentUser?.email || email || "").trim().toLowerCase();
+    let guestMobile = (currentUser?.mobile || mobile || "").trim();
     try {
       const stored = localStorage.getItem("fsm_help_ticket_codes");
       if (stored) storedCodes = JSON.parse(stored);
-      if (!currentUser) {
-        guestEmail = guestEmail || localStorage.getItem("fsm_help_guest_email") || "";
-        guestMobile = guestMobile || localStorage.getItem("fsm_help_guest_mobile") || "";
-      }
+      if (!guestEmail) guestEmail = localStorage.getItem("fsm_help_guest_email") || "";
+      if (!guestMobile) guestMobile = localStorage.getItem("fsm_help_guest_mobile") || "";
     } catch (_) {}
 
     api
       .getMyHelpTickets(storedCodes, guestEmail, guestMobile)
       .then((res) => {
-        if (res.tickets) setMyTickets(res.tickets);
+        if (res.tickets) {
+          setMyTickets(res.tickets);
+          try {
+            const existing = new Set(storedCodes);
+            res.tickets.forEach((t) => {
+              if (t.ticket_code) existing.add(t.ticket_code);
+            });
+            localStorage.setItem("fsm_help_ticket_codes", JSON.stringify(Array.from(existing)));
+          } catch (_) {}
+        }
       })
       .catch(() => {})
       .finally(() => setLoadingTickets(false));
   };
 
+  // Automatically fetch tickets whenever modal opens or tab changes
   useEffect(() => {
-    if (isOpen && activeTab === "tickets") {
+    if (isOpen) {
       fetchTickets();
     }
   }, [isOpen, activeTab]);
+
+  // Handle student follow-up reply from website
+  const handleStudentReply = async (e, ticketCode) => {
+    e.preventDefault();
+    const text = (replyInputs[ticketCode] || "").trim();
+    if (!text) return;
+
+    setSendingReply((prev) => ({ ...prev, [ticketCode]: true }));
+    setReplyNotice((prev) => ({ ...prev, [ticketCode]: null }));
+
+    const guestEmail = currentUser?.email || email || (!currentUser ? localStorage.getItem("fsm_help_guest_email") || "" : "");
+    const guestMobile = currentUser?.mobile || mobile || (!currentUser ? localStorage.getItem("fsm_help_guest_mobile") || "" : "");
+
+    try {
+      const res = await api.studentReplyHelpTicket(ticketCode, text, guestEmail, guestMobile);
+      if (res.success && res.ticket) {
+        setReplyInputs((prev) => ({ ...prev, [ticketCode]: "" }));
+        setReplyNotice((prev) => ({ ...prev, [ticketCode]: "✅ Reply sent to Administrator!" }));
+        setMyTickets((prev) =>
+          prev.map((t) => (t.ticket_code === ticketCode ? { ...t, ...res.ticket } : t))
+        );
+      } else {
+        setReplyNotice((prev) => ({ ...prev, [ticketCode]: `⚠️ ${res.message || "Failed to send reply."}` }));
+      }
+    } catch (err) {
+      setReplyNotice((prev) => ({ ...prev, [ticketCode]: `⚠️ ${err.message || "Network error."}` }));
+    } finally {
+      setSendingReply((prev) => ({ ...prev, [ticketCode]: false }));
+    }
+  };
 
   // Sync user info if available
   useEffect(() => {
@@ -449,23 +492,64 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
             }}
           >
             <Ticket size={15} />
-            <span>My Tickets & Replies</span>
-            {myTickets.some((t) => t.status === "answered") && (
+            <span>My Tickets</span>
+            {myTickets.length > 0 && (
               <span
                 style={{
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  background: "#10b981",
-                  display: "inline-block",
+                  background: myTickets.some((t) => t.status === "active") ? "#f59e0b" : "rgba(56, 189, 248, 0.25)",
+                  color: myTickets.some((t) => t.status === "active") ? "#000" : "#38bdf8",
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  padding: "1px 6px",
+                  borderRadius: "10px",
                 }}
-              />
+              >
+                {myTickets.length}
+              </span>
             )}
           </button>
         </div>
 
         {/* Tab Content Area */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {/* Active Ticket Alert Banner when user has tickets and is on FAQs/Ask tabs */}
+          {myTickets.some((t) => t.status === "active" || t.status === "answered") && activeTab !== "tickets" && (
+            <div
+              onClick={() => {
+                setActiveTab("tickets");
+                setSubmitSuccess(null);
+              }}
+              style={{
+                cursor: "pointer",
+                padding: "10px 14px",
+                marginBottom: "16px",
+                borderRadius: "10px",
+                background: myTickets.some((t) => t.status === "answered")
+                  ? "rgba(16, 185, 129, 0.12)"
+                  : "rgba(245, 158, 11, 0.12)",
+                border: myTickets.some((t) => t.status === "answered")
+                  ? "1px solid rgba(16, 185, 129, 0.35)"
+                  : "1px solid rgba(245, 158, 11, 0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontSize: "0.82rem",
+                color: myTickets.some((t) => t.status === "answered") ? "#6ee7b7" : "#fde68a",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>{myTickets.some((t) => t.status === "answered") ? "🎉" : "⚡"}</span>
+                <span>
+                  {myTickets.some((t) => t.status === "answered")
+                    ? "Admin has replied to your ticket! Tap here to read answer and reply."
+                    : `You have ${myTickets.filter((t) => t.status === "active").length} active ticket(s) in progress.`}
+                </span>
+              </div>
+              <span style={{ fontSize: "0.78rem", fontWeight: 700, textDecoration: "underline" }}>
+                View Ticket &rarr;
+              </span>
+            </div>
+          )}
           {/* TAB 1: FAQS */}
           {activeTab === "faqs" && (
             <div>
@@ -1050,62 +1134,183 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                           </div>
                         </div>
 
-                        {/* Question */}
-                        <div style={{ marginBottom: "12px" }}>
-                          <p style={{ margin: 0, fontSize: "0.85rem", color: "#f8fafc", lineHeight: "1.4" }}>
-                            {t.question}
-                          </p>
-                          {t.subject && (
-                            <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "4px", display: "block" }}>
-                              Subject / Note: {t.subject}
-                            </span>
-                          )}
-                        </div>
+                        {/* Conversation Thread or Original Question & Admin Response */}
+                        {(() => {
+                          let conv = [];
+                          try {
+                            if (t.conversation) conv = JSON.parse(t.conversation);
+                          } catch (_) {}
 
-                        {/* Admin Answer Box */}
-                        {isAnswered ? (
-                          <div
-                            style={{
-                              background: "rgba(16, 185, 129, 0.1)",
-                              borderLeft: "3px solid #10b981",
-                              padding: "10px 14px",
-                              borderRadius: "0 8px 8px 0",
-                              marginTop: "8px",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "space-between",
-                                marginBottom: "4px",
-                              }}
-                            >
-                              <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#34d399" }}>
-                                👑 Admin Response ({t.admin_name || "Platform Admin"})
-                              </span>
-                              {t.replied_at && (
-                                <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
-                                  {new Date(t.replied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                                </span>
+                          if (conv && conv.length > 0) {
+                            return (
+                              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "12px" }}>
+                                {conv.map((msg, mIdx) => {
+                                  const isAdmin = msg.sender === "admin";
+                                  return (
+                                    <div
+                                      key={mIdx}
+                                      style={{
+                                        padding: "10px 14px",
+                                        borderRadius: "10px",
+                                        background: isAdmin ? "rgba(16, 185, 129, 0.1)" : "rgba(255, 255, 255, 0.04)",
+                                        borderLeft: isAdmin ? "3px solid #10b981" : "3px solid #38bdf8",
+                                        border: isAdmin ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(255, 255, 255, 0.06)",
+                                      }}
+                                    >
+                                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                                        <span style={{ fontSize: "0.76rem", fontWeight: 700, color: isAdmin ? "#34d399" : "#38bdf8" }}>
+                                          {isAdmin ? `👑 ${msg.sender_name || "Platform Admin"}` : `👤 ${msg.sender_name || t.user_name || "You"}`}
+                                        </span>
+                                        {msg.created_at && (
+                                          <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p style={{ margin: 0, fontSize: "0.84rem", color: isAdmin ? "#ecfdf5" : "#f8fafc", lineHeight: "1.45" }}>
+                                        {msg.text}
+                                      </p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+
+                          // Fallback to classic format
+                          return (
+                            <>
+                              <div style={{ marginBottom: "12px" }}>
+                                <p style={{ margin: 0, fontSize: "0.85rem", color: "#f8fafc", lineHeight: "1.4" }}>
+                                  {t.question}
+                                </p>
+                                {t.subject && (
+                                  <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "4px", display: "block" }}>
+                                    Subject / Note: {t.subject}
+                                  </span>
+                                )}
+                              </div>
+
+                              {isAnswered ? (
+                                <div
+                                  style={{
+                                    background: "rgba(16, 185, 129, 0.1)",
+                                    borderLeft: "3px solid #10b981",
+                                    padding: "10px 14px",
+                                    borderRadius: "0 8px 8px 0",
+                                    marginTop: "8px",
+                                    marginBottom: "12px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                      marginBottom: "4px",
+                                    }}
+                                  >
+                                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#34d399" }}>
+                                      👑 Admin Response ({t.admin_name || "Platform Admin"})
+                                    </span>
+                                    {t.replied_at && (
+                                      <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                        {new Date(t.replied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p style={{ margin: 0, fontSize: "0.84rem", color: "#ecfdf5", lineHeight: "1.45" }}>
+                                    {t.admin_reply}
+                                  </p>
+                                </div>
+                              ) : (
+                                <div
+                                  style={{
+                                    fontSize: "0.76rem",
+                                    color: "var(--text-dim)",
+                                    fontStyle: "italic",
+                                    background: "rgba(0, 0, 0, 0.2)",
+                                    padding: "8px 12px",
+                                    borderRadius: "6px",
+                                    marginBottom: "12px",
+                                  }}
+                                >
+                                  ⏳ Your question has been forwarded to administrators in Topic 6. As soon as admin replies, it will appear right here.
+                                </div>
                               )}
-                            </div>
-                            <p style={{ margin: 0, fontSize: "0.84rem", color: "#ecfdf5", lineHeight: "1.45" }}>
-                              {t.admin_reply}
-                            </p>
+                            </>
+                          );
+                        })()}
+
+                        {/* Student Reply Form (Allowed on active or answered tickets) */}
+                        {t.status !== "closed" ? (
+                          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "12px" }}>
+                            <form
+                              onSubmit={(e) => handleStudentReply(e, t.ticket_code)}
+                              style={{ display: "flex", gap: "8px" }}
+                            >
+                              <input
+                                type="text"
+                                placeholder="Type your follow-up reply or query..."
+                                value={replyInputs[t.ticket_code] || ""}
+                                onChange={(e) =>
+                                  setReplyInputs((prev) => ({ ...prev, [t.ticket_code]: e.target.value }))
+                                }
+                                style={{
+                                  flex: 1,
+                                  padding: "9px 12px",
+                                  borderRadius: "8px",
+                                  background: "rgba(255, 255, 255, 0.05)",
+                                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                                  color: "#fff",
+                                  fontSize: "0.82rem",
+                                  outline: "none",
+                                }}
+                              />
+                              <button
+                                type="submit"
+                                className="btn-primary"
+                                disabled={sendingReply[t.ticket_code] || !replyInputs[t.ticket_code]?.trim()}
+                                style={{
+                                  padding: "9px 16px",
+                                  fontSize: "0.82rem",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {sendingReply[t.ticket_code] ? (
+                                  <div className="spinner" style={{ width: "13px", height: "13px" }} />
+                                ) : (
+                                  <Send size={13} />
+                                )}
+                                <span>Reply</span>
+                              </button>
+                            </form>
+                            {replyNotice[t.ticket_code] && (
+                              <div
+                                style={{
+                                  marginTop: "6px",
+                                  fontSize: "0.78rem",
+                                  color: replyNotice[t.ticket_code].startsWith("✅") ? "#34d399" : "#fda4af",
+                                }}
+                              >
+                                {replyNotice[t.ticket_code]}
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div
                             style={{
-                              fontSize: "0.76rem",
+                              marginTop: "8px",
+                              fontSize: "0.74rem",
                               color: "var(--text-dim)",
                               fontStyle: "italic",
-                              background: "rgba(0, 0, 0, 0.2)",
-                              padding: "8px 12px",
-                              borderRadius: "6px",
+                              textAlign: "right",
                             }}
                           >
-                            ⏳ Your question has been forwarded to the admin desk. As soon as admin replies, their answer will appear right here.
+                            🔒 This ticket has been resolved and archived to Topic 7.
                           </div>
                         )}
                       </div>

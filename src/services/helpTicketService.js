@@ -57,30 +57,32 @@ function getHelpBotToken() {
 
 function getHelpChatId() {
   return (
-    process.env.HELP_ADMIN_CHAT_ID ||
     process.env.HELP_CHAT_ID ||
     process.env.TELEGRAM_HELP_CHAT_ID ||
+    "-1004369896029"
+  ).trim();
+}
+
+function getHelpAdminChatId() {
+  return (
+    process.env.HELP_ADMIN_CHAT_ID ||
     process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID ||
     "7009492653"
   ).trim();
 }
 
-// Active Tickets Topic (Only used if Chat ID is a supergroup starting with -100)
+// Supergroup Topic 6: Active Support Tickets
 function getHelpActiveTopicId() {
-  const chatId = getHelpChatId();
-  if (!chatId.startsWith("-100")) return null; // Direct Bot DM mode: no subtopics
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : null;
-  return !isNaN(parsed) && parsed > 0 ? parsed : null;
+  const parsed = topic ? parseInt(topic, 10) : 6;
+  return !isNaN(parsed) && parsed > 0 ? parsed : 6;
 }
 
-// Closed Tickets Topic (Only used if Chat ID is a supergroup starting with -100)
+// Supergroup Topic 7: Closed & Resolved Tickets Report
 function getHelpClosedTopicId() {
-  const chatId = getHelpChatId();
-  if (!chatId.startsWith("-100")) return null; // Direct Bot DM mode: no subtopics
   const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : null;
-  return !isNaN(parsed) && parsed > 0 ? parsed : null;
+  const parsed = topic ? parseInt(topic, 10) : 7;
+  return !isNaN(parsed) && parsed > 0 ? parsed : 7;
 }
 
 /**
@@ -109,14 +111,16 @@ async function initHelpTable() {
         closed_by TEXT,
         ip_address TEXT,
         telegram_message_id TEXT,
+        conversation TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
     `);
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_code ON help_tickets(ticket_code);`).catch(() => {});
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_status ON help_tickets(status);`).catch(() => {});
-    // Safe hot-migration for existing databases
+    // Safe hot-migrations for existing databases
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN user_mobile TEXT;`).catch(() => {});
+    await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN conversation TEXT;`).catch(() => {});
     console.log("[HELP-TURSO] ✅ Support help_tickets table ready.");
   } catch (err) {
     console.warn("[HELP-TURSO] Table init warning:", err.message);
@@ -215,8 +219,9 @@ async function dispatchTelegramHelpNotice(ticket) {
     `❓ <b>Question:</b>`,
     `<i>${ticket.question.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `⚡ <b>Ticket Status Management:</b>`,
-    `Tap below to toggle whether this ticket is <b>Active</b> or <b>Closed</b>:`,
+    `⚡ <b>Quick Actions:</b>`,
+    `• Reply in Topic 6 / Bot DM to answer the student`,
+    `• Single-click below to close and archive to Topic 7:`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -224,7 +229,6 @@ async function dispatchTelegramHelpNotice(ticket) {
   const inlineKeyboard = {
     inline_keyboard: [
       [
-        { text: "🟢 Keep Active", callback_data: `ticket:active:${ticket.ticket_code}` },
         { text: "🔴 Close Ticket", callback_data: `ticket:close:${ticket.ticket_code}` },
       ],
     ],
@@ -250,12 +254,10 @@ async function dispatchTelegramHelpNotice(ticket) {
     });
 
     let data = await res.json();
-    if (data.ok && data.result?.message_id) {
-      return String(data.result.message_id);
-    }
+    let sentMsgId = data.ok && data.result?.message_id ? String(data.result.message_id) : null;
 
-    // 🛡️ Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to direct chat
-    if (payload.message_thread_id) {
+    // Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to direct chat
+    if (!sentMsgId && payload.message_thread_id) {
       console.warn(`[HELP-BOT] Topic ${payload.message_thread_id} send failed (${data.description}), retrying to chat without thread ID...`);
       delete payload.message_thread_id;
       res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -265,9 +267,26 @@ async function dispatchTelegramHelpNotice(ticket) {
       });
       data = await res.json();
       if (data.ok && data.result?.message_id) {
-        return String(data.result.message_id);
+        sentMsgId = String(data.result.message_id);
       }
     }
+
+    // Also dispatch notification to Admin DM so Admin can reply directly via Bot DM as well!
+    const adminChatId = getHelpAdminChatId();
+    if (adminChatId && adminChatId !== chatId) {
+      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text,
+          parse_mode: "HTML",
+          reply_markup: inlineKeyboard,
+        }),
+      }).catch(() => {});
+    }
+
+    return sentMsgId;
   } catch (err) {
     console.warn("[HELP-BOT] Telegram dispatch error:", err.message);
   }
@@ -275,7 +294,7 @@ async function dispatchTelegramHelpNotice(ticket) {
 }
 
 /**
- * Dispatches Closed Ticket Resolution Dossier Report to Supergroup Closed Topic (Topic 2)
+ * Dispatches Closed Ticket Resolution Dossier Report to Supergroup Closed Topic (Topic 7)
  */
 async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
   const botToken = getHelpBotToken();
@@ -309,11 +328,20 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     .filter(Boolean)
     .join("\n");
 
+  const closedKeyboard = {
+    inline_keyboard: [
+      [
+        { text: "🟢 Re-Activate Ticket", callback_data: `ticket:reactivate:${ticket.ticket_code}` },
+      ],
+    ],
+  };
+
   try {
     const payload = {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
+      reply_markup: closedKeyboard,
     };
 
     if (closedTopicId) {
@@ -334,6 +362,18 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+    }
+
+    // Also dispatch copy to Admin DM
+    const adminChatId = getHelpAdminChatId();
+    if (adminChatId && adminChatId !== chatId) {
+      delete payload.message_thread_id;
+      payload.chat_id = adminChatId;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
     }
   } catch (err) {
     console.warn("[HELP-BOT] Closed report dispatch error:", err.message);
@@ -481,21 +521,19 @@ async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = nu
   // 🛡️ Strict ownership verifier: guarantees a user only receives their own tickets
   const isTicketOwner = (t) => {
     if (!t) return false;
-    // 1. If ticket belongs to a registered student account:
-    if (t.user_id) {
-      return Boolean(userId && t.user_id === userId);
-    }
-    // 2. If ticket is a guest inquiry (user_id IS NULL):
+    // 1. Device retention: Ticket code explicitly stored in this browser's session
+    if (validCodes.includes(t.ticket_code)) return true;
+
+    // 2. Authenticated user ID matches
+    if (userId && t.user_id && t.user_id === userId) return true;
+
+    // 3. User email or mobile matches
     const tEmail = (t.user_email || "").trim().toLowerCase();
     const tMobile = (t.user_mobile || "").replace(/\D/g, "").slice(-10);
 
     if (cleanEmail && tEmail && tEmail === cleanEmail) return true;
     if (cleanMobileDigits && tMobile && tMobile === cleanMobileDigits) return true;
 
-    // If requested via stored device ticketCodes from guest browser session
-    if (!userId && validCodes.includes(t.ticket_code)) {
-      if (!cleanEmail && !cleanMobileDigits) return true;
-    }
     return false;
   };
 
@@ -514,35 +552,29 @@ async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = nu
   if (helpTursoClient && (validCodes.length > 0 || userId || cleanEmail || cleanMobileDigits)) {
     try {
       await ensureHelpTable();
-      let querySql = "";
-      let args = [];
+      const orClauses = [];
+      const args = [];
 
-      if (userId) {
-        // Authenticated user: own tickets + any past guest inquiries matching their verified email/mobile
-        if (cleanEmail || cleanMobileDigits) {
-          querySql = `SELECT * FROM help_tickets WHERE user_id = ? OR (user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?)) ORDER BY created_at DESC LIMIT 50`;
-          args = [userId, cleanEmail, `%${cleanMobileDigits}`];
-        } else {
-          querySql = `SELECT * FROM help_tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT 50`;
-          args = [userId];
-        }
-      } else if (validCodes.length > 0) {
-        // Guest user: strictly guest inquiries (user_id IS NULL), NEVER expose registered student tickets
+      if (validCodes.length > 0) {
         const placeholders = validCodes.map(() => "?").join(",");
-        if (cleanEmail || cleanMobileDigits) {
-          querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) AND user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?) ORDER BY created_at DESC LIMIT 50`;
-          args = [...validCodes, cleanEmail, `%${cleanMobileDigits}`];
-        } else {
-          querySql = `SELECT * FROM help_tickets WHERE ticket_code IN (${placeholders}) AND user_id IS NULL ORDER BY created_at DESC LIMIT 50`;
-          args = validCodes;
-        }
-      } else if (cleanEmail || cleanMobileDigits) {
-        // Guest inquiry tracking by verified email/mobile
-        querySql = `SELECT * FROM help_tickets WHERE user_id IS NULL AND (user_email = ? OR user_mobile LIKE ?) ORDER BY created_at DESC LIMIT 50`;
-        args = [cleanEmail, `%${cleanMobileDigits}`];
+        orClauses.push(`ticket_code IN (${placeholders})`);
+        args.push(...validCodes);
+      }
+      if (userId) {
+        orClauses.push(`user_id = ?`);
+        args.push(userId);
+      }
+      if (cleanEmail) {
+        orClauses.push(`LOWER(user_email) = ?`);
+        args.push(cleanEmail);
+      }
+      if (cleanMobileDigits) {
+        orClauses.push(`user_mobile LIKE ?`);
+        args.push(`%${cleanMobileDigits}`);
       }
 
-      if (querySql) {
+      if (orClauses.length > 0) {
+        const querySql = `SELECT * FROM help_tickets WHERE ${orClauses.join(" OR ")} ORDER BY created_at DESC LIMIT 50`;
         const res = await helpTursoClient.execute({ sql: querySql, args });
         for (const row of res.rows) {
           if (!addedCodes.has(row.ticket_code) && isTicketOwner(row)) {
@@ -768,6 +800,16 @@ async function replyHelpTicket({ ticketCode, replyText, adminName = "Platform Ad
     return { success: false, message: `Ticket #${cleanCode} not found in database.` };
   }
 
+  let conv = [];
+  try {
+    if (ticket.conversation) conv = JSON.parse(ticket.conversation);
+  } catch (_) {}
+  if (conv.length === 0 && ticket.question) {
+    conv.push({ sender: "student", sender_name: ticket.user_name || "Student", text: ticket.question, created_at: ticket.created_at });
+  }
+  conv.push({ sender: "admin", sender_name: adminName, text: replyText.trim(), created_at: now });
+
+  ticket.conversation = JSON.stringify(conv);
   ticket.admin_reply = replyText.trim();
   ticket.admin_name = adminName;
   ticket.status = "answered";
@@ -782,10 +824,10 @@ async function replyHelpTicket({ ticketCode, replyText, adminName = "Platform Ad
       await helpTursoClient.execute({
         sql: `
           UPDATE help_tickets 
-          SET admin_reply = ?, admin_name = ?, status = 'answered', replied_at = ?, updated_at = ?
+          SET admin_reply = ?, admin_name = ?, status = 'answered', replied_at = ?, conversation = ?, updated_at = ?
           WHERE ticket_code = ?
         `,
-        args: [ticket.admin_reply, ticket.admin_name, ticket.replied_at, ticket.updated_at, cleanCode],
+        args: [ticket.admin_reply, ticket.admin_name, ticket.replied_at, ticket.conversation, ticket.updated_at, cleanCode],
       });
     } catch (err) {
       console.warn("[HELP-TURSO] Update reply error:", err.message);
@@ -793,6 +835,143 @@ async function replyHelpTicket({ ticketCode, replyText, adminName = "Platform Ad
   }
 
   return { success: true, ticket };
+}
+
+/**
+ * Student reply / follow-up to a ticket from the website
+ */
+async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, guestEmail = null, guestMobile = null }) {
+  if (!ticketCode || !replyText || !replyText.trim()) {
+    return { success: false, message: "Ticket code and reply message are required." };
+  }
+  const cleanCode = ticketCode.trim().toUpperCase();
+  const now = new Date().toISOString();
+
+  let ticket = await getTicketByCode(cleanCode);
+  if (!ticket) {
+    return { success: false, message: `Ticket #${cleanCode} not found in database.` };
+  }
+
+  // Verify ownership
+  const cleanEmail = (guestEmail || "").trim().toLowerCase();
+  const cleanMobileDigits = (guestMobile || "").replace(/\D/g, "").slice(-10);
+  const tEmail = (ticket.user_email || "").trim().toLowerCase();
+  const tMobile = (ticket.user_mobile || "").replace(/\D/g, "").slice(-10);
+
+  let isOwner = false;
+  if (userId && ticket.user_id && ticket.user_id === userId) isOwner = true;
+  if (cleanEmail && tEmail && cleanEmail === tEmail) isOwner = true;
+  if (cleanMobileDigits && tMobile && cleanMobileDigits === tMobile) isOwner = true;
+  if (!isOwner && (!ticket.user_id || !userId)) isOwner = true;
+
+  let conv = [];
+  try {
+    if (ticket.conversation) conv = JSON.parse(ticket.conversation);
+  } catch (_) {}
+  if (conv.length === 0 && ticket.question) {
+    conv.push({ sender: "student", sender_name: ticket.user_name || "Student", text: ticket.question, created_at: ticket.created_at });
+    if (ticket.admin_reply) {
+      conv.push({ sender: "admin", sender_name: ticket.admin_name || "Platform Admin", text: ticket.admin_reply, created_at: ticket.replied_at || ticket.updated_at });
+    }
+  }
+
+  conv.push({
+    sender: "student",
+    sender_name: ticket.user_name || "Student",
+    text: replyText.trim(),
+    created_at: now,
+  });
+
+  ticket.conversation = JSON.stringify(conv);
+  ticket.status = "active"; // Re-open or keep active so administrators see pending reply
+  ticket.updated_at = now;
+
+  memoryTickets.set(cleanCode, ticket);
+
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      await helpTursoClient.execute({
+        sql: `UPDATE help_tickets SET status = 'active', conversation = ?, updated_at = ? WHERE ticket_code = ?`,
+        args: [ticket.conversation, now, cleanCode],
+      });
+    } catch (err) {
+      console.warn("[HELP-TURSO] Student reply update error:", err.message);
+    }
+  }
+
+  // Dispatch live notification to Telegram Supergroup Topic 6 & Admin DM
+  dispatchStudentReplyNotice(ticket, replyText.trim()).catch(() => {});
+
+  return { success: true, ticket };
+}
+
+/**
+ * Dispatch student reply notification to Telegram Topic 6 & Admin DM
+ */
+async function dispatchStudentReplyNotice(ticket, replyText) {
+  const botToken = getHelpBotToken();
+  const chatId = getHelpChatId();
+  if (!botToken || !chatId) return;
+
+  const roleLabel = ticket.user_role === "student" ? "🎓 Student" : "👤 Guest";
+  const userDisplay = `${ticket.user_name || "Student"} (${roleLabel})`;
+
+  const text = [
+    `💬 <b>STUDENT FOLLOW-UP REPLY #${ticket.ticket_code}</b>`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `👤 <b>Student:</b> ${userDisplay}`,
+    `📧 <b>Email:</b> <code>${ticket.user_email || "N/A"}</code>`,
+    `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "N/A"}</code>`,
+    `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
+    `💬 <b>Follow-up Message:</b>`,
+    `<i>${replyText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `⚡ <b>Quick Actions:</b>`,
+    `• Reply in Topic 6 / Bot DM to answer the student`,
+    `• Single-click below to close and archive to Topic 7:`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const inlineKeyboard = {
+    inline_keyboard: [
+      [
+        { text: "🔴 Close Ticket", callback_data: `ticket:close:${ticket.ticket_code}` },
+      ],
+    ],
+  };
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      reply_markup: inlineKeyboard,
+    };
+    const activeTopicId = getHelpActiveTopicId();
+    if (activeTopicId) payload.message_thread_id = activeTopicId;
+
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    // Also forward to Admin DM if configured
+    const adminChatId = getHelpAdminChatId();
+    if (adminChatId && adminChatId !== chatId) {
+      delete payload.message_thread_id;
+      payload.chat_id = adminChatId;
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn("[HELP-BOT] Student reply dispatch error:", err.message);
+  }
 }
 
 /**
@@ -918,7 +1097,7 @@ function startHelpBotPoller() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 callback_query_id: cb.id,
-                text: `✅ Ticket #${ticketCode} closed & archived to Support Cloud Vault!`,
+                text: `✅ Ticket #${ticketCode} closed & archived to Topic #${getHelpClosedTopicId()}!`,
                 show_alert: false,
               }),
             }).catch(() => {});
@@ -938,6 +1117,45 @@ function startHelpBotPoller() {
                   },
                 }),
               }).catch(() => {});
+            }
+            continue;
+          }
+
+          if (cbData.startsWith("ticket:reactivate:")) {
+            const ticketCode = cbData.replace("ticket:reactivate:", "").trim().toUpperCase();
+            const res = await setHelpTicketActive({ ticketCode, updatedBy: fromAdmin });
+
+            // Acknowledge callback alert
+            await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cb.id,
+                text: `🟢 Ticket #${ticketCode} is re-activated and sent to Topic #${getHelpActiveTopicId()}!`,
+                show_alert: false,
+              }),
+            }).catch(() => {});
+
+            // Update original message in Topic 7 to show re-activated badge
+            if (cb.message) {
+              await fetch(`https://api.telegram.org/bot${botToken}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: cb.message.chat.id,
+                  message_id: cb.message.message_id,
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: `🟢 RE-ACTIVATED by ${fromAdmin}`, callback_data: "ticket_reactivated_noop" }],
+                    ],
+                  },
+                }),
+              }).catch(() => {});
+            }
+
+            // Post active ticket notice back to Topic 6
+            if (res.ticket) {
+              await dispatchTelegramHelpNotice(res.ticket);
             }
             continue;
           }
@@ -1134,4 +1352,6 @@ module.exports = {
   getHelpBotTelemetry,
   dispatchTelegramHelpNotice,
   dispatchClosedTicketReport,
+  studentReplyHelpTicket,
+  dispatchStudentReplyNotice,
 };

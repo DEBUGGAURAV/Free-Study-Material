@@ -1259,6 +1259,8 @@ export const api = {
   },
   getMyHelpTickets: (ticketCodes = [], email = "", mobile = "") =>
     request("/help/my-tickets", { method: "POST", body: JSON.stringify({ ticketCodes, email, mobile }) }),
+  studentReplyHelpTicket: (ticketCode, message, guestEmail = "", guestMobile = "") =>
+    request("/help/reply", { method: "POST", body: JSON.stringify({ ticketCode, message, guestEmail, guestMobile }) }),
   adminReplyHelpTicket: (ticketCode, replyText) => request("/help/admin/reply", { method: "POST", body: JSON.stringify({ ticketCode, replyText }) }),
   adminCloseHelpTicket: (ticketCode, reason = "", autoDelete = false) =>
     request("/help/admin/close", { method: "POST", body: JSON.stringify({ ticketCode, reason, autoDelete }) }),

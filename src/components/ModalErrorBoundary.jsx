@@ -93,9 +93,28 @@ export default class ModalErrorBoundary extends Component {
               Dialog Notice
             </h3>
 
-            <p style={{ margin: "0 0 20px", color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.55 }}>
+            <p style={{ margin: "0 0 12px", color: "#94a3b8", fontSize: "0.85rem", lineHeight: 1.55 }}>
               Could not open this dialog due to updated assets or temporary network connection. Your notes, catalog, and workspace remain completely active.
             </p>
+
+            {this.state.error && (
+              <div style={{
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                borderRadius: "8px",
+                padding: "10px 12px",
+                margin: "0 0 16px",
+                color: "#fca5a5",
+                fontSize: "0.78rem",
+                textAlign: "left",
+                maxHeight: "150px",
+                overflowY: "auto",
+                fontFamily: "monospace",
+                wordBreak: "break-all",
+              }}>
+                <strong>Error Details:</strong> {this.state.error?.message || String(this.state.error)}
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
               <button

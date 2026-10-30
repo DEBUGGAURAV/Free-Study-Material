@@ -17,6 +17,7 @@ const {
   getTicketByCode,
   getTicketsByCodes,
   replyHelpTicket,
+  studentReplyHelpTicket,
   closeHelpTicket,
   setHelpTicketActive,
   deleteHelpTicket,
@@ -276,8 +277,46 @@ router.get("/ticket/:code", authenticateToken, async (req, res) => {
         admin_reply: ticket.admin_reply,
         admin_name: ticket.admin_name,
         replied_at: ticket.replied_at,
+        conversation: ticket.conversation || null,
         created_at: ticket.created_at,
       },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/reply
+ * Student / User reply to active ticket from website
+ */
+router.post("/reply", helpLimiter, authenticateToken, async (req, res) => {
+  try {
+    const { ticketCode, message, guestEmail, guestMobile } = req.body || {};
+    if (!ticketCode || !message || !message.trim()) {
+      return res.status(400).json({ success: false, message: "Ticket code and reply message are required." });
+    }
+
+    const userId = req.user?.id || null;
+    const userEmail = (req.user?.email || guestEmail || "").trim().toLowerCase();
+    const userMobile = (req.user?.mobile || guestMobile || "").trim();
+
+    const result = await studentReplyHelpTicket({
+      ticketCode,
+      replyText: message.trim(),
+      userId,
+      guestEmail: userEmail,
+      guestMobile: userMobile,
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.json({
+      success: true,
+      message: "Your reply has been delivered to Platform Administrators!",
+      ticket: result.ticket,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -336,6 +375,7 @@ router.post("/my-tickets", authenticateToken, async (req, res) => {
         admin_reply: t.admin_reply || null,
         admin_name: t.admin_name || null,
         replied_at: t.replied_at || null,
+        conversation: t.conversation || null,
         created_at: t.created_at || new Date().toISOString(),
       })),
     });
