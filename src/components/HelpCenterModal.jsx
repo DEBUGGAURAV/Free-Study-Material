@@ -20,6 +20,7 @@ import {
   Phone,
   Copy,
   Check,
+  Lock,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -1096,7 +1097,24 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                           </div>
 
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            {isAnswered ? (
+                            {t.status === "closed" ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontSize: "0.75rem",
+                                  color: "#94a3b8",
+                                  background: "rgba(100, 116, 139, 0.2)",
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <Lock size={12} />
+                                Resolved & Closed
+                              </span>
+                            ) : isAnswered ? (
                               <span
                                 style={{
                                   display: "inline-flex",
@@ -1303,14 +1321,32 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         ) : (
                           <div
                             style={{
-                              marginTop: "8px",
-                              fontSize: "0.74rem",
-                              color: "var(--text-dim)",
-                              fontStyle: "italic",
-                              textAlign: "right",
+                              marginTop: "12px",
+                              padding: "10px 14px",
+                              borderRadius: "8px",
+                              background: "rgba(100, 116, 139, 0.12)",
+                              border: "1px solid rgba(148, 163, 184, 0.25)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              fontSize: "0.8rem",
+                              color: "#cbd5e1",
                             }}
                           >
-                            🔒 This ticket has been resolved and archived to Topic 7.
+                            <Lock size={15} color="#94a3b8" />
+                            <span>
+                              This ticket has been resolved and closed by Administrator. Replies are closed. If you have a new question, please{" "}
+                              <span
+                                onClick={() => {
+                                  setActiveTab("ask");
+                                  setSubmitSuccess(null);
+                                }}
+                                style={{ color: "#38bdf8", cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+                              >
+                                ask a new question
+                              </span>
+                              .
+                            </span>
                           </div>
                         )}
                       </div>

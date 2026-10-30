@@ -15,6 +15,7 @@ import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
+import AdminModal from "./components/AdminModal";
 
 // ⚡ Heavy Modals: Code-split with retry & recovery
 function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
@@ -52,7 +53,6 @@ const NoticeBoardModal = lazyWithRetry(() => import("./components/NoticeBoardMod
 const ProfileModal = lazyWithRetry(() => import("./components/ProfileModal"));
 const UploadModal = lazyWithRetry(() => import("./components/UploadModal"));
 const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal"));
-const AdminModal = lazyWithRetry(() => import("./components/AdminModal"));
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 

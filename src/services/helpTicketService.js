@@ -852,6 +852,14 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
     return { success: false, message: `Ticket #${cleanCode} not found in database.` };
   }
 
+  // 🛡️ Strict: Once closed by administrator, student cannot reply to this ticket
+  if (ticket.status === "closed") {
+    return {
+      success: false,
+      message: `Ticket #${cleanCode} has been resolved and closed by administrator. Replies are disabled.`,
+    };
+  }
+
   // Verify ownership
   const cleanEmail = (guestEmail || "").trim().toLowerCase();
   const cleanMobileDigits = (guestMobile || "").replace(/\D/g, "").slice(-10);
@@ -883,7 +891,7 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
   });
 
   ticket.conversation = JSON.stringify(conv);
-  ticket.status = "active"; // Re-open or keep active so administrators see pending reply
+  ticket.status = "active"; // Set active so administrators see pending reply
   ticket.updated_at = now;
 
   memoryTickets.set(cleanCode, ticket);
@@ -900,19 +908,19 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
     }
   }
 
-  // Dispatch live notification to Telegram Supergroup Topic 6 & Admin DM
+  // Dispatch live notification strictly to Bot DM ONLY (No Topic 6 spam)
   dispatchStudentReplyNotice(ticket, replyText.trim()).catch(() => {});
 
   return { success: true, ticket };
 }
 
 /**
- * Dispatch student reply notification to Telegram Topic 6 & Admin DM
+ * Dispatch student reply notification strictly to Admin Bot DM (Topic 6 NOT spammed)
  */
 async function dispatchStudentReplyNotice(ticket, replyText) {
   const botToken = getHelpBotToken();
-  const chatId = getHelpChatId();
-  if (!botToken || !chatId) return;
+  const adminChatId = getHelpAdminChatId();
+  if (!botToken || !adminChatId) return;
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Student" : "👤 Guest";
   const userDisplay = `${ticket.user_name || "Student"} (${roleLabel})`;
@@ -924,12 +932,13 @@ async function dispatchStudentReplyNotice(ticket, replyText) {
     `📧 <b>Email:</b> <code>${ticket.user_email || "N/A"}</code>`,
     `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "N/A"}</code>`,
     `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
+    ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
     `💬 <b>Follow-up Message:</b>`,
     `<i>${replyText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
-    `• Reply in Topic 6 / Bot DM to answer the student`,
-    `• Single-click below to close and archive to Topic 7:`,
+    `• Reply directly here in bot DM to answer student`,
+    `• Single-click below to close ticket:`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -943,32 +952,17 @@ async function dispatchStudentReplyNotice(ticket, replyText) {
   };
 
   try {
-    const payload = {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      reply_markup: inlineKeyboard,
-    };
-    const activeTopicId = getHelpActiveTopicId();
-    if (activeTopicId) payload.message_thread_id = activeTopicId;
-
+    // Only sent to Admin Bot DM
     await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        chat_id: adminChatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: inlineKeyboard,
+      }),
     });
-
-    // Also forward to Admin DM if configured
-    const adminChatId = getHelpAdminChatId();
-    if (adminChatId && adminChatId !== chatId) {
-      delete payload.message_thread_id;
-      payload.chat_id = adminChatId;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    }
   } catch (err) {
     console.warn("[HELP-BOT] Student reply dispatch error:", err.message);
   }
