@@ -98,9 +98,9 @@ services:
       - key: HELP_CHAT_ID
         sync: false
       - key: HELP_TOPIC_ACTIVE_ID
-        value: "6"
+        value: ""
       - key: HELP_TOPIC_CLOSED_ID
-        value: "7"
+        value: ""
       - key: TURSO_HELP_DATABASE_URL
         sync: false
       - key: TURSO_HELP_AUTH_TOKEN

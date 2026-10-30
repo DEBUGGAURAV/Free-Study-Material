@@ -57,24 +57,30 @@ function getHelpBotToken() {
 
 function getHelpChatId() {
   return (
+    process.env.HELP_ADMIN_CHAT_ID ||
     process.env.HELP_CHAT_ID ||
     process.env.TELEGRAM_HELP_CHAT_ID ||
-    ""
+    process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID ||
+    "7009492653"
   ).trim();
 }
 
-// Supergroup Topic: Active Inquiries (Topic 6: 🟢 Active Support Tickets)
+// Active Tickets Topic (Only used if Chat ID is a supergroup starting with -100)
 function getHelpActiveTopicId() {
+  const chatId = getHelpChatId();
+  if (!chatId.startsWith("-100")) return null; // Direct Bot DM mode: no subtopics
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : 6;
-  return !isNaN(parsed) && parsed > 0 ? parsed : 6;
+  const parsed = topic ? parseInt(topic, 10) : null;
+  return !isNaN(parsed) && parsed > 0 ? parsed : null;
 }
 
-// Supergroup Topic: Closed Resolution Dossiers (Topic 7: 🔴 Closed & Resolved Tickets Report)
+// Closed Tickets Topic (Only used if Chat ID is a supergroup starting with -100)
 function getHelpClosedTopicId() {
+  const chatId = getHelpChatId();
+  if (!chatId.startsWith("-100")) return null; // Direct Bot DM mode: no subtopics
   const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : 7;
-  return !isNaN(parsed) && parsed > 0 ? parsed : 7;
+  const parsed = topic ? parseInt(topic, 10) : null;
+  return !isNaN(parsed) && parsed > 0 ? parsed : null;
 }
 
 /**
@@ -227,11 +233,15 @@ async function dispatchTelegramHelpNotice(ticket) {
   try {
     const payload = {
       chat_id: chatId,
-      message_thread_id: getHelpActiveTopicId(),
       text,
       parse_mode: "HTML",
       reply_markup: inlineKeyboard,
     };
+
+    const activeTopicId = getHelpActiveTopicId();
+    if (activeTopicId) {
+      payload.message_thread_id = activeTopicId;
+    }
 
     let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -244,9 +254,9 @@ async function dispatchTelegramHelpNotice(ticket) {
       return String(data.result.message_id);
     }
 
-    // 🛡️ Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to main supergroup
-    if (!data.ok && (data.description?.includes("thread not found") || data.error_code === 400)) {
-      console.warn(`[HELP-BOT] Topic ${payload.message_thread_id} send failed (${data.description}), retrying to supergroup without thread ID...`);
+    // 🛡️ Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to direct chat
+    if (payload.message_thread_id) {
+      console.warn(`[HELP-BOT] Topic ${payload.message_thread_id} send failed (${data.description}), retrying to chat without thread ID...`);
       delete payload.message_thread_id;
       res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
@@ -302,10 +312,13 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
   try {
     const payload = {
       chat_id: chatId,
-      message_thread_id: closedTopicId,
       text,
       parse_mode: "HTML",
     };
+
+    if (closedTopicId) {
+      payload.message_thread_id = closedTopicId;
+    }
 
     let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -314,7 +327,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     });
 
     let data = await res.json().catch(() => null);
-    if (!data || (!data.ok && (data.description?.includes("thread not found") || data.error_code === 400))) {
+    if (!data || (!data.ok && payload.message_thread_id)) {
       delete payload.message_thread_id;
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
@@ -843,13 +856,16 @@ async function getHelpTursoTelemetry() {
 }
 
 function getHelpBotTelemetry() {
+  const chatId = getHelpChatId();
+  const isDirectDm = !chatId.startsWith("-100");
   return {
     botUsername: "fsm_help_bot",
     botId: getHelpBotToken() ? getHelpBotToken().split(":")[0] : "fsm_help_bot",
     status: helpPollerActive ? "ONLINE & 2-WAY SYNC ACTIVE" : "INITIALIZING",
-    chatId: getHelpChatId(),
-    activeTopicId: getHelpActiveTopicId(),
-    closedTopicId: getHelpClosedTopicId(),
+    chatId: chatId,
+    mode: isDirectDm ? "DIRECT ADMIN BOT DM (No Subtopics)" : "SUPERGROUP TOPIC",
+    activeTopicId: isDirectDm ? "N/A (Direct DM)" : getHelpActiveTopicId(),
+    closedTopicId: isDirectDm ? "N/A (Direct DM)" : getHelpClosedTopicId(),
     twoWaySync: "ACTIVE (Inline Status Buttons & Reply Listener)",
   };
 }
@@ -902,7 +918,7 @@ function startHelpBotPoller() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 callback_query_id: cb.id,
-                text: `✅ Ticket #${ticketCode} closed & archived to Topic #${getHelpClosedTopicId()}!`,
+                text: `✅ Ticket #${ticketCode} closed & archived to Support Cloud Vault!`,
                 show_alert: false,
               }),
             }).catch(() => {});
@@ -950,7 +966,18 @@ function startHelpBotPoller() {
         const text = msg.text.trim();
         const fromAdmin = msg.from?.first_name || "Admin";
 
-        // Command: /close FSM-H1234
+        // 0. Handle /start or /help command
+        if (text === "/start" || text.startsWith("/help")) {
+          await sendTelegramReply(
+            botToken,
+            msg.chat.id,
+            `👋 <b>Welcome to Support Desk Bot (@fsm_help_bot)</b>\n━━━━━━━━━━━━━━━━━━━━━━\nYou are connected as Platform Administrator.\nNew student queries will arrive directly here in your private chat.\n\n⚡ <b>How to Reply & Manage Tickets:</b>\n• <b>Quick Reply:</b> Swipe or reply directly to any ticket message with your answer, OR type:\n  <code>/reply TICKET_CODE your answer</code>\n  (e.g., <code>/reply FSM-H1234 Notes uploaded!</code>)\n• <b>Close Ticket:</b> Tap the <b>[ 🔴 Close Ticket ]</b> button on the message, OR type:\n  <code>/close TICKET_CODE</code>\n• <b>Keep Active:</b> Tap the <b>[ 🟢 Keep Active ]</b> button.`,
+            msg.message_id
+          );
+          continue;
+        }
+
+        // 1. Command: /close FSM-H1234
         const closeCmdMatch = text.match(/^\/close\s+(FSM-H\d+)/i);
         if (closeCmdMatch) {
           const ticketCode = closeCmdMatch[1].toUpperCase();
@@ -959,7 +986,7 @@ function startHelpBotPoller() {
             botToken,
             msg.chat.id,
             result.success
-              ? `✅ <b>Ticket #${ticketCode} Closed!</b>\nResolution dossier has been archived to Topic #${getHelpClosedTopicId()}.`
+              ? `✅ <b>Ticket #${ticketCode} Closed!</b>\nResolution dossier archived to Support Cloud Vault.`
               : `⚠️ <b>Could not close ticket:</b> ${result.message}`,
             msg.message_id,
             msg.message_thread_id
@@ -967,7 +994,7 @@ function startHelpBotPoller() {
           continue;
         }
 
-        // Command: /reply FSM-H1234 your answer
+        // 2. Command: /reply FSM-H1234 your answer
         const replyCmdMatch = text.match(/^\/reply\s+(FSM-H\d+)\s+(.+)$/is);
         if (replyCmdMatch) {
           const ticketCode = replyCmdMatch[1].toUpperCase();
@@ -986,9 +1013,28 @@ function startHelpBotPoller() {
           continue;
         }
 
-        // Direct message reply to an alert
-        if (msg.reply_to_message && msg.reply_to_message.text) {
-          const originalText = msg.reply_to_message.text;
+        // 3. Shorthand: FSM-H1234 your answer or #FSM-H1234 your answer
+        const shorthandMatch = text.match(/^(?:#)?(FSM-H\d+)\s*[:\-]?\s*(.+)$/is);
+        if (shorthandMatch && !text.startsWith("/")) {
+          const ticketCode = shorthandMatch[1].toUpperCase();
+          const answer = shorthandMatch[2].trim();
+          const result = await replyHelpTicket({ ticketCode, replyText: answer, adminName: fromAdmin });
+
+          await sendTelegramReply(
+            botToken,
+            msg.chat.id,
+            result.success
+              ? `✅ <b>Answer Posted to Website!</b>\nStudent ticket <code>#${ticketCode}</code> received your reply.`
+              : `⚠️ <b>Could not post reply:</b> ${result.message}`,
+            msg.message_id,
+            msg.message_thread_id
+          );
+          continue;
+        }
+
+        // 4. Direct message reply to an alert (Swipe to reply)
+        if (msg.reply_to_message) {
+          const originalText = msg.reply_to_message.text || msg.reply_to_message.caption || "";
           const codeMatch = originalText.match(/#(FSM-H\d+)/i) || originalText.match(/(FSM-H\d+)/i);
           if (codeMatch) {
             const ticketCode = codeMatch[1].toUpperCase();
@@ -1003,7 +1049,34 @@ function startHelpBotPoller() {
               msg.message_id,
               msg.message_thread_id
             );
+            continue;
           }
+        }
+
+        // 5. Smart Direct DM Fallback (if Admin just types in private chat with bot without swiping)
+        if (msg.chat.type === "private" && !text.startsWith("/")) {
+          const activeTickets = Array.from(memoryTickets.values()).filter((t) => t.status === "active");
+          if (activeTickets.length === 1) {
+            const ticket = activeTickets[0];
+            const result = await replyHelpTicket({ ticketCode: ticket.ticket_code, replyText: text, adminName: fromAdmin });
+            await sendTelegramReply(
+              botToken,
+              msg.chat.id,
+              result.success
+                ? `✅ <b>Answer Posted to Website!</b>\nApplied to active student ticket <code>#${ticket.ticket_code}</code>.`
+                : `⚠️ <b>Could not post reply:</b> ${result.message}`,
+              msg.message_id
+            );
+            continue;
+          }
+
+          // If multiple active tickets or none, send instructional guidance
+          await sendTelegramReply(
+            botToken,
+            msg.chat.id,
+            `ℹ️ <b>How to reply to a student ticket:</b>\n1. Swipe / reply directly to the ticket message, OR\n2. Type <code>/reply TICKET_CODE your answer</code> (e.g. <code>/reply FSM-H1234 your answer</code>)`,
+            msg.message_id
+          );
         }
       }
     } catch (_) {}
@@ -1014,13 +1087,14 @@ function startHelpBotPoller() {
 
 async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null, threadId = null) {
   try {
+    const isGroup = String(chatId).startsWith("-100");
     const body = {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
     };
     if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
-    if (threadId) body.message_thread_id = threadId;
+    if (isGroup && threadId) body.message_thread_id = threadId;
 
     let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -1028,7 +1102,7 @@ async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null
       body: JSON.stringify(body),
     });
     let data = await res.json().catch(() => null);
-    if (data && !data.ok && (data.description?.includes("thread not found") || data.error_code === 400)) {
+    if (data && !data.ok && body.message_thread_id) {
       delete body.message_thread_id;
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
