@@ -456,7 +456,7 @@ router.post("/admin/close", authenticateToken, async (req, res) => {
       return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
-    const { ticketCode, reason, autoDelete } = req.body;
+    const { ticketCode, reason } = req.body;
     if (!ticketCode) {
       return res.status(400).json({ success: false, message: "Ticket code required." });
     }
@@ -465,7 +465,7 @@ router.post("/admin/close", authenticateToken, async (req, res) => {
       ticketCode,
       closedBy: req.user.name || "Academic Administrator",
       reason: reason || "Resolved by Administrator via Web Console",
-      autoDelete: Boolean(autoDelete),
+      autoDelete: true,
     });
 
     return res.json(result);

@@ -18,6 +18,7 @@ const { createClient } = require("@libsql/client");
 
 // Fallback in-memory cache to guarantee 0ms instant availability
 const memoryTickets = new Map();
+const recentlyClosedTickets = new Map();
 
 // Dedicated Turso Support Cloud Client initialization
 const helpTursoUrl = (process.env.TURSO_HELP_DATABASE_URL || "").trim();
@@ -121,7 +122,9 @@ async function initHelpTable() {
     // Safe hot-migrations for existing databases
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN user_mobile TEXT;`).catch(() => {});
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN conversation TEXT;`).catch(() => {});
-    console.log("[HELP-TURSO] ✅ Support help_tickets table ready.");
+    // Purge any closed tickets so database is 100% clean
+    await helpTursoClient.execute(`DELETE FROM help_tickets WHERE status = 'closed';`).catch(() => {});
+    console.log("[HELP-TURSO] ✅ Support help_tickets table ready (closed tickets auto-purged).");
   } catch (err) {
     console.warn("[HELP-TURSO] Table init warning:", err.message);
   }
@@ -323,7 +326,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👨‍💻 <b>Closed By:</b> ${closedBy}`,
     `🕒 <b>Closed At:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`,
-    `📁 <b>Storage Vault:</b> Dedicated Turso Support Cloud (Archived)`,
+    `🗑️ <b>Database Status:</b> Permanently Deleted from Database (Auto-Purged)`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -593,14 +596,17 @@ async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = nu
 }
 
 /**
- * Close a ticket and dispatch report to Topic 2
+ * Close a ticket, dispatch report to Topic 7, and physically delete from database
  */
-async function closeHelpTicket({ ticketCode, closedBy = "Admin", reason = "", autoDelete = false }) {
+async function closeHelpTicket({ ticketCode, closedBy = "Admin", reason = "", autoDelete = true }) {
   if (!ticketCode) return { success: false, message: "Ticket code required." };
   const cleanCode = ticketCode.trim().toUpperCase();
   const now = new Date().toISOString();
 
   let ticket = await getTicketByCode(cleanCode);
+  if (!ticket && recentlyClosedTickets.has(cleanCode)) {
+    ticket = recentlyClosedTickets.get(cleanCode);
+  }
   if (!ticket) {
     return { success: false, message: `Ticket #${cleanCode} not found.` };
   }
@@ -613,28 +619,19 @@ async function closeHelpTicket({ ticketCode, closedBy = "Admin", reason = "", au
     ticket.admin_reply = reason;
   }
 
-  memoryTickets.set(cleanCode, ticket);
-
-  if (helpTursoClient) {
-    try {
-      await ensureHelpTable();
-      await helpTursoClient.execute({
-        sql: `UPDATE help_tickets SET status = 'closed', closed_at = ?, closed_by = ?, updated_at = ? WHERE ticket_code = ?`,
-        args: [now, closedBy, now, cleanCode],
-      });
-    } catch (err) {
-      console.warn("[HELP-TURSO] Close ticket error:", err.message);
-    }
+  // Preserve in memory buffer so if administrator taps [ Re-Activate ] in Topic 7, it can restore to DB
+  recentlyClosedTickets.set(cleanCode, { ...ticket });
+  if (recentlyClosedTickets.size > 200) {
+    const oldestKey = recentlyClosedTickets.keys().next().value;
+    recentlyClosedTickets.delete(oldestKey);
   }
 
-  // Dispatch full closed dossier report to Topic 2
+  // Dispatch full closed dossier report to Topic 7 & Admin DM
   await dispatchClosedTicketReport(ticket, closedBy);
 
-  // Automatic Data Delete after report send (if requested)
-  if (autoDelete) {
-    await deleteHelpTicket(cleanCode);
-    ticket.auto_deleted = true;
-  }
+  // 🗑️ Physically delete ticket from Turso Database & active memory immediately!
+  await deleteHelpTicket(cleanCode);
+  ticket.auto_deleted = true;
 
   return { success: true, ticket };
 }
@@ -756,7 +753,7 @@ async function createTelegramForumTopics(customChatId = null) {
 }
 
 /**
- * Update ticket to active
+ * Update ticket to active (re-activates and re-inserts into database if previously closed and deleted)
  */
 async function setHelpTicketActive({ ticketCode, updatedBy = "Admin" }) {
   if (!ticketCode) return { success: false, message: "Ticket code required." };
@@ -764,20 +761,47 @@ async function setHelpTicketActive({ ticketCode, updatedBy = "Admin" }) {
   const now = new Date().toISOString();
 
   let ticket = await getTicketByCode(cleanCode);
+  if (!ticket && recentlyClosedTickets.has(cleanCode)) {
+    ticket = recentlyClosedTickets.get(cleanCode);
+  }
   if (!ticket) {
     return { success: false, message: `Ticket #${cleanCode} not found.` };
   }
 
   ticket.status = "active";
   ticket.updated_at = now;
+  ticket.closed_at = null;
+  ticket.closed_by = null;
   memoryTickets.set(cleanCode, ticket);
+  recentlyClosedTickets.delete(cleanCode);
 
   if (helpTursoClient) {
     try {
       await ensureHelpTable();
       await helpTursoClient.execute({
-        sql: `UPDATE help_tickets SET status = 'active', updated_at = ? WHERE ticket_code = ?`,
-        args: [now, cleanCode],
+        sql: `INSERT OR REPLACE INTO help_tickets (
+          id, ticket_code, user_id, user_name, user_email, user_mobile, user_role,
+          category, subject, question, admin_reply, admin_name, replied_at,
+          status, conversation, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
+        args: [
+          ticket.id || `hlp_${cleanCode}`,
+          ticket.ticket_code,
+          ticket.user_id || null,
+          ticket.user_name || "Student Visitor",
+          ticket.user_email || "",
+          ticket.user_mobile || "",
+          ticket.user_role || "student",
+          ticket.category || "general",
+          ticket.subject || "",
+          ticket.question || "",
+          ticket.admin_reply || "",
+          ticket.admin_name || "",
+          ticket.replied_at || null,
+          ticket.conversation || "[]",
+          ticket.created_at || now,
+          now,
+        ],
       });
     } catch (err) {
       console.warn("[HELP-TURSO] Set active ticket error:", err.message);
@@ -1091,7 +1115,7 @@ function startHelpBotPoller() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 callback_query_id: cb.id,
-                text: `✅ Ticket #${ticketCode} closed & archived to Topic #${getHelpClosedTopicId()}!`,
+                text: `✅ Ticket #${ticketCode} closed & deleted from database!`,
                 show_alert: false,
               }),
             }).catch(() => {});
@@ -1106,7 +1130,7 @@ function startHelpBotPoller() {
                   message_id: cb.message.message_id,
                   reply_markup: {
                     inline_keyboard: [
-                      [{ text: `🔒 Ticket #${ticketCode} CLOSED by ${fromAdmin}`, callback_data: "ticket_closed_noop" }],
+                      [{ text: `🔒 Ticket #${ticketCode} CLOSED & DELETED by ${fromAdmin}`, callback_data: "ticket_closed_noop" }],
                     ],
                   },
                 }),
@@ -1198,7 +1222,7 @@ function startHelpBotPoller() {
             botToken,
             msg.chat.id,
             result.success
-              ? `✅ <b>Ticket #${ticketCode} Closed!</b>\nResolution dossier archived to Support Cloud Vault.`
+              ? `✅ <b>Ticket #${ticketCode} Closed & Deleted!</b>\nTicket has been permanently removed from database. Resolution dossier sent to Topic #${getHelpClosedTopicId()}.`
               : `⚠️ <b>Could not close ticket:</b> ${result.message}`,
             msg.message_id,
             msg.message_thread_id

@@ -163,11 +163,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
         if (res.tickets) {
           setMyTickets(res.tickets);
           try {
-            const existing = new Set(storedCodes);
-            res.tickets.forEach((t) => {
-              if (t.ticket_code) existing.add(t.ticket_code);
-            });
-            localStorage.setItem("fsm_help_ticket_codes", JSON.stringify(Array.from(existing)));
+            // Keep codes for tickets that still exist in the database (removes closed/deleted tickets)
+            const activeReturnedCodes = (res.tickets || []).map((t) => t.ticket_code).filter(Boolean);
+            localStorage.setItem("fsm_help_ticket_codes", JSON.stringify(activeReturnedCodes));
           } catch (_) {}
         }
       })

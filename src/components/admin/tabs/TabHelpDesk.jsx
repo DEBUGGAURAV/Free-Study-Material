@@ -90,25 +90,18 @@ export default function TabHelpDesk() {
     }
   };
 
-  // Close ticket with optional auto-delete
+  // Close ticket and delete from database
   const handleCloseTicket = async (ticket) => {
     if (!ticket) return;
     try {
       const res = await api.adminCloseHelpTicket(
         ticket.ticket_code,
         replyText.trim() || ticket.admin_reply || "Resolved by Administrator via Web Console",
-        autoDeleteOnClose
+        true
       );
       if (res && res.success) {
-        if (autoDeleteOnClose) {
-          showNotification(`🔴 Ticket #${ticket.ticket_code} closed, report dispatched to Topic 2, and data auto-deleted!`);
-          setSelectedTicket(null);
-        } else {
-          showNotification(`🔴 Ticket #${ticket.ticket_code} closed & dossier sent to Topic 2!`);
-          if (selectedTicket?.ticket_code === ticket.ticket_code) {
-            setSelectedTicket({ ...selectedTicket, status: "closed" });
-          }
-        }
+        showNotification(`🔴 Ticket #${ticket.ticket_code} closed & permanently deleted from database!`);
+        setSelectedTicket(null);
         loadTickets();
       } else {
         showNotification(res?.message || "Failed to close ticket", true);
