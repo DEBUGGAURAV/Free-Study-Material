@@ -270,8 +270,11 @@ app.use(
     setHeaders: (res, filePath) => {
       if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.json")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      } else if (filePath.includes("tesseract") || /[\\/]assets[\\/]/.test(filePath)) {
+      } else if (filePath.includes("tesseract")) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      } else if (/[\\/]assets[\\/]/.test(filePath)) {
+        // Non-hashed assets: Revalidate with ETag so updated chunks after new builds load instantly!
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
       }
     },
   })
