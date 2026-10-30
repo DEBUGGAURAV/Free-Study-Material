@@ -408,6 +408,10 @@ export default function AdminModal({
 
   const isAdminOrManager =
     currentUser?.role === "admin" ||
+    currentUser?.role === "half_admin" ||
+    currentUser?.role === "sub_admin" ||
+    Boolean(currentUser?.isAdmin) ||
+    Boolean(currentUser?.isMainAdmin) ||
     isMasterAdminUser(currentUser) ||
     currentUser?.permissions?.includes("all") ||
     currentUser?.permissions?.includes("manage_notes") ||
@@ -2523,7 +2527,7 @@ export default function AdminModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
       <div
         className="modal-content"
         style={{

@@ -282,8 +282,12 @@ app.use(
 
 // SPA Catch-All Route
 app.get("*", (req, res) => {
-  if (req.path.startsWith("/api/")) {
-    return res.status(404).json({ success: false, message: "API endpoint not found" });
+  if (
+    req.path.startsWith("/api/") ||
+    req.path.startsWith("/assets/") ||
+    /\.(js|css|mjs|map|png|jpg|jpeg|svg|ico|woff2?)$/i.test(req.path)
+  ) {
+    return res.status(404).json({ success: false, message: "Resource not found" });
   }
   const indexPath = path.join(distPath, "index.html");
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");

@@ -15,7 +15,7 @@ import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
-import AdminModal from "./components/AdminModal";
+import AdminModal from "./components/admin/AdminModal";
 
 // ⚡ Heavy Modals: Code-split with retry & recovery
 function lazyWithRetry(componentFactory, retries = 2, interval = 700) {

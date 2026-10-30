@@ -1,10 +1,10 @@
 /**
- * FreeStudyMaterial PWA Service Worker v11
+ * FreeStudyMaterial PWA Service Worker v12
  * High-Performance Stale-While-Revalidate Caching & 100% Offline Vault
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v11';
+const CACHE_NAME = 'fsm-cache-v12';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
