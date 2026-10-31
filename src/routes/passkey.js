@@ -253,6 +253,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       expectedChallenge: stored.challenge,
       expectedOrigin: expectedOrigin,
       expectedRPID: rpID,
+      requireUserVerification: false,
     });
 
     if (!verification.verified || !verification.registrationInfo) {
@@ -492,6 +493,7 @@ router.post("/login-verify", async (req, res) => {
         counter: passkeyRecord.counter || 0,
         transports: passkeyRecord.transports,
       },
+      requireUserVerification: false,
     });
 
     if (!verification.verified) {
