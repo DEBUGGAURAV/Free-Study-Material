@@ -417,7 +417,28 @@ export default function App() {
     setTimeout(executeVaultMaintenance, 2000);
     const vaultMaintenanceInterval = setInterval(executeVaultMaintenance, 30 * 60 * 1000);
 
-    const handleOnline = () => setIsOffline(false);
+    // ⏰ Catch-up 6 AM Exam Pre-fetch if device was offline or sleeping at 6 AM
+    const triggerCatchUpPrefetch = () => {
+      try {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const lastPrefetch = safeStorage.getItem("fsm_last_exam_prefetch_date");
+        if (
+          lastPrefetch !== todayKey &&
+          typeof navigator !== "undefined" &&
+          navigator.onLine &&
+          navigator.serviceWorker &&
+          navigator.serviceWorker.controller
+        ) {
+          safeStorage.setItem("fsm_last_exam_prefetch_date", todayKey);
+          navigator.serviceWorker.controller.postMessage({ type: "TRIGGER_EXAM_PREFETCH" });
+        }
+      } catch (_) {}
+    };
+
+    const handleOnline = () => {
+      setIsOffline(false);
+      triggerCatchUpPrefetch();
+    };
     const handleOffline = () => setIsOffline(true);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -482,6 +503,10 @@ export default function App() {
         window.cacheAllActiveResources();
       }, 2000);
     }
+
+    setTimeout(() => {
+      triggerCatchUpPrefetch();
+    }, 3500);
 
     return () => {
       window.removeEventListener("online", handleOnline);

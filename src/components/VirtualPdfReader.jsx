@@ -230,19 +230,26 @@ export default function VirtualPdfReader({
   const [aiAnswer, setAiAnswer] = useState("");
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
-  // 6. Dynamic Live Stream Source ('p2p' | 'cdn')
+  // 6. Dynamic Live Stream Source ('p2p' | 'cdn' | 'storage' | 'cache')
   const [streamSource, setStreamSource] = useState(() => {
-    if (typeof window !== "undefined" && noteId && localStorage.getItem(`fsm_prefer_p2p_${noteId}`) === "1") return "p2p";
-    return "cdn";
+    if (typeof window !== "undefined" && noteId) {
+      if (localStorage.getItem(`fsm_prefer_p2p_${noteId}`) === "1") return "p2p";
+      if (note?.isCdnCached || localStorage.getItem(`fsm_cdn_${noteId}`) === "1") return "cdn";
+    }
+    return note?.isCdnCached ? "cdn" : "storage";
   });
-  const [isCachingToCdn, setIsCachingToCdn] = useState(false);
-  const [cdnTransferPercent, setCdnTransferPercent] = useState(100);
+  const [isCachingToCdn, setIsCachingToCdn] = useState(() => !Boolean(note?.isCdnCached));
+  const [cdnTransferPercent, setCdnTransferPercent] = useState(() => (note?.isCdnCached ? 100 : 25));
   const [p2pPeerCount, setP2pPeerCount] = useState(0);
   const [realSourceInfo, setRealSourceInfo] = useState(() => {
     if (typeof window !== "undefined" && noteId && localStorage.getItem(`fsm_prefer_p2p_${noteId}`) === "1") {
       return { id: "p2p", label: "P2P Local Mesh (0ms)", short: "P2P Mesh (0ms)", details: "Browser-to-Browser WebRTC Peer Mesh", colo: "P2P", icon: "⚡", color: "#10b981", bgColor: "rgba(16, 185, 129, 0.14)", borderColor: "rgba(16, 185, 129, 0.35)" };
     }
-    return { id: "worker", label: "Cloudflare Edge Worker", short: "Cloudflare Edge", details: "Cloudflare Global Edge CDN • 0ms Cache HIT", colo: "Edge", icon: "⚡", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.14)", borderColor: "rgba(56, 189, 248, 0.35)" };
+    if (note?.isCdnCached || (typeof window !== "undefined" && noteId && localStorage.getItem(`fsm_cdn_${noteId}`) === "1")) {
+      return { id: "worker", label: "Cloudflare Edge CDN (1ms)", short: "Cloudflare Edge", details: "Cloudflare Global Edge CDN • 0ms Cache HIT", colo: "Edge", icon: "⚡", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.14)", borderColor: "rgba(56, 189, 248, 0.35)" };
+    }
+    // Honest initial source: Cloud Storage until headers or local cache confirm otherwise
+    return { id: "storage", label: "Primary Cloud Storage Vault", short: "Cloud Storage", details: "Streaming from Cloud Storage • Caching to Edge CDN", colo: "Origin", icon: "☁️", color: "#f59e0b", bgColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.35)" };
   });
 
   // 7. Screen Wake Lock API (Keep Screen ON while reading)
@@ -488,52 +495,43 @@ export default function VirtualPdfReader({
           let previewPrevTime = previewStartTime;
 
           setPreviewProgress({
-            percent: 15,
+            percent: 5,
             loadedBytes: 0,
             totalBytes: noteTotalSize,
             speed: "Connecting to stream...",
           });
 
-          previewInterval = setInterval(() => {
-            if (isCancelled) return;
-            setPreviewProgress((prev) => {
-              if (prev.percent >= 90) return prev;
-              const step = Math.floor(Math.random() * 6) + 3;
-              return {
-                ...prev,
-                percent: Math.min(90, prev.percent + step),
-              };
-            });
-          }, 90);
-
           const handleProgress = (progressData) => {
             if (isCancelled) return;
             const loaded = progressData.loaded || 0;
             const total = (progressData.total && progressData.total > 0) ? progressData.total : noteTotalSize;
-            let percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+            const percent = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : 5;
 
             const now = performance.now();
+            const totalElapsed = (now - previewStartTime) / 1000;
             const timeDiff = (now - previewPrevTime) / 1000;
             const loadedDiff = loaded - previewPrevLoaded;
-            let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
-            if (speedBytes <= 0) {
-              const totalElapsed = (now - previewStartTime) / 1000;
-              speedBytes = totalElapsed > 0 ? loaded / totalElapsed : 0;
-            }
+
+            let speedBytes = timeDiff > 0.1 ? loadedDiff / timeDiff : (totalElapsed > 0 ? loaded / totalElapsed : 0);
             previewPrevLoaded = loaded;
             previewPrevTime = now;
 
-            // ⚡ Full-Throttle Maximum Cloudflare Edge CDN Virtual Range Stream (94.8 - 124.6 MB/s)
-            const dynamicPreviewJitter = Number(((loaded % 9) * 2.6 + (percent % 4) * 1.8).toFixed(1));
-            const hardcodedPreviewMB = (94.8 + dynamicPreviewJitter).toFixed(1);
-            const speedFormatted = `${hardcodedPreviewMB} MB/s`;
+            let speedFormatted = "";
+            if (speedBytes > 1048576) {
+              speedFormatted = `${(speedBytes / 1048576).toFixed(1)} MB/s`;
+            } else if (speedBytes > 1024) {
+              speedFormatted = `${(speedBytes / 1024).toFixed(0)} KB/s`;
+            } else {
+              speedFormatted = "Streaming...";
+            }
 
-            setPreviewProgress((prev) => ({
-              percent: Math.max(prev.percent, percent),
+            setPreviewProgress({
+              percent,
               loadedBytes: loaded,
               totalBytes: total,
               speed: speedFormatted,
-            }));
+            });
+            setCdnTransferPercent(percent);
           };
 
           try {
@@ -3767,7 +3765,9 @@ export default function VirtualPdfReader({
 
             <div>
               <div style={{ fontWeight: 700, fontSize: "1.05rem", color: nightMode ? "#f8fafc" : "#0f172a" }}>
-                {useNativeViewer
+                {realSourceInfo?.id === "storage"
+                  ? "☁️ Fetching from Storage & Caching to Edge CDN"
+                  : useNativeViewer
                   ? "⚡ Streaming to Native Browser Engine"
                   : "⚡ Streaming Pages On-Demand (Virtual Streamer)"}
               </div>

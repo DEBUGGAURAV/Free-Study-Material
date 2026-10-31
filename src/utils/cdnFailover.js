@@ -30,20 +30,28 @@ export function parseSourceFromHeaders(headers) {
   const edgeLocation = get("x-edge-location") || get("cf-ray")?.split("-")[1] || "";
   const dataSource = get("x-data-source");
 
-  if (realSource === "CLOUDFLARE_WORKER" || cfCache === "HIT" || xEdgeCache === "HIT") {
+  // 1. Explicit Storage / Origin MISS check (Highest Priority: Never mislabel Storage stream as CDN!)
+  if (
+    realSource === "ACADEMIC_CLOUD_VAULT" ||
+    realSource === "TELEGRAM_STORAGE" ||
+    dataSource === "storage" ||
+    cfCache === "MISS" ||
+    xEdgeCache === "MISS"
+  ) {
     return {
-      id: "worker",
-      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Mumbai"} POP)`,
-      short: "Edge CDN (1ms)",
-      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
-      colo: edgeLocation || "Edge",
-      icon: "⚡",
-      color: "#38bdf8",
-      bgColor: "rgba(56, 189, 248, 0.14)",
-      borderColor: "rgba(56, 189, 248, 0.35)",
+      id: "storage",
+      label: sourceLabel || "Primary Academic Cloud Storage Vault (Caching to CDN)",
+      short: "Cloud Storage",
+      details: "Streaming from Cloud Storage • Caching to CDN in background",
+      colo: "Origin",
+      icon: "☁️",
+      color: "#f59e0b",
+      bgColor: "rgba(245, 158, 11, 0.14)",
+      borderColor: "rgba(245, 158, 11, 0.35)",
     };
   }
 
+  // 2. In-Memory RAM Cache (0ms)
   if (realSource === "RAM_BUFFER" || dataSource === "ram") {
     return {
       id: "ram",
@@ -58,6 +66,7 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
+  // 3. Local NVMe SSD Disk Cache (1ms)
   if (realSource === "DISK_CACHE" || dataSource === "disk") {
     return {
       id: "disk",
@@ -72,17 +81,18 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  if (realSource === "ACADEMIC_CLOUD_VAULT" || realSource === "TELEGRAM_STORAGE" || dataSource === "storage") {
+  // 4. Cloudflare Edge CDN HIT (1ms)
+  if (realSource === "CLOUDFLARE_WORKER" || cfCache === "HIT" || xEdgeCache === "HIT") {
     return {
-      id: "storage",
-      label: sourceLabel || "Primary Academic Cloud Storage Vault",
-      short: "Cloud Vault",
-      details: "Primary Academic Cloud Storage Vault • Asia-Pacific Core Engine",
-      colo: "Origin",
-      icon: "☁️",
-      color: "#fbbf24",
-      bgColor: "rgba(245, 158, 11, 0.14)",
-      borderColor: "rgba(245, 158, 11, 0.35)",
+      id: "worker",
+      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Mumbai"} POP)`,
+      short: "Edge CDN (1ms)",
+      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
+      colo: edgeLocation || "Edge",
+      icon: "⚡",
+      color: "#38bdf8",
+      bgColor: "rgba(56, 189, 248, 0.14)",
+      borderColor: "rgba(56, 189, 248, 0.35)",
     };
   }
 
