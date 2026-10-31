@@ -294,6 +294,13 @@ export default function AuthModal({
     isPasskeySupported().then((supported) => setSupportsPasskey(supported));
   }, []);
 
+  // Pre-warm Google Identity Services when modal opens so 1-Click Google Sign-In is instantaneous
+  useEffect(() => {
+    if (isOpen) {
+      ensureGoogleScript(8000).catch(() => {});
+    }
+  }, [isOpen]);
+
   const handlePasskeySignIn = async () => {
     try {
       setPasskeyLoading(true);
@@ -645,22 +652,52 @@ export default function AuthModal({
   };
 
   // Ensure GIS script is fully loaded
-  const ensureGoogleScript = () => {
+  const ensureGoogleScript = (timeoutMs = 7000) => {
     return new Promise((resolve) => {
-      if (window.google?.accounts) return resolve(true);
-      let script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (typeof window !== "undefined" && window.google?.accounts) return resolve(true);
+      if (typeof document === "undefined") return resolve(false);
+
+      let script = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
       if (!script) {
         script = document.createElement("script");
         script.src = "https://accounts.google.com/gsi/client";
         script.async = true;
         script.defer = true;
-        document.body.appendChild(script);
+        document.head.appendChild(script);
       }
-      const onLoad = () => resolve(true);
-      const onError = () => resolve(false);
-      script.addEventListener("load", onLoad, { once: true });
-      script.addEventListener("error", onError, { once: true });
-      setTimeout(() => resolve(Boolean(window.google?.accounts)), 3000);
+
+      const startTime = Date.now();
+      const checkInterval = setInterval(() => {
+        if (typeof window !== "undefined" && window.google?.accounts) {
+          clearInterval(checkInterval);
+          resolve(true);
+        } else if (Date.now() - startTime >= timeoutMs) {
+          clearInterval(checkInterval);
+          resolve(Boolean(window?.google?.accounts));
+        }
+      }, 75);
+
+      script.addEventListener(
+        "load",
+        () => {
+          setTimeout(() => {
+            if (typeof window !== "undefined" && window.google?.accounts) {
+              clearInterval(checkInterval);
+              resolve(true);
+            }
+          }, 50);
+        },
+        { once: true }
+      );
+
+      script.addEventListener(
+        "error",
+        () => {
+          clearInterval(checkInterval);
+          resolve(false);
+        },
+        { once: true }
+      );
     });
   };
 
@@ -681,10 +718,10 @@ export default function AuthModal({
 
     if (!window.google?.accounts) {
       setLoading(true);
-      const ready = await ensureGoogleScript();
+      const ready = await ensureGoogleScript(6000);
       setLoading(false);
       if (!ready || !window.google?.accounts) {
-        return setError("Google Identity Services script failed to load. Please check your internet connection or ad-blocker.");
+        return setError("Google Identity Services script could not load. If you are using Brave Shields or an ad-blocker, please allow Google scripts, or use Telegram Bot / Email OTP below.");
       }
     }
 

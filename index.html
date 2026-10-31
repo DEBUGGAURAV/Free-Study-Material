@@ -15,10 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-    <noscript>
-      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    </noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <title>Free Study Material — Academic Cloud & Notes Vault</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/favicon.ico" />
@@ -30,7 +27,7 @@
         <div style="font-size:1.15rem;font-weight:800;color:#fff;letter-spacing:-0.02em;margin-bottom:6px;">Free Study Material Vault</div>
         <div style="font-size:0.82rem;color:#94a3b8;max-width:320px;line-height:1.5;">Connecting to Academic Cloud &amp; Indian Edge CDN...</div>
         <div id="initial-vault-emergency" style="display:none;margin-top:16px;">
-          <button onclick="window.emergencyVaultReset && window.emergencyVaultReset()" style="background:linear-gradient(135deg, #0284c7 0%, #3b82f6 100%);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);">
+          <button id="initial-vault-emergency-btn" style="background:linear-gradient(135deg, #0284c7 0%, #3b82f6 100%);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:0.82rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(2,132,199,0.35);">
             ⚡ Force Refresh Vault &amp; Clear Stale Cache
           </button>
         </div>
@@ -55,6 +52,12 @@
           var emergencyEl = document.getElementById('initial-vault-emergency');
           if (emergencyEl && document.getElementById('initial-vault-loader')) {
             emergencyEl.style.display = 'block';
+            var emergencyBtn = document.getElementById('initial-vault-emergency-btn');
+            if (emergencyBtn) {
+              emergencyBtn.addEventListener('click', function() {
+                if (window.emergencyVaultReset) window.emergencyVaultReset();
+              });
+            }
           }
         }, 3000);
       </script>
