@@ -124,6 +124,7 @@ export default function VirtualPdfReader({
   // P2P status
   const [isCachedP2P, setIsCachedP2P] = useState(false);
   const [isAirdropModalOpen, setIsAirdropModalOpen] = useState(false);
+  const [localPdfBuffer, setLocalPdfBuffer] = useState(null);
 
   // 🚀 Real-time CDN Preview Stream Progress (%)
   const [previewProgress, setPreviewProgress] = useState({
@@ -463,6 +464,7 @@ export default function VirtualPdfReader({
         }
 
         if (localDeviceBuffer && !isCancelled) {
+          setLocalPdfBuffer(localDeviceBuffer);
           setStreamSource("cache");
           setIsCachedP2P(true);
           const localSource = {
@@ -665,6 +667,7 @@ export default function VirtualPdfReader({
                 .then((uint8) => {
                   if (uint8 && noteId) {
                     const buf = uint8.buffer;
+                    setLocalPdfBuffer(buf);
                     cacheNoteBuffer(noteId, buf);
                     saveNoteOffline(note || { id: noteId, title }, buf);
                   }
