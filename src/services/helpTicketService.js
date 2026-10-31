@@ -113,6 +113,7 @@ async function initHelpTable() {
         ip_address TEXT,
         telegram_message_id TEXT,
         conversation TEXT,
+        attachments TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
@@ -122,6 +123,7 @@ async function initHelpTable() {
     // Safe hot-migrations for existing databases
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN user_mobile TEXT;`).catch(() => {});
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN conversation TEXT;`).catch(() => {});
+    await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN attachments TEXT;`).catch(() => {});
     // Purge any closed tickets so database is 100% clean
     await helpTursoClient.execute(`DELETE FROM help_tickets WHERE status = 'closed';`).catch(() => {});
     console.log("[HELP-TURSO] ✅ Support help_tickets table ready (closed tickets auto-purged).");
@@ -143,6 +145,56 @@ ensureHelpTable().catch(() => {});
 function generateTicketCode() {
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `FSM-H${rand}`;
+}
+
+/**
+ * Send photo / document / video attachment directly to Telegram Chat / Topic
+ */
+async function sendTelegramAttachment(botToken, chatId, threadId, attachment, caption = "") {
+  try {
+    if (!botToken || !chatId || !attachment?.url) return null;
+    const filename = path.basename(attachment.url);
+    const filePath = path.join(process.cwd(), "cache", "help_attachments", filename);
+    if (!fs.existsSync(filePath)) return null;
+
+    const fileBuffer = fs.readFileSync(filePath);
+    const mime = (attachment.type || "").toLowerCase();
+    const ext = path.extname(filename).toLowerCase();
+    const originalName = attachment.name || filename;
+
+    const isImage = mime.startsWith("image/") || [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext);
+    const isVideo = mime.startsWith("video/") || [".mp4", ".webm", ".mov"].includes(ext);
+
+    let method = "sendDocument";
+    let fieldName = "document";
+    if (isImage) {
+      method = "sendPhoto";
+      fieldName = "photo";
+    } else if (isVideo) {
+      method = "sendVideo";
+      fieldName = "video";
+    }
+
+    const formData = new FormData();
+    formData.append("chat_id", chatId);
+    if (threadId) formData.append("message_thread_id", String(threadId));
+    if (caption) {
+      formData.append("caption", caption.slice(0, 1024));
+      formData.append("parse_mode", "HTML");
+    }
+    const blob = new Blob([fileBuffer]);
+    formData.append(fieldName, blob, originalName);
+
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    return data.ok ? data.result?.message_id : null;
+  } catch (err) {
+    console.warn("[HELP-BOT] Send Telegram attachment notice:", err.message);
+    return null;
+  }
 }
 
 /**
@@ -211,6 +263,25 @@ async function dispatchTelegramHelpNotice(ticket) {
   const emailDisplay = ticket.user_email || "Not Provided";
   const mobileDisplay = ticket.user_mobile || "Not Provided";
 
+  const rawAttachments = ticket.attachments;
+  const attachments = Array.isArray(rawAttachments)
+    ? rawAttachments
+    : typeof rawAttachments === "string"
+    ? (() => { try { return JSON.parse(rawAttachments); } catch (_) { return []; } })()
+    : [];
+
+  const appBaseUrl = process.env.APP_URL || "https://freestudymaterial.onrender.com";
+  let attachmentNotice = null;
+  if (attachments.length > 0) {
+    const list = attachments
+      .map((att, idx) => {
+        const fullUrl = att.url?.startsWith("http") ? att.url : `${appBaseUrl}${att.url}`;
+        return `  ${idx + 1}. <a href="${fullUrl}">${att.name || "Attachment"}</a> (${att.type?.split("/")[0] || "File"})`;
+      })
+      .join("\n");
+    attachmentNotice = `📎 <b>Attached Files (${attachments.length}):</b>\n${list}`;
+  }
+
   const text = [
     `📩 <b>NEW HELP DESK QUERY #${ticket.ticket_code}</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
@@ -221,6 +292,7 @@ async function dispatchTelegramHelpNotice(ticket) {
     ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
     `❓ <b>Question:</b>`,
     `<i>${ticket.question.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+    attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
     `• Reply in Topic 6 / Bot DM to answer the student`,
@@ -287,6 +359,29 @@ async function dispatchTelegramHelpNotice(ticket) {
           reply_markup: inlineKeyboard,
         }),
       }).catch(() => {});
+    }
+
+    // Also send direct file attachment to Telegram topic if available
+    if (attachments.length > 0) {
+      for (const att of attachments.slice(0, 3)) {
+        sendTelegramAttachment(
+          botToken,
+          chatId,
+          payload.message_thread_id,
+          att,
+          `📎 <b>Attachment for #${ticket.ticket_code}</b> (${ticket.user_name || "Student"}): ${att.name || ""}`
+        ).catch(() => {});
+
+        if (adminChatId && adminChatId !== chatId) {
+          sendTelegramAttachment(
+            botToken,
+            adminChatId,
+            null,
+            att,
+            `📎 <b>Attachment for #${ticket.ticket_code}</b>: ${att.name || ""}`
+          ).catch(() => {});
+        }
+      }
     }
 
     return sentMsgId;
@@ -384,10 +479,22 @@ async function createHelpTicket({
   subject = "",
   question,
   ip = "",
+  attachments = [],
 }) {
   const id = `ht_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
   const ticketCode = generateTicketCode();
   const now = new Date().toISOString();
+
+  const validAttachments = Array.isArray(attachments) ? attachments : [];
+  const conv = [
+    {
+      sender: "student",
+      sender_name: (name || "Guest Scholar").trim(),
+      text: question.trim(),
+      attachments: validAttachments,
+      created_at: now,
+    },
+  ];
 
   const ticketObj = {
     id,
@@ -400,6 +507,7 @@ async function createHelpTicket({
     category: category || "general",
     subject: (subject || "").trim(),
     question: question.trim(),
+    attachments: validAttachments,
     status: "active",
     admin_reply: null,
     admin_name: null,
@@ -408,6 +516,7 @@ async function createHelpTicket({
     closed_by: null,
     ip_address: ip,
     telegram_message_id: null,
+    conversation: JSON.stringify(conv),
     created_at: now,
     updated_at: now,
   };
@@ -438,8 +547,8 @@ async function createHelpTicket({
         sql: `
           INSERT INTO help_tickets (
             id, ticket_code, user_id, user_name, user_email, user_mobile, user_role,
-            category, subject, question, status, ip_address, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            category, subject, question, attachments, conversation, status, ip_address, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
           id,
@@ -452,6 +561,8 @@ async function createHelpTicket({
           ticketObj.category,
           ticketObj.subject,
           ticketObj.question,
+          JSON.stringify(validAttachments),
+          ticketObj.conversation,
           ticketObj.status,
           ticketObj.ip_address,
           ticketObj.created_at,
@@ -486,6 +597,16 @@ async function getTicketByCode(ticketCode) {
       });
       if (res.rows && res.rows.length > 0) {
         const row = res.rows[0];
+        if (row.attachments && typeof row.attachments === "string") {
+          try {
+            row.attachments = JSON.parse(row.attachments);
+          } catch (_) {}
+        }
+        if (row.conversation && typeof row.conversation === "string") {
+          try {
+            row.conversation = JSON.parse(row.conversation);
+          } catch (_) {}
+        }
         memoryTickets.set(cleanCode, row);
         return row;
       }
@@ -569,6 +690,11 @@ async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = nu
         const res = await helpTursoClient.execute({ sql: querySql, args });
         for (const row of res.rows) {
           if (!addedCodes.has(row.ticket_code) && isTicketOwner(row)) {
+            if (row.attachments && typeof row.attachments === "string") {
+              try {
+                row.attachments = JSON.parse(row.attachments);
+              } catch (_) {}
+            }
             results.push(row);
             addedCodes.add(row.ticket_code);
             memoryTickets.set(row.ticket_code, row);
@@ -852,9 +978,10 @@ async function replyHelpTicket({ ticketCode, replyText, adminName = "Platform Ad
 /**
  * Student reply / follow-up to a ticket from the website
  */
-async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, guestEmail = null, guestMobile = null }) {
-  if (!ticketCode || !replyText || !replyText.trim()) {
-    return { success: false, message: "Ticket code and reply message are required." };
+async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, guestEmail = null, guestMobile = null, attachments = [] }) {
+  const validAttachments = Array.isArray(attachments) ? attachments : [];
+  if (!ticketCode || (!replyText?.trim() && validAttachments.length === 0)) {
+    return { success: false, message: "Ticket code and reply message or attachment are required." };
   }
   const cleanCode = ticketCode.trim().toUpperCase();
   const now = new Date().toISOString();
@@ -889,7 +1016,16 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
     if (ticket.conversation) conv = JSON.parse(ticket.conversation);
   } catch (_) {}
   if (conv.length === 0 && ticket.question) {
-    conv.push({ sender: "student", sender_name: ticket.user_name || "Student", text: ticket.question, created_at: ticket.created_at });
+    const firstMsg = {
+      sender: "student",
+      sender_name: ticket.user_name || "Student",
+      text: ticket.question,
+      created_at: ticket.created_at,
+    };
+    if (ticket.attachments) {
+      firstMsg.attachments = typeof ticket.attachments === "string" ? JSON.parse(ticket.attachments) : ticket.attachments;
+    }
+    conv.push(firstMsg);
     if (ticket.admin_reply) {
       conv.push({ sender: "admin", sender_name: ticket.admin_name || "Platform Admin", text: ticket.admin_reply, created_at: ticket.replied_at || ticket.updated_at });
     }
@@ -898,7 +1034,8 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
   conv.push({
     sender: "student",
     sender_name: ticket.user_name || "Student",
-    text: replyText.trim(),
+    text: (replyText || "").trim(),
+    attachments: validAttachments,
     created_at: now,
   });
 
@@ -921,7 +1058,7 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
   }
 
   // Dispatch live notification strictly to Bot DM ONLY (No Topic 6 spam)
-  dispatchStudentReplyNotice(ticket, replyText.trim()).catch(() => {});
+  dispatchStudentReplyNotice(ticket, (replyText || "").trim(), validAttachments).catch(() => {});
 
   return { success: true, ticket };
 }
@@ -929,13 +1066,25 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
 /**
  * Dispatch student reply notification strictly to Admin Bot DM (Topic 6 NOT spammed)
  */
-async function dispatchStudentReplyNotice(ticket, replyText) {
+async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   const botToken = getHelpBotToken();
   const adminChatId = getHelpAdminChatId();
   if (!botToken || !adminChatId) return;
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Student" : "👤 Guest";
   const userDisplay = `${ticket.user_name || "Student"} (${roleLabel})`;
+
+  const appBaseUrl = process.env.APP_URL || "https://freestudymaterial.onrender.com";
+  let attachmentNotice = null;
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    const list = attachments
+      .map((att, idx) => {
+        const fullUrl = att.url?.startsWith("http") ? att.url : `${appBaseUrl}${att.url}`;
+        return `  ${idx + 1}. <a href="${fullUrl}">${att.name || "Attachment"}</a> (${att.type?.split("/")[0] || "File"})`;
+      })
+      .join("\n");
+    attachmentNotice = `📎 <b>Attached Files (${attachments.length}):</b>\n${list}`;
+  }
 
   const text = [
     `💬 <b>STUDENT FOLLOW-UP REPLY #${ticket.ticket_code}</b>`,
@@ -945,8 +1094,8 @@ async function dispatchStudentReplyNotice(ticket, replyText) {
     `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "N/A"}</code>`,
     `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
     ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
-    `💬 <b>Follow-up Message:</b>`,
-    `<i>${replyText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+    replyText ? `💬 <b>Follow-up Message:</b>\n<i>${replyText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>` : null,
+    attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
     `• Reply directly here in bot DM to answer student`,
@@ -975,6 +1124,19 @@ async function dispatchStudentReplyNotice(ticket, replyText) {
         reply_markup: inlineKeyboard,
       }),
     });
+
+    // Also send direct file attachment to Telegram DM if available
+    if (Array.isArray(attachments) && attachments.length > 0) {
+      for (const att of attachments.slice(0, 3)) {
+        sendTelegramAttachment(
+          botToken,
+          adminChatId,
+          null,
+          att,
+          `📎 <b>Reply Attachment for #${ticket.ticket_code}</b>: ${att.name || ""}`
+        ).catch(() => {});
+      }
+    }
   } catch (err) {
     console.warn("[HELP-BOT] Student reply dispatch error:", err.message);
   }
@@ -999,7 +1161,19 @@ async function getAllHelpTickets({ status = null, limit = 50, offset = 0 } = {})
     args.push(limit, offset);
 
     const res = await helpTursoClient.execute({ sql, args });
-    return res.rows || [];
+    return (res.rows || []).map((row) => {
+      if (row.attachments && typeof row.attachments === "string") {
+        try {
+          row.attachments = JSON.parse(row.attachments);
+        } catch (_) {}
+      }
+      if (row.conversation && typeof row.conversation === "string") {
+        try {
+          row.conversation = JSON.parse(row.conversation);
+        } catch (_) {}
+      }
+      return row;
+    });
   } catch (err) {
     console.warn("[HELP-TURSO] Get all tickets error:", err.message);
     return Array.from(memoryTickets.values());

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X,
   HelpCircle,
@@ -21,6 +21,11 @@ import {
   Copy,
   Check,
   Lock,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  Film,
+  Download,
 } from "lucide-react";
 import { api } from "../api";
 
@@ -133,6 +138,155 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
   const [sendingReply, setSendingReply] = useState({});
   const [replyNotice, setReplyNotice] = useState({});
 
+  // File Attachments State
+  const [askAttachments, setAskAttachments] = useState([]);
+  const [askUploading, setAskUploading] = useState(false);
+  const [replyAttachments, setReplyAttachments] = useState({});
+  const [replyUploading, setReplyUploading] = useState({});
+  const askFileInputRef = useRef(null);
+
+  // File Upload Handlers
+  const handleAskFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 35 * 1024 * 1024) {
+      setFormError("File size exceeds 35 MB limit. Please select a smaller file.");
+      return;
+    }
+    setAskUploading(true);
+    setFormError(null);
+    try {
+      const res = await api.uploadHelpAttachment(file);
+      if (res.success && res.file) {
+        setAskAttachments((prev) => [...prev, res.file]);
+      } else {
+        setFormError(res.message || "Failed to upload attachment.");
+      }
+    } catch (err) {
+      setFormError("Attachment upload failed: " + err.message);
+    } finally {
+      setAskUploading(false);
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  const handleReplyFileSelect = async (e, ticketCode) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 35 * 1024 * 1024) {
+      setReplyNotice((prev) => ({ ...prev, [ticketCode]: "⚠️ File exceeds 35 MB limit." }));
+      return;
+    }
+    setReplyUploading((prev) => ({ ...prev, [ticketCode]: true }));
+    try {
+      const res = await api.uploadHelpAttachment(file);
+      if (res.success && res.file) {
+        setReplyAttachments((prev) => ({
+          ...prev,
+          [ticketCode]: [...(prev[ticketCode] || []), res.file],
+        }));
+      } else {
+        setReplyNotice((prev) => ({ ...prev, [ticketCode]: `⚠️ ${res.message || "Upload failed."}` }));
+      }
+    } catch (err) {
+      setReplyNotice((prev) => ({ ...prev, [ticketCode]: `⚠️ Upload error: ${err.message}` }));
+    } finally {
+      setReplyUploading((prev) => ({ ...prev, [ticketCode]: false }));
+      if (e.target) e.target.value = "";
+    }
+  };
+
+  // Helper to render attachment chip/badge in conversation or cards
+  const renderAttachmentBadge = (att, onRemove = null) => {
+    if (!att || !att.url) return null;
+    const isImg = att.type?.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(att.name || att.url);
+    const isVid = att.type?.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(att.name || att.url);
+    const formatSize = (bytes) => {
+      if (!bytes || isNaN(bytes)) return "";
+      if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+      return `${Math.round(bytes / 1024)} KB`;
+    };
+
+    return (
+      <div
+        key={att.url}
+        style={{
+          display: "inline-flex",
+          flexDirection: "column",
+          gap: "4px",
+          background: "rgba(0, 0, 0, 0.45)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: "8px",
+          padding: "6px 8px",
+          maxWidth: "320px",
+          marginTop: "6px",
+          position: "relative",
+        }}
+      >
+        {isImg && (
+          <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+            <img
+              src={att.url}
+              alt={att.name || "Attachment"}
+              style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "6px" }}
+            />
+          </a>
+        )}
+        {isVid && (
+          <video
+            controls
+            src={att.url}
+            style={{ width: "100%", maxHeight: "180px", borderRadius: "6px", background: "#000" }}
+          />
+        )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+            {isImg ? <ImageIcon size={14} color="#38bdf8" /> : isVid ? <Film size={14} color="#f59e0b" /> : <FileText size={14} color="#34d399" />}
+            <a
+              href={att.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: "0.75rem",
+                color: "#e2e8f0",
+                textDecoration: "underline",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "200px",
+              }}
+              title={att.name}
+            >
+              {att.name || "View Attachment"}
+            </a>
+            {att.size && <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>({formatSize(att.size)})</span>}
+          </div>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              style={{
+                background: "rgba(239, 68, 68, 0.2)",
+                border: "none",
+                borderRadius: "50%",
+                width: "20px",
+                height: "20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fca5a5",
+                cursor: "pointer",
+              }}
+              title="Remove file"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // Load FAQs on mount
   useEffect(() => {
     if (!isOpen) return;
@@ -184,7 +338,8 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
   const handleStudentReply = async (e, ticketCode) => {
     e.preventDefault();
     const text = (replyInputs[ticketCode] || "").trim();
-    if (!text) return;
+    const currentAtts = replyAttachments[ticketCode] || [];
+    if (!text && currentAtts.length === 0) return;
 
     setSendingReply((prev) => ({ ...prev, [ticketCode]: true }));
     setReplyNotice((prev) => ({ ...prev, [ticketCode]: null }));
@@ -193,9 +348,10 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
     const guestMobile = currentUser?.mobile || mobile || (!currentUser ? localStorage.getItem("fsm_help_guest_mobile") || "" : "");
 
     try {
-      const res = await api.studentReplyHelpTicket(ticketCode, text, guestEmail, guestMobile);
+      const res = await api.studentReplyHelpTicket(ticketCode, text, guestEmail, guestMobile, currentAtts);
       if (res.success && res.ticket) {
         setReplyInputs((prev) => ({ ...prev, [ticketCode]: "" }));
+        setReplyAttachments((prev) => ({ ...prev, [ticketCode]: [] }));
         setReplyNotice((prev) => ({ ...prev, [ticketCode]: "✅ Reply sent to Administrator!" }));
         setMyTickets((prev) =>
           prev.map((t) => (t.ticket_code === ticketCode ? { ...t, ...res.ticket } : t))
@@ -274,6 +430,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
         category,
         subject,
         question,
+        attachments: askAttachments,
         hp_website: honeypot,
       });
 
@@ -281,6 +438,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
         setSubmitSuccess(res.ticket);
         setQuestion("");
         setSubject("");
+        setAskAttachments([]);
 
         // Store ticket code and guest credentials in localStorage for guests
         try {
@@ -959,6 +1117,58 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                     />
                   </div>
 
+                  {/* File Attachment Input for Ask Question */}
+                  <div style={{ marginBottom: "18px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <label className="form-label" style={{ margin: 0 }}>
+                        Attach File / Screenshot (Optional):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => askFileInputRef.current?.click()}
+                        disabled={askUploading}
+                        style={{
+                          background: "rgba(56, 189, 248, 0.12)",
+                          border: "1px solid rgba(56, 189, 248, 0.35)",
+                          borderRadius: "6px",
+                          padding: "4px 10px",
+                          color: "#38bdf8",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Paperclip size={13} />
+                        <span>{askUploading ? "Uploading File..." : "Choose File (Image, PDF, Video)"}</span>
+                      </button>
+                    </div>
+
+                    <input
+                      ref={askFileInputRef}
+                      type="file"
+                      accept="image/*,video/*,.pdf,.txt,.doc,.docx"
+                      onChange={handleAskFileSelect}
+                      style={{ display: "none" }}
+                    />
+
+                    {/* Attachment Chips Display */}
+                    {askAttachments.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "8px" }}>
+                        {askAttachments.map((att, idx) =>
+                          renderAttachmentBadge(att, () => {
+                            setAskAttachments((prev) => prev.filter((_, i) => i !== idx));
+                          })
+                        )}
+                      </div>
+                    )}
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                      Supports Screenshots (PNG, JPG), Syllabus Documents (PDF, DOCX), &amp; Videos (MP4, WebM) up to 35 MB.
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
                     className="btn-primary"
@@ -1186,6 +1396,12 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                       <p style={{ margin: 0, fontSize: "0.84rem", color: isAdmin ? "#ecfdf5" : "#f8fafc", lineHeight: "1.45" }}>
                                         {msg.text}
                                       </p>
+                                      {/* Attachment badges inside conversation bubble */}
+                                      {Array.isArray(msg.attachments) && msg.attachments.length > 0 && (
+                                        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                                          {msg.attachments.map((att) => renderAttachmentBadge(att))}
+                                        </div>
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -1200,6 +1416,12 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                 <p style={{ margin: 0, fontSize: "0.85rem", color: "#f8fafc", lineHeight: "1.4" }}>
                                   {t.question}
                                 </p>
+                                {/* Attachment badges in fallback question view */}
+                                {Array.isArray(t.attachments) && t.attachments.length > 0 && (
+                                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "6px" }}>
+                                    {t.attachments.map((att) => renderAttachmentBadge(att))}
+                                  </div>
+                                )}
                                 {t.subject && (
                                   <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "4px", display: "block" }}>
                                     Subject / Note: {t.subject}
@@ -1261,10 +1483,52 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         {/* Student Reply Form (Allowed on active or answered tickets) */}
                         {t.status !== "closed" ? (
                           <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "12px" }}>
+                            {/* Render reply attachments chips */}
+                            {Array.isArray(replyAttachments[t.ticket_code]) && replyAttachments[t.ticket_code].length > 0 && (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
+                                {replyAttachments[t.ticket_code].map((att, aIdx) =>
+                                  renderAttachmentBadge(att, () => {
+                                    setReplyAttachments((prev) => ({
+                                      ...prev,
+                                      [t.ticket_code]: prev[t.ticket_code].filter((_, idx) => idx !== aIdx),
+                                    }));
+                                  })
+                                )}
+                              </div>
+                            )}
+
                             <form
                               onSubmit={(e) => handleStudentReply(e, t.ticket_code)}
-                              style={{ display: "flex", gap: "8px" }}
+                              style={{ display: "flex", gap: "8px", alignItems: "center" }}
                             >
+                              <label
+                                style={{
+                                  background: "rgba(56, 189, 248, 0.12)",
+                                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                                  borderRadius: "8px",
+                                  padding: "9px 11px",
+                                  color: "#38bdf8",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
+                                }}
+                                title="Attach Screenshot, Document or Video"
+                              >
+                                <input
+                                  type="file"
+                                  accept="image/*,video/*,.pdf,.txt,.doc,.docx"
+                                  onChange={(e) => handleReplyFileSelect(e, t.ticket_code)}
+                                  style={{ display: "none" }}
+                                />
+                                {replyUploading[t.ticket_code] ? (
+                                  <div className="spinner" style={{ width: "13px", height: "13px" }} />
+                                ) : (
+                                  <Paperclip size={15} />
+                                )}
+                              </label>
+
                               <input
                                 type="text"
                                 placeholder="Type your follow-up reply or query..."
@@ -1286,7 +1550,10 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                               <button
                                 type="submit"
                                 className="btn-primary"
-                                disabled={sendingReply[t.ticket_code] || !replyInputs[t.ticket_code]?.trim()}
+                                disabled={
+                                  sendingReply[t.ticket_code] ||
+                                  (!replyInputs[t.ticket_code]?.trim() && (!replyAttachments[t.ticket_code] || replyAttachments[t.ticket_code].length === 0))
+                                }
                                 style={{
                                   padding: "9px 16px",
                                   fontSize: "0.82rem",

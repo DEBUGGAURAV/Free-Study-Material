@@ -10,8 +10,57 @@
 
 const express = require("express");
 const router = express.Router();
+const path = require("path");
+const fs = require("fs");
+const multer = require("multer");
 const { helpLimiter } = require("../middleware/rateLimit");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
+
+// Ensure Help Attachments directory exists
+const HELP_ATTACHMENTS_DIR = path.join(process.cwd(), "cache", "help_attachments");
+try {
+  if (!fs.existsSync(HELP_ATTACHMENTS_DIR)) {
+    fs.mkdirSync(HELP_ATTACHMENTS_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn("[HELP-ATTACHMENTS] Directory notice:", e.message);
+}
+
+// Multer storage for Help Attachments
+const helpAttachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, HELP_ATTACHMENTS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    const cleanName = (file.originalname || "attachment").replace(/[^a-zA-Z0-9.-]/g, "_");
+    cb(null, `help-${uniqueSuffix}-${cleanName}`);
+  },
+});
+
+const uploadHelpAttachment = multer({
+  storage: helpAttachmentStorage,
+  limits: { fileSize: 35 * 1024 * 1024 }, // 35 MB max
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExts = [
+      ".png", ".jpg", ".jpeg", ".webp", ".gif",
+      ".pdf", ".txt", ".doc", ".docx",
+      ".mp4", ".webm", ".mov", ".m4v",
+      ".mp3", ".wav", ".ogg", ".m4a"
+    ];
+    if (
+      allowedExts.includes(ext) ||
+      file.mimetype.startsWith("image/") ||
+      file.mimetype.startsWith("video/") ||
+      file.mimetype.startsWith("audio/")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("File format not supported. Please upload an image, PDF, video, audio, or document."));
+    }
+  },
+});
 const {
   createHelpTicket,
   getTicketByCode,
@@ -98,6 +147,49 @@ const CURATED_FAQS = [
 // Note: Anti-Spam helpLimiter imported from ../middleware/rateLimit with proxy isolation & immunity
 
 /**
+ * POST /api/help/upload-attachment
+ * Upload attachment (image, pdf, video, doc) for help ticket
+ */
+router.post("/upload-attachment", helpLimiter, uploadHelpAttachment.single("file"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file was uploaded." });
+    }
+    const filename = req.file.filename;
+    const url = `/api/help/attachment/${encodeURIComponent(filename)}`;
+    return res.json({
+      success: true,
+      file: {
+        url,
+        name: req.file.originalname,
+        size: req.file.size,
+        type: req.file.mimetype,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/help/attachment/:filename
+ * Securely stream/serve help attachment with path-traversal protection
+ */
+router.get("/attachment/:filename", (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename);
+    const filePath = path.join(HELP_ATTACHMENTS_DIR, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: "Attachment not found." });
+    }
+    res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    return res.sendFile(filePath);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
  * GET /api/help/faqs
  * Instant searchable FAQs
  */
@@ -114,7 +206,7 @@ router.get("/faqs", (req, res) => {
  */
 router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
   try {
-    const { name, email, mobile, category, subject, question, hp_website } = req.body;
+    const { name, email, mobile, category, subject, question, hp_website, attachments } = req.body;
 
     // 1. Anti-spam Honeypot Trap
     if (hp_website) {
@@ -192,6 +284,7 @@ router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
       subject: subject || "",
       question: question.trim(),
       ip: clientIp,
+      attachments: Array.isArray(attachments) ? attachments : [],
     });
 
     return res.json({
@@ -205,6 +298,7 @@ router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
         category: ticket.category,
         subject: ticket.subject,
         question: ticket.question,
+        attachments: ticket.attachments || [],
         status: ticket.status,
         created_at: ticket.created_at,
       },
@@ -273,6 +367,7 @@ router.get("/ticket/:code", authenticateToken, async (req, res) => {
         category: ticket.category,
         subject: ticket.subject,
         question: ticket.question,
+        attachments: ticket.attachments || null,
         status: ticket.status,
         admin_reply: ticket.admin_reply,
         admin_name: ticket.admin_name,
@@ -292,9 +387,9 @@ router.get("/ticket/:code", authenticateToken, async (req, res) => {
  */
 router.post("/reply", helpLimiter, authenticateToken, async (req, res) => {
   try {
-    const { ticketCode, message, guestEmail, guestMobile } = req.body || {};
-    if (!ticketCode || !message || !message.trim()) {
-      return res.status(400).json({ success: false, message: "Ticket code and reply message are required." });
+    const { ticketCode, message, guestEmail, guestMobile, attachments } = req.body || {};
+    if (!ticketCode || (!message?.trim() && (!Array.isArray(attachments) || attachments.length === 0))) {
+      return res.status(400).json({ success: false, message: "Ticket code and reply message or attachment are required." });
     }
 
     const userId = req.user?.id || null;
@@ -303,10 +398,11 @@ router.post("/reply", helpLimiter, authenticateToken, async (req, res) => {
 
     const result = await studentReplyHelpTicket({
       ticketCode,
-      replyText: message.trim(),
+      replyText: (message || "").trim(),
       userId,
       guestEmail: userEmail,
       guestMobile: userMobile,
+      attachments: Array.isArray(attachments) ? attachments : [],
     });
 
     if (!result.success) {

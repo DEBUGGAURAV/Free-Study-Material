@@ -17,6 +17,11 @@ import {
   Filter,
   Check,
   X,
+  Paperclip,
+  FileText,
+  Image as ImageIcon,
+  Film,
+  Download,
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -61,6 +66,94 @@ export default function TabHelpDesk() {
     setTimeout(() => setActionNotice(null), 4000);
   };
 
+  // Helper to render attachment chip/preview in admin inspection drawer
+  const renderAttachmentBadge = (att) => {
+    if (!att || !att.url) return null;
+    const isImg = att.type?.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(att.name || att.url);
+    const isVid = att.type?.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(att.name || att.url);
+    const formatSize = (bytes) => {
+      if (!bytes || isNaN(bytes)) return "";
+      if (bytes > 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+      return `${Math.round(bytes / 1024)} KB`;
+    };
+
+    return (
+      <div
+        key={att.url}
+        style={{
+          display: "inline-flex",
+          flexDirection: "column",
+          gap: "4px",
+          background: "rgba(0, 0, 0, 0.45)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: "8px",
+          padding: "6px 8px",
+          maxWidth: "320px",
+          marginTop: "6px",
+        }}
+      >
+        {isImg && (
+          <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ display: "block" }}>
+            <img
+              src={att.url}
+              alt={att.name || "Attachment"}
+              style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "6px" }}
+            />
+          </a>
+        )}
+        {isVid && (
+          <video
+            controls
+            src={att.url}
+            style={{ width: "100%", maxHeight: "180px", borderRadius: "6px", background: "#000" }}
+          />
+        )}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
+            {isImg ? <ImageIcon size={14} color="#38bdf8" /> : isVid ? <Film size={14} color="#f59e0b" /> : <FileText size={14} color="#34d399" />}
+            <a
+              href={att.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: "0.75rem",
+                color: "#e2e8f0",
+                textDecoration: "underline",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "200px",
+              }}
+              title={att.name}
+            >
+              {att.name || "View Attachment"}
+            </a>
+            {att.size && <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>({formatSize(att.size)})</span>}
+          </div>
+          <a
+            href={att.downloadUrl || att.url}
+            download={att.name || "attachment"}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Download file"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "3px 6px",
+              borderRadius: "4px",
+              background: "rgba(255, 255, 255, 0.08)",
+              color: "#38bdf8",
+              textDecoration: "none",
+            }}
+          >
+            <Download size={12} />
+          </a>
+        </div>
+      </div>
+    );
+  };
+
   // Reply to ticket
   const handleSendReply = async (e) => {
     e?.preventDefault();
@@ -70,14 +163,31 @@ export default function TabHelpDesk() {
       const res = await api.adminReplyHelpTicket(selectedTicket.ticket_code, replyText.trim());
       if (res && res.success) {
         showNotification(`✅ Reply sent to student on #${selectedTicket.ticket_code}!`);
+        const sentReply = replyText.trim();
         setReplyText("");
         loadTickets();
         if (selectedTicket) {
+          const nowIso = new Date().toISOString();
+          let currentConv = [];
+          try {
+            if (Array.isArray(selectedTicket.conversation)) {
+              currentConv = [...selectedTicket.conversation];
+            } else if (typeof selectedTicket.conversation === "string" && selectedTicket.conversation.startsWith("[")) {
+              currentConv = JSON.parse(selectedTicket.conversation);
+            }
+          } catch (_) {}
+          currentConv.push({
+            sender: "admin",
+            sender_name: "Academic Administrator",
+            message: sentReply,
+            created_at: nowIso,
+          });
           setSelectedTicket({
             ...selectedTicket,
-            admin_reply: replyText.trim(),
+            admin_reply: sentReply,
             status: "answered",
-            replied_at: new Date().toISOString(),
+            replied_at: nowIso,
+            conversation: currentConv,
           });
         }
       } else {
@@ -529,9 +639,40 @@ export default function TabHelpDesk() {
                         </td>
 
                         <td style={{ padding: "12px 14px", verticalAlign: "top" }}>
-                          <div style={{ fontWeight: 700, color: "#e2e8f0" }}>
-                            {t.subject || t.category || "General Support"}
-                          </div>
+                          {(() => {
+                            let attList = [];
+                            try {
+                              if (Array.isArray(t.attachments)) attList = t.attachments;
+                              else if (typeof t.attachments === "string" && t.attachments.startsWith("[")) attList = JSON.parse(t.attachments);
+                            } catch (_) {}
+                            return (
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ fontWeight: 700, color: "#e2e8f0" }}>
+                                  {t.subject || t.category || "General Support"}
+                                </span>
+                                {attList.length > 0 && (
+                                  <span
+                                    title={`${attList.length} file(s) attached`}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                      fontSize: "0.68rem",
+                                      fontWeight: 800,
+                                      padding: "1px 6px",
+                                      borderRadius: "10px",
+                                      background: "rgba(56, 189, 248, 0.15)",
+                                      color: "#38bdf8",
+                                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                                    }}
+                                  >
+                                    <Paperclip size={10} />
+                                    {attList.length}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <div
                             style={{
                               color: "var(--text-dim)",
@@ -699,43 +840,142 @@ export default function TabHelpDesk() {
               {selectedTicket.subject ? `📌 ${selectedTicket.subject}` : `Category: ${selectedTicket.category || "General"}`}
             </div>
 
-            {/* Question Box */}
-            <div
-              style={{
-                background: "rgba(0, 0, 0, 0.35)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderRadius: "8px",
-                padding: "12px 14px",
-                fontSize: "0.82rem",
-                color: "#e2e8f0",
-                lineHeight: "1.45",
-              }}
-            >
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 700, marginBottom: "4px" }}>
-                STUDENT QUERY:
-              </div>
-              {selectedTicket.question}
-            </div>
+            {/* Conversation Timeline or Fallback Question/Reply Box */}
+            {(() => {
+              let conversationList = [];
+              try {
+                if (Array.isArray(selectedTicket.conversation)) {
+                  conversationList = selectedTicket.conversation;
+                } else if (typeof selectedTicket.conversation === "string" && selectedTicket.conversation.startsWith("[")) {
+                  conversationList = JSON.parse(selectedTicket.conversation);
+                }
+              } catch (_) {}
 
-            {/* Previous Admin Reply if exists */}
-            {selectedTicket.admin_reply && (
-              <div
-                style={{
-                  background: "rgba(16, 185, 129, 0.08)",
-                  border: "1px solid rgba(16, 185, 129, 0.25)",
-                  borderRadius: "8px",
-                  padding: "12px 14px",
-                  fontSize: "0.82rem",
-                  color: "#d1fae5",
-                  lineHeight: "1.45",
-                }}
-              >
-                <div style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700, marginBottom: "4px" }}>
-                  ADMINISTRATOR REPLY ({selectedTicket.admin_name || "Admin"}):
+              let directAtts = [];
+              try {
+                if (Array.isArray(selectedTicket.attachments)) {
+                  directAtts = selectedTicket.attachments;
+                } else if (typeof selectedTicket.attachments === "string" && selectedTicket.attachments.startsWith("[")) {
+                  directAtts = JSON.parse(selectedTicket.attachments);
+                }
+              } catch (_) {}
+
+              if (conversationList.length > 0) {
+                return (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      maxHeight: "360px",
+                      overflowY: "auto",
+                      paddingRight: "6px",
+                    }}
+                  >
+                    {conversationList.map((msg, idx) => {
+                      const isAdmin = msg.sender === "admin";
+                      const msgAtts = Array.isArray(msg.attachments) ? msg.attachments : [];
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            alignSelf: isAdmin ? "flex-end" : "flex-start",
+                            maxWidth: "88%",
+                            background: isAdmin ? "rgba(16, 185, 129, 0.12)" : "rgba(0, 0, 0, 0.35)",
+                            border: `1px solid ${isAdmin ? "rgba(16, 185, 129, 0.28)" : "rgba(255, 255, 255, 0.08)"}`,
+                            borderRadius: "8px",
+                            padding: "10px 12px",
+                            fontSize: "0.82rem",
+                            color: isAdmin ? "#d1fae5" : "#e2e8f0",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              color: isAdmin ? "#34d399" : "var(--accent-cyan)",
+                              marginBottom: "4px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "8px",
+                            }}
+                          >
+                            <span>
+                              {isAdmin
+                                ? `🛡️ ${msg.sender_name || "Academic Administrator"}`
+                                : `🎓 ${msg.sender_name || selectedTicket.user_name || "Student"}`}
+                            </span>
+                            {msg.created_at && (
+                              <span style={{ fontSize: "0.65rem", color: "var(--text-dim)", fontWeight: "normal" }}>
+                                {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ lineHeight: "1.45", wordBreak: "break-word" }}>
+                            {msg.message || msg.text}
+                          </div>
+                          {msgAtts.length > 0 && (
+                            <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                              {msgAtts.map((att, aIdx) => (
+                                <React.Fragment key={aIdx}>{renderAttachmentBadge(att)}</React.Fragment>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              }
+
+              // Fallback to initial Question + Reply box
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div
+                    style={{
+                      background: "rgba(0, 0, 0, 0.35)",
+                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      borderRadius: "8px",
+                      padding: "12px 14px",
+                      fontSize: "0.82rem",
+                      color: "#e2e8f0",
+                      lineHeight: "1.45",
+                    }}
+                  >
+                    <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 700, marginBottom: "4px" }}>
+                      STUDENT QUERY:
+                    </div>
+                    <div>{selectedTicket.question}</div>
+                    {directAtts.length > 0 && (
+                      <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {directAtts.map((att, aIdx) => (
+                          <React.Fragment key={aIdx}>{renderAttachmentBadge(att)}</React.Fragment>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedTicket.admin_reply && (
+                    <div
+                      style={{
+                        background: "rgba(16, 185, 129, 0.08)",
+                        border: "1px solid rgba(16, 185, 129, 0.25)",
+                        borderRadius: "8px",
+                        padding: "12px 14px",
+                        fontSize: "0.82rem",
+                        color: "#d1fae5",
+                        lineHeight: "1.45",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700, marginBottom: "4px" }}>
+                        ADMINISTRATOR REPLY ({selectedTicket.admin_name || "Admin"}):
+                      </div>
+                      <div>{selectedTicket.admin_reply}</div>
+                    </div>
+                  )}
                 </div>
-                {selectedTicket.admin_reply}
-              </div>
-            )}
+              );
+            })()}
 
             {/* Live Reply Form */}
             <form onSubmit={handleSendReply} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
