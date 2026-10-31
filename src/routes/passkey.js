@@ -512,14 +512,17 @@ router.post("/login-verify", async (req, res) => {
     const userRecord = decryptUserObject(rawUserData);
     const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
     const isMasterAdmin = Boolean(
-      (MAIN_ADMIN_EMAIL && userRecord.email === MAIN_ADMIN_EMAIL) ||
+      (MAIN_ADMIN_EMAIL && userRecord.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL) ||
       userRecord.isMainAdmin ||
-      userRecord.role === "admin" ||
-      userRecord.role === "half_admin"
+      userRecord.isMasterAdmin ||
+      userId === "admin-root" ||
+      userRecord.role === "admin"
     );
 
+    const isMaintenancePermitted = isMasterAdmin || userRecord.role === "half_admin";
+
     // 🔒 Maintenance Mode Guard: Block student login; allow only platform administrators
-    if (isMaintenanceActive() && !isMasterAdmin) {
+    if (isMaintenanceActive() && !isMaintenancePermitted) {
       return res.status(503).json({
         success: false,
         maintenance: true,
@@ -530,12 +533,13 @@ router.post("/login-verify", async (req, res) => {
     const payload = {
       id: userId,
       email: userRecord.email,
-      name: userRecord.name || (isMasterAdmin ? "Administrator" : "Academic Member"),
+      name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Academic Member"),
       role: isMasterAdmin ? "admin" : (userRecord.role || "student"),
       isMainAdmin: isMasterAdmin,
-      college: userRecord.college || "Academic Institute",
+      isMasterAdmin: isMasterAdmin,
+      college: isMasterAdmin ? (userRecord.college || "Central Academic Administration") : (userRecord.college || "Academic Institute"),
       mobile: userRecord.mobile || "",
-      year: userRecord.year || "",
+      year: isMasterAdmin ? (userRecord.year || "Faculty") : (userRecord.year || ""),
       permissions: isMasterAdmin
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : (userRecord.permissions || ["download_notes", "upload_notes"]),
@@ -549,11 +553,11 @@ router.post("/login-verify", async (req, res) => {
       sendTelegramAuthNotice({
         event: "LOGIN",
         user: {
-          name: userRecord.name || "Scholar",
+          name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Scholar"),
           email: userRecord.email,
           mobile: userRecord.mobile || "N/A",
-          college: userRecord.college || "N/A",
-          year: userRecord.year || "N/A",
+          college: isMasterAdmin ? "Central Administration" : (userRecord.college || "N/A"),
+          year: isMasterAdmin ? "Faculty" : (userRecord.year || "N/A"),
           ip: getClientIp(req),
         },
         method: `Passkey / Biometric (${passkeyRecord.deviceName || "Device Sensor"})`,
@@ -564,7 +568,7 @@ router.post("/login-verify", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "Biometric authentication successful! Welcome back.",
+      message: isMasterAdmin ? "Welcome back, Master Administrator!" : "Biometric authentication successful! Welcome back.",
       user: payload,
       token,
     });

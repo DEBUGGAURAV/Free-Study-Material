@@ -2640,22 +2640,26 @@ export default function StudentChatModal({
             <button
               onClick={toggleSound}
               style={{
-                background: soundEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                background: soundEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(239, 68, 68, 0.15)",
                 border: soundEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
-                borderRadius: "50%",
-                width: "36px",
-                height: "36px",
-                display: "flex",
+                borderRadius: "8px",
+                padding: "6px 9px",
+                display: "inline-flex",
                 alignItems: "center",
-                justifyContent: "center",
-                color: soundEnabled ? "#38bdf8" : "#f87171",
+                gap: "5px",
+                color: soundEnabled ? "#38bdf8" : "#fca5a5",
+                fontSize: "0.74rem",
+                fontWeight: 600,
                 cursor: "pointer",
                 transition: "all 0.2s ease",
               }}
               title={soundEnabled ? "Chat Sound: ON (Click to Mute)" : "Chat Sound: MUTED (Click to Unmute)"}
               aria-label={soundEnabled ? "Mute Chat Sounds" : "Unmute Chat Sounds"}
             >
-              {soundEnabled ? <Bell size={17} /> : <BellOff size={17} />}
+              {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
+              <span className="scm-action-btn-text">
+                {soundEnabled ? "Sound ON" : "Muted"}
+              </span>
             </button>
 
             {/* Close Button */}

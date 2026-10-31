@@ -142,7 +142,7 @@ async function getSubjectFromThreadId(threadId) {
       const snap = await db.collection("subject_forum_topics").where("threadId", "==", numThreadId).limit(1).get();
       if (!snap.empty) {
         const data = snap.docs[0].data();
-        const subject = data?.subject;
+        const subject = data?.name || data?.subject;
         if (subject) {
           if (ramCache) ramCache.set("tg_topic_sub_" + numThreadId, subject, 86400);
           return subject;

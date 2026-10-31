@@ -1542,12 +1542,13 @@ router.post("/login", authLimiter, async (req, res) => {
     const payload = {
       id: docId || "admin-root",
       email: userRecord.email,
-      name: userRecord.name || (isMasterAdmin ? "Administrator" : "Academic Member"),
+      name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Academic Member"),
       role: isMasterAdmin ? "admin" : (userRecord.role || "student"),
       isMainAdmin: isMasterAdmin,
-      college: userRecord.college || "Academic Institute",
+      isMasterAdmin: isMasterAdmin,
+      college: isMasterAdmin ? (userRecord.college || "Central Academic Administration") : (userRecord.college || "Academic Institute"),
       mobile: userRecord.mobile || "",
-      year: userRecord.year || "",
+      year: isMasterAdmin ? (userRecord.year || "Faculty") : (userRecord.year || ""),
       hasPasskey: Boolean(userRecord.hasPasskey || (userRecord.passkeys && userRecord.passkeys.length > 0)),
       permissions: isMasterAdmin
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
