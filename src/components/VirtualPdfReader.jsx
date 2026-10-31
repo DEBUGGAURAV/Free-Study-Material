@@ -97,6 +97,7 @@ export default function VirtualPdfReader({
   const renderTaskRef = useRef(null);
   const searchMatchesRef = useRef([]);
   const matchIndexRef = useRef(0);
+  const streamRetryCountRef = useRef(0);
 
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -638,6 +639,7 @@ export default function VirtualPdfReader({
           if (previewInterval) clearInterval(previewInterval);
 
           if (!isCancelled && doc) {
+            streamRetryCountRef.current = 0;
             setPreviewProgress({
               percent: 100,
               loadedBytes: noteTotalSize || (doc.numPages * 50000),
@@ -722,6 +724,29 @@ export default function VirtualPdfReader({
             }
             setError("This study material is currently unavailable or has been archived from the cloud vault.");
             setLoading(false);
+            return;
+          }
+
+          // ⚡ Intelligent Auto-Retry for transient Cloud Vault stream warm-ups (500/503/network)
+          const isTransientStreamGlitch =
+            errMsg.includes("500") ||
+            errMsg.includes("503") ||
+            errMsg.includes("warming up") ||
+            errMsg.includes("reconnecting") ||
+            errMsg.includes("Streaming error") ||
+            errMsg.includes("Failed to fetch") ||
+            errMsg.includes("retrieving PDF") ||
+            errMsg.includes("network");
+
+          if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 2) {
+            streamRetryCountRef.current += 1;
+            console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
+            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
+            setTimeout(() => {
+              if (!isCancelled) {
+                setReloadTrigger((v) => v + 1);
+              }
+            }, 2200);
             return;
           }
 

@@ -3,6 +3,7 @@ const router = express.Router();
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const https = require("https");
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
@@ -136,6 +137,246 @@ function loadDiskCacheIntoMemory() {
 
 // Immediately load disk cache into high-speed LRU RAM on module init
 loadDiskCacheIntoMemory();
+
+/**
+ * Direct Telegram Bot API stream with native HTTP Range support (206 Partial Content).
+ * Avoids MTProto socket setup latency, update timeouts, and undici fetch ECONNRESET errors.
+ */
+function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
+    const metaReq = https.get(metaUrl, (metaRes) => {
+      let raw = "";
+      metaRes.on("data", (c) => (raw += c));
+      metaRes.on("end", () => {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed.ok || !parsed.result?.file_path) {
+            return reject(new Error("Telegram Bot getFile error: " + (parsed.description || "File not found in Bot API")));
+          }
+          const filePath = parsed.result.file_path;
+          const totalSize = Number(parsed.result.file_size) || 0;
+          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
+          const headers = {};
+          if (rangeHeader) {
+            headers["Range"] = rangeHeader;
+          }
+          const fileReq = https.get(fileUrl, { headers }, (fileRes) => {
+            if (fileRes.statusCode !== 200 && fileRes.statusCode !== 206) {
+              return reject(new Error(`Telegram Bot file stream status ${fileRes.statusCode}`));
+            }
+
+            if (!res.headersSent) {
+              res.status(fileRes.statusCode);
+              if (fileRes.headers["content-type"]) res.setHeader("Content-Type", fileRes.headers["content-type"]);
+              if (fileRes.headers["content-length"]) res.setHeader("Content-Length", fileRes.headers["content-length"]);
+              if (fileRes.headers["content-range"]) res.setHeader("Content-Range", fileRes.headers["content-range"]);
+              res.setHeader("Accept-Ranges", "bytes");
+              res.setHeader("X-Real-Source", "TELEGRAM_BOT_API");
+              res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Bot CDN Stream)");
+              res.setHeader("X-Data-Source", "bot_api");
+              res.setHeader("CF-Cache-Status", "MISS");
+            }
+
+            fileRes.pipe(res);
+
+            fileRes.on("end", () => {
+              if (!resolved) {
+                resolved = true;
+                resolve({ success: true, totalSize });
+              }
+            });
+
+            fileRes.on("error", (err) => {
+              if (!resolved) {
+                resolved = true;
+                reject(err);
+              }
+            });
+          });
+
+          fileReq.on("error", (err) => {
+            if (!resolved) {
+              resolved = true;
+              reject(err);
+            }
+          });
+          fileReq.setTimeout(25000, () => {
+            fileReq.destroy();
+            if (!resolved) {
+              resolved = true;
+              reject(new Error("Telegram Bot file download timeout"));
+            }
+          });
+        } catch (e) {
+          if (!resolved) {
+            resolved = true;
+            reject(e);
+          }
+        }
+      });
+    });
+
+    metaReq.on("error", (err) => {
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
+    });
+    metaReq.setTimeout(8000, () => {
+      metaReq.destroy();
+      if (!resolved) {
+        resolved = true;
+        reject(new Error("Telegram Bot getFile metadata timeout"));
+      }
+    });
+  });
+}
+
+/**
+ * Downloads full document buffer from Telegram Bot API with timeout safety.
+ */
+function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
+    const metaReq = https.get(metaUrl, (metaRes) => {
+      let raw = "";
+      metaRes.on("data", (c) => (raw += c));
+      metaRes.on("end", () => {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed.ok || !parsed.result?.file_path) {
+            return reject(new Error("Telegram Bot getFile failed: " + (parsed.description || "Unknown")));
+          }
+          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${parsed.result.file_path}`;
+          const fileReq = https.get(fileUrl, (fileRes) => {
+            if (fileRes.statusCode !== 200) {
+              return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
+            }
+            const chunks = [];
+            let total = 0;
+            fileRes.on("data", (chunk) => {
+              chunks.push(chunk);
+              total += chunk.length;
+            });
+            fileRes.on("end", () => {
+              if (!resolved) {
+                resolved = true;
+                resolve({
+                  buffer: Buffer.concat(chunks),
+                  totalSize: total,
+                  mimeType: "application/pdf",
+                });
+              }
+            });
+            fileRes.on("error", (err) => {
+              if (!resolved) {
+                resolved = true;
+                reject(err);
+              }
+            });
+          });
+          fileReq.on("error", (err) => {
+            if (!resolved) {
+              resolved = true;
+              reject(err);
+            }
+          });
+          fileReq.setTimeout(timeoutMs, () => {
+            fileReq.destroy();
+            if (!resolved) {
+              resolved = true;
+              reject(new Error("Bot file download timed out"));
+            }
+          });
+        } catch (e) {
+          if (!resolved) {
+            resolved = true;
+            reject(e);
+          }
+        }
+      });
+    });
+    metaReq.on("error", (err) => {
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
+    });
+    metaReq.setTimeout(7000, () => {
+      metaReq.destroy();
+      if (!resolved) {
+        resolved = true;
+        reject(new Error("Bot metadata timed out"));
+      }
+    });
+  });
+}
+
+// Background ingestion tracker to avoid duplicate concurrent ingestions
+const activeBgIngests = new Set();
+
+function triggerBackgroundCdnCache(id, note) {
+  if (activeBgIngests.has(id)) return;
+  const isDiskCached = fs.existsSync(path.join(CDN_CACHE_DIR, `${id}.bin`));
+  const isRamCached = Boolean(noteBufferCache.has(id));
+  if (isDiskCached || isRamCached) return;
+
+  activeBgIngests.add(id);
+  (async () => {
+    try {
+      let docData = null;
+      const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+      const botFileId = note.telegramBotFileId || note.telegramFileId;
+      if (botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024)) {
+        try {
+          docData = await getTelegramBotBuffer(botToken, botFileId, 25000);
+        } catch (botErr) {
+          console.warn(`[BG-CACHE] Bot API buffer fetch notice for ${id}:`, botErr.message);
+        }
+      }
+      if (!docData && note.telegramMessageId) {
+        try {
+          docData = await getDocumentBufferFromChannel(note.telegramMessageId);
+        } catch (mtErr) {
+          console.warn(`[BG-CACHE] MTProto buffer fetch notice for ${id}:`, mtErr.message);
+        }
+      }
+
+      if (docData && docData.buffer) {
+        const maxRamPool = getMaxRamBufferItems();
+        if (noteBufferCache.size >= maxRamPool) {
+          const oldestKey = noteBufferCache.keys().next().value;
+          noteBufferCache.delete(oldestKey);
+        }
+        const cacheItem = {
+          buffer: docData.buffer,
+          totalSize: docData.totalSize || docData.buffer.length,
+          contentType: docData.mimeType || "application/pdf",
+          cachedAt: Date.now(),
+        };
+        noteBufferCache.set(id, cacheItem);
+        saveCdnBuffer(id, docData.buffer, docData.mimeType);
+
+        if (db && !note.isCdnCached) {
+          db.collection("notes").doc(id).update({
+            isCdnCached: true,
+            cdnCachedAt: new Date().toISOString(),
+          }).catch(() => {});
+          note.isCdnCached = true;
+          ramCache.set(`note_${id}`, note, 3 * 3600);
+        }
+        console.log(`[BG-CACHE] 🚀 Note "${note.title}" background-cached to Edge CDN & RAM!`);
+      }
+    } catch (err) {
+      console.warn(`[BG-CACHE] Background caching failed for ${id}:`, err.message);
+    } finally {
+      activeBgIngests.delete(id);
+    }
+  })();
+}
 
 function purgeCdnDiskBuffer(noteId) {
   try {
@@ -1065,11 +1306,23 @@ router.post("/:id/cache-to-cdn", async (req, res) => {
       });
     }
 
-    if (!note.telegramMessageId) {
+    if (!note.telegramMessageId && !note.telegramBotFileId) {
       return res.status(400).json({ success: false, message: "Note has no primary cloud storage ID." });
     }
 
-    const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
+    let docData = null;
+    const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const botFileId = note.telegramBotFileId || note.telegramFileId;
+    if (botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024)) {
+      try {
+        docData = await getTelegramBotBuffer(botToken, botFileId, 25000);
+      } catch (botErr) {
+        console.warn(`[EDGE-CDN] Bot API buffer fetch fallback to MTProto for ${id}:`, botErr.message);
+      }
+    }
+    if (!docData && note.telegramMessageId) {
+      docData = await getDocumentBufferFromChannel(note.telegramMessageId);
+    }
     if (!docData || !docData.buffer) {
       return res.status(500).json({ success: false, message: "Could not fetch document buffer from storage node." });
     }
@@ -1536,150 +1789,96 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // ☁️ 2. First-time fetch from Primary Academic Cloud Storage Vault (Asia-Pacific Singapore DC)
-    // ⚡ INSTANT CDN CACHING: Store immediately into RAM Buffer & NVMe SSD Disk Cache so all future previews & downloads are 100% CDN!
-    let docData = null;
-    try {
-      docData = await getDocumentBufferFromChannel(note.telegramMessageId);
-    } catch (docErr) {
-      console.warn(`[CLOUD-VAULT] Buffer fetch notice for ${id}:`, docErr.message);
-      const isTgDeleted =
-        docErr.isDeleted ||
-        docErr.code === "TELEGRAM_MESSAGE_DELETED" ||
-        docErr.message?.includes("Document not found for message ID") ||
-        docErr.message?.includes("MESSAGE_ID_INVALID") ||
-        docErr.message?.includes("FILE_REFERENCE_EXPIRED");
+    // ☁️ 2. First-time fetch from Primary Academic Cloud Storage Vault
+    const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const botFileId = note.telegramBotFileId || note.telegramFileId;
+    const canUseBotApi = Boolean(botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024));
 
-      if (isTgDeleted && !note.driveLink && !note.fileUrl) {
-        await purgeDeletedTelegramNote(id, note?.title);
-        if (!res.headersSent) {
-          return res.status(404).json({
-            success: false,
-            noteDeleted: true,
-            isDeletedFromTelegram: true,
-            noteId: id,
-            message: "This study material has been removed from cloud storage and has been automatically cleaned up from the website.",
-          });
-        }
+    // Tier 2: Instant Telegram Bot API stream with native Range (206) support (<1s latency)
+    if (canUseBotApi) {
+      try {
+        await streamTelegramBotFile({
+          botToken,
+          botFileId,
+          res,
+          rangeHeader: req.headers.range,
+        });
+        triggerBackgroundCdnCache(id, note);
+        return;
+      } catch (botStreamErr) {
+        console.warn(`[STREAM] Telegram Bot API stream notice for ${id}:`, botStreamErr.message);
+        if (res.headersSent) return;
       }
     }
 
-    if (docData && docData.buffer) {
-      if (noteBufferCache.size >= 100) {
-        const oldestKey = noteBufferCache.keys().next().value;
-        noteBufferCache.delete(oldestKey);
-      }
-      const cacheItem = {
-        buffer: docData.buffer,
-        totalSize: docData.totalSize || docData.buffer.length,
-        contentType: docData.mimeType || "application/pdf",
-        cachedAt: Date.now(),
-      };
-      noteBufferCache.set(id, cacheItem);
-      saveCdnBuffer(id, docData.buffer, docData.mimeType);
+    // Tier 3: Telegram MTProto direct streaming via 4-Worker engine guarded by Circuit Breaker
+    if (note.telegramMessageId) {
+      try {
+        await telegramCircuitBreaker.execute(
+          async () => {
+            return await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+          },
+          async (breakerErr) => {
+            console.warn(`[STREAM-BREAKER] Triggering resilient fallback for note ${id}:`, breakerErr.message);
 
-      if (db && !note.isCdnCached) {
-        db.collection("notes").doc(id).update({
-          isCdnCached: true,
-          cdnCachedAt: new Date().toISOString(),
-        }).catch(() => {});
-        note.isCdnCached = true;
-        ramCache.set(`note_${id}`, note, 3 * 3600);
-
-        const rawNotes = ramCache.get("all_raw_notes");
-        if (Array.isArray(rawNotes)) {
-          const found = rawNotes.find((n) => n.id === id);
-          if (found) found.isCdnCached = true;
-        }
-      }
-
-      console.log(`[PERMANENT-CDN] 🚀 Note "${note.title}" (${(docData.buffer.length / 1048576).toFixed(2)} MB) permanently cached on Edge CDN & Firestore!`);
-
-      res.setHeader("X-Real-Source", "RAM_BUFFER");
-      res.setHeader("X-Source-Label", "In-Memory RAM Buffer (0ms Microsecond)");
-      res.setHeader("X-Data-Source", "ram");
-      res.setHeader("X-Storage-Node", "RAM-Buffer-Node");
-      res.setHeader("CF-Cache-Status", "HIT");
-      res.setHeader("X-Cache", "HIT");
-      res.setHeader("X-Edge-Cache", "HIT");
-      res.setHeader("Cache-Control", "public, max-age=604800, s-maxage=604800, immutable");
-
-      const totalSize = cacheItem.totalSize;
-      const rangeHeader = req.headers.range;
-
-      if (rangeHeader) {
-        const parts = rangeHeader.replace(/bytes=/, "").split("-");
-        let start = parseInt(parts[0], 10) || 0;
-        let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-        if (isNaN(start)) start = 0;
-        if (isNaN(end) || end >= totalSize) end = totalSize - 1;
-        const contentLength = end - start + 1;
-
-        res.status(206);
-        res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
-        res.setHeader("Content-Length", contentLength);
-        return res.end(docData.buffer.slice(start, end + 1));
-      } else {
-        res.status(200);
-        res.setHeader("Content-Length", totalSize);
-        return res.end(docData.buffer);
-      }
-    }
-
-    // Fallback: stream directly from cloud vault if whole buffer download could not complete
-    res.setHeader("X-Real-Source", "ACADEMIC_CLOUD_VAULT");
-    res.setHeader("X-Source-Label", "Primary Academic Cloud Storage (Encrypted Vault)");
-    res.setHeader("X-Data-Source", "storage");
-    res.setHeader("X-Storage-Node", "Academic-Cloud-Singapore-DC");
-    res.setHeader("CF-Cache-Status", "MISS");
-    res.setHeader("X-Cache", "MISS");
-    res.setHeader("X-Edge-Cache", "MISS");
-
-    // Stream directly from Telegram DC via MTProto 16-Worker engine guarded by Circuit Breaker
-    try {
-      await telegramCircuitBreaker.execute(
-        async () => {
-          return await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
-        },
-        async (breakerErr) => {
-          console.warn(`[STREAM-BREAKER] Triggering resilient fallback for note ${id}:`, breakerErr.message);
-
-          // Secondary Failover: Telegram Bot API direct stream (if bot file ID exists)
-          const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-          const botFileId = note.telegramBotFileId || note.telegramFileId;
-          if (botFileId && botToken) {
-            try {
-              const fileMetaRes = await fetch(`https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`);
-              const fileMetaData = await fileMetaRes.json();
-              if (fileMetaData.ok && fileMetaData.result?.file_path) {
-                const rawFileUrl = `https://api.telegram.org/file/bot${botToken}/${fileMetaData.result.file_path}`;
-                const fileStreamRes = await fetch(rawFileUrl);
-                if (fileStreamRes.ok && fileStreamRes.body) {
-                  const { Readable } = require("stream");
-                  const nodeReadable = Readable.fromWeb ? Readable.fromWeb(fileStreamRes.body) : fileStreamRes.body;
-                  return nodeReadable.pipe(res);
-                }
+            // Secondary Failover: Telegram Bot API direct stream (using native https)
+            if (botFileId && botToken) {
+              try {
+                await streamTelegramBotFile({
+                  botToken,
+                  botFileId,
+                  res,
+                  rangeHeader: req.headers.range,
+                });
+                triggerBackgroundCdnCache(id, note);
+                return;
+              } catch (botErr) {
+                console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
               }
-            } catch (botErr) {
-              console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
             }
-          }
 
-          if (note.driveLink) {
-            return res.redirect(note.driveLink);
-          }
+            if (note.driveLink) {
+              return res.redirect(note.driveLink);
+            }
+            if (note.fileUrl) {
+              return res.redirect(note.fileUrl);
+            }
 
-          throw breakerErr;
+            throw breakerErr;
+          }
+        );
+        triggerBackgroundCdnCache(id, note);
+        return;
+      } catch (streamErr) {
+        console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
+
+        if (note.driveLink) {
+          return res.redirect(note.driveLink);
         }
-      );
-    } catch (streamErr) {
-      console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
+        if (note.fileUrl) {
+          return res.redirect(note.fileUrl);
+        }
 
-      if (note.driveLink) {
-        return res.redirect(note.driveLink);
+        throw streamErr;
       }
+    }
 
-      throw streamErr;
+    // Tier 4: External URL or Google Drive failover
+    if (note.driveLink) {
+      return res.redirect(note.driveLink);
+    }
+    if (note.fileUrl) {
+      return res.redirect(note.fileUrl);
+    }
+
+    // Tier 5: Resilient 503 Service Unavailable if headers have not been sent
+    if (!res.headersSent) {
+      res.setHeader("Retry-After", "3");
+      return res.status(503).json({
+        success: false,
+        retryable: true,
+        message: "Academic Cloud Vault is warming up storage connections. Please retry in a moment.",
+      });
     }
   } catch (err) {
     console.error("[STREAM] Error streaming note:", err.message);
@@ -1706,7 +1905,12 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     if (!res.headersSent) {
-      res.status(500).json({ success: false, message: "Streaming error: " + err.message, retryable: true });
+      res.setHeader("Retry-After", "3");
+      res.status(503).json({
+        success: false,
+        message: "Academic Cloud Vault is warming up. Please retry in a moment.",
+        retryable: true,
+      });
     }
   }
 });

@@ -1164,7 +1164,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
     res.setHeader("Content-Length", totalSize);
   }
 
-  // Stream in 512KB chunks using 16 parallel worker connections
+  // Stream in 512KB chunks using stable 4-worker pipeline (avoids socket overload & timeouts)
   const chunkSize = 512 * 1024;
   const location = new Api.InputDocumentFileLocation({
     id: doc.id,
@@ -1179,7 +1179,7 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
     offset: bigInt(start),
     chunkSize: chunkSize,
     requestSize: chunkSize,
-    workers: 16,
+    workers: 4,
   })) {
     if (res.writableEnded || res.destroyed) break;
 
@@ -1229,48 +1229,56 @@ async function getDocumentBufferFromChannel(messageId) {
   const isPdf = !docMime || docMime === "application/octet-stream" || docMime.includes("pdf");
   const finalMime = isPdf ? "application/pdf" : (doc.mimeType || "application/pdf");
 
-  // Strategy 1: GramJS downloadMedia (Fast parallel worker pipeline)
-  try {
-    const downloadedBuf = await c.downloadMedia(messages[0], {
-      workers: 16,
-    });
-    if (downloadedBuf && Buffer.isBuffer(downloadedBuf) && downloadedBuf.length > 0) {
-      return {
-        buffer: downloadedBuf,
-        totalSize: downloadedBuf.length,
-        mimeType: finalMime,
-      };
+  // Strategy 1: GramJS downloadMedia (Fast parallel worker pipeline with 12s timeout)
+  const downloadPromise = (async () => {
+    try {
+      const downloadedBuf = await c.downloadMedia(messages[0], {
+        workers: 4,
+      });
+      if (downloadedBuf && Buffer.isBuffer(downloadedBuf) && downloadedBuf.length > 0) {
+        return {
+          buffer: downloadedBuf,
+          totalSize: downloadedBuf.length,
+          mimeType: finalMime,
+        };
+      }
+    } catch (dlErr) {
+      console.warn("[MTProto BUFFER] downloadMedia fallback to iterDownload:", dlErr.message);
     }
-  } catch (dlErr) {
-    console.warn("[MTProto BUFFER] downloadMedia fallback to iterDownload:", dlErr.message);
-  }
 
-  // Strategy 2: Parallel 512KB chunk iteration via iterDownload
-  const chunkSize = 512 * 1024;
-  const location = new Api.InputDocumentFileLocation({
-    id: doc.id,
-    accessHash: doc.accessHash,
-    fileReference: doc.fileReference,
-    thumbSize: "",
-  });
+    // Strategy 2: Parallel 512KB chunk iteration via iterDownload
+    const chunkSize = 512 * 1024;
+    const location = new Api.InputDocumentFileLocation({
+      id: doc.id,
+      accessHash: doc.accessHash,
+      fileReference: doc.fileReference,
+      thumbSize: "",
+    });
 
-  const chunks = [];
-  for await (const chunk of c.iterDownload({
-    file: location,
-    offset: bigInt(0),
-    chunkSize: chunkSize,
-    requestSize: chunkSize,
-    workers: 16,
-  })) {
-    chunks.push(chunk);
-  }
+    const chunks = [];
+    for await (const chunk of c.iterDownload({
+      file: location,
+      offset: bigInt(0),
+      chunkSize: chunkSize,
+      requestSize: chunkSize,
+      workers: 4,
+    })) {
+      chunks.push(chunk);
+    }
 
-  const buffer = Buffer.concat(chunks);
-  return {
-    buffer,
-    totalSize: buffer.length || totalSize,
-    mimeType: finalMime,
-  };
+    const buffer = Buffer.concat(chunks);
+    return {
+      buffer,
+      totalSize: buffer.length || totalSize,
+      mimeType: finalMime,
+    };
+  })();
+
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error("MTProto document buffer download timed out after 12s")), 12000)
+  );
+
+  return await Promise.race([downloadPromise, timeoutPromise]);
 }
 
 /**
