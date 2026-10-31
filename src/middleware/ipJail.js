@@ -18,6 +18,19 @@ const jailedDevicesDetails = new Map(); // deviceId -> { deviceId, unjailTime, j
 const incidentsRegistry = new Map(); // incidentId -> { incidentId, ip, deviceId, unjailTime, reason }
 const pardonedIncidents = new Set(); // incidentId -> Set of explicitly pardoned incident IDs
 const ipRequestHistory = new Map(); // ip -> Array of timestamps
+const knownAdminIps = new Map(); // ip -> expiryMs (30-day sliding immunity window for active admins)
+
+/**
+ * Register an IP with absolute admin immunity
+ */
+function registerAdminIp(ip, ttlMs = 30 * 24 * 60 * 60 * 1000) {
+  if (!ip || ip === "unknown") return;
+  knownAdminIps.set(ip, Date.now() + ttlMs);
+  if (jailedIps.has(ip)) {
+    jailedIps.delete(ip);
+    jailedIpsDetails.delete(ip);
+  }
+}
 
 // Real-Time Threat Metrics & Event Buffer
 let totalThreatsDetected = 0;
@@ -197,42 +210,57 @@ function isWhitelistedIp(req, ip) {
     return true;
   }
 
-  // Admin bypass overrides (Secured against unauthorized forgery)
-  const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
-  if (
-    req.query?.admin_bypass === bypassKey ||
-    req.query?.bypass === bypassKey ||
-    req.headers["x-admin-bypass"] === bypassKey
-  ) {
-    if (
-      !ip ||
-      ip === "127.0.0.1" ||
-      ip === "::1" ||
-      ip === "localhost" ||
-      ip.startsWith("192.168.") ||
-      ip.startsWith("10.")
-    ) {
+  // 1. Check known active Administrator IPs cache
+  if (ip && knownAdminIps.has(ip)) {
+    if (Date.now() < knownAdminIps.get(ip)) {
       return true;
+    } else {
+      knownAdminIps.delete(ip);
     }
+  }
+
+  // 2. Direct Admin JWT Token & Session Check (Absolute immunity for logged-in Administrator on ANY IP)
+  if (req) {
     try {
-      const authHeader = req.headers["authorization"] || "";
-      const cookieHeader = req.headers["cookie"] || "";
+      const authHeader = req.headers?.["authorization"] || req.headers?.["x-admin-token"] || "";
+      const cookieHeader = req.headers?.["cookie"] || "";
       const rawToken =
-        (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null) ||
-        (cookieHeader.match(/(?:^|;\s*)(?:fsm_token|token|vault_token)=([^;]+)/)?.[1]) ||
+        (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : authHeader.trim()) ||
+        (cookieHeader.match(/(?:^|;\s*)(?:fsm_admin_token|admin_token|fsm_token|token|vault_token)=([^;]+)/)?.[1]) ||
+        req.query?.admin_token ||
         req.query?.token;
+
       if (rawToken) {
         const decoded = jwt.decode(decodeURIComponent(rawToken));
-        if (decoded && (decoded.role === "admin" || decoded.role === "half_admin" || decoded.isMainAdmin)) {
+        if (
+          decoded &&
+          (decoded.role === "admin" ||
+            decoded.role === "half_admin" ||
+            decoded.isMainAdmin ||
+            decoded.isMasterAdmin ||
+            (decoded.email && process.env.ADMIN_EMAIL && decoded.email.toLowerCase().trim() === process.env.ADMIN_EMAIL.toLowerCase().trim()))
+        ) {
+          if (ip) registerAdminIp(ip);
           return true;
         }
       }
     } catch (_) {}
-  }
 
-  // Cloudflare Worker Edge request
-  if (req.headers["x-worker-origin"] || (req.headers["host"] && req.headers["host"].includes("workers.dev"))) {
-    return true;
+    // 3. Admin bypass overrides (Secured against unauthorized forgery)
+    const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
+    if (
+      req.query?.admin_bypass === bypassKey ||
+      req.query?.bypass === bypassKey ||
+      req.headers?.["x-admin-bypass"] === bypassKey
+    ) {
+      if (ip) registerAdminIp(ip);
+      return true;
+    }
+
+    // 4. Cloudflare Worker Edge request
+    if (req.headers?.["x-worker-origin"] || (req.headers?.["host"] && req.headers["host"].includes("workers.dev"))) {
+      return true;
+    }
   }
 
   return false;
@@ -1083,6 +1111,13 @@ function clearAllJails() {
  */
 function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, deviceId = "") {
   if (!ip || ip === "unknown") return null;
+
+  // 🛡️ Absolute Master Immunity: Never jail Administrator IPs
+  if (isWhitelistedIp(null, ip) || knownAdminIps.has(ip)) {
+    console.log(`[IP-JAIL] 🛡️ Immunity check: IP ${ip} belongs to Administrator or Whitelist. Skipping detention.`);
+    return null;
+  }
+
   const isLoopback = (ip === "127.0.0.1" || ip === "::1" || ip === "localhost");
   const unjailTime = Date.now() + durationMs;
   const incidentId = customIncidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1123,6 +1158,13 @@ function jailSpecificIp(ip, reason = "Client Script Tampering", durationMs = 24 
  */
 function jailSpecificDevice(deviceId, reason = "Client Script Tampering", durationMs = 24 * 60 * 60 * 1000, customIncidentId = null, ip = "unknown") {
   if (!deviceId) return null;
+
+  // 🛡️ Absolute Master Immunity: Never jail Device if associated with Administrator IP
+  if (ip && ip !== "unknown" && (isWhitelistedIp(null, ip) || knownAdminIps.has(ip))) {
+    console.log(`[IP-JAIL] 🛡️ Immunity check: Device ${deviceId} associated with Administrator IP ${ip}. Skipping detention.`);
+    return null;
+  }
+
   const unjailTime = Date.now() + durationMs;
   const incidentId = customIncidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
 
@@ -1172,5 +1214,7 @@ module.exports = {
   getThreatIntelligence,
   clearAllJails,
   incidentsRegistry,
+  registerAdminIp,
+  isWhitelistedIp,
 };
 

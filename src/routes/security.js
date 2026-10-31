@@ -236,6 +236,29 @@ router.post("/tamper-alert", async (req, res) => {
       } catch (_) {}
     }
 
+    // 🛡️ 1.5. Absolute Master Immunity for Administrators (Never record strikes, never jail IP/Device)
+    const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+    const isAdminUser =
+      (authUser && (authUser.role === "admin" || authUser.role === "half_admin" || authUser.isMainAdmin || authUser.isMasterAdmin)) ||
+      (fullUser && (fullUser.role === "admin" || fullUser.role === "half_admin" || fullUser.isMainAdmin || fullUser.isMasterAdmin)) ||
+      Boolean(req.headers["x-admin-token"]) ||
+      (fullUser?.email && adminEmail && fullUser.email.toLowerCase().trim() === adminEmail);
+
+    if (isAdminUser) {
+      try {
+        const { registerAdminIp } = require("../middleware/ipJail");
+        if (clientIp) registerAdminIp(clientIp);
+      } catch (_) {}
+      console.log(`[ANTI-TAMPER] 🛡️ Administrator session active (${fullUser.email || fullUser.name || clientIp}). Bypassing anti-tamper inspection.`);
+      return res.json({
+        success: true,
+        action: "BYPASS",
+        strikeCount: 0,
+        isBlocked: false,
+        message: "Administrator session immunity active.",
+      });
+    }
+
     // 2. Track Strike Count per User ID, Anonymous Guest UID, or IP Address
     const guestUid = clientUser?.guestUid || null;
     const strikeKey = userId || guestUid || clientIp;

@@ -59,9 +59,22 @@ function isDevToolsBypassed() {
     }
   } catch (_) {}
 
-  // 2. Active logged-in student check:
-  // If the currently active logged-in user is a student, NEVER bypass,
-  // even if an old fsm_admin_token was left in localStorage!
+  // 2. Admin token presence or Admin login flag (Master Immunity on ANY page)
+  try {
+    const hasAdminToken =
+      localStorage.getItem("fsm_admin_token") ||
+      sessionStorage.getItem("fsm_admin_token") ||
+      localStorage.getItem("vault_admin_token") ||
+      sessionStorage.getItem("vault_admin_token") ||
+      localStorage.getItem("admin_logged_in") === "true" ||
+      sessionStorage.getItem("admin_logged_in") === "true";
+
+    if (hasAdminToken) {
+      return true;
+    }
+  } catch (_) {}
+
+  // 3. Active logged-in profile check (Admin / Half-Admin)
   try {
     const userStr = localStorage.getItem("vault_user");
     if (userStr) {
@@ -69,16 +82,7 @@ function isDevToolsBypassed() {
       if (u.role === "admin" || u.role === "half_admin" || u.isMasterAdmin || u.isMainAdmin) {
         return true;
       }
-      return false; // Student is active -> Anti-tamper must protect!
-    }
-  } catch (_) {}
-
-  // 3. Admin token check ONLY applies if user is actually on admin URL or hash
-  try {
-    const hasAdminToken = localStorage.getItem("fsm_admin_token") || sessionStorage.getItem("fsm_admin_token");
-    const isAdminUrl = window.location.pathname.startsWith("/admin") || window.location.hash.includes("admin");
-    if (hasAdminToken && isAdminUrl) {
-      return true;
+      return false; // Verified student is active -> Anti-tamper protects
     }
   } catch (_) {}
 

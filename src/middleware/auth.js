@@ -69,6 +69,15 @@ function authenticateToken(req, res, next) {
 
     req.user = user;
 
+    // 🛡️ Auto-whitelist Admin IP on active session (Absolute immunity from automated IP Jail)
+    if (user && (user.role === "admin" || user.role === "half_admin" || user.isMainAdmin || user.isMasterAdmin || isMainAdmin)) {
+      try {
+        const { registerAdminIp, getClientIp } = require("./ipJail");
+        const ip = getClientIp(req);
+        if (ip) registerAdminIp(ip);
+      } catch (_) {}
+    }
+
     // Refresh vault_last_active cookie periodically (debounced to 30s) on active API requests
     if (req.user && (!lastActiveStr || Date.now() - parseInt(lastActiveStr, 10) > 30000)) {
       const isProd = process.env.NODE_ENV === "production";
