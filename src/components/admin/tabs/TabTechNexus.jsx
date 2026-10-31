@@ -3,7 +3,7 @@ import {
   X, Shield, Trash2, Search, Clock, Save, RefreshCw,
   Database, Cpu, Server, HardDrive, Globe, Cloud, Download,
   Upload, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Lock
+  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera
 } from "lucide-react";
 import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
@@ -91,6 +91,9 @@ export default function TabTechNexus(props) {
 
   const currentDedupMB = Number(techSettings.dedupMaxVarianceMB ?? 3);
   const currentDedupBytes = Number(techSettings.dedupMaxVarianceBytes ?? (currentDedupMB * 1024 * 1024));
+
+  const isAirDropOn = techSettings.enableP2pAirDrop !== false;
+  const isQrMeshOn = techSettings.enableQrMeshConnect !== false;
 
   return (
             <div>
@@ -530,7 +533,7 @@ export default function TabTechNexus(props) {
                   )}
                 </div>
 
-                {/* CARD 2: P2P Campus AirDrop & WebRTC Swarm */}
+                {/* CARD 2: Air-Drop Campus Swarm (Zero-Internet BitTorrent Mesh) */}
                 <div
                   style={{
                     background: "rgba(255, 255, 255, 0.02)",
@@ -543,21 +546,43 @@ export default function TabTechNexus(props) {
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <Share2 size={18} color="#c084fc" />
                       <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
-                        2. P2P Campus AirDrop (WebRTC Swarm)
+                        2. ⚡ Air-Drop Campus Swarm (BitTorrent Mesh)
                       </h4>
                     </div>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.8rem", color: techSettings.enableP2pAirDrop ? "#10b981" : "var(--text-dim)", fontWeight: 600 }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(techSettings.enableP2pAirDrop)}
-                        onChange={() => handleToggleTechSetting("enableP2pAirDrop")}
-                        style={{ accentColor: "#c084fc", width: "16px", height: "16px" }}
+                    {/* Dedicated ON/OFF Button Switch */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTechSetting("enableP2pAirDrop")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "5px 12px",
+                        borderRadius: "20px",
+                        border: isAirDropOn ? "1px solid #10b981" : "1px solid rgba(239, 68, 68, 0.4)",
+                        background: isAirDropOn ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.12)",
+                        color: isAirDropOn ? "#34d399" : "#f87171",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      title={isAirDropOn ? "Click to Turn OFF Air-Drop Swarm" : "Click to Turn ON Air-Drop Swarm"}
+                    >
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: isAirDropOn ? "#10b981" : "#ef4444",
+                          boxShadow: isAirDropOn ? "0 0 8px #10b981" : "none",
+                        }}
                       />
-                      AirDrop Mode
-                    </label>
+                      <span>{isAirDropOn ? "ON (ACTIVE)" : "OFF (DISABLED)"}</span>
+                    </button>
                   </div>
                   <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginBottom: "14px" }}>
-                    Enables BitTorrent-like direct browser-to-browser P2P chunk transfer between students on the same campus WiFi network at 0ms latency with zero data usage.
+                    Enables BitTorrent-like direct browser-to-browser P2P chunk transfer between students on the same campus WiFi network or Mobile Hotspot at 0ms latency with zero internet consumption.
                   </p>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", fontSize: "0.8rem", padding: "10px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
@@ -588,8 +613,80 @@ export default function TabTechNexus(props) {
                   </div>
 
                   <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.74rem", color: "#94a3b8" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: techSettings.enableP2pAirDrop ? "#10b981" : "#64748b" }}></span>
-                    Signaling: WebRTC DataChannels with auto-fallback to Cloudflare CDN Edge
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: isAirDropOn ? "#10b981" : "#64748b" }}></span>
+                    Status: {isAirDropOn ? "BitTorrent Swarm Active (₹0 Server Cost)" : "AirDrop Swarm Paused"}
+                  </div>
+                </div>
+
+                {/* CARD 2B: 1-Tap QR Mesh Connect (Camera/QR Zero-Server Handshake) */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "12px",
+                    padding: "18px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <QrCode size={18} color="#38bdf8" />
+                      <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
+                        2B. 📱 1-Tap QR Mesh Connect
+                      </h4>
+                    </div>
+                    {/* Dedicated ON/OFF Button Switch */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleTechSetting("enableQrMeshConnect")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "5px 12px",
+                        borderRadius: "20px",
+                        border: isQrMeshOn ? "1px solid #38bdf8" : "1px solid rgba(239, 68, 68, 0.4)",
+                        background: isQrMeshOn ? "rgba(56, 189, 248, 0.15)" : "rgba(239, 68, 68, 0.12)",
+                        color: isQrMeshOn ? "#38bdf8" : "#f87171",
+                        fontSize: "0.78rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                      }}
+                      title={isQrMeshOn ? "Click to Turn OFF QR Mesh Connect" : "Click to Turn ON QR Mesh Connect"}
+                    >
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: isQrMeshOn ? "#38bdf8" : "#ef4444",
+                          boxShadow: isQrMeshOn ? "0 0 8px #38bdf8" : "none",
+                        }}
+                      />
+                      <span>{isQrMeshOn ? "ON (ACTIVE)" : "OFF (DISABLED)"}</span>
+                    </button>
+                  </div>
+                  <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginBottom: "14px" }}>
+                    Replaces central server signaling with 1-Tap Camera &amp; Animated QR handshake. Allows students to establish peer connections even in dead-zones (0% mobile network/jammers).
+                  </p>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", fontSize: "0.8rem", padding: "10px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
+                    <span style={{ color: "var(--text-muted)" }}>Signaling Channel:</span>
+                    <span style={{ color: "#38bdf8", fontWeight: 700, fontSize: "0.78rem" }}>
+                      📷 Optical Camera &amp; Screen Barcode
+                    </span>
+                  </div>
+
+                  <div style={{ marginTop: "10px", padding: "8px 10px", background: "rgba(56, 189, 248, 0.06)", borderRadius: "8px", border: "1px solid rgba(56, 189, 248, 0.15)" }}>
+                    <div style={{ fontSize: "0.76rem", color: "#bae6fd", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Camera size={14} />
+                      <span><strong>Native BarcodeDetector:</strong> Instant 0.1s scanning without uploading frames to cloud.</span>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.74rem", color: "#94a3b8" }}>
+                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: isQrMeshOn ? "#38bdf8" : "#64748b" }}></span>
+                    Status: {isQrMeshOn ? "1-Tap QR Mesh Ready (Zero-Server Handshake)" : "QR Handshake Disabled"}
                   </div>
                 </div>
 

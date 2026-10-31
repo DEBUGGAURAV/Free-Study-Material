@@ -46,6 +46,7 @@ import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
+import CampusAirdropModal from "./CampusAirdropModal";
 
 // Setup PDF.js worker
 if (typeof window !== "undefined") {
@@ -117,6 +118,7 @@ export default function VirtualPdfReader({
 
   // P2P status
   const [isCachedP2P, setIsCachedP2P] = useState(false);
+  const [isAirdropModalOpen, setIsAirdropModalOpen] = useState(false);
 
   // 🚀 Real-time CDN Preview Stream Progress (%)
   const [previewProgress, setPreviewProgress] = useState({
@@ -3214,6 +3216,30 @@ export default function VirtualPdfReader({
             <Smartphone size={14} />
             <span>{wakeLockActive ? "Awake ON" : "Awake"}</span>
           </button>
+
+          {/* ⚡ 1-Tap Campus AirDrop & QR Mesh */}
+          <button
+            type="button"
+            onClick={() => setIsAirdropModalOpen(true)}
+            style={{
+              padding: "5px 10px",
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: "rgba(168, 85, 247, 0.18)",
+              color: "#c084fc",
+              border: "1px solid rgba(168, 85, 247, 0.4)",
+              borderRadius: "6px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+            title="⚡ Campus AirDrop: Offline device-to-device note transfer via 1-Tap QR Mesh (0 KB internet)"
+          >
+            <Zap size={14} />
+            <span>⚡ AirDrop</span>
+          </button>
         </div>
 
         {/* Center: Page Jumpers */}
@@ -4280,6 +4306,20 @@ export default function VirtualPdfReader({
           </div>
         </div>
       )}
+
+      {/* ⚡ Campus AirDrop & 1-Tap QR Mesh Modal */}
+      <CampusAirdropModal
+        isOpen={isAirdropModalOpen}
+        onClose={() => setIsAirdropModalOpen(false)}
+        currentNote={note || { id: noteId, title, subject: subjectName, branch: branchName }}
+        onNoteReceived={(data) => {
+          if (data?.buffer) {
+            setLocalPdfBuffer(data.buffer);
+            setStreamSource("p2p");
+            setIsCachedP2P(true);
+          }
+        }}
+      />
     </div>
   );
 }

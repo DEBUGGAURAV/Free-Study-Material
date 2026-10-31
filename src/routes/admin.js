@@ -3316,8 +3316,9 @@ let techSettings = {
   enableCdnAutoPrewarm: true,
   cdnMaxRamItems: 50,
 
-  // P2P Campus AirDrop (WebRTC Local Mesh)
+  // P2P Campus AirDrop (WebRTC Local Mesh) & 1-Tap QR Mesh Connect
   enableP2pAirDrop: true,
+  enableQrMeshConnect: true,
   p2pMaxPeers: "auto",
   autoP2pHardwareGuard: true,
 
@@ -3547,7 +3548,8 @@ router.get("/tech-flags", (req, res) => {
     flags: {
       enableCdnAutoPrewarm: techSettings.enableCdnAutoPrewarm,
       cdnMaxRamItems: techSettings.cdnMaxRamItems || "auto",
-      enableP2pAirDrop: techSettings.enableP2pAirDrop,
+      enableP2pAirDrop: techSettings.enableP2pAirDrop !== false,
+      enableQrMeshConnect: techSettings.enableQrMeshConnect !== false,
       p2pMaxPeers: techSettings.p2pMaxPeers || "auto",
       autoP2pHardwareGuard: techSettings.autoP2pHardwareGuard !== false,
       enableClientAi: techSettings.enableClientAi,
