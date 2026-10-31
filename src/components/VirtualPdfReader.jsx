@@ -293,8 +293,16 @@ export default function VirtualPdfReader({
         dLink = `https://drive.google.com/file/d/${match[1]}/preview`;
       }
       setNativeSrc(dLink);
-    } else if (url) {
-      setNativeSrc(url);
+    } else {
+      const activeId = noteId || note?.id;
+      if (activeId) {
+        const cleanName = getNotePdfFileName(note || { id: activeId, title });
+        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+        setNativeSrc(`/api/notes/${activeId}/${pathSegment}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+      } else if (url) {
+        setNativeSrc(url);
+      }
     }
 
     return () => {
@@ -302,7 +310,7 @@ export default function VirtualPdfReader({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [file, url, note]);
+  }, [file, url, note, noteId]);
 
   // Load document on-demand (streaming range requests or local file)
   useEffect(() => {
@@ -2176,6 +2184,22 @@ export default function VirtualPdfReader({
     }
   };
 
+  const handleSwitchToNative = async () => {
+    setError(null);
+    setLoading(false);
+    setUseNativeViewer(true);
+    if (pdfDoc && typeof pdfDoc.getData === "function") {
+      try {
+        const data = await pdfDoc.getData();
+        if (data && data.length > 0) {
+          const blob = new Blob([data], { type: "application/pdf" });
+          const blobUrl = URL.createObjectURL(blob);
+          setNativeSrc(blobUrl);
+        }
+      } catch (_) {}
+    }
+  };
+
   return (
     <div
       ref={containerRef}
@@ -2454,10 +2478,7 @@ export default function VirtualPdfReader({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setError(null);
-                  setUseNativeViewer(true);
-                }}
+                onClick={handleSwitchToNative}
                 style={{
                   padding: "5px 12px",
                   fontSize: "0.78rem",
@@ -3649,11 +3670,13 @@ export default function VirtualPdfReader({
               ref={iframeRef}
               key={`native-frame-${noteId || "pdf"}`}
               src={
-                !nativeSrc
-                  ? (url ? `${(url || "").split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined)
-                  : nativeSrc.startsWith("https://drive.google.com")
-                  ? nativeSrc
-                  : `${(nativeSrc || "").split("#")[0]}${getNativeToolbarParams(currentPage)}`
+                nativeSrc
+                  ? (nativeSrc.startsWith("https://drive.google.com")
+                      ? nativeSrc
+                      : `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`)
+                  : (noteId || note?.id
+                      ? `/api/notes/${noteId || note?.id}/stream.pdf${getNativeToolbarParams(currentPage)}`
+                      : (url ? `${url.split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined))
               }
               allow="fullscreen"
               onLoad={() => {
@@ -3680,7 +3703,7 @@ export default function VirtualPdfReader({
           </div>
         )}
 
-        {(loading || (useNativeViewer && nativeLoading)) && (
+        {((!useNativeViewer && loading) || (useNativeViewer && nativeLoading)) && (
           <div
             style={{
               textAlign: "center",
@@ -4022,10 +4045,7 @@ export default function VirtualPdfReader({
                 <span>Retry Connection</span>
               </button>
               <button
-                onClick={() => {
-                  setError(null);
-                  setUseNativeViewer(true);
-                }}
+                onClick={handleSwitchToNative}
                 className="btn-primary"
                 style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
               >
