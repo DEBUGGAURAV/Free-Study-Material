@@ -87,11 +87,23 @@ async function request(endpoint, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: "include",
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      credentials: "include",
+      headers,
+    });
+  } catch (fetchErr) {
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    const msg = isOffline
+      ? "You are currently offline. Please check your internet connection."
+      : "Backend server is unreachable on port 5000. Please ensure the server is running (`npm start`).";
+    const netErr = new Error(msg);
+    netErr.status = 503;
+    netErr.original = fetchErr;
+    throw netErr;
+  }
 
   let data = {};
   const rawText = await res.text().catch(() => "");
