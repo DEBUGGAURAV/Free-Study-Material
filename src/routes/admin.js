@@ -3352,6 +3352,9 @@ let techSettings = {
   // Formula & Diagram Clipper
   enableFormulaClipper: true,
 
+  // Smart Page-Level Discussion & QR Bridge (Preview Mode)
+  enablePageDiscussionBridge: true,
+
   // WebRTC Collaborative Study Room
   enableStudyRoom: true,
   studyRoomMaxUsers: 8,
@@ -3566,6 +3569,7 @@ router.get("/tech-flags", (req, res) => {
       inactivityTimeoutMinutes: techSettings.inactivityTimeoutMinutes,
       enableInactivityWarning: techSettings.enableInactivityWarning,
       enableFormulaClipper: techSettings.enableFormulaClipper,
+      enablePageDiscussionBridge: techSettings.enablePageDiscussionBridge !== false,
       enableStudyRoom: techSettings.enableStudyRoom,
       studyRoomMaxUsers: techSettings.studyRoomMaxUsers || "auto",
       autoUiCollaboration: techSettings.autoUiCollaboration !== false,

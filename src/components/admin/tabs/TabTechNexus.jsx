@@ -3,7 +3,7 @@ import {
   X, Shield, Trash2, Search, Clock, Save, RefreshCw,
   Database, Cpu, Server, HardDrive, Globe, Cloud, Download,
   Upload, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera
+  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera, MessageSquare
 } from "lucide-react";
 import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
@@ -1034,6 +1034,30 @@ export default function TabTechNexus(props) {
                         checked={Boolean(techSettings.enableOfflineQueue)}
                         onChange={() => handleToggleTechSetting("enableOfflineQueue")}
                         style={{ accentColor: "#10b981", width: "16px", height: "16px" }}
+                      />
+                    </div>
+
+                    {/* Smart Page Discussion & QR Bridge Toggle (Preview Mode) */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(6, 182, 212, 0.05)", border: "1px solid rgba(6, 182, 212, 0.15)", borderRadius: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <QrCode size={16} color="#06b6d4" />
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#f8fafc" }}>Page Discussion &amp; QR Bridge (Preview Mode)</span>
+                            <span style={{ fontSize: "0.62rem", background: "rgba(6, 182, 212, 0.2)", color: "#67e8f9", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>
+                              Preview Only
+                            </span>
+                          </div>
+                          <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                            Shows interactive "Stuck on this page? Discuss in Study Pod" pill &amp; scannable mobile QR on each page in Virtual PDF Reader.
+                          </span>
+                        </div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={techSettings.enablePageDiscussionBridge !== false}
+                        onChange={() => handleToggleTechSetting("enablePageDiscussionBridge")}
+                        style={{ accentColor: "#06b6d4", width: "18px", height: "18px", cursor: "pointer" }}
                       />
                     </div>
 

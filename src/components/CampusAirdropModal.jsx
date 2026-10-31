@@ -42,12 +42,15 @@ export default function CampusAirdropModal({
   const [receivedNoteData, setReceivedNoteData] = useState(null);
   const [receiverDone, setReceiverDone] = useState(false);
   const [cameraActive, setCameraActive] = useState(false);
+  const [hasBarcodeDetector, setHasBarcodeDetector] = useState(true);
   const [manualOfferText, setManualOfferText] = useState("");
   const [showManualReceive, setShowManualReceive] = useState(false);
 
   const videoRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const scanIntervalRef = useRef(null);
+  const senderSessionRef = useRef(null);
+  const receiverSessionRef = useRef(null);
 
   // Initialize Sender when modal opens on "send" tab
   useEffect(() => {
@@ -81,6 +84,7 @@ export default function CampusAirdropModal({
             return;
           }
           session = s;
+          senderSessionRef.current = s;
           setSenderSession(s);
 
           // Generate QR code for the Offer Token
@@ -108,16 +112,23 @@ export default function CampusAirdropModal({
       isCancelled = true;
       if (session) {
         cancelAirDropSession(session);
+        if (senderSessionRef.current === session) senderSessionRef.current = null;
       }
     };
   }, [activeTab, currentNote?.id]);
 
-  // Clean up Camera on unmount or tab change
+  // Clean up Camera & active Peer Sessions on unmount
   useEffect(() => {
     return () => {
       stopCamera();
-      if (senderSession) cancelAirDropSession(senderSession);
-      if (receiverSession) cancelAirDropSession(receiverSession);
+      if (senderSessionRef.current) {
+        cancelAirDropSession(senderSessionRef.current);
+        senderSessionRef.current = null;
+      }
+      if (receiverSessionRef.current) {
+        cancelAirDropSession(receiverSessionRef.current);
+        receiverSessionRef.current = null;
+      }
     };
   }, []);
 
@@ -129,6 +140,12 @@ export default function CampusAirdropModal({
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.srcObject = null;
+      } catch (_) {}
     }
     setCameraActive(false);
   };
@@ -149,7 +166,11 @@ export default function CampusAirdropModal({
       setCameraActive(true);
 
       // Check if native BarcodeDetector API is supported
-      if ("BarcodeDetector" in window) {
+      if (!("BarcodeDetector" in window)) {
+        setHasBarcodeDetector(false);
+        setShowManualReceive(true);
+      } else {
+        setHasBarcodeDetector(true);
         const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
         scanIntervalRef.current = setInterval(async () => {
           if (!videoRef.current || videoRef.current.readyState < 2) return;
@@ -190,16 +211,21 @@ export default function CampusAirdropModal({
         },
       });
 
+      receiverSessionRef.current = session;
       setReceiverSession(session);
 
-      // Render Answer QR
-      const url = await QRCode.toDataURL(session.answerToken, {
-        width: 260,
-        margin: 2,
-        color: { dark: "#0f172a", light: "#ffffff" },
-        errorCorrectionLevel: "L",
-      });
-      setAnswerQrUrl(url);
+      // Render Answer QR safely
+      try {
+        const url = await QRCode.toDataURL(session.answerToken, {
+          width: 260,
+          margin: 2,
+          color: { dark: "#0f172a", light: "#ffffff" },
+          errorCorrectionLevel: "L",
+        });
+        setAnswerQrUrl(url);
+      } catch (qrErr) {
+        console.warn("Answer QR encode notice:", qrErr);
+      }
     } catch (err) {
       setErrorMsg(err.message || "Invalid AirDrop offer QR token.");
     }
@@ -781,6 +807,26 @@ export default function CampusAirdropModal({
                           }}
                         />
                       )}
+                    </div>
+                  )}
+
+                  {/* Browser Capability Notice for iOS/Safari */}
+                  {!hasBarcodeDetector && (
+                    <div
+                      style={{
+                        padding: "8px 12px",
+                        background: "rgba(234, 179, 8, 0.15)",
+                        border: "1px solid rgba(234, 179, 8, 0.35)",
+                        borderRadius: "8px",
+                        fontSize: "0.74rem",
+                        color: "#fde047",
+                        marginTop: "10px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>💡 Safari / iOS detected: Camera barcode scanner requires Chrome/Edge. Please copy &amp; paste the AirDrop token below.</span>
                     </div>
                   )}
 

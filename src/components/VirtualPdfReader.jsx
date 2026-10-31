@@ -35,7 +35,12 @@ import {
   Wifi,
   Pin,
   Trash2,
+  QrCode,
+  MessageSquare,
+  Copy,
+  Check,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { cacheNoteBuffer, getCachedNoteBuffer, findPeersForNote } from "../utils/p2pMesh";
 import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
 import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
@@ -253,6 +258,69 @@ export default function VirtualPdfReader({
     // Honest initial source: Cloud Storage until headers or local cache confirm otherwise
     return { id: "storage", label: "Primary Cloud Storage Vault", short: "Cloud Storage", details: "Streaming from Cloud Storage • Caching to Edge CDN", colo: "Origin", icon: "☁️", color: "#f59e0b", bgColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.35)" };
   });
+
+  // 6.5 Smart Page-Level Discussion & QR Bridge State (Preview Mode Only)
+  const [enableDiscussionBridge, setEnableDiscussionBridge] = useState(() => {
+    try {
+      const cached = localStorage.getItem("fsm_offline_flags");
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.flags?.enablePageDiscussionBridge !== undefined) {
+          return Boolean(parsed.flags.enablePageDiscussionBridge);
+        }
+      }
+    } catch (_) {}
+    return true;
+  });
+  const [showQrBridgeModal, setShowQrBridgeModal] = useState(false);
+  const [qrBridgeDataUrl, setQrBridgeDataUrl] = useState("");
+  const [qrCopied, setQrCopied] = useState(false);
+
+  useEffect(() => {
+    api.getPublicTechFlags()
+      .then((res) => {
+        if (res?.flags?.enablePageDiscussionBridge !== undefined) {
+          setEnableDiscussionBridge(Boolean(res.flags.enablePageDiscussionBridge));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleOpenPageDiscussion = () => {
+    const roomCode = `pod-${(note?.subject || title || "study").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}-${noteId ? String(noteId).slice(-4) : "live"}`;
+    window.dispatchEvent(
+      new CustomEvent("open_study_pod", {
+        detail: {
+          roomCode,
+          note,
+          page: currentPage,
+          subject: note?.subject || title || "General Study",
+          prefillMsg: `📌 [Page ${currentPage} Doubt]: Hey classmates, I have a doubt regarding the theorem/problem on Page ${currentPage} of ${note?.title || title || "this note"}. Can someone explain this?`,
+        },
+      })
+    );
+  };
+
+  const handleOpenPageQr = async () => {
+    try {
+      const targetNoteId = noteId || note?.id || "";
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
+      const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}&pod=true`;
+
+      const qrData = await QRCode.toDataURL(shareUrl, {
+        width: 260,
+        margin: 2,
+        color: {
+          dark: "#0f172a",
+          light: "#ffffff",
+        },
+      });
+      setQrBridgeDataUrl(qrData);
+      setShowQrBridgeModal(true);
+    } catch (e) {
+      console.warn("Failed to generate QR code:", e);
+    }
+  };
 
   // 7. Screen Wake Lock API (Keep Screen ON while reading)
   const [wakeLockActive, setWakeLockActive] = useState(false);
@@ -4187,6 +4255,74 @@ export default function VirtualPdfReader({
             )}
           </div>
         )}
+
+        {/* 💬 Smart Page Discussion & QR Bridge Pill (Preview Mode Only) */}
+        {enableDiscussionBridge && !loading && !error && !isAuthGated && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: "44px",
+              right: "24px",
+              zIndex: 100,
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              background: nightMode ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(14px)",
+              padding: "6px 10px 6px 14px",
+              borderRadius: "999px",
+              border: nightMode ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(6, 182, 212, 0.6)",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(6, 182, 212, 0.2)",
+              animation: "fadeIn 0.2s ease-out",
+            }}
+          >
+            <button
+              type="button"
+              onClick={handleOpenPageDiscussion}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: nightMode ? "#38bdf8" : "#0284c7",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: 0,
+              }}
+              title={`Open Live Study Pod discussion for Page ${currentPage}`}
+            >
+              <MessageSquare size={14} color="#06b6d4" />
+              <span>Stuck on Pg {currentPage}? Discuss</span>
+            </button>
+
+            <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 4px" }} />
+
+            <button
+              type="button"
+              onClick={handleOpenPageQr}
+              style={{
+                background: "rgba(6, 182, 212, 0.15)",
+                border: "1px solid rgba(6, 182, 212, 0.4)",
+                color: nightMode ? "#67e8f9" : "#0891b2",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                borderRadius: "999px",
+                padding: "3px 9px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.15s ease",
+              }}
+              title="Scan QR to open this page and chat directly on mobile"
+            >
+              <QrCode size={13} />
+              <span>QR</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Footer Info Strip */}
@@ -4321,6 +4457,154 @@ export default function VirtualPdfReader({
           }
         }}
       />
+
+      {/* 📱 Smart Page-Level QR Bridge Modal Overlay (Preview Mode Only) */}
+      {showQrBridgeModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowQrBridgeModal(false)}
+          style={{
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "360px",
+              width: "90%",
+              background: nightMode ? "#0f172a" : "#ffffff",
+              border: "1px solid rgba(6, 182, 212, 0.4)",
+              borderRadius: "16px",
+              padding: "22px 20px",
+              textAlign: "center",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(6, 182, 212, 0.2)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "12px",
+              position: "relative",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowQrBridgeModal(false)}
+              style={{
+                position: "absolute",
+                top: "14px",
+                right: "14px",
+                background: "transparent",
+                border: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+              }}
+            >
+              <X size={18} />
+            </button>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-cyan)", fontWeight: 800, fontSize: "0.95rem" }}>
+              <QrCode size={18} />
+              <span>Smart Page Discussion Bridge</span>
+            </div>
+
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+              Scan with your phone camera or share with friends to open <strong>Page {currentPage}</strong> in Live Study Pod!
+            </div>
+
+            {/* QR Code Container */}
+            <div
+              style={{
+                padding: "10px",
+                background: "#ffffff",
+                borderRadius: "12px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                marginTop: "4px",
+              }}
+            >
+              {qrBridgeDataUrl ? (
+                <img
+                  src={qrBridgeDataUrl}
+                  alt={`QR Code for Page ${currentPage}`}
+                  style={{ width: "200px", height: "200px", display: "block" }}
+                />
+              ) : (
+                <div style={{ width: "200px", height: "200px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <RefreshCw size={24} className="animate-spin" color="#06b6d4" />
+                </div>
+              )}
+            </div>
+
+            <div
+              style={{
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                color: nightMode ? "#e2e8f0" : "#334155",
+                background: nightMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                padding: "4px 12px",
+                borderRadius: "20px",
+              }}
+            >
+              📄 {note?.title || title || "Document"} • <strong>Pg {currentPage} of {numPages}</strong>
+            </div>
+
+            <div style={{ display: "flex", gap: "8px", width: "100%", marginTop: "6px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const targetNoteId = noteId || note?.id || "";
+                  const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
+                  const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}&pod=true`;
+                  navigator.clipboard.writeText(shareUrl).then(() => {
+                    setQrCopied(true);
+                    setTimeout(() => setQrCopied(false), 2500);
+                  });
+                }}
+                className="btn-secondary"
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  fontSize: "0.76rem",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                {qrCopied ? <Check size={14} color="#10b981" /> : <Copy size={14} />}
+                <span>{qrCopied ? "Link Copied!" : "Copy Page Link"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQrBridgeModal(false);
+                  handleOpenPageDiscussion();
+                }}
+                className="btn-primary"
+                style={{
+                  flex: 1,
+                  padding: "8px",
+                  fontSize: "0.76rem",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+              >
+                <MessageSquare size={14} />
+                <span>Join Study Pod</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

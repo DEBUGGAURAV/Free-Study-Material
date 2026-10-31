@@ -47,19 +47,35 @@ export function encodeSignalingToken(data) {
 }
 
 /**
- * Decodes a signaling token back into an SDP object
+ * Decodes a signaling token back into an SDP object with strict validation
  */
 export function decodeSignalingToken(token) {
+  if (!token || typeof token !== "string") {
+    throw new Error("Empty or invalid token provided.");
+  }
   try {
     const raw = token.trim();
+    let parsed = null;
     try {
       const decodedUri = decodeURIComponent(atob(raw));
-      return JSON.parse(decodedUri);
+      parsed = JSON.parse(decodedUri);
     } catch (_) {
-      return JSON.parse(atob(raw));
+      parsed = JSON.parse(atob(raw));
     }
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Decoded token is not a valid payload.");
+    }
+    if (parsed.role !== "airdrop_offer" && parsed.role !== "airdrop_answer") {
+      throw new Error("Unrecognized AirDrop token role.");
+    }
+    if (!parsed.sdp || typeof parsed.sdp !== "string" || !parsed.sdp.includes("v=0")) {
+      throw new Error("Invalid or corrupted SDP signaling inside token.");
+    }
+
+    return parsed;
   } catch (err) {
-    throw new Error("Invalid AirDrop token format. Please scan or enter a valid QR code token.");
+    throw new Error("Invalid AirDrop token format: " + (err.message || "Decoding failed"));
   }
 }
 
@@ -321,6 +337,8 @@ async function seedNoteBufferOverChannel(noteId, buffer, dataChannel, onProgress
   }
 }
 
+const MAX_AIRDROP_FILE_SIZE = 250 * 1024 * 1024; // 250 MB campus quota limit
+
 /**
  * Internal: Receives binary chunks, reconstructs note buffer, and caches into IndexedDB
  */
@@ -337,10 +355,22 @@ function setupReceiverDataChannel(dc, session, onProgress, onComplete, onError) 
       try {
         const msg = JSON.parse(event.data);
         if (msg.type === "AIRDROP_HEADER") {
-          header = msg;
+          const totalBytes = Number(msg.totalBytes);
+          if (!totalBytes || totalBytes <= 0 || totalBytes > MAX_AIRDROP_FILE_SIZE) {
+            throw new Error(`File size (${(totalBytes / (1024 * 1024)).toFixed(1)} MB) exceeds campus safety limit (250 MB).`);
+          }
+          const cleanNoteId = String(msg.noteId || "note").replace(/[^a-zA-Z0-9_\-.]/g, "").slice(0, 100);
+          header = {
+            ...msg,
+            noteId: cleanNoteId,
+            totalBytes,
+          };
           receivedBytes = 0;
           chunks = [];
         } else if (msg.type === "AIRDROP_TRAILER") {
+          if (!header) {
+            throw new Error("Received completion trailer without valid header.");
+          }
           // Rebuild complete Uint8Array
           const completeArray = new Uint8Array(receivedBytes);
           let offset = 0;
@@ -370,6 +400,12 @@ function setupReceiverDataChannel(dc, session, onProgress, onComplete, onError) 
 
     // Binary chunk
     if (event.data instanceof ArrayBuffer) {
+      if (receivedBytes + event.data.byteLength > MAX_AIRDROP_FILE_SIZE) {
+        try { dc.close(); } catch (_) {}
+        if (session.active) onError(new Error("Transfer exceeded safety quota (250 MB)."));
+        return;
+      }
+
       chunks.push(event.data);
       receivedBytes += event.data.byteLength;
 
