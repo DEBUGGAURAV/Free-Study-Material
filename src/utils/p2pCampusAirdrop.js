@@ -95,12 +95,18 @@ function waitForIceGathering(pc, timeoutMs = 1200) {
  * Initiates an AirDrop sender session for a noteId.
  * Creates WebRTC Offer, DataChannel, and returns the QR token to display.
  */
-export async function createAirDropSenderSession(noteId, callbacks = {}) {
+export async function createAirDropSenderSession(noteId, callbacks = {}, directBuffer = null) {
   const { onProgress = () => {}, onConnected = () => {}, onError = () => {} } = callbacks;
 
-  const buffer = await getCachedNoteBuffer(noteId);
+  let buffer = directBuffer;
+  if (!buffer || buffer.byteLength === 0) {
+    buffer = await getCachedNoteBuffer(noteId);
+  }
   if (!buffer || buffer.byteLength === 0) {
     throw new Error("This note is not yet cached in your device memory. Please open or view it first.");
+  }
+  if (directBuffer && noteId) {
+    cacheNoteBuffer(noteId, directBuffer).catch(() => {});
   }
 
   const pc = new RTCPeerConnection(ICE_CONFIG);

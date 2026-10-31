@@ -4312,6 +4312,7 @@ export default function VirtualPdfReader({
         isOpen={isAirdropModalOpen}
         onClose={() => setIsAirdropModalOpen(false)}
         currentNote={note || { id: noteId, title, subject: subjectName, branch: branchName }}
+        directBuffer={localPdfBuffer}
         onNoteReceived={(data) => {
           if (data?.buffer) {
             setLocalPdfBuffer(data.buffer);

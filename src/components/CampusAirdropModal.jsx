@@ -17,6 +17,7 @@ export default function CampusAirdropModal({
   isOpen,
   onClose,
   currentNote = null,
+  directBuffer = null,
   onNoteReceived = null,
 }) {
   if (!isOpen) return null;
@@ -73,7 +74,7 @@ export default function CampusAirdropModal({
         onError: (err) => {
           if (!isCancelled) setErrorMsg(err.message || "Transfer interrupted");
         },
-      })
+      }, directBuffer)
         .then((s) => {
           if (isCancelled) {
             cancelAirDropSession(s);
@@ -870,3 +871,4 @@ export default function CampusAirdropModal({
     </div>
   );
 }
+
