@@ -27,17 +27,24 @@ let totalBruteForceBlocked = 0;
 const MAX_INCIDENTS = 50;
 const securityIncidents = []; // Circular incident log
 
-// Clean up expired jail & tracking entries every 5 minutes to keep memory at 0MB
-setInterval(() => {
+// Clean up expired jail & tracking entries every 60 seconds (Auto-Release pipeline)
+setInterval(async () => {
   const now = Date.now();
+  const releasedIps = [];
+  const releasedDevices = [];
+
   for (const [ip, unjailTime] of jailedIps.entries()) {
     if (now >= unjailTime) {
+      const details = jailedIpsDetails.get(ip) || {};
+      releasedIps.push({ ip, details });
       jailedIps.delete(ip);
       jailedIpsDetails.delete(ip);
     }
   }
   for (const [devId, unjailTime] of jailedDevices.entries()) {
     if (now >= unjailTime) {
+      const details = jailedDevicesDetails.get(devId) || {};
+      releasedDevices.push({ devId, details });
       jailedDevices.delete(devId);
       jailedDevicesDetails.delete(devId);
     }
@@ -52,7 +59,91 @@ setInterval(() => {
     if (valid.length === 0) ipRequestHistory.delete(ip);
     else ipRequestHistory.set(ip, valid);
   }
-}, 5 * 60 * 1000);
+
+  // Delete from database & dispatch auto-release reports to Topic 750
+  if (releasedIps.length > 0 || releasedDevices.length > 0) {
+    let db = null;
+    try {
+      db = require("../firebase").db;
+    } catch (_) {}
+
+    let sendTelegramAuthNotice = null;
+    try {
+      sendTelegramAuthNotice = require("../services/emailService").sendTelegramAuthNotice;
+    } catch (_) {}
+
+    for (const item of releasedIps) {
+      const ip = item.ip;
+      const incId = item.details?.incidentId;
+
+      if (db) {
+        try {
+          if (incId) {
+            const snap = await db.collection("jail_appeals").where("incidentId", "==", incId).get();
+            for (const d of snap.docs) await d.ref.delete();
+          }
+          const snapIp = await db.collection("jail_appeals").where("ip", "==", ip).get();
+          for (const d of snapIp.docs) await d.ref.delete();
+        } catch (_) {}
+      }
+
+      if (typeof sendTelegramAuthNotice === "function") {
+        const autoReport = [
+          `⏱️ <b>[SECURITY QUARANTINE AUTO-RELEASE REPORT]</b>`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `🌐 <b>Public IP:</b> <code>${ip}</code>`,
+          incId ? `🆔 <b>Incident ID:</b> <code>${incId}</code>` : null,
+          item.details?.reason ? `⚠️ <b>Detention Reason:</b> ${item.details.reason}` : null,
+          `⚡ <b>Release Type:</b> Autonomous Quarantine Expiry (Timer Served)`,
+          `🛡️ <b>Status:</b> IP Quarantine Lifted, Full Access Restored`,
+          `🗑️ <b>Database Status:</b> Cleaned & Purged from Database`,
+          `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+        ].filter(Boolean).join("\n");
+
+        sendTelegramAuthNotice({
+          event: "IP_JAIL_APPEAL",
+          user: { name: "Autonomous Sweeper", email: "System", ip },
+          method: "Autonomous Timer Expiry",
+          detail: autoReport,
+          threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+        }).catch(() => {});
+      }
+    }
+
+    for (const item of releasedDevices) {
+      const devId = item.devId;
+      const incId = item.details?.incidentId;
+
+      if (db && incId) {
+        try {
+          const snap = await db.collection("jail_appeals").where("incidentId", "==", incId).get();
+          for (const d of snap.docs) await d.ref.delete();
+        } catch (_) {}
+      }
+
+      if (typeof sendTelegramAuthNotice === "function") {
+        const autoReport = [
+          `⏱️ <b>[SECURITY QUARANTINE AUTO-RELEASE REPORT]</b>`,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `📱 <b>Device Hash:</b> <code>${devId.slice(0, 16)}...</code>`,
+          incId ? `🆔 <b>Incident ID:</b> <code>${incId}</code>` : null,
+          `⚡ <b>Release Type:</b> Autonomous Device Quarantine Expiry`,
+          `🛡️ <b>Status:</b> Device Unjailed, Access Restored`,
+          `🗑️ <b>Database Status:</b> Cleaned & Purged from Database`,
+          `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+        ].filter(Boolean).join("\n");
+
+        sendTelegramAuthNotice({
+          event: "IP_JAIL_APPEAL",
+          user: { name: "Autonomous Sweeper", email: "System", ip: item.details?.ip || "N/A" },
+          method: "Autonomous Timer Expiry",
+          detail: autoReport,
+          threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+        }).catch(() => {});
+      }
+    }
+  }
+}, 60 * 1000);
 
 // Note: getClientIp is imported from ./rateLimit with proxy isolation & IPv6/IPv4 normalization
 

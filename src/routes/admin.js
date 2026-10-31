@@ -254,19 +254,29 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
     let totalCompressedBytes = 0;
     let totalDuplicates = 0;
     let totalDownloads = 0;
+    let totalBandwidthSavedBytes = 0;
 
     notesSnap.forEach((doc) => {
       const data = doc.data();
       totalNotes++;
       const orig = Number(data.fileSize) || 0;
       const comp = Number(data.compressedSize) || orig;
+      const downloads = Number(data.downloadsCount) || 0;
       totalOriginalBytes += orig;
       totalCompressedBytes += comp;
       if (data.isDuplicate) totalDuplicates++;
-      totalDownloads += Number(data.downloadsCount) || 0;
+      totalDownloads += downloads;
+
+      // Bandwidth savings = PDF compression savings + CDN/Cache download offload savings
+      const compressionDiff = Math.max(0, orig - comp);
+      const cdnOffload = comp * downloads;
+      totalBandwidthSavedBytes += compressionDiff + cdnOffload;
     });
 
-    const totalSavedBytes = totalOriginalBytes - totalCompressedBytes;
+    const totalSavedBytes = totalBandwidthSavedBytes;
+    const formattedSaved = totalSavedBytes >= 1024 * 1024 * 1024
+      ? (totalSavedBytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
+      : (totalSavedBytes / (1024 * 1024)).toFixed(2) + " MB";
 
     return res.json({
       success: true,
@@ -278,7 +288,7 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
         totalOriginalBytes,
         totalCompressedBytes,
         totalSavedBytes,
-        formattedSaved: (totalSavedBytes / (1024 * 1024)).toFixed(2) + " MB",
+        formattedSaved,
         formattedOriginal: (totalOriginalBytes / (1024 * 1024)).toFixed(2) + " MB",
       },
       lastSync: getLastSyncState(),
@@ -2646,20 +2656,22 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("data
   try {
     if (!db) return res.json({ success: true, collections: {} });
 
-    const [notesSnap, usersSnap, noticesSnap, deletedSnap] = await Promise.all([
+    const [notesSnap, usersSnap, noticesSnap, deletedSnap, deletedRecordsSnap] = await Promise.all([
       db.collection("notes").get(),
       db.collection("users").get(),
       db.collection("notices").get(),
       db.collection("deleted_notes").get(),
+      db.collection("deleted_records").get(),
     ]);
 
     return res.json({
       success: true,
       collections: {
-        notes: notesSnap.size,
-        users: usersSnap.size,
-        notices: noticesSnap.size,
-        deleted_notes: deletedSnap.size,
+        notes: { count: notesSnap.size, size: notesSnap.size },
+        users: { count: usersSnap.size, size: usersSnap.size },
+        notices: { count: noticesSnap.size, size: noticesSnap.size },
+        deleted_notes: { count: deletedSnap.size, size: deletedSnap.size },
+        deleted_records: { count: deletedRecordsSnap.size, size: deletedRecordsSnap.size },
       },
     });
   } catch (err) {
@@ -2705,7 +2717,7 @@ router.get("/database/export", authenticateToken, checkAdminOrPermission("databa
 router.get("/database/collection/:collectionName", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     const { collectionName } = req.params;
-    if (!["notes", "users", "notices", "deleted_notes"].includes(collectionName)) {
+    if (!["notes", "users", "notices", "deleted_notes", "deleted_records"].includes(collectionName)) {
       return res.status(400).json({ success: false, message: "Invalid collection name" });
     }
     const snap = await db.collection(collectionName).get();
@@ -4061,9 +4073,14 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
           .get()
           .catch(() => null);
         if (appealSnap && !appealSnap.empty) {
-          appealSnap.forEach((doc) => {
-            jailAppeals.push({ id: doc.id, ...doc.data() });
-          });
+          for (const doc of appealSnap.docs) {
+            const d = doc.data();
+            if (d.status === "pardoned" || d.status === "dismissed") {
+              await doc.ref.delete().catch(() => {});
+            } else {
+              jailAppeals.push({ id: doc.id, ...d });
+            }
+          }
           jailAppeals.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         }
       } catch (err) {
@@ -4142,6 +4159,29 @@ router.post("/threats/unblock-user", authenticateToken, requireAdmin, async (req
       if (userId) addPardonedIncident(`FSM-BAN-${userId.toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`);
       if (email) addPardonedIncident(`FSM-BAN-${email.toString().replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase()}`);
     }
+
+    // 🛡️ Dispatch unblock report to Topic 750
+    try {
+      const { sendTelegramAuthNotice } = require("../services/emailService");
+      const unblockReport = [
+        `🟢 <b>[STUDENT ACCOUNT UNBLOCKED / RESTORED]</b>`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        userId ? `🆔 <b>User ID:</b> <code>${userId}</code>` : null,
+        email ? `📧 <b>Email:</b> <code>${email}</code>` : null,
+        `👮 <b>Action Executed By:</b> ${req.user?.name || "Admin"} (<code>${req.user?.email || "admin"}</code>)`,
+        `⚡ <b>Action:</b> Anti-Tamper & Security Blocks Cleared, Platform Access Restored`,
+        `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+      ].filter(Boolean).join("\n");
+
+      await sendTelegramAuthNotice({
+        event: "IP_JAIL_APPEAL",
+        user: { name: req.user?.name || "Admin", email: email || req.user?.email, ip: "N/A" },
+        method: "Admin Account Unblock",
+        detail: unblockReport,
+        threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+      });
+    } catch (_) {}
+
     return res.json({
       success: true,
       message: `User account (${email || userId}) unblocked and platform access restored.`,
@@ -4226,15 +4266,58 @@ router.post("/threats/unjail", authenticateToken, requireAdmin, async (req, res)
       return res.status(400).json({ success: false, message: "IP, Device ID, or Incident ID is required." });
     }
 
-    if (appealId && db) {
+    let deletedAppealData = null;
+    if (db) {
       try {
-        await db.collection("jail_appeals").doc(appealId).update({
-          status: "pardoned",
-          pardonedAt: new Date().toISOString(),
-          pardonedBy: req.user?.email || "Admin",
-        });
-      } catch (_) {}
+        if (appealId) {
+          const aDoc = await db.collection("jail_appeals").doc(appealId).get();
+          if (aDoc.exists) deletedAppealData = aDoc.data();
+          await db.collection("jail_appeals").doc(appealId).delete();
+        }
+        if (incidentId) {
+          const snap = await db.collection("jail_appeals").where("incidentId", "==", incidentId).get();
+          for (const d of snap.docs) {
+            if (!deletedAppealData) deletedAppealData = d.data();
+            await d.ref.delete();
+          }
+        }
+        if (ip) {
+          const snap = await db.collection("jail_appeals").where("ip", "==", ip).get();
+          for (const d of snap.docs) {
+            if (!deletedAppealData) deletedAppealData = d.data();
+            await d.ref.delete();
+          }
+        }
+      } catch (dbErr) {
+        console.warn("[ADMIN-THREATS] Error deleting appeal from DB on unjail:", dbErr.message);
+      }
     }
+
+    // 🛡️ Dispatch release report to Topic 750
+    try {
+      const { sendTelegramAuthNotice } = require("../services/emailService");
+      const releaseReport = [
+        `🟢 <b>[SECURITY QUARANTINE RELEASE / PARDON REPORT]</b>`,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
+        incidentId ? `🆔 <b>Incident ID:</b> <code>${incidentId}</code>` : null,
+        ip ? `🌐 <b>Public IP:</b> <code>${ip}</code>` : null,
+        deviceId ? `📱 <b>Device:</b> <code>${deviceId.slice(0, 16)}...</code>` : null,
+        deletedAppealData?.name ? `👤 <b>Student:</b> ${deletedAppealData.name}` : null,
+        deletedAppealData?.email ? `📧 <b>Email:</b> <code>${deletedAppealData.email}</code>` : null,
+        `👮 <b>Action Executed By:</b> ${req.user?.name || "Admin"} (<code>${req.user?.email || "admin"}</code>)`,
+        `⚡ <b>Release Type:</b> Admin Pardon / Manual Unjail`,
+        `🗑️ <b>Database Status:</b> Complete Record Purged from Database (0 trace)`,
+        `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+      ].filter(Boolean).join("\n");
+
+      await sendTelegramAuthNotice({
+        event: "IP_JAIL_APPEAL",
+        user: { name: req.user?.name || "Admin", email: req.user?.email || "Admin", ip: ip || "N/A" },
+        method: "Admin Manual Pardon",
+        detail: releaseReport,
+        threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+      });
+    } catch (_) {}
 
     return res.json({
       success: true,
@@ -4248,7 +4331,7 @@ router.post("/threats/unjail", authenticateToken, requireAdmin, async (req, res)
 
 /**
  * POST /api/admin/threats/dismiss-appeal
- * Admin only: Mark an appeal as dismissed
+ * Admin only: Dismiss an appeal and delete it completely from database
  */
 router.post("/threats/dismiss-appeal", authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -4257,14 +4340,9 @@ router.post("/threats/dismiss-appeal", authenticateToken, requireAdmin, async (r
       return res.status(400).json({ success: false, message: "Appeal ID is required." });
     }
     if (db) {
-      await db.collection("jail_appeals").doc(appealId).update({
-        status: "dismissed",
-        dismissReason: reason || "Dismissed by Admin",
-        dismissedAt: new Date().toISOString(),
-        dismissedBy: req.user?.email || "Admin",
-      });
+      await db.collection("jail_appeals").doc(appealId).delete();
     }
-    return res.json({ success: true, message: "Appeal marked as dismissed." });
+    return res.json({ success: true, message: "Appeal dismissed and permanently deleted from database." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

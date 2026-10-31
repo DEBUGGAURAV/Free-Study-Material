@@ -349,7 +349,11 @@ export default function TabDatabase(props) {
                         color: "#a5b4fc",
                       }}
                     >
-                      <span>📂 Open Restore Vault ({dbOverview?.collections?.deleted_records?.count ?? 0})</span>
+                      <span>📂 Open Restore Vault ({
+                        typeof dbOverview?.collections?.deleted_records === "number"
+                          ? dbOverview.collections.deleted_records
+                          : (dbOverview?.collections?.deleted_records?.count ?? 0)
+                      })</span>
                     </button>
                   </div>
 
@@ -506,7 +510,10 @@ export default function TabDatabase(props) {
               {/* Collections Cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginBottom: "20px" }}>
                 {["notes", "users", "notices", "deleted_notes", "deleted_records"].map((col) => {
-                  const count = dbOverview?.collections?.[col]?.count ?? (col === "notes" ? notes.length : 0);
+                  const rawCol = dbOverview?.collections?.[col];
+                  const count = typeof rawCol === "number"
+                    ? rawCol
+                    : (rawCol?.count ?? rawCol?.size ?? (col === "notes" ? notes.length : 0));
                   const isSelected = selectedCollection === col;
 
                   return (

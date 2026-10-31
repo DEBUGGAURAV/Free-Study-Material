@@ -958,36 +958,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </div>
             </div>
 
-            {/* IndexedDB Database Breakdown Cards */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.78rem" }}>
-              <div style={{ fontWeight: 700, color: "var(--text-dim)", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Active Local Device Stores
-              </div>
 
-              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm_p2p_cache_v1 (note_chunks)</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>6 AM Exam Pre-fetch & Campus P2P Mesh Binary Chunks</div>
-                </div>
-                <span style={{ fontSize: "0.7rem", color: "#34d399", background: "rgba(16, 185, 129, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>IndexedDB</span>
-              </div>
-
-              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm_offline_vault (offline_notes)</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>User explicitly saved village and train reading vaults</div>
-                </div>
-                <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>IndexedDB</span>
-              </div>
-
-              <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: 600, color: "#f8fafc" }}>fsm-cache-v10 (Service Worker)</div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Application shell, offline catalog JSON, and stream clones</div>
-                </div>
-                <span style={{ fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.15)", padding: "2px 6px", borderRadius: "4px" }}>CacheStorage</span>
-              </div>
-            </div>
 
             {/* Stored Offline Notes Section */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>

@@ -33,6 +33,8 @@ import {
   Share2,
   Mic,
   MicOff,
+  Bell,
+  BellOff,
   Volume2,
   VolumeX,
   CornerUpLeft,
@@ -2638,21 +2640,22 @@ export default function StudentChatModal({
             <button
               onClick={toggleSound}
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "none",
+                background: soundEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(239, 68, 68, 0.12)",
+                border: soundEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
                 borderRadius: "50%",
                 width: "36px",
                 height: "36px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: soundEnabled ? "var(--accent-cyan)" : "var(--text-dim)",
+                color: soundEnabled ? "#38bdf8" : "#f87171",
                 cursor: "pointer",
-                transition: "background 0.2s ease, color 0.2s ease",
+                transition: "all 0.2s ease",
               }}
-              title={soundEnabled ? "Mute Chat Sounds" : "Unmute Chat Sounds"}
+              title={soundEnabled ? "Chat Sound: ON (Click to Mute)" : "Chat Sound: MUTED (Click to Unmute)"}
+              aria-label={soundEnabled ? "Mute Chat Sounds" : "Unmute Chat Sounds"}
             >
-              {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {soundEnabled ? <Bell size={17} /> : <BellOff size={17} />}
             </button>
 
             {/* Close Button */}

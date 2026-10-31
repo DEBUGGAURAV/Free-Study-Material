@@ -424,6 +424,7 @@ export default function AdminModal({
     if (isOpen && isAdminOrManager) {
       loadStats();
       loadRecycleBinItems();
+      loadCdnStats();
 
       if (activeTab === "notes") {
         loadStats();
@@ -2669,7 +2670,9 @@ export default function AdminModal({
           <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
             <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</div>
             <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#10b981", marginTop: "2px" }}>
-              {stats?.formattedSaved || "0.00 MB"}
+              {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
+                ? stats.formattedSaved
+                : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
             </div>
           </div>
 

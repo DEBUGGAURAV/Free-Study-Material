@@ -915,6 +915,48 @@ async function startSecurityBotPoller() {
               statusSuffix = `\n\n━━━━━━━━━━━━━━━━━━━━━━\n❌ <b>REJECTED BY ADMIN:</b> Detention kept active by @${fromUser?.username || fromUser?.first_name || "Admin"}`;
             }
 
+            // 🗑️ Delete appeal record completely from database & dispatch resolution report to Topic 750
+            if (action === "pardon_dev" || action === "pardon_ip") {
+              try {
+                const { db } = require("../firebase");
+                if (db) {
+                  if (incidentId && incidentId !== "PING") {
+                    const snap = await db.collection("jail_appeals").where("incidentId", "==", incidentId).get();
+                    for (const d of snap.docs) await d.ref.delete();
+                  }
+                  if (targetVal && targetVal !== "none" && targetVal !== "all") {
+                    const snapIp = await db.collection("jail_appeals").where("ip", "==", targetVal).get();
+                    for (const d of snapIp.docs) await d.ref.delete();
+                  }
+                }
+              } catch (dbErr) {
+                console.warn("[SECURITY-BOT] DB delete notice:", dbErr.message);
+              }
+
+              // Dispatch release report to Topic 750
+              try {
+                const { sendTelegramAuthNotice } = require("./emailService");
+                const releaseReport = [
+                  `🟢 <b>[SECURITY QUARANTINE RELEASE / PARDON REPORT]</b>`,
+                  `━━━━━━━━━━━━━━━━━━━━━━`,
+                  incidentId ? `🆔 <b>Incident ID:</b> <code>${incidentId}</code>` : null,
+                  targetVal && targetVal !== "none" ? `🎯 <b>Released Entity:</b> <code>${targetVal}</code>` : null,
+                  `⚡ <b>Scope:</b> ${action === "pardon_ip" ? "Full IP Unjailed" : "Device Unjailed"}`,
+                  `👮 <b>Pardoned By:</b> @${fromUser?.username || fromUser?.first_name || "Admin"}`,
+                  `🗑️ <b>Database Status:</b> Complete Record Purged from Database (0 trace)`,
+                  `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
+                ].filter(Boolean).join("\n");
+
+                await sendTelegramAuthNotice({
+                  event: "IP_JAIL_APPEAL",
+                  user: { name: fromUser?.first_name || "Admin", email: "Admin", ip: targetVal || "N/A" },
+                  method: "Admin Telegram Inline Pardon",
+                  detail: releaseReport,
+                  threadId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
+                });
+              } catch (_) {}
+            }
+
             try {
               await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
                 method: "POST",

@@ -697,7 +697,21 @@ export default function VirtualPdfReader({
       });
     }, 120);
 
-    return () => clearInterval(nativeTimer);
+    // 🛡️ Auto-resolve native loader in 800ms because Chromium PDFium suppresses iframe onLoad
+    const safetyTimer = setTimeout(() => {
+      setNativeLoading(false);
+      setPreviewProgress({
+        percent: 100,
+        loadedBytes: noteTotalSize,
+        totalBytes: noteTotalSize,
+        speed: "Ready",
+      });
+    }, 800);
+
+    return () => {
+      clearInterval(nativeTimer);
+      clearTimeout(safetyTimer);
+    };
   }, [useNativeViewer, nativeSrc, url, streamSource, note]);
 
   // ⚡ High-Speed CDN Download with Real-Time Percentage and Speed HUD
@@ -1160,7 +1174,10 @@ export default function VirtualPdfReader({
         mainScrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
       }
       if (useNativeViewer && iframeRef.current) {
-        iframeRef.current.src = `${url}${getNativeToolbarParams(pageNum, searchQuery)}`;
+        const baseSrc = (nativeSrc || url || "").split("#")[0];
+        if (baseSrc) {
+          iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(pageNum, searchQuery)}`;
+        }
       }
     }
   };
@@ -1236,7 +1253,10 @@ export default function VirtualPdfReader({
           setCurrentPage(firstMatch.pageNum);
         }
         if (useNativeViewer && iframeRef.current) {
-          iframeRef.current.src = `${url}${getNativeToolbarParams(firstMatch.pageNum, query)}`;
+          const baseSrc = (nativeSrc || url || "").split("#")[0];
+          if (baseSrc) {
+            iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(firstMatch.pageNum, query)}`;
+          }
         }
       } else {
         setPageHighlights([]);
@@ -2083,7 +2103,10 @@ export default function VirtualPdfReader({
     if (match.pageNum !== currentPage) {
       setCurrentPage(match.pageNum);
       if (useNativeViewer && iframeRef.current) {
-        iframeRef.current.src = `${url}${getNativeToolbarParams(match.pageNum, searchQuery)}`;
+        const baseSrc = (nativeSrc || url || "").split("#")[0];
+        if (baseSrc) {
+          iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(match.pageNum, searchQuery)}`;
+        }
       }
     } else {
       setPageHighlights((prev) => {
@@ -2111,7 +2134,10 @@ export default function VirtualPdfReader({
     if (match.pageNum !== currentPage) {
       setCurrentPage(match.pageNum);
       if (useNativeViewer && iframeRef.current) {
-        iframeRef.current.src = `${url}${getNativeToolbarParams(match.pageNum, searchQuery)}`;
+        const baseSrc = (nativeSrc || url || "").split("#")[0];
+        if (baseSrc) {
+          iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(match.pageNum, searchQuery)}`;
+        }
       }
     } else {
       setPageHighlights((prev) => {
@@ -3580,10 +3606,11 @@ export default function VirtualPdfReader({
           overflow: "auto",
           display: "flex",
           justifyContent: "center",
-          alignItems: "flex-start",
+          alignItems: useNativeViewer ? "stretch" : "flex-start",
           padding: useNativeViewer ? "0" : "24px",
           background: nightMode ? "#060911" : "#e2e8f0",
           position: "relative",
+          height: "100%",
         }}
       >
         {/* Native Browser PDF Engine Embed */}
@@ -3592,6 +3619,8 @@ export default function VirtualPdfReader({
             style={{
               width: "100%",
               height: "100%",
+              flex: 1,
+              minHeight: "100%",
               display: "flex",
               flexDirection: "column",
               background: nightMode ? "#0f172a" : "#f8fafc",
@@ -3621,11 +3650,12 @@ export default function VirtualPdfReader({
               key={`native-frame-${noteId || "pdf"}`}
               src={
                 !nativeSrc
-                  ? (url ? `${url}${getNativeToolbarParams(currentPage)}` : undefined)
+                  ? (url ? `${(url || "").split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined)
                   : nativeSrc.startsWith("https://drive.google.com")
                   ? nativeSrc
-                  : `${nativeSrc}${getNativeToolbarParams(currentPage)}`
+                  : `${(nativeSrc || "").split("#")[0]}${getNativeToolbarParams(currentPage)}`
               }
+              allow="fullscreen"
               onLoad={() => {
                 const noteTotalSize = note?.compressedSize || note?.fileSize || 1048576;
                 setPreviewProgress({
@@ -3638,11 +3668,12 @@ export default function VirtualPdfReader({
               }}
               style={{
                 width: "100%",
+                height: "100%",
                 flex: 1,
+                minHeight: "500px",
                 border: "none",
                 background: "#ffffff",
-                opacity: nativeLoading ? 0 : 1,
-                transition: "opacity 0.25s ease",
+                opacity: 1,
               }}
               title={title}
             />
