@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2, Zap } from "lucide-react";
+import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2, Zap, Volume2 } from "lucide-react";
 import { api } from "../api";
 import { downloadFromPeerMesh, cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
@@ -719,11 +719,32 @@ export default function NoteCard({
               e.stopPropagation();
               window.dispatchEvent(
                 new CustomEvent("open_campus_airdrop", {
-                  detail: { note },
+                  detail: { note, initialMode: "sound" },
                 })
               );
             }}
-            title="⚡ AirDrop this note offline to a classmate (0 KB internet)"
+            title="🔊 Sound-Drop: Beam note wirelessly via ultrasonic audio frequency (0 KB internet)"
+            style={{
+              color: "#34d399",
+              background: "rgba(16, 185, 129, 0.12)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+            }}
+          >
+            <Volume2 size={15} />
+          </button>
+
+          <button
+            className="btn-card-preview"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("open_campus_airdrop", {
+                  detail: { note, initialMode: "qr" },
+                })
+              );
+            }}
+            title="⚡ AirDrop this note offline via 1-Tap QR Mesh (0 KB internet)"
             style={{
               color: "#c084fc",
               background: "rgba(168, 85, 247, 0.12)",

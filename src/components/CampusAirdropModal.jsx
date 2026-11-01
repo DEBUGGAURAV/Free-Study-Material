@@ -702,7 +702,11 @@ export default function CampusAirdropModal({
                         transition: "width 0.2s ease",
                       }}
                     />
-    {/* Sender Pairing Display (Sound-Drop vs QR) */}
+                  </div>
+                </div>
+              )}
+
+              {/* Sender Pairing Display (Sound-Drop vs QR) */}
               {!senderDone && pairingMode === "sound" && (
                 <div
                   style={{
@@ -837,9 +841,6 @@ export default function CampusAirdropModal({
                     <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
                       Both devices should be on same Wi-Fi or Mobile Hotspot
                     </div>
-                  </div>
-                </div>
-              )}     </div>
                   </div>
                 </div>
               )}
@@ -1049,7 +1050,14 @@ export default function CampusAirdropModal({
                           borderRadius: "6px",
                           fontSize: "0.72rem",
                           cursor: "pointer",
-    {/* Receiver Audio Mesh Listener (Sound-Drop) */}
+                        }}
+                      >
+                        {copied ? "Copied!" : "Copy Answer Token"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Receiver Audio Mesh Listener (Sound-Drop) */}
                   {!answerQrUrl && !receiverProgress && pairingMode === "sound" && (
                     <div
                       style={{
@@ -1210,12 +1218,6 @@ export default function CampusAirdropModal({
                             border: "2px solid #38bdf8",
                             borderRadius: "16px",
                             boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.45)",
-                            pointerEvents: "none",
-                          }}
-                        />
-                      )}
-                    </div>
-                  )} 0 0 9999px rgba(0, 0, 0, 0.45)",
                             pointerEvents: "none",
                           }}
                         />

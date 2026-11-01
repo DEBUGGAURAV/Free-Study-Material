@@ -167,6 +167,7 @@ export default function App() {
     };
     const handleOpenAirdrop = (e) => {
       setAirdropTargetNote(e?.detail?.note || null);
+      setAirdropInitialMode(e?.detail?.initialMode || (e?.detail?.mode === "qr" ? "qr" : "sound"));
       setIsAirdropOpen(true);
     };
     window.addEventListener("open_student_chat", handleOpenChat);
@@ -1383,10 +1384,11 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   setAirdropTargetNote(null);
+                  setAirdropInitialMode("sound");
                   setIsAirdropOpen(true);
                 }}
                 style={{
-                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
                   color: "#fff",
                   border: "none",
                   borderRadius: "6px",
@@ -1399,10 +1401,35 @@ export default function App() {
                   gap: "5px",
                   boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
                 }}
+                title="0 KB internet note transfer via Ultrasonic Sound-Drop waves"
+              >
+                <span>🔊</span>
+                <span>Sound-Drop (0 KB)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAirdropTargetNote(null);
+                  setAirdropInitialMode("qr");
+                  setIsAirdropOpen(true);
+                }}
+                style={{
+                  background: "rgba(56, 189, 248, 0.15)",
+                  color: "#38bdf8",
+                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
                 title="Receive or Send notes offline with nearby classmates via 1-Tap QR Mesh"
               >
                 <span>⚡</span>
-                <span>Campus AirDrop (0 KB)</span>
+                <span>QR AirDrop (0 KB)</span>
               </button>
               <span className="tech-pill dedup" style={{ fontSize: "0.68rem" }}>
                 ⚡ 100% Free Offline Vault
@@ -2177,6 +2204,7 @@ export default function App() {
             }}
           >
             <CampusAirdropModal
+              initialMode={airdropInitialMode}
               isOpen={isAirdropOpen}
               onClose={() => {
                 setIsAirdropOpen(false);
