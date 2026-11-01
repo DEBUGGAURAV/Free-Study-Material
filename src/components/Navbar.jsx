@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle, Users } from "lucide-react";
+import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle, Users, Zap } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
 export default function Navbar({
@@ -13,6 +13,7 @@ export default function Navbar({
   onOpenChat,
   onOpenHelp,
   onOpenStudyPod,
+  onOpenAirDrop,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -243,6 +244,38 @@ export default function Navbar({
               }}
             >
               P2P
+            </span>
+          </button>
+
+          {/* ⚡ Campus AirDrop (Offline P2P BitTorrent Transfer & 0 KB Share) */}
+          <button
+            className="btn-secondary"
+            onClick={onOpenAirDrop}
+            title="⚡ Campus AirDrop: Send or Receive notes offline with 0 KB internet via 1-Tap QR Mesh"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(168, 85, 247, 0.14)",
+              border: "1px solid rgba(168, 85, 247, 0.38)",
+              color: "#c084fc",
+              fontWeight: 700,
+              fontSize: "0.82rem",
+            }}
+          >
+            <Zap size={15} />
+            <span>AirDrop</span>
+            <span
+              style={{
+                fontSize: "0.65rem",
+                background: "rgba(168, 85, 247, 0.25)",
+                padding: "1px 5px",
+                borderRadius: "8px",
+                color: "#e9d5ff",
+                fontWeight: 700,
+              }}
+            >
+              0 KB
             </span>
           </button>
 

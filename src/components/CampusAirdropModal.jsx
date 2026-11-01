@@ -52,6 +52,19 @@ export default function CampusAirdropModal({
   const senderSessionRef = useRef(null);
   const receiverSessionRef = useRef(null);
 
+  // Sync active tab and start camera if in receive mode
+  useEffect(() => {
+    if (isOpen) {
+      if (currentNote?.id) {
+        setActiveTab("send");
+        stopCamera();
+      } else {
+        setActiveTab("receive");
+        startCamera();
+      }
+    }
+  }, [isOpen, currentNote?.id]);
+
   // Initialize Sender when modal opens on "send" tab
   useEffect(() => {
     let session = null;

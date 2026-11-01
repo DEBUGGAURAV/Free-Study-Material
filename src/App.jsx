@@ -55,6 +55,7 @@ const UploadModal = lazyWithRetry(() => import("./components/UploadModal"));
 const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal"));
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
+const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdropModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -148,6 +149,9 @@ export default function App() {
   const [studyPodRoomCode, setStudyPodRoomCode] = useState("");
   const [studyPodNote, setStudyPodNote] = useState(null);
   const [previewNote, setPreviewNote] = useState(null);
+  const [previewInitialPage, setPreviewInitialPage] = useState(1);
+  const [isAirdropOpen, setIsAirdropOpen] = useState(false);
+  const [airdropTargetNote, setAirdropTargetNote] = useState(null);
 
   useEffect(() => {
     try {
@@ -160,11 +164,16 @@ export default function App() {
       if (e?.detail?.note) setStudyPodNote(e.detail.note);
       setIsStudyPodOpen(true);
     };
+    const handleOpenAirdrop = (e) => {
+      setAirdropTargetNote(e?.detail?.note || null);
+      setIsAirdropOpen(true);
+    };
     window.addEventListener("open_student_chat", handleOpenChat);
     window.addEventListener("open_help_desk", handleOpenHelp);
     window.addEventListener("open_study_pod", handleOpenPod);
+    window.addEventListener("open_campus_airdrop", handleOpenAirdrop);
 
-    // Auto-open chat, help or study pod if URL has matching parameter
+    // Auto-open chat, help, study pod, or specific note page if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
     if (params.get("chat") || params.get("code") || params.get("chat_join")) {
       setIsChatOpen(true);
@@ -173,15 +182,41 @@ export default function App() {
       setIsHelpOpen(true);
     }
     const podParam = params.get("pod") || params.get("studypod") || params.get("room");
-    if (podParam) {
+    if (podParam && podParam !== "true") {
       setStudyPodRoomCode(podParam);
       setIsStudyPodOpen(true);
+    }
+
+    // Smart Page QR Code / Direct Note Link Handler (Opens note directly on specified page)
+    const urlNoteId = params.get("noteId") || params.get("note");
+    const urlPage = parseInt(params.get("page") || "1", 10);
+    if (urlNoteId) {
+      if (urlPage > 0) setPreviewInitialPage(urlPage);
+      api.getNoteById(urlNoteId)
+        .then((res) => {
+          if (res?.note) {
+            setPreviewNote({ ...res.note, _initialPage: urlPage });
+          }
+        })
+        .catch(() => {
+          try {
+            const cachedNotes = safeStorage.getItem("all_raw_notes");
+            if (cachedNotes) {
+              const list = JSON.parse(cachedNotes);
+              const found = list.find((n) => n.id === urlNoteId);
+              if (found) {
+                setPreviewNote({ ...found, _initialPage: urlPage });
+              }
+            }
+          } catch (_) {}
+        });
     }
 
     return () => {
       window.removeEventListener("open_student_chat", handleOpenChat);
       window.removeEventListener("open_help_desk", handleOpenHelp);
       window.removeEventListener("open_study_pod", handleOpenPod);
+      window.removeEventListener("open_campus_airdrop", handleOpenAirdrop);
     };
   }, []);
 
@@ -1220,6 +1255,10 @@ export default function App() {
           }
         }}
         onOpenStudyPod={() => setIsStudyPodOpen(true)}
+        onOpenAirDrop={() => {
+          setAirdropTargetNote(null);
+          setIsAirdropOpen(true);
+        }}
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
@@ -1326,6 +1365,7 @@ export default function App() {
               alignItems: "center",
               justifyContent: "space-between",
               gap: "12px",
+              flexWrap: "wrap",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1337,9 +1377,36 @@ export default function App() {
                 Reading cached notes from local device storage.
               </span>
             </div>
-            <span className="tech-pill dedup" style={{ fontSize: "0.68rem" }}>
-              ⚡ 100% Free Offline Vault
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAirdropTargetNote(null);
+                  setIsAirdropOpen(true);
+                }}
+                style={{
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+                }}
+                title="Receive or Send notes offline with nearby classmates via 1-Tap QR Mesh"
+              >
+                <span>⚡</span>
+                <span>Campus AirDrop (0 KB)</span>
+              </button>
+              <span className="tech-pill dedup" style={{ fontSize: "0.68rem" }}>
+                ⚡ 100% Free Offline Vault
+              </span>
+            </div>
           </div>
         )}
 
@@ -1983,12 +2050,17 @@ export default function App() {
         {previewNote && (
           <PreviewModal
             note={previewNote}
-            onClose={() => setPreviewNote(null)}
+            onClose={() => {
+              setPreviewNote(null);
+              setPreviewInitialPage(1);
+            }}
             currentUser={currentUser}
             allowNotesDownload={allowNotesDownload}
             downloadDisabledReason={downloadDisabledReason}
+            initialPage={previewInitialPage || previewNote?._initialPage || 1}
             onOpenAuth={(mode) => {
               setPreviewNote(null);
+              setPreviewInitialPage(1);
               openAuth(mode || "signin");
             }}
           />
@@ -2091,6 +2163,34 @@ export default function App() {
               currentUser={currentUser}
               note={studyPodNote}
               initialRoomCode={studyPodRoomCode}
+            />
+          </ModalErrorBoundary>
+        )}
+
+        {/* ⚡ Campus AirDrop Modal (Direct P2P Offline Note Transfer via 1-Tap QR Mesh) */}
+        {isAirdropOpen && (
+          <ModalErrorBoundary
+            onClose={() => {
+              setIsAirdropOpen(false);
+              setAirdropTargetNote(null);
+            }}
+          >
+            <CampusAirdropModal
+              isOpen={isAirdropOpen}
+              onClose={() => {
+                setIsAirdropOpen(false);
+                setAirdropTargetNote(null);
+              }}
+              currentNote={airdropTargetNote}
+              onNoteReceived={(receivedData) => {
+                if (receivedData?.noteId) {
+                  setIsAirdropOpen(false);
+                  const found = notes.find((n) => n.id === receivedData.noteId);
+                  if (found) {
+                    setPreviewNote(found);
+                  }
+                }
+              }}
             />
           </ModalErrorBoundary>
         )}

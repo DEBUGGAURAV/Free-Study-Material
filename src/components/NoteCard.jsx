@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2 } from "lucide-react";
+import { FileText, Download, Eye, Share2, Check, Activity, HardDrive, MessageCircle, Pin, Trash2, Zap } from "lucide-react";
 import { api } from "../api";
 import { downloadFromPeerMesh, cacheNoteBuffer, getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
@@ -710,6 +710,27 @@ export default function NoteCard({
             title="Preview Document"
           >
             <Eye size={16} />
+          </button>
+
+          <button
+            className="btn-card-preview"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("open_campus_airdrop", {
+                  detail: { note },
+                })
+              );
+            }}
+            title="⚡ AirDrop this note offline to a classmate (0 KB internet)"
+            style={{
+              color: "#c084fc",
+              background: "rgba(168, 85, 247, 0.12)",
+              border: "1px solid rgba(168, 85, 247, 0.3)",
+            }}
+          >
+            <Zap size={15} />
           </button>
 
           <button

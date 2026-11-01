@@ -72,6 +72,7 @@ export default function VirtualPdfReader({
   onOpenAuth,
   isDownloadBlocked = false,
   downloadDisabledReason = "",
+  initialPage = 1,
 }) {
   const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
   const isBlocked = Boolean(isDownloadBlocked || isSingleNoteDisabled);
@@ -100,7 +101,14 @@ export default function VirtualPdfReader({
   const streamRetryCountRef = useRef(0);
 
   const [pdfDoc, setPdfDoc] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(() => {
+    if (initialPage && Number(initialPage) > 0) return Number(initialPage);
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("page");
+      if (p && Number(p) > 0) return Number(p);
+    }
+    return 1;
+  });
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.2);
   const [loading, setLoading] = useState(true);
@@ -307,7 +315,7 @@ export default function VirtualPdfReader({
     try {
       const targetNoteId = noteId || note?.id || "";
       const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
-      const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}&pod=true`;
+      const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}`;
 
       const qrData = await QRCode.toDataURL(shareUrl, {
         width: 260,
@@ -4586,7 +4594,7 @@ export default function VirtualPdfReader({
                 onClick={() => {
                   const targetNoteId = noteId || note?.id || "";
                   const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
-                  const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}&pod=true`;
+                  const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}`;
                   navigator.clipboard.writeText(shareUrl).then(() => {
                     setQrCopied(true);
                     setTimeout(() => setQrCopied(false), 2500);
