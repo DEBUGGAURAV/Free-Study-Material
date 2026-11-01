@@ -162,7 +162,14 @@ export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwit
     const candidateUrl = `${candidateBase}/api/notes/${noteId}/${pathSegment}${query}`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000); // 4-second timeout guard
+    const fetchTimeout = isDownload ? 60000 : 35000;
+    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+    if (fetchOptions.signal) {
+      fetchOptions.signal.addEventListener("abort", () => {
+        clearTimeout(timeoutId);
+        controller.abort();
+      }, { once: true });
+    }
 
     try {
       const response = await fetch(candidateUrl, {

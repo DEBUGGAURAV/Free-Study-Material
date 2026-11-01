@@ -280,26 +280,36 @@ export default function NoteCard({
     }
   };
 
+  const handleDocumentPreviewClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!currentUser) {
+      if (onRequireAuth) onRequireAuth("signin");
+      return;
+    }
+    onPreview(note);
+  };
+
   return (
     <article className="note-card">
       <div>
-        {/* Header with Type & Badges */}
+        {/* 1. Header with Type & Badges */}
         <div className="card-header">
           <div className="file-type-icon">
-            <FileText size={22} />
+            <FileText size={20} />
           </div>
 
           <div className="note-badges-row">
             {note.foundViaOcr && (
               <span className="tech-pill compress" style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
-                🔍 Found in Handwritten (OCR)
+                🔍 Handwritten (OCR)
               </span>
             )}
             {note.isDuplicate && (
               <span className="tech-pill dedup">⚡ 0s Dedup</span>
             )}
             {note.savingsPercent > 0 && !note.isDuplicate && (
-              <span className="tech-pill compress">🗜️ -{note.savingsPercent}% Saved</span>
+              <span className="tech-pill compress">🗜️ -{note.savingsPercent}%</span>
             )}
             {note.isLatest && (
               <span
@@ -308,8 +318,7 @@ export default function NoteCard({
                   background: "linear-gradient(135deg, #10b981, #06b6d4)",
                   color: "#fff",
                   fontWeight: 800,
-                  fontSize: "0.68rem",
-                  letterSpacing: "0.5px",
+                  fontSize: "0.65rem",
                 }}
               >
                 ✨ LATEST
@@ -342,11 +351,11 @@ export default function NoteCard({
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
-                  fontSize: "0.68rem",
+                  fontSize: "0.66rem",
                   transition: "all 0.15s ease",
                 }}
               >
-                {isSingleNoteDisabled ? "🔒 Downloads: Locked" : "🟢 Downloads: Active"}
+                {isSingleNoteDisabled ? "🔒 Locked" : "🟢 Active"}
               </button>
             )}
             {(!isAdmin || !onToggleNoteDownload) && isSingleNoteDisabled && (
@@ -358,7 +367,7 @@ export default function NoteCard({
                   color: "#f87171",
                   border: "1px solid rgba(239, 68, 68, 0.35)",
                   fontWeight: 700,
-                  fontSize: "0.68rem",
+                  fontSize: "0.66rem",
                 }}
               >
                 🔒 Read-Only
@@ -367,15 +376,45 @@ export default function NoteCard({
           </div>
         </div>
 
-        {/* Optional WebP Thumbnail */}
-        {note.thumbnailUrl && (
-          <div className="card-thumbnail-box" style={{ marginTop: "12px" }}>
-            <img src={note.thumbnailUrl} alt={note.title} loading="lazy" />
-          </div>
-        )}
+        {/* 2. Floating Document Blueprint Canvas Window (Cardboard.ai Bento Preview) */}
+        <div
+          className="note-card-canvas-window"
+          onClick={handleDocumentPreviewClick}
+          title="Click to Open in Virtual PDF Reader"
+        >
+          {note.thumbnailUrl ? (
+            <div className="card-thumbnail-box">
+              <img src={note.thumbnailUrl} alt={note.title} loading="lazy" />
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.65rem", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                <span style={{ color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>Verified Blueprint</span>
+                <span>{note.semester || note.year || "Unit 1 to 5"}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(6, 182, 212, 0.15)", border: "1px solid rgba(6, 182, 212, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22d3ee", flexShrink: 0 }}>
+                  <FileText size={18} />
+                </div>
+                <div style={{ overflow: "hidden" }}>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {note.title}
+                  </div>
+                  <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                    {formattedSize} • WebP Optimized
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.65rem", fontFamily: "var(--font-mono)", color: "var(--text-dim)", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "4px" }}>
+                <span>Cloudflare CDN Cached</span>
+                <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>Preview Document ↗</span>
+              </div>
+            </>
+          )}
+        </div>
 
-        {/* Content Info */}
-        <div style={{ marginTop: "14px" }}>
+        {/* 3. Title & Academic Description */}
+        <div className="note-title-container">
           <h3 className="note-title" title={note.title}>
             {note.title}
           </h3>
@@ -388,24 +427,35 @@ export default function NoteCard({
             </p>
           )}
         </div>
+
+        {/* 4. Luxury 3-Column Specs HUD Bar */}
+        <div className="note-specs-hud">
+          <div className="note-specs-item">
+            <span className="note-specs-label">Term</span>
+            <span className="note-specs-val">{note.year || note.semester || "All Years"}</span>
+          </div>
+          <div className="note-specs-item" style={{ borderLeft: "1px solid rgba(255, 255, 255, 0.06)", borderRight: "1px solid rgba(255, 255, 255, 0.06)" }}>
+            <span className="note-specs-label">File Size</span>
+            <span className="note-specs-val" style={{ color: "var(--accent-cyan)" }}>{formattedSize}</span>
+          </div>
+          <div className="note-specs-item">
+            <span className="note-specs-label">Downloads</span>
+            <span className="note-specs-val">{note.downloadsCount || 0}+</span>
+          </div>
+        </div>
       </div>
 
-      {/* Footer & Actions */}
+      {/* 5. Bottom Anchored Action Matrix & Indicators */}
       <div>
-        <div className="note-meta-footer">
-          <span>{note.year || note.semester || "All Years"}</span>
-          <span>{formattedSize} • {note.downloadsCount || 0} downloads</span>
-        </div>
-
         {/* LIVE IN-CARD DOWNLOAD PROGRESS BAR */}
         {downloading && (
           <div
             style={{
-              marginTop: "8px",
+              marginBottom: "8px",
               background: "rgba(6, 182, 212, 0.08)",
               border: "1px solid rgba(6, 182, 212, 0.25)",
               borderRadius: "var(--radius-sm)",
-              padding: "8px 10px",
+              padding: "7px 10px",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#fff", fontWeight: 700, marginBottom: "4px" }}>
@@ -487,25 +537,6 @@ export default function NoteCard({
                   >
                     <span>💽</span>
                     <span>SSD Cache (1ms)</span>
-                  </span>
-                ) : (downloadProgress.realSource?.id === "storage" || (!note.isCdnCached && !downloadProgress.realSource && downloadProgress.percent < 90)) ? (
-                  <span
-                    style={{
-                      fontSize: "0.62rem",
-                      padding: "2px 6px",
-                      borderRadius: "4px",
-                      fontWeight: 700,
-                      background: "rgba(245, 158, 11, 0.2)",
-                      color: "#fbbf24",
-                      border: "1px solid rgba(245, 158, 11, 0.4)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "3px",
-                    }}
-                    title="Primary Academic Cloud Storage Vault"
-                  >
-                    <span>☁️</span>
-                    <span>Cloud Vault</span>
                   </span>
                 ) : (
                   <span
@@ -657,121 +688,132 @@ export default function NoteCard({
           </div>
         )}
 
-        <div className="card-action-bar">
-          {isNoteDownloadBlocked ? (
+        {/* ====================================================================== */}
+        {/* 🚀 ANCHORED ACTION MATRIX (EXACT SAME HORIZONTAL BASELINE ON ALL CARDS) 🚀 */}
+        {/* ====================================================================== */}
+        <div className="card-action-matrix">
+          {/* ROW 1: CORE STUDY DUAL ACTIONS (READ ONLINE + FAST DOWNLOAD) */}
+          <div className="action-row-dual">
             <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
-                alert(reasonMsg);
-              }}
-              className="btn-card-download"
-              title={isSingleNoteDisabled ? "Downloads disabled for this note. Online Reader is active. Click to view notice." : "Downloads paused by administrator. Online Reader is active. Click to view notice."}
-              style={{
-                opacity: 0.9,
-                cursor: "pointer",
-                background: "rgba(239, 68, 68, 0.15)",
-                border: "1px solid rgba(239, 68, 68, 0.4)",
-                color: "#fca5a5",
-              }}
+              type="button"
+              className="btn-action-read"
+              onClick={handleDocumentPreviewClick}
+              title="Open full document in Online Reader"
             >
-              <Download size={14} style={{ opacity: 0.8 }} />
-              <span>{isSingleNoteDisabled ? "🔒 Download Disabled" : "🔒 Downloads Paused"}</span>
+              <Eye size={15} />
+              <span>Read Online</span>
             </button>
-          ) : (
+
+            {isNoteDownloadBlocked ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const reasonMsg = note.downloadDisabledReason || downloadDisabledReason || (isSingleNoteDisabled ? "Downloads for this specific note have been disabled by the administrator. You can still preview and read all pages in the Online Reader." : "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.");
+                  alert(reasonMsg);
+                }}
+                className="btn-action-download"
+                title={isSingleNoteDisabled ? "Downloads disabled for this note. Online Reader is active." : "Downloads paused by administrator. Online Reader is active."}
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  color: "#fca5a5",
+                }}
+              >
+                <Download size={14} style={{ opacity: 0.8 }} />
+                <span>{isSingleNoteDisabled ? "🔒 Read-Only" : "🔒 Paused"}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleTrackedDownload}
+                className="btn-action-download"
+                title="Download note via Cloudflare Indian CDN"
+                disabled={downloading}
+              >
+                {downloading ? (
+                  <>
+                    <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                    <span>Streaming {downloadProgress.percent}%</span>
+                  </>
+                ) : (
+                  <>
+                    <Download size={14} />
+                    <span>Download</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* ROW 2: PROMINENT DEDICATED SOCIAL (CHAT + SHARE - FULL BUTTONS!) */}
+          <div className="action-row-dual">
             <button
-              onClick={handleTrackedDownload}
-              className="btn-card-download"
-              title="Download via Cloudflare Indian CDN"
-              disabled={downloading}
+              type="button"
+              className="btn-action-chat"
+              onClick={handleShareToChat}
+              title={sharedToChat ? "Dropped in Student Study Chat!" : "Drop note directly into Student Study Chat"}
             >
-              {downloading ? (
-                <>
-                  <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
-                  <span>Streaming {downloadProgress.percent}%</span>
-                </>
-              ) : (
-                <>
-                  <Download size={15} />
-                  <span>⚡ Fast Download</span>
-                </>
-              )}
+              {sharedToChat ? <Check size={14} style={{ color: "#34d399" }} /> : <MessageCircle size={14} />}
+              <span>{sharedToChat ? "Dropped!" : "Drop in Chat"}</span>
             </button>
-          )}
 
-          <button
-            className="btn-card-preview"
-            onClick={() => {
-              if (!currentUser) {
-                if (onRequireAuth) onRequireAuth("signin");
-                return;
-              }
-              onPreview(note);
-            }}
-            title="Preview Document"
-          >
-            <Eye size={16} />
-          </button>
+            <button
+              type="button"
+              className="btn-action-share"
+              onClick={handleShareNote}
+              title={copied ? "Link Copied to Clipboard!" : "Share note link via WhatsApp, Telegram or Native Sheet"}
+            >
+              {copied ? <Check size={14} style={{ color: "#34d399" }} /> : <Share2 size={14} />}
+              <span>{copied ? "Copied!" : "Share Link"}</span>
+            </button>
+          </div>
 
-          <button
-            className="btn-card-preview"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.dispatchEvent(
-                new CustomEvent("open_campus_airdrop", {
-                  detail: { note, initialMode: "sound" },
-                })
-              );
-            }}
-            title="🔊 Sound-Drop: Beam note wirelessly via ultrasonic audio frequency (0 KB internet)"
-            style={{
-              color: "#34d399",
-              background: "rgba(16, 185, 129, 0.12)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-            }}
-          >
-            <Volume2 size={15} />
-          </button>
+          {/* ROW 3: 0-KB WIRELESS PROXIMITY MESH (SOUND-DROP & AIRDROP) */}
+          <div className="action-mesh-bar">
+            <span style={{ color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "5px" }}>
+              <span className="pulse-dot" style={{ width: "5px", height: "5px" }}></span>
+              <span>0-KB Mesh:</span>
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                className="btn-mesh-pill btn-mesh-sound"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.dispatchEvent(
+                    new CustomEvent("open_campus_airdrop", {
+                      detail: { note, initialMode: "sound" },
+                    })
+                  );
+                }}
+                title="🔊 Sound-Drop: Beam note wirelessly via ultrasonic audio frequency (0 KB internet)"
+              >
+                <Volume2 size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
+                Sound-Drop
+              </button>
 
-          <button
-            className="btn-card-preview"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.dispatchEvent(
-                new CustomEvent("open_campus_airdrop", {
-                  detail: { note, initialMode: "qr" },
-                })
-              );
-            }}
-            title="⚡ AirDrop this note offline via 1-Tap QR Mesh (0 KB internet)"
-            style={{
-              color: "#c084fc",
-              background: "rgba(168, 85, 247, 0.12)",
-              border: "1px solid rgba(168, 85, 247, 0.3)",
-            }}
-          >
-            <Zap size={15} />
-          </button>
-
-          <button
-            className="btn-card-preview"
-            onClick={handleShareToChat}
-            title={sharedToChat ? "Dropped in Study Chat!" : "Share in Student Study Chat"}
-            style={{ color: sharedToChat ? "#34d399" : "var(--accent-cyan)" }}
-          >
-            {sharedToChat ? <Check size={16} /> : <MessageCircle size={16} />}
-          </button>
-
-          <button
-            className="btn-card-preview"
-            onClick={handleShareNote}
-            title={copied ? "Shared / Copied!" : "Share Note (WhatsApp / Native Sheet)"}
-          >
-            {copied ? <Check size={16} style={{ color: "#34d399" }} /> : <Share2 size={16} />}
-          </button>
+              <button
+                type="button"
+                className="btn-mesh-pill btn-mesh-airdrop"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.dispatchEvent(
+                    new CustomEvent("open_campus_airdrop", {
+                      detail: { note, initialMode: "qr" },
+                    })
+                  );
+                }}
+                title="⚡ AirDrop this note offline via 1-Tap QR Mesh (0 KB internet)"
+              >
+                <Zap size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
+                AirDrop
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </article>

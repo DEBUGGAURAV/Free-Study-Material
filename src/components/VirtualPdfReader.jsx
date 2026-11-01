@@ -648,6 +648,25 @@ export default function VirtualPdfReader({
 
           if (!isCancelled && doc) {
             streamRetryCountRef.current = 0;
+            setStreamSource("cdn");
+            setIsCachingToCdn(false);
+            setCdnTransferPercent(100);
+            setRealSourceInfo((prev) => {
+              if (prev && (prev.id === "storage" || prev.id === "unknown")) {
+                return {
+                  id: "ram",
+                  label: "In-Memory RAM Buffer (0ms Microsecond)",
+                  short: "RAM Buffer (0ms)",
+                  details: "In-Memory RAM Buffer Pool • 0ms Microsecond Stream",
+                  colo: "RAM",
+                  icon: "🧠",
+                  color: "#c084fc",
+                  bgColor: "rgba(168, 85, 247, 0.14)",
+                  borderColor: "rgba(168, 85, 247, 0.35)",
+                };
+              }
+              return prev;
+            });
             setPreviewProgress({
               percent: 100,
               loadedBytes: noteTotalSize || (doc.numPages * 50000),

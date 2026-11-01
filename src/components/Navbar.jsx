@@ -1,5 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Cloud, Search, UploadCloud, Shield, LogOut, Bell, UserPlus, LogIn, User, Smartphone, Mic, MicOff, MessageSquare, HelpCircle, Users, Zap } from "lucide-react";
+import {
+  Cloud,
+  Search,
+  UploadCloud,
+  Shield,
+  LogOut,
+  Bell,
+  UserPlus,
+  LogIn,
+  User,
+  Smartphone,
+  Mic,
+  MicOff,
+  MessageSquare,
+  HelpCircle,
+  Users,
+  Zap,
+  ChevronDown
+} from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
 export default function Navbar({
@@ -19,6 +37,10 @@ export default function Navbar({
   noticeCount = 0,
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const toolsRef = useRef(null);
+  const searchInputRef = useRef(null);
+
   const [isInstalled, setIsInstalled] = useState(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -30,6 +52,38 @@ export default function Navbar({
       return false;
     }
   });
+
+  // Close tools dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (toolsRef.current && !toolsRef.current.contains(event.target)) {
+        setIsToolsOpen(false);
+      }
+    };
+    if (isToolsOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isToolsOpen]);
+
+  // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -79,6 +133,7 @@ export default function Navbar({
       alert("📲 To Install FreeStudyMaterial App on Edge/Chrome:\n\n1. Look at Edge top-right: Click the 3 dots (...) menu.\n2. Click 'Apps' -> 'Install this site as an app'.\n\nOn Mobile: Tap 3 dots -> 'Add to Home screen'!");
     }
   };
+
   const isAdminOrManager = Boolean(
     currentUser?.isMainAdmin ||
     currentUser?.isAdmin ||
@@ -138,10 +193,10 @@ export default function Navbar({
   return (
     <header className="navbar-wrapper">
       <div className="navbar-content">
-        {/* Brand */}
-        <div className="brand-section" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}>
+        {/* 1. Brand Section */}
+        <div className="brand-section" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} title="Scroll to Top">
           <div className="brand-logo-glow">
-            <Cloud size={24} />
+            <Cloud size={22} />
           </div>
           <div>
             <div className="brand-title">{SITE_NAME}</div>
@@ -152,30 +207,30 @@ export default function Navbar({
           </div>
         </div>
 
-        {/* Universal Search */}
-        <div className="search-wrapper" style={{ position: "relative" }}>
-          <Search size={18} className="search-icon" />
+        {/* 2. Universal Spotlight Search with Voice & ⌘K */}
+        <div className="search-wrapper">
+          <Search size={16} className="search-icon" />
           <input
+            ref={searchInputRef}
             type="text"
             className="search-input"
-            placeholder="Search notes, subjects, branch, or keywords..."
+            placeholder="Search notes, subjects, branch, PYQs..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ paddingRight: "40px" }}
           />
           <button
             type="button"
             onClick={handleVoiceSearch}
             style={{
               position: "absolute",
-              right: "10px",
+              right: "44px",
               top: "50%",
               transform: "translateY(-50%)",
               background: isListening ? "rgba(239, 68, 68, 0.25)" : "transparent",
               border: isListening ? "1px solid #ef4444" : "none",
               borderRadius: "50%",
-              width: "28px",
-              height: "28px",
+              width: "26px",
+              height: "26px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -185,69 +240,14 @@ export default function Navbar({
             }}
             title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
           >
-            {isListening ? <MicOff size={16} /> : <Mic size={16} />}
+            {isListening ? <MicOff size={15} /> : <Mic size={15} />}
           </button>
+          <kbd className="search-kbd-shortcut">⌘K</kbd>
         </div>
 
-        {/* Actions */}
+        {/* 3. Floating Action Matrix (ALL 11 ELEMENTS ACCOMMODATED CLEANLY) */}
         <div className="nav-actions">
-          {/* Notice Board Button */}
-          <button
-            className="btn-icon"
-            onClick={onOpenNotices}
-            title="Notice Board & Announcements"
-            style={{ position: "relative" }}
-          >
-            <Bell size={18} />
-            {noticeCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "6px",
-                  right: "6px",
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  background: "#06b6d4",
-                  boxShadow: "0 0 6px #06b6d4",
-                }}
-              />
-            )}
-          </button>
-
-          {/* Collaborative Live Study Pod with Real-time Canvas */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenStudyPod}
-            title="Collaborative Live Study Pod (Real-time P2P Canvas & Notes Sync)"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(16, 185, 129, 0.12)",
-              border: "1px solid rgba(16, 185, 129, 0.35)",
-              color: "#34d399",
-              fontWeight: 600,
-              fontSize: "0.82rem",
-            }}
-          >
-            <Users size={16} />
-            <span>Study Pod</span>
-            <span
-              style={{
-                fontSize: "0.65rem",
-                background: "rgba(16, 185, 129, 0.25)",
-                padding: "1px 5px",
-                borderRadius: "8px",
-                color: "#6ee7b7",
-                fontWeight: 700,
-              }}
-            >
-              P2P
-            </span>
-          </button>
-
-          {/* ⚡ Campus AirDrop (Offline P2P BitTorrent Transfer & 0 KB Share) */}
+          {/* ⚡ Campus AirDrop (0 KB Offline Peer Mesh) */}
           <button
             className="btn-secondary"
             onClick={onOpenAirDrop}
@@ -260,17 +260,18 @@ export default function Navbar({
               border: "1px solid rgba(168, 85, 247, 0.38)",
               color: "#c084fc",
               fontWeight: 700,
-              fontSize: "0.82rem",
+              fontSize: "0.8rem",
+              padding: "7px 12px",
             }}
           >
-            <Zap size={15} />
+            <Zap size={14} />
             <span>AirDrop</span>
             <span
               style={{
-                fontSize: "0.65rem",
+                fontSize: "0.62rem",
                 background: "rgba(168, 85, 247, 0.25)",
                 padding: "1px 5px",
-                borderRadius: "8px",
+                borderRadius: "6px",
                 color: "#e9d5ff",
                 fontWeight: 700,
               }}
@@ -279,11 +280,11 @@ export default function Navbar({
             </span>
           </button>
 
-          {/* Real-time Student Chat & Study Pods */}
+          {/* 💬 Student Chat Hub */}
           <button
             className="btn-secondary"
             onClick={onOpenChat}
-            title="Student Hub & Study Pods (Live Chat)"
+            title="Student Hub & Live Discussion"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -292,81 +293,166 @@ export default function Navbar({
               border: "1px solid rgba(99, 102, 241, 0.35)",
               color: "#a5b4fc",
               fontWeight: 600,
-              fontSize: "0.82rem",
+              fontSize: "0.8rem",
+              padding: "7px 12px",
             }}
           >
-            <MessageSquare size={16} />
+            <MessageSquare size={14} />
             <span>Chat Hub</span>
           </button>
 
-          {/* Help & Support Desk */}
+          {/* 🔔 Notice Board Bell */}
           <button
-            className="btn-secondary"
-            onClick={onOpenHelp}
-            title="Help Center, FAQs & 2-Way Admin Support"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(56, 189, 248, 0.12)",
-              border: "1px solid rgba(56, 189, 248, 0.35)",
-              color: "#38bdf8",
-              fontWeight: 600,
-              fontSize: "0.82rem",
-            }}
+            className="btn-icon"
+            onClick={onOpenNotices}
+            title="Notice Board & Announcements"
+            style={{ position: "relative", width: "36px", height: "36px" }}
           >
-            <HelpCircle size={16} />
-            <span>Help Desk</span>
+            <Bell size={16} />
+            {noticeCount > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: "6px",
+                  right: "6px",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "#06b6d4",
+                  boxShadow: "0 0 8px #06b6d4",
+                }}
+              />
+            )}
           </button>
 
-          {/* Upload Button */}
-          <button className="btn-primary" onClick={onOpenUpload}>
-            <UploadCloud size={17} />
+          {/* 🛠️ Floating Tools Island (Houses Study Pod, Help Desk, Install App & Admin Portal) */}
+          <div className="nav-tools-container" ref={toolsRef}>
+            <button
+              type="button"
+              className="nav-tools-btn"
+              onClick={() => setIsToolsOpen(!isToolsOpen)}
+              title="More Academic Tools & Services"
+            >
+              <Users size={14} style={{ color: "#38bdf8" }} />
+              <span>Tools</span>
+              <ChevronDown
+                size={13}
+                style={{
+                  transform: isToolsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s ease",
+                  opacity: 0.7,
+                }}
+              />
+            </button>
+
+            {/* Floating Dropdown Island */}
+            {isToolsOpen && (
+              <div className="nav-tools-dropdown">
+                {/* 1. Collaborative Live Study Pod */}
+                <button
+                  type="button"
+                  className="nav-tools-item"
+                  onClick={() => {
+                    setIsToolsOpen(false);
+                    onOpenStudyPod();
+                  }}
+                >
+                  <Users size={15} style={{ color: "#34d399" }} />
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                    <span>Collaborative Study Pod</span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Real-time Canvas & Sync</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.62rem",
+                      background: "rgba(16, 185, 129, 0.2)",
+                      color: "#6ee7b7",
+                      padding: "1px 5px",
+                      borderRadius: "6px",
+                      fontWeight: 700,
+                    }}
+                  >
+                    P2P
+                  </span>
+                </button>
+
+                {/* 2. Help & Support Desk */}
+                <button
+                  type="button"
+                  className="nav-tools-item"
+                  onClick={() => {
+                    setIsToolsOpen(false);
+                    onOpenHelp();
+                  }}
+                >
+                  <HelpCircle size={15} style={{ color: "#38bdf8" }} />
+                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                    <span>Help &amp; Support Desk</span>
+                    <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>FAQs &amp; 24/7 Queries</span>
+                  </div>
+                </button>
+
+                {/* 3. Install App (PWA) */}
+                {!isInstalled && (
+                  <button
+                    type="button"
+                    className="nav-tools-item"
+                    onClick={() => {
+                      setIsToolsOpen(false);
+                      handleInstallClick();
+                    }}
+                  >
+                    <Smartphone size={15} style={{ color: "#a855f7" }} />
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                      <span>Install App (PWA)</span>
+                      <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Fast Offline Desktop/Mobile</span>
+                    </div>
+                  </button>
+                )}
+
+                {/* 4. Admin Studio Portal (if authorized) */}
+                {isAdminOrManager && (
+                  <button
+                    type="button"
+                    className="nav-tools-item"
+                    onClick={() => {
+                      setIsToolsOpen(false);
+                      onOpenAdmin();
+                    }}
+                    style={{
+                      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                      paddingTop: "10px",
+                    }}
+                  >
+                    <Shield size={15} style={{ color: "#f59e0b" }} />
+                    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+                      <span style={{ color: "#fbbf24" }}>Admin Security Studio</span>
+                      <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Notes, Logs &amp; Access</span>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 🚀 Primary CTA: Upload Notes */}
+          <button className="btn-primary" onClick={onOpenUpload} style={{ padding: "8px 16px", fontSize: "0.82rem" }}>
+            <UploadCloud size={16} />
             <span>Upload Notes</span>
           </button>
 
-          {/* PWA Install App Button */}
-          {!isInstalled && (
-            <button
-              className="btn-secondary"
-              onClick={handleInstallClick}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                background: "rgba(16, 185, 129, 0.12)",
-                border: "1px solid rgba(16, 185, 129, 0.35)",
-                color: "#34d399",
-                fontWeight: 600,
-                fontSize: "0.82rem",
-              }}
-              title={`Install ${SITE_NAME} as Desktop / Mobile App`}
-            >
-              <Smartphone size={16} />
-              <span>📲 Install App</span>
-            </button>
-          )}
-
-          {/* Admin Studio Button (if authorized) */}
-          {isAdminOrManager && (
-            <button className="btn-secondary" onClick={onOpenAdmin}>
-              <Shield size={16} />
-              <span>Admin Studio</span>
-            </button>
-          )}
-
-          {/* User Auth Info / Login */}
+          {/* 👤 User Auth Info / Profile Chip */}
           {currentUser ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
+                  gap: "7px",
                   background: "rgba(255, 255, 255, 0.05)",
                   border: "1px solid var(--border-subtle)",
                   borderRadius: "var(--radius-full)",
-                  padding: "6px 12px",
+                  padding: "5px 12px 5px 6px",
                   cursor: "pointer",
                   transition: "all 0.2s ease",
                 }}
@@ -375,16 +461,17 @@ export default function Navbar({
               >
                 <div
                   style={{
-                    width: "24px",
-                    height: "24px",
+                    width: "26px",
+                    height: "26px",
                     borderRadius: "50%",
-                    background: "rgba(99, 102, 241, 0.2)",
-                    color: "var(--accent-indigo)",
+                    background: "linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan))",
+                    color: "#fff",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: "0.75rem",
-                    fontWeight: 700,
+                    fontWeight: 800,
+                    boxShadow: "0 0 10px rgba(6, 182, 212, 0.35)",
                   }}
                 >
                   {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
@@ -393,8 +480,8 @@ export default function Navbar({
                   <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>
                     {currentUser.name?.split(" ")[0] || currentUser.email?.split("@")[0]}
                   </span>
-                  <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>
-                    {currentUser.role === "admin" ? "Admin" : currentUser.college ? currentUser.college.substring(0, 16) + "..." : "Student"} • Settings
+                  <span style={{ fontSize: "0.62rem", color: "var(--text-dim)" }}>
+                    {currentUser.role === "admin" ? "Admin" : currentUser.college ? currentUser.college.substring(0, 14) + "..." : "Student"}
                   </span>
                 </div>
               </div>
@@ -403,15 +490,15 @@ export default function Navbar({
                 className="btn-icon"
                 onClick={onLogout}
                 title="Log Out"
-                style={{ width: "36px", height: "36px" }}
+                style={{ width: "34px", height: "34px" }}
               >
-                <LogOut size={15} />
+                <LogOut size={14} />
               </button>
             </div>
           ) : (
-            <button className="btn-secondary" onClick={onOpenAuth}>
-              <LogIn size={15} />
-              <span>Sign In / Register</span>
+            <button className="btn-secondary" onClick={onOpenAuth} style={{ padding: "7px 14px", fontSize: "0.8rem" }}>
+              <LogIn size={14} />
+              <span>Sign In</span>
             </button>
           )}
         </div>

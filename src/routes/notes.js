@@ -315,33 +315,48 @@ function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 15000) {
   });
 }
 
-// Background ingestion tracker to avoid duplicate concurrent ingestions
+// Single-Flight Ingestion Tracker (Guarantees exactly 1 storage connection per note across all users)
+const inFlightFetches = new Map();
 const activeBgIngests = new Set();
 
-function triggerBackgroundCdnCache(id, note) {
-  if (activeBgIngests.has(id)) return;
-  const isDiskCached = fs.existsSync(path.join(CDN_CACHE_DIR, `${id}.bin`));
-  const isRamCached = Boolean(noteBufferCache.has(id));
-  if (isDiskCached || isRamCached) return;
+/**
+ * Single-Flight Pass-Through Engine:
+ * Fetches document from Main Storage once and saves to RAM Buffer and Local SSD Disk CDN.
+ * Deduplicates concurrent requests so 10 students opening the same note trigger only 1 storage download.
+ */
+async function fetchAndCacheNoteBuffer(id, note) {
+  // 1. Memory Check
+  if (noteBufferCache.has(id)) return noteBufferCache.get(id);
+  // 2. Disk Check
+  const diskItem = getCdnBuffer(id);
+  if (diskItem) return diskItem;
 
-  activeBgIngests.add(id);
-  (async () => {
+  // 3. In-flight Deduplication
+  if (inFlightFetches.has(id)) {
+    return await inFlightFetches.get(id);
+  }
+
+  const fetchPromise = (async () => {
     try {
       let docData = null;
       const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
       const botFileId = note.telegramBotFileId || note.telegramFileId;
+
+      // Tier 1: Telegram Bot API fast buffer fetch (<20MB)
       if (botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024)) {
         try {
           docData = await getTelegramBotBuffer(botToken, botFileId, 25000);
         } catch (botErr) {
-          console.warn(`[BG-CACHE] Bot API buffer fetch notice for ${id}:`, botErr.message);
+          console.warn(`[INGEST] Bot API buffer fetch notice for ${id}:`, botErr.message);
         }
       }
+
+      // Tier 2: MTProto Document buffer fallback
       if (!docData && note.telegramMessageId) {
         try {
           docData = await getDocumentBufferFromChannel(note.telegramMessageId);
         } catch (mtErr) {
-          console.warn(`[BG-CACHE] MTProto buffer fetch notice for ${id}:`, mtErr.message);
+          console.warn(`[INGEST] MTProto buffer fetch notice for ${id}:`, mtErr.message);
         }
       }
 
@@ -368,14 +383,24 @@ function triggerBackgroundCdnCache(id, note) {
           note.isCdnCached = true;
           ramCache.set(`note_${id}`, note, 3 * 3600);
         }
-        console.log(`[BG-CACHE] 🚀 Note "${note.title}" background-cached to Edge CDN & RAM!`);
+        console.log(`[PASS-THROUGH] 🚀 Note "${note.title}" successfully cached to Edge CDN & RAM Buffer!`);
+        return cacheItem;
       }
+      return null;
     } catch (err) {
-      console.warn(`[BG-CACHE] Background caching failed for ${id}:`, err.message);
+      console.warn(`[INGEST] Storage fetch error for ${id}:`, err.message);
+      return null;
     } finally {
-      activeBgIngests.delete(id);
+      inFlightFetches.delete(id);
     }
   })();
+
+  inFlightFetches.set(id, fetchPromise);
+  return await fetchPromise;
+}
+
+function triggerBackgroundCdnCache(id, note) {
+  fetchAndCacheNoteBuffer(id, note).catch(() => {});
 }
 
 function purgeCdnDiskBuffer(noteId) {
@@ -1706,6 +1731,32 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       incrementDbWritesPrevented();
     }
 
+    // ⚡ Instant HEAD response for preflight metadata checks (0ms, 0 byte overhead)
+    if (req.method === "HEAD") {
+      let headSize = note.fileSize || note.compressedSize || 0;
+      if (isDiskCached) {
+        try { headSize = fs.statSync(binPath).size; } catch (_) {}
+      } else if (cached?.totalSize) {
+        headSize = cached.totalSize;
+      }
+      if (headSize > 0) res.setHeader("Content-Length", headSize);
+
+      if (isRamCached) {
+        res.setHeader("X-Real-Source", "RAM_BUFFER");
+        res.setHeader("X-Source-Label", "In-Memory RAM Buffer (0ms Microsecond)");
+        res.setHeader("CF-Cache-Status", "HIT");
+      } else if (isDiskCached) {
+        res.setHeader("X-Real-Source", "DISK_CACHE");
+        res.setHeader("X-Source-Label", "Local SSD Disk Cache (1ms High-Speed)");
+        res.setHeader("CF-Cache-Status", "HIT");
+      } else {
+        res.setHeader("X-Real-Source", "TELEGRAM_STORAGE");
+        res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Caching to Edge CDN...)");
+        res.setHeader("CF-Cache-Status", "MISS");
+      }
+      return res.status(200).end();
+    }
+
     // 🚀 1. Check if file is already brought to Edge CDN / RAM / Disk Cache (Instant 1ms Stream)
     const cached = getCdnBuffer(id);
 
@@ -1750,11 +1801,14 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
       if (rangeHeader) {
         const parts = rangeHeader.replace(/bytes=/, "").split("-");
-        let start = parseInt(parts[0], 10) || 0;
+        let start = parseInt(parts[0], 10);
         let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-        if (isNaN(start)) start = 0;
+        if (isNaN(start)) {
+          start = Math.max(0, totalSize - (parseInt(parts[1], 10) || 0));
+          end = totalSize - 1;
+        }
         if (isNaN(end) || end >= totalSize) end = totalSize - 1;
-        const contentLength = end - start + 1;
+        const contentLength = Math.max(0, end - start + 1);
 
         res.status(206);
         res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
@@ -1790,80 +1844,43 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // ☁️ 2. First-time fetch from Primary Academic Cloud Storage Vault
-    const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-    const botFileId = note.telegramBotFileId || note.telegramFileId;
-    const canUseBotApi = Boolean(botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024));
+    // Real-Time Dynamic Headers: Tell the student browser we are fetching from Storage and caching to CDN
+    res.setHeader("X-Real-Source", "TELEGRAM_STORAGE");
+    res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Caching to Edge CDN...)");
+    res.setHeader("X-Data-Source", "storage");
+    res.setHeader("CF-Cache-Status", "MISS");
+    res.setHeader("X-Cache", "MISS");
 
-    // Tier 2: Instant Telegram Bot API stream with native Range (206) support (<1s latency)
-    if (canUseBotApi) {
-      try {
-        await streamTelegramBotFile({
-          botToken,
-          botFileId,
-          res,
-          rangeHeader: req.headers.range,
-        });
-        triggerBackgroundCdnCache(id, note);
-        return;
-      } catch (botStreamErr) {
-        console.warn(`[STREAM] Telegram Bot API stream notice for ${id}:`, botStreamErr.message);
-        if (res.headersSent) return;
+    // Fetch once from Main Storage and simultaneously write to CDN (RAM + Disk) and user response
+    const freshItem = await fetchAndCacheNoteBuffer(id, note);
+
+    if (freshItem && freshItem.buffer) {
+      const totalSize = freshItem.totalSize || freshItem.buffer.length;
+      const rangeHeader = req.headers.range;
+
+      if (rangeHeader) {
+        const parts = rangeHeader.replace(/bytes=/, "").split("-");
+        let start = parseInt(parts[0], 10);
+        let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+        if (isNaN(start)) {
+          start = Math.max(0, totalSize - (parseInt(parts[1], 10) || 0));
+          end = totalSize - 1;
+        }
+        if (isNaN(end) || end >= totalSize) end = totalSize - 1;
+        const contentLength = Math.max(0, end - start + 1);
+
+        res.status(206);
+        res.setHeader("Content-Range", `bytes ${start}-${end}/${totalSize}`);
+        res.setHeader("Content-Length", contentLength);
+        return res.end(freshItem.buffer.slice(start, end + 1));
+      } else {
+        res.status(200);
+        res.setHeader("Content-Length", totalSize);
+        return res.end(freshItem.buffer);
       }
     }
 
-    // Tier 3: Telegram MTProto direct streaming via 4-Worker engine guarded by Circuit Breaker
-    if (note.telegramMessageId) {
-      try {
-        await telegramCircuitBreaker.execute(
-          async () => {
-            return await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
-          },
-          async (breakerErr) => {
-            console.warn(`[STREAM-BREAKER] Triggering resilient fallback for note ${id}:`, breakerErr.message);
-
-            // Secondary Failover: Telegram Bot API direct stream (using native https)
-            if (botFileId && botToken) {
-              try {
-                await streamTelegramBotFile({
-                  botToken,
-                  botFileId,
-                  res,
-                  rangeHeader: req.headers.range,
-                });
-                triggerBackgroundCdnCache(id, note);
-                return;
-              } catch (botErr) {
-                console.warn("[STREAM FAILOVER] Bot API fallback notice:", botErr.message);
-              }
-            }
-
-            if (note.driveLink) {
-              return res.redirect(note.driveLink);
-            }
-            if (note.fileUrl) {
-              return res.redirect(note.fileUrl);
-            }
-
-            throw breakerErr;
-          }
-        );
-        triggerBackgroundCdnCache(id, note);
-        return;
-      } catch (streamErr) {
-        console.warn(`[STREAM] MTProto stream notice for note ${id}:`, streamErr.message);
-
-        if (note.driveLink) {
-          return res.redirect(note.driveLink);
-        }
-        if (note.fileUrl) {
-          return res.redirect(note.fileUrl);
-        }
-
-        throw streamErr;
-      }
-    }
-
-    // Tier 4: External URL or Google Drive failover
+    // Failover: External Google Drive link or fileUrl
     if (note.driveLink) {
       return res.redirect(note.driveLink);
     }
@@ -1871,7 +1888,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       return res.redirect(note.fileUrl);
     }
 
-    // Tier 5: Resilient 503 Service Unavailable if headers have not been sent
+    // Resilient 503 retryable fallback
     if (!res.headersSent) {
       res.setHeader("Retry-After", "3");
       return res.status(503).json({
