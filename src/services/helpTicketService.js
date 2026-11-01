@@ -16,9 +16,21 @@ const path = require("path");
 const fs = require("fs");
 const { createClient } = require("@libsql/client");
 
-// Fallback in-memory cache to guarantee 0ms instant availability
+// Fallback in-memory cache to guarantee 0ms instant availability (Capped to prevent memory leaks)
 const memoryTickets = new Map();
 const recentlyClosedTickets = new Map();
+
+// Periodic prune to prevent memory leaks on undersized instances
+setInterval(() => {
+  while (memoryTickets.size > 500) {
+    const oldest = memoryTickets.keys().next().value;
+    memoryTickets.delete(oldest);
+  }
+  while (recentlyClosedTickets.size > 200) {
+    const oldest = recentlyClosedTickets.keys().next().value;
+    recentlyClosedTickets.delete(oldest);
+  }
+}, 10 * 60 * 1000);
 
 // Dedicated Turso Support Cloud Client initialization
 const helpTursoUrl = (process.env.TURSO_HELP_DATABASE_URL || "").trim();

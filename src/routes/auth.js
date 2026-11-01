@@ -36,6 +36,26 @@ const otpStore = new Map();
 // Profile Update Re-Verification Store: key = userId, value = { newMobile, otp, expiresAt }
 const pendingProfileMobileOtps = new Map();
 
+// 🛡️ Periodic Memory Leak Shield: Prunes expired OTPs every 60s & enforces 1000-entry max limit
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of otpStore.entries()) {
+    if (val.expiresAt && val.expiresAt < now) otpStore.delete(key);
+  }
+  for (const [key, val] of pendingProfileMobileOtps.entries()) {
+    if (val.expiresAt && val.expiresAt < now) pendingProfileMobileOtps.delete(key);
+  }
+  // Evict oldest if exceeding 1,000 entries (anti-DoS memory cap)
+  while (otpStore.size > 1000) {
+    const oldest = otpStore.keys().next().value;
+    otpStore.delete(oldest);
+  }
+  while (pendingProfileMobileOtps.size > 1000) {
+    const oldest = pendingProfileMobileOtps.keys().next().value;
+    pendingProfileMobileOtps.delete(oldest);
+  }
+}, 60000);
+
 function getClientIp(req) {
   if (!req) return "127.0.0.1";
   const forwarded = req.headers ? req.headers["x-forwarded-for"] : null;

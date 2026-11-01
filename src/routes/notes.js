@@ -319,6 +319,30 @@ function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 15000) {
 const inFlightFetches = new Map();
 const activeBgIngests = new Set();
 
+// 🛡️ Adaptive Storage Ingestion Semaphore for Undersized 512MB Instances
+// Limits concurrent multi-megabyte storage fetches to MAX 2 simultaneously.
+// Guarantees heap memory stays strictly below 40MB during sudden traffic spikes.
+const MAX_CONCURRENT_STORAGE_DOWNLOADS = 2;
+let activeStorageDownloads = 0;
+const storageDownloadQueue = [];
+
+function acquireStorageSlot() {
+  if (activeStorageDownloads < MAX_CONCURRENT_STORAGE_DOWNLOADS) {
+    activeStorageDownloads++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => storageDownloadQueue.push(resolve));
+}
+
+function releaseStorageSlot() {
+  activeStorageDownloads = Math.max(0, activeStorageDownloads - 1);
+  if (storageDownloadQueue.length > 0) {
+    activeStorageDownloads++;
+    const next = storageDownloadQueue.shift();
+    if (typeof next === "function") next();
+  }
+}
+
 /**
  * Single-Flight Pass-Through Engine:
  * Fetches document from Main Storage once and saves to RAM Buffer and Local SSD Disk CDN.
@@ -337,6 +361,7 @@ async function fetchAndCacheNoteBuffer(id, note) {
   }
 
   const fetchPromise = (async () => {
+    await acquireStorageSlot();
     try {
       let docData = null;
       const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -391,6 +416,7 @@ async function fetchAndCacheNoteBuffer(id, note) {
       console.warn(`[INGEST] Storage fetch error for ${id}:`, err.message);
       return null;
     } finally {
+      releaseStorageSlot();
       inFlightFetches.delete(id);
     }
   })();

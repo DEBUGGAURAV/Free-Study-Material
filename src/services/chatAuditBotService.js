@@ -60,9 +60,36 @@ function getTargetPublicDeletedTopic() {
   return auditTopics.deletedMessages || "35";
 }
 
-// Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID
+// Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID (Capped at 2,000 entries)
 const telegramToWebMsgMap = new Map();
 const webToTelegramMsgMap = new Map();
+
+function trackTelegramWebMsg(teleId, webId) {
+  if (teleId && webId) {
+    if (telegramToWebMsgMap.size >= 2000) {
+      const oldest = telegramToWebMsgMap.keys().next().value;
+      telegramToWebMsgMap.delete(oldest);
+    }
+    if (webToTelegramMsgMap.size >= 2000) {
+      const oldest = webToTelegramMsgMap.keys().next().value;
+      webToTelegramMsgMap.delete(oldest);
+    }
+    telegramToWebMsgMap.set(String(teleId), webId);
+    webToTelegramMsgMap.set(String(webId), teleId);
+  }
+}
+
+// Periodic cleanup every 15 minutes
+setInterval(() => {
+  while (telegramToWebMsgMap.size > 2000) {
+    const oldest = telegramToWebMsgMap.keys().next().value;
+    telegramToWebMsgMap.delete(oldest);
+  }
+  while (webToTelegramMsgMap.size > 2000) {
+    const oldest = webToTelegramMsgMap.keys().next().value;
+    webToTelegramMsgMap.delete(oldest);
+  }
+}, 15 * 60 * 1000);
 
 let pollerRunning = false;
 let lastUpdateId = 0;

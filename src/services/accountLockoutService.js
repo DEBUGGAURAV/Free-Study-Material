@@ -14,6 +14,20 @@ const LOCKOUT_DURATION_MS = 20 * 60 * 1000; // 20 minutes
 // Value: { attempts: number, lockedUntil: number, lastAttempt: number }
 const lockoutCache = new Map();
 
+// 🛡️ Periodic Memory Leak Shield: Prune expired lockouts every 5m & cap at 2,000 entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of lockoutCache.entries()) {
+    if (val.lockedUntil && val.lockedUntil <= now && (!val.lastAttempt || now - val.lastAttempt > LOCKOUT_DURATION_MS)) {
+      lockoutCache.delete(key);
+    }
+  }
+  while (lockoutCache.size > 2000) {
+    const oldest = lockoutCache.keys().next().value;
+    lockoutCache.delete(oldest);
+  }
+}, 5 * 60 * 1000);
+
 /**
  * Normalizes identifier (email lowercase or 10 digits)
  */

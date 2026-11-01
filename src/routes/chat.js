@@ -1390,7 +1390,7 @@ function initChatWebSocket(server) {
           msgs.push(newMsg);
           if (msgs.length > 200) msgs.shift();
 
-          // 🔒 Record complete, untampered snapshot into room's auditMessages
+          // 🔒 Record complete, untampered snapshot into room's auditMessages (Capped at 500 to prevent memory leaks)
           if (currentRoom) {
             if (!currentRoom.auditMessages) currentRoom.auditMessages = [];
             currentRoom.auditMessages.push({
@@ -1418,6 +1418,9 @@ function initChatWebSocket(server) {
               isEdited: false,
               edits: [],
             });
+            if (currentRoom.auditMessages.length > 500) {
+              currentRoom.auditMessages.shift();
+            }
           }
 
           // Broadcast to everyone in room
