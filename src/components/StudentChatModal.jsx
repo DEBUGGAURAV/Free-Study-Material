@@ -6246,6 +6246,422 @@ export default function StudentChatModal({
           </div>
         </div>
       )}
+
+      {/* MANAGE GROUP MEMBERS & CONTROLS MODAL (Group Admin WhatsApp-Style) */}
+      {membersModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            zIndex: 100000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+          onClick={() => setMembersModalOpen(false)}
+        >
+          <div
+            style={{
+              background: "linear-gradient(145deg, #0f172a, #1e293b)",
+              border: "1px solid rgba(168, 85, 247, 0.35)",
+              borderRadius: "20px",
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              padding: "24px",
+              boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(168, 85, 247, 0.2)",
+              color: "#fff",
+              position: "relative",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(59, 130, 246, 0.25))",
+                    border: "1px solid rgba(168, 85, 247, 0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#c084fc",
+                  }}
+                >
+                  <Users size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                    Group Members & Admin
+                  </h3>
+                  <div style={{ fontSize: "0.76rem", color: "#c084fc", fontWeight: 600, marginTop: "2px" }}>
+                    🔒 {membersTargetRoom?.name || currentRoom.name}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setMembersModalOpen(false)}
+                style={{
+                  background: "rgba(255, 255, 255, 0.06)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "6px",
+                  color: "var(--text-dim)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px", paddingRight: "4px" }}>
+              
+              {/* Reset Link & Invite Code Bar */}
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                    Group Secret Code
+                  </div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#38bdf8", fontFamily: "monospace" }}>
+                    {membersTargetRoom?.secretCode || currentRoom.secretCode}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = membersTargetRoom?.secretCode || currentRoom.secretCode;
+                      const link = `${window.location.origin}/?chat=private&code=${encodeURIComponent(code || "")}`;
+                      navigator.clipboard.writeText(link);
+                      alert("Link copied to clipboard!");
+                    }}
+                    style={{
+                      background: "rgba(56, 189, 248, 0.15)",
+                      border: "1px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      color: "#38bdf8",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <Copy size={13} />
+                    <span>Copy Link</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={resetLinkLoading}
+                    onClick={() => handleResetInviteLink(membersTargetRoom || currentRoom)}
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      borderRadius: "8px",
+                      padding: "6px 10px",
+                      color: "#f87171",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: resetLinkLoading ? "wait" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title="Invalidate old links and generate new one"
+                  >
+                    <RefreshCw size={13} className={resetLinkLoading ? "spin" : ""} />
+                    <span>Reset Link</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Add Member Form */}
+              <div
+                style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "14px",
+                  padding: "14px",
+                }}
+              >
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: "8px" }}>
+                  Add Student to Group (Direct Access)
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="text"
+                    value={addMemberInput}
+                    onChange={(e) => setAddMemberInput(e.target.value)}
+                    placeholder="Enter student email or ID..."
+                    style={{
+                      flex: 1,
+                      background: "rgba(0, 0, 0, 0.35)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: "10px",
+                      padding: "8px 12px",
+                      fontSize: "0.8rem",
+                      color: "#fff",
+                      outline: "none",
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddMember(null, addMemberInput);
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={addMemberLoading || !addMemberInput.trim()}
+                    onClick={() => handleAddMember(null, addMemberInput)}
+                    style={{
+                      background: "linear-gradient(135deg, #a855f7, #6366f1)",
+                      border: "none",
+                      borderRadius: "10px",
+                      padding: "8px 14px",
+                      color: "#fff",
+                      fontWeight: 700,
+                      fontSize: "0.8rem",
+                      cursor: (addMemberLoading || !addMemberInput.trim()) ? "not-allowed" : "pointer",
+                      opacity: (addMemberLoading || !addMemberInput.trim()) ? 0.6 : 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <Plus size={15} />
+                    <span>{addMemberLoading ? "Adding..." : "Add"}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Members List */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#cbd5e1", textTransform: "uppercase" }}>
+                    Active Members ({roomMembersList.length})
+                  </span>
+                  {membersLoading && (
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>Refreshing...</span>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {roomMembersList.map((m) => {
+                    const isGroupHost = m.isHost || m.id === (membersTargetRoom?.createdBy || currentRoom.createdBy);
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "10px 12px",
+                          background: "rgba(255, 255, 255, 0.04)",
+                          border: "1px solid rgba(255, 255, 255, 0.06)",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <div
+                            style={{
+                              width: "34px",
+                              height: "34px",
+                              borderRadius: "10px",
+                              background: isGroupHost ? "linear-gradient(135deg, #eab308, #f59e0b)" : "linear-gradient(135deg, #6366f1, #3b82f6)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 800,
+                              fontSize: "0.82rem",
+                              color: "#fff",
+                              overflow: "hidden",
+                            }}
+                          >
+                            {m.photoUrl ? (
+                              <img src={m.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            ) : (
+                              (m.name || "S").slice(0, 1).toUpperCase()
+                            )}
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "0.84rem", fontWeight: 700, color: "#fff" }}>
+                                {m.name || "Student"}
+                              </span>
+                              {isGroupHost && (
+                                <span
+                                  style={{
+                                    fontSize: "0.62rem",
+                                    fontWeight: 800,
+                                    background: "rgba(234, 179, 8, 0.2)",
+                                    border: "1px solid rgba(234, 179, 8, 0.4)",
+                                    color: "#fde047",
+                                    padding: "1px 5px",
+                                    borderRadius: "4px",
+                                  }}
+                                >
+                                  HOST
+                                </span>
+                              )}
+                              {m.id === currentUser?.id && (
+                                <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>(You)</span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              {m.isOnline ? "🟢 Active now" : "⚪ Offline"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          {isGroupHost ? (
+                            <span style={{ fontSize: "0.72rem", color: "#fde047", fontWeight: 700 }}>
+                              Group Creator
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveMember(m.id, m.name)}
+                              style={{
+                                background: "rgba(239, 68, 68, 0.12)",
+                                border: "1px solid rgba(239, 68, 68, 0.35)",
+                                borderRadius: "8px",
+                                padding: "4px 10px",
+                                color: "#f87171",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                transition: "all 0.15s ease",
+                              }}
+                              title="Remove user (prevents rejoining via invite link)"
+                            >
+                              <UserX size={12} />
+                              <span>Remove</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Removed / Blocked Members List (WhatsApp Rule) */}
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#f87171", textTransform: "uppercase" }}>
+                    Removed Members ({roomBannedList.length})
+                  </span>
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginBottom: "8px" }}>
+                  Removed users cannot rejoin using the invite link until you click "Add Back".
+                </div>
+
+                {roomBannedList.length === 0 ? (
+                  <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontStyle: "italic", padding: "8px 12px", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px" }}>
+                    No removed users.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {roomBannedList.map((bm) => (
+                      <div
+                        key={bm.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "8px 12px",
+                          background: "rgba(239, 68, 68, 0.06)",
+                          border: "1px solid rgba(239, 68, 68, 0.2)",
+                          borderRadius: "10px",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#cbd5e1" }}>
+                            {bm.name || "Removed Member"}
+                          </div>
+                          {bm.email && (
+                            <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                              {bm.email}
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAddMember(bm.id, null)}
+                          style={{
+                            background: "rgba(16, 185, 129, 0.15)",
+                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                            borderRadius: "8px",
+                            padding: "4px 10px",
+                            color: "#34d399",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                          title="Allow user to rejoin group"
+                        >
+                          <UserCheck size={12} />
+                          <span>Add Back</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setMembersModalOpen(false)}
+                className="btn-ghost"
+                style={{ padding: "8px 18px", fontSize: "0.82rem" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
