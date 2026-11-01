@@ -1181,6 +1181,189 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   color: #a5b4fc;
 }
 
+/* ---------------- Admin Card Status Toggle Pill (Image 1 Fix) ---------------- */
+.admin-status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.admin-status-toggle.active {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  color: #34d399 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.18);
+}
+
+.admin-status-toggle.active:hover {
+  background: rgba(16, 185, 129, 0.25) !important;
+  border-color: rgba(16, 185, 129, 0.6) !important;
+  color: #fff !important;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+}
+
+.admin-status-toggle.locked {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.38) !important;
+  color: #f87171 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.18);
+}
+
+.admin-status-toggle.locked:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(239, 68, 68, 0.6) !important;
+  color: #fff !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.4);
+  transform: translateY(-1px);
+}
+
+.admin-status-toggle .status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.admin-status-toggle.active .status-dot {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseDotGreen 2s infinite ease-in-out;
+}
+
+.admin-status-toggle.locked .status-dot,
+.pill-readonly .status-dot.locked {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+}
+
+@keyframes pulseDotGreen {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.pill-readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+/* ---------------- Device Offline Cache Control Strip (Image 2 Fix) ---------------- */
+.note-offline-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.70rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.note-offline-bar.expiring {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.note-offline-bar.pinned {
+  background: rgba(6, 182, 212, 0.08);
+  border-color: rgba(6, 182, 212, 0.28);
+}
+
+.offline-bar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: #fbbf24;
+  font-size: 0.68rem;
+  letter-spacing: -0.01em;
+}
+
+.note-offline-bar.pinned .offline-bar-label {
+  color: #38bdf8;
+}
+
+.offline-icon {
+  color: inherit;
+  flex-shrink: 0;
+}
+
+.btn-offline-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cbd5e1;
+  border-radius: var(--radius-full);
+  padding: 3px 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.btn-offline-pin:hover {
+  background: rgba(56, 189, 248, 0.16);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.btn-offline-pin.active {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: rgba(6, 182, 212, 0.5);
+  color: #22d3ee;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+.btn-offline-trash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  outline: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+}
+
+.btn-offline-trash:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+  transform: scale(1.08);
+}
+
 /* Interactive Document Preview / Showcase Box */
 .note-showcase-box {
   background: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.08), transparent 70%), rgba(6, 10, 20, 0.7);

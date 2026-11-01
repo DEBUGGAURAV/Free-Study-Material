@@ -357,7 +357,7 @@ export default function NoteCard({
             )}
           </div>
 
-          {/* Admin Quick Lock / Read-Only Pill */}
+          {/* Admin Quick Lock / Read-Only Pill (Image 1 Refined Status) */}
           <div className="card-header-status">
             {isAdmin && onToggleNoteDownload && (
               <button
@@ -367,25 +367,27 @@ export default function NoteCard({
                   e.stopPropagation();
                   onToggleNoteDownload(note);
                 }}
-                className={`tech-pill admin-status-toggle ${isSingleNoteDisabled ? "locked" : "active"}`}
+                className={`admin-status-toggle ${isSingleNoteDisabled ? "locked" : "active"}`}
                 title={
                   isSingleNoteDisabled
                     ? "Admin: Click to ENABLE downloads for this note"
                     : "Admin: Click to LOCK / DISABLE downloads for this note"
                 }
               >
-                {isSingleNoteDisabled ? "🔒 Locked" : "🟢 Active"}
+                <span className={`status-dot ${isSingleNoteDisabled ? "locked" : "active"}`} />
+                <span>{isSingleNoteDisabled ? "Locked" : "Active"}</span>
               </button>
             )}
             {(!isAdmin || !onToggleNoteDownload) && isSingleNoteDisabled && (
               <span
-                className="tech-pill pill-readonly"
+                className="pill-readonly"
                 title={
                   note.downloadDisabledReason ||
                   "Download disabled for this note (Online preview available)"
                 }
               >
-                🔒 Read-Only
+                <span className="status-dot locked" />
+                <span>Read-Only</span>
               </span>
             )}
           </div>
@@ -521,7 +523,7 @@ export default function NoteCard({
           </div>
         )}
 
-        {/* Device Offline Cache Control Bar (48h Auto-Delete / User Pin / Delete) */}
+        {/* Device Offline Cache Control Bar (Image 2 Luxury Retention Strip) */}
         {isCachedOffline && (
           <div className={`note-offline-bar ${isPinned ? "pinned" : "expiring"}`}>
             <span
@@ -532,8 +534,8 @@ export default function NoteCard({
                   : "Will auto-delete after 48h to prevent phone storage bloat"
               }
             >
-              <HardDrive size={12} />
-              <span>{isPinned ? "📌 Kept Offline" : "⏳ 48h Auto-Delete"}</span>
+              <HardDrive size={13} className="offline-icon" />
+              <span>{isPinned ? "Kept Offline" : "48h Auto-Delete"}</span>
             </span>
 
             <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
@@ -543,7 +545,7 @@ export default function NoteCard({
                 title={isPinned ? "Click to set 48h auto-expire" : "Click to keep note forever"}
                 className={`btn-offline-pin ${isPinned ? "active" : ""}`}
               >
-                <Pin size={10} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
+                <Pin size={11} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
                 <span>{isPinned ? "Pinned" : "Keep Note"}</span>
               </button>
 
