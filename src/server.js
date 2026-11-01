@@ -374,6 +374,12 @@ app.use((err, req, res, next) => {
 
 // Start Server with Real-Time WebSocket Support
 const server = http.createServer(app);
+// 🛡️ Traffic Spike & Reverse Proxy Keep-Alive Hardening (Prevents 502 Bad Gateway under sudden bursts)
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+if (server.maxRequestsPerSocket !== undefined) {
+  server.maxRequestsPerSocket = 1000;
+}
 chatRoutes.initChatWebSocket(server);
 
 const initialPort = Number(PORT);
