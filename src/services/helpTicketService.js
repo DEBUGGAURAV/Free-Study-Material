@@ -72,7 +72,8 @@ function getHelpChatId() {
   return (
     process.env.HELP_CHAT_ID ||
     process.env.TELEGRAM_HELP_CHAT_ID ||
-    "-1004369896029"
+    process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID ||
+    ""
   ).trim();
 }
 
@@ -80,7 +81,7 @@ function getHelpAdminChatId() {
   return (
     process.env.HELP_ADMIN_CHAT_ID ||
     process.env.TELEGRAM_CHAT_AUDIT_ADMIN_ID ||
-    "7009492653"
+    ""
   ).trim();
 }
 

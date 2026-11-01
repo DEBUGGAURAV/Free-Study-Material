@@ -2060,7 +2060,7 @@ async function dispatchGroupAuditEventToTelegram({
       `🚫 <b>[MEMBER REMOVED & LINK BLOCKED]</b>\n\n` +
       `🏠 <b>Group:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
       `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code> (🔑 Code: <code>${escapeHtml(room?.secretCode || "N/A")}</code>)\n` +
-      `👤 <b>Removed Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${tId}</code>${tEmail !== "N/A" ? ` | ${tEmail}` : ""})\n` +
+      `👤 <b>Removed Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${escapeHtml(tId)}</code>${tEmail !== "N/A" ? ` | ${escapeHtml(tEmail)}` : ""})\n` +
       `🔒 <b>WhatsApp Rule Enforcement:</b> <i>This user is strictly blocked from rejoining via invite links or secret codes until explicitly added back by the host.</i>\n` +
       `${actorBadge}\n` +
       `🕒 <b>Time:</b> ${timeStr}`;
@@ -2072,7 +2072,7 @@ async function dispatchGroupAuditEventToTelegram({
       `✅ <b>[MEMBER ADDED BACK / UNBANNED]</b>\n\n` +
       `🏠 <b>Group:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
       `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code> (🔑 Code: <code>${escapeHtml(room?.secretCode || "N/A")}</code>)\n` +
-      `👤 <b>Added Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${tId}</code>${tEmail !== "N/A" ? ` | ${tEmail}` : ""})\n` +
+      `👤 <b>Added Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${escapeHtml(tId)}</code>${tEmail !== "N/A" ? ` | ${escapeHtml(tEmail)}` : ""})\n` +
       `🔓 <b>Access Status:</b> <i>Ban removed. Student has full access to the group.</i>\n` +
       `${actorBadge}\n` +
       `🕒 <b>Time:</b> ${timeStr}`;
@@ -2909,11 +2909,13 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
 }
 
 function escapeHtml(str) {
-  if (!str) return "";
+  if (!str && str !== 0) return "";
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 module.exports = {

@@ -4124,7 +4124,7 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       appealTopicConfig: {
         topicId: process.env.TELEGRAM_TOPIC_IP_APPEAL || "750",
         botUsername: "fsm_security_otp_bot",
-        groupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "-1003943130538",
+        groupChatId: process.env.TELEGRAM_TOPIC_GROUP_ID || "",
         status: "ACTIVE",
       },
       webSecurityShields,

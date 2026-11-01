@@ -190,6 +190,37 @@ roomSockets.set(PUBLIC_ROOM_ID, new Map());
 })();
 
 /**
+ * 🔄 Retrieves a room from memory, or restores it from Firestore if not in memory (resilience against cold starts)
+ */
+async function getOrRestoreRoom(roomId) {
+  if (!roomId) return null;
+  let room = activeRooms.get(roomId);
+  if (!room && db && roomId !== PUBLIC_ROOM_ID) {
+    try {
+      const rDoc = await db.collection("chat_rooms").doc(roomId).get();
+      if (rDoc.exists) {
+        const rData = rDoc.data();
+        room = {
+          id: rDoc.id,
+          ...rData,
+          members: new Set(rData.members || []),
+          bannedMembers: new Set(rData.bannedMembers || []),
+          auditLog: [],
+          auditMessages: [],
+          participantsMap: new Map(),
+        };
+        activeRooms.set(roomId, room);
+        if (!activeMessages.has(roomId)) activeMessages.set(roomId, []);
+        if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Map());
+      }
+    } catch (e) {
+      console.warn(`[CHAT] Error restoring room ${roomId}:`, e.message);
+    }
+  }
+  return room;
+}
+
+/**
  * 📥 Inbound Telegram Message Injector
  * Receives messages/photos/documents sent by Admins in Telegram @fsm_chat_bot,
  * inserts into RAM, mirrors to Turso LibSQL, and broadcasts via WebSocket.
@@ -520,11 +551,13 @@ function isMainAdmin(user) {
 }
 
 function escapeHtml(str) {
-  if (!str) return "";
+  if (!str && str !== 0) return "";
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 /**
@@ -1183,36 +1216,18 @@ function initChatWebSocket(server) {
         // 1. JOIN ROOM
         if (type === "join_room") {
           const { roomId, secretCode } = data;
-          let room = activeRooms.get(roomId);
-
-          if (!room) {
-            // Check if private room in Firestore
-            if (db && roomId !== PUBLIC_ROOM_ID) {
-              const rDoc = await db.collection("chat_rooms").doc(roomId).get();
-              if (rDoc.exists) {
-                const rData = rDoc.data();
-                room = {
-                  id: rDoc.id,
-                  ...rData,
-                  members: new Set(),
-                  bannedMembers: new Set(rData.bannedMembers || []),
-                  auditLog: [],
-                  auditMessages: [],
-                  participantsMap: new Map(),
-                };
-                activeRooms.set(roomId, room);
-                if (!activeMessages.has(roomId)) activeMessages.set(roomId, []);
-                if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Map());
-              }
-            }
-          }
+          let room = await getOrRestoreRoom(roomId);
 
           if (!room) {
             return ws.send(JSON.stringify({ type: "error", message: "Room not found or has been closed." }));
           }
 
           // 🚫 WhatsApp Rule: If user was removed by group admin, they CANNOT rejoin via invite link or code
-          if (room.isPrivate && room.bannedMembers && room.bannedMembers.has(user.id)) {
+          const isUserBanned = room.bannedMembers instanceof Set
+            ? room.bannedMembers.has(user.id)
+            : Array.isArray(room.bannedMembers) && room.bannedMembers.includes(user.id);
+
+          if (room.isPrivate && isUserBanned) {
             return ws.send(
               JSON.stringify({
                 type: "error",
@@ -1705,13 +1720,13 @@ function initChatWebSocket(server) {
             return ws.send(JSON.stringify({ type: "error", message: "Please provide a valid room name." }));
           }
 
-          const currentRoom = activeRooms.get(targetRoomId);
+          const currentRoom = await getOrRestoreRoom(targetRoomId);
           if (!currentRoom || !currentRoom.isPrivate) {
             return ws.send(JSON.stringify({ type: "error", message: "Private room not found or already closed." }));
           }
 
           const isCreator = currentRoom.createdBy === user.id;
-          const isAdmin = isUserAdmin(user);
+          const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
           if (!isCreator && !isAdmin) {
             return ws.send(
@@ -1793,11 +1808,11 @@ function initChatWebSocket(server) {
         // 5. EXPLICIT DELETE/CLOSE ROOM (Host or Admin only - Permanently deletes room for everyone)
         else if (type === "close_room" || type === "delete_room") {
           const roomId = data.roomId || ws.currentRoomId;
-          const currentRoom = activeRooms.get(roomId);
+          const currentRoom = await getOrRestoreRoom(roomId);
           if (!currentRoom || !currentRoom.isPrivate) return;
 
           const isCreator = currentRoom.createdBy === user.id;
-          const isAdmin = isUserAdmin(user);
+          const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
           if (!isCreator && !isAdmin) {
             return ws.send(
@@ -1833,7 +1848,7 @@ function initChatWebSocket(server) {
         // 5b. LEAVE ROOM (Non-creator participants leave room; room stays alive for host)
         else if (type === "leave_room") {
           const roomId = data.roomId || ws.currentRoomId;
-          const currentRoom = activeRooms.get(roomId);
+          const currentRoom = await getOrRestoreRoom(roomId);
           if (!currentRoom || !currentRoom.isPrivate) return;
 
           const isCreator = currentRoom.createdBy === user.id;
@@ -2360,13 +2375,13 @@ router.post("/rooms/rename", authenticateToken, requireAuth, async (req, res) =>
       return res.status(400).json({ success: false, message: "Please provide a valid room name." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or already closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isAdmin = isUserAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
     if (!isCreator && !isAdmin) {
       return res.status(403).json({
@@ -2471,18 +2486,18 @@ router.post("/rooms/reset-link", authenticateToken, requireAuth, async (req, res
       return res.status(400).json({ success: false, message: "Room ID is required." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or already closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isMain = isMainAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
-    if (!isCreator && !isMain) {
+    if (!isCreator && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Permission denied. Only the room creator or Main Administrator can reset this group's invite link.",
+        message: "Permission denied. Only the room creator or an administrator can reset this group's invite link.",
       });
     }
 
@@ -2578,18 +2593,18 @@ router.post("/rooms/remove-user", authenticateToken, requireAuth, async (req, re
       return res.status(400).json({ success: false, message: "Room ID and targetUserId are required." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or already closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isMain = isMainAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
-    if (!isCreator && !isMain) {
+    if (!isCreator && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Permission denied. Only the room creator or Main Administrator can remove members from this group.",
+        message: "Permission denied. Only the room creator or an administrator can remove members from this group.",
       });
     }
 
@@ -2625,10 +2640,11 @@ router.post("/rooms/remove-user", authenticateToken, requireAuth, async (req, re
 
     room.lastActivity = new Date().toISOString();
 
-    // Persist bannedMembers to Firestore
+    // Persist bannedMembers and members to Firestore
     if (db) {
       db.collection("chat_rooms").doc(roomId).update({
-        bannedMembers: Array.from(room.bannedMembers),
+        members: room.members instanceof Set ? Array.from(room.members) : (room.members || []),
+        bannedMembers: room.bannedMembers instanceof Set ? Array.from(room.bannedMembers) : (room.bannedMembers || []),
         lastActivity: room.lastActivity,
       }).catch((err) => console.warn("[CHAT-REMOVE-USER] Firestore update error:", err.message));
     }
@@ -2717,18 +2733,18 @@ router.post("/rooms/add-user", authenticateToken, requireAuth, async (req, res) 
       return res.status(400).json({ success: false, message: "Room ID and either targetUserId or email are required." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or already closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isMain = isMainAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
-    if (!isCreator && !isMain) {
+    if (!isCreator && !isAdmin) {
       return res.status(403).json({
         success: false,
-        message: "Permission denied. Only the room creator or Main Administrator can add members to this group.",
+        message: "Permission denied. Only the room creator or an administrator can add members to this group.",
       });
     }
 
@@ -2784,6 +2800,7 @@ router.post("/rooms/add-user", authenticateToken, requireAuth, async (req, res) 
     // Persist to Firestore
     if (db) {
       db.collection("chat_rooms").doc(roomId).update({
+        members: room.members instanceof Set ? Array.from(room.members) : (room.members || []),
         bannedMembers: room.bannedMembers instanceof Set ? Array.from(room.bannedMembers) : (room.bannedMembers || []),
         lastActivity: room.lastActivity,
       }).catch((err) => console.warn("[CHAT-ADD-USER] Firestore update error:", err.message));
@@ -2850,13 +2867,18 @@ router.get("/rooms/:roomId/members", authenticateToken, requireAuth, async (req,
     const user = req.user;
     const { roomId } = req.params;
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isMain = isMainAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
+    const isMember = (room.members instanceof Set ? room.members.has(user.id) : (room.members || []).includes(user.id)) || isCreator;
+
+    if (!isMember && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied. You are not a member of this private room." });
+    }
 
     // Build list of active participants
     const participants = [];
@@ -2927,9 +2949,9 @@ router.get("/rooms/:roomId/members", authenticateToken, requireAuth, async (req,
       createdBy: room.createdBy,
       creatorName: room.creatorName,
       isCreator,
-      isMainAdmin: isMain,
+      isMainAdmin: isAdmin,
       members: participants,
-      bannedMembers: (isCreator || isMain) ? bannedMembers : [],
+      bannedMembers: (isCreator || isAdmin) ? bannedMembers : [],
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -2948,16 +2970,16 @@ router.post("/rooms/close", authenticateToken, requireAuth, async (req, res) => 
       return res.status(400).json({ success: false, message: "Room ID is required." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found or already closed." });
     }
 
     const isCreator = room.createdBy === user.id;
-    const isMain = isMainAdmin(user);
+    const isAdmin = isUserAdmin(user) || isMainAdmin(user);
 
-    if (!isCreator && !isMain) {
-      return res.status(403).json({ success: false, message: "Permission denied. Only the room creator or Main Administrator can delete this private chat." });
+    if (!isCreator && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Permission denied. Only the room creator or an administrator can delete this private chat." });
     }
 
     broadcastToRoom(roomId, {
@@ -2994,7 +3016,7 @@ router.post("/rooms/leave", authenticateToken, requireAuth, async (req, res) => 
       return res.status(400).json({ success: false, message: "Room ID is required." });
     }
 
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (!room || !room.isPrivate) {
       return res.status(404).json({ success: false, message: "Private room not found." });
     }
@@ -3092,25 +3114,18 @@ router.post("/rooms/join", authenticateToken, requireAuth, async (req, res) => {
           targetRoom = {
             id: doc.id,
             ...rData,
-            members: new Set(),
+            members: new Set(rData.members || []),
             bannedMembers: new Set(rData.bannedMembers || []),
             auditLog: [],
+            auditMessages: [],
+            participantsMap: new Map(),
           };
           activeRooms.set(targetRoom.id, targetRoom);
+          if (!activeMessages.has(targetRoom.id)) activeMessages.set(targetRoom.id, []);
+          if (!roomSockets.has(targetRoom.id)) roomSockets.set(targetRoom.id, new Map());
         }
       } else if (roomId) {
-        const doc = await db.collection("chat_rooms").doc(roomId).get();
-        if (doc.exists) {
-          const rData = doc.data();
-          targetRoom = {
-            id: doc.id,
-            ...rData,
-            members: new Set(),
-            bannedMembers: new Set(rData.bannedMembers || []),
-            auditLog: [],
-          };
-          activeRooms.set(targetRoom.id, targetRoom);
-        }
+        targetRoom = await getOrRestoreRoom(roomId);
       }
     }
 
