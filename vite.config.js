@@ -25,17 +25,39 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     target: 'es2020',
+    chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-icons': ['lucide-react'],
-          'vendor-pdf': ['pdfjs-dist'],
-          'vendor-pdflib': ['pdf-lib'],
-          'vendor-yjs': ['yjs', 'y-webrtc'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
+            if (id.includes('pdfjs-dist')) {
+              return 'vendor-pdf';
+            }
+            if (id.includes('pdf-lib')) {
+              return 'vendor-pdflib';
+            }
+            if (id.includes('yjs') || id.includes('y-webrtc')) {
+              return 'vendor-yjs';
+            }
+            if (id.includes('tesseract.js')) {
+              return 'vendor-tesseract';
+            }
+            if (id.includes('minisearch')) {
+              return 'vendor-minisearch';
+            }
+            if (id.includes('qrcode')) {
+              return 'vendor-qrcode';
+            }
+          }
         },
       },
     },

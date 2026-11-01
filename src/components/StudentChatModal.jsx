@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import { api, getAuthToken } from "../api";
 import { formatFileSize } from "../utils/formatUtils";
+import { wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
 
 // Deterministic vibrant color for student names (Modern Messenger style)
 const getUsernameColor = (userId, name) => {
@@ -738,14 +739,14 @@ export default function StudentChatModal({
             handleSwitchRoom({ id: "public", name: "💬 Public Community Chat", isPrivate: false });
           }
         } else if (data.type === "remote_storage_wipe" || data.type === "remote_storage_wipe_all") {
-          import("../utils/offlineQueue").then(({ wipeAllDeviceOfflineStorage }) => {
+          try {
             wipeAllDeviceOfflineStorage().then(() => {
               if (data.epoch) {
                 localStorage.setItem("fsm_device_cache_epoch", String(data.epoch));
               }
               console.log("[STORAGE] 🧹 Executed remote storage reset from administrator via WebSocket.");
             }).catch(() => {});
-          });
+          } catch (_) {}
         } else if (data.type === "blocked_status_update") {
           setIsBlocked(Boolean(data.isBlocked));
           if (data.message) {

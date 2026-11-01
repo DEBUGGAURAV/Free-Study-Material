@@ -51,7 +51,7 @@ import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
-import CampusAirdropModal from "./CampusAirdropModal";
+const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
 // Setup PDF.js worker
 if (typeof window !== "undefined") {
@@ -4480,19 +4480,23 @@ export default function VirtualPdfReader({
       )}
 
       {/* ⚡ Campus AirDrop & 1-Tap QR Mesh Modal */}
-      <CampusAirdropModal
-        isOpen={isAirdropModalOpen}
-        onClose={() => setIsAirdropModalOpen(false)}
-        currentNote={note || { id: noteId, title, subject: subjectName, branch: branchName }}
-        directBuffer={localPdfBuffer}
-        onNoteReceived={(data) => {
-          if (data?.buffer) {
-            setLocalPdfBuffer(data.buffer);
-            setStreamSource("p2p");
-            setIsCachedP2P(true);
-          }
-        }}
-      />
+      {isAirdropModalOpen && (
+        <React.Suspense fallback={null}>
+          <CampusAirdropModal
+            isOpen={isAirdropModalOpen}
+            onClose={() => setIsAirdropModalOpen(false)}
+            currentNote={note || { id: noteId, title, subject: subjectName, branch: branchName }}
+            directBuffer={localPdfBuffer}
+            onNoteReceived={(data) => {
+              if (data?.buffer) {
+                setLocalPdfBuffer(data.buffer);
+                setStreamSource("p2p");
+                setIsCachedP2P(true);
+              }
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* 📱 Smart Page-Level QR Bridge Modal Overlay (Preview Mode Only) */}
       {showQrBridgeModal && (

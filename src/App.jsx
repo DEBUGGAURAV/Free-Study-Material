@@ -13,9 +13,10 @@ import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
+import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
-import AdminModal from "./components/admin/AdminModal";
+// AdminModal is dynamically lazy-loaded below
 
 // ⚡ Heavy Modals: Code-split with retry & recovery
 function lazyWithRetry(componentFactory, retries = 2, interval = 700) {
@@ -56,6 +57,7 @@ const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdropModal"));
+const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -445,11 +447,9 @@ export default function App() {
 
     // 🕒 Run 48-Hour Auto-Delete & Device-Aware Dynamic LRU maintenance silently in background
     const executeVaultMaintenance = () => {
-      import("./utils/offlineQueue").then((m) => {
-        if (m && m.runOfflineVaultAutoMaintenance) {
-          m.runOfflineVaultAutoMaintenance().catch(() => {});
-        }
-      }).catch(() => {});
+      try {
+        runOfflineVaultAutoMaintenance().catch(() => {});
+      } catch (_) {}
     };
     setTimeout(executeVaultMaintenance, 2000);
     const vaultMaintenanceInterval = setInterval(executeVaultMaintenance, 30 * 60 * 1000);
@@ -499,9 +499,9 @@ export default function App() {
 
           if (forceWipe || serverEpoch > localEpoch) {
             localStorage.setItem("fsm_device_cache_epoch", String(serverEpoch));
-            import("./utils/offlineQueue").then(({ wipeAllDeviceOfflineStorage }) => {
+            try {
               wipeAllDeviceOfflineStorage().catch(() => {});
-            });
+            } catch (_) {}
           }
         } else {
           if (typeof navigator !== "undefined" && !navigator.onLine) {
