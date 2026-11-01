@@ -1221,7 +1221,7 @@ export function initAntiTamperDefense() {
       }
     };
     window.addEventListener("resize", checkDockedDevTools);
-    setInterval(checkDockedDevTools, 400);
+    setInterval(checkDockedDevTools, 2500); // ⚡ Optimized: window resize already handles instant docked changes
 
     // 6. Native Keyboard Shortcut Interception (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U)
     window.addEventListener(

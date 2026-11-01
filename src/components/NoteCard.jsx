@@ -47,8 +47,10 @@ export default function NoteCard({
       })
       .catch(() => {});
 
-    const handleSync = () => {
+    const handleSync = (e) => {
       if (active && note?.id) {
+        // ⚡ Fast-path loop skip: If event was for another note, don't query IndexedDB
+        if (e?.detail?.noteId && e.detail.noteId !== note.id) return;
         setIsPinned(isNotePinnedOffline(note.id));
         getCachedNoteBuffer(note.id)
           .then((buf) => {

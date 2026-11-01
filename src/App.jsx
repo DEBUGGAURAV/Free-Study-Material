@@ -882,17 +882,25 @@ export default function App() {
       } else if (typeof navigator !== "undefined" && navigator.onLine) {
         setIsOffline(false);
       }
-      const getNoteTs = (n) => {
-        if (!n) return 0;
-        if (n._sortTimestamp) return n._sortTimestamp;
-        const val = n.createdAt || n.updatedAt;
-        if (!val) return 0;
-        if (typeof val === "number") return val;
-        if (val._seconds !== undefined) return val._seconds * 1000;
-        const t = new Date(val).getTime();
-        return isNaN(t) ? 0 : t;
-      };
-      const sorted = (res.notes || []).slice().sort((a, b) => getNoteTs(b) - getNoteTs(a));
+      const rawNotes = res.notes || [];
+      const len = rawNotes.length;
+      // ⚡ O(N) single-pass precomputation: Avoids thousands of redundant Date parses in sort comparator
+      for (let i = 0; i < len; i++) {
+        const n = rawNotes[i];
+        if (!n) continue;
+        if (n._sortTimestamp === undefined) {
+          const val = n.createdAt || n.updatedAt;
+          if (typeof val === "number") n._sortTimestamp = val;
+          else if (val && val._seconds !== undefined) n._sortTimestamp = val._seconds * 1000;
+          else if (val) {
+            const t = new Date(val).getTime();
+            n._sortTimestamp = isNaN(t) ? 0 : t;
+          } else {
+            n._sortTimestamp = 0;
+          }
+        }
+      }
+      const sorted = rawNotes.slice().sort((a, b) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0));
       if (sorted.length > 0) {
         sorted[0].isLatest = true;
         try {
@@ -1019,7 +1027,11 @@ export default function App() {
   };
 
   // Rule: Display initial 15 notes, keep rest hidden until user clicks "Show All Notes"
-  const displayedNotes = showAllNotes ? notes : notes.slice(0, 15);
+  // ⚡ Memoized displayed notes: Eliminates redundant slice and filter loops on re-renders
+  const displayedNotes = useMemo(() => {
+    const list = showAllNotes ? notes : notes.slice(0, 15);
+    return list.filter(Boolean);
+  }, [showAllNotes, notes]);
 
   const isAdminUser = currentUser?.role === "admin" || currentUser?.role === "half_admin" || isMasterAdminUser(currentUser);
   const hasBypassParam =
@@ -1878,7 +1890,7 @@ export default function App() {
               <>
                 {viewMode === "grid" ? (
                   <div className="notes-grid">
-                    {displayedNotes.filter(Boolean).map((note) => (
+                    {displayedNotes.map((note) => (
                       <NoteCard
                         key={note.id}
                         note={note}
@@ -1907,7 +1919,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedNotes.filter(Boolean).map((note) => (
+                        {displayedNotes.map((note) => (
                           <tr key={note.id} style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
                             <td style={{ padding: "12px 16px", color: "#fff", fontWeight: 600 }}>
                               <div>{note.title}</div>

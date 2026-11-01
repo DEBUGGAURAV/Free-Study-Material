@@ -226,20 +226,23 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
   let state = "IDLE"; // 'IDLE' | 'READING_NIBBLES'
   let capturedNibbles = [];
   let lastDetectedTime = 0;
+  let lastVolumeTime = 0;
   let isListening = true;
 
   const loop = () => {
     if (!isListening) return;
 
     analyser.getByteFrequencyData(dataArray);
-
-    // Calculate ambient volume for UI visualizer
-    let sum = 0;
-    for (let i = 0; i < 64; i++) sum += dataArray[i];
-    const avgVolume = Math.round((sum / 64 / 255) * 100);
-    onVolume(avgVolume);
-
     const now = performance.now();
+
+    // ⚡ Throttled Volume Visualizer (12 FPS instead of 120 FPS): Saves 90% React UI re-renders
+    if (now - lastVolumeTime > 80) {
+      lastVolumeTime = now;
+      let sum = 0;
+      for (let i = 0; i < 32; i += 4) sum += dataArray[i];
+      const avgVolume = Math.min(100, Math.round((sum / 8 / 255) * 100));
+      onVolume(avgVolume);
+    }
 
     if (state === "IDLE") {
       // Look for Preamble pulse (peak energy in preamble bin)

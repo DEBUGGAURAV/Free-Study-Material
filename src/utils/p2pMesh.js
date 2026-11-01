@@ -421,15 +421,20 @@ export async function downloadFromPeerMesh(noteId, onProgress) {
   });
 }
 
-// Background Listener: Allows this client to serve cached chunks to other peers
+// Background Listener: Allows this client to serve cached chunks to other peers (Throttled & Tab-Aware)
+let p2pSeederStarted = false;
 export function startP2PBackgroundSeeder() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || p2pSeederStarted) return;
+  p2pSeederStarted = true;
   const myPeerId = getPeerId();
 
-  // Listen for incoming connection offers every 3 seconds
+  // Low-frequency passive probe (every 20s, paused when tab is hidden or offline)
   setInterval(async () => {
     try {
-      const res = await fetch(`/api/p2p/signals/${myPeerId}`);
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+      const res = await fetch(`/api/p2p/signals/${myPeerId}`, { signal: AbortSignal.timeout(3500) });
       const data = await res.json();
       if (!data.signals || data.signals.length === 0) return;
 
@@ -439,7 +444,7 @@ export function startP2PBackgroundSeeder() {
         }
       }
     } catch {}
-  }, 3000);
+  }, 20000);
 }
 
 async function handleIncomingOffer(fromPeerId, offerSdp) {
