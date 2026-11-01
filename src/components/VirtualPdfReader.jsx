@@ -49,7 +49,7 @@ import { generateClientAiAnswer } from "../utils/clientAi";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
-import { parseSourceFromHeaders } from "../utils/cdnFailover";
+import { parseSourceFromHeaders, fetchWithCdnFailover } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
 const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
@@ -121,6 +121,19 @@ export default function VirtualPdfReader({
   const [useNativeViewer, setUseNativeViewer] = useState(false);
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
+
+  const isMobileDevice = typeof window !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (window.innerWidth > 0 && window.innerWidth <= 768)
+  );
+
+  // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
+  // Force high-performance Canvas Streamer on mobile!
+  useEffect(() => {
+    if (isMobileDevice && useNativeViewer && !note?.driveLink) {
+      setUseNativeViewer(false);
+    }
+  }, [isMobileDevice, useNativeViewer, note]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -626,20 +639,45 @@ export default function VirtualPdfReader({
             loadingTask.onProgress = handleProgress;
             doc = await loadingTask.promise;
           } catch (fetchErr) {
-            console.warn("[PDF.js] Primary stream notice, trying same-origin stream:", fetchErr.message);
+            console.warn("[PDF.js] Primary stream notice, trying fallback routes:", fetchErr.message);
+            let loadedFallback = false;
             if (primaryUrl !== fallbackSameOrigin) {
-              setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 30), speed: "Switching CDN Route..." }));
-              const fallbackTask = pdfjsLib.getDocument({
-                url: fallbackSameOrigin,
-                withCredentials: true,
-                rangeChunkSize: adaptiveChunkSize,
-                disableAutoFetch: true,
-                disableStream: false,
-              });
-              fallbackTask.onProgress = handleProgress;
-              doc = await fallbackTask.promise;
-              setNativeSrc(fallbackSameOrigin);
-            } else {
+              try {
+                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 30), speed: "Switching CDN Route..." }));
+                const fallbackTask = pdfjsLib.getDocument({
+                  url: fallbackSameOrigin,
+                  withCredentials: true,
+                  rangeChunkSize: adaptiveChunkSize,
+                  disableAutoFetch: true,
+                  disableStream: false,
+                });
+                fallbackTask.onProgress = handleProgress;
+                doc = await fallbackTask.promise;
+                setNativeSrc(fallbackSameOrigin);
+                loadedFallback = true;
+              } catch (subErr) {
+                console.warn("[PDF.js] Secondary stream notice:", subErr.message);
+              }
+            }
+            if (!loadedFallback && noteId) {
+              // 🛡️ Fail-Safe Tier: Full-Buffer Multi-Tier Fetch (Bypasses byte-range or network glitches completely)
+              try {
+                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 50), speed: "Retrieving Secure Buffer..." }));
+                const bufferRes = await fetchWithCdnFailover(noteId, { token });
+                if (bufferRes && bufferRes.ok) {
+                  const arrayBuffer = await bufferRes.arrayBuffer();
+                  if (arrayBuffer && arrayBuffer.byteLength > 500) {
+                    const bufferTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    bufferTask.onProgress = handleProgress;
+                    doc = await bufferTask.promise;
+                    loadedFallback = true;
+                  }
+                }
+              } catch (bufErr) {
+                console.warn("[PDF.js] Buffer failover notice:", bufErr.message);
+              }
+            }
+            if (!loadedFallback && !doc) {
               throw fetchErr;
             }
           }
@@ -777,8 +815,8 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if external backup URL exists
-          if ((note?.fileUrl || note?.driveLink) && !isDeletedNote) {
+          // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if desktop and external backup URL exists
+          if (!isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
             console.log("[AUTO-FAILOVER] ⚡ Switching to Native Browser Engine (<500ms)");
             setUseNativeViewer(true);
             setLoading(false);
@@ -2308,6 +2346,10 @@ export default function VirtualPdfReader({
   };
 
   const handleSwitchToNative = async () => {
+    if (isMobileDevice) {
+      alert("📱 Mobile Browser Notice:\n\nMobile browsers (Chrome / Safari) do not embed PDFs inside iframes and will display an external Open prompt. The High-Speed Streamer is optimized for your mobile touch screen!");
+      return;
+    }
     setError(null);
     setLoading(false);
     setUseNativeViewer(true);
@@ -2561,9 +2603,9 @@ export default function VirtualPdfReader({
           </div>
         </div>
 
-        {/* Right: Engine Switcher, Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
+        {/* Right: Engine Switcher (Desktop Only), Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          {!note?.driveLink && (
+          {!note?.driveLink && !isMobileDevice && (
             <div
               style={{
                 display: "inline-flex",
@@ -3781,8 +3823,8 @@ export default function VirtualPdfReader({
           height: "100%",
         }}
       >
-        {/* Native Browser PDF Engine Embed */}
-        {useNativeViewer && (
+        {/* Native Browser PDF Engine Embed (Never rendered for raw PDFs on mobile to prevent external "Open" prompt) */}
+        {useNativeViewer && (!isMobileDevice || Boolean(note?.driveLink)) && (
           <div
             style={{
               width: "100%",

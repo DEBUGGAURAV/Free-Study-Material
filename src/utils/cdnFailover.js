@@ -6,11 +6,12 @@
 
 const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "";
+const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "https://fsm-edge.jnplotus.workers.dev";
 
 const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
 
-export const CDN_ENDPOINTS = [originBase, CF_WORKER].filter(Boolean);
+// Prioritize Cloudflare Edge Worker so all users stream directly from the high-speed Global Edge CDN
+export const CDN_ENDPOINTS = [CF_WORKER, originBase].filter(Boolean);
 
 let activeCdnIndex = 0;
 let lastFailoverTimestamp = 0;
@@ -118,7 +119,8 @@ export function parseSourceFromHeaders(headers) {
  */
 export function getSmartStreamUrl(noteId, ticket = null, fileName = null) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
-  const base = localOrigin || "";
+  // ⚡ Serve all users directly from Cloudflare Edge Worker CDN when available with seamless localOrigin fallback
+  const base = CF_WORKER || localOrigin || "";
   const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";

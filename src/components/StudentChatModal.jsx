@@ -446,6 +446,16 @@ export default function StudentChatModal({
   const [newRoomNameInput, setNewRoomNameInput] = useState("");
   const [renameLoading, setRenameLoading] = useState(false);
 
+  // Group Members & Admin Controls Modal State (WhatsApp-style Add/Remove/Reset)
+  const [membersModalOpen, setMembersModalOpen] = useState(false);
+  const [membersTargetRoom, setMembersTargetRoom] = useState(null);
+  const [roomMembersList, setRoomMembersList] = useState([]);
+  const [roomBannedList, setRoomBannedList] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [addMemberInput, setAddMemberInput] = useState("");
+  const [addMemberLoading, setAddMemberLoading] = useState(false);
+  const [resetLinkLoading, setResetLinkLoading] = useState(false);
+
   // Auto-fill invite code if URL parameter present
   useEffect(() => {
     if (!isOpen) return;
@@ -738,6 +748,36 @@ export default function StudentChatModal({
           if (currentRoom.id === data.roomId) {
             handleSwitchRoom({ id: "public", name: "💬 Public Community Chat", isPrivate: false });
           }
+        } else if (data.type === "kicked_from_room") {
+          alert(`🚫 ${data.reason || "You were removed from this group by the group admin."}`);
+          setRooms((prev) => (Array.isArray(prev) ? prev.filter((r) => r.id !== data.roomId) : []));
+          if (currentRoom?.id === data.roomId) {
+            handleSwitchRoom({ id: "public", name: "💬 Public Community Chat", isPrivate: false });
+          }
+        } else if (data.type === "room_link_reset") {
+          setCurrentRoom((prev) => {
+            if (prev && prev.id === data.roomId) {
+              return { ...prev, secretCode: data.newSecretCode };
+            }
+            return prev;
+          });
+          setRooms((prev) =>
+            (Array.isArray(prev) ? prev : []).map((r) =>
+              r && r.id === data.roomId ? { ...r, secretCode: data.newSecretCode } : r
+            )
+          );
+          setShareRoomModal((prev) => {
+            if (prev && prev.id === data.roomId) {
+              return { ...prev, secretCode: data.newSecretCode };
+            }
+            return prev;
+          });
+          setMembersTargetRoom((prev) => {
+            if (prev && prev.id === data.roomId) {
+              return { ...prev, secretCode: data.newSecretCode };
+            }
+            return prev;
+          });
         } else if (data.type === "remote_storage_wipe" || data.type === "remote_storage_wipe_all") {
           try {
             wipeAllDeviceOfflineStorage().then(() => {
@@ -758,6 +798,11 @@ export default function StudentChatModal({
           }
         } else if (data.type === "error") {
           console.warn("[CHAT-WS] Server error notice:", data);
+          if (data.isRemovedByAdmin) {
+            alert(`🚫 ${data.message || "You cannot join this group because you were removed by the group admin."}`);
+            handleSwitchRoom({ id: "public", name: "💬 Public Community Chat", isPrivate: false });
+            return;
+          }
           if (
             data.code === "UNAUTHORIZED" ||
             String(data.message || "").toLowerCase().includes("unauthorized") ||
@@ -1528,6 +1573,115 @@ export default function StudentChatModal({
       alert("Failed to rename room: " + err.message);
     } finally {
       setRenameLoading(false);
+    }
+  };
+
+  // Group Admin: Open Members & Group Controls Modal
+  const openMembersModal = async (room = currentRoom) => {
+    const target = room || currentRoom;
+    if (!target || !target.isPrivate) return;
+    setMembersTargetRoom(target);
+    setMembersModalOpen(true);
+    setMembersLoading(true);
+    try {
+      const data = await api.getChatRoomMembers(target.id);
+      if (data && data.success) {
+        setRoomMembersList(data.members || []);
+        setRoomBannedList(data.bannedMembers || []);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch room members:", err);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  // Group Admin: Remove user WhatsApp-style (blocks rejoining via invite link)
+  const handleRemoveMember = async (targetUserId, targetUserName) => {
+    const target = membersTargetRoom || currentRoom;
+    if (!target || !target.id) return;
+    if (!confirm(`Are you sure you want to remove "${targetUserName || "this member"}" from the group?\n\nThey will be disconnected immediately and CANNOT rejoin with the invite link until you add them back.`)) {
+      return;
+    }
+    try {
+      const res = await api.removeUserFromChatRoom(target.id, targetUserId);
+      if (res && res.success) {
+        setRoomMembersList((prev) => prev.filter((m) => m.id !== targetUserId));
+        setRoomBannedList((prev) => [
+          ...prev.filter((m) => m.id !== targetUserId),
+          { id: targetUserId, name: targetUserName || "Removed Member" },
+        ]);
+        alert(`🚫 ${targetUserName || "Member"} removed from group. They cannot rejoin via invite link.`);
+      } else {
+        alert(res?.message || "Failed to remove member.");
+      }
+    } catch (err) {
+      alert("Error removing member: " + err.message);
+    }
+  };
+
+  // Group Admin: Add member back (unbans and re-adds by ID or email)
+  const handleAddMember = async (targetUserId = null, email = null) => {
+    const target = membersTargetRoom || currentRoom;
+    if (!target || !target.id) return;
+    const finalEmail = email || addMemberInput.trim();
+    if (!targetUserId && !finalEmail) {
+      alert("Please enter a student email or ID to add.");
+      return;
+    }
+    try {
+      setAddMemberLoading(true);
+      const res = await api.addUserToChatRoom(target.id, targetUserId, finalEmail);
+      if (res && res.success) {
+        setAddMemberInput("");
+        const data = await api.getChatRoomMembers(target.id);
+        if (data && data.success) {
+          setRoomMembersList(data.members || []);
+          setRoomBannedList(data.bannedMembers || []);
+        }
+        alert(res.message || "Member added back to the group successfully!");
+      } else {
+        alert(res?.message || "Failed to add member.");
+      }
+    } catch (err) {
+      alert("Error adding member: " + err.message);
+    } finally {
+      setAddMemberLoading(false);
+    }
+  };
+
+  // Group Admin: Reset Invite Link (Invalidates previous secret codes and links)
+  const handleResetInviteLink = async (room = currentRoom) => {
+    const target = room || membersTargetRoom || currentRoom;
+    if (!target || !target.id) return;
+    if (!confirm("Are you sure you want to reset the group invite link?\n\nPrevious links and secret codes will stop working immediately for all students.")) {
+      return;
+    }
+    try {
+      setResetLinkLoading(true);
+      const res = await api.resetChatRoomLink(target.id);
+      if (res && res.success && res.room) {
+        const newCode = res.room.secretCode;
+        setCurrentRoom((prev) => (prev && prev.id === target.id ? { ...prev, secretCode: newCode } : prev));
+        setRooms((prev) =>
+          (Array.isArray(prev) ? prev : []).map((r) =>
+            r && r.id === target.id ? { ...r, secretCode: newCode } : r
+          )
+        );
+        if (shareRoomModal && shareRoomModal.id === target.id) {
+          setShareRoomModal((prev) => (prev ? { ...prev, secretCode: newCode } : prev));
+        }
+        if (membersTargetRoom && membersTargetRoom.id === target.id) {
+          setMembersTargetRoom((prev) => (prev ? { ...prev, secretCode: newCode } : prev));
+        }
+        alert("✅ Group invite link reset successfully! Previous invite links and secret codes are now invalid.");
+      } else {
+        alert(res?.message || "Failed to reset link.");
+      }
+    } catch (err) {
+      alert("Error resetting link: " + err.message);
+    } finally {
+      setResetLinkLoading(false);
     }
   };
 
@@ -2365,6 +2519,31 @@ export default function StudentChatModal({
                     <span>Rename</span>
                   </button>
                 )}
+                {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
+                  <button
+                    type="button"
+                    onClick={() => openMembersModal(currentRoom)}
+                    style={{
+                      background: "rgba(168, 85, 247, 0.14)",
+                      border: "1px solid rgba(168, 85, 247, 0.35)",
+                      borderRadius: "6px",
+                      padding: "2px 6px",
+                      color: "#c084fc",
+                      fontSize: "0.68rem",
+                      fontWeight: 700,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Manage members & reset invite link"
+                  >
+                    <Users size={11} />
+                    <span>Members</span>
+                  </button>
+                )}
                 {currentRoom.isPrivate && isAdmin && (
                   <span
                     style={{
@@ -2483,6 +2662,31 @@ export default function StudentChatModal({
               >
                 <Edit2 size={12} color="#38bdf8" />
                 <span>Rename</span>
+              </button>
+            )}
+
+            {/* Host or Admin: Manage Members Button */}
+            {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
+              <button
+                onClick={() => openMembersModal(currentRoom)}
+                style={{
+                  background: "rgba(168, 85, 247, 0.15)",
+                  border: "1px solid rgba(168, 85, 247, 0.4)",
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  color: "#c084fc",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                title="Manage members, add/remove students & reset invite link"
+              >
+                <Users size={12} color="#c084fc" />
+                <span>Members</span>
               </button>
             )}
 
@@ -3207,6 +3411,33 @@ export default function StudentChatModal({
                             >
                               <Edit2 size={11} />
                               <span>Rename</span>
+                            </button>
+                          )}
+                          {(r.createdBy === currentUser?.id || isAdmin) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openMembersModal(r);
+                              }}
+                              style={{
+                                background: "rgba(168, 85, 247, 0.15)",
+                                border: "1px solid rgba(168, 85, 247, 0.35)",
+                                borderRadius: "8px",
+                                padding: "4px 8px",
+                                color: "#c084fc",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                              title="Manage Members & Link"
+                            >
+                              <Users size={11} />
+                              <span>Members</span>
                             </button>
                           )}
                         </div>
@@ -5762,6 +5993,38 @@ export default function StudentChatModal({
                   <span>{copiedShareLink ? "Copied!" : "Copy Link"}</span>
                 </button>
               </div>
+
+              {/* Group Admin: Reset Invite Link */}
+              {(shareRoomModal.createdBy === currentUser?.id || isAdmin) && (
+                <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px dashed rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                    Need a fresh link? Old links & codes will stop working.
+                  </span>
+                  <button
+                    type="button"
+                    disabled={resetLinkLoading}
+                    onClick={() => handleResetInviteLink(shareRoomModal)}
+                    style={{
+                      background: "rgba(239, 68, 68, 0.12)",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      borderRadius: "8px",
+                      padding: "5px 10px",
+                      color: "#f87171",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: resetLinkLoading ? "wait" : "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Generate a brand new invite code and link"
+                  >
+                    <RefreshCw size={12} className={resetLinkLoading ? "spin" : ""} />
+                    <span>{resetLinkLoading ? "Resetting..." : "Reset Invite Link"}</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Quick Social Share Buttons */}

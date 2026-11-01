@@ -1465,6 +1465,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const headerToken = req.headers["authorization"]?.split(" ")[1];
     const ticketParam = req.query.ticket;
     const queryToken = req.query.token;
+    const isDownload = req.query.download === "1" || req.query.attachment === "1";
 
     // 1. Check Ephemeral Stream Ticket (Single-use 60s ticket bound to client IP)
     if (ticketParam && ephemeralStreamTickets.has(ticketParam)) {
@@ -1532,8 +1533,15 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         req.headers["x-via-worker"] ||
         req.headers["cf-worker"] ||
         req.headers["cf-ray"] ||
-        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev")) ||
+        (req.headers["referer"] && req.headers["referer"].includes("workers.dev")) ||
+        (req.headers["origin"] && req.headers["origin"].includes("workers.dev"))
       );
+
+      // Cloudflare Edge Worker caching is explicitly recognized as trusted CDN infrastructure
+      if (isWorkerProxy && !requestingUser) {
+        requestingUser = { id: "cf_worker_edge", role: "worker", isEdgeCDN: true };
+      }
 
       // Only block if an untrusted third-party site is explicitly attempting cross-site hotlinking
       if (secFetchSite === "cross-site" && !isTrustedOrigin && !isWorkerProxy) {
@@ -1545,8 +1553,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // Gated Student Access: If not logged in, prompt user to Sign In / Register
-    if (!requestingUser) {
+    // Gated Student Access: Only gate direct file downloads for unauthenticated users; allow reading / viewer streaming for all students
+    if (!requestingUser && isDownload) {
       const isHtmlRequest =
         req.headers["sec-fetch-dest"] === "document" ||
         req.headers["sec-fetch-mode"] === "navigate" ||
@@ -1658,7 +1666,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       note.mimeType === "application/octet-stream";
     const contentType = isPdf ? "application/pdf" : (note.mimeType || "application/pdf");
 
-    const isDownload = req.query.download === "1" || req.query.attachment === "1";
+    // isDownload already resolved at route inception
     const isSingleNoteDisabled = note.allowDownload === false || note.allowDownload === "false" || note.allowDownload === 0 || note.allowDownload === "0";
     const isNoteDownloadDisabled = Boolean(isSingleNoteDisabled);
 

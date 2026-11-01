@@ -6,9 +6,7 @@ import {
   Shield,
   LogOut,
   Bell,
-  UserPlus,
   LogIn,
-  User,
   Smartphone,
   Mic,
   MicOff,
@@ -17,7 +15,6 @@ import {
   Users,
   Zap,
   Volume2,
-  ChevronDown
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
@@ -39,9 +36,8 @@ export default function Navbar({
   noticeCount = 0,
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
-  const toolsRef = useRef(null);
   const searchInputRef = useRef(null);
+  const mobileSearchInputRef = useRef(null);
 
   const [isInstalled, setIsInstalled] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -55,23 +51,6 @@ export default function Navbar({
     }
   });
 
-  // Close tools dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (toolsRef.current && !toolsRef.current.contains(event.target)) {
-        setIsToolsOpen(false);
-      }
-    };
-    if (isToolsOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("touchstart", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, [isToolsOpen]);
-
   // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -80,6 +59,9 @@ export default function Navbar({
         if (searchInputRef.current) {
           searchInputRef.current.focus();
           searchInputRef.current.select();
+        } else if (mobileSearchInputRef.current) {
+          mobileSearchInputRef.current.focus();
+          mobileSearchInputRef.current.select();
         }
       }
     };
@@ -132,7 +114,7 @@ export default function Navbar({
       }
       setInstallPrompt(null);
     } else {
-      alert("📲 To Install FreeStudyMaterial App on Edge/Chrome:\n\n1. Look at Edge top-right: Click the 3 dots (...) menu.\n2. Click 'Apps' -> 'Install this site as an app'.\n\nOn Mobile: Tap 3 dots -> 'Add to Home screen'!");
+      alert("📲 To Install FreeStudyMaterial App:\n\n1. Tap the browser menu (3 dots or share button).\n2. Select 'Add to Home screen' or 'Install App'.\n\nEnjoy instant 0ms offline access!");
     }
   };
 
@@ -162,9 +144,9 @@ export default function Navbar({
     }
 
     if (isListening) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (_) {}
-      }
+      try {
+        if (recognitionRef.current) recognitionRef.current.stop();
+      } catch (_) {}
       setIsListening(false);
       return;
     }
@@ -172,11 +154,12 @@ export default function Navbar({
     try {
       const recognition = new SpeechRecognition();
       recognition.lang = "en-IN";
+      recognition.continuous = false;
       recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
 
       recognition.onstart = () => setIsListening(true);
       recognition.onresult = (event) => {
+        setIsListening(false);
         const transcript = event?.results?.[0]?.[0]?.transcript;
         if (transcript) {
           setSearchTerm(transcript);
@@ -193,321 +176,315 @@ export default function Navbar({
   };
 
   return (
-    <header className="navbar-wrapper">
-      <div className="navbar-content">
-        {/* 1. Brand Section */}
-        <div className="brand-section" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} title="Scroll to Top">
-          <div className="brand-logo-glow">
-            <Cloud size={22} />
-          </div>
-          <div>
-            <div className="brand-title">{SITE_NAME}</div>
-            <div className="brand-status-tag">
-              <span className="pulse-dot"></span>
-              {SITE_TAGLINE} • CDN Ready
+    <>
+      {/* ══════════════════════════════════════════════════════════════════
+          1. TOP FLOATING APP BAR (Clean & Slim on Desktop and Mobile)
+          ══════════════════════════════════════════════════════════════════ */}
+      <header className="navbar-wrapper">
+        <div className="navbar-content">
+          {/* Brand Identity */}
+          <div
+            className="brand-section"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            title="Scroll to Top • Free Study Material Cloud"
+          >
+            <div className="brand-logo-glow">
+              <Cloud size={20} />
+            </div>
+            <div className="brand-text-block">
+              <div className="brand-title">{SITE_NAME}</div>
+              <div className="brand-status-tag">
+                <span className="pulse-dot"></span>
+                <span>{SITE_TAGLINE}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 2. Universal Spotlight Search with Voice & ⌘K */}
-        <div className="search-wrapper">
-          <Search size={15} className="search-icon" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="search-input"
-            placeholder="Search notes, subjects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="search-right-tools">
-            <button
-              type="button"
-              onClick={handleVoiceSearch}
-              className={`search-mic-btn ${isListening ? "listening" : ""}`}
-              title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
-            >
-              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-            </button>
-            <kbd className="search-kbd-shortcut">⌘K</kbd>
-          </div>
-        </div>
-
-        {/* 3. Floating Action Matrix */}
-        <div className="nav-actions">
-          {/* ⚡ Campus AirDrop */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenAirDrop}
-            title="Campus AirDrop: Send or Receive notes offline with 1-Tap QR Mesh"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(168, 85, 247, 0.14)",
-              border: "1px solid rgba(168, 85, 247, 0.38)",
-              color: "#c084fc",
-              fontWeight: 700,
-              fontSize: "0.8rem",
-              padding: "7px 13px",
-            }}
-          >
-            <Zap size={14} />
-            <span>AirDrop</span>
-          </button>
-
-          {/* 🔊 Sound-Drop */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenSoundDrop || (() => {
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("open_campus_airdrop", {
-                    detail: { initialMode: "sound" },
-                  })
-                );
-              }
-            })}
-            title="Sound-Drop: Beam notes offline via ultrasonic sound waves"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(16, 185, 129, 0.14)",
-              border: "1px solid rgba(16, 185, 129, 0.38)",
-              color: "#34d399",
-              fontWeight: 700,
-              fontSize: "0.8rem",
-              padding: "7px 13px",
-            }}
-          >
-            <Volume2 size={14} />
-            <span>Sound-Drop</span>
-          </button>
-
-          {/* 💬 Student Chat Hub */}
-          <button
-            className="btn-secondary"
-            onClick={onOpenChat}
-            title="Student Hub & Live Discussion"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              background: "rgba(99, 102, 241, 0.12)",
-              border: "1px solid rgba(99, 102, 241, 0.35)",
-              color: "#a5b4fc",
-              fontWeight: 600,
-              fontSize: "0.8rem",
-              padding: "7px 12px",
-            }}
-          >
-            <MessageSquare size={14} />
-            <span>Chat Hub</span>
-          </button>
-
-          {/* 🔔 Notice Board Bell */}
-          <button
-            className="btn-icon"
-            onClick={onOpenNotices}
-            title="Notice Board & Announcements"
-            style={{ position: "relative", width: "36px", height: "36px" }}
-          >
-            <Bell size={16} />
-            {noticeCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "6px",
-                  right: "6px",
-                  width: "8px",
-                  height: "8px",
-                  borderRadius: "50%",
-                  background: "#06b6d4",
-                  boxShadow: "0 0 8px #06b6d4",
-                }}
-              />
-            )}
-          </button>
-
-          {/* 🛠️ Floating Tools Island (Houses Study Pod, Help Desk, Install App & Admin Portal) */}
-          <div className="nav-tools-container" ref={toolsRef}>
-            <button
-              type="button"
-              className="nav-tools-btn"
-              onClick={() => setIsToolsOpen(!isToolsOpen)}
-              title="More Academic Tools & Services"
-            >
-              <Users size={14} style={{ color: "#38bdf8" }} />
-              <span>Tools</span>
-              <ChevronDown
-                size={13}
-                style={{
-                  transform: isToolsOpen ? "rotate(180deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s ease",
-                  opacity: 0.7,
-                }}
-              />
-            </button>
-
-            {/* Floating Dropdown Island */}
-            {isToolsOpen && (
-              <div className="nav-tools-dropdown">
-                {/* 1. Collaborative Live Study Pod */}
-                <button
-                  type="button"
-                  className="nav-tools-item"
-                  onClick={() => {
-                    setIsToolsOpen(false);
-                    onOpenStudyPod();
-                  }}
-                >
-                  <Users size={15} style={{ color: "#34d399" }} />
-                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                    <span>Collaborative Study Pod</span>
-                    <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Real-time Canvas & Sync</span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.62rem",
-                      background: "rgba(16, 185, 129, 0.2)",
-                      color: "#6ee7b7",
-                      padding: "1px 5px",
-                      borderRadius: "6px",
-                      fontWeight: 700,
-                    }}
-                  >
-                    P2P
-                  </span>
-                </button>
-
-                {/* 2. Help & Support Desk */}
-                <button
-                  type="button"
-                  className="nav-tools-item"
-                  onClick={() => {
-                    setIsToolsOpen(false);
-                    onOpenHelp();
-                  }}
-                >
-                  <HelpCircle size={15} style={{ color: "#38bdf8" }} />
-                  <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                    <span>Help &amp; Support Desk</span>
-                    <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>FAQs &amp; 24/7 Queries</span>
-                  </div>
-                </button>
-
-                {/* 3. Install App (PWA) */}
-                {!isInstalled && (
-                  <button
-                    type="button"
-                    className="nav-tools-item"
-                    onClick={() => {
-                      setIsToolsOpen(false);
-                      handleInstallClick();
-                    }}
-                  >
-                    <Smartphone size={15} style={{ color: "#a855f7" }} />
-                    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                      <span>Install App (PWA)</span>
-                      <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Fast Offline Desktop/Mobile</span>
-                    </div>
-                  </button>
-                )}
-
-                {/* 4. Admin Studio Portal (if authorized) */}
-                {isAdminOrManager && (
-                  <button
-                    type="button"
-                    className="nav-tools-item"
-                    onClick={() => {
-                      setIsToolsOpen(false);
-                      onOpenAdmin();
-                    }}
-                    style={{
-                      borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-                      paddingTop: "10px",
-                    }}
-                  >
-                    <Shield size={15} style={{ color: "#f59e0b" }} />
-                    <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-                      <span style={{ color: "#fbbf24" }}>Admin Security Studio</span>
-                      <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>Notes, Logs &amp; Access</span>
-                    </div>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 🚀 Primary CTA: Upload Notes */}
-          <button className="btn-primary" onClick={onOpenUpload} style={{ padding: "8px 16px", fontSize: "0.82rem" }}>
-            <UploadCloud size={16} />
-            <span>Upload Notes</span>
-          </button>
-
-          {/* 👤 User Auth Info / Profile Chip */}
-          {currentUser ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "7px",
-                  background: "rgba(255, 255, 255, 0.05)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "var(--radius-full)",
-                  padding: "5px 12px 5px 6px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onClick={onOpenProfile}
-                title="Edit My Profile & Password"
-              >
-                <div
-                  style={{
-                    width: "26px",
-                    height: "26px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan))",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "0.75rem",
-                    fontWeight: 800,
-                    boxShadow: "0 0 10px rgba(6, 182, 212, 0.35)",
-                  }}
-                >
-                  {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#fff", lineHeight: 1.1 }}>
-                    {currentUser.name?.split(" ")[0] || currentUser.email?.split("@")[0]}
-                  </span>
-                  <span style={{ fontSize: "0.62rem", color: "var(--text-dim)" }}>
-                    {currentUser.role === "admin" ? "Admin" : currentUser.college ? currentUser.college.substring(0, 14) + "..." : "Student"}
-                  </span>
-                </div>
-              </div>
-
+          {/* Universal Spotlight Search (Voice & ⌘K) */}
+          <div className="search-wrapper">
+            <Search size={15} className="search-icon" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="search-input"
+              placeholder="Search notes, subjects, branch, PYQs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <div className="search-right-tools">
               <button
-                className="btn-icon"
-                onClick={onLogout}
-                title="Log Out"
-                style={{ width: "34px", height: "34px" }}
+                type="button"
+                onClick={handleVoiceSearch}
+                className={`search-mic-btn ${isListening ? "listening" : ""}`}
+                title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
               >
-                <LogOut size={14} />
+                {isListening ? <MicOff size={13} /> : <Mic size={13} />}
+              </button>
+              <kbd className="search-kbd-shortcut">⌘K</kbd>
+            </div>
+          </div>
+
+          {/* DESKTOP SEGMENTED ACTION MATRIX (All elements shown directly - NO tools dropdown!) */}
+          <div className="desktop-nav-matrix">
+            {/* Segment 1: Offline Mesh Beam */}
+            <div className="nav-segment-group">
+              <button
+                className="nav-capsule-btn btn-airdrop"
+                onClick={onOpenAirDrop}
+                title="Campus AirDrop: Peer-to-Peer offline note exchange"
+              >
+                <Zap size={14} className="capsule-icon" />
+                <span>AirDrop</span>
+              </button>
+              <button
+                className="nav-capsule-btn btn-sounddrop"
+                onClick={onOpenSoundDrop}
+                title="Sound-Drop: Beam notes via ultrasonic sound waves"
+              >
+                <Volume2 size={14} className="capsule-icon" />
+                <span>Sound-Drop</span>
               </button>
             </div>
-          ) : (
-            <button className="btn-secondary" onClick={onOpenAuth} style={{ padding: "7px 14px", fontSize: "0.8rem" }}>
-              <LogIn size={14} />
-              <span>Sign In</span>
+
+            {/* Segment 2: Interactive Community */}
+            <div className="nav-segment-group">
+              <button
+                className="nav-capsule-btn btn-chat"
+                onClick={onOpenChat}
+                title="Student Chat Hub & Community Discussions"
+              >
+                <MessageSquare size={14} className="capsule-icon" />
+                <span>Chat Hub</span>
+              </button>
+              <button
+                className="nav-capsule-btn btn-studypod"
+                onClick={onOpenStudyPod}
+                title="Study Pod: Real-time collaborative audio & notes"
+              >
+                <Users size={14} className="capsule-icon" />
+                <span>Study Pod</span>
+                <span className="live-pill">LIVE</span>
+              </button>
+            </div>
+
+            {/* Segment 3: Notices & Help */}
+            <div className="nav-segment-group">
+              <button
+                className="nav-icon-btn btn-notice"
+                onClick={onOpenNotices}
+                title="Notice Board & Exam Circulars"
+              >
+                <Bell size={16} />
+                {noticeCount > 0 && (
+                  <span className="nav-notice-badge">{noticeCount > 9 ? "9+" : noticeCount}</span>
+                )}
+              </button>
+              <button
+                className="nav-icon-btn btn-help"
+                onClick={onOpenHelp}
+                title="Help & Academic Support Desk"
+              >
+                <HelpCircle size={16} />
+              </button>
+              {!isInstalled && (
+                <button
+                  className="nav-capsule-btn btn-install"
+                  onClick={handleInstallClick}
+                  title="Install Free Study Material App (PWA) for 0ms fast access"
+                >
+                  <Smartphone size={14} className="capsule-icon" />
+                  <span>Install</span>
+                </button>
+              )}
+              {isAdminOrManager && (
+                <button
+                  className="nav-capsule-btn btn-admin"
+                  onClick={onOpenAdmin}
+                  title="Admin Security Studio: Notes, Telemetry & Vault Management"
+                >
+                  <Shield size={14} className="capsule-icon" />
+                  <span>Admin</span>
+                </button>
+              )}
+            </div>
+
+            {/* Segment 4: Primary Action & Profile */}
+            <div className="nav-segment-group" style={{ gap: "10px" }}>
+              <button
+                className="btn-upload-notes"
+                onClick={onOpenUpload}
+                title="Upload Notes, PYQs or Solutions to Cloud Vault"
+              >
+                <UploadCloud size={16} />
+                <span>Upload Notes</span>
+              </button>
+
+              {currentUser ? (
+                <div className="nav-user-profile-cluster">
+                  <div
+                    className="nav-user-chip"
+                    onClick={onOpenProfile}
+                    title="Edit My Profile & Account Settings"
+                  >
+                    <div className="nav-avatar-circle">
+                      {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+                    </div>
+                    <div className="nav-user-meta">
+                      <span className="nav-user-name">
+                        {currentUser.name?.split(" ")[0] || currentUser.email?.split("@")[0]}
+                      </span>
+                      <span className="nav-user-role">
+                        {currentUser.role === "admin" ? "Admin" : "Student"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    className="nav-icon-btn btn-logout"
+                    onClick={onLogout}
+                    title="Log Out from Cloud Vault"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="btn-signin-nav"
+                  onClick={onOpenAuth}
+                  title="Sign In / Register as Student"
+                >
+                  <LogIn size={15} />
+                  <span>Sign In</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* MOBILE HEADER COMPACT QUICK ACTIONS (Upload + Avatar/Auth) */}
+          <div className="mobile-header-actions">
+            <button
+              className="btn-upload-mobile-compact"
+              onClick={onOpenUpload}
+              title="Upload Notes"
+            >
+              <UploadCloud size={16} />
+              <span>Upload</span>
             </button>
-          )}
+
+            {currentUser ? (
+              <div
+                className="nav-avatar-circle"
+                onClick={onOpenProfile}
+                title="Open Profile"
+              >
+                {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+              </div>
+            ) : (
+              <button
+                className="mobile-auth-icon-btn"
+                onClick={onOpenAuth}
+                title="Sign In"
+              >
+                <LogIn size={16} />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* ══════════════════════════════════════════════════════════════════
+          2. MOBILE FLOATING DYNAMIC ISLAND DOCK (Fixed at Bottom)
+          1-Tap Thumb Ergonomics • Zero Dropdown • All Elements Visible
+          ══════════════════════════════════════════════════════════════════ */}
+      <nav className="mobile-floating-island-dock" aria-label="Mobile Navigation Dock">
+        <button
+          type="button"
+          className="dock-item dock-airdrop"
+          onClick={onOpenAirDrop}
+          title="Campus AirDrop"
+        >
+          <Zap size={18} />
+          <span>AirDrop</span>
+        </button>
+
+        <button
+          type="button"
+          className="dock-item dock-sounddrop"
+          onClick={onOpenSoundDrop}
+          title="Sound-Drop"
+        >
+          <Volume2 size={18} />
+          <span>Sound</span>
+        </button>
+
+        <button
+          type="button"
+          className="dock-item dock-chat"
+          onClick={onOpenChat}
+          title="Student Chat Hub"
+        >
+          <MessageSquare size={18} />
+          <span>Chat</span>
+        </button>
+
+        <button
+          type="button"
+          className="dock-item dock-pod"
+          onClick={onOpenStudyPod}
+          title="Collaborative Study Pod"
+        >
+          <Users size={18} />
+          <span>Pod</span>
+        </button>
+
+        <button
+          type="button"
+          className="dock-item dock-notice"
+          onClick={onOpenNotices}
+          title="Notice Board"
+        >
+          <div style={{ position: "relative", display: "inline-flex" }}>
+            <Bell size={18} />
+            {noticeCount > 0 && (
+              <span className="dock-notice-dot">{noticeCount > 9 ? "9+" : noticeCount}</span>
+            )}
+          </div>
+          <span>Notices</span>
+        </button>
+
+        <button
+          type="button"
+          className="dock-item dock-help"
+          onClick={onOpenHelp}
+          title="Help & Support Desk"
+        >
+          <HelpCircle size={18} />
+          <span>Help</span>
+        </button>
+
+        {isAdminOrManager && (
+          <button
+            type="button"
+            className="dock-item dock-admin"
+            onClick={onOpenAdmin}
+            title="Admin Studio"
+          >
+            <Shield size={18} />
+            <span>Admin</span>
+          </button>
+        )}
+
+        {!isInstalled && !isAdminOrManager && (
+          <button
+            type="button"
+            className="dock-item dock-install"
+            onClick={handleInstallClick}
+            title="Install App (PWA)"
+          >
+            <Smartphone size={18} />
+            <span>Install</span>
+          </button>
+        )}
+      </nav>
+    </>
   );
 }

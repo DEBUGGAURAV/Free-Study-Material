@@ -1061,6 +1061,22 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ roomId, newName }),
     }),
+  resetChatRoomLink: (roomId) =>
+    request("/chat/rooms/reset-link", {
+      method: "POST",
+      body: JSON.stringify({ roomId }),
+    }),
+  removeUserFromChatRoom: (roomId, targetUserId) =>
+    request("/chat/rooms/remove-user", {
+      method: "POST",
+      body: JSON.stringify({ roomId, targetUserId }),
+    }),
+  addUserToChatRoom: (roomId, targetUserId, email) =>
+    request("/chat/rooms/add-user", {
+      method: "POST",
+      body: JSON.stringify({ roomId, targetUserId, email }),
+    }),
+  getChatRoomMembers: (roomId) => request(`/chat/rooms/${roomId}/members`),
   joinChatRoom: (secretCode, roomId) =>
     request("/chat/rooms/join", {
       method: "POST",
