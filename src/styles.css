@@ -1560,9 +1560,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 .card-action-matrix {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   margin-top: auto;
-  padding-top: 6px;
+  padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1572,66 +1572,79 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   gap: 6px;
 }
 
-.btn-action-read {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
-  border-radius: var(--radius-full);
-  padding: 7px 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
+/* Action Buttons Core Standardization (Identical Dimensions & Icon Sizes) */
+.btn-action-read,
+.btn-action-download,
+.btn-action-chat,
+.btn-action-share,
+.btn-mesh-pill {
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  padding: 0 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  border-radius: var(--radius-full) !important;
+  font-size: 0.74rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  width: 100% !important;
+  white-space: nowrap !important;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-decoration: none;
+}
+
+.btn-action-read svg,
+.btn-action-download svg,
+.btn-action-chat svg,
+.btn-action-share svg,
+.btn-mesh-pill svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+
+.btn-action-read {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
 }
 
 .btn-action-read:hover {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.28);
   transform: translateY(-1px);
 }
 
 .btn-action-download {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
   background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-indigo) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   color: #fff;
-  border-radius: var(--radius-full);
-  padding: 7px 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 4px 15px -3px rgba(6, 182, 212, 0.4);
+  box-shadow: 0 4px 14px -3px rgba(6, 182, 212, 0.4);
 }
 
 .btn-action-download:hover {
   opacity: 0.95;
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px -3px rgba(6, 182, 212, 0.6);
+  box-shadow: 0 6px 18px -3px rgba(6, 182, 212, 0.6);
+}
+
+.btn-action-download.blocked {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #fca5a5 !important;
+  box-shadow: none !important;
 }
 
 .btn-action-chat {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
   background: rgba(99, 102, 241, 0.12);
   border: 1px solid rgba(99, 102, 241, 0.35);
   color: #a5b4fc;
-  border-radius: var(--radius-full);
-  padding: 6px 8px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .btn-action-chat:hover {
@@ -1642,19 +1655,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .btn-action-share {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
   background: rgba(6, 182, 212, 0.12);
   border: 1px solid rgba(6, 182, 212, 0.35);
   color: #67e8f9;
-  border-radius: var(--radius-full);
-  padding: 6px 8px;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
 }
 
 .btn-action-share:hover {
@@ -1676,36 +1679,30 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   font-family: var(--font-mono);
 }
 
-.btn-mesh-pill {
-  padding: 2px 8px;
-  border-radius: var(--radius-full);
-  font-size: 0.68rem;
-  font-weight: 700;
-  border: none;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
 .btn-mesh-sound {
-  background: rgba(16, 185, 129, 0.16);
+  background: rgba(16, 185, 129, 0.12);
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .btn-mesh-sound:hover {
-  background: rgba(16, 185, 129, 0.28);
+  background: rgba(16, 185, 129, 0.24);
+  border-color: rgba(16, 185, 129, 0.55);
   color: #6ee7b7;
+  transform: translateY(-1px);
 }
 
 .btn-mesh-airdrop {
-  background: rgba(168, 85, 247, 0.16);
+  background: rgba(168, 85, 247, 0.12);
   color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  border: 1px solid rgba(168, 85, 247, 0.35);
 }
 
 .btn-mesh-airdrop:hover {
-  background: rgba(168, 85, 247, 0.28);
+  background: rgba(168, 85, 247, 0.24);
+  border-color: rgba(168, 85, 247, 0.55);
   color: #e9d5ff;
+  transform: translateY(-1px);
 }
 
 /* Fallback legacy classes for backward compatibility */

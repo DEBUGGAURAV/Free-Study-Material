@@ -635,9 +635,9 @@ export default function NoteCard({
               }
             >
               {sharedToChat ? (
-                <Check size={13} style={{ color: "#34d399" }} />
+                <Check size={14} style={{ color: "#34d399" }} />
               ) : (
-                <MessageCircle size={13} />
+                <MessageCircle size={14} />
               )}
               <span>{sharedToChat ? "Dropped!" : "Drop in Chat"}</span>
             </button>
@@ -653,9 +653,9 @@ export default function NoteCard({
               }
             >
               {copied ? (
-                <Check size={13} style={{ color: "#34d399" }} />
+                <Check size={14} style={{ color: "#34d399" }} />
               ) : (
-                <Share2 size={13} />
+                <Share2 size={14} />
               )}
               <span>{copied ? "Copied!" : "Share Link"}</span>
             </button>
@@ -677,7 +677,7 @@ export default function NoteCard({
               }}
               title="Sound-Drop: Beam note wirelessly via ultrasonic audio frequency"
             >
-              <Volume2 size={13} />
+              <Volume2 size={14} />
               <span>Sound-Drop</span>
             </button>
 
@@ -695,7 +695,7 @@ export default function NoteCard({
               }}
               title="AirDrop: Beam note offline via 1-Tap QR Mesh"
             >
-              <Zap size={13} />
+              <Zap size={14} />
               <span>AirDrop</span>
             </button>
           </div>
