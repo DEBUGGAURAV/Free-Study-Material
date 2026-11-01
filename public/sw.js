@@ -84,6 +84,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // 0a. Never intercept Google Identity Services or OAuth endpoints - let native browser handle
+  if (url.hostname.includes('accounts.google.com') || url.hostname.includes('oauth2.googleapis.com')) {
+    return;
+  }
+
   // 0. Completely bypass Vite dev server modules, source files, HMR channels & API routes (except /api/notes)
   // Ensures Service Worker never intercepts, caches, or corrupts live API or local dev JSX modules
   if (

@@ -86,7 +86,9 @@ app.use(
           "'unsafe-inline'",
           "blob:",
           "https://accounts.google.com",
+          "https://*.google.com",
           "https://apis.google.com",
+          "https://*.google.com",
           "https://ssl.gstatic.com",
           "https://*.gstatic.com",
           "https://www.gstatic.com",
@@ -99,6 +101,7 @@ app.use(
           "'unsafe-inline'",
           "https://fonts.googleapis.com",
           "https://accounts.google.com",
+          "https://*.google.com",
           "https://ssl.gstatic.com",
           "https://*.gstatic.com",
         ],
@@ -109,7 +112,10 @@ app.use(
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
           "https://accounts.google.com",
+          "https://*.google.com",
           "https://oauth2.googleapis.com",
+          "https://play.google.com",
+          "https://www.googleapis.com",
           "https://api.telegram.org",
           "https://*.firebaseio.com",
           "https://*.googleapis.com",
@@ -131,6 +137,7 @@ app.use(
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
           "https://accounts.google.com",
+          "https://*.google.com",
           "https://drive.google.com",
           "https://*.google.com",
         ].filter(Boolean),
@@ -191,7 +198,12 @@ app.use(
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.path.includes("/stream")) {
+      if (
+        req.path.includes("/stream") ||
+        req.path.endsWith(".pdf") ||
+        req.originalUrl?.includes("/api/notes/") ||
+        req.path.startsWith("/api/notes/")
+      ) {
         return false;
       }
       return compression.filter(req, res);

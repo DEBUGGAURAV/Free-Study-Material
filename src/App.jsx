@@ -152,6 +152,7 @@ export default function App() {
   const [previewInitialPage, setPreviewInitialPage] = useState(1);
   const [isAirdropOpen, setIsAirdropOpen] = useState(false);
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
+  const [airdropInitialMode, setAirdropInitialMode] = useState("sound");
 
   useEffect(() => {
     try {

@@ -651,7 +651,7 @@ export default function AuthModal({
     }
   };
 
-  // Ensure GIS script is fully loaded
+  // Ensure GIS script is fully loaded with auto-recovery for ad-blockers / slow networks
   const ensureGoogleScript = (timeoutMs = 7000) => {
     return new Promise((resolve) => {
       if (typeof window !== "undefined" && window.google?.accounts) return resolve(true);
@@ -667,15 +667,34 @@ export default function AuthModal({
       }
 
       const startTime = Date.now();
+      let retried = false;
+
       const checkInterval = setInterval(() => {
         if (typeof window !== "undefined" && window.google?.accounts) {
           clearInterval(checkInterval);
           resolve(true);
-        } else if (Date.now() - startTime >= timeoutMs) {
+          return;
+        }
+
+        // If after 2.2s window.google.accounts is still missing, retry with fresh script node
+        if (!retried && Date.now() - startTime >= 2200) {
+          retried = true;
+          try {
+            const staleScripts = document.querySelectorAll('script[src*="accounts.google.com/gsi/client"]');
+            staleScripts.forEach((s) => s.remove());
+          } catch (_) {}
+          const fresh = document.createElement("script");
+          fresh.src = "https://accounts.google.com/gsi/client?v=" + Date.now();
+          fresh.async = true;
+          fresh.defer = true;
+          document.head.appendChild(fresh);
+        }
+
+        if (Date.now() - startTime >= timeoutMs) {
           clearInterval(checkInterval);
           resolve(Boolean(window?.google?.accounts));
         }
-      }, 75);
+      }, 50);
 
       script.addEventListener(
         "load",
@@ -685,7 +704,7 @@ export default function AuthModal({
               clearInterval(checkInterval);
               resolve(true);
             }
-          }, 50);
+          }, 30);
         },
         { once: true }
       );
@@ -693,8 +712,17 @@ export default function AuthModal({
       script.addEventListener(
         "error",
         () => {
-          clearInterval(checkInterval);
-          resolve(false);
+          if (!retried) {
+            retried = true;
+            try {
+              script.remove();
+            } catch (_) {}
+            const fresh = document.createElement("script");
+            fresh.src = "https://accounts.google.com/gsi/client";
+            fresh.async = true;
+            fresh.defer = true;
+            document.head.appendChild(fresh);
+          }
         },
         { once: true }
       );
@@ -1344,7 +1372,51 @@ export default function AuthModal({
                 {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
               </div>
               <div style={{ lineHeight: "1.45" }}>{error}</div>
+              {error.toLowerCase().includes("google") && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null);
+                      handleGoogleSignIn();
+                    }}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.15)",
+                      border: "1px solid rgba(255, 255, 255, 0.3)",
+                      color: "#ffffff",
+                      padding: "5px 12px",
+                      borderRadius: "6px",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <RefreshCw size={12} />
+                    <span>Retry Google Sign-In</span>
+                  </button>
+                </div>
+              )}
             </div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+                padding: "2px",
+                display: "flex",
+                alignItems: "center",
+                opacity: 0.8,
+              }}
+              title="Dismiss alert"
+            >
+              <X size={16} />
+            </button>
           </div>
         )}
 
@@ -2645,6 +2717,7 @@ export default function AuthModal({
               <button
                 type="button"
                 onClick={() => {
+                  setError(null);
                   if (regMode !== "telebot") {
                     resetSignUpFields();
                     setRegMode("telebot");
@@ -2673,6 +2746,7 @@ export default function AuthModal({
               <button
                 type="button"
                 onClick={() => {
+                  setError(null);
                   if (regMode !== "email") {
                     resetSignUpFields();
                     setRegMode("email");
