@@ -406,7 +406,7 @@ export default function NoteCard({
                 </div>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.65rem", fontFamily: "var(--font-mono)", color: "var(--text-dim)", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "4px" }}>
-                <span>Cloudflare CDN Cached</span>
+                <span>Verified Notes</span>
                 <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>Preview Document ↗</span>
               </div>
             </>
@@ -770,49 +770,63 @@ export default function NoteCard({
             </button>
           </div>
 
-          {/* ROW 3: 0-KB WIRELESS PROXIMITY MESH (SOUND-DROP & AIRDROP) */}
-          <div className="action-mesh-bar">
-            <span style={{ color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "5px" }}>
-              <span className="pulse-dot" style={{ width: "5px", height: "5px" }}></span>
-              <span>0-KB Mesh:</span>
-            </span>
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <button
-                type="button"
-                className="btn-mesh-pill btn-mesh-sound"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.dispatchEvent(
-                    new CustomEvent("open_campus_airdrop", {
-                      detail: { note, initialMode: "sound" },
-                    })
-                  );
-                }}
-                title="🔊 Sound-Drop: Beam note wirelessly via ultrasonic audio frequency (0 KB internet)"
-              >
-                <Volume2 size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
-                Sound-Drop
-              </button>
+          {/* ROW 3: PROXIMITY MESH ACTIONS (SOUND-DROP & AIRDROP) */}
+          <div className="action-row-dual">
+            <button
+              type="button"
+              className="btn-mesh-pill btn-mesh-sound"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(
+                  new CustomEvent("open_campus_airdrop", {
+                    detail: { note, initialMode: "sound" },
+                  })
+                );
+              }}
+              title="Sound-Drop: Beam note wirelessly via ultrasonic audio frequency"
+              style={{
+                padding: "6px 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                borderRadius: "var(--radius-full)",
+              }}
+            >
+              <Volume2 size={13} />
+              <span>Sound-Drop</span>
+            </button>
 
-              <button
-                type="button"
-                className="btn-mesh-pill btn-mesh-airdrop"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  window.dispatchEvent(
-                    new CustomEvent("open_campus_airdrop", {
-                      detail: { note, initialMode: "qr" },
-                    })
-                  );
-                }}
-                title="⚡ AirDrop this note offline via 1-Tap QR Mesh (0 KB internet)"
-              >
-                <Zap size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: "3px" }} />
-                AirDrop
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-mesh-pill btn-mesh-airdrop"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(
+                  new CustomEvent("open_campus_airdrop", {
+                    detail: { note, initialMode: "qr" },
+                  })
+                );
+              }}
+              title="AirDrop: Beam note offline via 1-Tap QR Mesh"
+              style={{
+                padding: "6px 10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                borderRadius: "var(--radius-full)",
+              }}
+            >
+              <Zap size={13} />
+              <span>AirDrop</span>
+            </button>
           </div>
         </div>
       </div>

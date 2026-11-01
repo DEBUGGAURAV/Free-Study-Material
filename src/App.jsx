@@ -1271,6 +1271,12 @@ export default function App() {
         onOpenStudyPod={() => setIsStudyPodOpen(true)}
         onOpenAirDrop={() => {
           setAirdropTargetNote(null);
+          setAirdropInitialMode("qr");
+          setIsAirdropOpen(true);
+        }}
+        onOpenSoundDrop={() => {
+          setAirdropTargetNote(null);
+          setAirdropInitialMode("sound");
           setIsAirdropOpen(true);
         }}
         onOpenHelp={() => setIsHelpOpen(true)}

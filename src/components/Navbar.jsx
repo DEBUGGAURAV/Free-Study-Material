@@ -16,6 +16,7 @@ import {
   HelpCircle,
   Users,
   Zap,
+  Volume2,
   ChevronDown
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
@@ -32,6 +33,7 @@ export default function Navbar({
   onOpenHelp,
   onOpenStudyPod,
   onOpenAirDrop,
+  onOpenSoundDrop,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -209,49 +211,35 @@ export default function Navbar({
 
         {/* 2. Universal Spotlight Search with Voice & ⌘K */}
         <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
+          <Search size={15} className="search-icon" />
           <input
             ref={searchInputRef}
             type="text"
             className="search-input"
-            placeholder="Search notes, subjects, branch, PYQs..."
+            placeholder="Search notes, subjects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <button
-            type="button"
-            onClick={handleVoiceSearch}
-            style={{
-              position: "absolute",
-              right: "44px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: isListening ? "rgba(239, 68, 68, 0.25)" : "transparent",
-              border: isListening ? "1px solid #ef4444" : "none",
-              borderRadius: "50%",
-              width: "26px",
-              height: "26px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              color: isListening ? "#ef4444" : "var(--text-dim, #94a3b8)",
-              transition: "all 0.2s ease",
-            }}
-            title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
-          >
-            {isListening ? <MicOff size={15} /> : <Mic size={15} />}
-          </button>
-          <kbd className="search-kbd-shortcut">⌘K</kbd>
+          <div className="search-right-tools">
+            <button
+              type="button"
+              onClick={handleVoiceSearch}
+              className={`search-mic-btn ${isListening ? "listening" : ""}`}
+              title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
+            >
+              {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+            </button>
+            <kbd className="search-kbd-shortcut">⌘K</kbd>
+          </div>
         </div>
 
-        {/* 3. Floating Action Matrix (ALL 11 ELEMENTS ACCOMMODATED CLEANLY) */}
+        {/* 3. Floating Action Matrix */}
         <div className="nav-actions">
-          {/* ⚡ Campus AirDrop (0 KB Offline Peer Mesh) */}
+          {/* ⚡ Campus AirDrop */}
           <button
             className="btn-secondary"
             onClick={onOpenAirDrop}
-            title="⚡ Campus AirDrop: Send or Receive notes offline with 0 KB internet via 1-Tap QR Mesh"
+            title="Campus AirDrop: Send or Receive notes offline with 1-Tap QR Mesh"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -261,23 +249,40 @@ export default function Navbar({
               color: "#c084fc",
               fontWeight: 700,
               fontSize: "0.8rem",
-              padding: "7px 12px",
+              padding: "7px 13px",
             }}
           >
             <Zap size={14} />
             <span>AirDrop</span>
-            <span
-              style={{
-                fontSize: "0.62rem",
-                background: "rgba(168, 85, 247, 0.25)",
-                padding: "1px 5px",
-                borderRadius: "6px",
-                color: "#e9d5ff",
-                fontWeight: 700,
-              }}
-            >
-              0 KB
-            </span>
+          </button>
+
+          {/* 🔊 Sound-Drop */}
+          <button
+            className="btn-secondary"
+            onClick={onOpenSoundDrop || (() => {
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("open_campus_airdrop", {
+                    detail: { initialMode: "sound" },
+                  })
+                );
+              }
+            })}
+            title="Sound-Drop: Beam notes offline via ultrasonic sound waves"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(16, 185, 129, 0.14)",
+              border: "1px solid rgba(16, 185, 129, 0.38)",
+              color: "#34d399",
+              fontWeight: 700,
+              fontSize: "0.8rem",
+              padding: "7px 13px",
+            }}
+          >
+            <Volume2 size={14} />
+            <span>Sound-Drop</span>
           </button>
 
           {/* 💬 Student Chat Hub */}
