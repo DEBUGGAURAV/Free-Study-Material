@@ -23,6 +23,8 @@ const {
 const { decrypt } = require("../utils/cryptoVault");
 const {
   dispatchChatForensicAudit,
+  dispatchPrivateChatMessageToTelegram,
+  dispatchGroupAuditEventToTelegram,
   dispatchPrivateMediaToTelegramVault,
   dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
@@ -1449,7 +1451,14 @@ function initChatWebSocket(server) {
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public send dispatch notice:", err.message));
           } else {
-            // 🔒 Private Chat Media Vault (Topic 33): Real-time vaulting for PDF, IMG, Documents (pure text excluded)
+            // 🔒 Private Study Pod / Group: Real-time Dispatch to Telegram (@fsm_chat_bot & Topic 31)
+            dispatchPrivateChatMessageToTelegram({
+              message: newMsg,
+              room: currentRoom,
+              chatMediaDir: CHAT_MEDIA_DIR,
+            }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private pod message dispatch notice:", err.message));
+
+            // 🔒 Private Chat Media Vault (Topic 33): Real-time vaulting for PDF, IMG, Documents
             if (newMsg.fileUrl || ["pdf", "image", "document", "audio"].includes(newMsg.type)) {
               dispatchPrivateMediaToTelegramVault({
                 message: newMsg,
@@ -1770,6 +1779,15 @@ function initChatWebSocket(server) {
           });
 
           console.log(`[CHAT-POD] ✏️ Room ${targetRoomId} renamed from "${oldName}" to "${sanitizedNewName}" by ${user.name}`);
+
+          dispatchGroupAuditEventToTelegram({
+            eventType: "group_renamed",
+            room: currentRoom,
+            actor: user,
+            oldName,
+            newName: sanitizedNewName,
+            ip: ws.userIp,
+          }).catch((err) => console.warn("[CHAT-AUDIT-BOT] WS rename group dispatch notice:", err.message));
         }
 
         // 5. EXPLICIT DELETE/CLOSE ROOM (Host or Admin only - Permanently deletes room for everyone)
@@ -2302,6 +2320,13 @@ router.post("/rooms/create", authenticateToken, requireAuth, async (req, res) =>
       }).catch(() => {});
     }
 
+    dispatchGroupAuditEventToTelegram({
+      eventType: "group_created",
+      room: newRoom,
+      actor: user,
+      ip: getClientIp(req),
+    }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Create group dispatch notice:", err.message));
+
     return res.json({
       success: true,
       message: `Private Study Group "${newRoom.name}" created successfully!`,
@@ -2408,6 +2433,15 @@ router.post("/rooms/rename", authenticateToken, requireAuth, async (req, res) =>
 
     console.log(`[CHAT-POD] ✏️ Room ${roomId} renamed from "${oldName}" to "${sanitizedNewName}" by ${user.name} via API`);
 
+    dispatchGroupAuditEventToTelegram({
+      eventType: "group_renamed",
+      room,
+      actor: user,
+      oldName,
+      newName: sanitizedNewName,
+      ip: getClientIp(req),
+    }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Rename group dispatch notice:", err.message));
+
     return res.json({
       success: true,
       message: `Room renamed to "${sanitizedNewName}" successfully!`,
@@ -2505,6 +2539,15 @@ router.post("/rooms/reset-link", authenticateToken, requireAuth, async (req, res
     });
 
     console.log(`[CHAT-POD] 🔄 Room ${roomId} link reset from "${oldCode}" to "${newCode}" by ${user.name}`);
+
+    dispatchGroupAuditEventToTelegram({
+      eventType: "link_reset",
+      room,
+      actor: user,
+      oldCode,
+      newCode,
+      ip: getClientIp(req),
+    }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Reset link dispatch notice:", err.message));
 
     return res.json({
       success: true,
@@ -2644,6 +2687,14 @@ router.post("/rooms/remove-user", authenticateToken, requireAuth, async (req, re
 
     console.log(`[CHAT-POD] 🚫 User ${targetUserId} (${targetName}) removed from room ${roomId} by ${user.name}`);
 
+    dispatchGroupAuditEventToTelegram({
+      eventType: "member_removed",
+      room,
+      actor: user,
+      targetUser: { id: targetUserId, name: targetName },
+      ip: getClientIp(req),
+    }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Remove user dispatch notice:", err.message));
+
     return res.json({
       success: true,
       message: `${targetName} has been removed from the group. They cannot rejoin using invite links or codes.`,
@@ -2771,6 +2822,14 @@ router.post("/rooms/add-user", authenticateToken, requireAuth, async (req, res) 
     });
 
     console.log(`[CHAT-POD] ✅ User ${finalUserId} (${targetName}) added back to room ${roomId} by ${user.name}`);
+
+    dispatchGroupAuditEventToTelegram({
+      eventType: "member_added",
+      room,
+      actor: user,
+      targetUser: { id: finalUserId, name: targetName },
+      ip: getClientIp(req),
+    }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Add user dispatch notice:", err.message));
 
     return res.json({
       success: true,

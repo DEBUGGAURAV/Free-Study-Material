@@ -47,7 +47,7 @@ function isUnifiedTopic1Mode() {
 
 function getTargetPublicChatTopic() {
   const topic = String(auditTopics.publicChat || "").trim();
-  if (!topic || topic === "off" || topic === "none" || topic === "dm") return null;
+  if (!topic || topic === "off" || topic === "none" || topic === "dm" || topic === "1") return null;
   return topic;
 }
 
@@ -1470,7 +1470,7 @@ async function startChatAuditBotPoller() {
  * Dispatches a new Public Chat Hall message (Text, Image, PDF) to @fsm_chat_bot
  */
 async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
-  if (!chatBotSettings.enablePublicChatSync) return false;
+  if (!chatBotSettings.enablePublicChatSync && !chatBotSettings.enableChatAudit) return false;
 
   const targetChats = [];
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID;
@@ -1484,7 +1484,7 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
   }
 
   // Dual-delivery & Bot Control: Mirror public messages to Admin Bot DM so Admin has full 1-on-1 supervision & control
-  if (effectiveAdminId && (chatBotSettings.enableAdminDmMirror || !currentSupergroupId)) {
+  if (effectiveAdminId) {
     if (String(effectiveAdminId) !== String(currentSupergroupId)) {
       targetChats.push({
         chatId: effectiveAdminId,
@@ -1822,6 +1822,282 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
       }
     } catch (e) {
       console.warn(`[CHAT-AUDIT-BOT] Error sending delete alert to ${chatId}:`, e.message);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 🔒 Dispatches Real-Time Messages from Private Study Groups/Pods to Telegram (@fsm_chat_bot & Topic 31)
+ */
+async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDir }) {
+  if (!chatBotSettings.enableChatAudit) return false;
+
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+
+  const targetChats = [];
+
+  // Supergroup Topic 31 (Pod Audits)
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
+    targetChats.push({
+      chatId: currentSupergroupId,
+      threadId: auditTopics.podAudits || "31",
+    });
+  }
+
+  // Admin Direct Message (@fsm_chat_bot)
+  if (effectiveAdminId) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+      });
+    }
+  }
+
+  if (targetChats.length === 0) return false;
+
+  const roomName = room?.name || "Private Study Group";
+  const secretCode = room?.secretCode || "N/A";
+  const senderName = message.sender?.name || "Student";
+  const senderBranch = message.sender?.branch || "General";
+  const senderIp = message.sender?.ip || message.ip || null;
+  const ipBadge = senderIp ? ` • 🌐 <code>${escapeHtml(senderIp)}</code>` : "";
+  const text = message.text || "";
+
+  for (const { chatId, threadId } of targetChats) {
+    try {
+      // 1. If Image message
+      if (message.type === "image" && message.fileUrl) {
+        let fileBuffer = null;
+        if (chatMediaDir) {
+          const filenameOnDisk = path.basename(message.fileUrl.split("?")[0]);
+          const potentialPath = path.join(chatMediaDir, filenameOnDisk);
+          if (fs.existsSync(potentialPath)) {
+            try { fileBuffer = fs.readFileSync(potentialPath); } catch {}
+          }
+        }
+
+        const caption =
+          `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 Code: <code>${escapeHtml(secretCode)}</code>)\n` +
+          `👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n` +
+          `${escapeHtml(text)}`;
+
+        if (fileBuffer && fileBuffer.length <= 10 * 1024 * 1024) {
+          const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+          let formHeader = `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
+          if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
+
+          const payload = Buffer.concat([
+            Buffer.from(formHeader),
+            fileBuffer,
+            Buffer.from(`\r\n--${boundary}--\r\n`),
+          ]);
+
+          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+            method: "POST",
+            headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+            body: payload,
+          });
+          continue;
+        } else {
+          const clientUrl = getSiteUrl();
+          const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
+          const body = {
+            chat_id: chatId,
+            photo: fullUrl,
+            caption,
+            parse_mode: "HTML",
+          };
+          if (threadId) body.message_thread_id = threadId;
+          await callTelegram("sendPhoto", body);
+          continue;
+        }
+      }
+
+      // 2. If PDF or Document
+      if ((message.type === "pdf" || message.type === "document") && message.fileUrl) {
+        let fileBuffer = null;
+        if (chatMediaDir) {
+          const filenameOnDisk = path.basename(message.fileUrl.split("?")[0]);
+          const potentialPath = path.join(chatMediaDir, filenameOnDisk);
+          if (fs.existsSync(potentialPath)) {
+            try { fileBuffer = fs.readFileSync(potentialPath); } catch {}
+          }
+        }
+
+        const originalName = message.fileName || (message.type === "pdf" ? "Document.pdf" : "File");
+        const caption =
+          `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 Code: <code>${escapeHtml(secretCode)}</code>)\n` +
+          `👤 <b>${escapeHtml(senderName)}</b> shared <code>${escapeHtml(originalName)}</code>\n` +
+          `${escapeHtml(text)}`;
+
+        if (fileBuffer && fileBuffer.length <= 50 * 1024 * 1024) {
+          const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
+          let formHeader = `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
+          if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+
+          const payload = Buffer.concat([
+            Buffer.from(formHeader),
+            fileBuffer,
+            Buffer.from(`\r\n--${boundary}--\r\n`),
+          ]);
+
+          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+            method: "POST",
+            headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+            body: payload,
+          });
+          continue;
+        } else {
+          const clientUrl = getSiteUrl();
+          const fullUrl = message.fileUrl.startsWith("http") ? message.fileUrl : `${clientUrl}${message.fileUrl}`;
+          const body = {
+            chat_id: chatId,
+            document: fullUrl,
+            caption,
+            parse_mode: "HTML",
+          };
+          if (threadId) body.message_thread_id = threadId;
+          await callTelegram("sendDocument", body);
+          continue;
+        }
+      }
+
+      // 3. Regular Text Message
+      const body = {
+        chat_id: chatId,
+        text: `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 <code>${escapeHtml(secretCode)}</code>)\n👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`,
+        parse_mode: "HTML",
+        disable_web_page_preview: false,
+      };
+      if (threadId) body.message_thread_id = threadId;
+      await callTelegram("sendMessage", body);
+    } catch (err) {
+      console.warn(`[CHAT-AUDIT-BOT] Error sending private pod msg to chat ${chatId}:`, err.message);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * 📢 Dispatches Administrative Changes in Private Groups to Telegram (@fsm_chat_bot & Topic 31)
+ * Events: group_created, group_renamed, link_reset, member_removed, member_added
+ */
+async function dispatchGroupAuditEventToTelegram({
+  eventType,
+  room,
+  actor,
+  targetUser,
+  oldName,
+  newName,
+  oldCode,
+  newCode,
+  ip,
+}) {
+  if (!chatBotSettings.enableChatAudit) return false;
+
+  const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const effectiveAdminId = chatBotSettings.adminId || activeAdminId;
+
+  const targetChats = [];
+  if (currentSupergroupId && currentSupergroupId.startsWith("-100")) {
+    targetChats.push({
+      chatId: currentSupergroupId,
+      threadId: auditTopics.podAudits || "31",
+    });
+  }
+  if (effectiveAdminId) {
+    if (String(effectiveAdminId) !== String(currentSupergroupId)) {
+      targetChats.push({
+        chatId: effectiveAdminId,
+        threadId: null,
+      });
+    }
+  }
+
+  if (targetChats.length === 0) return false;
+
+  const actorName = actor?.name || "Admin/Host";
+  const actorEmail = actor?.email || "N/A";
+  const actorMobile = actor?.mobile || "N/A";
+  const actorIp = ip || actor?.ip || "127.0.0.1";
+  const actorBadge = `👤 <b>Admin / Host:</b> ${escapeHtml(actorName)} (${escapeHtml(actorEmail)} | 📱 <code>${escapeHtml(actorMobile)}</code> | 🌐 <code>${escapeHtml(actorIp)}</code>)`;
+  const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) + " IST";
+
+  let htmlText = "";
+
+  if (eventType === "group_renamed") {
+    htmlText =
+      `✏️ <b>[PRIVATE GROUP RENAMED]</b>\n\n` +
+      `🏠 <b>Group:</b> "${escapeHtml(oldName)}" ➔ <b>"${escapeHtml(newName)}"</b>\n` +
+      `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code> (🔑 Code: <code>${escapeHtml(room?.secretCode || "N/A")}</code>)\n` +
+      `${actorBadge}\n` +
+      `🕒 <b>Time:</b> ${timeStr}`;
+  } else if (eventType === "link_reset") {
+    htmlText =
+      `🔄 <b>[GROUP INVITE LINK RESET]</b>\n\n` +
+      `🏠 <b>Group:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
+      `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code>\n` +
+      `🔑 <b>Old Secret Code:</b> <code>${escapeHtml(oldCode || "N/A")}</code> ➔ <b>New Code:</b> <code>${escapeHtml(newCode || "N/A")}</code>\n` +
+      `⚠️ <b>Security Notice:</b> <i>All previous invite links and secret codes have been permanently invalidated.</i>\n` +
+      `${actorBadge}\n` +
+      `🕒 <b>Time:</b> ${timeStr}`;
+  } else if (eventType === "member_removed") {
+    const tName = targetUser?.name || "Student";
+    const tId = targetUser?.id || "N/A";
+    const tEmail = targetUser?.email || "N/A";
+    htmlText =
+      `🚫 <b>[MEMBER REMOVED & LINK BLOCKED]</b>\n\n` +
+      `🏠 <b>Group:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
+      `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code> (🔑 Code: <code>${escapeHtml(room?.secretCode || "N/A")}</code>)\n` +
+      `👤 <b>Removed Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${tId}</code>${tEmail !== "N/A" ? ` | ${tEmail}` : ""})\n` +
+      `🔒 <b>WhatsApp Rule Enforcement:</b> <i>This user is strictly blocked from rejoining via invite links or secret codes until explicitly added back by the host.</i>\n` +
+      `${actorBadge}\n` +
+      `🕒 <b>Time:</b> ${timeStr}`;
+  } else if (eventType === "member_added") {
+    const tName = targetUser?.name || "Student";
+    const tId = targetUser?.id || "N/A";
+    const tEmail = targetUser?.email || "N/A";
+    htmlText =
+      `✅ <b>[MEMBER ADDED BACK / UNBANNED]</b>\n\n` +
+      `🏠 <b>Group:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
+      `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code> (🔑 Code: <code>${escapeHtml(room?.secretCode || "N/A")}</code>)\n` +
+      `👤 <b>Added Student:</b> <b>${escapeHtml(tName)}</b> (ID: <code>${tId}</code>${tEmail !== "N/A" ? ` | ${tEmail}` : ""})\n` +
+      `🔓 <b>Access Status:</b> <i>Ban removed. Student has full access to the group.</i>\n` +
+      `${actorBadge}\n` +
+      `🕒 <b>Time:</b> ${timeStr}`;
+  } else if (eventType === "group_created") {
+    htmlText =
+      `🆕 <b>[NEW PRIVATE STUDY POD CREATED]</b>\n\n` +
+      `🏠 <b>Group Name:</b> "<b>${escapeHtml(room?.name || "Private Pod")}</b>"\n` +
+      `🆔 <b>Room ID:</b> <code>${room?.id || "N/A"}</code>\n` +
+      `🔑 <b>Invite Secret Code:</b> <code>${escapeHtml(room?.secretCode || "N/A")}</code>\n` +
+      `${actorBadge}\n` +
+      `🕒 <b>Time:</b> ${timeStr}`;
+  }
+
+  for (const { chatId, threadId } of targetChats) {
+    try {
+      const body = {
+        chat_id: chatId,
+        text: htmlText,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      };
+      if (threadId) body.message_thread_id = threadId;
+      await callTelegram("sendMessage", body);
+    } catch (err) {
+      console.warn(`[CHAT-AUDIT-BOT] Error sending group audit alert to ${chatId}:`, err.message);
     }
   }
 
@@ -2648,6 +2924,8 @@ module.exports = {
   startChatAuditBotPoller,
   autoCreateTopicsForSupergroup,
   dispatchChatForensicAudit,
+  dispatchPrivateChatMessageToTelegram,
+  dispatchGroupAuditEventToTelegram,
   dispatchPrivateMediaToTelegramVault,
   dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
