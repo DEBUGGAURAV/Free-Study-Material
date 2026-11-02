@@ -1955,6 +1955,18 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       return res.redirect(note.fileUrl);
     }
 
+    // Direct MTProto streaming fallback (Bypasses buffer assembly and streams chunks directly)
+    if (note.telegramMessageId && !res.headersSent) {
+      try {
+        const { streamTelegramDocument } = require("../telegram/mtproto");
+        if (typeof streamTelegramDocument === "function") {
+          return await streamTelegramDocument(note.telegramMessageId, res, req);
+        }
+      } catch (streamFallbackErr) {
+        console.warn(`[STREAM-DIRECT] Direct MTProto stream fallback notice for ${id}:`, streamFallbackErr.message);
+      }
+    }
+
     // Resilient 503 retryable fallback
     if (!res.headersSent) {
       res.setHeader("Retry-After", "3");

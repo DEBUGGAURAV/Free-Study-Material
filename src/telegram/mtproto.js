@@ -1274,8 +1274,10 @@ async function getDocumentBufferFromChannel(messageId) {
     };
   })();
 
+  const totalSizeMb = Math.ceil((totalSize || 1048576) / (1024 * 1024));
+  const dynamicTimeoutMs = Math.max(60000, totalSizeMb * 3000); // Minimum 60s, +3s per MB (e.g. 45MB gets 135s)
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("MTProto document buffer download timed out after 12s")), 12000)
+    setTimeout(() => reject(new Error(`MTProto document buffer download timed out after ${Math.round(dynamicTimeoutMs / 1000)}s`)), dynamicTimeoutMs)
   );
 
   return await Promise.race([downloadPromise, timeoutPromise]);
