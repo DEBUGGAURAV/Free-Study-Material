@@ -4494,7 +4494,7 @@ export default function VirtualPdfReader({
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
               <Download size={14} style={{ color: "var(--accent-cyan)" }} />
               <span>
-                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Telegram Vault" : "Edge CDN")}: {downloadProgress.percent}%
+                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Edge CDN")}: {downloadProgress.percent}%
               </span>
             </span>
             <button
@@ -4555,7 +4555,7 @@ export default function VirtualPdfReader({
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
             <span>{downloadProgress.loadedMB} MB / {downloadProgress.totalMB} MB</span>
             <span style={{ color: realSourceInfo?.color || (downloadProgress.source === "storage" || streamSource === "storage" ? "#fbbf24" : "var(--accent-cyan)"), fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-              {realSourceInfo?.icon || (downloadProgress.source === "storage" || streamSource === "storage" ? "☁️" : "⚡")} {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Telegram Vault" : "Edge CDN")} • {downloadProgress.speed}
+              {realSourceInfo?.icon || (downloadProgress.source === "storage" || streamSource === "storage" ? "☁️" : "⚡")} {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Edge CDN")} • {downloadProgress.speed}
             </span>
           </div>
         </div>

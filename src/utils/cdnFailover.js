@@ -81,9 +81,10 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // 4. Primary Telegram Cloud Storage Vault (MISS or initial write-through fetch)
+  // 4. Primary Cloud Storage Vault (MISS or initial write-through fetch)
   if (
     realSource === "ACADEMIC_CLOUD_VAULT" ||
+    realSource === "CLOUD_STORAGE" ||
     realSource === "TELEGRAM_STORAGE" ||
     realSource === "TELEGRAM_BOT_API" ||
     dataSource === "storage" ||
@@ -94,9 +95,9 @@ export function parseSourceFromHeaders(headers) {
   ) {
     return {
       id: "storage",
-      label: sourceLabel || "Telegram Cloud Storage (Caching to Edge CDN...)",
-      short: "Telegram Vault",
-      details: "Streaming from Telegram Storage • Caching to Edge CDN",
+      label: sourceLabel || "Academic Cloud Storage (Caching to Edge CDN...)",
+      short: "Cloud Vault",
+      details: "Streaming from Cloud Storage • Caching to Edge CDN",
       colo: "Origin",
       icon: "☁️",
       color: "#f59e0b",

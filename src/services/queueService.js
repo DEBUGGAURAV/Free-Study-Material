@@ -434,7 +434,7 @@ function enqueueUpload(task) {
           const { recordSyncEvent } = require("../telegram/syncTracker");
           recordSyncEvent({
             trigger: `Website Upload: "${meta?.title || originalName || noteId}"`,
-            details: "Uploaded to web and synchronized to Telegram Vault",
+            details: "Uploaded to web and synchronized to Cloud Vault",
             importedCount: 1,
           });
         } catch {}

@@ -156,8 +156,8 @@ function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
               if (fileRes.headers["content-length"]) res.setHeader("Content-Length", fileRes.headers["content-length"]);
               if (fileRes.headers["content-range"]) res.setHeader("Content-Range", fileRes.headers["content-range"]);
               res.setHeader("Accept-Ranges", "bytes");
-              res.setHeader("X-Real-Source", "TELEGRAM_BOT_API");
-              res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Bot CDN Stream)");
+              res.setHeader("X-Real-Source", "CLOUD_STORAGE");
+              res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Direct Stream)");
               res.setHeader("X-Data-Source", "bot_api");
               res.setHeader("CF-Cache-Status", "MISS");
             }
@@ -1750,7 +1750,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         res.setHeader("X-Source-Label", "Local SSD Disk Cache (1ms High-Speed)");
         res.setHeader("CF-Cache-Status", "HIT");
       } else {
-        res.setHeader("X-Real-Source", "TELEGRAM_STORAGE");
+        res.setHeader("X-Real-Source", "CLOUD_STORAGE");
         res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Caching to Edge CDN...)");
         res.setHeader("CF-Cache-Status", "MISS");
       }
@@ -1845,7 +1845,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
     // ☁️ 2. First-time fetch from Primary Academic Cloud Storage Vault
     // Real-Time Dynamic Headers: Tell the student browser we are fetching from Storage and caching to CDN
-    res.setHeader("X-Real-Source", "TELEGRAM_STORAGE");
+    res.setHeader("X-Real-Source", "CLOUD_STORAGE");
     res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Caching to Edge CDN...)");
     res.setHeader("X-Data-Source", "storage");
     res.setHeader("CF-Cache-Status", "MISS");

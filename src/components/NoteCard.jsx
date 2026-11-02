@@ -483,7 +483,7 @@ export default function NoteCard({
                   title={downloadProgress.realSource?.details || downloadProgress.realSourceLabel || "Real-time Stream Source"}
                 >
                   {downloadProgress.realSource?.icon || "⚡"}{" "}
-                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Telegram Vault" : "Edge CDN")}
+                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Cloud Vault" : "Edge CDN")}
                 </span>
               </span>
 
