@@ -234,7 +234,8 @@ app.all(["/health", "/api/health"], (req, res) => {
       if (token) {
         try {
           const jwt = require("jsonwebtoken");
-          const decoded = jwt.decode(token);
+          const { JWT_SECRET } = require("./middleware/auth");
+          const decoded = jwt.verify(token, JWT_SECRET);
           if (decoded && (adminRouter.isPendingUserStorageWipe(decoded.id) || adminRouter.isPendingUserStorageWipe(decoded.email))) {
             wipeRequired = true;
             adminRouter.clearPendingUserStorageWipe(decoded.id);

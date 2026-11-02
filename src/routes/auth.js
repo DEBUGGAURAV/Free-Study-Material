@@ -965,35 +965,24 @@ router.post("/google", authLimiter, async (req, res) => {
     let verifiedPicture = null;
 
     if (credential) {
-      // 1. Fast JWT Decode check (0ms instantaneous payload extraction)
+      // 🛡️ Cryptographically verify Google ID Token via Google's OAuth2 TokenInfo API
       try {
-        const decoded = jwt.decode(credential);
-        if (decoded && decoded.email && (decoded.email_verified === true || decoded.email_verified === "true" || decoded.email.includes("@"))) {
-          verifiedEmail = decoded.email.trim().toLowerCase();
-          verifiedName = decoded.name || decoded.given_name || "Scholar";
-          verifiedPicture = decoded.picture || "";
-        }
-      } catch (decodeErr) {
-        console.warn("[AUTH-GOOGLE] Fast JWT decode notice:", decodeErr.message);
-      }
-
-      // Fallback verification via Google TokenInfo API if needed
-      if (!verifiedEmail) {
-        try {
-          const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
-            signal: AbortSignal.timeout(4000),
-          });
-          if (tokenRes.ok) {
-            const tokenData = await tokenRes.json();
-            if (tokenData.email) {
-              verifiedEmail = tokenData.email.trim().toLowerCase();
-              verifiedName = tokenData.name || tokenData.given_name || "Scholar";
-              verifiedPicture = tokenData.picture || "";
-            }
+        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          const emailVerified = tokenData.email_verified === true || tokenData.email_verified === "true";
+          if (tokenData.email && emailVerified) {
+            verifiedEmail = tokenData.email.trim().toLowerCase();
+            verifiedName = tokenData.name || tokenData.given_name || "Scholar";
+            verifiedPicture = tokenData.picture || "";
+          } else {
+            console.warn("[AUTH-GOOGLE] Google token email unverified:", tokenData.email);
           }
-        } catch (tokenErr) {
-          console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
         }
+      } catch (tokenErr) {
+        console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
       }
     }
 
@@ -1182,41 +1171,14 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // Check if user already exists
+    // 🛡️ Security Check: If user already exists, refuse unauthenticated takeover.
+    // Existing users must authenticate through normal sign-in or verified Google OAuth.
     const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
     if (!snap.empty) {
-      const doc = snap.docs[0];
-      const userData = decryptUserObject(doc.data());
-      const payload = {
-        id: doc.id,
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        college: userData.college,
-        mobile: userData.mobile,
-        year: userData.year,
-        permissions: userData.permissions,
-      };
-      const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
-      setAuthCookie(res, req, token);
-
-      setImmediate(() => {
-        sendTelegramAuthNotice({
-          event: "LOGIN",
-          user: {
-            name: userData.name,
-            email: userData.email,
-            mobile: userData.mobile,
-            college: userData.college,
-            year: userData.year,
-            ip: getClientIp(req),
-          },
-          photoUrl: picture || null,
-          method: "Continue with Google",
-        }).catch(() => {});
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email address already exists. Please sign in with your password or use Google Sign-In directly.",
       });
-
-      return res.json({ success: true, message: "Account already exists. Logged in successfully.", user: payload, token });
     }
 
     // Check if mobile already registered

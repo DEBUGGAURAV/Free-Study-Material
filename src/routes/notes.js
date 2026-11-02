@@ -1335,7 +1335,7 @@ router.post("/:id/stream-ticket", authenticateToken, (req, res) => {
  * POST /api/notes/:id/cache-to-cdn
  * Pre-warms and caches the note into Edge CDN & Server Memory buffer (1ms instant stream)
  */
-router.post("/:id/cache-to-cdn", async (req, res) => {
+router.post("/:id/cache-to-cdn", downloadLimiter, authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });

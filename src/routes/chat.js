@@ -1064,84 +1064,43 @@ function initChatWebSocket(server) {
         }
       }
 
-      // 3. Fallback: If token expired or JWT_SECRET rotated, decode token and verify student in Database
-      if (!user && (token || req.headers?.cookie)) {
-        try {
-          let rawToDecode = token;
-          if (!rawToDecode && req.headers?.cookie) {
-            const m = req.headers.cookie.match(/(?:^|;\s*)(?:fsm_token|token|vault_token)=([^;]+)/);
-            if (m && m[1]) rawToDecode = decodeURIComponent(m[1].trim());
-          }
-          if (rawToDecode) {
-            const decoded = jwt.decode(rawToDecode);
-            if (decoded && (decoded.id || decoded.email) && db) {
-              let docRef = null;
-              if (decoded.id && decoded.id !== "admin-root") {
-                const doc = await db.collection("users").doc(decoded.id).get().catch(() => null);
-                if (doc && doc.exists) docRef = doc;
-              }
-              if (!docRef && decoded.email) {
-                const snap = await db.collection("users").where("email", "==", String(decoded.email).toLowerCase().trim()).limit(1).get().catch(() => null);
-                if (snap && !snap.empty) docRef = snap.docs[0];
-              }
-              if (docRef && docRef.exists) {
-                const uData = docRef.data();
-                if (!uData.isBlocked) {
-                  user = {
-                    id: docRef.id,
-                    email: uData.email,
-                    name: uData.name || decoded.name || "Student Scholar",
-                    role: uData.role || decoded.role || "student",
-                    college: uData.college || decoded.college || "",
-                    branch: uData.branch || decoded.branch || "",
-                    year: uData.year || decoded.year || "",
-                    permissions: uData.permissions || [],
-                  };
-                  console.log(`[CHAT-WS] 🔄 Restored active student session for ${user.email} (${user.id}) via DB verification.`);
-                }
-              }
-            }
-          }
-        } catch (dbAuthErr) {
-          console.warn("[CHAT-WS] DB fallback verify notice:", dbAuthErr.message);
-        }
-      }
-
-      const adminBypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
-      const hasBypassParam = (
-        urlObj.searchParams.get("admin_bypass") === adminBypassKey ||
-        req.headers?.["x-admin-bypass"] === adminBypassKey
+      // 3. Admin bypass overrides (Strictly verified and only enabled when ADMIN_BYPASS_KEY is explicitly configured)
+      const adminBypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY;
+      const hasBypassParam = Boolean(
+        adminBypassKey &&
+        (urlObj.searchParams.get("admin_bypass") === adminBypassKey ||
+         req.headers?.["x-admin-bypass"] === adminBypassKey)
       );
 
       if (!user && hasBypassParam) {
         const clientIp = req.socket?.remoteAddress || "";
         const isLoopback = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp.includes("127.0.0.1");
 
-        let tokenClaims = null;
+        let verifiedAdminClaims = null;
         if (token) {
-          try { tokenClaims = jwt.decode(token); } catch (_) {}
+          try { verifiedAdminClaims = jwt.verify(token, JWT_SECRET); } catch (_) {}
         }
-        const hasAdminClaims = tokenClaims && (
-          tokenClaims.role === "admin" ||
-          tokenClaims.role === "half_admin" ||
-          tokenClaims.isMainAdmin ||
-          (MAIN_ADMIN_EMAIL && tokenClaims.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL.toLowerCase().trim())
+        const hasAdminClaims = verifiedAdminClaims && (
+          verifiedAdminClaims.role === "admin" ||
+          verifiedAdminClaims.role === "half_admin" ||
+          verifiedAdminClaims.isMainAdmin ||
+          (MAIN_ADMIN_EMAIL && verifiedAdminClaims.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL.toLowerCase().trim())
         );
 
-        if (isLoopback || hasAdminClaims || process.env.ALLOW_INSECURE_ADMIN_BYPASS === "true") {
+        if ((isLoopback && hasAdminClaims) || (process.env.ALLOW_INSECURE_ADMIN_BYPASS === "true" && isLoopback)) {
           user = {
-            id: tokenClaims?.id || "admin-root",
-            email: tokenClaims?.email || MAIN_ADMIN_EMAIL,
-            name: tokenClaims?.name || "Administrator",
-            role: tokenClaims?.role || "admin",
-            college: tokenClaims?.college || "FSM Network Hub",
-            branch: tokenClaims?.branch || "Admin Team",
-            year: tokenClaims?.year || "Official",
-            permissions: tokenClaims?.permissions || ["all"],
+            id: verifiedAdminClaims?.id || "admin-root",
+            email: verifiedAdminClaims?.email || MAIN_ADMIN_EMAIL,
+            name: verifiedAdminClaims?.name || "Administrator",
+            role: verifiedAdminClaims?.role || "admin",
+            college: verifiedAdminClaims?.college || "FSM Network Hub",
+            branch: verifiedAdminClaims?.branch || "Admin Team",
+            year: verifiedAdminClaims?.year || "Official",
+            permissions: verifiedAdminClaims?.permissions || ["all"],
           };
           console.log(`[CHAT-WS] 🛡️ Authorized Admin WebSocket session established for ${user.email} (${clientIp}).`);
         } else {
-          console.warn(`[CHAT-WS] 🚨 Blocked unauthorized unauthenticated admin_bypass attempt from ${clientIp}`);
+          console.warn(`[CHAT-WS] 🚨 Blocked unauthorized admin_bypass attempt from ${clientIp}`);
         }
       }
     } catch (authErr) {
@@ -2154,60 +2113,12 @@ router.use("/media", express.static(CHAT_MEDIA_DIR, { maxAge: "2d", immutable: t
 /**
  * ALL /api/chat/ws-token
  * Generates an ephemeral WebSocket access token for the authenticated student or admin
- * Resilient fallback: If authenticateToken didn't authenticate (e.g. expired token),
- * validates the user from database and mints a fresh token with zero failure.
  */
 router.all("/ws-token", authenticateToken, async (req, res) => {
   try {
-    let authUser = req.user;
+    const authUser = req.user;
 
-    // Resilient fallback: If authenticateToken didn't authenticate,
-    // verify the user identity against Firestore database
-    if (!authUser) {
-      const authHeader = (req.headers["authorization"] || "").replace(/^Bearer\s+/i, "").trim();
-      const rawToken = authHeader || req.cookies?.fsm_token || req.body?.token || req.query?.token;
-      let lookupId = req.body?.userId || req.query?.userId;
-      let lookupEmail = req.body?.email || req.query?.email;
-
-      if (rawToken) {
-        try {
-          const decoded = jwt.decode(rawToken);
-          if (decoded) {
-            lookupId = lookupId || decoded.id;
-            lookupEmail = lookupEmail || decoded.email;
-          }
-        } catch (_) {}
-      }
-
-      if ((lookupId || lookupEmail) && db) {
-        let docRef = null;
-        if (lookupId && lookupId !== "admin-root") {
-          const doc = await db.collection("users").doc(lookupId).get().catch(() => null);
-          if (doc && doc.exists) docRef = doc;
-        }
-        if (!docRef && lookupEmail) {
-          const snap = await db.collection("users").where("email", "==", String(lookupEmail).toLowerCase().trim()).limit(1).get().catch(() => null);
-          if (snap && !snap.empty) docRef = snap.docs[0];
-        }
-        if (docRef && docRef.exists) {
-          const uData = docRef.data();
-          if (!uData.isBlocked) {
-            authUser = {
-              id: docRef.id,
-              email: uData.email,
-              name: uData.name || "Student Scholar",
-              role: uData.role || "student",
-              college: uData.college || "",
-              branch: uData.branch || "",
-              year: uData.year || "",
-              permissions: uData.permissions || [],
-            };
-          }
-        }
-      }
-    }
-
-    if (!authUser) {
+    if (!authUser || !authUser.id) {
       return res.status(401).json({ success: false, message: "Authentication required. Please sign in to connect to the live student chat." });
     }
 
@@ -3133,6 +3044,23 @@ router.post("/rooms/join", authenticateToken, requireAuth, async (req, res) => {
       return res.status(404).json({ success: false, message: "No active room found with this Secret Key." });
     }
 
+    // 🛡️ Private Room Passcode Enforcement
+    if (targetRoom.isPrivate) {
+      const isCreator = targetRoom.createdBy === user.id;
+      const isMain = isMainAdmin(user);
+      const isAlreadyMember = targetRoom.members instanceof Set
+        ? targetRoom.members.has(user.id)
+        : Array.isArray(targetRoom.members) && targetRoom.members.includes(user.id);
+      const codeMatches = secretCode && targetRoom.secretCode && secretCode.trim().toUpperCase() === targetRoom.secretCode.trim().toUpperCase();
+
+      if (!isCreator && !isMain && !isAlreadyMember && !codeMatches) {
+        return res.status(403).json({
+          success: false,
+          message: "Valid Secret Passcode is required to join this private study room.",
+        });
+      }
+    }
+
     // 🚫 WhatsApp Rule: If user was removed by group admin, they CANNOT rejoin via invite link or code
     const isBanned = targetRoom.bannedMembers instanceof Set
       ? targetRoom.bannedMembers.has(user.id)
@@ -3174,6 +3102,15 @@ router.post("/rooms/join", authenticateToken, requireAuth, async (req, res) => {
 router.get("/messages/:roomId", authenticateToken, requireAuth, async (req, res) => {
   try {
     const { roomId } = req.params;
+    const room = activeRooms.get(roomId);
+    if (room && room.isPrivate) {
+      const isMain = isMainAdmin(req.user);
+      const isCreator = room.createdBy === req.user.id;
+      const isMember = room.members instanceof Set ? room.members.has(req.user.id) : Array.isArray(room.members) ? room.members.includes(req.user.id) : false;
+      if (!isMain && !isCreator && !isMember) {
+        return res.status(403).json({ success: false, message: "Access denied. You are not a member of this private pod." });
+      }
+    }
     const msgs = activeMessages.get(roomId) || [];
     return res.json({ success: true, messages: msgs });
   } catch (err) {

@@ -231,7 +231,11 @@ function isWhitelistedIp(req, ip) {
         req.query?.token;
 
       if (rawToken) {
-        const decoded = jwt.decode(decodeURIComponent(rawToken));
+        let decoded = null;
+        try {
+          const { JWT_SECRET } = require("./auth");
+          decoded = jwt.verify(decodeURIComponent(rawToken), JWT_SECRET);
+        } catch (_) {}
         if (
           decoded &&
           (decoded.role === "admin" ||
@@ -246,12 +250,13 @@ function isWhitelistedIp(req, ip) {
       }
     } catch (_) {}
 
-    // 3. Admin bypass overrides (Secured against unauthorized forgery)
-    const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
+    // 3. Admin bypass overrides (Secured against unauthorized forgery - requires explicitly set key)
+    const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY;
     if (
-      req.query?.admin_bypass === bypassKey ||
-      req.query?.bypass === bypassKey ||
-      req.headers?.["x-admin-bypass"] === bypassKey
+      bypassKey &&
+      (req.query?.admin_bypass === bypassKey ||
+        req.query?.bypass === bypassKey ||
+        req.headers?.["x-admin-bypass"] === bypassKey)
     ) {
       if (ip) registerAdminIp(ip);
       return true;
