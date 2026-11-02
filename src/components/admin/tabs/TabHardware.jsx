@@ -94,10 +94,11 @@ export default function TabHardware(props) {
                     onClick={handleSystemCleanup}
                     className="btn-secondary"
                     disabled={cleaningUp}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
+                    title="Purge server NVMe SSD CDN disk cache, temp upload buffers, and reset RAM memory"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px", borderColor: "rgba(239, 68, 68, 0.4)", color: "#fca5a5", fontWeight: 700 }}
                   >
                     <Trash2 size={14} />
-                    <span>{cleaningUp ? "Sweeping Buffers..." : "Clean Temp Buffers"}</span>
+                    <span>{cleaningUp ? "Sweeping SSD Buffers..." : "🧹 Clean SSD & Temp Buffers"}</span>
                   </button>
                   <button
                     onClick={loadHardwareInfo}

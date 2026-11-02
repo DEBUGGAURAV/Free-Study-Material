@@ -73,10 +73,10 @@ export default function TabPerformance(props) {
                     onClick={handlePurgeCdn}
                     className="btn-danger"
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 14px", fontWeight: 800 }}
-                    title="Purge All Keys globally across Cloudflare Edge, Worker & RAM Cache"
+                    title="Purge All Keys globally across Server NVMe SSD Disk, Cloudflare Edge & RAM Cache"
                   >
                     <Flame size={14} />
-                    <span>🔥 Purge All (RAM + Edge)</span>
+                    <span>🔥 Purge All (SSD + Edge + RAM)</span>
                   </button>
 
                   <button

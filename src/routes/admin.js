@@ -2598,6 +2598,25 @@ router.post("/system/cleanup", authenticateToken, checkAdminOrPermission("all"),
       }
     }
 
+    // 2b. Wipe Server NVMe SSD CDN Cache folder (cache/cdn/)
+    let cleanedDiskCacheFiles = 0;
+    try {
+      const notesRouter = require("./notes");
+      if (notesRouter && typeof notesRouter.purgeCdnDiskBuffer === "function") {
+        notesRouter.purgeCdnDiskBuffer();
+      }
+      const cdnDiskDir = path.join(process.cwd(), "cache", "cdn");
+      if (fs.existsSync(cdnDiskDir)) {
+        const diskFiles = fs.readdirSync(cdnDiskDir);
+        for (const f of diskFiles) {
+          try {
+            fs.unlinkSync(path.join(cdnDiskDir, f));
+            cleanedDiskCacheFiles++;
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
     // 3. Force Node.js Garbage Collection if exposed
     if (global.gc) {
       global.gc();
@@ -2605,8 +2624,9 @@ router.post("/system/cleanup", authenticateToken, checkAdminOrPermission("all"),
 
     return res.json({
       success: true,
-      message: `System cleanup complete! Flushed RAM cache, purged ${cleanedFiles} temp files.`,
+      message: `System cleanup complete! Flushed RAM, wiped ${cleanedDiskCacheFiles} NVMe SSD cache files and ${cleanedFiles} temp files.`,
       cleanedFiles,
+      cleanedDiskCacheFiles,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
