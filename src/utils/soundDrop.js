@@ -11,17 +11,17 @@
  * ============================================================================
  */
 
-// Frequency Bands (Standard Ultrasonic vs Audible Sci-Fi Mode)
-const ULTRASONIC_PREAMBLE = 18200; // Hz
-const ULTRASONIC_BASE = 18500;     // Hz
-const ULTRASONIC_STEP = 90;        // Hz per hex nibble (16 bins = 18500 to 19850 Hz)
+// Frequency Bands (Optimized for standard smartphone speaker/mic frequency response)
+const ULTRASONIC_PREAMBLE = 17200; // Hz (Inaudible near-ultrasound)
+const ULTRASONIC_BASE = 17500;     // Hz
+const ULTRASONIC_STEP = 80;        // Hz per hex nibble (16 bins = 17500 to 18700 Hz)
 
-const AUDIBLE_PREAMBLE = 14200;    // Hz
-const AUDIBLE_BASE = 14500;        // Hz
-const AUDIBLE_STEP = 90;           // Hz per hex nibble
+const AUDIBLE_PREAMBLE = 2400;     // Hz (Futuristic friendly R2D2 sci-fi chirps)
+const AUDIBLE_BASE = 2700;         // Hz
+const AUDIBLE_STEP = 120;          // Hz per hex nibble (16 bins = 2700 to 4500 Hz)
 
-const TONE_DURATION_SEC = 0.065;   // 65ms per symbol
-const PAUSE_DURATION_SEC = 0.015;  // 15ms guard pause between tones
+const TONE_DURATION_SEC = 0.085;   // 85ms per symbol
+const PAUSE_DURATION_SEC = 0.020;  // 20ms guard pause between tones
 
 let activeAudioCtx = null;
 let activeBroadcastTimer = null;
@@ -29,14 +29,16 @@ let activeMicStream = null;
 let activeAnalyser = null;
 let activeListenAnimFrame = null;
 
-function getAudioContext() {
+async function getAudioContext() {
   if (!activeAudioCtx || activeAudioCtx.state === "closed") {
     const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtxClass) return null;
     activeAudioCtx = new AudioCtxClass();
   }
   if (activeAudioCtx.state === "suspended") {
-    activeAudioCtx.resume().catch(() => {});
+    try {
+      await activeAudioCtx.resume();
+    } catch (_) {}
   }
   return activeAudioCtx;
 }
@@ -58,7 +60,7 @@ function calculateChecksum(hexString) {
  * @param {object} options - Configuration options
  * @returns {object} Controller with stop() method
  */
-export function startSoundDropBroadcast(token, options = {}) {
+export async function startSoundDropBroadcast(token, options = {}) {
   const {
     isAudible = false,
     volume = 0.85,
@@ -68,7 +70,7 @@ export function startSoundDropBroadcast(token, options = {}) {
 
   stopSoundDropBroadcast();
 
-  const ctx = getAudioContext();
+  const ctx = await getAudioContext();
   if (!ctx) {
     throw new Error("Web Audio API is not supported on this device.");
   }
@@ -245,25 +247,34 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
     }
 
     if (state === "IDLE") {
-      // Look for Preamble pulse (peak energy in preamble bin)
-      const preambleEnergy = dataArray[preambleBin] || 0;
-      const noiseFloor = (dataArray[preambleBin - 4] + dataArray[preambleBin + 4]) / 2 || 1;
+      // Look for Preamble pulse (peak energy in preamble bin, checking ±1 bin around preamble)
+      const preambleEnergy = Math.max(
+        dataArray[preambleBin - 1] || 0,
+        dataArray[preambleBin] || 0,
+        dataArray[preambleBin + 1] || 0
+      );
+      const noiseFloor = ((dataArray[preambleBin - 5] || 0) + (dataArray[preambleBin + 5] || 0)) / 2 + 5;
 
-      if (preambleEnergy > 130 && preambleEnergy > noiseFloor * 1.8) {
+      if (preambleEnergy > 32 && preambleEnergy > noiseFloor * 1.35) {
         state = "READING_NIBBLES";
         capturedNibbles = [];
         lastDetectedTime = now;
       }
     } else if (state === "READING_NIBBLES") {
       // Find highest energy bin in the 16 symbol range
-      if (now - lastDetectedTime >= TONE_DURATION_SEC * 1000 * 0.75) {
+      if (now - lastDetectedTime >= TONE_DURATION_SEC * 1000 * 0.70) {
         let maxEnergy = 0;
         let bestNibble = -1;
+        const localNoise = ((dataArray[baseBin - 3] || 0) + (dataArray[baseBin + 16 * stepBins + 3] || 0)) / 2 + 5;
 
         for (let n = 0; n < 16; n++) {
           const targetBin = baseBin + n * stepBins;
-          const energy = dataArray[targetBin] || 0;
-          if (energy > maxEnergy && energy > 120) {
+          const energy = Math.max(
+            dataArray[targetBin - 1] || 0,
+            dataArray[targetBin] || 0,
+            dataArray[targetBin + 1] || 0
+          );
+          if (energy > maxEnergy && energy > 28 && energy > localNoise * 1.25) {
             maxEnergy = energy;
             bestNibble = n;
           }
@@ -273,15 +284,15 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
           capturedNibbles.push(bestNibble.toString(16).toUpperCase());
           lastDetectedTime = now;
 
-          // Check if we captured 8 to 10 characters (payload + checksum)
+          // Check if we captured 8 characters (6-char clean code + 2-char checksum)
           if (capturedNibbles.length >= 8) {
             const rawCode = capturedNibbles.join("");
-            const dataPart = rawCode.slice(0, rawCode.length - 2);
-            const checksumPart = rawCode.slice(rawCode.length - 2);
+            const dataPart = rawCode.slice(0, 6);
+            const checksumPart = rawCode.slice(6, 8);
 
             const expectedChecksum = calculateChecksum(dataPart);
             if (checksumPart === expectedChecksum || rawCode.length >= 8) {
-              onTokenDetected(dataPart || rawCode);
+              onTokenDetected(dataPart || rawCode.slice(0, 6));
               state = "IDLE";
               capturedNibbles = [];
             }
@@ -289,7 +300,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
         }
 
         // Reset if timeout exceeded
-        if (now - lastDetectedTime > 1200) {
+        if (now - lastDetectedTime > 1500) {
           state = "IDLE";
           capturedNibbles = [];
         }

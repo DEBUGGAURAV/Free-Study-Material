@@ -918,6 +918,21 @@ export const api = {
     invalidateClientNotesCache();
     return res;
   },
+  purgeCdnDisk: async () => {
+    invalidateClientNotesCache();
+    const res = await request("/admin/cdn/purge-disk", { method: "POST" });
+    invalidateClientNotesCache();
+    return res;
+  },
+  purgeSingleDiskNote: async (noteId) => {
+    invalidateClientNotesCache();
+    if (typeof localStorage !== "undefined") {
+      try { localStorage.removeItem(`fsm_cdn_${noteId}`); } catch (_) {}
+    }
+    const res = await request(`/admin/cdn/purge-disk/${noteId}`, { method: "POST" });
+    invalidateClientNotesCache();
+    return res;
+  },
   purgeNoteCdn: async (noteId) => {
     invalidateClientNotesCache();
     if (typeof localStorage !== "undefined") {

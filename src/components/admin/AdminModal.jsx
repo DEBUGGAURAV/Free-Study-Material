@@ -181,6 +181,7 @@ export default function AdminModal({
   const [cdnStats, setCdnStats] = useState(null);
   const [retentionDays, setRetentionDays] = useState(7);
   const [cdnFiles, setCdnFiles] = useState([]);
+  const [ssdDiskStats, setSsdDiskStats] = useState(null);
   const [manualNoteIdToPurge, setManualNoteIdToPurge] = useState("");
   const [cdnFilesLoading, setCdnFilesLoading] = useState(false);
   const [cdnSearch, setCdnSearch] = useState("");
@@ -549,6 +550,7 @@ export default function AdminModal({
       setCdnFilesLoading(true);
       const res = await api.getCdnFiles();
       setCdnFiles(res?.files || []);
+      if (res?.ssdDiskStats) setSsdDiskStats(res.ssdDiskStats);
     } catch {} finally {
       setCdnFilesLoading(false);
     }
@@ -1769,6 +1771,34 @@ export default function AdminModal({
     }
   };
 
+  const handlePurgeDiskOnly = async () => {
+    if (!window.confirm("Purge Local Server NVMe SSD Disk Cache? This will clear all cached PDF files from server disk (cache/cdn/) without touching Cloudflare Edge or student records.")) return;
+    try {
+      setCdnFiles((prev) => prev.map((f) => ({ ...f, onDisk: false })));
+      const res = await api.purgeCdnDisk();
+      alert(`✅ Server NVMe SSD Cache Purged!\n\n${res.message || "Disk cache pool is now 0 MB."}`);
+      loadCdnStats();
+      loadCdnFiles();
+    } catch (err) {
+      alert("SSD Disk purge failed: " + err.message);
+      loadCdnFiles();
+    }
+  };
+
+  const handlePurgeSingleDiskFile = async (noteId) => {
+    if (!noteId) return;
+    try {
+      setCdnFiles((prev) => prev.map((f) => (f.noteId === noteId || f.id === noteId ? { ...f, onDisk: false } : f)));
+      const res = await api.purgeSingleDiskNote(noteId);
+      alert(`✅ Note removed from Server NVMe SSD!\n\n${res.message || "File deleted from disk."}`);
+      loadCdnStats();
+      loadCdnFiles();
+    } catch (err) {
+      alert("SSD delete failed: " + err.message);
+      loadCdnFiles();
+    }
+  };
+
   const handlePurgeEdgeOnly = async () => {
     try {
       setCdnFiles([]);
@@ -2378,12 +2408,14 @@ export default function AdminModal({
     handlePrewarmPopular,
     handlePruneRetentionMessages,
     handlePurgeCdn,
+    handlePurgeDiskOnly,
     handlePurgeEdgeOnly,
     handlePurgeInactivePods,
     handlePurgeMemoryCache,
     handlePurgeNoteCdn,
     handlePurgeRamOnly,
     handlePurgeSingleCdnFile,
+    handlePurgeSingleDiskFile,
     handleRestoreAllItems,
     handleRestoreItem,
     handleRunInactivityPurge,
@@ -2495,6 +2527,7 @@ export default function AdminModal({
     showNoticeEditor,
     softwareInfo,
     softwareLoading,
+    ssdDiskStats,
     stats,
     studentPage,
     studentSearch,

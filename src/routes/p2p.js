@@ -198,6 +198,108 @@ router.get("/signals/:peerId", (req, res) => {
   }
 });
 
+// ============================================================================
+// ⚡ Campus AirDrop & SoundDrop Live Auto-Signaling Relay (Zero-Touch Peer Handshake)
+// ============================================================================
+const airdropSessions = new Map();
+
+// Periodic prune every 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, item] of airdropSessions.entries()) {
+    if (now - item.createdAt > 300000) { // 5 minutes TTL
+      airdropSessions.delete(code);
+    }
+  }
+}, 60000);
+
+/**
+ * POST /api/p2p/airdrop/offer
+ * Sender registers WebRTC offer with pairing code
+ */
+router.post("/airdrop/offer", (req, res) => {
+  try {
+    const { code, offerToken, note } = req.body || {};
+    if (!code || !offerToken) {
+      return res.status(400).json({ success: false, message: "Pairing code and offerToken are required" });
+    }
+    const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    airdropSessions.set(cleanCode, {
+      code: cleanCode,
+      offerToken,
+      note: note || null,
+      answerToken: null,
+      createdAt: Date.now(),
+    });
+    return res.json({ success: true, code: cleanCode });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/p2p/airdrop/offer/:code
+ * Receiver fetches WebRTC offer using the pairing code heard via sound or scanned via QR
+ */
+router.get("/airdrop/offer/:code", (req, res) => {
+  try {
+    const cleanCode = String(req.params.code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    const item = airdropSessions.get(cleanCode);
+    if (!item || !item.offerToken) {
+      return res.status(404).json({ success: false, message: "No active AirDrop offer found for this code." });
+    }
+    return res.json({
+      success: true,
+      offerToken: item.offerToken,
+      note: item.note,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/p2p/airdrop/answer
+ * Receiver submits WebRTC answer for the pairing code
+ */
+router.post("/airdrop/answer", (req, res) => {
+  try {
+    const { code, answerToken } = req.body || {};
+    if (!code || !answerToken) {
+      return res.status(400).json({ success: false, message: "Pairing code and answerToken are required" });
+    }
+    const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    const item = airdropSessions.get(cleanCode);
+    if (!item) {
+      return res.status(404).json({ success: false, message: "AirDrop session expired or not found." });
+    }
+    item.answerToken = answerToken;
+    return res.json({ success: true, message: "Answer recorded successfully" });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/p2p/airdrop/answer/:code
+ * Sender polls for Receiver's answer
+ */
+router.get("/airdrop/answer/:code", (req, res) => {
+  try {
+    const cleanCode = String(req.params.code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    const item = airdropSessions.get(cleanCode);
+    if (!item) {
+      return res.status(404).json({ success: false, message: "Session expired" });
+    }
+    if (!item.answerToken) {
+      return res.json({ success: true, ready: false });
+    }
+    return res.json({ success: true, ready: true, answerToken: item.answerToken });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /**
  * GET /api/p2p/stats
  * Overview of global mesh state

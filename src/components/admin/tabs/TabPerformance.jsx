@@ -19,10 +19,12 @@ export default function TabPerformance(props) {
     cdnSearch,
     cdnStats,
     handlePurgeCdn,
+    handlePurgeDiskOnly,
     handlePurgeEdgeOnly,
     handlePurgeNoteCdn,
     handlePurgeRamOnly,
     handlePurgeSingleCdnFile,
+    handlePurgeSingleDiskFile,
     handleSaveRetention,
     manualNoteIdToPurge,
     retentionDays,
@@ -32,7 +34,10 @@ export default function TabPerformance(props) {
     setRetentionDays,
     setShowAllCdnFiles,
     showAllCdnFiles,
+    ssdDiskStats,
   } = props;
+
+  const [storageFilter, setStorageFilter] = useState("all"); // "all" | "ssd" | "ram"
 
   
 
@@ -57,6 +62,16 @@ export default function TabPerformance(props) {
                   >
                     <Trash2 size={13} />
                     <span>🧹 Purge RAM Only</span>
+                  </button>
+
+                  <button
+                    onClick={handlePurgeDiskOnly}
+                    className="btn-secondary"
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(34, 197, 94, 0.4)", color: "#4ade80", fontWeight: 700, background: "rgba(34, 197, 94, 0.08)" }}
+                    title="Purge only Server NVMe SSD Disk Cache (cache/cdn/) without touching RAM or Cloudflare Edge"
+                  >
+                    <HardDrive size={13} />
+                    <span>💽 Clean Server SSD Only</span>
                   </button>
 
                   <button
@@ -120,6 +135,36 @@ export default function TabPerformance(props) {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.8rem" }}>
+                    {/* Server NVMe SSD Disk Cache Pool */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                        <span style={{ color: "var(--text-dim)" }}>Server NVMe SSD Disk Cache:</span>
+                        <span style={{ color: "#4ade80", fontWeight: 700 }}>
+                          {(ssdDiskStats?.totalMB ?? cdnStats?.ssdDisk?.storageUsedMB ?? "0.0")} MB / 1536 MB ({ssdDiskStats?.quotaPercent ?? cdnStats?.ssdDisk?.quotaUsedPercent ?? 0}% used)
+                        </span>
+                      </div>
+                      <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
+                        <div style={{ width: `${Math.min(100, Math.max((ssdDiskStats?.totalBytes ?? 0) > 0 ? 3 : 0, (ssdDiskStats?.quotaPercent ?? cdnStats?.ssdDisk?.quotaUsedPercent ?? 0)))}%`, height: "100%", background: "#22c55e", borderRadius: "999px" }} />
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "3px" }}>
+                        <span>Dedicated 1.5 GB NVMe SSD cache (cache/cdn/) • {ssdDiskStats?.totalFiles ?? cdnStats?.ssdDisk?.cachedFilesCount ?? 0} notes on disk</span>
+                        <button
+                          onClick={handlePurgeDiskOnly}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#f87171",
+                            fontSize: "0.7rem",
+                            cursor: "pointer",
+                            textDecoration: "underline",
+                            padding: 0
+                          }}
+                        >
+                          Clear SSD Disk
+                        </button>
+                      </div>
+                    </div>
+
                     {/* In-Memory RAM Cache */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
@@ -343,9 +388,15 @@ export default function TabPerformance(props) {
                 </div>
               </div>
 
-              {/* Granular Cached Files Table with Search Bar & 10 Notes Limit */}
+              {/* Granular Cached Files Table with Storage Filters & Search Bar */}
               {(() => {
+                const ssdCount = cdnFiles.filter((f) => f.onDisk).length;
+                const ramCount = cdnFiles.filter((f) => f.inRam).length;
+
                 const filteredCdn = cdnFiles.filter((file) => {
+                  if (storageFilter === "ssd" && !file.onDisk) return false;
+                  if (storageFilter === "ram" && !file.inRam) return false;
+
                   if (!cdnSearch.trim()) return true;
                   const q = cdnSearch.toLowerCase().trim();
                   return (
@@ -354,20 +405,71 @@ export default function TabPerformance(props) {
                     (file.originalName && file.originalName.toLowerCase().includes(q))
                   );
                 });
-                const displayCdn = showAllCdnFiles ? filteredCdn : filteredCdn.slice(0, 10);
+                const displayCdn = showAllCdnFiles ? filteredCdn : filteredCdn.slice(0, 15);
 
                 return (
                   <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
-                    {/* Header Bar with Realtime Search */}
-                    <div style={{ padding: "12px 18px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                      <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <span>Cached Documents in Edge LRU RAM</span>
-                        <span style={{ fontSize: "0.72rem", background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)", border: "1px solid rgba(6, 182, 212, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
-                          📄 {cdnFiles.filter((f) => f.fileType !== "image").length} PDFs
-                        </span>
-                        <span style={{ fontSize: "0.72rem", background: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", border: "1px solid rgba(245, 158, 11, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
-                          🖼️ {cdnFiles.filter((f) => f.fileType === "image").length} Images
-                        </span>
+                    {/* Header Bar with Realtime Search & Storage Node Filter Tabs */}
+                    <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ fontWeight: 800, fontSize: "0.92rem", color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                          <span>Stored &amp; Cached Academic Documents</span>
+                          <span style={{ fontSize: "0.72rem", background: "rgba(34, 197, 94, 0.15)", color: "#4ade80", border: "1px solid rgba(34, 197, 94, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
+                            💽 {ssdCount} on Server SSD
+                          </span>
+                          <span style={{ fontSize: "0.72rem", background: "rgba(168, 85, 247, 0.15)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
+                            🧠 {ramCount} in RAM Buffer
+                          </span>
+                        </div>
+
+                        {/* Filter Mode Selector Pills */}
+                        <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                          <button
+                            onClick={() => setStorageFilter("all")}
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              background: storageFilter === "all" ? "rgba(6, 182, 212, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                              border: storageFilter === "all" ? "1px solid var(--accent-cyan)" : "1px solid rgba(255, 255, 255, 0.1)",
+                              color: storageFilter === "all" ? "#fff" : "var(--text-dim)",
+                            }}
+                          >
+                            🌐 All Cached ({cdnFiles.length})
+                          </button>
+                          <button
+                            onClick={() => setStorageFilter("ssd")}
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              background: storageFilter === "ssd" ? "rgba(34, 197, 94, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                              border: storageFilter === "ssd" ? "1px solid #22c55e" : "1px solid rgba(255, 255, 255, 0.1)",
+                              color: storageFilter === "ssd" ? "#4ade80" : "var(--text-dim)",
+                            }}
+                          >
+                            💽 Stored on Server SSD Only ({ssdCount})
+                          </button>
+                          <button
+                            onClick={() => setStorageFilter("ram")}
+                            style={{
+                              padding: "3px 10px",
+                              borderRadius: "6px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              background: storageFilter === "ram" ? "rgba(168, 85, 247, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                              border: storageFilter === "ram" ? "1px solid #a855f7" : "1px solid rgba(255, 255, 255, 0.1)",
+                              color: storageFilter === "ram" ? "#c084fc" : "var(--text-dim)",
+                            }}
+                          >
+                            🧠 In RAM Buffer Only ({ramCount})
+                          </button>
+                        </div>
                       </div>
 
                       <div style={{ position: "relative", minWidth: "260px" }}>
@@ -376,7 +478,7 @@ export default function TabPerformance(props) {
                           type="text"
                           value={cdnSearch}
                           onChange={(e) => setCdnSearch(e.target.value)}
-                          placeholder="Search cached note by title or ID..."
+                          placeholder="Search note by title or ID..."
                           style={{
                             width: "100%",
                             padding: "6px 12px 6px 32px",
@@ -394,17 +496,22 @@ export default function TabPerformance(props) {
                       <thead>
                         <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
                           <th style={{ padding: "10px 16px" }}>KEY / NOTE ID</th>
+                          <th style={{ padding: "10px 16px" }}>STORAGE NODE</th>
                           <th style={{ padding: "10px 16px" }}>TYPE</th>
                           <th style={{ padding: "10px 16px" }}>DOCUMENT TITLE</th>
-                          <th style={{ padding: "10px 16px" }}>CACHED SIZE</th>
-                          <th style={{ padding: "10px 16px", textAlign: "right" }}>ACTION</th>
+                          <th style={{ padding: "10px 16px" }}>SSD / FILE SIZE</th>
+                          <th style={{ padding: "10px 16px", textAlign: "right" }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {displayCdn.length === 0 ? (
                           <tr>
-                            <td colSpan={5} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
-                              {cdnSearch.trim() ? "No cached documents match your search query." : "No files currently cached in in-memory RAM pool."}
+                            <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                              {cdnSearch.trim()
+                                ? "No stored documents match your search query."
+                                : storageFilter === "ssd"
+                                ? "No notes currently stored on Server NVMe SSD disk. When students download notes, they are automatically cached to SSD in 1ms!"
+                                : "No files currently cached in this pool."}
                             </td>
                           </tr>
                         ) : (
@@ -412,6 +519,60 @@ export default function TabPerformance(props) {
                             <tr key={file.noteId} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
                               <td style={{ padding: "10px 16px", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontSize: "0.78rem" }}>
                                 {file.noteId}
+                              </td>
+                              <td style={{ padding: "10px 16px" }}>
+                                {file.onDisk ? (
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      padding: "2px 7px",
+                                      borderRadius: "4px",
+                                      fontWeight: 800,
+                                      background: "rgba(34, 197, 94, 0.15)",
+                                      color: "#4ade80",
+                                      border: "1px solid rgba(34, 197, 94, 0.35)",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    💽 Server SSD
+                                  </span>
+                                ) : file.inRam ? (
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      padding: "2px 7px",
+                                      borderRadius: "4px",
+                                      fontWeight: 800,
+                                      background: "rgba(168, 85, 247, 0.15)",
+                                      color: "#c084fc",
+                                      border: "1px solid rgba(168, 85, 247, 0.35)",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    🧠 RAM Buffer
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: "0.68rem",
+                                      padding: "2px 7px",
+                                      borderRadius: "4px",
+                                      fontWeight: 800,
+                                      background: "rgba(6, 182, 212, 0.15)",
+                                      color: "var(--accent-cyan)",
+                                      border: "1px solid rgba(6, 182, 212, 0.35)",
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "3px",
+                                    }}
+                                  >
+                                    ⚡ Edge CDN
+                                  </span>
+                                )}
                               </td>
                               <td style={{ padding: "10px 16px" }}>
                                 <span
@@ -434,17 +595,30 @@ export default function TabPerformance(props) {
                               <td style={{ padding: "10px 16px", color: "#fff", fontWeight: 600 }}>
                                 {file.title || "Academic Material"}
                               </td>
-                              <td style={{ padding: "10px 16px", color: "var(--text-dim)" }}>
-                                {file.sizeFormatted || (file.size ? `${(file.size / 1048576).toFixed(2)} MB` : "Dynamic")}
+                              <td style={{ padding: "10px 16px", color: file.onDisk ? "#4ade80" : "var(--text-dim)", fontWeight: file.onDisk ? 700 : 500 }}>
+                                {file.diskSize ? `${(file.diskSize / 1048576).toFixed(2)} MB` : file.sizeFormatted || (file.size ? `${(file.size / 1048576).toFixed(2)} MB` : "Dynamic")}
                               </td>
                               <td style={{ padding: "10px 16px", textAlign: "right" }}>
-                                <button
-                                  onClick={() => handlePurgeSingleCdnFile(file.noteId)}
-                                  className="btn-danger"
-                                  style={{ padding: "4px 10px", fontSize: "0.72rem" }}
-                                >
-                                  Purge Key
-                                </button>
+                                <div style={{ display: "inline-flex", gap: "6px", alignItems: "center" }}>
+                                  {file.onDisk && (
+                                    <button
+                                      onClick={() => handlePurgeSingleDiskFile(file.noteId)}
+                                      className="btn-secondary"
+                                      style={{ padding: "4px 8px", fontSize: "0.72rem", color: "#4ade80", borderColor: "rgba(34, 197, 94, 0.4)" }}
+                                      title="Delete only from Server NVMe SSD disk cache"
+                                    >
+                                      💽 Delete SSD
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handlePurgeSingleCdnFile(file.noteId)}
+                                    className="btn-danger"
+                                    style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+                                    title="Purge globally across Edge, Worker & RAM"
+                                  >
+                                    Purge All
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))

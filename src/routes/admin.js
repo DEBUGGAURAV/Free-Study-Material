@@ -1566,6 +1566,7 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
 
   // Read actual on-disk CDN bin files
   const diskFilesMap = new Map();
+  let totalSsdDiskBytes = 0;
   try {
     if (fs.existsSync(cdnDiskDir)) {
       const files = fs.readdirSync(cdnDiskDir);
@@ -1575,6 +1576,7 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
           try {
             const stat = fs.statSync(path.join(cdnDiskDir, f));
             diskFilesMap.set(noteId, stat.size);
+            totalSsdDiskBytes += stat.size;
           } catch (_) {}
         }
       }
@@ -1713,6 +1715,14 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   return res.json({
     success: true,
     retentionDays: cdnRetentionDays,
+    ssdDisk: {
+      cachedFilesCount: isPurged ? 0 : diskFilesMap.size,
+      storageUsedBytes: isPurged ? 0 : totalSsdDiskBytes,
+      storageUsedMB: isPurged ? "0.0" : (totalSsdDiskBytes / (1024 * 1024)).toFixed(1),
+      quotaMB: 1536,
+      quotaFormatted: "1.5 GB",
+      quotaUsedPercent: isPurged ? 0 : Math.min(100, Number(((totalSsdDiskBytes / (1536 * 1024 * 1024)) * 100).toFixed(1))),
+    },
     ramStats: {
       ...ramStats,
       keysCount: isPurged ? 0 : (ramBufferItems || ramStats.keysCount || 0),
@@ -1874,6 +1884,114 @@ router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission("all"),
   } catch (_) {}
 
   return res.json({ success: true, message: "Cloudflare Edge CDN, Worker & Disk Cache purged globally! Edge caches are now cleared." });
+});
+
+/**
+ * POST /api/admin/cdn/purge-disk
+ * Dedicated Endpoint: Wipes ONLY the local Server NVMe SSD Disk Cache (cache/cdn/)
+ * Leaves RAM Buffer and Cloudflare Worker Edge untouched.
+ */
+router.post("/cdn/purge-disk", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    let notesRouter = null;
+    try { notesRouter = require("./notes"); } catch (_) {}
+    if (notesRouter && typeof notesRouter.purgeCdnDiskBuffer === "function") {
+      notesRouter.purgeCdnDiskBuffer();
+    }
+    const cdnDiskDir = path.join(process.cwd(), "cache", "cdn");
+    let deletedFiles = 0;
+    let freedBytes = 0;
+    if (fs.existsSync(cdnDiskDir)) {
+      const files = fs.readdirSync(cdnDiskDir);
+      for (const f of files) {
+        try {
+          const filePath = path.join(cdnDiskDir, f);
+          const stat = fs.statSync(filePath);
+          freedBytes += stat.size;
+          fs.unlinkSync(filePath);
+          deletedFiles++;
+        } catch (_) {}
+      }
+    }
+
+    // Also update Firestore isCdnCached if files are removed from disk & RAM is empty
+    if (db) {
+      try {
+        const snap = await db.collection("notes").where("isCdnCached", "==", true).get();
+        if (!snap.empty) {
+          const batch = db.batch();
+          snap.forEach((d) => {
+            const inRam = Boolean(notesRouter?.noteBufferCache?.has(d.id));
+            if (!inRam) {
+              batch.update(d.ref, { isCdnCached: false, cdnCachedAt: null });
+            }
+          });
+          await batch.commit().catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    const freedMB = (freedBytes / (1024 * 1024)).toFixed(2);
+    return res.json({
+      success: true,
+      message: `Server NVMe SSD Disk Cache wiped! Deleted ${deletedFiles} files, reclaimed ${freedMB} MB of local disk space.`,
+      deletedFiles,
+      freedBytes,
+      freedMB,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/cdn/purge-disk/:noteId
+ * Dedicated Endpoint: Deletes a single note from local Server NVMe SSD (cache/cdn/)
+ */
+router.post("/cdn/purge-disk/:noteId", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+  const { noteId } = req.params;
+  try {
+    let notesRouter = null;
+    try { notesRouter = require("./notes"); } catch (_) {}
+    if (notesRouter && typeof notesRouter.purgeCdnDiskBuffer === "function") {
+      notesRouter.purgeCdnDiskBuffer(noteId);
+    }
+    const cdnDiskDir = path.join(process.cwd(), "cache", "cdn");
+    const bin = path.join(cdnDiskDir, `${noteId}.bin`);
+    const meta = path.join(cdnDiskDir, `${noteId}.meta.json`);
+    let freedBytes = 0;
+    if (fs.existsSync(bin)) {
+      try {
+        freedBytes += fs.statSync(bin).size;
+        fs.unlinkSync(bin);
+      } catch (_) {}
+    }
+    if (fs.existsSync(meta)) {
+      try { fs.unlinkSync(meta); } catch (_) {}
+    }
+
+    if (db) {
+      try {
+        const inRam = Boolean(notesRouter?.noteBufferCache?.has(noteId));
+        if (!inRam) {
+          await db.collection("notes").doc(noteId).update({
+            isCdnCached: false,
+            cdnCachedAt: null,
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
+
+    const freedMB = (freedBytes / (1024 * 1024)).toFixed(2);
+    return res.json({
+      success: true,
+      message: `Note ${noteId} deleted from Server NVMe SSD! Freed ${freedMB} MB disk space.`,
+      freedBytes,
+      freedMB,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
@@ -2932,6 +3050,16 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
       const onDisk = !isPurged && fs.existsSync(path.join(cdnDiskDir, `${doc.id}.bin`));
       const isCached = !isPurged && Boolean(d.isCdnCached || inRam || onDisk);
 
+      let diskSize = 0;
+      let diskCachedAt = null;
+      if (onDisk) {
+        try {
+          const stat = fs.statSync(path.join(cdnDiskDir, `${doc.id}.bin`));
+          diskSize = stat.size;
+          diskCachedAt = stat.mtime ? stat.mtime.toISOString() : null;
+        } catch (_) {}
+      }
+
       let storageLocation = "Telegram Cloud Storage (Origin)";
       if (inRam) storageLocation = "RAM Edge Buffer (0ms microsecond stream)";
       else if (onDisk) storageLocation = "Local NVMe SSD Disk Cache (1ms stream)";
@@ -2947,7 +3075,9 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
         noteId: doc.id,
         title: d.title || "Untitled",
         originalName: d.originalName || (isImg ? "Image.jpg" : "Document.pdf"),
-        size: d.compressedSize || d.fileSize || 0,
+        size: diskSize || d.compressedSize || d.fileSize || 0,
+        diskSize: diskSize || d.compressedSize || d.fileSize || 0,
+        diskCachedAt,
         telegramMessageId: d.telegramMessageId || null,
         isCached,
         inRam,
@@ -2956,10 +3086,49 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
         typeLabel,
         mimeType: d.mimeType || (isImg ? "image/jpeg" : "application/pdf"),
         storageLocation,
-        updatedAt: d.updatedAt,
+        updatedAt: d.updatedAt || diskCachedAt,
       };
     });
     const activeFiles = files.filter((f) => f.isCached || f.inRam || f.onDisk);
+
+    // Scan cdnDiskDir for any orphaned or direct Telegram-cached .bin files on NVMe SSD
+    if (!isPurged && fs.existsSync(cdnDiskDir)) {
+      try {
+        const cdnDirFiles = fs.readdirSync(cdnDiskDir);
+        for (const f of cdnDirFiles) {
+          if (f.endsWith(".bin")) {
+            const noteId = f.replace(".bin", "");
+            if (!activeFiles.some((af) => af.id === noteId || af.noteId === noteId)) {
+              try {
+                const stat = fs.statSync(path.join(cdnDiskDir, f));
+                const metaPath = path.join(cdnDiskDir, `${noteId}.meta.json`);
+                let meta = {};
+                if (fs.existsSync(metaPath)) {
+                  try { meta = JSON.parse(fs.readFileSync(metaPath, "utf8")); } catch (_) {}
+                }
+                activeFiles.push({
+                  id: noteId,
+                  noteId,
+                  title: meta.title || `Cached Document (${noteId})`,
+                  originalName: meta.originalName || `${noteId}.pdf`,
+                  size: stat.size,
+                  diskSize: stat.size,
+                  diskCachedAt: stat.mtime ? stat.mtime.toISOString() : null,
+                  isCached: true,
+                  inRam: false,
+                  onDisk: true,
+                  fileType: "pdf",
+                  typeLabel: "📄 PDF",
+                  mimeType: meta.mimeType || "application/pdf",
+                  storageLocation: "Local NVMe SSD Disk Cache (1ms stream)",
+                  updatedAt: stat.mtime.toISOString(),
+                });
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     // Also scan chat_media for student study images & media cached on NVMe disk
     const chatMediaDir = path.join(process.cwd(), "cache", "chat_media");
@@ -2980,6 +3149,8 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
                 title: cleanTitle.length > 3 ? cleanTitle : f,
                 originalName: f,
                 size: stat.size,
+                diskSize: stat.size,
+                diskCachedAt: stat.mtime ? stat.mtime.toISOString() : null,
                 isCached: true,
                 inRam: false,
                 onDisk: true,
@@ -2995,7 +3166,23 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
       } catch (_) {}
     }
 
-    return res.json({ success: true, files: activeFiles, totalNotes: files.length });
+    let totalSsdCount = 0;
+    let totalSsdBytes = 0;
+    activeFiles.forEach((f) => {
+      if (f.onDisk) {
+        totalSsdCount++;
+        totalSsdBytes += (f.diskSize || f.size || 0);
+      }
+    });
+    const ssdDiskStats = {
+      totalFiles: totalSsdCount,
+      totalBytes: totalSsdBytes,
+      totalMB: (totalSsdBytes / (1024 * 1024)).toFixed(2),
+      quotaMB: 1536,
+      quotaPercent: Math.min(100, Number(((totalSsdBytes / (1536 * 1024 * 1024)) * 100).toFixed(1))),
+    };
+
+    return res.json({ success: true, files: activeFiles, totalNotes: files.length, ssdDiskStats });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
