@@ -19,6 +19,21 @@ import {
   stopSoundDropListener
 } from "../utils/soundDrop";
 
+
+/**
+ * Generates a deterministic 6-character hex code (0-9, A-F) from any token string.
+ * Strictly guarantees compatibility with ultrasonic frequency bins in soundDrop.js.
+ */
+function getHexSoundCode(token) {
+  if (!token) return "A1B2C3";
+  let h = 0x811c9dc5;
+  for (let i = 0; i < token.length; i++) {
+    h ^= token.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return ((h >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase();
+}
+
 export default function CampusAirdropModal({
   isOpen,
   onClose,
@@ -118,7 +133,7 @@ export default function CampusAirdropModal({
           setSenderSession(s);
 
           // Set sound pairing code from token
-          const soundCode = (s.offerToken.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "A1B2C3").toUpperCase();
+          const soundCode = getHexSoundCode(s.offerToken);
           setSoundPairingCode(soundCode);
 
           // Generate QR code for the Offer Token
@@ -133,6 +148,7 @@ export default function CampusAirdropModal({
             })
             .catch((e) => {
               console.warn("QR Render error:", e);
+              if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Data too large for QR"));
             });
         })
         .catch((err) => {
@@ -158,7 +174,7 @@ export default function CampusAirdropModal({
 
     if (activeTab === "send" && pairingMode === "sound" && senderSession?.offerToken && !senderDone) {
       try {
-        const soundCode = (senderSession.offerToken.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6) || "A1B2C3").toUpperCase();
+        const soundCode = getHexSoundCode(senderSession.offerToken);
         setSoundPairingCode(soundCode);
 
         // Broadcast over local network channel for zero-touch peer discovery

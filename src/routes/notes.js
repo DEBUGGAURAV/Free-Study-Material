@@ -19,6 +19,31 @@ const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 const noteBufferCache = new Map();
 let dbWritesPreventedCount = 0;
 
+// Anti-Spam / Cooldown Cache for Telegram Activity Alerts (Prevents repeat notices for 15 minutes)
+const streamNoticeCooldown = new Map();
+const STREAM_NOTICE_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+
+function shouldDispatchStreamNotice(userKey, noteId, action) {
+  const key = `${userKey}:${noteId}:${action}`;
+  const now = Date.now();
+  if (streamNoticeCooldown.has(key)) {
+    const lastSent = streamNoticeCooldown.get(key);
+    if (now - lastSent < STREAM_NOTICE_COOLDOWN_MS) {
+      return false; // Muted by cooldown
+    }
+  }
+  streamNoticeCooldown.set(key, now);
+  // Periodic cleanup if map grows
+  if (streamNoticeCooldown.size > 2000) {
+    for (const [k, ts] of streamNoticeCooldown.entries()) {
+      if (now - ts >= STREAM_NOTICE_COOLDOWN_MS) {
+        streamNoticeCooldown.delete(k);
+      }
+    }
+  }
+  return true;
+}
+
 // Load persisted DB Writes Prevented counter from Firestore
 if (db) {
   db.collection("settings").doc("tech_controls").get().then((snap) => {
@@ -1293,6 +1318,11 @@ router.post("/:id/stream-ticket", authenticateToken, (req, res) => {
 
   ephemeralStreamTickets.set(ticket, {
     userId: req.user.id,
+    name: req.user.name || req.user.userInputName || "",
+    email: req.user.email || "",
+    mobile: req.user.mobile || "",
+    college: req.user.college || "",
+    year: req.user.year || "",
     noteId: id,
     ip: clientIp,
     expires: Date.now() + 60000, // strictly 60 seconds
@@ -1439,7 +1469,15 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       if (ticketMeta.noteId === id && ticketMeta.expires > Date.now()) {
         const isIpMatch = !ticketMeta.ip || ticketMeta.ip === clientIp || clientIp === "127.0.0.1" || clientIp.includes("::1");
         if (isIpMatch) {
-          requestingUser = { id: ticketMeta.userId, viaTicket: true };
+          requestingUser = {
+            id: ticketMeta.userId,
+            name: ticketMeta.name,
+            email: ticketMeta.email,
+            mobile: ticketMeta.mobile,
+            college: ticketMeta.college,
+            year: ticketMeta.year,
+            viaTicket: true,
+          };
         } else {
           console.warn(`[SECURITY] Stream ticket IP mismatch: expected ${ticketMeta.ip}, got ${clientIp}`);
         }
@@ -1571,30 +1609,56 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       streamRealSource = "⚡ Indian Edge CDN Worker (1ms Indian Edge POP)";
     }
 
-    // Asynchronously dispatch Real-time Telegram security notice (Zero Database Writes, Instant Delivery)
-    if (requestingUser) {
-      const isStudent = requestingUser.id && requestingUser.id !== "admin-root";
-      sendTelegramAuthNotice({
-        event: "NOTE_DOWNLOAD",
-        user: {
-          id: requestingUser.id,
-          name: requestingUser.name || (isStudent ? "Student Scholar" : "Administrator"),
-          email: requestingUser.email || "N/A",
-          mobile: requestingUser.mobile || (isStudent ? "N/A" : "Admin Session"),
-          college: requestingUser.college || (isStudent ? "N/A" : "Central Administration"),
-          year: requestingUser.year || (isStudent ? "N/A" : "Master Admin"),
-        },
-        note: {
-          id: note.id || id,
-          title: note.title,
-          subject: note.subject,
-          course: note.course,
-          branch: note.branch,
-          fileSize: note.fileSize,
-          downloadsCount: note.downloadsCount || 0,
-        },
-        method: streamRealSource,
-      }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
+    // 🛡️ TELEGRAM STREAM MONITOR: Only dispatch for REAL Downloads or Initial Preview Opening
+    // Exclude reader page chunks (bytes > 0), repeated range fetches, and worker pre-warm
+    const isWorkerProxy = requestingUser && (requestingUser.role === "worker" || requestingUser.isEdgeCDN);
+    const rangeHeader = req.headers.range;
+    let isSubsequentRangeChunk = false;
+    if (rangeHeader) {
+      const match = rangeHeader.match(/bytes=(\d+)-/);
+      if (match && parseInt(match[1], 10) > 0) {
+        isSubsequentRangeChunk = true;
+      }
+    }
+
+    const isActualDownload = Boolean(isDownload);
+    const isExplicitPreview = req.query.preview === "1" || req.query.view === "1";
+    // Preview is only initial load (not subsequent reader chunks)
+    const isInitialPreview = (isExplicitPreview || !isSubsequentRangeChunk) && !isActualDownload;
+
+    // RULE: Exclude reader chunks completely! Only allow real download or initial preview
+    const isEligibleForNotice = (isActualDownload || isInitialPreview) && !isSubsequentRangeChunk && !isWorkerProxy;
+
+    if (requestingUser && isEligibleForNotice) {
+      const userKey = requestingUser.id || requestingUser.email || clientIp;
+      const actionType = isActualDownload ? "NOTE_DOWNLOAD" : "NOTE_PREVIEW";
+
+      if (shouldDispatchStreamNotice(userKey, note.id || id, actionType)) {
+        const isStudent = requestingUser.id && requestingUser.id !== "admin-root";
+        const studentDisplayName = requestingUser.name || (isStudent ? "Student Scholar" : "Administrator");
+
+        sendTelegramAuthNotice({
+          event: actionType,
+          user: {
+            id: requestingUser.id,
+            name: studentDisplayName,
+            email: requestingUser.email || "N/A",
+            mobile: requestingUser.mobile || (isStudent ? "N/A" : "Admin Session"),
+            college: requestingUser.college || (isStudent ? "N/A" : "Central Administration"),
+            year: requestingUser.year || (isStudent ? "N/A" : "Master Admin"),
+          },
+          note: {
+            id: note.id || id,
+            title: note.title,
+            subject: note.subject,
+            course: note.course,
+            branch: note.branch,
+            fileSize: note.fileSize,
+            downloadsCount: note.downloadsCount || 0,
+          },
+          method: streamRealSource,
+        }).catch((err) => console.warn("[STREAM-TELEGRAM-NOTICE] Notice error:", err.message));
+      }
     }
 
     // Explicit PDF Content-Type & RFC-compliant Content-Disposition with ACTUAL File Name

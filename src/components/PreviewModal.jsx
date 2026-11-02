@@ -27,7 +27,7 @@ export default function PreviewModal({
   const finalFileName = getNotePdfFileName(note);
 
   // Stream through Cloudflare Global Edge CDN with resilient auto-failover (using httpOnly session cookie)
-  const streamUrl = getSmartStreamUrl(note.id, null, finalFileName);
+  const streamUrl = getSmartStreamUrl(note.id, null, finalFileName, true);
   const directDownloadUrl = api.getDownloadUrl(note.id, finalFileName);
   const isPdf = (note.mimeType || "").includes("pdf") || (note.originalName || "").toLowerCase().endsWith(".pdf") || true;
 

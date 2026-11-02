@@ -12,6 +12,7 @@
  */
 
 import { getCachedNoteBuffer, cacheNoteBuffer } from "./p2pMesh";
+import { getOfflineNoteBuffer } from "./offlineQueue";
 
 // Standard STUN servers (will silently be bypassed on pure local Wi-Fi / Hotspot networks)
 const ICE_CONFIG = {
@@ -23,46 +24,127 @@ const ICE_CONFIG = {
 };
 
 /**
+ * Strips non-DataChannel junk from SDP to keep it ultra-compact for offline QR Code generation (<500 bytes)
+ */
+export function compactSdp(sdp) {
+  if (!sdp) return "";
+  return sdp
+    .split(/\r?\n/)
+    .filter((line) => {
+      const t = line.trim();
+      if (!t) return false;
+      if (t.startsWith("a=extmap:")) return false;
+      if (t.startsWith("a=msid-semantic:")) return false;
+      if (t.startsWith("a=rtcp:")) return false;
+      return true;
+    })
+    .join("\r\n") + "\r\n";
+}
+
+/**
  * Checks if a note is stored in local browser cache ready for P2P AirDrop
  * @param {string} noteId 
  * @returns {Promise<boolean>}
  */
 export async function isNoteReadyForAirdrop(noteId) {
   if (!noteId) return false;
-  const buf = await getCachedNoteBuffer(noteId);
+  const buf = (await getCachedNoteBuffer(noteId)) || (await getOfflineNoteBuffer(noteId));
   return Boolean(buf && buf.byteLength > 0);
 }
 
 /**
- * Encodes an SDP signaling object into a compact QR-friendly string
+ * Encodes an SDP signaling object into a compact, compressed QR-friendly string (<500 chars)
  */
-export function encodeSignalingToken(data) {
+export async function encodeSignalingToken(data) {
   try {
     const jsonStr = JSON.stringify(data);
-    return btoa(encodeURIComponent(jsonStr));
+    if (typeof CompressionStream !== "undefined") {
+      const cs = new CompressionStream("deflate-raw");
+      const writer = cs.writable.getWriter();
+      writer.write(new TextEncoder().encode(jsonStr));
+      writer.close();
+      const chunks = [];
+      const reader = cs.readable.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+      }
+      const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      let bin = "";
+      for (let i = 0; i < merged.length; i++) {
+        bin += String.fromCharCode(merged[i]);
+      }
+      return "FSMZ:" + btoa(bin);
+    }
+    return "FSMR:" + btoa(jsonStr);
   } catch (err) {
     console.warn("[AIRDROP] Token encode fallback:", err);
-    return btoa(JSON.stringify(data));
+    return "FSMR:" + btoa(JSON.stringify(data));
   }
 }
 
 /**
  * Decodes a signaling token back into an SDP object with strict validation
  */
-export function decodeSignalingToken(token) {
+export async function decodeSignalingToken(token) {
   if (!token || typeof token !== "string") {
     throw new Error("Empty or invalid token provided.");
   }
   try {
     const raw = token.trim();
-    let parsed = null;
-    try {
-      const decodedUri = decodeURIComponent(atob(raw));
-      parsed = JSON.parse(decodedUri);
-    } catch (_) {
-      parsed = JSON.parse(atob(raw));
+    let jsonStr = null;
+
+    if (raw.startsWith("FSMZ:")) {
+      const b64 = raw.slice(5);
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        bytes[i] = bin.charCodeAt(i);
+      }
+      if (typeof DecompressionStream !== "undefined") {
+        const ds = new DecompressionStream("deflate-raw");
+        const writer = ds.writable.getWriter();
+        writer.write(bytes);
+        writer.close();
+        const chunks = [];
+        const reader = ds.readable.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0);
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        jsonStr = new TextDecoder().decode(merged);
+      }
+    } else if (raw.startsWith("FSMR:")) {
+      jsonStr = atob(raw.slice(5));
+    } else {
+      // Legacy uncompressed fallback
+      try {
+        jsonStr = decodeURIComponent(atob(raw));
+      } catch (_) {
+        jsonStr = atob(raw);
+      }
     }
 
+    if (!jsonStr) {
+      throw new Error("Failed to decompress signaling payload.");
+    }
+
+    const parsed = JSON.parse(jsonStr);
     if (!parsed || typeof parsed !== "object") {
       throw new Error("Decoded token is not a valid payload.");
     }
@@ -119,7 +201,10 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
     buffer = await getCachedNoteBuffer(noteId);
   }
   if (!buffer || buffer.byteLength === 0) {
-    throw new Error("This note is not yet cached in your device memory. Please open or view it first.");
+    buffer = await getOfflineNoteBuffer(noteId);
+  }
+  if (!buffer || buffer.byteLength === 0) {
+    throw new Error("This note is not yet cached on your device. Please open or view it in the Online Reader first so AirDrop can share it offline.");
   }
   if (directBuffer && noteId) {
     cacheNoteBuffer(noteId, directBuffer).catch(() => {});
@@ -164,11 +249,11 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
     role: "airdrop_offer",
     noteId,
     fileSize: buffer.byteLength,
-    sdp: pc.localDescription.sdp,
-    v: 1,
+    sdp: compactSdp(pc.localDescription.sdp),
+    v: 2,
   };
 
-  const offerToken = encodeSignalingToken(offerPayload);
+  const offerToken = await encodeSignalingToken(offerPayload);
   session.offerToken = offerToken;
 
   return session;
@@ -183,7 +268,7 @@ export async function completeSenderWithAnswer(session, answerToken) {
     throw new Error("Active sender session expired. Please restart AirDrop.");
   }
 
-  const payload = decodeSignalingToken(answerToken);
+  const payload = await decodeSignalingToken(answerToken);
   if (payload.role !== "airdrop_answer" || !payload.sdp) {
     throw new Error("Invalid answer QR token received. Please scan the receiver's answer QR code.");
   }
@@ -204,7 +289,7 @@ export async function completeSenderWithAnswer(session, answerToken) {
 export async function createAirDropReceiverSession(offerToken, callbacks = {}) {
   const { onProgress = () => {}, onComplete = () => {}, onError = () => {} } = callbacks;
 
-  const payload = decodeSignalingToken(offerToken);
+  const payload = await decodeSignalingToken(offerToken);
   if (payload.role !== "airdrop_offer" || !payload.sdp) {
     throw new Error("Invalid offer QR token. Please scan the sender's AirDrop QR code.");
   }
@@ -241,11 +326,11 @@ export async function createAirDropReceiverSession(offerToken, callbacks = {}) {
   const answerPayload = {
     role: "airdrop_answer",
     noteId: payload.noteId,
-    sdp: pc.localDescription.sdp,
-    v: 1,
+    sdp: compactSdp(pc.localDescription.sdp),
+    v: 2,
   };
 
-  const answerToken = encodeSignalingToken(answerPayload);
+  const answerToken = await encodeSignalingToken(answerPayload);
   session.answerToken = answerToken;
 
   return session;

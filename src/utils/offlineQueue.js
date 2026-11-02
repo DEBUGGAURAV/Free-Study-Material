@@ -77,6 +77,30 @@ export async function getOfflineNotes() {
 }
 
 /**
+ * Retrieves a single offline note's ArrayBuffer from IndexedDB
+ * @param {string} noteId
+ * @returns {Promise<ArrayBuffer|null>}
+ */
+export async function getOfflineNoteBuffer(noteId) {
+  if (!noteId) return null;
+  try {
+    const db = await openDatabase();
+    return new Promise((resolve) => {
+      const tx = db.transaction([STORE_NOTES], 'readonly');
+      const store = tx.objectStore(STORE_NOTES);
+      const req = store.get(noteId);
+      req.onsuccess = () => {
+        const item = req.result;
+        resolve(item?.buffer || null);
+      };
+      req.onerror = () => resolve(null);
+    });
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
  * Deletes an individual offline note from IndexedDB
  * @param {string} noteId
  * @returns {Promise<boolean>}

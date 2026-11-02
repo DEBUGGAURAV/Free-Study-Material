@@ -399,8 +399,8 @@ async function sendTelegramAuthNotice({
         console.log("[SECURITY-BOT] ⏸️ NOTE_UPLOAD alert suppressed by admin setting.");
         return;
       }
-      if (event === "NOTE_DOWNLOAD" && currentSettings.enableNoteDownloadNotice === false) {
-        console.log("[SECURITY-BOT] ⏸️ NOTE_DOWNLOAD alert suppressed by admin setting.");
+      if ((event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") && currentSettings.enableNoteDownloadNotice === false) {
+        console.log("[SECURITY-BOT] ⏸️ NOTE_DOWNLOAD / NOTE_PREVIEW alert suppressed by admin setting.");
         return;
       }
       if (event === "ACCOUNT_PURGE" && currentSettings.enableAccountPurgeNotice === false) {
@@ -450,8 +450,8 @@ async function sendTelegramAuthNotice({
         if (!threadId) {
           threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
         }
-      } else if (event === "NOTE_DOWNLOAD") {
-        // Route note downloads to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
+      } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {
+        // Route note downloads and previews to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
         threadId = await getOrCreateDownloadManagerForumTopic(targetChatId, botToken);
         if (!threadId) {
           threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
@@ -499,6 +499,9 @@ async function sendTelegramAuthNotice({
     } else if (event === "NOTE_DOWNLOAD") {
       titleIcon = "📥";
       eventTitle = "Document Download Stream";
+    } else if (event === "NOTE_PREVIEW") {
+      titleIcon = "👁️";
+      eventTitle = "Document Online Preview";
     } else if (event === "ACCOUNT_PURGE") {
       titleIcon = "🗑️";
       eventTitle = "90-Day Inactive Account Purged";
@@ -554,10 +557,11 @@ async function sendTelegramAuthNotice({
         `🔗 <b>Direct Link:</b> ${getSiteUrl()}/api/notes/${note?.id}/stream\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
-    } else if (event === "NOTE_DOWNLOAD") {
+    } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {
+      const isPreviewEvent = event === "NOTE_PREVIEW";
       const realSizeStr = formatRealSize(note?.fileSize);
       caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
-        `👤 <b>Student Downloader:</b> <code>${user.name || "Student"}</code>\n` +
+        `👤 <b>${isPreviewEvent ? "Student Viewer:" : "Student Downloader:"}</b> <code>${user.name || "Student"}</code>\n` +
         (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>\n` : "") +
         `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>\n` +
         (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
@@ -566,10 +570,10 @@ async function sendTelegramAuthNotice({
         `📚 <b>Subject:</b> <code>${note?.subject || "General"}</code>\n` +
         `🏛️ <b>Course & Branch:</b> <code>${note?.course || ""} - ${note?.branch || ""}</code>\n` +
         (note?.fileSize ? `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` : "") +
-        (note?.downloadsCount !== undefined ? `📊 <b>Download Stream:</b> <code>#${note.downloadsCount + 1}</code>\n` : "") +
+        (!isPreviewEvent && note?.downloadsCount !== undefined ? `📊 <b>Download Stream:</b> <code>#${note.downloadsCount + 1}</code>\n` : "") +
         `⚡ <b>Delivery Source:</b> <code>${method || "Indian Edge CDN Worker"}</code>\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
-        `🌐 <i>Real-time Academic Vault Streaming Monitor</i>`;
+        `🌐 <i>Real-time Academic Vault ${isPreviewEvent ? "Preview" : "Streaming"} Monitor</i>`;
     } else if (event === "ACCOUNT_PURGE") {
       let notesSnippet = "  • <i>No study notes uploaded by this student.</i>";
       if (user.uploadedNotes && user.uploadedNotes.length > 0) {

@@ -126,7 +126,7 @@ export function parseSourceFromHeaders(headers) {
  * @param {string} ticket (optional ephemeral single-use 60s ticket)
  * @returns {string} streamUrl
  */
-export function getSmartStreamUrl(noteId, ticket = null, fileName = null) {
+export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPreview = false) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
   // ⚡ Serve all users directly from Cloudflare Edge Worker CDN when available with seamless localOrigin fallback
   const base = CF_WORKER || localOrigin || "";
@@ -135,6 +135,7 @@ export function getSmartStreamUrl(noteId, ticket = null, fileName = null) {
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
   const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
   const params = [];
+  if (isPreview) params.push("preview=1");
   if (ticket) params.push(`ticket=${encodeURIComponent(ticket)}`);
   if (token) params.push(`token=${encodeURIComponent(token)}`);
   if (cleanName) params.push(`filename=${encodeURIComponent(cleanName)}`);

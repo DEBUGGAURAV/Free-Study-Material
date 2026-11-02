@@ -399,7 +399,7 @@ export default function VirtualPdfReader({
         const cleanName = getNotePdfFileName(note || { id: activeId, title });
         const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
         const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
-        setNativeSrc(`/api/notes/${activeId}/${pathSegment}${token ? `?token=${encodeURIComponent(token)}` : ""}`);
+        setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
       } else if (url) {
         setNativeSrc(url);
       }
@@ -474,7 +474,7 @@ export default function VirtualPdfReader({
 
         // 🚀 Online: Determine stream source with resilient auto-failover
         const effectiveUrl = (url || "").toString();
-        const fallbackSameOrigin = `/api/notes/${noteId}/stream.pdf`;
+        const fallbackSameOrigin = `/api/notes/${noteId}/stream.pdf?preview=1`;
         const primaryUrl = effectiveUrl || fallbackSameOrigin;
 
         // 1. Check local IndexedDB offline storage first for instant 0ms render
