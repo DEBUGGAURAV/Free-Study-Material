@@ -14,11 +14,13 @@
 import { getCachedNoteBuffer, cacheNoteBuffer } from "./p2pMesh";
 import { getOfflineNoteBuffer } from "./offlineQueue";
 
-// Standard STUN servers (will silently be bypassed on pure local Wi-Fi / Hotspot networks)
+// Standard STUN servers (resilient worldwide pool)
 const ICE_CONFIG = {
   iceServers: [
     { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" }
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
   ],
   iceCandidatePoolSize: 2,
 };
@@ -162,29 +164,39 @@ export async function decodeSignalingToken(token) {
 }
 
 /**
- * Waits for ICE candidate gathering to finish or reach timeout
+ * Waits for ICE candidate gathering to finish or reach timeout with fast srflx resolution
  */
-function waitForIceGathering(pc, timeoutMs = 1200) {
+function waitForIceGathering(pc, timeoutMs = 2000) {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === "complete") {
       return resolve();
     }
     let timer = null;
+    let resolved = false;
+
+    const done = () => {
+      if (resolved) return;
+      resolved = true;
+      if (timer) clearTimeout(timer);
+      try { pc.removeEventListener("icegatheringstatechange", checkState); } catch (_) {}
+      try { pc.removeEventListener("icecandidate", onCand); } catch (_) {}
+      resolve();
+    };
+
     const checkState = () => {
-      if (pc.iceGatheringState === "complete") {
-        cleanup();
-        resolve();
+      if (pc.iceGatheringState === "complete") done();
+    };
+
+    const onCand = (e) => {
+      // If we got a reflexive STUN candidate, wait brief 150ms for other host candidates then resolve
+      if (e.candidate && (e.candidate.type === "srflx" || e.candidate.candidate?.includes("typ srflx"))) {
+        setTimeout(done, 150);
       }
     };
-    const cleanup = () => {
-      if (timer) clearTimeout(timer);
-      pc.removeEventListener("icegatheringstatechange", checkState);
-    };
-    timer = setTimeout(() => {
-      cleanup();
-      resolve();
-    }, timeoutMs);
+
+    timer = setTimeout(done, timeoutMs);
     pc.addEventListener("icegatheringstatechange", checkState);
+    pc.addEventListener("icecandidate", onCand);
   });
 }
 
@@ -362,10 +374,9 @@ async function seedNoteBufferOverChannel(noteId, buffer, dataChannel, onProgress
     throw new Error("Cannot airdrop: Peer channel not open or buffer missing.");
   }
 
-  const isLowMemory = typeof navigator !== "undefined" && navigator.deviceMemory && navigator.deviceMemory <= 2;
-  const CHUNK_SIZE = isLowMemory ? 32 * 1024 : 64 * 1024;
+  // Safe standard WebRTC chunk size (16 KB) for all browsers without SCTP buffer crashes
+  const CHUNK_SIZE = 16 * 1024;
   const totalChunks = Math.ceil(buffer.byteLength / CHUNK_SIZE);
-  const uint8 = new Uint8Array(buffer);
 
   // 1. Send Header
   dataChannel.send(JSON.stringify({
@@ -375,23 +386,40 @@ async function seedNoteBufferOverChannel(noteId, buffer, dataChannel, onProgress
     totalChunks,
   }));
 
-  const maxBufferThreshold = isLowMemory ? 2 * 1024 * 1024 : 6 * 1024 * 1024;
+  const maxBufferThreshold = 128 * 1024; // 128 KB flow-control threshold
   const startTime = Date.now();
 
   // 2. Stream binary chunks with flow control
   for (let i = 0; i < totalChunks; i++) {
-    const start = i * CHUNK_SIZE;
-    const end = Math.min(buffer.byteLength, start + CHUNK_SIZE);
-    const chunk = uint8.slice(start, end);
-
-    // Prevent buffer overflow on low-end hardware
-    if (dataChannel.bufferedAmount > maxBufferThreshold) {
-      await new Promise((r) => setTimeout(r, 35));
+    if (dataChannel.readyState !== "open") {
+      throw new Error("DataChannel closed unexpectedly during file streaming.");
     }
 
-    dataChannel.send(chunk.buffer);
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(buffer.byteLength, start + CHUNK_SIZE);
+    const chunkBuffer = buffer.slice(start, end);
 
-    if (onProgress && (i % 4 === 0 || i === totalChunks - 1)) {
+    // Standard W3C WebRTC Flow Control: pause if buffer exceeds threshold
+    if (dataChannel.bufferedAmount > maxBufferThreshold) {
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, 35);
+        const onLow = () => {
+          clearTimeout(timer);
+          try { dataChannel.removeEventListener("bufferedamountlow", onLow); } catch (_) {}
+          resolve();
+        };
+        try {
+          dataChannel.bufferedAmountLowThreshold = 32 * 1024;
+          dataChannel.addEventListener("bufferedamountlow", onLow, { once: true });
+        } catch (_) {
+          setTimeout(resolve, 25);
+        }
+      });
+    }
+
+    dataChannel.send(chunkBuffer);
+
+    if (onProgress && (i % 8 === 0 || i === totalChunks - 1)) {
       const elapsedSec = (Date.now() - startTime) / 1000 || 0.1;
       const sentBytes = end;
       const speedMBs = (sentBytes / (1024 * 1024) / elapsedSec).toFixed(1);
@@ -406,11 +434,13 @@ async function seedNoteBufferOverChannel(noteId, buffer, dataChannel, onProgress
   }
 
   // 3. Send Completion trailer
-  dataChannel.send(JSON.stringify({
-    type: "AIRDROP_TRAILER",
-    noteId,
-    status: "COMPLETE",
-  }));
+  if (dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify({
+      type: "AIRDROP_TRAILER",
+      noteId,
+      status: "COMPLETE",
+    }));
+  }
 
   if (onProgress) {
     onProgress({

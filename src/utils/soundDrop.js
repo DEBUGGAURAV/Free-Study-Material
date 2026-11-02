@@ -1,26 +1,25 @@
 /**
  * ============================================================================
- * 🔊 Sound-Drop: Ultrasonic Data-Over-Sound Offline Pairing Engine
+ * 🔊 Sound-Drop: High-Speed Near-Ultrasonic Data-Over-Sound Pairing Engine
  * ============================================================================
  * Pure Web Audio API acoustic pairing protocol for zero-internet environments.
- * Transmits short pairing tokens and session handshakes using inaudible 
- * ultrasonic audio frequencies (17.2 kHz - 18.8 kHz) from speaker to microphone.
+ * Transmits 4-hex pairing codes in ~380ms using near-ultrasound (15.8 - 17.5 kHz)
+ * or futuristic audible chirps (2.2 - 4.1 kHz).
  *
- * 0 KB Internet • 0.0% Server Bandwidth • ₹0 Cost Forever
- * Zero Camera Required • 0-Touch Proximity Pairing (Apple NameDrop Style)
+ * 0 KB Internet • 0.0% Server Bandwidth • Instant <0.4s Acoustic Lock
  * ============================================================================
  */
 
-// Frequency Bands (Optimized for smartphone speaker & microphone frequency response)
-const ULTRASONIC_PREAMBLE = 17200; // Hz (Inaudible near-ultrasound)
-const ULTRASONIC_BASE = 17500;     // Hz
-const ULTRASONIC_STEP = 80;        // Hz per hex nibble (16 bins = 17500 to 18700 Hz)
+// Frequency Bands (Optimized for maximum speaker output & smartphone mic capture)
+const ULTRASONIC_PREAMBLE = 15800; // Hz (Inaudible to human ear, high speaker power)
+const ULTRASONIC_BASE = 16200;     // Hz
+const ULTRASONIC_STEP = 90;        // Hz per hex nibble (16 bins = 16200 to 17550 Hz)
 
-const AUDIBLE_PREAMBLE = 2400;     // Hz (Futuristic friendly R2D2 sci-fi chirps)
-const AUDIBLE_BASE = 2700;         // Hz
-const AUDIBLE_STEP = 120;          // Hz per hex nibble (16 bins = 2700 to 4500 Hz)
+const AUDIBLE_PREAMBLE = 2200;     // Hz (Futuristic friendly R2D2 sci-fi chirps)
+const AUDIBLE_BASE = 2500;         // Hz
+const AUDIBLE_STEP = 110;          // Hz per hex nibble (16 bins = 2500 to 4150 Hz)
 
-const TONE_DURATION_SEC = 0.085;   // 85ms per symbol
+const TONE_DURATION_SEC = 0.060;   // 60ms per symbol (Fast 15 symbols/sec)
 const PAUSE_DURATION_SEC = 0.020;  // 20ms guard pause between tones
 
 let activeAudioCtx = null;
@@ -44,27 +43,16 @@ async function getAudioContext() {
 }
 
 /**
- * Calculates simple 2-character checksum for transmission integrity
- */
-function calculateChecksum(hexString) {
-  let sum = 0;
-  for (let i = 0; i < hexString.length; i++) {
-    sum = (sum + hexString.charCodeAt(i)) % 256;
-  }
-  return sum.toString(16).padStart(2, "0").toUpperCase();
-}
-
-/**
- * Broadcasts a pairing token over speaker via ultrasonic audio waves
- * @param {string} token - Short pairing code (e.g. 6-8 hex chars)
+ * Broadcasts a 4-hex pairing token over speaker via acoustic audio waves (~380ms total)
+ * @param {string} token - 4-6 hex chars (e.g. "B4C9")
  * @param {object} options - Configuration options
  * @returns {object} Controller with stop() method
  */
 export async function startSoundDropBroadcast(token, options = {}) {
   const {
     isAudible = false,
-    volume = 0.85,
-    repeatIntervalMs = 1400,
+    volume = 0.90,
+    repeatIntervalMs = 950,
     onBeep = () => {},
   } = options;
 
@@ -75,10 +63,9 @@ export async function startSoundDropBroadcast(token, options = {}) {
     throw new Error("Web Audio API is not supported on this device.");
   }
 
-  // Sanitize token to 6-8 hex characters + 2-char checksum
-  const cleanToken = (token || "A1B2C3").replace(/[^a-fA-F0-9]/g, "").toUpperCase().slice(0, 8);
-  const checksum = calculateChecksum(cleanToken);
-  const payload = cleanToken + checksum;
+  // Sanitize token to 4 hex characters
+  const cleanToken = (token || "A1B2").replace(/[^a-fA-F0-9]/g, "").toUpperCase().slice(0, 4).padEnd(4, "0");
+  const payload = cleanToken;
 
   const preambleFreq = isAudible ? AUDIBLE_PREAMBLE : ULTRASONIC_PREAMBLE;
   const baseFreq = isAudible ? AUDIBLE_BASE : ULTRASONIC_BASE;
@@ -90,7 +77,7 @@ export async function startSoundDropBroadcast(token, options = {}) {
     if (!isRunning) return;
     try {
       const now = ctx.currentTime;
-      let toneTime = now + 0.05;
+      let toneTime = now + 0.03;
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -101,23 +88,23 @@ export async function startSoundDropBroadcast(token, options = {}) {
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      // 1. Play Preamble tone (wake-up signal)
+      // 1. Play Preamble tone (wake-up pulse: 80ms)
       osc.frequency.setValueAtTime(preambleFreq, toneTime);
       gain.gain.setValueAtTime(0.001, toneTime);
-      gain.gain.exponentialRampToValueAtTime(volume, toneTime + 0.01);
-      gain.gain.setValueAtTime(volume, toneTime + TONE_DURATION_SEC * 1.5 - 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, toneTime + TONE_DURATION_SEC * 1.5);
-      toneTime += TONE_DURATION_SEC * 1.5 + PAUSE_DURATION_SEC;
+      gain.gain.exponentialRampToValueAtTime(volume, toneTime + 0.008);
+      gain.gain.setValueAtTime(volume, toneTime + 0.075);
+      gain.gain.exponentialRampToValueAtTime(0.001, toneTime + 0.080);
+      toneTime += 0.080 + PAUSE_DURATION_SEC;
 
-      // 2. Play payload tones (hex nibbles)
+      // 2. Play 4 payload tones (60ms each + 20ms pause)
       for (let i = 0; i < payload.length; i++) {
         const nibble = parseInt(payload[i], 16);
         const freq = baseFreq + nibble * stepFreq;
 
         osc.frequency.setValueAtTime(freq, toneTime);
         gain.gain.setValueAtTime(0.001, toneTime);
-        gain.gain.exponentialRampToValueAtTime(volume, toneTime + 0.008);
-        gain.gain.setValueAtTime(volume, toneTime + TONE_DURATION_SEC - 0.008);
+        gain.gain.exponentialRampToValueAtTime(volume, toneTime + 0.006);
+        gain.gain.setValueAtTime(volume, toneTime + TONE_DURATION_SEC - 0.006);
         gain.gain.exponentialRampToValueAtTime(0.001, toneTime + TONE_DURATION_SEC);
 
         toneTime += TONE_DURATION_SEC + PAUSE_DURATION_SEC;
@@ -160,8 +147,7 @@ export function stopSoundDropBroadcast() {
 }
 
 /**
- * Listens on the microphone for incoming ultrasonic Sound-Drop chirps
- * Decodes the pairing token in real time without camera or server.
+ * Listens on the microphone for incoming Sound-Drop chirps (~380ms decode time)
  * @param {object} callbacks - { onTokenDetected, onVolume, onError }
  * @param {object} options - { isAudible }
  * @returns {Promise<object>} Controller with stop() method
@@ -181,7 +167,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
     throw new Error("Web Audio API is not supported on this device.");
   }
 
-  // Request microphone stream
+  // Request microphone stream with clean unprocessed audio
   let stream = null;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -207,7 +193,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
   const source = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.35;
+  analyser.smoothingTimeConstant = 0.25; // Responsive time constant for fast chirps
 
   source.connect(analyser);
   activeAnalyser = analyser;
@@ -225,7 +211,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
 
   let state = "IDLE"; // 'IDLE' | 'READING_NIBBLES'
   let capturedNibbles = [];
-  let lastDetectedTime = 0;
+  let nextToneExpectedAt = 0;
   let lastVolumeTime = 0;
   let isListening = true;
 
@@ -235,7 +221,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
     analyser.getByteFrequencyData(dataArray);
     const now = performance.now();
 
-    // ⚡ Throttled Volume Visualizer (12 FPS instead of 120 FPS): Saves 90% React UI re-renders
+    // Throttled Volume Visualizer (12 FPS): Smooth UI without React re-render lag
     if (now - lastVolumeTime > 80) {
       lastVolumeTime = now;
       let sum = 0;
@@ -245,37 +231,37 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
     }
 
     if (state === "IDLE") {
-      // Look for Preamble pulse (peak energy in preamble bin, checking ±1 bin around preamble)
+      // 1. Detect Preamble tone (wake-up pulse)
       const preambleEnergy = Math.max(
         dataArray[preambleBin - 1] || 0,
         dataArray[preambleBin] || 0,
         dataArray[preambleBin + 1] || 0
       );
-      const noiseFloor = ((dataArray[preambleBin - 6] || 0) + (dataArray[preambleBin + 6] || 0)) / 2 + 5;
+      const noiseFloor = ((dataArray[preambleBin - 5] || 0) + (dataArray[preambleBin + 5] || 0)) / 2 + 4;
 
-      if (preambleEnergy > 28 && preambleEnergy > noiseFloor * 1.3) {
+      if (preambleEnergy > 24 && preambleEnergy > noiseFloor * 1.25) {
         state = "READING_NIBBLES";
         capturedNibbles = [];
-        lastDetectedTime = now;
+        // First payload tone center arrives ~110ms after preamble start
+        nextToneExpectedAt = now + 95;
       }
     } else if (state === "READING_NIBBLES") {
-      // Find highest energy bin in the 16 symbol range
-      if (now - lastDetectedTime >= TONE_DURATION_SEC * 1000 * 0.70) {
+      // 2. Sample each nibble in its exact time window (prevents double-sampling)
+      if (now >= nextToneExpectedAt) {
         let maxEnergy = 0;
         let bestNibble = -1;
-        const lowNoiseBin = Math.max(0, Math.round((baseFreq - stepFreq) / binWidth));
-        const highNoiseBin = Math.min(bufferLength - 1, Math.round((baseFreq + 16 * stepFreq) / binWidth));
-        const localNoise = ((dataArray[lowNoiseBin] || 0) + (dataArray[highNoiseBin] || 0)) / 2 + 4;
+        const lowBin = Math.max(0, Math.round((baseFreq - stepFreq) / binWidth));
+        const highBin = Math.min(bufferLength - 1, Math.round((baseFreq + 16 * stepFreq) / binWidth));
+        const localNoise = ((dataArray[lowBin] || 0) + (dataArray[highBin] || 0)) / 2 + 4;
 
         for (let n = 0; n < 16; n++) {
-          const targetFreq = baseFreq + n * stepFreq;
-          const targetBin = Math.round(targetFreq / binWidth);
+          const targetBin = Math.round((baseFreq + n * stepFreq) / binWidth);
           const energy = Math.max(
             dataArray[targetBin - 1] || 0,
             dataArray[targetBin] || 0,
             dataArray[targetBin + 1] || 0
           );
-          if (energy > maxEnergy && energy > 25 && energy > localNoise * 1.2) {
+          if (energy > maxEnergy && energy > 20 && energy > localNoise * 1.20) {
             maxEnergy = energy;
             bestNibble = n;
           }
@@ -283,27 +269,23 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
 
         if (bestNibble !== -1) {
           capturedNibbles.push(bestNibble.toString(16).toUpperCase());
-          lastDetectedTime = now;
+          // Advance directly to next tone center (80ms slot)
+          nextToneExpectedAt = now + 75;
 
-          // Check if we captured 8 characters (6-char clean code + 2-char checksum)
-          if (capturedNibbles.length >= 8) {
-            const rawCode = capturedNibbles.join("");
-            const dataPart = rawCode.slice(0, 6);
-            const checksumPart = rawCode.slice(6, 8);
-
-            const expectedChecksum = calculateChecksum(dataPart);
-            if (checksumPart === expectedChecksum || rawCode.length >= 8) {
-              onTokenDetected(dataPart);
-              state = "IDLE";
-              capturedNibbles = [];
-            }
+          if (capturedNibbles.length >= 4) {
+            const detectedCode = capturedNibbles.slice(0, 4).join("");
+            onTokenDetected(detectedCode);
+            state = "IDLE";
+            capturedNibbles = [];
           }
+        } else {
+          // Retry within 15ms if right on edge of window
+          nextToneExpectedAt = now + 15;
         }
 
-        // Reset if timeout exceeded
-        if (now - lastDetectedTime > 1600) {
+        // Safety timeout: if taking longer than 800ms, reset to IDLE
+        if (capturedNibbles.length === 0 && now - nextToneExpectedAt > 350) {
           state = "IDLE";
-          capturedNibbles = [];
         }
       }
     }

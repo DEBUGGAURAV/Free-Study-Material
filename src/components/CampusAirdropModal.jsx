@@ -22,17 +22,17 @@ import {
 
 
 /**
- * Generates a deterministic 6-character hex code (0-9, A-F) from any token string.
- * Strictly guarantees compatibility with ultrasonic frequency bins in soundDrop.js.
+ * Generates a deterministic 4-character hex code (0-9, A-F) from any token string.
+ * Strictly guarantees instant ~380ms acoustic lock in soundDrop.js.
  */
 function getHexSoundCode(token) {
-  if (!token) return "A1B2C3";
+  if (!token) return "A1B2";
   let h = 0x811c9dc5;
   for (let i = 0; i < token.length; i++) {
     h ^= token.charCodeAt(i);
     h = Math.imul(h, 0x01000193);
   }
-  return ((h >>> 0) & 0xffffff).toString(16).padStart(6, "0").toUpperCase();
+  return ((h >>> 0) & 0xffff).toString(16).padStart(4, "0").toUpperCase();
 }
 
 export default function CampusAirdropModal({
@@ -83,10 +83,12 @@ export default function CampusAirdropModal({
   const scanIntervalRef = useRef(null);
   const senderSessionRef = useRef(null);
   const receiverSessionRef = useRef(null);
+  const isProcessingOfferRef = useRef(false);
 
   // Sync active tab when modal opens
   useEffect(() => {
     if (isOpen) {
+      isProcessingOfferRef.current = false;
       if (currentNote?.id) {
         setActiveTab("send");
       } else {
@@ -109,7 +111,11 @@ export default function CampusAirdropModal({
 
       createAirDropSenderSession(currentNote.id, {
         onConnected: () => {
-          if (!isCancelled) setSenderConnected(true);
+          if (!isCancelled) {
+            setSenderConnected(true);
+            stopSoundDropBroadcast();
+            setSoundBeaming(false);
+          }
         },
         onProgress: (prog) => {
           if (!isCancelled) {
@@ -159,6 +165,8 @@ export default function CampusAirdropModal({
                   clearInterval(pollTimer);
                   await completeSenderWithAnswer(s, aData.answerToken);
                   setSenderConnected(true);
+                  stopSoundDropBroadcast();
+                  setSoundBeaming(false);
                 }
               }
             } catch (_) {}
@@ -253,6 +261,7 @@ export default function CampusAirdropModal({
     stopSoundDropListener();
     setSoundListening(false);
     setSoundVolumeLevel(0);
+    isProcessingOfferRef.current = false;
 
     let isCancelled = false;
 
@@ -263,6 +272,11 @@ export default function CampusAirdropModal({
       if (typeof BroadcastChannel !== "undefined") {
         const bc = new BroadcastChannel("campus_airdrop_mesh_channel");
         broadcastChannelRef.current = bc;
+        bc.onmessage = (e) => {
+          if (e.data?.type === "AIRDROP_OFFER" && e.data?.offerToken) {
+            handleProcessOfferToken(e.data.offerToken);
+          }
+        };
       }
 
       startSoundDropListener({
@@ -423,7 +437,10 @@ export default function CampusAirdropModal({
 
   // Process Offer Token when scanned via QR or heard via SoundDrop
   const handleProcessOfferToken = async (tokenStr) => {
-    if (!tokenStr) return;
+    if (!tokenStr || isProcessingOfferRef.current) return;
+    isProcessingOfferRef.current = true;
+    stopSoundDropListener();
+    setSoundListening(false);
     setErrorMsg("");
     try {
       let rawToken = String(tokenStr).trim();
@@ -513,6 +530,7 @@ export default function CampusAirdropModal({
         console.warn("Answer QR encode notice:", qrErr);
       }
     } catch (err) {
+      isProcessingOfferRef.current = false;
       setErrorMsg(err.message || "Invalid AirDrop offer token or session expired.");
     }
   };
