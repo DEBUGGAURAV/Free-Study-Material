@@ -30,7 +30,7 @@ setInterval(() => {
       signalQueue.set(peerId, freshSignals);
     }
   }
-}, 30000);
+}, 30000).unref();
 
 /**
  * POST /api/p2p/announce
@@ -211,7 +211,7 @@ setInterval(() => {
       airdropSessions.delete(code);
     }
   }
-}, 60000);
+}, 60000).unref();
 
 /**
  * POST /api/p2p/airdrop/offer

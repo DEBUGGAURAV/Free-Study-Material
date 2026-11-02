@@ -4,14 +4,14 @@
  * ============================================================================
  * Pure Web Audio API acoustic pairing protocol for zero-internet environments.
  * Transmits short pairing tokens and session handshakes using inaudible 
- * ultrasonic audio frequencies (18.2 kHz - 19.8 kHz) from speaker to microphone.
+ * ultrasonic audio frequencies (17.2 kHz - 18.8 kHz) from speaker to microphone.
  *
  * 0 KB Internet • 0.0% Server Bandwidth • ₹0 Cost Forever
  * Zero Camera Required • 0-Touch Proximity Pairing (Apple NameDrop Style)
  * ============================================================================
  */
 
-// Frequency Bands (Optimized for standard smartphone speaker/mic frequency response)
+// Frequency Bands (Optimized for smartphone speaker & microphone frequency response)
 const ULTRASONIC_PREAMBLE = 17200; // Hz (Inaudible near-ultrasound)
 const ULTRASONIC_BASE = 17500;     // Hz
 const ULTRASONIC_STEP = 80;        // Hz per hex nibble (16 bins = 17500 to 18700 Hz)
@@ -64,7 +64,7 @@ export async function startSoundDropBroadcast(token, options = {}) {
   const {
     isAudible = false,
     volume = 0.85,
-    repeatIntervalMs = 1200,
+    repeatIntervalMs = 1400,
     onBeep = () => {},
   } = options;
 
@@ -176,7 +176,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
 
   stopSoundDropListener();
 
-  const ctx = getAudioContext();
+  const ctx = await getAudioContext();
   if (!ctx) {
     throw new Error("Web Audio API is not supported on this device.");
   }
@@ -222,8 +222,6 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
   const stepFreq = isAudible ? AUDIBLE_STEP : ULTRASONIC_STEP;
 
   const preambleBin = Math.round(preambleFreq / binWidth);
-  const baseBin = Math.round(baseFreq / binWidth);
-  const stepBins = Math.round(stepFreq / binWidth);
 
   let state = "IDLE"; // 'IDLE' | 'READING_NIBBLES'
   let capturedNibbles = [];
@@ -253,9 +251,9 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
         dataArray[preambleBin] || 0,
         dataArray[preambleBin + 1] || 0
       );
-      const noiseFloor = ((dataArray[preambleBin - 5] || 0) + (dataArray[preambleBin + 5] || 0)) / 2 + 5;
+      const noiseFloor = ((dataArray[preambleBin - 6] || 0) + (dataArray[preambleBin + 6] || 0)) / 2 + 5;
 
-      if (preambleEnergy > 32 && preambleEnergy > noiseFloor * 1.35) {
+      if (preambleEnergy > 28 && preambleEnergy > noiseFloor * 1.3) {
         state = "READING_NIBBLES";
         capturedNibbles = [];
         lastDetectedTime = now;
@@ -265,16 +263,19 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
       if (now - lastDetectedTime >= TONE_DURATION_SEC * 1000 * 0.70) {
         let maxEnergy = 0;
         let bestNibble = -1;
-        const localNoise = ((dataArray[baseBin - 3] || 0) + (dataArray[baseBin + 16 * stepBins + 3] || 0)) / 2 + 5;
+        const lowNoiseBin = Math.max(0, Math.round((baseFreq - stepFreq) / binWidth));
+        const highNoiseBin = Math.min(bufferLength - 1, Math.round((baseFreq + 16 * stepFreq) / binWidth));
+        const localNoise = ((dataArray[lowNoiseBin] || 0) + (dataArray[highNoiseBin] || 0)) / 2 + 4;
 
         for (let n = 0; n < 16; n++) {
-          const targetBin = baseBin + n * stepBins;
+          const targetFreq = baseFreq + n * stepFreq;
+          const targetBin = Math.round(targetFreq / binWidth);
           const energy = Math.max(
             dataArray[targetBin - 1] || 0,
             dataArray[targetBin] || 0,
             dataArray[targetBin + 1] || 0
           );
-          if (energy > maxEnergy && energy > 28 && energy > localNoise * 1.25) {
+          if (energy > maxEnergy && energy > 25 && energy > localNoise * 1.2) {
             maxEnergy = energy;
             bestNibble = n;
           }
@@ -292,7 +293,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
 
             const expectedChecksum = calculateChecksum(dataPart);
             if (checksumPart === expectedChecksum || rawCode.length >= 8) {
-              onTokenDetected(dataPart || rawCode.slice(0, 6));
+              onTokenDetected(dataPart);
               state = "IDLE";
               capturedNibbles = [];
             }
@@ -300,7 +301,7 @@ export async function startSoundDropListener(callbacks = {}, options = {}) {
         }
 
         // Reset if timeout exceeded
-        if (now - lastDetectedTime > 1500) {
+        if (now - lastDetectedTime > 1600) {
           state = "IDLE";
           capturedNibbles = [];
         }

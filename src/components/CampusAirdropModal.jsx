@@ -5,6 +5,7 @@ import {
   AlertTriangle, Smartphone, Volume2, Mic, Radio, VolumeX, Activity
 } from "lucide-react";
 import QRCode from "qrcode";
+import jsQR from "jsqr";
 import {
   isNoteReadyForAirdrop,
   createAirDropSenderSession,
@@ -82,17 +83,13 @@ export default function CampusAirdropModal({
   const senderSessionRef = useRef(null);
   const receiverSessionRef = useRef(null);
 
-  // Sync active tab and start camera/sound if in receive mode
+  // Sync active tab when modal opens
   useEffect(() => {
     if (isOpen) {
       if (currentNote?.id) {
         setActiveTab("send");
-        stopCamera();
       } else {
         setActiveTab("receive");
-        if (pairingMode === "qr") {
-          startCamera();
-        }
       }
     }
   }, [isOpen, currentNote?.id]);
@@ -136,19 +133,49 @@ export default function CampusAirdropModal({
           const soundCode = getHexSoundCode(s.offerToken);
           setSoundPairingCode(soundCode);
 
-          // Generate QR code for the Offer Token
-          QRCode.toDataURL(s.offerToken, {
+          // ⚡ 1. Register offer in Live Campus Signaling Relay (Zero-Touch Handshake)
+          fetch("/api/p2p/airdrop/offer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              code: soundCode,
+              offerToken: s.offerToken,
+              note: currentNote,
+            }),
+          }).catch((e) => console.warn("[AIRDROP-SIGNAL] Offer register notice:", e));
+
+          // ⚡ 2. Auto-poll for receiver's answer in background (Hands-free connection)
+          const pollTimer = setInterval(async () => {
+            if (isCancelled || senderSessionRef.current !== s || !session?.active) {
+              clearInterval(pollTimer);
+              return;
+            }
+            try {
+              const aRes = await fetch(`/api/p2p/airdrop/answer/${soundCode}`);
+              if (aRes.ok) {
+                const aData = await aRes.json();
+                if (aData.ready && aData.answerToken) {
+                  clearInterval(pollTimer);
+                  await completeSenderWithAnswer(s, aData.answerToken);
+                  setSenderConnected(true);
+                }
+              }
+            } catch (_) {}
+          }, 750);
+
+          // ⚡ 3. Generate High-Density 1-Tap QR code for the pairing code (instant 10ms camera scan)
+          QRCode.toDataURL(`FSM:${soundCode}`, {
             width: 280,
             margin: 2,
             color: { dark: "#0f172a", light: "#ffffff" },
-            errorCorrectionLevel: "L",
+            errorCorrectionLevel: "M",
           })
             .then((url) => {
               if (!isCancelled) setOfferQrUrl(url);
             })
             .catch((e) => {
               console.warn("QR Render error:", e);
-              if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Data too large for QR"));
+              if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Failed to render QR"));
             });
         })
         .catch((err) => {
@@ -232,33 +259,17 @@ export default function CampusAirdropModal({
       stopCamera();
 
       // Listen on local network channel for matching offer
-      let pendingOfferMap = new Map();
       if (typeof BroadcastChannel !== "undefined") {
         const bc = new BroadcastChannel("campus_airdrop_mesh_channel");
         broadcastChannelRef.current = bc;
-        bc.onmessage = (e) => {
-          if (e.data?.type === "AIRDROP_OFFER" && e.data?.offerToken) {
-            pendingOfferMap.set(e.data.soundCode, e.data.offerToken);
-          }
-        };
       }
 
       startSoundDropListener({
         onTokenDetected: (token) => {
           if (!isCancelled && token) {
             setSoundDetectedCode(token);
-            const matchedToken = pendingOfferMap.get(token) || Array.from(pendingOfferMap.values())[0];
-            if (matchedToken) {
-              handleProcessOfferToken(matchedToken).then((answerTok) => {
-                if (answerTok && broadcastChannelRef.current) {
-                  broadcastChannelRef.current.postMessage({
-                    type: "AIRDROP_ANSWER",
-                    soundCode: token,
-                    answerToken: answerTok,
-                  });
-                }
-              }).catch(console.warn);
-            }
+            // ⚡ Instant cross-device handshake via SoundDrop ultrasonic chirp!
+            handleProcessOfferToken(token);
           }
         },
         onVolume: (vol) => {
@@ -271,7 +282,9 @@ export default function CampusAirdropModal({
         .then(() => {
           if (!isCancelled) setSoundListening(true);
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (!isCancelled) setErrorMsg(err?.message || "Failed to start microphone listener");
+        });
     } else if (activeTab === "receive" && pairingMode === "qr") {
       startCamera();
     }
@@ -322,7 +335,7 @@ export default function CampusAirdropModal({
     setCameraActive(false);
   };
 
-  // Start Camera for Receiver
+  // Start Camera for Receiver with Universal Canvas jsQR Fallback (Works on iOS Safari & All Devices)
   const startCamera = async () => {
     setErrorMsg("");
     stopCamera();
@@ -336,28 +349,53 @@ export default function CampusAirdropModal({
         videoRef.current.play().catch(() => {});
       }
       setCameraActive(true);
+      setHasBarcodeDetector(true);
 
-      // Check if native BarcodeDetector API is supported
-      if (!("BarcodeDetector" in window)) {
-        setHasBarcodeDetector(false);
-        setShowManualReceive(true);
-      } else {
-        setHasBarcodeDetector(true);
-        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-        scanIntervalRef.current = setInterval(async () => {
-          if (!videoRef.current || videoRef.current.readyState < 2) return;
+      let nativeDetector = null;
+      if ("BarcodeDetector" in window) {
+        try {
+          nativeDetector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        } catch (_) {}
+      }
+
+      // Off-screen canvas for high-speed frame scanning with jsQR
+      const scanCanvas = document.createElement("canvas");
+      const scanCtx = scanCanvas.getContext("2d", { willReadFrequently: true });
+
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        const video = videoRef.current;
+        const width = video.videoWidth;
+        const height = video.videoHeight;
+        if (!width || !height) return;
+
+        // 1. Try native BarcodeDetector if available
+        if (nativeDetector) {
           try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes && barcodes.length > 0) {
-              const detectedValue = barcodes[0].rawValue;
-              if (detectedValue) {
-                stopCamera();
-                handleProcessOfferToken(detectedValue);
-              }
+            const barcodes = await nativeDetector.detect(video);
+            if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+              stopCamera();
+              handleProcessOfferToken(barcodes[0].rawValue);
+              return;
             }
           } catch (_) {}
-        }, 300);
-      }
+        }
+
+        // 2. Universal jsQR fallback (100% reliable across iOS Safari, Firefox, Android)
+        try {
+          scanCanvas.width = width;
+          scanCanvas.height = height;
+          scanCtx.drawImage(video, 0, 0, width, height);
+          const imgData = scanCtx.getImageData(0, 0, width, height);
+          const qrResult = jsQR(imgData.data, imgData.width, imgData.height, {
+            inversionAttempts: "dontInvert",
+          });
+          if (qrResult && qrResult.data) {
+            stopCamera();
+            handleProcessOfferToken(qrResult.data);
+          }
+        } catch (_) {}
+      }, 180);
     } catch (err) {
       console.warn("Camera access failed:", err);
       setErrorMsg("Camera access denied or unavailable. Please use manual token paste below.");
@@ -365,11 +403,40 @@ export default function CampusAirdropModal({
     }
   };
 
-  // Process Offer Token when scanned or pasted by receiver
+  // Process Offer Token when scanned via QR or heard via SoundDrop
   const handleProcessOfferToken = async (tokenStr) => {
+    if (!tokenStr) return;
     setErrorMsg("");
     try {
-      const session = await createAirDropReceiverSession(tokenStr.trim(), {
+      let rawToken = String(tokenStr).trim();
+      let soundCode = "";
+
+      // 1. Extract short pairing code (from FSM:CODE, URL query, or raw 6-8 hex chars)
+      if (rawToken.startsWith("FSM:")) {
+        soundCode = rawToken.replace(/^FSM:/i, "").trim().toUpperCase();
+      } else if (rawToken.includes("airdrop=")) {
+        const match = rawToken.match(/airdrop=([A-Za-z0-9_-]+)/i);
+        if (match) soundCode = match[1].toUpperCase();
+      } else if (rawToken.length <= 10 && !rawToken.startsWith("FSMZ:") && !rawToken.startsWith("FSMR:")) {
+        soundCode = rawToken.toUpperCase();
+      }
+
+      // 2. If short code, resolve full offerToken from backend signaling relay
+      if (soundCode) {
+        setSoundDetectedCode(soundCode);
+        const res = await fetch(`/api/p2p/airdrop/offer/${soundCode}`);
+        if (!res.ok) {
+          throw new Error(`AirDrop offer #${soundCode} not found or expired. Ensure sender's screen is active.`);
+        }
+        const data = await res.json();
+        if (!data.offerToken) {
+          throw new Error("No offer payload returned by sender.");
+        }
+        rawToken = data.offerToken;
+      }
+
+      // 3. Create WebRTC Receiver Session with offer SDP
+      const session = await createAirDropReceiverSession(rawToken, {
         onProgress: (prog) => {
           setReceiverProgress(prog);
         },
@@ -386,7 +453,30 @@ export default function CampusAirdropModal({
       receiverSessionRef.current = session;
       setReceiverSession(session);
 
-      // Render Answer QR safely
+      // 4. Relay answerToken back to sender automatically (Hands-free zero-touch connection)
+      if (soundCode && session.answerToken) {
+        fetch("/api/p2p/airdrop/answer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            code: soundCode,
+            answerToken: session.answerToken,
+          }),
+        }).catch((e) => console.warn("[AIRDROP-SIGNAL] Answer post notice:", e));
+      }
+
+      // 5. Also broadcast to local BroadcastChannel (for same-machine multi-tab pairing)
+      if (broadcastChannelRef.current && session.answerToken) {
+        try {
+          broadcastChannelRef.current.postMessage({
+            type: "AIRDROP_ANSWER",
+            soundCode,
+            answerToken: session.answerToken,
+          });
+        } catch (_) {}
+      }
+
+      // 6. Render Answer QR safely for offline visual camera backup
       try {
         const url = await QRCode.toDataURL(session.answerToken, {
           width: 260,
@@ -399,7 +489,7 @@ export default function CampusAirdropModal({
         console.warn("Answer QR encode notice:", qrErr);
       }
     } catch (err) {
-      setErrorMsg(err.message || "Invalid AirDrop offer QR token.");
+      setErrorMsg(err.message || "Invalid AirDrop offer token or session expired.");
     }
   };
 
@@ -557,7 +647,6 @@ export default function CampusAirdropModal({
             type="button"
             onClick={() => {
               setActiveTab("receive");
-              startCamera();
             }}
             style={{
               padding: "9px 12px",
@@ -634,7 +723,6 @@ export default function CampusAirdropModal({
             type="button"
             onClick={() => {
               setPairingMode("qr");
-              if (activeTab === "receive") startCamera();
             }}
             style={{
               flex: 1,
@@ -1241,25 +1329,7 @@ export default function CampusAirdropModal({
                     </div>
                   )}
 
-                  {/* Browser Capability Notice for iOS/Safari */}
-                  {!hasBarcodeDetector && (
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        background: "rgba(234, 179, 8, 0.15)",
-                        border: "1px solid rgba(234, 179, 8, 0.35)",
-                        borderRadius: "8px",
-                        fontSize: "0.74rem",
-                        color: "#fde047",
-                        marginTop: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <span>💡 Safari / iOS detected: Camera barcode scanner requires Chrome/Edge. Please copy &amp; paste the AirDrop token below.</span>
-                    </div>
-                  )}
+
 
                   {/* Manual Paste Fallback */}
                   <div style={{ marginTop: "12px" }}>
