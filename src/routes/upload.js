@@ -173,7 +173,7 @@ router.post(
           year: noteYear,
           semester: noteYear, // Backward compatibility for legacy clients
           description: description || "",
-          tags: tags ? tags.split(",").map((t) => t.trim()) : [],
+          tags: tags ? (Array.isArray(tags) ? tags : typeof tags === "string" ? tags.split(",") : []).map((t) => String(t).trim()).filter(Boolean) : [],
           originalName: file.originalname,
           mimeType: file.mimetype,
           fileSize: file.size,
