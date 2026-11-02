@@ -478,18 +478,13 @@ export default function NoteCard({
               <span className="progress-status-left">
                 <Activity size={12} style={{ color: "var(--accent-cyan)" }} />
                 <span>{downloadProgress.percent}%</span>
-                {downloadProgress.source === "p2p" ||
-                downloadProgress.realSource?.id === "p2p" ? (
-                  <span className="source-mini-tag tag-p2p">⚡ P2P</span>
-                ) : downloadProgress.realSource?.id === "local_cache" ? (
-                  <span className="source-mini-tag tag-cache">💾 Local</span>
-                ) : downloadProgress.realSource?.id === "ram" ? (
-                  <span className="source-mini-tag tag-ram">🧠 RAM</span>
-                ) : downloadProgress.realSource?.id === "disk" ? (
-                  <span className="source-mini-tag tag-disk">💽 SSD</span>
-                ) : (
-                  <span className="source-mini-tag tag-cdn">⚡ Edge CDN</span>
-                )}
+                <span
+                  className={`source-mini-tag tag-${downloadProgress.realSource?.id || (downloadProgress.source === "storage" ? "storage" : "cdn")}`}
+                  title={downloadProgress.realSource?.details || downloadProgress.realSourceLabel || "Real-time Stream Source"}
+                >
+                  {downloadProgress.realSource?.icon || "⚡"}{" "}
+                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Telegram Vault" : "Edge CDN")}
+                </span>
               </span>
 
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>

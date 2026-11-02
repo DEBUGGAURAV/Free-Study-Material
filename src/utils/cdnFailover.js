@@ -31,24 +31,23 @@ export function parseSourceFromHeaders(headers) {
   const edgeLocation = get("x-edge-location") || get("cf-ray")?.split("-")[1] || "";
   const dataSource = get("x-data-source");
 
-  // 1. Explicit Storage / Origin MISS check (Highest Priority: Never mislabel Storage stream as CDN!)
+  // 1. Cloudflare Edge CDN HIT (Top Priority for System B: When Edge Cache returns HIT or worker serves directly)
   if (
-    realSource === "ACADEMIC_CLOUD_VAULT" ||
-    realSource === "TELEGRAM_STORAGE" ||
-    dataSource === "storage" ||
-    cfCache === "MISS" ||
-    xEdgeCache === "MISS"
+    realSource === "CLOUDFLARE_WORKER" ||
+    xEdgeCache === "HIT" ||
+    (cfCache === "HIT" && realSource !== "RAM_BUFFER" && realSource !== "DISK_CACHE") ||
+    dataSource === "cdn"
   ) {
     return {
-      id: "storage",
-      label: sourceLabel || "Primary Academic Cloud Storage Vault (Caching to CDN)",
-      short: "Cloud Storage",
-      details: "Streaming from Cloud Storage • Caching to CDN in background",
-      colo: "Origin",
-      icon: "☁️",
-      color: "#f59e0b",
-      bgColor: "rgba(245, 158, 11, 0.14)",
-      borderColor: "rgba(245, 158, 11, 0.35)",
+      id: "worker",
+      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Global"} POP)`,
+      short: "Edge CDN (1ms)",
+      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
+      colo: edgeLocation || "Edge",
+      icon: "⚡",
+      color: "#38bdf8",
+      bgColor: "rgba(56, 189, 248, 0.14)",
+      borderColor: "rgba(56, 189, 248, 0.35)",
     };
   }
 
@@ -82,18 +81,27 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // 4. Cloudflare Edge CDN HIT (1ms)
-  if (realSource === "CLOUDFLARE_WORKER" || cfCache === "HIT" || xEdgeCache === "HIT") {
+  // 4. Primary Telegram Cloud Storage Vault (MISS or initial write-through fetch)
+  if (
+    realSource === "ACADEMIC_CLOUD_VAULT" ||
+    realSource === "TELEGRAM_STORAGE" ||
+    realSource === "TELEGRAM_BOT_API" ||
+    dataSource === "storage" ||
+    dataSource === "bot_api" ||
+    xEdgeCache === "MISS" ||
+    xEdgeCache === "MISS-SAVED" ||
+    cfCache === "MISS"
+  ) {
     return {
-      id: "worker",
-      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Mumbai"} POP)`,
-      short: "Edge CDN (1ms)",
-      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
-      colo: edgeLocation || "Edge",
-      icon: "⚡",
-      color: "#38bdf8",
-      bgColor: "rgba(56, 189, 248, 0.14)",
-      borderColor: "rgba(56, 189, 248, 0.35)",
+      id: "storage",
+      label: sourceLabel || "Telegram Cloud Storage (Caching to Edge CDN...)",
+      short: "Telegram Vault",
+      details: "Streaming from Telegram Storage • Caching to Edge CDN",
+      colo: "Origin",
+      icon: "☁️",
+      color: "#f59e0b",
+      bgColor: "rgba(245, 158, 11, 0.14)",
+      borderColor: "rgba(245, 158, 11, 0.35)",
     };
   }
 

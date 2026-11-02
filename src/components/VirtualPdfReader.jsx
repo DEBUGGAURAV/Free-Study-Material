@@ -2483,6 +2483,29 @@ export default function VirtualPdfReader({
             <div style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "8px", marginTop: "2px", flexWrap: "wrap" }}>
               <span>{subject || "Mozilla PDF Engine"}</span>
 
+              {/* Dynamic Live Stream Realtime Source Badge */}
+              {realSourceInfo && (
+                <span
+                  title={realSourceInfo.details || realSourceInfo.label}
+                  style={{
+                    padding: "2px 8px",
+                    fontSize: "0.64rem",
+                    fontWeight: 700,
+                    background: realSourceInfo.bgColor || "rgba(56, 189, 248, 0.14)",
+                    color: realSourceInfo.color || "#38bdf8",
+                    border: `1px solid ${realSourceInfo.borderColor || "rgba(56, 189, 248, 0.3)"}`,
+                    borderRadius: "6px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    userSelect: "none",
+                  }}
+                >
+                  <span>{realSourceInfo.icon || "⚡"}</span>
+                  <span>{realSourceInfo.short || realSourceInfo.label}</span>
+                </span>
+              )}
+
               {/* Dynamic Live Stream Source Indicator: Auto-shown ONLY when P2P Mesh is active with peers */}
               {streamSource === "p2p" && isCachedP2P && p2pPeerCount > 0 && (
                 <span
@@ -4471,9 +4494,7 @@ export default function VirtualPdfReader({
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
               <Download size={14} style={{ color: "var(--accent-cyan)" }} />
               <span>
-                {downloadProgress.source === "storage" || streamSource === "storage"
-                  ? `Streaming from Store: ${downloadProgress.percent}%`
-                  : `Streaming from CDN: ${downloadProgress.percent}%`}
+                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Telegram Vault" : "Edge CDN")}: {downloadProgress.percent}%
               </span>
             </span>
             <button
@@ -4533,8 +4554,8 @@ export default function VirtualPdfReader({
 
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
             <span>{downloadProgress.loadedMB} MB / {downloadProgress.totalMB} MB</span>
-            <span style={{ color: downloadProgress.source === "storage" || streamSource === "storage" ? "#fbbf24" : "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-              {downloadProgress.source === "storage" || streamSource === "storage" ? "📦 Store" : "⚡ CDN"} • {downloadProgress.speed}
+            <span style={{ color: realSourceInfo?.color || (downloadProgress.source === "storage" || streamSource === "storage" ? "#fbbf24" : "var(--accent-cyan)"), fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+              {realSourceInfo?.icon || (downloadProgress.source === "storage" || streamSource === "storage" ? "☁️" : "⚡")} {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Telegram Vault" : "Edge CDN")} • {downloadProgress.speed}
             </span>
           </div>
         </div>
