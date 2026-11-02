@@ -604,7 +604,7 @@ export default function NoteCard({
               >
                 {downloading ? (
                   <>
-                    <div className="spinner" style={{ width: "12px", height: "12px" }}></div>
+                    <div className="spinner" style={{ width: "14px", height: "14px" }}></div>
                     <span>{downloadProgress?.percent || 0}%</span>
                   </>
                 ) : (

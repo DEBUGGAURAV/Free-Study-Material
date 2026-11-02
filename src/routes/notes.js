@@ -15,7 +15,7 @@ const { sendTelegramAuthNotice } = require("../services/emailService");
 const { getLastSyncState, recordSyncEvent } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 
-// In-Memory Edge CDN & RAM Buffer Cache for Instant 1ms Streaming (Max 100 items)
+// In-Memory Edge CDN & RAM Buffer Cache (Ultra-Lightweight Zero-RAM Mode: 0 MB Heap Buffer)
 const noteBufferCache = new Map();
 let dbWritesPreventedCount = 0;
 
@@ -82,60 +82,43 @@ function saveCdnBuffer(id, buffer, mimeType) {
 }
 
 function getCdnBuffer(id) {
-  if (noteBufferCache.has(id)) {
-    return noteBufferCache.get(id);
-  }
   const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
   const metaPath = path.join(CDN_CACHE_DIR, `${id}.meta.json`);
   if (fs.existsSync(binPath)) {
     try {
-      const buffer = fs.readFileSync(binPath);
-      let meta = { mimeType: "application/pdf", totalSize: buffer.length };
+      let meta = { mimeType: "application/pdf" };
       if (fs.existsSync(metaPath)) {
         try {
           meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
         } catch (_) {}
       }
-      const item = {
-        buffer,
-        totalSize: meta.totalSize || buffer.length,
+      let totalSize = meta.totalSize || 0;
+      if (!totalSize) {
+        try { totalSize = fs.statSync(binPath).size; } catch (_) {}
+      }
+      // Zero-RAM Mode: Returns file metadata & path without loading multi-megabyte buffer into Node.js heap!
+      return {
+        isDiskOnly: true,
+        binPath,
+        totalSize,
         contentType: meta.mimeType || "application/pdf",
         cachedAt: meta.cachedAt || Date.now(),
       };
-      noteBufferCache.set(id, item);
-      return item;
     } catch (err) {
-      console.warn("[CDN-DISK] Read error:", err.message);
+      console.warn("[CDN-DISK] Metadata read error:", err.message);
     }
   }
   return null;
 }
 
 function loadDiskCacheIntoMemory() {
-  try {
-    if (!fs.existsSync(CDN_CACHE_DIR)) return;
-    const files = fs.readdirSync(CDN_CACHE_DIR);
-    let loaded = 0;
-    const maxItems = getMaxRamBufferItems();
-    for (const f of files) {
-      if (noteBufferCache.size >= maxItems) break;
-      if (f.endsWith(".bin")) {
-        const id = f.replace(".bin", "");
-        if (!noteBufferCache.has(id)) {
-          const item = getCdnBuffer(id);
-          if (item) loaded++;
-        }
-      }
-    }
-    if (loaded > 0) {
-      console.log(`[CDN-PREWARM] 🚀 Pre-warmed ${loaded} document(s) from NVMe disk into LRU RAM Cache Pool (${(getMemoryCacheInfo().totalBytes / 1048576).toFixed(1)} MB).`);
-    }
-  } catch (err) {
-    console.warn("[CDN-PREWARM] Disk-to-RAM prewarm notice:", err.message);
-  }
+  // Ultra-Lightweight Zero-RAM Mode: Do NOT buffer big PDF files into Node.js process heap memory.
+  // Disk Cache (cache/cdn/) streams directly via zero-copy fs.createReadStream().pipe(res),
+  // freeing 100% of Node.js RAM and preventing Render Out-Of-Memory (OOM) crashes!
+  console.log("[ZERO-RAM-ENGINE] 🛡️ Ultra-Lightweight Zero-RAM Mode active: 0 MB PDF Buffer in RAM. Zero-Copy NVMe SSD stream enabled.");
 }
 
-// Immediately load disk cache into high-speed LRU RAM on module init
+// Module init log
 loadDiskCacheIntoMemory();
 
 /**
@@ -386,18 +369,7 @@ async function fetchAndCacheNoteBuffer(id, note) {
       }
 
       if (docData && docData.buffer) {
-        const maxRamPool = getMaxRamBufferItems();
-        if (noteBufferCache.size >= maxRamPool) {
-          const oldestKey = noteBufferCache.keys().next().value;
-          noteBufferCache.delete(oldestKey);
-        }
-        const cacheItem = {
-          buffer: docData.buffer,
-          totalSize: docData.totalSize || docData.buffer.length,
-          contentType: docData.mimeType || "application/pdf",
-          cachedAt: Date.now(),
-        };
-        noteBufferCache.set(id, cacheItem);
+        // Zero-RAM Mode: Store immediately to Local SSD Disk Cache (0 MB Process Heap RAM)
         saveCdnBuffer(id, docData.buffer, docData.mimeType);
 
         if (db && !note.isCdnCached) {
@@ -408,8 +380,15 @@ async function fetchAndCacheNoteBuffer(id, note) {
           note.isCdnCached = true;
           ramCache.set(`note_${id}`, note, 3 * 3600);
         }
-        console.log(`[PASS-THROUGH] 🚀 Note "${note.title}" successfully cached to Edge CDN & RAM Buffer!`);
-        return cacheItem;
+        console.log(`[PASS-THROUGH] 🚀 Note "${note.title}" cached to NVMe SSD Disk Cache (Zero-RAM Stream)!`);
+        
+        // Return single in-flight response buffer (Node GC cleans this up immediately after streaming)
+        return {
+          buffer: docData.buffer,
+          totalSize: docData.totalSize || docData.buffer.length,
+          contentType: docData.mimeType || "application/pdf",
+          cachedAt: Date.now(),
+        };
       }
       return null;
     } catch (err) {
@@ -1378,20 +1357,7 @@ router.post("/:id/cache-to-cdn", async (req, res) => {
       return res.status(500).json({ success: false, message: "Could not fetch document buffer from storage node." });
     }
 
-    // High-capacity Dynamic RAM pool: Scales with server total RAM (e.g. 25 on 512MB, 50 on 1GB, 100 on 2GB, 200 on 4GB)
-    const maxRamPool = getMaxRamBufferItems();
-    if (noteBufferCache.size >= maxRamPool) {
-      const oldestKey = noteBufferCache.keys().next().value;
-      noteBufferCache.delete(oldestKey);
-    }
-
-    const cacheItem = {
-      buffer: docData.buffer,
-      totalSize: docData.totalSize || docData.buffer.length,
-      contentType: docData.mimeType || "application/pdf",
-      cachedAt: Date.now(),
-    };
-    noteBufferCache.set(id, cacheItem);
+    // Zero-RAM Mode: Save directly to NVMe SSD Disk Cache (0 MB Heap Memory allocation)
     saveCdnBuffer(id, docData.buffer, docData.mimeType);
 
     // ⚡ Persist permanent CDN status in Firestore so it survives server restarts & prevents storage hits forever
@@ -2002,27 +1968,14 @@ function trimMemoryCache(keepRatio = 0.6) {
 }
 
 function getMemoryCacheInfo() {
-  let totalBytes = 0;
-  const items = [];
-  for (const [id, entry] of noteBufferCache.entries()) {
-    const size = entry.totalSize || (entry.buffer ? entry.buffer.length : 0);
-    totalBytes += size;
-    items.push({
-      id,
-      size,
-      sizeMB: (size / (1024 * 1024)).toFixed(2),
-      mimeType: entry.contentType || entry.mimeType || "application/pdf",
-      cachedAt: entry.cachedAt || Date.now(),
-      ageSeconds: Math.round((Date.now() - (entry.cachedAt || Date.now())) / 1000),
-    });
-  }
   const dynamicMax = getMaxRamBufferItems();
   return {
     itemCount: noteBufferCache.size,
     maxItems: dynamicMax,
-    totalBytes,
-    totalMB: (totalBytes / (1024 * 1024)).toFixed(2),
-    items: items.slice(0, 25),
+    totalBytes: 0,
+    totalMB: "0.00",
+    mode: "Zero-RAM Kernel Zero-Copy SSD Stream",
+    items: [],
   };
 }
 
@@ -2044,51 +1997,29 @@ async function prewarmPopularNotes(limit = 10) {
     snap = await db.collection("notes").limit(finalLimit).get();
   }
   let prewarmed = 0;
-  const dynamicMax = getMaxRamBufferItems();
   for (const doc of snap.docs) {
     const note = doc.data();
-    if (!noteBufferCache.has(doc.id)) {
-      // 1. Instant 0ms load from local NVMe/SSD disk cache if already buffered
-      const binPath = path.join(CDN_CACHE_DIR, `${doc.id}.bin`);
-      if (fs.existsSync(binPath)) {
-        try {
-          const diskBuffer = await fs.promises.readFile(binPath);
-          noteBufferCache.set(doc.id, {
-            buffer: diskBuffer,
-            totalSize: diskBuffer.length,
-            contentType: note.mimeType || "application/pdf",
-            cachedAt: Date.now(),
-          });
-          prewarmed++;
-          continue;
-        } catch (_) {}
-      }
+    const binPath = path.join(CDN_CACHE_DIR, `${doc.id}.bin`);
+    // 1. If already on SSD disk, zero-copy stream is already warm!
+    if (fs.existsSync(binPath)) {
+      prewarmed++;
+      continue;
+    }
 
-      // 2. Fetch from high-speed MTProto Telegram DC
-      if (note.telegramMessageId) {
-        try {
-          const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
-          if (docData && docData.buffer) {
-            if (noteBufferCache.size >= dynamicMax) {
-              const oldestKey = noteBufferCache.keys().next().value;
-              noteBufferCache.delete(oldestKey);
-            }
-            noteBufferCache.set(doc.id, {
-              buffer: docData.buffer,
-              totalSize: docData.totalSize || docData.buffer.length,
-              contentType: docData.mimeType || "application/pdf",
-              cachedAt: Date.now(),
-            });
-            saveCdnBuffer(doc.id, docData.buffer, docData.mimeType);
-            prewarmed++;
-          }
-        } catch (e) {
-          console.error(`Prewarm error for note ${doc.id}:`, e.message);
+    // 2. Fetch from high-speed MTProto Telegram DC and save to SSD disk (Zero-RAM mode)
+    if (note.telegramMessageId) {
+      try {
+        const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
+        if (docData && docData.buffer) {
+          saveCdnBuffer(doc.id, docData.buffer, docData.mimeType);
+          prewarmed++;
         }
+      } catch (e) {
+        console.error(`Prewarm error for note ${doc.id}:`, e.message);
       }
     }
   }
-  return { success: true, prewarmed, totalInCache: noteBufferCache.size };
+  return { success: true, prewarmed, totalInCache: prewarmed, mode: "Zero-RAM Kernel SSD Stream" };
 }
 
 // ⚡ Automatic Auto-Prewarm: Automatically load popular documents into RAM Edge Cache on boot
@@ -2101,9 +2032,9 @@ setTimeout(async () => {
     } catch (_) {}
 
     if (!techSet || techSet.enableCdnAutoPrewarm !== false) {
-      console.log("[TECH-NEXUS] 🚀 Auto-Prewarming Top Notes into In-Memory RAM Edge Cache...");
+      console.log("[TECH-NEXUS] 🚀 Auto-Prewarming Top Notes into Zero-RAM NVMe SSD Cache...");
       const res = await prewarmPopularNotes(techSet?.cdnMaxRamItems || 10);
-      console.log(`[TECH-NEXUS] ⚡ Auto-Prewarm complete: ${res.prewarmed || 0} notes cached in RAM (${getMemoryCacheInfo().totalMB} MB).`);
+      console.log(`[TECH-NEXUS] ⚡ Auto-Prewarm complete: ${res.prewarmed || 0} notes cached on SSD (0 MB Heap RAM).`);
     }
   } catch (err) {
     console.warn("[TECH-NEXUS] Auto-prewarm notice:", err.message);

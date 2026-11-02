@@ -1695,14 +1695,14 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 .btn-action-chat,
 .btn-action-share,
 .btn-mesh-pill {
-  height: 34px !important;
-  min-height: 34px !important;
-  max-height: 34px !important;
+  height: 35px !important;
+  min-height: 35px !important;
+  max-height: 35px !important;
   padding: 0 10px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 6px !important;
+  gap: 7px !important;
   border-radius: var(--radius-full) !important;
   font-size: 0.74rem !important;
   font-weight: 700 !important;
@@ -1721,8 +1721,18 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 .btn-action-share svg,
 .btn-mesh-pill svg {
   flex-shrink: 0;
-  width: 14px;
-  height: 14px;
+  width: 14px !important;
+  height: 14px !important;
+  display: block;
+}
+
+.btn-action-read span,
+.btn-action-download span,
+.btn-action-chat span,
+.btn-action-share span,
+.btn-mesh-pill span {
+  display: inline-block;
+  line-height: 1;
 }
 
 .btn-action-read {
