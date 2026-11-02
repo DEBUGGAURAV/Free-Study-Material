@@ -63,6 +63,7 @@ export default function CampusAirdropModal({
   const [senderDone, setSenderDone] = useState(false);
   const [showAnswerInput, setShowAnswerInput] = useState(false);
   const [answerInputText, setAnswerInputText] = useState("");
+  const [showSenderScanner, setShowSenderScanner] = useState(false);
 
   // Receiver state
   const [receiverSession, setReceiverSession] = useState(null);
@@ -163,12 +164,12 @@ export default function CampusAirdropModal({
             } catch (_) {}
           }, 750);
 
-          // ⚡ 3. Generate High-Density 1-Tap QR code for the pairing code (instant 10ms camera scan)
-          QRCode.toDataURL(`FSM:${soundCode}`, {
+          // ⚡ 3. Generate 100% Offline Standalone Offer QR code (0 server fetch required)
+          QRCode.toDataURL(s.offerToken, {
             width: 280,
             margin: 2,
             color: { dark: "#0f172a", light: "#ffffff" },
-            errorCorrectionLevel: "M",
+            errorCorrectionLevel: "L",
           })
             .then((url) => {
               if (!isCancelled) setOfferQrUrl(url);
@@ -375,7 +376,7 @@ export default function CampusAirdropModal({
             const barcodes = await nativeDetector.detect(video);
             if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
               stopCamera();
-              handleProcessOfferToken(barcodes[0].rawValue);
+              handleScannedQr(barcodes[0].rawValue);
               return;
             }
           } catch (_) {}
@@ -392,7 +393,7 @@ export default function CampusAirdropModal({
           });
           if (qrResult && qrResult.data) {
             stopCamera();
-            handleProcessOfferToken(qrResult.data);
+            handleScannedQr(qrResult.data);
           }
         } catch (_) {}
       }, 180);
@@ -400,6 +401,23 @@ export default function CampusAirdropModal({
       console.warn("Camera access failed:", err);
       setErrorMsg("Camera access denied or unavailable. Please use manual token paste below.");
       setShowManualReceive(true);
+    }
+  };
+
+  // Smart QR handler for both Sender (Answer QR) and Receiver (Offer QR)
+  const handleScannedQr = async (data) => {
+    if (!data) return;
+    const str = String(data).trim();
+    if (activeTab === "send" && senderSessionRef.current) {
+      try {
+        await completeSenderWithAnswer(senderSessionRef.current, str);
+        setSenderConnected(true);
+        setShowSenderScanner(false);
+      } catch (err) {
+        setErrorMsg(err.message || "Invalid answer QR code");
+      }
+    } else {
+      handleProcessOfferToken(str);
     }
   };
 
@@ -411,7 +429,7 @@ export default function CampusAirdropModal({
       let rawToken = String(tokenStr).trim();
       let soundCode = "";
 
-      // 1. Extract short pairing code (from FSM:CODE, URL query, or raw 6-8 hex chars)
+      // 1. Extract short pairing code (from SoundDrop audio chirp, or FSM:PIN)
       if (rawToken.startsWith("FSM:")) {
         soundCode = rawToken.replace(/^FSM:/i, "").trim().toUpperCase();
       } else if (rawToken.includes("airdrop=")) {
@@ -421,21 +439,25 @@ export default function CampusAirdropModal({
         soundCode = rawToken.toUpperCase();
       }
 
-      // 2. If short code, resolve full offerToken from backend signaling relay
+      // 2. If short code (heard via SoundDrop), resolve full offerToken from backend signaling relay
       if (soundCode) {
         setSoundDetectedCode(soundCode);
-        const res = await fetch(`/api/p2p/airdrop/offer/${soundCode}`);
-        if (!res.ok) {
-          throw new Error(`AirDrop offer #${soundCode} not found or expired. Ensure sender's screen is active.`);
+        try {
+          const res = await fetch(`/api/p2p/airdrop/offer/${soundCode}`);
+          if (!res.ok) {
+            throw new Error(`AirDrop offer #${soundCode} not found or expired.`);
+          }
+          const data = await res.json();
+          if (!data.offerToken) {
+            throw new Error("No offer payload returned by sender.");
+          }
+          rawToken = data.offerToken;
+        } catch (fetchErr) {
+          throw new Error("SoundDrop audio pairing requires local Wi-Fi / Hotspot network. For 100% offline transfer without internet, switch to 📱 1-Tap QR Mesh mode!");
         }
-        const data = await res.json();
-        if (!data.offerToken) {
-          throw new Error("No offer payload returned by sender.");
-        }
-        rawToken = data.offerToken;
       }
 
-      // 3. Create WebRTC Receiver Session with offer SDP
+      // 3. Create WebRTC Receiver Session with offer SDP (100% OFFLINE)
       const session = await createAirDropReceiverSession(rawToken, {
         onProgress: (prog) => {
           setReceiverProgress(prog);
@@ -453,16 +475,18 @@ export default function CampusAirdropModal({
       receiverSessionRef.current = session;
       setReceiverSession(session);
 
-      // 4. Relay answerToken back to sender automatically (Hands-free zero-touch connection)
-      if (soundCode && session.answerToken) {
+      const computedSoundCode = soundCode || getHexSoundCode(rawToken);
+
+      // 4. Relay answerToken back to sender automatically if network exists (non-blocking)
+      if (computedSoundCode && session.answerToken) {
         fetch("/api/p2p/airdrop/answer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            code: soundCode,
+            code: computedSoundCode,
             answerToken: session.answerToken,
           }),
-        }).catch((e) => console.warn("[AIRDROP-SIGNAL] Answer post notice:", e));
+        }).catch(() => {});
       }
 
       // 5. Also broadcast to local BroadcastChannel (for same-machine multi-tab pairing)
@@ -470,13 +494,13 @@ export default function CampusAirdropModal({
         try {
           broadcastChannelRef.current.postMessage({
             type: "AIRDROP_ANSWER",
-            soundCode,
+            soundCode: computedSoundCode,
             answerToken: session.answerToken,
           });
         } catch (_) {}
       }
 
-      // 6. Render Answer QR safely for offline visual camera backup
+      // 6. Render Answer QR safely for 100% offline visual camera scan
       try {
         const url = await QRCode.toDataURL(session.answerToken, {
           width: 260,
@@ -976,14 +1000,23 @@ export default function CampusAirdropModal({
 
                 <button
                   type="button"
-                  onClick={() => setShowAnswerInput(!showAnswerInput)}
+                  onClick={() => {
+                    if (showSenderScanner) {
+                      stopCamera();
+                      setShowSenderScanner(false);
+                    } else {
+                      setShowAnswerInput(false);
+                      setShowSenderScanner(true);
+                      startCamera();
+                    }
+                  }}
                   style={{
                     flex: 1,
                     padding: "8px 12px",
-                    background: "rgba(168, 85, 247, 0.15)",
-                    border: "1px solid rgba(168, 85, 247, 0.35)",
+                    background: showSenderScanner ? "rgba(239, 68, 68, 0.2)" : "rgba(168, 85, 247, 0.15)",
+                    border: showSenderScanner ? "1px solid #ef4444" : "1px solid rgba(168, 85, 247, 0.35)",
                     borderRadius: "8px",
-                    color: "#e9d5ff",
+                    color: showSenderScanner ? "#fca5a5" : "#e9d5ff",
                     fontSize: "0.76rem",
                     fontWeight: 600,
                     cursor: "pointer",
@@ -993,8 +1026,49 @@ export default function CampusAirdropModal({
                     gap: "6px",
                   }}
                 >
-                  <span>Connect with Answer</span>
-                  <ArrowRight size={14} />
+                  <Camera size={14} />
+                  <span>{showSenderScanner ? "Close Camera" : "📷 Scan Answer QR"}</span>
+                </button>
+              </div>
+
+              {/* Sender Viewfinder when scanning Receiver's Answer QR */}
+              {showSenderScanner && (
+                <div style={{ marginTop: "12px", borderRadius: "12px", overflow: "hidden", position: "relative", height: "230px", background: "#000" }}>
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                    <div style={{ width: "160px", height: "160px", border: "2px solid #c084fc", borderRadius: "14px", boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.45)" }} />
+                    <span style={{ marginTop: "8px", fontSize: "0.72rem", color: "#e9d5ff", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>Point at Receiver's Answer QR</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Paste Link */}
+              <div style={{ marginTop: "8px", textAlign: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAnswerInput(!showAnswerInput);
+                    if (showSenderScanner) {
+                      stopCamera();
+                      setShowSenderScanner(false);
+                    }
+                  }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94a3b8",
+                    fontSize: "0.72rem",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    padding: 0,
+                  }}
+                >
+                  {showAnswerInput ? "Hide Manual Paste" : "Or Paste Receiver's Token Manually"}
                 </button>
               </div>
 
