@@ -1576,7 +1576,13 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         signUpUrl: "/?auth=signup",
       });
     }
-    if (!note.telegramMessageId) {
+    const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
+    const isDiskCached = fs.existsSync(binPath);
+    const isRamCached = Boolean(noteBufferCache.has(id));
+    const hasTelegramStorage = Boolean(note.telegramMessageId || note.telegramBotFileId || note.telegramFileId);
+
+    // Only redirect to external Drive link if file is TRULY absent from all Cloud Vault tiers (RAM, Disk, Edge CDN, Telegram)
+    if (!hasTelegramStorage && !isDiskCached && !isRamCached && !note.isCdnCached) {
       if (note.driveLink) {
         let driveUrl = note.driveLink;
         const driveMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
@@ -1597,9 +1603,6 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // 🚀 Check Storage Tier for Live Real-Time Telemetry
-    const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
-    const isDiskCached = fs.existsSync(binPath);
-    const isRamCached = Boolean(noteBufferCache.has(id));
     let streamRealSource = "☁️ Primary Academic Cloud Vault (Singapore Origin Core)";
     if (isRamCached) {
       streamRealSource = "🧠 In-Memory RAM Buffer (0ms Microsecond Stream)";

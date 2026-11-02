@@ -128,12 +128,12 @@ export default function VirtualPdfReader({
   );
 
   // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
-  // Force high-performance Canvas Streamer on mobile!
+  // Force high-performance Canvas Streamer on mobile ALWAYS!
   useEffect(() => {
-    if (isMobileDevice && useNativeViewer && !note?.driveLink) {
+    if (isMobileDevice && useNativeViewer) {
       setUseNativeViewer(false);
     }
-  }, [isMobileDevice, useNativeViewer, note]);
+  }, [isMobileDevice, useNativeViewer]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -386,7 +386,7 @@ export default function VirtualPdfReader({
         objectUrl = URL.createObjectURL(file);
         setNativeSrc(objectUrl);
       } catch {}
-    } else if (note?.driveLink && !note?.telegramMessageId) {
+    } else if (note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached && !isMobileDevice) {
       let dLink = note.driveLink;
       const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
@@ -446,8 +446,15 @@ export default function VirtualPdfReader({
           return;
         }
 
-        // Check if note is a Google Drive link without Telegram storage
-        if (note?.driveLink && !note?.telegramMessageId) {
+        // Check if note is a Google Drive link without Cloud vault storage
+        const hasCloudStorage = Boolean(
+          note?.telegramMessageId ||
+          note?.telegramBotFileId ||
+          note?.telegramFileId ||
+          note?.isCdnCached
+        );
+
+        if (note?.driveLink && !hasCloudStorage && !isMobileDevice) {
           setUseNativeViewer(true);
           setLoading(false);
           return;
@@ -3846,8 +3853,8 @@ export default function VirtualPdfReader({
           height: "100%",
         }}
       >
-        {/* Native Browser PDF Engine Embed (Never rendered for raw PDFs on mobile to prevent external "Open" prompt) */}
-        {useNativeViewer && (!isMobileDevice || Boolean(note?.driveLink)) && (
+        {/* Native Browser PDF Engine Embed (Desktop only, never rendered on mobile) */}
+        {useNativeViewer && !isMobileDevice && (
           <div
             style={{
               width: "100%",
@@ -4258,13 +4265,23 @@ export default function VirtualPdfReader({
                 <RefreshCw size={14} />
                 <span>Retry Connection</span>
               </button>
-              <button
-                onClick={handleSwitchToNative}
-                className="btn-primary"
-                style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
-              >
-                ⚡ Switch to Native Browser Viewer
-              </button>
+              {!isMobileDevice ? (
+                <button
+                  onClick={handleSwitchToNative}
+                  className="btn-primary"
+                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  ⚡ Switch to Native Browser Viewer
+                </button>
+              ) : (note?.driveLink || note?.fileUrl) ? (
+                <button
+                  onClick={() => window.open(note.driveLink || note.fileUrl, "_blank")}
+                  className="btn-primary"
+                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <span>🌐 Open Document Link</span>
+                </button>
+              ) : null}
             </div>
           </div>
         )}
