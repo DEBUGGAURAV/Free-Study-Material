@@ -122,12 +122,35 @@ export default function VirtualPdfReader({
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
 
-  // Mobile Device Detection (Used for optimizing iframe embed source between Chrome PDFium & Google Cloud Preview)
-  const isMobileDevice = typeof window !== "undefined" && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || "") ||
-    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "")
+  // Comprehensive Mobile, Touch & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
+  const isTouchOrMobileDevice = typeof window !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "") ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "") ||
+    Boolean(navigator.userAgentData?.mobile) ||
+    Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    ("ontouchstart" in window) ||
+    Boolean(window.matchMedia && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)) ||
+    (typeof screen !== "undefined" && Math.min(screen.width, screen.height) <= 900) ||
+    (typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth <= 900) ||
+    navigator.pdfViewerEnabled === false
   );
-  const canUseNativePdfViewer = true;
+  const isMobileDevice = isTouchOrMobileDevice;
+
+  // Genuine Desktop PDFium capability: True ONLY on desktop PCs (Windows/Mac/Linux) with built-in PDFium plugin and without coarse touch
+  const hasNativePdfium = typeof window !== "undefined" &&
+    navigator.pdfViewerEnabled === true &&
+    !isTouchOrMobileDevice;
+  const canUseNativePdfViewer = hasNativePdfium;
+
+  // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
+  // Force high-performance Canvas Streamer on mobile ALWAYS for notes without external Drive preview or when blocked!
+  useEffect(() => {
+    if ((isTouchOrMobileDevice || !hasNativePdfium) && useNativeViewer && (!note?.driveLink || isBlocked)) {
+      setUseNativeViewer(false);
+      setOcrStatusText("📱 High-Speed Streamer Engine active (optimized for mobile touch screen).");
+      setTimeout(() => setOcrStatusText(""), 4000);
+    }
+  }, [isTouchOrMobileDevice, hasNativePdfium, useNativeViewer, note?.driveLink, isBlocked]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -448,7 +471,7 @@ export default function VirtualPdfReader({
           note?.isCdnCached
         );
 
-        if (note?.driveLink && !hasCloudStorage && canUseNativePdfViewer && !isMobileDevice) {
+        if (note?.driveLink && !hasCloudStorage && !isBlocked && canUseNativePdfViewer && !isMobileDevice) {
           setUseNativeViewer(true);
           setLoading(false);
           return;
@@ -2371,6 +2394,32 @@ export default function VirtualPdfReader({
   };
 
   const handleSwitchToNative = async () => {
+    // 📱 Mobile / Touch devices lack desktop PDFium plugins:
+    if (isTouchOrMobileDevice || !hasNativePdfium) {
+      if (note?.driveLink && !isBlocked) {
+        setError(null);
+        setLoading(false);
+        setUseNativeViewer(true);
+        let dLink = note.driveLink;
+        const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+        if (match && match[1]) {
+          setNativeSrc(`https://drive.google.com/file/d/${match[1]}/preview`);
+        } else {
+          setNativeSrc(dLink);
+        }
+        return;
+      }
+
+      // If no Google Drive link or note is read-only protected:
+      // Mobile browsers display an external "Open" download prompt on raw PDF iframes, breaking reading & DRM.
+      // Keep student in the high-performance Streamer Engine and show a clear notification:
+      setUseNativeViewer(false);
+      setOcrStatusText("📱 Mobile Touch Notice: Android Chrome lacks built-in PDFium iframe plugins (shows external Open prompt). 🚀 High-Speed Streamer is active for your touch screen!");
+      setTimeout(() => setOcrStatusText(""), 5000);
+      return;
+    }
+
+    // 💻 Genuine Desktop with PDFium:
     setError(null);
     setLoading(false);
     setUseNativeViewer(true);
@@ -3865,8 +3914,8 @@ export default function VirtualPdfReader({
           height: "100%",
         }}
       >
-        {/* Native Browser PDF Engine Embed */}
-        {useNativeViewer && (
+        {/* Native Browser PDF Engine Embed (Desktop PDFium or Safe Mobile Google Drive Preview ONLY) */}
+        {useNativeViewer && (!isTouchOrMobileDevice || (note?.driveLink && !isBlocked)) && (
           <div
             style={{
               width: "100%",
@@ -3892,7 +3941,7 @@ export default function VirtualPdfReader({
                 gap: "8px",
               }}
             >
-              <span>⚡ <strong>Native Browser PDF Engine</strong> {isMobileDevice ? "(Cloud Preview Engine)" : "(Chrome/Edge Native PDFium)"}</span>
+              <span>⚡ <strong>Native Browser PDF Engine</strong> {isMobileDevice ? "(Google Drive Cloud Preview)" : "(Chrome/Edge Native PDFium)"}</span>
               <span>
                 {isMobileDevice
                   ? "💡 Tip: Switch to 🚀 Streamer Engine for fast mobile touch scrolling & dark mode!"
@@ -3908,13 +3957,7 @@ export default function VirtualPdfReader({
                   : (isMobileDevice
                       ? (note?.driveLink && note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
                           ? `https://drive.google.com/file/d/${note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)[1]}/preview`
-                          : (nativeSrc && nativeSrc.startsWith("blob:")
-                              ? nativeSrc
-                              : `https://docs.google.com/viewer?url=${encodeURIComponent(
-                                  nativeSrc?.startsWith("http")
-                                    ? nativeSrc
-                                    : `${typeof window !== "undefined" ? window.location.origin : ""}${nativeSrc || `/api/notes/${noteId || note?.id}/stream.pdf`}`
-                                )}&embedded=true`))
+                          : "")
                       : (nativeSrc
                           ? `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`
                           : (noteId || note?.id
@@ -4289,19 +4332,29 @@ export default function VirtualPdfReader({
                 <RefreshCw size={14} />
                 <span>Retry Connection</span>
               </button>
-              <button
-                onClick={handleSwitchToNative}
-                className="btn-primary"
-                style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
-              >
-                ⚡ Switch to Native Browser Viewer
-              </button>
+              {canUseNativePdfViewer ? (
+                <button
+                  onClick={handleSwitchToNative}
+                  className="btn-primary"
+                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  ⚡ Switch to Native Browser Viewer
+                </button>
+              ) : (note?.driveLink && !isBlocked) ? (
+                <button
+                  onClick={handleSwitchToNative}
+                  className="btn-primary"
+                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
+                >
+                  🌐 Switch to Google Drive Preview
+                </button>
+              ) : null}
             </div>
           </div>
         )}
 
         {/* Virtual Page Canvas Wrapper with Highlight Overlay Layer */}
-        {!loading && !error && !isAuthGated && !useNativeViewer && (
+        {!loading && !error && !isAuthGated && (!useNativeViewer || (isTouchOrMobileDevice && (!note?.driveLink || isBlocked))) && (
           <div
             style={{
               position: "relative",
