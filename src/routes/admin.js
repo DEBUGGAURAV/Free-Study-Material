@@ -3523,11 +3523,9 @@ let techSettings = {
   enableCdnAutoPrewarm: true,
   cdnMaxRamItems: 50,
 
-  // P2P Campus AirDrop (WebRTC Local Mesh), 1-Tap QR Mesh Connect & Sound-Drop
+  // P2P Campus AirDrop (WebRTC Local Mesh) & 1-Tap QR Mesh Connect
   enableP2pAirDrop: true,
   enableQrMeshConnect: true,
-  enableSoundDrop: true,
-  soundDropFrequencyMode: "ultrasonic",
   p2pMaxPeers: "auto",
   autoP2pHardwareGuard: true,
 
