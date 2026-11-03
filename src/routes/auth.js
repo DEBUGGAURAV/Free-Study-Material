@@ -589,9 +589,14 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    const newVersion = Date.now();
+    setRevokedTokenVersion(userId, newVersion);
+
     const userDocRef = db.collection("users").doc(userId);
     await userDocRef.update({
       password: hashedPassword,
+      tokenVersion: newVersion,
+      sessionRevokedAt: newVersion,
       updatedAt: new Date().toISOString(),
     });
 
@@ -1535,6 +1540,7 @@ router.post("/login", authLimiter, async (req, res) => {
       permissions: isMasterAdmin
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : (userRecord.permissions || ["download_notes", "upload_notes"]),
+      v: Number(userRecord.tokenVersion || Date.now()),
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
@@ -1799,6 +1805,7 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
       permissions: inputIdentity === MAIN_ADMIN_EMAIL
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : (userRecord.permissions || ["download_notes", "upload_notes"]),
+      v: Number(userRecord.tokenVersion || Date.now()),
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
@@ -1959,9 +1966,14 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    const newVersion = Date.now();
+    setRevokedTokenVersion(userId, newVersion);
+
     const userDocRef = db.collection("users").doc(userId);
     await userDocRef.update({
       password: hashedPassword,
+      tokenVersion: newVersion,
+      sessionRevokedAt: newVersion,
       updatedAt: new Date().toISOString(),
     });
 
@@ -2317,10 +2329,23 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
     const salt = await bcrypt.genSalt(10);
     const hashedNewPassword = await bcrypt.hash(newPassword, salt);
 
+    const newVersion = Date.now();
+    setRevokedTokenVersion(req.user.id, newVersion);
+
     await userDocRef.update({
       password: hashedNewPassword,
+      tokenVersion: newVersion,
+      sessionRevokedAt: newVersion,
       updatedAt: new Date().toISOString(),
     });
+
+    // Re-issue fresh token for CURRENT device with newVersion so current session stays active
+    const updatedPayload = {
+      ...req.user,
+      v: newVersion,
+    };
+    const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
+    setAuthCookie(res, req, freshToken);
 
     return res.json({
       success: true,

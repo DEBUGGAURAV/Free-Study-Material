@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -335,6 +335,23 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   };
 
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+
+  const handleLogoutAllDevices = async () => {
+    if (!window.confirm("Are you sure you want to log out from all devices? All other active sessions on other phones and computers will be revoked immediately.")) {
+      return;
+    }
+    setLoggingOutAll(true);
+    try {
+      await api.logoutAllDevices();
+      if (onClose) onClose();
+      window.location.reload();
+    } catch (err) {
+      setMsg({ type: "error", text: "Failed to log out from all devices: " + (err.message || "Unknown error") });
+      setLoggingOutAll(false);
+    }
+  };
+
   const totalNotesBytes = storedNotes.reduce((acc, n) => acc + (n.sizeBytes || 0), 0);
   const totalNotesMB = (totalNotesBytes / (1024 * 1024)).toFixed(2);
 
@@ -584,7 +601,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
         )}
 
         {tab === "password" && (
-          /* Change Password Form */
+          <>
+          {/* Change Password Form */}
           <form onSubmit={handleChangePassword}>
             <div className="form-group">
               <label className="form-label">Current Password *</label>
@@ -700,6 +718,52 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </button>
             </div>
           </form>
+
+          {/* Multi-Device Security & Logout All Devices */}
+          <div
+            style={{
+              marginTop: "20px",
+              paddingTop: "16px",
+              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <ShieldAlert size={16} color="#f43f5e" />
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
+                  Active Session Security
+                </span>
+              </div>
+            </div>
+            <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }}>
+              Logged in on a public computer, college lab, or shared phone? Invalidate all active sessions across all devices instantly.
+            </p>
+            <button
+              type="button"
+              disabled={loggingOutAll}
+              onClick={handleLogoutAllDevices}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                padding: "10px 14px",
+                borderRadius: "8px",
+                background: "rgba(244, 63, 94, 0.12)",
+                border: "1px solid rgba(244, 63, 94, 0.35)",
+                color: "#fda4af",
+                fontSize: "0.82rem",
+                fontWeight: 600,
+                cursor: loggingOutAll ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <LogOut size={15} />
+              <span>{loggingOutAll ? "Revoking All Devices..." : "Logout From All Other Devices"}</span>
+            </button>
+          </div>
+          </>
         )}
 
         {tab === "passkey" && (
