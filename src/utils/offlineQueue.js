@@ -126,14 +126,13 @@ export async function getAnyCachedNoteBuffer(noteId) {
   // 3. Check browser Service Worker CacheStorage
   try {
     if (typeof caches !== "undefined") {
-      const cache = await caches.open("fsm-cache-v13");
       const candidates = [
         `/api/notes/${noteId}/stream.pdf`,
         `/api/notes/${noteId}/stream`,
         `/api/notes/${noteId}`,
       ];
       for (const uri of candidates) {
-        const match = await cache.match(uri, { ignoreSearch: true });
+        const match = await caches.match(uri, { ignoreSearch: true });
         if (match && match.ok) {
           const buf = await match.arrayBuffer();
           if (buf && buf.byteLength > 0) {

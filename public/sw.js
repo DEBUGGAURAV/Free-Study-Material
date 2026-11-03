@@ -4,7 +4,7 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v13';
+const CACHE_NAME = 'fsm-cache-v14';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -100,7 +100,7 @@ self.addEventListener('fetch', (event) => {
      url.pathname.endsWith('.tsx') ||
      url.searchParams.has('t') ||
      url.pathname.startsWith('/ws') ||
-     (url.pathname.startsWith('/api/') && url.pathname !== '/api/notes'))
+     (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/notes')))
   ) {
     return;
   }
@@ -304,6 +304,80 @@ export default {};`,
     return;
   }
 
+  // 3b. Notes PDF Stream: Network-First with CacheStorage + IndexedDB Offline Vault Fallback (100% Offline Reader Guarantee)
+  if (
+    url.pathname.startsWith('/api/notes/') &&
+    (url.pathname.endsWith('/stream.pdf') ||
+     url.pathname.endsWith('/stream') ||
+     url.pathname.includes('/stream') ||
+     url.pathname.endsWith('.pdf'))
+  ) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const cleanUrl = url.origin + url.pathname;
+
+        // 1. If online, fetch from network and cache full response
+        if (self.navigator.onLine) {
+          try {
+            const networkResponse = await fetch(request);
+            if (networkResponse && (networkResponse.status === 200 || networkResponse.status === 206)) {
+              if (networkResponse.status === 200) {
+                const c1 = networkResponse.clone();
+                cache.put(cleanUrl, c1).catch(() => {});
+                cache.put(request, networkResponse.clone()).catch(() => {});
+              }
+              return networkResponse;
+            }
+          } catch (_) {}
+        }
+
+        // 2. Offline or Network Glitch: Check CacheStorage
+        const cached =
+          (await cache.match(request)) ||
+          (await cache.match(cleanUrl)) ||
+          (await cache.match(cleanUrl, { ignoreSearch: true })) ||
+          (await cache.match(request, { ignoreSearch: true }));
+
+        if (cached) {
+          console.log('[SW] 📴 Offline: Serving cached PDF stream from CacheStorage for', url.pathname);
+          return cached;
+        }
+
+        // 3. Check IndexedDB stores (fsm_p2p_cache_v1 & fsm_offline_vault)
+        const match = url.pathname.match(/\/api\/notes\/([^/]+)/);
+        const noteId = match ? match[1] : null;
+        if (noteId) {
+          try {
+            const idbBuffer = await getNoteBufferFromIndexedDB(noteId);
+            if (idbBuffer && idbBuffer.byteLength > 0) {
+              console.log('[SW] 📴 Offline: Serving synthesized PDF stream from IndexedDB Vault for', noteId);
+              return new Response(idbBuffer, {
+                status: 200,
+                headers: {
+                  'Content-Type': 'application/pdf',
+                  'Content-Length': idbBuffer.byteLength.toString(),
+                  'Accept-Ranges': 'bytes',
+                  'X-Offline-Vault': 'indexeddb',
+                },
+              });
+            }
+          } catch (_) {}
+        }
+
+        // 4. Return offline error response if not cached
+        return new Response(
+          JSON.stringify({
+            error: 'Offline Note Unavailable',
+            message: 'This note is not cached on your device yet. Please connect to internet once to cache it offline.',
+          }),
+          { status: 503, headers: { 'Content-Type': 'application/json' } }
+        );
+      })()
+    );
+    return;
+  }
+
   // 4. Same-Origin Assets (CSS, JS, Fonts, Images - strictly bypasses API and WebSocket)
   if (url.origin === self.location.origin && !url.pathname.startsWith('/api/') && !url.pathname.startsWith('/ws')) {
     const cleanUrl = url.origin + url.pathname;
@@ -470,6 +544,60 @@ function saveNoteBufferToIndexedDB(noteId, arrayBuffer) {
       req.onerror = () => resolve(false);
     } catch {
       resolve(false);
+    }
+  });
+}
+
+// Helper: Retrieve note buffer from IndexedDB Offline Vault (for offline PDF stream synthesis)
+function getNoteBufferFromIndexedDB(noteId) {
+  return new Promise((resolve) => {
+    try {
+      if (typeof indexedDB === 'undefined' || !noteId) return resolve(null);
+
+      // 1. Check fsm_p2p_cache_v1
+      const req1 = indexedDB.open('fsm_p2p_cache_v1', 1);
+      req1.onsuccess = () => {
+        try {
+          const db1 = req1.result;
+          if (!db1.objectStoreNames.contains('note_chunks')) return tryVault();
+          const tx1 = db1.transaction('note_chunks', 'readonly');
+          const getReq = tx1.objectStore('note_chunks').get(noteId);
+          getReq.onsuccess = () => {
+            if (getReq.result) return resolve(getReq.result);
+            tryVault();
+          };
+          getReq.onerror = () => tryVault();
+        } catch {
+          tryVault();
+        }
+      };
+      req1.onerror = () => tryVault();
+
+      function tryVault() {
+        try {
+          const req2 = indexedDB.open('fsm_offline_vault', 1);
+          req2.onsuccess = () => {
+            try {
+              const db2 = req2.result;
+              if (!db2.objectStoreNames.contains('offline_notes')) return resolve(null);
+              const tx2 = db2.transaction('offline_notes', 'readonly');
+              const getReq2 = tx2.objectStore('offline_notes').get(noteId);
+              getReq2.onsuccess = () => {
+                const item = getReq2.result;
+                resolve(item?.buffer || null);
+              };
+              getReq2.onerror = () => resolve(null);
+            } catch {
+              resolve(null);
+            }
+          };
+          req2.onerror = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      }
+    } catch {
+      resolve(null);
     }
   });
 }
