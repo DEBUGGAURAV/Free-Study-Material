@@ -46,7 +46,7 @@ import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
 import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
-import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
+import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders, fetchWithCdnFailover } from "../utils/cdnFailover";
@@ -122,18 +122,31 @@ export default function VirtualPdfReader({
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
 
-  const isMobileDevice = typeof window !== "undefined" && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-    (window.innerWidth > 0 && window.innerWidth <= 768)
+  // Comprehensive Mobile & Touch Device Detection (Covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
+  const isMobileDevice = typeof window !== "undefined" && typeof navigator !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) ||
+    (window.innerWidth > 0 && window.innerWidth <= 820) ||
+    (window.screen && Math.min(window.screen.width, window.screen.height) <= 820) ||
+    (navigator.maxTouchPoints > 1 && window.screen && Math.min(window.screen.width, window.screen.height) <= 1024) ||
+    Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+    navigator.pdfViewerEnabled === false
+  );
+
+  // True if and only if the current browser environment genuinely supports inline PDF embedding without prompting external app / "Open" button
+  const canUseNativePdfViewer = typeof window !== "undefined" && typeof navigator !== "undefined" && (
+    navigator.pdfViewerEnabled === true &&
+    !isMobileDevice &&
+    !Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) &&
+    !(navigator.maxTouchPoints > 1 && window.screen && Math.min(window.screen.width, window.screen.height) <= 1024)
   );
 
   // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
   // Force high-performance Canvas Streamer on mobile ALWAYS!
   useEffect(() => {
-    if (isMobileDevice && useNativeViewer) {
+    if ((isMobileDevice || !canUseNativePdfViewer) && useNativeViewer) {
       setUseNativeViewer(false);
     }
-  }, [isMobileDevice, useNativeViewer]);
+  }, [isMobileDevice, canUseNativePdfViewer, useNativeViewer]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -386,7 +399,7 @@ export default function VirtualPdfReader({
         objectUrl = URL.createObjectURL(file);
         setNativeSrc(objectUrl);
       } catch {}
-    } else if (note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached && !isMobileDevice) {
+    } else if (note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached && canUseNativePdfViewer && !isMobileDevice) {
       let dLink = note.driveLink;
       const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
@@ -454,41 +467,17 @@ export default function VirtualPdfReader({
           note?.isCdnCached
         );
 
-        if (note?.driveLink && !hasCloudStorage && !isMobileDevice) {
+        if (note?.driveLink && !hasCloudStorage && canUseNativePdfViewer && !isMobileDevice) {
           setUseNativeViewer(true);
           setLoading(false);
           return;
         }
 
-        // 🌟 If user is offline (PWA), check if note is already cached locally in IndexedDB
-        if (typeof navigator !== "undefined" && !navigator.onLine && noteId) {
-          const cachedBuf = await getCachedNoteBuffer(noteId);
-          if (cachedBuf && !isCancelled) {
-            setIsCachedP2P(true);
-            setStreamSource("p2p");
-            setPreviewProgress({ percent: 70, loadedBytes: cachedBuf.byteLength, totalBytes: cachedBuf.byteLength, speed: "Offline Cache" });
-            const loadingTask = pdfjsLib.getDocument({ data: cachedBuf });
-            const doc = await loadingTask.promise;
-            if (!isCancelled) {
-              setPreviewProgress({ percent: 100, loadedBytes: cachedBuf.byteLength, totalBytes: cachedBuf.byteLength, speed: "Ready" });
-              setPdfDoc(doc);
-              setNumPages(doc.numPages);
-              setLoading(false);
-            }
-            return;
-          }
-        }
-
-        // 🚀 Online: Determine stream source with resilient auto-failover
-        const effectiveUrl = (url || "").toString();
-        const fallbackSameOrigin = `/api/notes/${noteId}/stream.pdf?preview=1`;
-        const primaryUrl = effectiveUrl || fallbackSameOrigin;
-
-        // 1. Check local IndexedDB offline storage first for instant 0ms render
+        // 🌟 1. Check local IndexedDB offline vault & CacheStorage FIRST for instant 0ms launch
         let localDeviceBuffer = null;
         if (noteId) {
           try {
-            localDeviceBuffer = await getCachedNoteBuffer(noteId);
+            localDeviceBuffer = await getAnyCachedNoteBuffer(noteId);
           } catch (_) {}
         }
 
@@ -498,7 +487,7 @@ export default function VirtualPdfReader({
           setIsCachedP2P(true);
           const localSource = {
             id: "local_cache",
-            label: "💾 Local Device Storage (IndexedDB Cache)",
+            label: "💾 Local Device Storage (Offline Vault)",
             short: "Local Storage (0ms)",
             details: "100% Instant Offline Cache from Student Device Storage • 0ms Latency",
             colo: "Local",
@@ -522,12 +511,39 @@ export default function VirtualPdfReader({
               setPdfDoc(doc);
               setNumPages(doc.numPages);
               setLoading(false);
+
+              // 1. Background index into MiniSearch Client-Side RAG (0% Server Load)
+              setIsRagIndexing(true);
+              ragIndexRef.current.indexPdfDocument(doc).then(() => {
+                setIsRagIndexing(false);
+              }).catch(() => {
+                setIsRagIndexing(false);
+              });
+
+              setTimeout(() => {
+                warmupClientOcr();
+              }, 800);
+
               return;
             }
           } catch (localErr) {
             console.warn("[LOCAL-CACHE] Fallback to network stream:", localErr.message);
           }
         }
+
+        // 🌟 If note is NOT cached locally and the device is explicitly offline:
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          if (!isCancelled) {
+            setError("This note has not been saved in your Offline Vault yet. Please connect to internet once to view and automatically cache it for offline reading.");
+            setLoading(false);
+            return;
+          }
+        }
+
+        // 🚀 Online: Determine stream source with resilient auto-failover
+        const effectiveUrl = (url || "").toString();
+        const fallbackSameOrigin = `/api/notes/${noteId}/stream.pdf?preview=1`;
+        const primaryUrl = effectiveUrl || fallbackSameOrigin;
 
         // ⚡ Query real-time P2P peers & local cache (P2P activates ONLY if real peers are active)
         if (noteId) {
@@ -735,8 +751,8 @@ export default function VirtualPdfReader({
               warmupClientOcr();
             }, 800);
 
-            // Asynchronously pre-cache buffer from memory into P2P mesh seeder & IndexedDB Offline Vault ONLY if not blocked (Zero extra network requests)
-            if (!isBlocked && doc && typeof doc.getData === "function") {
+            // Asynchronously pre-cache buffer from memory into P2P mesh seeder & IndexedDB Offline Vault (Zero extra network requests)
+            if (doc && typeof doc.getData === "function") {
               doc.getData()
                 .then((uint8) => {
                   if (uint8 && noteId) {
@@ -753,9 +769,9 @@ export default function VirtualPdfReader({
             bringFileToCdn();
           }
         } catch (streamErr) {
-          // If streaming from CDN fails, fallback to local IndexedDB cache if available
+          // If streaming from CDN fails, fallback to local IndexedDB offline cache if available
           if (noteId) {
-            const cachedBuf = await getCachedNoteBuffer(noteId);
+            const cachedBuf = await getAnyCachedNoteBuffer(noteId);
             if (cachedBuf && !isCancelled) {
               setIsCachedP2P(true);
               setStreamSource("p2p");
@@ -823,7 +839,7 @@ export default function VirtualPdfReader({
           }
 
           // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if desktop and external backup URL exists
-          if (!isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
+          if (canUseNativePdfViewer && !isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
             console.log("[AUTO-FAILOVER] ⚡ Switching to Native Browser Engine (<500ms)");
             setUseNativeViewer(true);
             setLoading(false);
@@ -2353,7 +2369,7 @@ export default function VirtualPdfReader({
   };
 
   const handleSwitchToNative = async () => {
-    if (isMobileDevice) {
+    if (isMobileDevice || !canUseNativePdfViewer) {
       alert("📱 Mobile Browser Notice:\n\nMobile browsers (Chrome / Safari) do not embed PDFs inside iframes and will display an external Open prompt. The High-Speed Streamer is optimized for your mobile touch screen!");
       return;
     }
@@ -2635,7 +2651,7 @@ export default function VirtualPdfReader({
 
         {/* Right: Engine Switcher (Desktop Only), Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          {!note?.driveLink && !isMobileDevice && (
+          {!note?.driveLink && canUseNativePdfViewer && !isMobileDevice && (
             <div
               style={{
                 display: "inline-flex",
@@ -3846,15 +3862,15 @@ export default function VirtualPdfReader({
           overflow: "auto",
           display: "flex",
           justifyContent: "center",
-          alignItems: useNativeViewer ? "stretch" : "flex-start",
-          padding: useNativeViewer ? "0" : "24px",
+          alignItems: useNativeViewer && canUseNativePdfViewer && !isMobileDevice ? "stretch" : "flex-start",
+          padding: useNativeViewer && canUseNativePdfViewer && !isMobileDevice ? "0" : "24px",
           background: nightMode ? "#060911" : "#e2e8f0",
           position: "relative",
           height: "100%",
         }}
       >
         {/* Native Browser PDF Engine Embed (Desktop only, never rendered on mobile) */}
-        {useNativeViewer && !isMobileDevice && (
+        {useNativeViewer && canUseNativePdfViewer && !isMobileDevice && (
           <div
             style={{
               width: "100%",
@@ -4265,7 +4281,7 @@ export default function VirtualPdfReader({
                 <RefreshCw size={14} />
                 <span>Retry Connection</span>
               </button>
-              {!isMobileDevice ? (
+              {canUseNativePdfViewer && !isMobileDevice ? (
                 <button
                   onClick={handleSwitchToNative}
                   className="btn-primary"
@@ -4287,7 +4303,7 @@ export default function VirtualPdfReader({
         )}
 
         {/* Virtual Page Canvas Wrapper with Highlight Overlay Layer */}
-        {!loading && !error && !isAuthGated && !useNativeViewer && (
+        {!loading && !error && !isAuthGated && (!useNativeViewer || !canUseNativePdfViewer || isMobileDevice) && (
           <div
             style={{
               position: "relative",
@@ -4586,6 +4602,7 @@ export default function VirtualPdfReader({
             onClose={() => setIsAirdropModalOpen(false)}
             currentNote={note || { id: noteId, title, subject: subjectName, branch: branchName }}
             directBuffer={localPdfBuffer}
+            pdfDoc={pdfDoc}
             onNoteReceived={(data) => {
               if (data?.buffer) {
                 setLocalPdfBuffer(data.buffer);

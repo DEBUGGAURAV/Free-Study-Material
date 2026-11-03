@@ -12,7 +12,7 @@
  */
 
 import { getCachedNoteBuffer, cacheNoteBuffer } from "./p2pMesh";
-import { getOfflineNoteBuffer } from "./offlineQueue";
+import { getOfflineNoteBuffer, getAnyCachedNoteBuffer } from "./offlineQueue";
 
 // Standard STUN servers (resilient worldwide pool)
 const ICE_CONFIG = {
@@ -26,21 +26,42 @@ const ICE_CONFIG = {
 };
 
 /**
- * Strips non-DataChannel junk from SDP to keep it ultra-compact for offline QR Code generation (<500 bytes)
+ * Strips non-DataChannel junk from SDP to keep it ultra-compact for offline QR Code generation (<300 bytes)
+ * Prioritizes local Wi-Fi / hotspot host candidates so QR codes render instantly and scan effortlessly
  */
 export function compactSdp(sdp) {
   if (!sdp) return "";
-  return sdp
-    .split(/\r?\n/)
-    .filter((line) => {
-      const t = line.trim();
-      if (!t) return false;
-      if (t.startsWith("a=extmap:")) return false;
-      if (t.startsWith("a=msid-semantic:")) return false;
-      if (t.startsWith("a=rtcp:")) return false;
-      return true;
-    })
-    .join("\r\n") + "\r\n";
+  const lines = sdp.split(/\r?\n/);
+  const hostCandidates = [];
+  const otherLines = [];
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    if (t.startsWith("a=extmap:")) continue;
+    if (t.startsWith("a=msid-semantic:")) continue;
+    if (t.startsWith("a=rtcp:")) continue;
+    if (t.startsWith("a=ssrc:")) continue;
+    if (t.startsWith("a=ice-options:")) continue;
+
+    if (t.startsWith("a=candidate:")) {
+      // Prioritize host IPv4 candidates (essential for offline local Wi-Fi / hotspot AirDrop)
+      if (t.includes(" typ host") && !t.includes(":") /* IPv4 */) {
+        hostCandidates.push(t);
+      } else if (t.includes(" typ host")) {
+        // IPv6 host candidate - keep only 1 as fallback
+        if (hostCandidates.length < 2) hostCandidates.push(t);
+      }
+      continue;
+    }
+
+    otherLines.push(t);
+  }
+
+  // Include up to 2 primary host candidates
+  const finalCandidates = hostCandidates.slice(0, 2);
+  const result = [...otherLines, ...finalCandidates].join("\r\n") + "\r\n";
+  return result;
 }
 
 /**
@@ -50,7 +71,7 @@ export function compactSdp(sdp) {
  */
 export async function isNoteReadyForAirdrop(noteId) {
   if (!noteId) return false;
-  const buf = (await getCachedNoteBuffer(noteId)) || (await getOfflineNoteBuffer(noteId));
+  const buf = await getAnyCachedNoteBuffer(noteId);
   return Boolean(buf && buf.byteLength > 0);
 }
 
@@ -164,9 +185,9 @@ export async function decodeSignalingToken(token) {
 }
 
 /**
- * Waits for ICE candidate gathering to finish or reach timeout with fast srflx resolution
+ * Waits for ICE candidate gathering to finish or reach timeout with fast host candidate resolution
  */
-function waitForIceGathering(pc, timeoutMs = 2000) {
+function waitForIceGathering(pc, timeoutMs = 1500) {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === "complete") {
       return resolve();
@@ -188,13 +209,17 @@ function waitForIceGathering(pc, timeoutMs = 2000) {
     };
 
     const onCand = (e) => {
-      // If we got a reflexive STUN candidate, wait brief 150ms for other host candidates then resolve
-      if (e.candidate && (e.candidate.type === "srflx" || e.candidate.candidate?.includes("typ srflx"))) {
+      // If we got a local host candidate (local Wi-Fi / hotspot), resolve fast (<100ms) for instant offline QR
+      if (e.candidate && (e.candidate.type === "host" || e.candidate.candidate?.includes("typ host"))) {
+        setTimeout(done, 100);
+      } else if (e.candidate && (e.candidate.type === "srflx" || e.candidate.candidate?.includes("typ srflx"))) {
         setTimeout(done, 150);
       }
     };
 
-    timer = setTimeout(done, timeoutMs);
+    // If offline, use aggressive 350ms timeout instead of waiting for unreachable STUN servers
+    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+    timer = setTimeout(done, isOffline ? 350 : timeoutMs);
     pc.addEventListener("icegatheringstatechange", checkState);
     pc.addEventListener("icecandidate", onCand);
   });
@@ -210,16 +235,13 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
 
   let buffer = directBuffer;
   if (!buffer || buffer.byteLength === 0) {
-    buffer = await getCachedNoteBuffer(noteId);
-  }
-  if (!buffer || buffer.byteLength === 0) {
-    buffer = await getOfflineNoteBuffer(noteId);
+    buffer = await getAnyCachedNoteBuffer(noteId);
   }
   if (!buffer || buffer.byteLength === 0) {
     throw new Error("This note is not yet cached on your device. Please open or view it in the Online Reader first so AirDrop can share it offline.");
   }
-  if (directBuffer && noteId) {
-    cacheNoteBuffer(noteId, directBuffer).catch(() => {});
+  if (buffer && noteId) {
+    cacheNoteBuffer(noteId, buffer).catch(() => {});
   }
 
   const pc = new RTCPeerConnection(ICE_CONFIG);

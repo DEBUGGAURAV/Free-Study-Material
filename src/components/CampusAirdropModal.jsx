@@ -40,6 +40,7 @@ export default function CampusAirdropModal({
   onClose,
   currentNote = null,
   directBuffer = null,
+  pdfDoc = null,
   onNoteReceived = null,
   initialMode = "sound",
 }) {
@@ -109,89 +110,118 @@ export default function CampusAirdropModal({
       setSenderProgress(null);
       setOfferQrUrl("");
 
-      createAirDropSenderSession(currentNote.id, {
-        onConnected: () => {
-          if (!isCancelled) {
-            setSenderConnected(true);
-            stopSoundDropBroadcast();
-            setSoundBeaming(false);
-          }
-        },
-        onProgress: (prog) => {
-          if (!isCancelled) {
-            setSenderProgress(prog);
-            if (prog.percent >= 100) setSenderDone(true);
-          }
-        },
-        onError: (err) => {
-          if (!isCancelled) setErrorMsg(err.message || "Transfer interrupted");
-        },
-      }, directBuffer)
-        .then((s) => {
-          if (isCancelled) {
-            cancelAirDropSession(s);
-            return;
-          }
-          session = s;
-          senderSessionRef.current = s;
-          setSenderSession(s);
+      // Resolve buffer: if directBuffer is null, extract from pdfDoc if active
+      const resolveBuffer = async () => {
+        if (directBuffer && directBuffer.byteLength > 0) return directBuffer;
+        if (pdfDoc && typeof pdfDoc.getData === "function") {
+          try {
+            const u8 = await pdfDoc.getData();
+            if (u8 && u8.buffer && u8.buffer.byteLength > 0) return u8.buffer;
+          } catch (_) {}
+        }
+        return null;
+      };
 
-          // Set sound pairing code from token
-          const soundCode = getHexSoundCode(s.offerToken);
-          setSoundPairingCode(soundCode);
+      resolveBuffer().then((bufToUse) => {
+        if (isCancelled) return;
 
-          // ⚡ 1. Register offer in Live Campus Signaling Relay (Zero-Touch Handshake)
-          fetch("/api/p2p/airdrop/offer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              code: soundCode,
-              offerToken: s.offerToken,
-              note: currentNote,
-            }),
-          }).catch((e) => console.warn("[AIRDROP-SIGNAL] Offer register notice:", e));
-
-          // ⚡ 2. Auto-poll for receiver's answer in background (Hands-free connection)
-          const pollTimer = setInterval(async () => {
-            if (isCancelled || senderSessionRef.current !== s || !session?.active) {
-              clearInterval(pollTimer);
+        createAirDropSenderSession(currentNote.id, {
+          onConnected: () => {
+            if (!isCancelled) {
+              setSenderConnected(true);
+              stopSoundDropBroadcast();
+              setSoundBeaming(false);
+            }
+          },
+          onProgress: (prog) => {
+            if (!isCancelled) {
+              setSenderProgress(prog);
+              if (prog.percent >= 100) setSenderDone(true);
+            }
+          },
+          onError: (err) => {
+            if (!isCancelled) setErrorMsg(err.message || "Transfer interrupted");
+          },
+        }, bufToUse)
+          .then((s) => {
+            if (isCancelled) {
+              cancelAirDropSession(s);
               return;
             }
-            try {
-              const aRes = await fetch(`/api/p2p/airdrop/answer/${soundCode}`);
-              if (aRes.ok) {
-                const aData = await aRes.json();
-                if (aData.ready && aData.answerToken) {
-                  clearInterval(pollTimer);
-                  await completeSenderWithAnswer(s, aData.answerToken);
-                  setSenderConnected(true);
-                  stopSoundDropBroadcast();
-                  setSoundBeaming(false);
-                }
-              }
-            } catch (_) {}
-          }, 750);
+            session = s;
+            senderSessionRef.current = s;
+            setSenderSession(s);
 
-          // ⚡ 3. Generate 100% Offline Standalone Offer QR code (0 server fetch required)
-          QRCode.toDataURL(s.offerToken, {
-            width: 280,
-            margin: 2,
-            color: { dark: "#0f172a", light: "#ffffff" },
-            errorCorrectionLevel: "L",
-          })
-            .then((url) => {
-              if (!isCancelled) setOfferQrUrl(url);
+            // Set sound pairing code from token
+            const soundCode = getHexSoundCode(s.offerToken);
+            setSoundPairingCode(soundCode);
+
+            // ⚡ 1. Register offer in Live Campus Signaling Relay (Zero-Touch Handshake)
+            fetch("/api/p2p/airdrop/offer", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                code: soundCode,
+                offerToken: s.offerToken,
+                note: currentNote,
+              }),
+            }).catch((e) => console.warn("[AIRDROP-SIGNAL] Offer register notice:", e));
+
+            // ⚡ 2. Auto-poll for receiver's answer in background (Hands-free connection)
+            const pollTimer = setInterval(async () => {
+              if (isCancelled || senderSessionRef.current !== s || !session?.active) {
+                clearInterval(pollTimer);
+                return;
+              }
+              try {
+                const aRes = await fetch(`/api/p2p/airdrop/answer/${soundCode}`);
+                if (aRes.ok) {
+                  const aData = await aRes.json();
+                  if (aData.ready && aData.answerToken) {
+                    clearInterval(pollTimer);
+                    await completeSenderWithAnswer(s, aData.answerToken);
+                    setSenderConnected(true);
+                    stopSoundDropBroadcast();
+                    setSoundBeaming(false);
+                  }
+                }
+              } catch (_) {}
+            }, 750);
+
+            // ⚡ 3. Generate 100% Offline Standalone Offer QR code (0 server fetch required)
+            QRCode.toDataURL(s.offerToken, {
+              width: 280,
+              margin: 2,
+              color: { dark: "#0f172a", light: "#ffffff" },
+              errorCorrectionLevel: "L",
             })
-            .catch((e) => {
-              console.warn("QR Render error:", e);
-              if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Failed to render QR"));
-            });
-        })
-        .catch((err) => {
-          if (!isCancelled) {
-            setErrorMsg(err.message || "Failed to initialize AirDrop sender.");
-          }
-        });
+              .then((url) => {
+                if (!isCancelled) setOfferQrUrl(url);
+              })
+              .catch((e) => {
+                console.warn("QR Render notice, trying compact pairing code QR fallback:", e);
+                // Guaranteed fallback QR code using short sound/pairing token
+                const fallbackToken = `FSM:${soundCode}`;
+                QRCode.toDataURL(fallbackToken, {
+                  width: 280,
+                  margin: 2,
+                  color: { dark: "#0f172a", light: "#ffffff" },
+                  errorCorrectionLevel: "M",
+                })
+                  .then((fbUrl) => {
+                    if (!isCancelled) setOfferQrUrl(fbUrl);
+                  })
+                  .catch(() => {
+                    if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Failed to render QR"));
+                  });
+              });
+          })
+          .catch((err) => {
+            if (!isCancelled) {
+              setErrorMsg(err.message || "Failed to initialize AirDrop sender.");
+            }
+          });
+      });
     }
 
     return () => {
@@ -974,9 +1004,18 @@ export default function CampusAirdropModal({
                       alt="AirDrop QR Handshake"
                       style={{ width: "230px", height: "230px", borderRadius: "8px", display: "block" }}
                     />
+                  ) : errorMsg ? (
+                    <div style={{ width: "230px", height: "230px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "16px", color: "#64748b" }}>
+                      <AlertTriangle size={32} color="#f59e0b" style={{ marginBottom: "10px" }} />
+                      <span style={{ fontSize: "0.82rem", color: "#ef4444", marginBottom: "6px", fontWeight: 700 }}>Note Not In Offline Cache</span>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", lineHeight: 1.4 }}>
+                        Open this note once in the Reader while online so it caches automatically for offline sharing.
+                      </span>
+                    </div>
                   ) : (
-                    <div style={{ width: "230px", height: "230px", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b" }}>
+                    <div style={{ width: "230px", height: "230px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", color: "#64748b" }}>
                       <RefreshCw size={24} className="spin" />
+                      <span style={{ fontSize: "0.74rem", color: "#94a3b8" }}>Preparing offline QR handshake...</span>
                     </div>
                   )}
 
