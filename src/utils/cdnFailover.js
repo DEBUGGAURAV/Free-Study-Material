@@ -10,8 +10,8 @@ const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_C
 
 const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
 
-// Prioritize Cloudflare Edge Worker so all users stream directly from the high-speed Global Edge CDN
-export const CDN_ENDPOINTS = [CF_WORKER, originBase].filter(Boolean);
+// Prioritize localOrigin on localhost, or Edge Worker in production
+export const CDN_ENDPOINTS = isLocal ? [originBase] : [CF_WORKER, originBase].filter(Boolean);
 
 let activeCdnIndex = 0;
 let lastFailoverTimestamp = 0;
@@ -126,10 +126,16 @@ export function parseSourceFromHeaders(headers) {
  * @param {string} ticket (optional ephemeral single-use 60s ticket)
  * @returns {string} streamUrl
  */
-export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPreview = false) {
+export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPreview = false, isCdnCached = false) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
-  // ⚡ Serve all users directly from Cloudflare Edge Worker CDN when available with seamless localOrigin fallback
-  const base = CF_WORKER || localOrigin || "";
+  // ⚡ Smart Route Optimization:
+  // 1. On localhost, always stream directly from localOrigin
+  // 2. If note is NOT yet cached on CDN (isCdnCached === false), route to localOrigin so direct MTProto stream renders Page 1 in <1s (avoids Cloudflare Worker 503 gateway timeouts)
+  // 3. Once cached on CDN (isCdnCached === true), stream through Cloudflare Global Edge Worker for 1ms cache hits
+  let base = localOrigin;
+  if (!isLocal && isCdnCached && CF_WORKER) {
+    base = CF_WORKER;
+  }
   const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";

@@ -632,8 +632,9 @@ export default function VirtualPdfReader({
             setCdnTransferPercent(percent);
           };
 
+          let loadingTask = null;
           try {
-            const loadingTask = pdfjsLib.getDocument({
+            loadingTask = pdfjsLib.getDocument({
               url: primaryUrl,
               withCredentials: true,     // Transmit httpOnly session cookie with range requests
               rangeChunkSize: adaptiveChunkSize, // Dynamic byte chunks for weak 2G/3G networks
@@ -641,13 +642,25 @@ export default function VirtualPdfReader({
               disableStream: false,
             });
             loadingTask.onProgress = handleProgress;
-            doc = await loadingTask.promise;
+
+            // Fast-Failover: If primaryUrl takes > 7s (e.g. edge CDN gateway timeout), auto-switch to direct origin!
+            const timeoutMs = primaryUrl !== fallbackSameOrigin ? 7000 : 40000;
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => {
+                reject(new Error(`Stream connection to ${primaryUrl} timed out after ${timeoutMs / 1000}s`));
+              }, timeoutMs)
+            );
+
+            doc = await Promise.race([loadingTask.promise, timeoutPromise]);
           } catch (fetchErr) {
+            if (loadingTask) {
+              try { loadingTask.destroy(); } catch (_) {}
+            }
             console.warn("[PDF.js] Primary stream notice, trying fallback routes:", fetchErr.message);
             let loadedFallback = false;
             if (primaryUrl !== fallbackSameOrigin) {
               try {
-                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 30), speed: "Switching CDN Route..." }));
+                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 30), speed: "Switching to Origin Cloud Vault..." }));
                 const fallbackTask = pdfjsLib.getDocument({
                   url: fallbackSameOrigin,
                   withCredentials: true,
@@ -656,7 +669,15 @@ export default function VirtualPdfReader({
                   disableStream: false,
                 });
                 fallbackTask.onProgress = handleProgress;
-                doc = await fallbackTask.promise;
+
+                const fallbackTimeout = new Promise((_, reject) =>
+                  setTimeout(() => {
+                    try { fallbackTask.destroy(); } catch (_) {}
+                    reject(new Error("Origin stream timed out after 30s"));
+                  }, 30000)
+                );
+
+                doc = await Promise.race([fallbackTask.promise, fallbackTimeout]);
                 setNativeSrc(fallbackSameOrigin);
                 loadedFallback = true;
               } catch (subErr) {
