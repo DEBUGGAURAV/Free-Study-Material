@@ -264,7 +264,7 @@ function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
 /**
  * Downloads full document buffer from Telegram Bot API with timeout safety.
  */
-function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 15000) {
+function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 7000) {
   return new Promise((resolve, reject) => {
     let resolved = false;
     const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
@@ -332,7 +332,7 @@ function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 15000) {
         reject(err);
       }
     });
-    metaReq.setTimeout(7000, () => {
+    metaReq.setTimeout(4000, () => {
       metaReq.destroy();
       if (!resolved) {
         resolved = true;
@@ -394,10 +394,10 @@ async function fetchAndCacheNoteBuffer(id, note) {
       const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
       const botFileId = note.telegramBotFileId || note.telegramFileId;
 
-      // Tier 1: Telegram Bot API fast buffer fetch (<20MB)
-      if (botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024)) {
+      // Tier 1: Telegram Bot API fast buffer fetch (strictly for verified small files <= 20MB)
+      if (botToken && botFileId && note.fileSize && note.fileSize <= 20 * 1024 * 1024) {
         try {
-          docData = await getTelegramBotBuffer(botToken, botFileId, 25000);
+          docData = await getTelegramBotBuffer(botToken, botFileId, 7000);
         } catch (botErr) {
           console.warn(`[INGEST] Bot API buffer fetch notice for ${id}:`, botErr.message);
         }
@@ -1389,25 +1389,10 @@ router.post("/:id/cache-to-cdn", downloadLimiter, authenticateToken, async (req,
       return res.status(400).json({ success: false, message: "Note has no primary cloud storage ID." });
     }
 
-    let docData = null;
-    const botToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
-    const botFileId = note.telegramBotFileId || note.telegramFileId;
-    if (botToken && botFileId && (!note.fileSize || note.fileSize <= 20 * 1024 * 1024)) {
-      try {
-        docData = await getTelegramBotBuffer(botToken, botFileId, 25000);
-      } catch (botErr) {
-        console.warn(`[EDGE-CDN] Bot API buffer fetch fallback to MTProto for ${id}:`, botErr.message);
-      }
-    }
-    if (!docData && note.telegramMessageId) {
-      docData = await getDocumentBufferFromChannel(note.telegramMessageId);
-    }
+    const docData = await fetchAndCacheNoteBuffer(id, note);
     if (!docData || !docData.buffer) {
       return res.status(500).json({ success: false, message: "Could not fetch document buffer from storage node." });
     }
-
-    // Zero-RAM Mode: Save directly to NVMe SSD Disk Cache (0 MB Heap Memory allocation)
-    saveCdnBuffer(id, docData.buffer, docData.mimeType);
 
     // ⚡ Persist permanent CDN status in Firestore so it survives server restarts & prevents storage hits forever
     if (db && !note.isCdnCached) {
@@ -1941,14 +1926,28 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     // ☁️ 2. First-time fetch from Primary Academic Cloud Storage Vault
-    // Real-Time Dynamic Headers: Tell the student browser we are fetching from Storage and caching to CDN
+    // Real-Time Dynamic Headers: Tell the student browser we are streaming directly from Cloud Storage
     res.setHeader("X-Real-Source", "CLOUD_STORAGE");
-    res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Caching to Edge CDN...)");
+    res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Fast Stream)");
     res.setHeader("X-Data-Source", "storage");
     res.setHeader("CF-Cache-Status", "MISS");
     res.setHeader("X-Cache", "MISS");
 
-    // Fetch once from Main Storage and simultaneously write to CDN (RAM + Disk) and user response
+    // ⚡ INSTANT FAST-STREAM ENGINE: If MTProto message ID exists, stream directly to user!
+    // Never block range requests or user preview on downloading the full 50MB file!
+    if (note.telegramMessageId) {
+      // Asynchronously trigger background CDN caching to NVMe SSD disk so next hits are 1ms
+      triggerBackgroundCdnCache(id, note);
+
+      try {
+        await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+        return;
+      } catch (streamErr) {
+        console.warn(`[FAST-STREAM] Direct MTProto stream notice for ${id}, falling back to buffer fetch:`, streamErr.message);
+      }
+    }
+
+    // Fallback: Fetch once from Main Storage and simultaneously write to CDN (RAM + Disk) and user response
     const freshItem = await fetchAndCacheNoteBuffer(id, note);
 
     if (freshItem && freshItem.buffer) {

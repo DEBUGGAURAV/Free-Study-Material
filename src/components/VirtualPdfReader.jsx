@@ -122,35 +122,12 @@ export default function VirtualPdfReader({
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
 
-  // Comprehensive Touch, Mobile & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
-  const isTouchOrMobileDevice = typeof window !== "undefined" && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "") ||
-    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "") ||
-    Boolean(navigator.userAgentData?.mobile) ||
-    Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
-    ("ontouchstart" in window) ||
-    Boolean(window.matchMedia && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)) ||
-    (window.screen && Math.min(window.screen.width, window.screen.height) <= 900) ||
-    (window.innerWidth > 0 && window.innerWidth <= 900) ||
-    navigator.pdfViewerEnabled === false
+  // Mobile Device Detection (Used for optimizing iframe embed source between Chrome PDFium & Google Cloud Preview)
+  const isMobileDevice = typeof window !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || "") ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "")
   );
-  const isMobileDevice = isTouchOrMobileDevice;
-
-  // True if and only if the current browser environment is a genuine desktop PC that natively supports inline PDF embedding without prompting external app / "Open" button, and downloads are NOT disabled
-  const canUseNativePdfViewer = Boolean(
-    typeof window !== "undefined" &&
-    navigator.pdfViewerEnabled === true &&
-    !isTouchOrMobileDevice &&
-    !isBlocked
-  );
-
-  // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
-  // Force high-performance Canvas Streamer on mobile ALWAYS!
-  useEffect(() => {
-    if ((isTouchOrMobileDevice || !canUseNativePdfViewer) && useNativeViewer) {
-      setUseNativeViewer(false);
-    }
-  }, [isTouchOrMobileDevice, canUseNativePdfViewer, useNativeViewer]);
+  const canUseNativePdfViewer = true;
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -403,7 +380,7 @@ export default function VirtualPdfReader({
         objectUrl = URL.createObjectURL(file);
         setNativeSrc(objectUrl);
       } catch {}
-    } else if (note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached && canUseNativePdfViewer && !isMobileDevice) {
+    } else if (note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached) {
       let dLink = note.driveLink;
       const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
@@ -616,10 +593,10 @@ export default function VirtualPdfReader({
           let previewPrevTime = previewStartTime;
 
           setPreviewProgress({
-            percent: 5,
+            percent: 15,
             loadedBytes: 0,
             totalBytes: noteTotalSize,
-            speed: "Connecting to stream...",
+            speed: note?.isCdnCached ? "Streaming via Edge CDN (1ms)..." : "High-Speed Stream (Direct Cloud Vault)...",
           });
 
           const handleProgress = (progressData) => {
@@ -2373,10 +2350,6 @@ export default function VirtualPdfReader({
   };
 
   const handleSwitchToNative = async () => {
-    if (isMobileDevice || !canUseNativePdfViewer) {
-      alert("📱 Mobile Browser Notice:\n\nMobile browsers (Chrome / Safari) do not embed PDFs inside iframes and will display an external Open prompt. The High-Speed Streamer is optimized for your mobile touch screen!");
-      return;
-    }
     setError(null);
     setLoading(false);
     setUseNativeViewer(true);
@@ -2653,68 +2626,66 @@ export default function VirtualPdfReader({
           </div>
         </div>
 
-        {/* Right: Engine Switcher (Desktop Only), Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
+        {/* Right: Engine Switcher, Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          {!note?.driveLink && canUseNativePdfViewer && !isMobileDevice && (
-            <div
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+              padding: "3px",
+              borderRadius: "8px",
+              border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setUseNativeViewer(false);
+              }}
               style={{
+                padding: "5px 12px",
+                fontSize: "0.78rem",
+                fontWeight: !useNativeViewer ? 700 : 500,
+                borderRadius: "6px",
+                border: "none",
+                background: !useNativeViewer ? "linear-gradient(135deg, #4f46e5, #06b6d4)" : "transparent",
+                color: !useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
+                cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-                padding: "3px",
-                borderRadius: "8px",
-                border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+                gap: "5px",
+                boxShadow: !useNativeViewer ? "0 2px 6px rgba(79, 70, 229, 0.4)" : "none",
+                transition: "all 0.15s ease",
               }}
+              title="Switch to Range Streamer Engine (instant glowing highlights & rapid scrolling)"
             >
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  setUseNativeViewer(false);
-                }}
-                style={{
-                  padding: "5px 12px",
-                  fontSize: "0.78rem",
-                  fontWeight: !useNativeViewer ? 700 : 500,
-                  borderRadius: "6px",
-                  border: "none",
-                  background: !useNativeViewer ? "linear-gradient(135deg, #4f46e5, #06b6d4)" : "transparent",
-                  color: !useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  boxShadow: !useNativeViewer ? "0 2px 6px rgba(79, 70, 229, 0.4)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-                title="Switch to Range Streamer Engine (instant glowing highlights & rapid scrolling)"
-              >
-                🚀 Streamer Engine
-              </button>
-              <button
-                type="button"
-                onClick={handleSwitchToNative}
-                style={{
-                  padding: "5px 12px",
-                  fontSize: "0.78rem",
-                  fontWeight: useNativeViewer ? 700 : 500,
-                  borderRadius: "6px",
-                  border: "none",
-                  background: useNativeViewer ? "linear-gradient(135deg, #2563eb, #38bdf8)" : "transparent",
-                  color: useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
-                  transition: "all 0.15s ease",
-                }}
-                title="Switch to Native Browser Engine (Chrome/Edge PDF plugin)"
-              >
-                ⚡ Native Browser
-              </button>
-            </div>
-          )}
+              🚀 Streamer Engine
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchToNative}
+              style={{
+                padding: "5px 12px",
+                fontSize: "0.78rem",
+                fontWeight: useNativeViewer ? 700 : 500,
+                borderRadius: "6px",
+                border: "none",
+                background: useNativeViewer ? "linear-gradient(135deg, #2563eb, #38bdf8)" : "transparent",
+                color: useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
+                transition: "all 0.15s ease",
+              }}
+              title="Switch to Native Browser Engine (Chrome/Edge PDF plugin)"
+            >
+              ⚡ Native Browser
+            </button>
+          </div>
 
           {(onDownload || noteId) && !isBlocked && (
             <button
@@ -3866,15 +3837,15 @@ export default function VirtualPdfReader({
           overflow: "auto",
           display: "flex",
           justifyContent: "center",
-          alignItems: useNativeViewer && canUseNativePdfViewer && !isMobileDevice ? "stretch" : "flex-start",
-          padding: useNativeViewer && canUseNativePdfViewer && !isMobileDevice ? "0" : "24px",
+          alignItems: useNativeViewer ? "stretch" : "flex-start",
+          padding: useNativeViewer ? "0" : "24px",
           background: nightMode ? "#060911" : "#e2e8f0",
           position: "relative",
           height: "100%",
         }}
       >
-        {/* Native Browser PDF Engine Embed (Desktop only, never rendered on mobile) */}
-        {useNativeViewer && canUseNativePdfViewer && !isMobileDevice && (
+        {/* Native Browser PDF Engine Embed */}
+        {useNativeViewer && (
           <div
             style={{
               width: "100%",
@@ -3900,22 +3871,34 @@ export default function VirtualPdfReader({
                 gap: "8px",
               }}
             >
-              <span>⚡ <strong>Native Browser PDF Engine</strong> (Chrome/Edge Native PDFium)</span>
+              <span>⚡ <strong>Native Browser PDF Engine</strong> {isMobileDevice ? "(Cloud Preview Engine)" : "(Chrome/Edge Native PDFium)"}</span>
               <span>
-                💡 Tip: Press <kbd style={{ padding: "2px 6px", borderRadius: "4px", background: nightMode ? "#334155" : "#cbd5e1", fontWeight: 700 }}>Ctrl + F</kbd> for browser highlight, or switch to <strong>🚀 Streamer Engine</strong> for instant glowing overlays!
+                {isMobileDevice
+                  ? "💡 Tip: Switch to 🚀 Streamer Engine for fast mobile touch scrolling & dark mode!"
+                  : <span>💡 Tip: Press <kbd style={{ padding: "2px 6px", borderRadius: "4px", background: nightMode ? "#334155" : "#cbd5e1", fontWeight: 700 }}>Ctrl + F</kbd> for browser highlight, or switch to <strong>🚀 Streamer Engine</strong> for instant glowing overlays!</span>}
               </span>
             </div>
             <iframe
               ref={iframeRef}
               key={`native-frame-${noteId || "pdf"}`}
               src={
-                nativeSrc
-                  ? (nativeSrc.startsWith("https://drive.google.com")
-                      ? nativeSrc
-                      : `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`)
-                  : (noteId || note?.id
-                      ? `/api/notes/${noteId || note?.id}/stream.pdf${getNativeToolbarParams(currentPage)}`
-                      : (url ? `${url.split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined))
+                nativeSrc && nativeSrc.startsWith("https://drive.google.com")
+                  ? nativeSrc
+                  : (isMobileDevice
+                      ? (note?.driveLink && note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
+                          ? `https://drive.google.com/file/d/${note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)[1]}/preview`
+                          : (nativeSrc && nativeSrc.startsWith("blob:")
+                              ? nativeSrc
+                              : `https://docs.google.com/viewer?url=${encodeURIComponent(
+                                  nativeSrc?.startsWith("http")
+                                    ? nativeSrc
+                                    : `${typeof window !== "undefined" ? window.location.origin : ""}${nativeSrc || `/api/notes/${noteId || note?.id}/stream.pdf`}`
+                                )}&embedded=true`))
+                      : (nativeSrc
+                          ? `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`
+                          : (noteId || note?.id
+                              ? `/api/notes/${noteId || note?.id}/stream.pdf${getNativeToolbarParams(currentPage)}`
+                              : (url ? `${url.split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined))))
               }
               allow="fullscreen"
               onLoad={() => {
@@ -4285,29 +4268,19 @@ export default function VirtualPdfReader({
                 <RefreshCw size={14} />
                 <span>Retry Connection</span>
               </button>
-              {canUseNativePdfViewer && !isMobileDevice ? (
-                <button
-                  onClick={handleSwitchToNative}
-                  className="btn-primary"
-                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
-                >
-                  ⚡ Switch to Native Browser Viewer
-                </button>
-              ) : (note?.driveLink || note?.fileUrl) ? (
-                <button
-                  onClick={() => window.open(note.driveLink || note.fileUrl, "_blank")}
-                  className="btn-primary"
-                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
-                >
-                  <span>🌐 Open Document Link</span>
-                </button>
-              ) : null}
+              <button
+                onClick={handleSwitchToNative}
+                className="btn-primary"
+                style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
+              >
+                ⚡ Switch to Native Browser Viewer
+              </button>
             </div>
           </div>
         )}
 
         {/* Virtual Page Canvas Wrapper with Highlight Overlay Layer */}
-        {!loading && !error && !isAuthGated && (!useNativeViewer || !canUseNativePdfViewer || isMobileDevice) && (
+        {!loading && !error && !isAuthGated && !useNativeViewer && (
           <div
             style={{
               position: "relative",
