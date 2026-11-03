@@ -273,6 +273,25 @@ const helpLimiter = rateLimit({
   ),
 });
 
+/**
+ * 6. P2P Mesh & AirDrop Signaling Limiter
+ * Permits up to 600 signaling requests per 5 minutes per IP.
+ * Defends against memory exhaustion and DoS while permitting rapid real-time peer discovery.
+ */
+const p2pLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  passOnStoreError: true,
+  keyGenerator: getClientIp,
+  skip: (req) => req.method === "OPTIONS" || isImmune(req),
+  handler: createSafeLimiterHandler(
+    "P2P signaling rate limit reached. Please wait a minute before re-announcing."
+  ),
+});
+
 module.exports = {
   getClientIp,
   isImmune,
@@ -283,4 +302,5 @@ module.exports = {
   uploadLimiter,
   authLimiter,
   helpLimiter,
+  p2pLimiter,
 };

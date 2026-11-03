@@ -3,8 +3,7 @@ import {
   X, Shield, Trash2, Search, Clock, Save, RefreshCw,
   Database, Cpu, Server, HardDrive, Globe, Cloud, Download,
   Upload, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera, MessageSquare,
-  Volume2, Radio, Mic, VolumeX
+  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera, MessageSquare
 } from "lucide-react";
 import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
@@ -95,7 +94,6 @@ export default function TabTechNexus(props) {
 
   const isAirDropOn = techSettings.enableP2pAirDrop !== false;
   const isQrMeshOn = techSettings.enableQrMeshConnect !== false;
-  const isSoundDropOn = techSettings.enableSoundDrop !== false;
 
   return (
             <div>
@@ -689,83 +687,6 @@ export default function TabTechNexus(props) {
                   <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.74rem", color: "#94a3b8" }}>
                     <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: isQrMeshOn ? "#38bdf8" : "#64748b" }}></span>
                     Status: {isQrMeshOn ? "1-Tap QR Mesh Ready (Zero-Server Handshake)" : "QR Handshake Disabled"}
-                  </div>
-                </div>
-
-                {/* CARD 2C: 🔊 Sound-Drop Ultrasonic Transfer (Zero-Touch Audio Wave Pairing) */}
-                <div
-                  style={{
-                    background: "rgba(255, 255, 255, 0.02)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
-                    borderRadius: "12px",
-                    padding: "18px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <Volume2 size={18} color="#ec4899" />
-                      <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
-                        2C. 🔊 Sound-Drop (Ultrasonic Audio Transfer)
-                      </h4>
-                    </div>
-                    {/* Dedicated ON/OFF Button Switch */}
-                    <button
-                      type="button"
-                      onClick={() => handleToggleTechSetting("enableSoundDrop")}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "5px 12px",
-                        borderRadius: "20px",
-                        border: isSoundDropOn ? "1px solid #ec4899" : "1px solid rgba(239, 68, 68, 0.4)",
-                        background: isSoundDropOn ? "rgba(236, 72, 153, 0.15)" : "rgba(239, 68, 68, 0.12)",
-                        color: isSoundDropOn ? "#f472b6" : "#f87171",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                      }}
-                      title={isSoundDropOn ? "Click to Turn OFF Sound-Drop" : "Click to Turn ON Sound-Drop"}
-                    >
-                      <span
-                        style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          background: isSoundDropOn ? "#ec4899" : "#ef4444",
-                          boxShadow: isSoundDropOn ? "0 0 8px #ec4899" : "none",
-                        }}
-                      />
-                      <span>{isSoundDropOn ? "ON (ACTIVE)" : "OFF (DISABLED)"}</span>
-                    </button>
-                  </div>
-                  <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginBottom: "14px" }}>
-                    0-Touch proximity pairing using inaudible ultrasonic sound waves (18.5 kHz - 19.5 kHz). Allows students to transfer notes between nearby phones without even scanning a QR code or needing 1 KB internet.
-                  </p>
-
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", fontSize: "0.8rem", padding: "10px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
-                    <span style={{ color: "var(--text-muted)" }}>Acoustic Frequency Mode:</span>
-                    <select
-                      value={techSettings.soundDropFrequencyMode ?? "ultrasonic"}
-                      onChange={(e) => handleUpdateTechValue("soundDropFrequencyMode", e.target.value)}
-                      style={{ background: "#0b0f19", color: "#fff", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "6px", padding: "4px 8px", fontSize: "0.8rem" }}
-                    >
-                      <option value="ultrasonic">🦇 Inaudible Ultrasonic (18.5 - 19.5 kHz)</option>
-                      <option value="audible">🎵 Audible Sci-Fi Chirp (14 - 15 kHz - Budget Device Compatible)</option>
-                    </select>
-                  </div>
-
-                  <div style={{ marginTop: "10px", padding: "8px 10px", background: "rgba(236, 72, 153, 0.06)", borderRadius: "8px", border: "1px solid rgba(236, 72, 153, 0.15)" }}>
-                    <div style={{ fontSize: "0.76rem", color: "#fbcfe8", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Radio size={14} />
-                      <span><strong>0-Touch Proximity Pairing:</strong> Works via native Web Audio API &amp; microphone at 0% server bandwidth.</span>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: "10px", display: "flex", alignItems: "center", gap: "8px", fontSize: "0.74rem", color: "#94a3b8" }}>
-                    <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: isSoundDropOn ? "#ec4899" : "#64748b" }}></span>
-                    Status: {isSoundDropOn ? "Sound-Drop Engine Ready (0-Touch Audio Pairing Active)" : "Sound-Drop Disabled"}
                   </div>
                 </div>
 

@@ -1,5 +1,9 @@
 const express = require("express");
 const router = express.Router();
+const { p2pLimiter } = require("../middleware/rateLimit");
+
+// Apply rate limiting across all P2P Mesh & AirDrop signaling endpoints
+router.use(p2pLimiter);
 
 // Ephemeral in-memory P2P Mesh state (zero database overhead)
 // Structure: noteId -> Map(peerId -> { peerId, ip, lastSeen, meta })
@@ -157,6 +161,16 @@ router.post("/signal", (req, res) => {
       return res.status(400).json({ success: false, message: "Peer ID exceeds permitted length" });
     }
 
+    // Security: Limit signal payload size (protect against heap memory bloat)
+    try {
+      const sigStr = typeof signal === "string" ? signal : JSON.stringify(signal);
+      if (sigStr.length > 8192) {
+        return res.status(400).json({ success: false, message: "Signal payload exceeds permitted length" });
+      }
+    } catch (_) {
+      return res.status(400).json({ success: false, message: "Malformed signal payload" });
+    }
+
     if (!signalQueue.has(toPeerId)) {
       if (signalQueue.size >= 2000) {
         const oldestQueue = signalQueue.keys().next().value;
@@ -171,7 +185,7 @@ router.post("/signal", (req, res) => {
     }
 
     queue.push({
-      fromPeerId: String(fromPeerId || ""),
+      fromPeerId: String(fromPeerId || "").slice(0, 100),
       signal,
       timestamp: Date.now(),
     });
@@ -188,9 +202,9 @@ router.post("/signal", (req, res) => {
  */
 router.get("/signals/:peerId", (req, res) => {
   try {
-    const { peerId } = req.params;
+    const peerId = String(req.params.peerId || "").slice(0, 100);
     const signals = signalQueue.get(peerId) || [];
-    signalQueue.set(peerId, []); // Flush queue after retrieval
+    signalQueue.delete(peerId); // Cleanly flush and remove map key to prevent empty array memory leak
 
     return res.json({ success: true, signals });
   } catch (err) {
@@ -199,8 +213,9 @@ router.get("/signals/:peerId", (req, res) => {
 });
 
 // ============================================================================
-// ⚡ Campus AirDrop & SoundDrop Live Auto-Signaling Relay (Zero-Touch Peer Handshake)
+// ⚡ Campus AirDrop Live Auto-Signaling Relay (1-Tap QR Mesh Peer Handshake)
 // ============================================================================
+const MAX_AIRDROP_SESSIONS = 500;
 const airdropSessions = new Map();
 
 // Periodic prune every 60s
@@ -220,14 +235,35 @@ setInterval(() => {
 router.post("/airdrop/offer", (req, res) => {
   try {
     const { code, offerToken, note } = req.body || {};
-    if (!code || !offerToken) {
-      return res.status(400).json({ success: false, message: "Pairing code and offerToken are required" });
+    if (!code || !offerToken || typeof offerToken !== "string") {
+      return res.status(400).json({ success: false, message: "Valid pairing code and offerToken are required" });
     }
     const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (cleanCode.length < 3) {
+      return res.status(400).json({ success: false, message: "Pairing code must be at least 3 characters" });
+    }
+    if (offerToken.length > 8192) {
+      return res.status(400).json({ success: false, message: "offerToken exceeds permitted length" });
+    }
+
+    // DoS Defense: Cap Map size to 500 and evict oldest session (LRU)
+    if (airdropSessions.size >= MAX_AIRDROP_SESSIONS) {
+      const oldestKey = airdropSessions.keys().next().value;
+      airdropSessions.delete(oldestKey);
+    }
+
+    // Heap Memory Protection: Strictly sanitize and bound note metadata
+    const safeNote = note && typeof note === "object" ? {
+      id: String(note.id || "").slice(0, 64),
+      title: String(note.title || "").slice(0, 150),
+      subject: String(note.subject || "").slice(0, 100),
+      branch: String(note.branch || "").slice(0, 100),
+    } : null;
+
     airdropSessions.set(cleanCode, {
       code: cleanCode,
       offerToken,
-      note: note || null,
+      note: safeNote,
       answerToken: null,
       createdAt: Date.now(),
     });
@@ -244,6 +280,9 @@ router.post("/airdrop/offer", (req, res) => {
 router.get("/airdrop/offer/:code", (req, res) => {
   try {
     const cleanCode = String(req.params.code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (cleanCode.length < 3) {
+      return res.status(400).json({ success: false, message: "Invalid pairing code" });
+    }
     const item = airdropSessions.get(cleanCode);
     if (!item || !item.offerToken) {
       return res.status(404).json({ success: false, message: "No active AirDrop offer found for this code." });
@@ -265,10 +304,16 @@ router.get("/airdrop/offer/:code", (req, res) => {
 router.post("/airdrop/answer", (req, res) => {
   try {
     const { code, answerToken } = req.body || {};
-    if (!code || !answerToken) {
-      return res.status(400).json({ success: false, message: "Pairing code and answerToken are required" });
+    if (!code || !answerToken || typeof answerToken !== "string") {
+      return res.status(400).json({ success: false, message: "Valid pairing code and answerToken are required" });
     }
     const cleanCode = String(code).trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (cleanCode.length < 3) {
+      return res.status(400).json({ success: false, message: "Invalid pairing code" });
+    }
+    if (answerToken.length > 8192) {
+      return res.status(400).json({ success: false, message: "answerToken exceeds permitted length" });
+    }
     const item = airdropSessions.get(cleanCode);
     if (!item) {
       return res.status(404).json({ success: false, message: "AirDrop session expired or not found." });
@@ -287,6 +332,9 @@ router.post("/airdrop/answer", (req, res) => {
 router.get("/airdrop/answer/:code", (req, res) => {
   try {
     const cleanCode = String(req.params.code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+    if (cleanCode.length < 3) {
+      return res.status(400).json({ success: false, message: "Invalid pairing code" });
+    }
     const item = airdropSessions.get(cleanCode);
     if (!item) {
       return res.status(404).json({ success: false, message: "Session expired" });

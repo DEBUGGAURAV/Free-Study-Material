@@ -443,16 +443,6 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   color: #fff;
 }
 
-.pill-sounddrop {
-  background: rgba(16, 185, 129, 0.13);
-  border-color: rgba(16, 185, 129, 0.34);
-  color: #6ee7b7;
-}
-.pill-sounddrop:hover {
-  background: rgba(16, 185, 129, 0.24);
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
-  color: #fff;
-}
 
 .pill-chat {
   background: rgba(99, 102, 241, 0.13);
@@ -659,7 +649,6 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .dock-airdrop { color: #c084fc; }
-.dock-sounddrop { color: #34d399; }
 .dock-chat { color: #a5b4fc; }
 .dock-pod { color: #67e8f9; }
 .dock-notice { color: #fbbf24; }
@@ -1806,18 +1795,6 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   font-family: var(--font-mono);
 }
 
-.btn-mesh-sound {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
-}
-
-.btn-mesh-sound:hover {
-  background: rgba(16, 185, 129, 0.24);
-  border-color: rgba(16, 185, 129, 0.55);
-  color: #6ee7b7;
-  transform: translateY(-1px);
-}
 
 .btn-mesh-airdrop {
   background: rgba(168, 85, 247, 0.12);

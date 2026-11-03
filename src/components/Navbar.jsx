@@ -14,7 +14,6 @@ import {
   HelpCircle,
   Users,
   Zap,
-  Volume2,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
@@ -30,7 +29,6 @@ export default function Navbar({
   onOpenHelp,
   onOpenStudyPod,
   onOpenAirDrop,
-  onOpenSoundDrop,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -111,18 +109,6 @@ export default function Navbar({
       setInstallPrompt(null);
     } else {
       alert("📲 To Install FreeStudyMaterial App:\n\n1. Tap the browser menu (3 dots or share button).\n2. Select 'Add to Home screen' or 'Install App'.\n\nEnjoy instant 0ms offline access!");
-    }
-  };
-
-  const triggerSoundDrop = () => {
-    if (onOpenSoundDrop) {
-      onOpenSoundDrop();
-    } else if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("open_campus_airdrop", {
-          detail: { initialMode: "sound" },
-        })
-      );
     }
   };
 
@@ -378,16 +364,6 @@ export default function Navbar({
             <span>AirDrop</span>
           </button>
 
-          <button
-            type="button"
-            className="launchpad-pill pill-sounddrop"
-            onClick={triggerSoundDrop}
-            title="Sound-Drop: Beam notes wirelessly via ultrasonic sound waves"
-          >
-            <Volume2 size={14} />
-            <span>Sound-Drop</span>
-          </button>
-
           <span className="launchpad-divider" aria-hidden="true" />
 
           <button
@@ -463,15 +439,6 @@ export default function Navbar({
         >
           <Zap size={17} />
           <span>AirDrop</span>
-        </button>
-
-        <button
-          type="button"
-          className="dock-item dock-sounddrop"
-          onClick={triggerSoundDrop}
-        >
-          <Volume2 size={17} />
-          <span>Sound</span>
         </button>
 
         <button

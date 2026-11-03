@@ -3762,8 +3762,6 @@ router.get("/tech-flags", (req, res) => {
       cdnMaxRamItems: techSettings.cdnMaxRamItems || "auto",
       enableP2pAirDrop: techSettings.enableP2pAirDrop !== false,
       enableQrMeshConnect: techSettings.enableQrMeshConnect !== false,
-      enableSoundDrop: techSettings.enableSoundDrop !== false,
-      soundDropFrequencyMode: techSettings.soundDropFrequencyMode || "ultrasonic",
       p2pMaxPeers: techSettings.p2pMaxPeers || "auto",
       autoP2pHardwareGuard: techSettings.autoP2pHardwareGuard !== false,
       enableClientAi: techSettings.enableClientAi,

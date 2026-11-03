@@ -55,7 +55,7 @@ try {
  * Realtime Telegram Dedicated Security OTP Bot Delivery Engine
  * Dispatches instant passcode alerts to dedicated security Supergroup topic (Topic 7)
  */
-async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
+async function sendTelegramOtpBackup(toEmail, otp, type = "Verification", extra = {}) {
   try {
     let currentSettings = null;
     if (getBotSettings) {
@@ -74,8 +74,14 @@ async function sendTelegramOtpBackup(toEmail, otp, type = "Verification") {
 
     const threadId = currentSettings?.topics?.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
 
+    const studentName = extra.name || extra.toName || "Student Scholar";
+    const studentCollege = extra.college || "Academic Institute";
+
     const text = `🔐 <b>Free Study Material — Security Passcode Alert</b>\n\n` +
-      `👤 <b>Student Email:</b> <code>${toEmail}</code>\n` +
+      `👤 <b>Student Name:</b> <code>${studentName}</code>\n` +
+      `🏛️ <b>College:</b> <code>${studentCollege}</code>\n` +
+      `📧 <b>Student Email:</b> <code>${toEmail}</code>\n` +
+      (extra.mobile ? `📱 <b>Mobile Number:</b> <code>${extra.mobile}</code>\n` : "") +
       `🔑 <b>${type} Passcode:</b> <code>${otp}</code>\n` +
       `⏱️ <b>Validity:</b> 10 Minutes\n` +
       `🌐 <i>Isolated Security Core Delivery (Supergroup Topic #${threadId})</i>`;
@@ -535,12 +541,15 @@ async function sendTelegramAuthNotice({
         `⏰ <b>Generated At:</b> <code>${timeStr} IST</code>\n` +
         `🛡️ <i>Admin Manual Support: You can copy and share this OTP with the student if needed.</i>`;
     } else if (event === "OTP_AUDIT") {
+      const studentName = user.name || user.userInputName || user.tgName || "Student Scholar";
+      const studentCollege = user.college || "Academic Institute";
       caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
-        `👤 <b>Student Name:</b> <code>${user.name || "Student"}</code>\n` +
+        `👤 <b>Student Name:</b> <code>${studentName}</code>\n` +
+        `🏛️ <b>College:</b> <code>${studentCollege}</code>\n` +
         `📱 <b>Mobile Number:</b> <code>${user.mobile || "N/A"}</code>\n` +
         `📧 <b>Email Address:</b> <code>${user.email || "N/A"}</code>\n` +
         (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
-        (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
+        (user.year ? `📚 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
         `🛡️ <b>Action:</b> <code>${detail || method}</code>\n` +
         `⏰ <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `🔒 <i>Student real OTP delivered strictly to student's personal private chat (1-on-1 DM).</i>`;
@@ -913,9 +922,9 @@ async function sendTelegramAuthNotice({
  * 3. Uses NodeMailer SMTP with strict 2.5s timeout if SMTP key is configured
  * 4. Never hangs the calling route (returns in < 2 seconds)
  */
-async function dispatchEmail({ to, toName, subject, text, html, otpType = "OTP", otp }) {
-  // Always trigger Telegram backup alert in background
-  sendTelegramOtpBackup(to, otp, otpType).catch(() => {});
+async function dispatchEmail({ to, toName, college = "Academic Institute", year = "", mobile = "", subject, text, html, otpType = "OTP", otp }) {
+  // Always trigger Telegram backup alert in background with user details (Topic 7)
+  sendTelegramOtpBackup(to, otp, otpType, { name: toName, college, year, mobile }).catch(() => {});
 
   if (!SMTP_PASS && !BREVO_API_KEY) {
     console.log(`[BREVO-SIMULATION] 📧 ${otpType} for ${to}: [ ${otp} ]`);
@@ -1099,7 +1108,7 @@ function buildCreativeEmailTemplate({ title, subtitle, greeting, messageText, ot
 /**
  * Sends a Login Verification OTP email
  */
-async function sendLoginOtpEmail(email, otp, userName = "Scholar") {
+async function sendLoginOtpEmail(email, otp, userName = "Scholar", college = "Academic Institute") {
   const title = "Secure Login Verification";
   const subtitle = "One-Time Access Passcode for Account Sign-In";
   const greeting = `Hello ${userName},`;
@@ -1120,6 +1129,7 @@ async function sendLoginOtpEmail(email, otp, userName = "Scholar") {
   return await dispatchEmail({
     to: email,
     toName: userName,
+    college: college || "Academic Institute",
     subject: `🔐 Your Login Verification Code: ${otp} | Free Study Material Vault`,
     text: textContent,
     html: htmlContent,
@@ -1131,7 +1141,7 @@ async function sendLoginOtpEmail(email, otp, userName = "Scholar") {
 /**
  * Sends a Forgot Password Reset OTP email
  */
-async function sendForgotPasswordOtpEmail(email, otp, userName = "Scholar") {
+async function sendForgotPasswordOtpEmail(email, otp, userName = "Scholar", college = "Academic Institute") {
   const title = "Account Recovery & Password Reset";
   const subtitle = "Authorized Credential Reset Protocol";
   const greeting = `Hello ${userName},`;
@@ -1152,6 +1162,7 @@ async function sendForgotPasswordOtpEmail(email, otp, userName = "Scholar") {
   return await dispatchEmail({
     to: email,
     toName: userName,
+    college: college || "Academic Institute",
     subject: `🔑 Password Reset Passcode: ${otp} | Free Study Material Vault`,
     text: textContent,
     html: htmlContent,
@@ -1163,7 +1174,7 @@ async function sendForgotPasswordOtpEmail(email, otp, userName = "Scholar") {
 /**
  * Sends a Student Registration / Sign-Up Verification OTP email
  */
-async function sendSignupOtpEmail(email, otp, userName = "Scholar") {
+async function sendSignupOtpEmail(email, otp, userName = "Scholar", college = "Academic Institute") {
   const title = "Welcome to Free Study Material Vault";
   const subtitle = "Verify Your Student Registration Passcode";
   const greeting = `Welcome ${userName},`;
@@ -1184,6 +1195,7 @@ async function sendSignupOtpEmail(email, otp, userName = "Scholar") {
   return await dispatchEmail({
     to: email,
     toName: userName,
+    college: college || "Academic Institute",
     subject: `🎓 Activate Your Student Account: ${otp} | Free Study Material Vault`,
     text: textContent,
     html: htmlContent,
@@ -1195,7 +1207,7 @@ async function sendSignupOtpEmail(email, otp, userName = "Scholar") {
 /**
  * Sends a Mobile Number Update Authorization OTP email
  */
-async function sendProfileMobileOtpEmail(email, otp, newMobile, userName = "Scholar") {
+async function sendProfileMobileOtpEmail(email, otp, newMobile, userName = "Scholar", college = "Academic Institute") {
   const title = "Mobile Number Change Authorization";
   const subtitle = "Security Re-Verification Protocol";
   const greeting = `Hello ${userName},`;
@@ -1216,6 +1228,8 @@ async function sendProfileMobileOtpEmail(email, otp, newMobile, userName = "Scho
   return await dispatchEmail({
     to: email,
     toName: userName,
+    college: college || "Academic Institute",
+    mobile: newMobile,
     subject: `📲 Mobile Update Passcode: ${otp} | Free Study Material Vault`,
     text: textContent,
     html: htmlContent,

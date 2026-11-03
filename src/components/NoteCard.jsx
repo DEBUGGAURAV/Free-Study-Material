@@ -11,7 +11,6 @@ import {
   Pin,
   Trash2,
   Zap,
-  Volume2,
   ArrowUpRight,
 } from "lucide-react";
 import { api } from "../api";
@@ -656,44 +655,25 @@ export default function NoteCard({
             </button>
           </div>
 
-          {/* Tertiary Row: Sound-Drop + AirDrop */}
-          <div className="action-row-dual">
-            <button
-              type="button"
-              className="btn-mesh-pill btn-mesh-sound"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.dispatchEvent(
-                  new CustomEvent("open_campus_airdrop", {
-                    detail: { note, initialMode: "sound" },
-                  })
-                );
-              }}
-              title="Sound-Drop: Beam note wirelessly via ultrasonic audio frequency"
-            >
-              <Volume2 size={14} />
-              <span>Sound-Drop</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn-mesh-pill btn-mesh-airdrop"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.dispatchEvent(
-                  new CustomEvent("open_campus_airdrop", {
-                    detail: { note, initialMode: "qr" },
-                  })
-                );
-              }}
-              title="AirDrop: Beam note offline via 1-Tap QR Mesh"
-            >
-              <Zap size={14} />
-              <span>AirDrop</span>
-            </button>
-          </div>
+          {/* Tertiary Row: Campus AirDrop (1-Tap QR Mesh) */}
+          <button
+            type="button"
+            className="btn-mesh-pill btn-mesh-airdrop"
+            style={{ width: "100%", justifyContent: "center" }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("open_campus_airdrop", {
+                  detail: { note, initialMode: "qr" },
+                })
+              );
+            }}
+            title="AirDrop: Beam note offline via 1-Tap QR Mesh"
+          >
+            <Zap size={14} />
+            <span>Campus AirDrop (1-Tap QR)</span>
+          </button>
         </div>
       </div>
     </article>

@@ -678,7 +678,7 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
     // Send email via Brevo HTTPS API / SMTP
     let mailResult = null;
     try {
-      mailResult = await sendSignupOtpEmail(cleanEmail, otp, name.trim());
+      mailResult = await sendSignupOtpEmail(cleanEmail, otp, name.trim(), (college || "").trim());
     } catch (mailErr) {
       console.warn("[BREVO-SMTP] Signup OTP dispatch warning:", mailErr.message);
     }
@@ -1733,7 +1733,7 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     // Send email via Brevo SMTP
     let mailResult = null;
     try {
-      mailResult = await sendLoginOtpEmail(targetEmail, otp, userRecord.name || "Scholar");
+      mailResult = await sendLoginOtpEmail(targetEmail, otp, userRecord.name || "Scholar", userRecord.college || "Academic Institute");
     } catch (mailErr) {
       console.warn("[BREVO-SMTP] Login OTP dispatch warning:", mailErr.message);
     }
@@ -1902,7 +1902,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
     // Send email via Brevo HTTPS API / SMTP
     let mailResult = null;
     try {
-      mailResult = await sendForgotPasswordOtpEmail(cleanEmail, otp, userData.name || "Scholar");
+      mailResult = await sendForgotPasswordOtpEmail(cleanEmail, otp, userData.name || "Scholar", userData.college || "Academic Institute");
     } catch (mailErr) {
       console.warn("[BREVO-SMTP] Forgot Password OTP warning:", mailErr.message);
     }
@@ -2000,11 +2000,24 @@ router.post("/send-otp", authLimiter, async (req, res) => {
       });
     }
 
+    let studentName = "Scholar";
+    let studentCollege = "Academic Institute";
+    if (db) {
+      try {
+        const uSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+        if (!uSnap.empty) {
+          const uDoc = uSnap.docs[0].data();
+          if (uDoc.name) studentName = uDoc.name;
+          if (uDoc.college) studentCollege = uDoc.college;
+        }
+      } catch (_) {}
+    }
+
     const otp = crypto.randomInt(100000, 999999).toString();
-    saveOtp("general", cleanEmail, otp);
+    saveOtp("general", cleanEmail, otp, { name: studentName, college: studentCollege });
 
     try {
-      await sendLoginOtpEmail(cleanEmail, otp, "Scholar");
+      await sendLoginOtpEmail(cleanEmail, otp, studentName, studentCollege);
     } catch (e) {}
 
     return res.json({

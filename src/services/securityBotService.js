@@ -701,14 +701,14 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
 
   try {
     const { sendTelegramAuthNotice } = require("./emailService");
-    // 1. Audit Log to Supergroup
+    // 1. Audit Log to Supergroup (Topic 7)
     sendTelegramAuthNotice({
       event: "OTP_AUDIT",
       user: {
-        name: combinedName,
+        name: combinedName || record.name || "Student Scholar",
         mobile: record.mobile,
         email: record.email || "",
-        college: record.college || "",
+        college: record.college || "Academic Institute",
         year: record.year || "",
       },
       method: "Telegram Bot DM",
@@ -719,10 +719,10 @@ async function dispatchRegistrationOtp(chatId, record, tgUser = {}) {
     sendTelegramAuthNotice({
       event: "USER_OTP",
       user: {
-        name: combinedName,
+        name: combinedName || record.name || "Student Scholar",
         mobile: record.mobile,
         email: record.email || "",
-        college: record.college || "",
+        college: record.college || "Academic Institute",
         year: record.year || "",
       },
       otp: record.otp,
@@ -793,14 +793,14 @@ async function dispatchPasswordResetOtp(chatId, record) {
 
   try {
     const { sendTelegramAuthNotice } = require("./emailService");
-    // 1. Audit Log to Supergroup
+    // 1. Audit Log to Supergroup (Topic 7)
     sendTelegramAuthNotice({
       event: "OTP_AUDIT",
       user: {
-        name: displayName,
+        name: displayName || record.userName || "Scholar",
         mobile: displayMobile,
         email: displayEmail,
-        college: displayCollege,
+        college: displayCollege || record.college || "Academic Institute",
       },
       method: "Telegram Bot DM",
       detail: "Password Recovery Verification Passcode",
@@ -810,10 +810,10 @@ async function dispatchPasswordResetOtp(chatId, record) {
     sendTelegramAuthNotice({
       event: "USER_OTP",
       user: {
-        name: displayName,
+        name: displayName || record.userName || "Scholar",
         mobile: displayMobile,
         email: displayEmail,
-        college: displayCollege,
+        college: displayCollege || record.college || "Academic Institute",
       },
       otp: displayOtp,
       method: "Telegram Bot DM",

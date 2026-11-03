@@ -122,31 +122,35 @@ export default function VirtualPdfReader({
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
 
-  // Comprehensive Mobile & Touch Device Detection (Covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
-  const isMobileDevice = typeof window !== "undefined" && typeof navigator !== "undefined" && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent) ||
-    (window.innerWidth > 0 && window.innerWidth <= 820) ||
-    (window.screen && Math.min(window.screen.width, window.screen.height) <= 820) ||
-    (navigator.maxTouchPoints > 1 && window.screen && Math.min(window.screen.width, window.screen.height) <= 1024) ||
-    Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+  // Comprehensive Touch, Mobile & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
+  const isTouchOrMobileDevice = typeof window !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "") ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "") ||
+    Boolean(navigator.userAgentData?.mobile) ||
+    Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    ("ontouchstart" in window) ||
+    Boolean(window.matchMedia && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)) ||
+    (window.screen && Math.min(window.screen.width, window.screen.height) <= 900) ||
+    (window.innerWidth > 0 && window.innerWidth <= 900) ||
     navigator.pdfViewerEnabled === false
   );
+  const isMobileDevice = isTouchOrMobileDevice;
 
-  // True if and only if the current browser environment genuinely supports inline PDF embedding without prompting external app / "Open" button
-  const canUseNativePdfViewer = typeof window !== "undefined" && typeof navigator !== "undefined" && (
+  // True if and only if the current browser environment is a genuine desktop PC that natively supports inline PDF embedding without prompting external app / "Open" button, and downloads are NOT disabled
+  const canUseNativePdfViewer = Boolean(
+    typeof window !== "undefined" &&
     navigator.pdfViewerEnabled === true &&
-    !isMobileDevice &&
-    !Boolean(window.matchMedia && window.matchMedia("(pointer: coarse)").matches) &&
-    !(navigator.maxTouchPoints > 1 && window.screen && Math.min(window.screen.width, window.screen.height) <= 1024)
+    !isTouchOrMobileDevice &&
+    !isBlocked
   );
 
   // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
   // Force high-performance Canvas Streamer on mobile ALWAYS!
   useEffect(() => {
-    if ((isMobileDevice || !canUseNativePdfViewer) && useNativeViewer) {
+    if ((isTouchOrMobileDevice || !canUseNativePdfViewer) && useNativeViewer) {
       setUseNativeViewer(false);
     }
-  }, [isMobileDevice, canUseNativePdfViewer, useNativeViewer]);
+  }, [isTouchOrMobileDevice, canUseNativePdfViewer, useNativeViewer]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");

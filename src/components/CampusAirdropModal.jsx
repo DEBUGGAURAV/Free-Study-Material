@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   X, Share2, QrCode, Camera, Copy, Check, RefreshCw, Zap,
   Download, ArrowRight, ShieldCheck, Wifi, Sparkles, CheckCircle2,
-  AlertTriangle, Smartphone, Volume2, Mic, Radio, VolumeX, Activity
+  AlertTriangle, Smartphone
 } from "lucide-react";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
@@ -13,19 +13,12 @@ import {
   createAirDropReceiverSession,
   cancelAirDropSession
 } from "../utils/p2pCampusAirdrop";
-import {
-  startSoundDropBroadcast,
-  stopSoundDropBroadcast,
-  startSoundDropListener,
-  stopSoundDropListener
-} from "../utils/soundDrop";
 
 
 /**
- * Generates a deterministic 4-character hex code (0-9, A-F) from any token string.
- * Strictly guarantees instant ~380ms acoustic lock in soundDrop.js.
+ * Generates a deterministic 4-character pairing PIN (0-9, A-F) from any token string.
  */
-function getHexSoundCode(token) {
+function getAirDropPairingPin(token) {
   if (!token) return "A1B2";
   let h = 0x811c9dc5;
   for (let i = 0; i < token.length; i++) {
@@ -42,17 +35,12 @@ export default function CampusAirdropModal({
   directBuffer = null,
   pdfDoc = null,
   onNoteReceived = null,
-  initialMode = "sound",
+  initialMode = "qr",
 }) {
   if (!isOpen) return null;
 
   const [activeTab, setActiveTab] = useState(currentNote ? "send" : "receive");
-  const [pairingMode, setPairingMode] = useState(initialMode || "sound"); // 'sound' | 'qr'
-  const [isAudible, setIsAudible] = useState(false);
-  const [soundBeaming, setSoundBeaming] = useState(false);
-  const [soundListening, setSoundListening] = useState(false);
-  const [soundVolumeLevel, setSoundVolumeLevel] = useState(0);
-  const [soundDetectedCode, setSoundDetectedCode] = useState("");
+  const [airdropPairingPin, setAirdropPairingPin] = useState("");
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -76,7 +64,6 @@ export default function CampusAirdropModal({
   const [hasBarcodeDetector, setHasBarcodeDetector] = useState(true);
   const [manualOfferText, setManualOfferText] = useState("");
   const [showManualReceive, setShowManualReceive] = useState(false);
-  const [soundPairingCode, setSoundPairingCode] = useState("");
   const broadcastChannelRef = useRef(null);
 
   const videoRef = useRef(null);
@@ -102,6 +89,7 @@ export default function CampusAirdropModal({
   useEffect(() => {
     let session = null;
     let isCancelled = false;
+    let pollTimer = null;
 
     if (activeTab === "send" && currentNote?.id) {
       setErrorMsg("");
@@ -129,8 +117,6 @@ export default function CampusAirdropModal({
           onConnected: () => {
             if (!isCancelled) {
               setSenderConnected(true);
-              stopSoundDropBroadcast();
-              setSoundBeaming(false);
             }
           },
           onProgress: (prog) => {
@@ -152,37 +138,35 @@ export default function CampusAirdropModal({
             senderSessionRef.current = s;
             setSenderSession(s);
 
-            // Set sound pairing code from token
-            const soundCode = getHexSoundCode(s.offerToken);
-            setSoundPairingCode(soundCode);
+            // Set pairing PIN code from token
+            const pairingPin = getAirDropPairingPin(s.offerToken);
+            setAirdropPairingPin(pairingPin);
 
             // ⚡ 1. Register offer in Live Campus Signaling Relay (Zero-Touch Handshake)
             fetch("/api/p2p/airdrop/offer", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                code: soundCode,
+                code: pairingPin,
                 offerToken: s.offerToken,
                 note: currentNote,
               }),
             }).catch((e) => console.warn("[AIRDROP-SIGNAL] Offer register notice:", e));
 
             // ⚡ 2. Auto-poll for receiver's answer in background (Hands-free connection)
-            const pollTimer = setInterval(async () => {
+            pollTimer = setInterval(async () => {
               if (isCancelled || senderSessionRef.current !== s || !session?.active) {
-                clearInterval(pollTimer);
+                if (pollTimer) clearInterval(pollTimer);
                 return;
               }
               try {
-                const aRes = await fetch(`/api/p2p/airdrop/answer/${soundCode}`);
+                const aRes = await fetch(`/api/p2p/airdrop/answer/${pairingPin}`);
                 if (aRes.ok) {
                   const aData = await aRes.json();
                   if (aData.ready && aData.answerToken) {
-                    clearInterval(pollTimer);
+                    if (pollTimer) clearInterval(pollTimer);
                     await completeSenderWithAnswer(s, aData.answerToken);
                     setSenderConnected(true);
-                    stopSoundDropBroadcast();
-                    setSoundBeaming(false);
                   }
                 }
               } catch (_) {}
@@ -200,8 +184,8 @@ export default function CampusAirdropModal({
               })
               .catch((e) => {
                 console.warn("QR Render notice, trying compact pairing code QR fallback:", e);
-                // Guaranteed fallback QR code using short sound/pairing token
-                const fallbackToken = `FSM:${soundCode}`;
+                // Guaranteed fallback QR code using short pairing PIN
+                const fallbackToken = `FSM:${pairingPin}`;
                 QRCode.toDataURL(fallbackToken, {
                   width: 280,
                   margin: 2,
@@ -226,6 +210,7 @@ export default function CampusAirdropModal({
 
     return () => {
       isCancelled = true;
+      if (pollTimer) clearInterval(pollTimer);
       if (session) {
         cancelAirDropSession(session);
         if (senderSessionRef.current === session) senderSessionRef.current = null;
@@ -233,124 +218,23 @@ export default function CampusAirdropModal({
     };
   }, [activeTab, currentNote?.id]);
 
-  // Manage Sound-Drop Ultrasonic Broadcast for Sender
+  // Auto-manage Camera scanner for Receiver
   useEffect(() => {
-    stopSoundDropBroadcast();
-    setSoundBeaming(false);
-
-    if (activeTab === "send" && pairingMode === "sound" && senderSession?.offerToken && !senderDone) {
-      try {
-        const soundCode = getHexSoundCode(senderSession.offerToken);
-        setSoundPairingCode(soundCode);
-
-        // Broadcast over local network channel for zero-touch peer discovery
-        if (typeof BroadcastChannel !== "undefined") {
-          const bc = new BroadcastChannel("campus_airdrop_mesh_channel");
-          broadcastChannelRef.current = bc;
-          bc.onmessage = (e) => {
-            if (e.data?.type === "AIRDROP_ANSWER" && e.data?.answerToken) {
-              if (!e.data.soundCode || e.data.soundCode === soundCode) {
-                completeSenderWithAnswer(senderSession, e.data.answerToken)
-                  .then(() => setSenderConnected(true))
-                  .catch(console.warn);
-              }
-            }
-          };
-          bc.postMessage({
-            type: "AIRDROP_OFFER",
-            soundCode,
-            offerToken: senderSession.offerToken,
-            note: currentNote,
-          });
-        }
-
-        // Start ultrasonic audio wave broadcast from speaker
-        startSoundDropBroadcast(soundCode, {
-          isAudible,
-          volume: 0.9,
-          repeatIntervalMs: 1200,
-        });
-        setSoundBeaming(true);
-      } catch (err) {
-        console.warn("[SOUND-DROP] Start broadcast error:", err);
-      }
-    }
-
-    return () => {
-      stopSoundDropBroadcast();
-      setSoundBeaming(false);
-      if (broadcastChannelRef.current) {
-        try { broadcastChannelRef.current.close(); } catch (_) {}
-        broadcastChannelRef.current = null;
-      }
-    };
-  }, [activeTab, pairingMode, senderSession?.offerToken, isAudible, senderDone]);
-
-  // Manage Sound-Drop Microphone Listener for Receiver
-  useEffect(() => {
-    stopSoundDropListener();
-    setSoundListening(false);
-    setSoundVolumeLevel(0);
     isProcessingOfferRef.current = false;
-
-    let isCancelled = false;
-
-    if (activeTab === "receive" && pairingMode === "sound" && !receiverDone) {
-      stopCamera();
-
-      // Listen on local network channel for matching offer
-      if (typeof BroadcastChannel !== "undefined") {
-        const bc = new BroadcastChannel("campus_airdrop_mesh_channel");
-        broadcastChannelRef.current = bc;
-        bc.onmessage = (e) => {
-          if (e.data?.type === "AIRDROP_OFFER" && e.data?.offerToken) {
-            handleProcessOfferToken(e.data.offerToken);
-          }
-        };
-      }
-
-      startSoundDropListener({
-        onTokenDetected: (token) => {
-          if (!isCancelled && token) {
-            setSoundDetectedCode(token);
-            // ⚡ Instant cross-device handshake via SoundDrop ultrasonic chirp!
-            handleProcessOfferToken(token);
-          }
-        },
-        onVolume: (vol) => {
-          if (!isCancelled) setSoundVolumeLevel(vol);
-        },
-        onError: (err) => {
-          if (!isCancelled) setErrorMsg(err.message || "Microphone listener error");
-        },
-      }, { isAudible })
-        .then(() => {
-          if (!isCancelled) setSoundListening(true);
-        })
-        .catch((err) => {
-          if (!isCancelled) setErrorMsg(err?.message || "Failed to start microphone listener");
-        });
-    } else if (activeTab === "receive" && pairingMode === "qr") {
+    if (activeTab === "receive" && !receiverDone && !answerQrUrl && !receiverProgress) {
       startCamera();
+    } else {
+      stopCamera();
     }
-
     return () => {
-      isCancelled = true;
-      stopSoundDropListener();
-      setSoundListening(false);
-      if (broadcastChannelRef.current) {
-        try { broadcastChannelRef.current.close(); } catch (_) {}
-        broadcastChannelRef.current = null;
-      }
+      stopCamera();
     };
-  }, [activeTab, pairingMode, isAudible, receiverDone]);
+  }, [activeTab, receiverDone, answerQrUrl, receiverProgress]);
 
   // Clean up Camera & active Peer Sessions on unmount
   useEffect(() => {
     return () => {
       stopCamera();
-      stopSoundDropBroadcast();
-      stopSoundDropListener();
       if (senderSessionRef.current) {
         cancelAirDropSession(senderSessionRef.current);
         senderSessionRef.current = null;
@@ -465,34 +349,31 @@ export default function CampusAirdropModal({
     }
   };
 
-  // Process Offer Token when scanned via QR or heard via SoundDrop
+  // Process Offer Token when scanned via QR or pasted
   const handleProcessOfferToken = async (tokenStr) => {
     if (!tokenStr || isProcessingOfferRef.current) return;
     isProcessingOfferRef.current = true;
-    stopSoundDropListener();
-    setSoundListening(false);
     setErrorMsg("");
     try {
       let rawToken = String(tokenStr).trim();
-      let soundCode = "";
+      let pairingPin = "";
 
-      // 1. Extract short pairing code (from SoundDrop audio chirp, or FSM:PIN)
+      // 1. Extract short pairing code (from FSM:PIN or token)
       if (rawToken.startsWith("FSM:")) {
-        soundCode = rawToken.replace(/^FSM:/i, "").trim().toUpperCase();
+        pairingPin = rawToken.replace(/^FSM:/i, "").trim().toUpperCase();
       } else if (rawToken.includes("airdrop=")) {
         const match = rawToken.match(/airdrop=([A-Za-z0-9_-]+)/i);
-        if (match) soundCode = match[1].toUpperCase();
+        if (match) pairingPin = match[1].toUpperCase();
       } else if (rawToken.length <= 10 && !rawToken.startsWith("FSMZ:") && !rawToken.startsWith("FSMR:")) {
-        soundCode = rawToken.toUpperCase();
+        pairingPin = rawToken.toUpperCase();
       }
 
-      // 2. If short code (heard via SoundDrop), resolve full offerToken from backend signaling relay
-      if (soundCode) {
-        setSoundDetectedCode(soundCode);
+      // 2. If short code, resolve full offerToken from backend signaling relay
+      if (pairingPin) {
         try {
-          const res = await fetch(`/api/p2p/airdrop/offer/${soundCode}`);
+          const res = await fetch(`/api/p2p/airdrop/offer/${pairingPin}`);
           if (!res.ok) {
-            throw new Error(`AirDrop offer #${soundCode} not found or expired.`);
+            throw new Error(`AirDrop offer #${pairingPin} not found or expired.`);
           }
           const data = await res.json();
           if (!data.offerToken) {
@@ -500,7 +381,7 @@ export default function CampusAirdropModal({
           }
           rawToken = data.offerToken;
         } catch (fetchErr) {
-          throw new Error("SoundDrop audio pairing requires local Wi-Fi / Hotspot network. For 100% offline transfer without internet, switch to 📱 1-Tap QR Mesh mode!");
+          throw new Error("AirDrop connection requires local Wi-Fi / Hotspot or direct QR camera scan.");
         }
       }
 
@@ -522,15 +403,15 @@ export default function CampusAirdropModal({
       receiverSessionRef.current = session;
       setReceiverSession(session);
 
-      const computedSoundCode = soundCode || getHexSoundCode(rawToken);
+      const computedPin = pairingPin || getAirDropPairingPin(rawToken);
 
       // 4. Relay answerToken back to sender automatically if network exists (non-blocking)
-      if (computedSoundCode && session.answerToken) {
+      if (computedPin && session.answerToken) {
         fetch("/api/p2p/airdrop/answer", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            code: computedSoundCode,
+            code: computedPin,
             answerToken: session.answerToken,
           }),
         }).catch(() => {});
@@ -541,7 +422,7 @@ export default function CampusAirdropModal({
         try {
           broadcastChannelRef.current.postMessage({
             type: "AIRDROP_ANSWER",
-            soundCode: computedSoundCode,
+            pairingPin: computedPin,
             answerToken: session.answerToken,
           });
         } catch (_) {}
@@ -762,62 +643,6 @@ export default function CampusAirdropModal({
           </div>
         )}
 
-        {/* Pairing Mode Selector: Sound-Drop vs 1-Tap QR Mesh */}
-        <div style={{ display: "flex", gap: "8px", margin: "14px 20px 0" }}>
-          <button
-            type="button"
-            onClick={() => {
-              setPairingMode("sound");
-              stopCamera();
-            }}
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: pairingMode === "sound" ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.1)",
-              background: pairingMode === "sound" ? "rgba(16, 185, 129, 0.18)" : "rgba(255, 255, 255, 0.03)",
-              color: pairingMode === "sound" ? "#34d399" : "#94a3b8",
-              fontSize: "0.78rem",
-              fontWeight: pairingMode === "sound" ? 700 : 500,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <Volume2 size={15} />
-            <span>🔊 Sound-Drop (Audio Mesh)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setPairingMode("qr");
-            }}
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              borderRadius: "8px",
-              border: pairingMode === "qr" ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-              background: pairingMode === "qr" ? "rgba(56, 189, 248, 0.18)" : "rgba(255, 255, 255, 0.03)",
-              color: pairingMode === "qr" ? "#38bdf8" : "#94a3b8",
-              fontSize: "0.78rem",
-              fontWeight: pairingMode === "qr" ? 700 : 500,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
-            }}
-          >
-            <QrCode size={15} />
-            <span>📱 1-Tap QR Mesh</span>
-          </button>
-        </div>
-
         {/* Content Body */}
         <div style={{ padding: "16px 20px 20px", display: "flex", flexDirection: "column", gap: "14px" }}>
           {/* ===================== TAB 1: SENDER ===================== */}
@@ -881,112 +706,7 @@ export default function CampusAirdropModal({
                   </div>
                 </div>
               )}
-
-              {/* Sender Pairing Display (Sound-Drop vs QR) */}
-              {!senderDone && pairingMode === "sound" && (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    padding: "24px 16px",
-                    background: "radial-gradient(circle at 50% 40%, rgba(16, 185, 129, 0.16) 0%, rgba(15, 23, 42, 0.95) 75%)",
-                    border: "1px solid rgba(16, 185, 129, 0.35)",
-                    borderRadius: "16px",
-                    boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-                    position: "relative",
-                    overflow: "hidden",
-                  }}
-                >
-                  {/* Pulsing Acoustic Radar Wave Rings */}
-                  <div
-                    style={{
-                      width: "120px",
-                      height: "120px",
-                      borderRadius: "50%",
-                      background: "rgba(16, 185, 129, 0.12)",
-                      border: "2px solid rgba(16, 185, 129, 0.4)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      position: "relative",
-                      marginBottom: "16px",
-                      boxShadow: soundBeaming ? "0 0 35px rgba(16, 185, 129, 0.5)" : "none",
-                      animation: soundBeaming ? "pulse 2s infinite" : "none",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 6px 20px rgba(16, 185, 129, 0.4)",
-                      }}
-                    >
-                      <Volume2 size={36} color="#ffffff" />
-                    </div>
-                  </div>
-
-                  {/* Sound PIN Badge */}
-                  <div
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "6px 14px",
-                      borderRadius: "20px",
-                      background: "rgba(16, 185, 129, 0.18)",
-                      border: "1px solid rgba(16, 185, 129, 0.4)",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <Radio size={14} color="#34d399" />
-                    <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#a7f3d0", letterSpacing: "1.5px", fontFamily: "var(--font-mono)" }}>
-                      #{soundPairingCode || "A1B2C3"}
-                    </span>
-                  </div>
-
-                  <div style={{ textAlign: "center", color: "#e2e8f0", maxWidth: "290px", marginBottom: "14px" }}>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 700, marginBottom: "4px" }}>
-                      {isAudible ? "🔔 Audible Audio Wave Emitting" : "🔊 Ultrasonic Chirp Emitting (19.2 kHz)"}
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", lineHeight: 1.4 }}>
-                      {isAudible
-                        ? "Broadcasting acoustic sound code. Bring receiver close to listen."
-                        : "Inaudible to human ears. Receiver's microphone will automatically detect this sound and initiate transfer in <1s (0 KB internet)."}
-                    </div>
-                  </div>
-
-                  {/* Frequency Switcher: Ultrasonic vs Audible */}
-                  <div style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      type="button"
-                      onClick={() => setIsAudible(!isAudible)}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "6px",
-                        background: isAudible ? "rgba(234, 179, 8, 0.2)" : "rgba(255, 255, 255, 0.06)",
-                        border: isAudible ? "1px solid #eab308" : "1px solid rgba(255, 255, 255, 0.15)",
-                        color: isAudible ? "#fde047" : "#cbd5e1",
-                        fontSize: "0.72rem",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "5px",
-                      }}
-                    >
-                      {isAudible ? <Volume2 size={13} /> : <VolumeX size={13} />}
-                      <span>{isAudible ? "Switch to Ultrasonic (Silent)" : "Switch to Audible Beep"}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!senderDone && pairingMode === "qr" && (
+              {!senderDone && (
                 <div
                   style={{
                     display: "flex",
@@ -1291,108 +1011,7 @@ export default function CampusAirdropModal({
                       </button>
                     </div>
                   )}
-
-                  {/* Receiver Audio Mesh Listener (Sound-Drop) */}
-                  {!answerQrUrl && !receiverProgress && pairingMode === "sound" && (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        padding: "26px 16px",
-                        background: "radial-gradient(circle at 50% 40%, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.95) 75%)",
-                        border: "1px solid rgba(16, 185, 129, 0.35)",
-                        borderRadius: "16px",
-                        boxShadow: "0 12px 32px rgba(0,0,0,0.5)",
-                      }}
-                    >
-                      {/* Pulsing Mic Circle */}
-                      <div
-                        style={{
-                          width: "110px",
-                          height: "110px",
-                          borderRadius: "50%",
-                          background: soundListening ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                          border: soundListening ? "2px solid rgba(16, 185, 129, 0.5)" : "2px solid rgba(255, 255, 255, 0.1)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          position: "relative",
-                          marginBottom: "16px",
-                          boxShadow: soundListening ? "0 0 30px rgba(16, 185, 129, 0.4)" : "none",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "70px",
-                            height: "70px",
-                            borderRadius: "50%",
-                            background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Mic size={32} color="#ffffff" />
-                        </div>
-                      </div>
-
-                      {/* Equalizer Frequency Bars */}
-                      <div style={{ display: "flex", alignItems: "center", gap: "5px", height: "30px", marginBottom: "14px" }}>
-                        {[0.3, 0.6, 1, 0.8, 0.5, 0.9, 0.4].map((scale, i) => {
-                          const barHeight = Math.max(6, Math.min(28, (soundVolumeLevel * 100 * scale) + (soundListening ? 8 : 4)));
-                          return (
-                            <div
-                              key={i}
-                              style={{
-                                width: "4px",
-                                height: barHeight + "px",
-                                borderRadius: "3px",
-                                background: soundDetectedCode ? "#34d399" : (soundListening ? "#10b981" : "#475569"),
-                                transition: "height 0.08s ease",
-                              }}
-                            />
-                          );
-                        })}
-                      </div>
-
-                      {/* Status Text */}
-                      <div style={{ textAlign: "center", color: "#e2e8f0", maxWidth: "290px", marginBottom: "12px" }}>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: soundDetectedCode ? "#34d399" : "#fff", marginBottom: "4px" }}>
-                          {soundDetectedCode ? "🎉 Signal Matched! Connecting..." : (soundListening ? "🎧 Listening for Sound-Drop..." : "Microphone Activating...")}
-                        </div>
-                        <div style={{ fontSize: "0.72rem", color: "#94a3b8", lineHeight: 1.4 }}>
-                          {soundDetectedCode
-                            ? `Matched sound token #${soundDetectedCode}. High-speed WebRTC data tunnel is starting.`
-                            : "Hold phone close to sender's speaker. 0 KB internet required — automatic ultrasonic handshake in <0.6s."}
-                        </div>
-                      </div>
-
-                      {/* Manual Frequency Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => setIsAudible(!isAudible)}
-                        style={{
-                          padding: "5px 12px",
-                          borderRadius: "6px",
-                          background: isAudible ? "rgba(234, 179, 8, 0.2)" : "rgba(255, 255, 255, 0.06)",
-                          border: isAudible ? "1px solid #eab308" : "1px solid rgba(255, 255, 255, 0.15)",
-                          color: isAudible ? "#fde047" : "#cbd5e1",
-                          fontSize: "0.72rem",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                        }}
-                      >
-                        <Activity size={13} />
-                        <span>{isAudible ? "Listening: Audible Beeps" : "Listening: Ultrasonic (19.2 kHz)"}</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Live Camera Viewfinder (1-Tap QR Mesh) */}
-                  {!answerQrUrl && !receiverProgress && pairingMode === "qr" && (
+                  {!answerQrUrl && !receiverProgress && (
                     <div
                       style={{
                         position: "relative",

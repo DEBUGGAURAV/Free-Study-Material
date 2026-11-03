@@ -88,10 +88,26 @@ try {
   console.warn("[CDN-CACHE] Dir creation notice:", e.message);
 }
 
+/**
+ * Sanitizes and validates note ID against path traversal attacks (Directory Traversal Defense)
+ * Strictly ensures any resolved disk cache path remains firmly inside CDN_CACHE_DIR.
+ */
+function sanitizeCacheId(id) {
+  if (!id || typeof id !== "string") return null;
+  const safe = path.basename(id).replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!safe || safe.length > 128) return null;
+  const resolved = path.resolve(CDN_CACHE_DIR, `${safe}.bin`);
+  if (!resolved.startsWith(path.resolve(CDN_CACHE_DIR))) return null;
+  return safe;
+}
+
 function saveCdnBuffer(id, buffer, mimeType) {
+  const safeId = sanitizeCacheId(id);
+  if (!safeId || !buffer) return;
+
   // Asynchronously write to disk so the Node.js event loop thread remains 100% responsive
-  const binFile = path.join(CDN_CACHE_DIR, `${id}.bin`);
-  const metaFile = path.join(CDN_CACHE_DIR, `${id}.meta.json`);
+  const binFile = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
+  const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
   const metaContent = JSON.stringify({
     mimeType: mimeType || "application/pdf",
     totalSize: buffer.length,
@@ -107,8 +123,11 @@ function saveCdnBuffer(id, buffer, mimeType) {
 }
 
 function getCdnBuffer(id) {
-  const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
-  const metaPath = path.join(CDN_CACHE_DIR, `${id}.meta.json`);
+  const safeId = sanitizeCacheId(id);
+  if (!safeId) return null;
+
+  const binPath = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
+  const metaPath = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
   if (fs.existsSync(binPath)) {
     try {
       let meta = { mimeType: "application/pdf" };
@@ -1576,8 +1595,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         signUpUrl: "/?auth=signup",
       });
     }
-    const binPath = path.join(CDN_CACHE_DIR, `${id}.bin`);
-    const isDiskCached = fs.existsSync(binPath);
+    const safeId = sanitizeCacheId(id);
+    const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
+    const isDiskCached = Boolean(binPath && fs.existsSync(binPath));
     const isRamCached = Boolean(noteBufferCache.has(id));
     const hasTelegramStorage = Boolean(note.telegramMessageId || note.telegramBotFileId || note.telegramFileId);
 
@@ -1884,6 +1904,11 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         if (isDiskCached) {
           // ⚡ Pillar 3: Zero-Copy Stream Pipelining (0% RAM / 0% CPU kernel file-descriptor pipe)
           const fileStream = fs.createReadStream(binPath, { start, end });
+          const cleanup = () => {
+            if (!fileStream.destroyed) fileStream.destroy();
+          };
+          res.on("close", cleanup);
+          res.on("finish", cleanup);
           fileStream.on("error", (err) => {
             console.warn("[ZERO-COPY-STREAM] Range pipe error:", err.message);
             if (!res.headersSent) res.status(500).end();
@@ -1899,6 +1924,11 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         if (isDiskCached) {
           // ⚡ Pillar 3: Zero-Copy Stream Pipelining for full file transfer
           const fileStream = fs.createReadStream(binPath);
+          const cleanup = () => {
+            if (!fileStream.destroyed) fileStream.destroy();
+          };
+          res.on("close", cleanup);
+          res.on("finish", cleanup);
           fileStream.on("error", (err) => {
             console.warn("[ZERO-COPY-STREAM] Full pipe error:", err.message);
             if (!res.headersSent) res.status(500).end();

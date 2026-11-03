@@ -154,7 +154,7 @@ export default function App() {
   const [previewInitialPage, setPreviewInitialPage] = useState(1);
   const [isAirdropOpen, setIsAirdropOpen] = useState(false);
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
-  const [airdropInitialMode, setAirdropInitialMode] = useState("sound");
+  const [airdropInitialMode, setAirdropInitialMode] = useState("qr");
 
   useEffect(() => {
     try {
@@ -169,7 +169,7 @@ export default function App() {
     };
     const handleOpenAirdrop = (e) => {
       setAirdropTargetNote(e?.detail?.note || null);
-      setAirdropInitialMode(e?.detail?.initialMode || (e?.detail?.mode === "qr" ? "qr" : "sound"));
+      setAirdropInitialMode("qr");
       setIsAirdropOpen(true);
     };
     window.addEventListener("open_student_chat", handleOpenChat);
@@ -1274,11 +1274,6 @@ export default function App() {
           setAirdropInitialMode("qr");
           setIsAirdropOpen(true);
         }}
-        onOpenSoundDrop={() => {
-          setAirdropTargetNote(null);
-          setAirdropInitialMode("sound");
-          setIsAirdropOpen(true);
-        }}
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
@@ -1398,32 +1393,6 @@ export default function App() {
               </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setAirdropTargetNote(null);
-                  setAirdropInitialMode("sound");
-                  setIsAirdropOpen(true);
-                }}
-                style={{
-                  background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "6px",
-                  padding: "5px 12px",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
-                }}
-                title="0 KB internet note transfer via Ultrasonic Sound-Drop waves"
-              >
-                <span>🔊</span>
-                <span>Sound-Drop (0 KB)</span>
-              </button>
               <button
                 type="button"
                 onClick={() => {
