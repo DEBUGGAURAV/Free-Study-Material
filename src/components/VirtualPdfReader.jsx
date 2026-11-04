@@ -49,7 +49,7 @@ import { generateClientAiAnswer } from "../utils/clientAi";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
-import { parseSourceFromHeaders, fetchWithCdnFailover } from "../utils/cdnFailover";
+import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
 const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
@@ -696,354 +696,115 @@ export default function VirtualPdfReader({
           return;
         }
 
-        // 🌟 1. Check local IndexedDB offline vault & CacheStorage FIRST for instant 0ms launch
-        let localDeviceBuffer = null;
-        if (noteId) {
-          try {
-            localDeviceBuffer = await getAnyCachedNoteBuffer(noteId);
-          } catch (_) {}
-        }
+        // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
+        // Tier 1: IndexedDB -> Tier 2: CDN Worker -> Tier 3: Server SSD -> Tier 4: Telegram Storage
+        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+        const result = await acquireNoteDocument(noteId, {
+          mode: "read",
+          note,
+          token,
+          onProgress: (m) => {
+            if (isCancelled) return;
+            const loaded = Math.round(parseFloat(m.loadedMB || 0) * 1024 * 1024);
+            const total = Math.round(parseFloat(m.totalMB || 0) * 1024 * 1024);
 
-        if (localDeviceBuffer && !isCancelled) {
-          setLocalPdfBuffer(localDeviceBuffer);
-          if (typeof window !== "undefined") {
-            window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-            window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = localDeviceBuffer;
-          }
-          setStreamSource("cache");
-          setIsCachedP2P(true);
-          const localSource = {
-            id: "local_cache",
-            label: "💾 Local Device Storage (Offline Vault)",
-            short: "Local Storage (0ms)",
-            details: "100% Instant Offline Cache from Student Device Storage • 0ms Latency",
-            colo: "Local",
-            icon: "💾",
-            color: "#38bdf8",
-            bgColor: "rgba(56, 189, 248, 0.14)",
-            borderColor: "rgba(56, 189, 248, 0.35)",
-          };
-          setRealSourceInfo(localSource);
-          setPreviewProgress({
-            percent: 100,
-            loadedBytes: localDeviceBuffer.byteLength,
-            totalBytes: localDeviceBuffer.byteLength,
-            speed: "Instant (0ms)",
-          });
+            setPreviewProgress({
+              percent: m.percent,
+              loadedBytes: loaded,
+              totalBytes: total,
+              speed: m.speed,
+            });
 
-          try {
-            const localTask = pdfjsLib.getDocument({ data: localDeviceBuffer });
-            const doc = await localTask.promise;
-            if (!isCancelled && doc) {
-              setPdfDoc(doc);
-              setNumPages(doc.numPages);
-              setLoading(false);
-
-              // 1. Background index into MiniSearch Client-Side RAG (0% Server Load)
-              setIsRagIndexing(true);
-              ragIndexRef.current.indexPdfDocument(doc).then(() => {
-                setIsRagIndexing(false);
-              }).catch(() => {
-                setIsRagIndexing(false);
-              });
-
-              setTimeout(() => {
-                warmupClientOcr();
-              }, 800);
-
-              return;
-            }
-          } catch (localErr) {
-            console.warn("[LOCAL-CACHE] Fallback to network stream:", localErr.message);
-          }
-        }
-
-        // 🌟 If note is NOT cached locally and the device is explicitly offline:
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          if (!isCancelled) {
-            setError("This note has not been saved in your Offline Vault yet. Please connect to internet once to view and automatically cache it for offline reading.");
-            setLoading(false);
-            return;
-          }
-        }
-
-        // 🚀 Online: Determine stream source with resilient auto-failover
-        const effectiveUrl = (url || "").toString();
-        const fallbackSameOrigin = `/api/notes/${noteId}/stream.pdf?preview=1`;
-        const primaryUrl = effectiveUrl || fallbackSameOrigin;
-
-        // ⚡ Query real-time P2P peers & local cache (P2P activates ONLY if real peers are active)
-        if (noteId) {
-          findPeersForNote(noteId).then((peerData) => {
-            const count = peerData?.peers?.length || 0;
-            if (count > 0) {
-              setP2pPeerCount(count);
-              setStreamSource("p2p");
+            if (m.tier === 1) {
+              setStreamSource("cache");
               setIsCachedP2P(true);
               setRealSourceInfo({
-                id: "p2p",
-                label: `⚡ P2P Local Mesh (${count} Peer${count > 1 ? "s" : ""})`,
-                short: "⚡ P2P Mesh (0ms)",
-                details: `WebRTC Peer Mesh (${count} active peer${count > 1 ? "s" : ""}) • 0ms Latency`,
-                colo: "P2P",
-                icon: "⚡",
-                color: "#10b981",
-                bgColor: "rgba(16, 185, 129, 0.14)",
-                borderColor: "rgba(16, 185, 129, 0.35)",
+                id: "local_cache",
+                label: "💾 Local Device Storage (IndexedDB Hit)",
+                short: "Local Storage (0ms)",
+                details: "100% Instant Offline Cache from Student Device Storage • 0ms Latency",
+                colo: "Local",
+                icon: "💾",
+                color: "#38bdf8",
+                bgColor: "rgba(56, 189, 248, 0.14)",
+                borderColor: "rgba(56, 189, 248, 0.35)",
               });
-            }
-          }).catch(() => {});
-        }
-
-        // Determine live real source: Cloudflare Worker, RAM Buffer, SSD Disk, or Cloud Storage
-        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
-        const headHeaders = token ? { Authorization: `Bearer ${token}` } : {};
-
-        fetch(primaryUrl, { method: "HEAD", credentials: "include", headers: headHeaders })
-          .then((r) => {
-            const parsedSource = parseSourceFromHeaders(r.headers);
-            setRealSourceInfo(parsedSource);
-
-            const isEdgeHit = parsedSource.id === "worker" || parsedSource.id === "ram" || parsedSource.id === "disk" || Boolean(note?.isCdnCached);
-            if (isEdgeHit) {
+            } else if (m.tier === 2) {
               setStreamSource("cdn");
               setIsCachingToCdn(false);
               setCdnTransferPercent(100);
-            } else {
-              // Origin Stream (Storage Vault MISS, background caching to CDN)
-              setStreamSource("storage");
-              setIsCachingToCdn(true);
-              setCdnTransferPercent(20);
-            }
-          })
-          .catch(() => {
-            if (note?.isCdnCached) {
+              setRealSourceInfo({
+                id: "worker",
+                label: "⚡ Edge CDN Worker",
+                short: "Edge CDN (1ms)",
+                details: "Indian Edge CDN Worker • 0ms Edge Cache HIT",
+                colo: "Edge",
+                icon: "⚡",
+                color: "#38bdf8",
+                bgColor: "rgba(56, 189, 248, 0.14)",
+                borderColor: "rgba(56, 189, 248, 0.35)",
+              });
+            } else if (m.tier === 3) {
               setStreamSource("cdn");
               setIsCachingToCdn(false);
+              setCdnTransferPercent(100);
+              setRealSourceInfo({
+                id: "disk",
+                label: "💽 Local NVMe SSD Disk Cache (100ms)",
+                short: "SSD Cache (100ms)",
+                details: "Local NVMe SSD Zero-Copy Stream • 100ms Latency",
+                colo: "NVMe",
+                icon: "💽",
+                color: "#4ade80",
+                bgColor: "rgba(34, 197, 94, 0.14)",
+                borderColor: "rgba(34, 197, 94, 0.35)",
+              });
             } else {
               setStreamSource("storage");
               setIsCachingToCdn(true);
+              setCdnTransferPercent(m.percent);
+              setRealSourceInfo({
+                id: "telegram",
+                label: "☁️ Primary Academic Cloud Storage Vault",
+                short: "Cloud Vault",
+                details: "Telegram MTProto Core Stream + Auto-Save to Server SSD",
+                colo: "Cloud",
+                icon: "☁️",
+                color: "#38bdf8",
+                bgColor: "rgba(56, 189, 248, 0.14)",
+                borderColor: "rgba(56, 189, 248, 0.35)",
+              });
             }
-          });
+          },
+        });
 
-        // ⚡ Dynamic Chunk Size: 128KB for High-Speed (HQ default), 32KB for Data Saver Lite
-        const adaptiveChunkSize = (networkMode === "lite") ? 32 * 1024 : 128 * 1024;
+        if (isCancelled) return;
+        setLocalPdfBuffer(result.buffer);
 
-        // On-demand streaming from server/CDN using byte ranges with resilient fallback & real-time % tracking
-        let previewInterval = null;
-        try {
-          let doc = null;
-          const noteTotalSize = note?.compressedSize || note?.fileSize || 0;
-          let previewStartTime = performance.now();
-          let previewPrevLoaded = 0;
-          let previewPrevTime = previewStartTime;
+        const loadingTask = pdfjsLib.getDocument({ data: result.buffer });
+        const doc = await loadingTask.promise;
+        if (isCancelled || !doc) return;
 
-          setPreviewProgress({
-            percent: 15,
-            loadedBytes: 0,
-            totalBytes: noteTotalSize,
-            speed: note?.isCdnCached ? "Streaming via Local Server (1ms)..." : "High-Speed Stream (Direct Cloud Vault)...",
-          });
+        setPdfDoc(doc);
+        setNumPages(doc.numPages);
+        setLoading(false);
+        setIsCachingToCdn(false);
+        setCdnTransferPercent(100);
 
-          const handleProgress = (progressData) => {
-            if (isCancelled) return;
-            const loaded = progressData.loaded || 0;
-            const total = (progressData.total && progressData.total > 0) ? progressData.total : noteTotalSize;
-            const percent = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : 5;
-
-            const now = performance.now();
-            const totalElapsed = (now - previewStartTime) / 1000;
-            const timeDiff = (now - previewPrevTime) / 1000;
-            const loadedDiff = loaded - previewPrevLoaded;
-
-            let speedBytes = timeDiff > 0.1 ? loadedDiff / timeDiff : (totalElapsed > 0 ? loaded / totalElapsed : 0);
-            previewPrevLoaded = loaded;
-            previewPrevTime = now;
-
-            let speedFormatted = "";
-            if (speedBytes > 1048576) {
-              speedFormatted = `${(speedBytes / 1048576).toFixed(1)} MB/s`;
-            } else if (speedBytes > 1024) {
-              speedFormatted = `${(speedBytes / 1024).toFixed(0)} KB/s`;
-            } else {
-              speedFormatted = "Streaming...";
-            }
-
-            setPreviewProgress({
-              percent,
-              loadedBytes: loaded,
-              totalBytes: total,
-              speed: speedFormatted,
-            });
-            setCdnTransferPercent(percent);
-          };
-
-          let loadingTask = null;
-          try {
-            loadingTask = pdfjsLib.getDocument({
-              url: primaryUrl,
-              withCredentials: true,     // Transmit httpOnly session cookie with range requests
-              rangeChunkSize: adaptiveChunkSize, // Dynamic byte chunks for weak 2G/3G networks
-              disableAutoFetch: true,     // Don't auto-fetch whole 100MB file!
-              disableStream: false,
-            });
-            loadingTask.onProgress = handleProgress;
-
-            // Fast-Failover: If primaryUrl takes > 7s (e.g. edge CDN gateway timeout), auto-switch to direct origin!
-            const timeoutMs = primaryUrl !== fallbackSameOrigin ? 7000 : 40000;
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => {
-                reject(new Error(`Stream connection to ${primaryUrl} timed out after ${timeoutMs / 1000}s`));
-              }, timeoutMs)
-            );
-
-            doc = await Promise.race([loadingTask.promise, timeoutPromise]);
-          } catch (fetchErr) {
-            if (loadingTask) {
-              try { loadingTask.destroy(); } catch (_) {}
-            }
-            console.warn("[PDF.js] Primary stream notice, trying fallback routes:", fetchErr.message);
-            let loadedFallback = false;
-            if (primaryUrl !== fallbackSameOrigin) {
-              try {
-                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 30), speed: "Switching to Origin Cloud Vault..." }));
-                const fallbackTask = pdfjsLib.getDocument({
-                  url: fallbackSameOrigin,
-                  withCredentials: true,
-                  rangeChunkSize: adaptiveChunkSize,
-                  disableAutoFetch: true,
-                  disableStream: false,
-                });
-                fallbackTask.onProgress = handleProgress;
-
-                const fallbackTimeout = new Promise((_, reject) =>
-                  setTimeout(() => {
-                    try { fallbackTask.destroy(); } catch (_) {}
-                    reject(new Error("Origin stream timed out after 30s"));
-                  }, 30000)
-                );
-
-                doc = await Promise.race([fallbackTask.promise, fallbackTimeout]);
-                setNativeSrc(fallbackSameOrigin);
-                loadedFallback = true;
-              } catch (subErr) {
-                console.warn("[PDF.js] Secondary stream notice:", subErr.message);
-              }
-            }
-            if (!loadedFallback && noteId) {
-              // 🛡️ Fail-Safe Tier: Full-Buffer Multi-Tier Fetch (Bypasses byte-range or network glitches completely)
-              try {
-                setPreviewProgress((prev) => ({ ...prev, percent: Math.max(prev.percent, 50), speed: "Retrieving Secure Buffer..." }));
-                const bufferRes = await fetchWithCdnFailover(noteId, { token });
-                if (bufferRes && bufferRes.ok) {
-                  const arrayBuffer = await bufferRes.arrayBuffer();
-                  if (arrayBuffer && arrayBuffer.byteLength > 500) {
-                    const bufferTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                    bufferTask.onProgress = handleProgress;
-                    doc = await bufferTask.promise;
-                    loadedFallback = true;
-                  }
-                }
-              } catch (bufErr) {
-                console.warn("[PDF.js] Buffer failover notice:", bufErr.message);
-              }
-            }
-            if (!loadedFallback && !doc) {
-              throw fetchErr;
-            }
-          }
-
-          if (previewInterval) clearInterval(previewInterval);
-
-          if (!isCancelled && doc) {
-            streamRetryCountRef.current = 0;
-            setStreamSource("cdn");
-            setIsCachingToCdn(false);
-            setCdnTransferPercent(100);
-            setRealSourceInfo((prev) => {
-              if (prev && (prev.id === "storage" || prev.id === "unknown")) {
-                return {
-                  id: "ram",
-                  label: "In-Memory RAM Buffer (0ms Microsecond)",
-                  short: "RAM Buffer (0ms)",
-                  details: "In-Memory RAM Buffer Pool • 0ms Microsecond Stream",
-                  colo: "RAM",
-                  icon: "🧠",
-                  color: "#c084fc",
-                  bgColor: "rgba(168, 85, 247, 0.14)",
-                  borderColor: "rgba(168, 85, 247, 0.35)",
-                };
-              }
-              return prev;
-            });
-            setPreviewProgress({
-              percent: 100,
-              loadedBytes: noteTotalSize || (doc.numPages * 50000),
-              totalBytes: noteTotalSize || (doc.numPages * 50000),
-              speed: "Ready",
-            });
-            setPdfDoc(doc);
-            setNumPages(doc.numPages);
-            setLoading(false);
-
-            // 1. Background index into MiniSearch Client-Side RAG (0% Server Load)
-            setIsRagIndexing(true);
-            ragIndexRef.current.indexPdfDocument(doc).then(() => {
-              setIsRagIndexing(false);
-            }).catch(() => {
-              setIsRagIndexing(false);
-            });
-
-            // Pre-warm Tesseract WASM OCR worker in idle background so "🔍 OCR Page" executes in <0.5s!
-            setTimeout(() => {
-              warmupClientOcr();
-            }, 800);
-
-            // Asynchronously pre-cache buffer from memory into P2P mesh seeder & IndexedDB Offline Vault (Zero extra network requests)
-            if (doc && typeof doc.getData === "function") {
-              doc.getData()
-                .then((uint8) => {
-                  if (uint8 && noteId) {
-                    const buf = uint8.buffer;
-                    setLocalPdfBuffer(buf);
-                    if (typeof window !== "undefined") {
-                      window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-                      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = buf;
-                    }
-                    cacheNoteBuffer(noteId, buf);
-                    saveNoteOffline(note || { id: noteId, title }, buf);
-                  }
-                })
-                .catch(() => {});
-            }
-
-            // ⚡ AUTOMATIC: Bring file to Edge CDN cache in background (Zero manual clicking!)
-            bringFileToCdn();
-          }
-        } catch (streamErr) {
-          // If streaming from CDN fails, fallback to local IndexedDB offline cache if available
-          if (noteId) {
-            const cachedBuf = await getAnyCachedNoteBuffer(noteId);
-            if (cachedBuf && !isCancelled) {
-              setIsCachedP2P(true);
-              setStreamSource("p2p");
-              const fallbackTask = pdfjsLib.getDocument({ data: cachedBuf });
-              const doc = await fallbackTask.promise;
-              if (!isCancelled) {
-                setLocalPdfBuffer(cachedBuf);
-                if (typeof window !== "undefined") {
-                  window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-                  window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = cachedBuf;
-                }
-                setPdfDoc(doc);
-                setNumPages(doc.numPages);
-                setLoading(false);
-                return;
-              }
-            }
-          }
-          throw streamErr;
+        // Pre-cache buffer into P2P mesh & IndexedDB
+        if (typeof window !== "undefined") {
+          window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+          window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = result.buffer;
         }
+        cacheNoteBuffer(noteId, result.buffer);
+        saveNoteOffline(note || { id: noteId, title }, result.buffer);
+
+        // 1. Background index into MiniSearch Client-Side RAG
+        setIsRagIndexing(true);
+        ragIndexRef.current.indexPdfDocument(doc).finally(() => setIsRagIndexing(false));
+
+        // Pre-warm Tesseract WASM OCR worker in idle background
+        setTimeout(() => warmupClientOcr(), 800);
       } catch (err) {
         if (!isCancelled) {
           console.error("[PDF.js Reader] Stream error:", err);
@@ -1072,32 +833,8 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // ⚡ Intelligent Auto-Retry for transient Cloud Vault stream warm-ups (500/503/network)
-          const isTransientStreamGlitch =
-            errMsg.includes("500") ||
-            errMsg.includes("503") ||
-            errMsg.includes("warming up") ||
-            errMsg.includes("reconnecting") ||
-            errMsg.includes("Streaming error") ||
-            errMsg.includes("Failed to fetch") ||
-            errMsg.includes("retrieving PDF") ||
-            errMsg.includes("network");
-
-          if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 2) {
-            streamRetryCountRef.current += 1;
-            console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
-            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
-            setTimeout(() => {
-              if (!isCancelled) {
-                setReloadTrigger((v) => v + 1);
-              }
-            }, 2200);
-            return;
-          }
-
-          // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if desktop and external backup URL exists
+          // Native fallback if desktop
           if (canUseNativePdfViewer && !isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
-            console.log("[AUTO-FAILOVER] ⚡ Switching to Web Reader (<500ms)");
             setUseNativeViewer(true);
             setLoading(false);
             setOcrStatusText("⚡ Auto-switched to Web Reader for seamless reading.");
@@ -1163,7 +900,7 @@ export default function VirtualPdfReader({
     };
   }, [useNativeViewer, nativeSrc, url, streamSource, note]);
 
-  // ⚡ High-Speed Instant Download with In-Memory Buffer & Fallback Stream
+  // ⚡ Unified 4-Tier Document Download Engine (Waterfall)
   const handleInternalDownload = async () => {
     if (isBlocked) {
       alert(effectiveReason);
@@ -1173,72 +910,31 @@ export default function VirtualPdfReader({
 
     const fileName = getNotePdfFileName(note || { title, id: noteId });
 
-    // 🚀 Fast-Path 1: Instant 0ms Save from already-loaded Memory/Reader Buffer
-    let instantBuffer = localPdfBuffer;
-    if (!instantBuffer && typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__?.[String(noteId)]) {
-      instantBuffer = window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)];
-    }
-    if (!instantBuffer && pdfDoc && typeof pdfDoc.getData === "function") {
-      try {
-        const u8 = await pdfDoc.getData();
-        if (u8 && u8.buffer && u8.byteLength > 500) {
-          instantBuffer = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
-        }
-      } catch (_) {}
-    }
-    if (!instantBuffer && noteId) {
-      try {
-        instantBuffer = await getAnyCachedNoteBuffer(noteId);
-      } catch (_) {}
-    }
-
-    if (instantBuffer && instantBuffer.byteLength > 500) {
-      try {
-        const blob = new Blob([instantBuffer], { type: "application/pdf" });
-        const dlUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = dlUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          try {
-            if (a.parentNode) document.body.removeChild(a);
-            window.URL.revokeObjectURL(dlUrl);
-          } catch (_) {}
-        }, 45000);
-
-        setOcrStatusText("✅ Document downloaded successfully!");
-        setTimeout(() => setOcrStatusText(""), 4000);
-        return;
-      } catch (instantErr) {
-        console.warn("[DOWNLOAD] Instant buffer save notice:", instantErr.message);
-      }
-    }
-
-    // Fast-Path 2: Stream from server with live HUD
     const controller = new AbortController();
     downloadAbortRef.current = controller;
     setIsDownloadingPdf(true);
     setDownloadProgress({
+      tier: 1,
+      tierLabel: "Checking Local Device Storage (IndexedDB)...",
+      icon: "📱",
       percent: 5,
-      speed: "98.4 MB/s",
+      speed: "Checking local cache...",
       loadedMB: "0",
       totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
       timeRemaining: "Estimating...",
-      source: streamSource === "cdn" ? "cdn" : "storage",
     });
 
     try {
       if (noteId) {
-        await api.downloadNoteWithProgress(
-          noteId,
+        await acquireNoteDocument(noteId, {
+          mode: "download",
           fileName,
-          (metrics) => {
+          note,
+          signal: controller.signal,
+          onProgress: (metrics) => {
             setDownloadProgress(metrics);
           },
-          controller.signal
-        );
+        });
       } else if (onDownload) {
         onDownload();
       }
@@ -4980,7 +4676,7 @@ export default function VirtualPdfReader({
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
               <Download size={14} style={{ color: "var(--accent-cyan)" }} />
               <span>
-                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Local Server")}: {downloadProgress.percent}%
+                {downloadProgress.tierLabel || "Waterfall Pipeline"}: {downloadProgress.percent}%
               </span>
             </span>
             <button
