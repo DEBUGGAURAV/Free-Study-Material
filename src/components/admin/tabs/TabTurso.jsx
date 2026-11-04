@@ -6,7 +6,7 @@ import {
   Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
   Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
   FileText, Sliders, Layers, Scissors, RotateCcw, Megaphone, Plus, Lock,
-  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug
+  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug, Smartphone
 } from "lucide-react";
 import { api, getAuthToken } from "../../../api";
 import { formatFileSize, formatMB } from "../../../utils/formatUtils";
@@ -45,6 +45,48 @@ export default function TabTurso(props) {
     tursoStatus,
     tursoSyncing,
   } = props;
+
+  const [studentPruning, setStudentPruning] = useState(false);
+  const [studentPruneDays, setStudentPruneDays] = useState(7);
+  const [studentActionMsg, setStudentActionMsg] = useState(null);
+
+  const handlePruneStudent = async (days, target) => {
+    if (!window.confirm(`Clean student session & telemetry data (${target}) older than ${days} days?`)) return;
+    setStudentPruning(true);
+    setStudentActionMsg(null);
+    try {
+      const res = await api.pruneStudentTursoSessions(days, target);
+      if (res?.success) {
+        setStudentActionMsg({ type: "success", text: res.message || "Cleaned successfully." });
+        if (typeof loadTursoData === "function") loadTursoData();
+      } else {
+        setStudentActionMsg({ type: "error", text: res?.message || "Failed to prune student telemetry." });
+      }
+    } catch (err) {
+      setStudentActionMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setStudentPruning(false);
+    }
+  };
+
+  const handleWipeRevoked = async () => {
+    if (!window.confirm("Instantly delete all revoked session records from the student Turso database?")) return;
+    setStudentPruning(true);
+    setStudentActionMsg(null);
+    try {
+      const res = await api.cleanRevokedStudentSessions();
+      if (res?.success) {
+        setStudentActionMsg({ type: "success", text: res.message || "All revoked sessions wiped cleanly." });
+        if (typeof loadTursoData === "function") loadTursoData();
+      } else {
+        setStudentActionMsg({ type: "error", text: res?.message || "Failed to wipe revoked sessions." });
+      }
+    } catch (err) {
+      setStudentActionMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setStudentPruning(false);
+    }
+  };
 
   
 
@@ -741,6 +783,215 @@ export default function TabTurso(props) {
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* 🎓 Student Sessions & Telemetry Edge Vault (New Turso Database) */}
+              <div
+                style={{
+                  background: "rgba(15, 23, 42, 0.55)",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "18px",
+                  marginBottom: "20px",
+                }}
+              >
+                {studentActionMsg && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      marginBottom: "12px",
+                      fontSize: "0.8rem",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      background: studentActionMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      border: studentActionMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
+                      color: studentActionMsg.type === "success" ? "#34d399" : "#fca5a5",
+                    }}
+                  >
+                    <span>{studentActionMsg.text}</span>
+                    <button
+                      onClick={() => setStudentActionMsg(null)}
+                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Smartphone size={18} />
+                    </div>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <h4 style={{ fontWeight: 800, color: "#fff", fontSize: "0.98rem", margin: 0 }}>
+                          Student Sessions &amp; Security Telemetry Vault (New Turso DB)
+                        </h4>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            fontWeight: 700,
+                            background: tursoStatus?.studentVault?.connected
+                              ? "rgba(16, 185, 129, 0.15)"
+                              : "rgba(245, 158, 11, 0.15)",
+                            color: tursoStatus?.studentVault?.connected ? "#34d399" : "#fbbf24",
+                            border: tursoStatus?.studentVault?.connected
+                              ? "1px solid rgba(16, 185, 129, 0.35)"
+                              : "1px solid rgba(245, 158, 11, 0.35)",
+                          }}
+                        >
+                          {tursoStatus?.studentVault?.isCloud ? "🟢 Cloud LibSQL (Student Vault)" : "🟡 Local Standby Engine"}
+                        </span>
+                        {tursoStatus?.studentVault?.latencyMs !== undefined && (
+                          <span style={{ fontSize: "0.7rem", color: "#38bdf8", fontWeight: 600 }}>
+                            ⚡ {tursoStatus.studentVault.latencyMs}ms Latency
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        Tracks active multi-device logins, remote session kills, and 10-log rolling security events with zero Firestore read bloat.
+                      </div>
+                    </div>
+                  </div>
+
+                  <code style={{ fontSize: "0.74rem", color: "#38bdf8", background: "rgba(0,0,0,0.35)", padding: "4px 8px", borderRadius: "6px" }}>
+                    {tursoStatus?.studentVault?.databaseUrl || "TURSO_STUDENT_DATABASE_URL"}
+                  </code>
+                </div>
+
+                {/* Metrics Grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px", marginBottom: "14px" }}>
+                  <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(16, 185, 129, 0.25)", borderRadius: "8px", padding: "10px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                      Active Student Sessions
+                    </div>
+                    <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#34d399", marginTop: "2px" }}>
+                      {(tursoStatus?.studentVault?.activeSessionsCount ?? 0).toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#34d399", marginTop: "2px" }}>
+                      Active Devices / Browsers
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(239, 68, 68, 0.25)", borderRadius: "8px", padding: "10px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                      Revoked Sessions
+                    </div>
+                    <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#f87171", marginTop: "2px" }}>
+                      {(tursoStatus?.studentVault?.revokedSessionsCount ?? 0).toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#f87171", marginTop: "2px" }}>
+                      Terminated / Killed Devices
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(168, 85, 247, 0.25)", borderRadius: "8px", padding: "10px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                      Security Activity Logs
+                    </div>
+                    <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#c084fc", marginTop: "2px" }}>
+                      {(tursoStatus?.studentVault?.securityLogsCount ?? 0).toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#c084fc", marginTop: "2px" }}>
+                      Rolling Ring-Buffer Events
+                    </div>
+                  </div>
+                </div>
+
+                {/* Maintenance & Clean Controls */}
+                <div style={{ background: "rgba(0,0,0,0.25)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Retention:</span>
+                    <select
+                      value={studentPruneDays}
+                      onChange={(e) => setStudentPruneDays(Number(e.target.value))}
+                      style={{
+                        background: "rgba(0,0,0,0.5)",
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        color: "#fff",
+                        borderRadius: "6px",
+                        padding: "5px 8px",
+                        fontSize: "0.76rem",
+                      }}
+                    >
+                      <option value={3}>Older than 3 Days</option>
+                      <option value={7}>Older than 7 Days (Recommended)</option>
+                      <option value={14}>Older than 14 Days</option>
+                      <option value={30}>Older than 30 Days</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      disabled={studentPruning}
+                      onClick={() => handlePruneStudent(studentPruneDays, "sessions")}
+                      className="btn-secondary"
+                      style={{
+                        fontSize: "0.76rem",
+                        padding: "6px 12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        borderColor: "rgba(56, 189, 248, 0.35)",
+                        color: "#38bdf8",
+                        cursor: studentPruning ? "not-allowed" : "pointer",
+                      }}
+                      title="Clean stale active sessions older than retention days"
+                    >
+                      <Trash2 size={13} className={studentPruning ? "spin" : ""} />
+                      <span>{studentPruning ? "Cleaning..." : `Clean Sessions (>${studentPruneDays}d)`}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={studentPruning}
+                      onClick={() => handlePruneStudent(studentPruneDays, "logs")}
+                      className="btn-secondary"
+                      style={{
+                        fontSize: "0.76rem",
+                        padding: "6px 12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        borderColor: "rgba(168, 85, 247, 0.35)",
+                        color: "#c084fc",
+                        cursor: studentPruning ? "not-allowed" : "pointer",
+                      }}
+                      title="Prune security logs older than retention days"
+                    >
+                      <Activity size={13} className={studentPruning ? "spin" : ""} />
+                      <span>{studentPruning ? "Pruning..." : `Prune Logs (>${studentPruneDays}d)`}</span>
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={studentPruning}
+                    onClick={handleWipeRevoked}
+                    className="btn-danger"
+                    style={{
+                      fontSize: "0.76rem",
+                      padding: "6px 14px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      background: "rgba(239, 68, 68, 0.18)",
+                      border: "1px solid rgba(239, 68, 68, 0.4)",
+                      color: "#fca5a5",
+                      cursor: studentPruning ? "not-allowed" : "pointer",
+                      borderRadius: "6px",
+                      fontWeight: 700,
+                    }}
+                    title="Instantly wipe all revoked sessions from the student database"
+                  >
+                    <Flame size={13} className={studentPruning ? "spin" : ""} />
+                    <span>Clean All Revoked Sessions</span>
+                  </button>
                 </div>
               </div>
 

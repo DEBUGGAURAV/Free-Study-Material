@@ -3930,9 +3930,44 @@ router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) =>
       const { getHelpTursoTelemetry } = require("../services/helpTicketService");
       helpVault = await getHelpTursoTelemetry();
     } catch (_) {}
-    res.json({ success: true, ...status, cacheStats, helpVault });
+    let studentVault = null;
+    try {
+      const { getStudentTursoStats } = require("../services/tursoStudentSessionService");
+      studentVault = await getStudentTursoStats();
+    } catch (_) {}
+    res.json({ success: true, ...status, cacheStats, helpVault, studentVault });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/turso/students/prune
+ * Prune Student Sessions & Activity Logs by Days
+ */
+router.post("/turso/students/prune", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { pruneStudentSessions } = require("../services/tursoStudentSessionService");
+    const days = parseInt(req.body?.days || 7, 10);
+    const target = req.body?.target || "all";
+    const result = await pruneStudentSessions({ days, target });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/turso/students/clean-revoked
+ * Instant clean all revoked sessions from new Turso Student DB
+ */
+router.post("/turso/students/clean-revoked", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { cleanAllRevokedSessions } = require("../services/tursoStudentSessionService");
+    const result = await cleanAllRevokedSessions();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

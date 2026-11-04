@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Globe, Activity } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -336,6 +336,74 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   };
 
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [activeSessions, setActiveSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [terminatingSessionId, setTerminatingSessionId] = useState(null);
+  const [terminatingAllOther, setTerminatingAllOther] = useState(false);
+  const [securityLogs, setSecurityLogs] = useState([]);
+  const [securityLogsLoading, setSecurityLogsLoading] = useState(false);
+  const [showSecurityHistory, setShowSecurityHistory] = useState(false);
+
+  const loadSessionsAndActivity = async () => {
+    setSessionsLoading(true);
+    setSecurityLogsLoading(true);
+    try {
+      const [sessRes, logsRes] = await Promise.all([
+        api.getActiveSessions().catch(() => ({ success: false, sessions: [] })),
+        api.getRecentSecurityActivity().catch(() => ({ success: false, logs: [] })),
+      ]);
+      if (sessRes?.sessions) setActiveSessions(sessRes.sessions);
+      if (logsRes?.logs) setSecurityLogs(logsRes.logs);
+    } catch (_) {}
+    setSessionsLoading(false);
+    setSecurityLogsLoading(false);
+  };
+
+  useEffect(() => {
+    if (isOpen && tab === "password") {
+      loadSessionsAndActivity();
+    }
+  }, [isOpen, tab]);
+
+  const handleTerminateSingle = async (sessionId, deviceName) => {
+    if (!window.confirm(`Are you sure you want to terminate the active session on "${deviceName}"? That device will be logged out immediately.`)) {
+      return;
+    }
+    setTerminatingSessionId(sessionId);
+    try {
+      const res = await api.terminateSession(sessionId);
+      if (res?.success) {
+        setMsg({ type: "success", text: `Session on "${deviceName}" terminated successfully.` });
+        await loadSessionsAndActivity();
+      } else {
+        setMsg({ type: "error", text: res?.message || "Failed to terminate session." });
+      }
+    } catch (err) {
+      setMsg({ type: "error", text: "Error terminating session: " + err.message });
+    } finally {
+      setTerminatingSessionId(null);
+    }
+  };
+
+  const handleTerminateAllOther = async () => {
+    if (!window.confirm("Are you sure you want to log out all other devices? You will remain logged in on this current device.")) {
+      return;
+    }
+    setTerminatingAllOther(true);
+    try {
+      const res = await api.terminateOtherSessions();
+      if (res?.success) {
+        setMsg({ type: "success", text: "All other devices logged out successfully. This device remains active." });
+        await loadSessionsAndActivity();
+      } else {
+        setMsg({ type: "error", text: res?.message || "Failed to terminate other devices." });
+      }
+    } catch (err) {
+      setMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setTerminatingAllOther(false);
+    }
+  };
 
   const handleLogoutAllDevices = async () => {
     if (!window.confirm("Are you sure you want to log out from all devices? All other active sessions on other phones and computers will be revoked immediately.")) {
@@ -719,7 +787,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             </div>
           </form>
 
-          {/* Multi-Device Security & Logout All Devices */}
+          {/* 🛡️ Multi-Device Active Session Management & Telemetry */}
           <div
             style={{
               marginTop: "20px",
@@ -729,39 +797,284 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShieldAlert size={16} color="#f43f5e" />
+                <ShieldAlert size={16} color="#38bdf8" />
                 <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
-                  Active Session Security
+                  Active Devices &amp; Remote Session Control
                 </span>
               </div>
+              <button
+                type="button"
+                onClick={loadSessionsAndActivity}
+                disabled={sessionsLoading}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#38bdf8",
+                  fontSize: "0.74rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <RefreshCw size={12} className={sessionsLoading ? "spin" : ""} />
+                <span>Refresh</span>
+              </button>
             </div>
             <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }}>
-              Logged in on a public computer, college lab, or shared phone? Invalidate all active sessions across all devices instantly.
+              Manage all phones, tablets, and computers currently logged into your account. You can terminate any individual session or revoke all devices remotely.
             </p>
-            <button
-              type="button"
-              disabled={loggingOutAll}
-              onClick={handleLogoutAllDevices}
+
+            {/* List of Active Devices */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
+              {sessionsLoading && activeSessions.length === 0 ? (
+                <div style={{ padding: "12px", textAlign: "center", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                  Loading active devices...
+                </div>
+              ) : activeSessions.length === 0 ? (
+                <div style={{ padding: "12px", borderRadius: "8px", background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.06)", fontSize: "0.78rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Smartphone size={16} color="#38bdf8" />
+                  <span>Current Device (Active session verified)</span>
+                </div>
+              ) : (
+                activeSessions.map((sess) => {
+                  const isCurrent = sess.isCurrentDevice;
+                  const isTerminating = terminatingSessionId === sess.sessionId;
+                  const diff = Date.now() - Number(sess.lastActiveAt);
+                  const mins = Math.floor(diff / 60000);
+                  const timeLabel = mins < 2 ? "Active now" : (mins < 60 ? `${mins}m ago` : `${Math.floor(mins / 60)}h ago`);
+
+                  return (
+                    <div
+                      key={sess.sessionId}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: isCurrent ? "rgba(56, 189, 248, 0.07)" : "rgba(255, 255, 255, 0.03)",
+                        border: isCurrent ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.07)",
+                        gap: "10px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: "180px" }}>
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "6px",
+                            background: isCurrent ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.06)",
+                            color: isCurrent ? "#38bdf8" : "var(--text-dim)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {sess.deviceType === "mobile" ? <Smartphone size={16} /> : <Laptop size={16} />}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span>{sess.deviceName}</span>
+                            {isCurrent && (
+                              <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "999px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)", fontWeight: 700 }}>
+                                This Device
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                            <span>{sess.location || "India"}</span>
+                            <span style={{ margin: "0 5px" }}>•</span>
+                            <span style={{ color: isCurrent ? "#34d399" : "var(--text-dim)" }}>{timeLabel}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Single Terminate Button (Only for other devices) */}
+                      {!isCurrent ? (
+                        <button
+                          type="button"
+                          disabled={isTerminating}
+                          onClick={() => handleTerminateSingle(sess.sessionId, sess.deviceName)}
+                          style={{
+                            padding: "5px 10px",
+                            fontSize: "0.74rem",
+                            borderRadius: "6px",
+                            background: "rgba(239, 68, 68, 0.12)",
+                            border: "1px solid rgba(239, 68, 68, 0.3)",
+                            color: "#fca5a5",
+                            cursor: isTerminating ? "not-allowed" : "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontWeight: 600,
+                            transition: "all 0.15s ease",
+                          }}
+                          title={`Terminate session on ${sess.deviceName}`}
+                        >
+                          <Trash2 size={12} className={isTerminating ? "spin" : ""} />
+                          <span>{isTerminating ? "Terminating..." : "Terminate"}</span>
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
+                          <CheckCircle2 size={13} />
+                          <span>Current Session</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Remote Session Control Buttons */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "14px" }}>
+              <button
+                type="button"
+                disabled={terminatingAllOther || activeSessions.length <= 1}
+                onClick={handleTerminateAllOther}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "9px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(245, 158, 11, 0.12)",
+                  border: "1px solid rgba(245, 158, 11, 0.35)",
+                  color: "#fcd34d",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: (terminatingAllOther || activeSessions.length <= 1) ? "not-allowed" : "pointer",
+                  opacity: activeSessions.length <= 1 ? 0.6 : 1,
+                  transition: "all 0.2s ease",
+                }}
+                title="Log out all other devices while keeping this device active"
+              >
+                <LogOut size={14} />
+                <span>{terminatingAllOther ? "Terminating..." : "Logout Other Devices"}</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={loggingOutAll}
+                onClick={handleLogoutAllDevices}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  padding: "9px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(244, 63, 94, 0.12)",
+                  border: "1px solid rgba(244, 63, 94, 0.35)",
+                  color: "#fda4af",
+                  fontSize: "0.78rem",
+                  fontWeight: 600,
+                  cursor: loggingOutAll ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                title="Log out everywhere across all phones and computers"
+              >
+                <ShieldAlert size={14} />
+                <span>{loggingOutAll ? "Revoking..." : "Logout All Devices"}</span>
+              </button>
+            </div>
+
+            {/* Last 10 Security & Login Activity Updates */}
+            <div
               style={{
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                padding: "10px 14px",
                 borderRadius: "8px",
-                background: "rgba(244, 63, 94, 0.12)",
-                border: "1px solid rgba(244, 63, 94, 0.35)",
-                color: "#fda4af",
-                fontSize: "0.82rem",
-                fontWeight: 600,
-                cursor: loggingOutAll ? "not-allowed" : "pointer",
-                transition: "all 0.2s ease",
+                background: "rgba(15, 23, 42, 0.4)",
+                border: "1px solid rgba(255, 255, 255, 0.06)",
+                padding: "10px 12px",
               }}
             >
-              <LogOut size={15} />
-              <span>{loggingOutAll ? "Revoking All Devices..." : "Logout From All Other Devices"}</span>
-            </button>
+              <div
+                onClick={() => setShowSecurityHistory(!showSecurityHistory)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  cursor: "pointer",
+                  userSelect: "none",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
+                  <Activity size={14} color="#a78bfa" />
+                  <span>Recent Security Activity (Last 10 Events)</span>
+                  <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "999px", background: "rgba(167, 139, 250, 0.15)", color: "#c4b5fd" }}>
+                    Turso Edge
+                  </span>
+                </div>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                  {showSecurityHistory ? "▲ Hide" : "▼ Show"}
+                </span>
+              </div>
+
+              {showSecurityHistory && (
+                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {securityLogsLoading ? (
+                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                      Loading recent activity...
+                    </div>
+                  ) : securityLogs.length === 0 ? (
+                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                      No recent security activity recorded yet.
+                    </div>
+                  ) : (
+                    securityLogs.slice(0, 10).map((log) => {
+                      const diff = Date.now() - Number(log.createdAt);
+                      const mins = Math.floor(diff / 60000);
+                      const timeStr = mins < 2 ? "Just now" : (mins < 60 ? `${mins}m ago` : (mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`));
+
+                      let badgeColor = "#38bdf8";
+                      let badgeBg = "rgba(56, 189, 248, 0.12)";
+                      if (log.action.includes("TERMINATE") || log.action.includes("REVOKE")) {
+                        badgeColor = "#fca5a5";
+                        badgeBg = "rgba(239, 68, 68, 0.12)";
+                      } else if (log.action === "LOGIN") {
+                        badgeColor = "#34d399";
+                        badgeBg = "rgba(16, 185, 129, 0.12)";
+                      } else if (log.action.includes("PASSWORD")) {
+                        badgeColor = "#fcd34d";
+                        badgeBg = "rgba(245, 158, 11, 0.12)";
+                      }
+
+                      return (
+                        <div
+                          key={log.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "6px 8px",
+                            borderRadius: "6px",
+                            background: "rgba(255, 255, 255, 0.02)",
+                            fontSize: "0.72rem",
+                            gap: "8px",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0 }}>
+                            <span style={{ padding: "2px 6px", borderRadius: "4px", background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: "0.68rem", flexShrink: 0 }}>
+                              {log.action}
+                            </span>
+                            <span style={{ color: "#e2e8f0", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                              {log.details || log.deviceName}
+                            </span>
+                          </div>
+                          <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: "0.68rem" }}>
+                            {timeStr}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           </>
         )}

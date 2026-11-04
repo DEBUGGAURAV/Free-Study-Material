@@ -315,6 +315,11 @@ export const api = {
     return api.logout("Logout From All Devices");
   },
 
+  getActiveSessions: () => request("/auth/active-sessions"),
+  terminateSession: (sessionId) => request("/auth/terminate-session", { method: "POST", body: JSON.stringify({ sessionId }) }),
+  terminateOtherSessions: () => request("/auth/terminate-other-sessions", { method: "POST" }),
+  getRecentSecurityActivity: () => request("/auth/recent-activity"),
+
   logout: async (reason = "Manual Session Logout", fallbackUser = null) => {
     const u = fallbackUser || getCurrentUser();
     // Instant 0ms local session revocation for immediate UI logout
@@ -1282,6 +1287,8 @@ export const api = {
   getTursoAudits: (limit = 100) => request(`/admin/turso/audits?limit=${limit}`),
   pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
   deleteTursoAudit: (roomId) => request(`/admin/turso/audits/${encodeURIComponent(roomId)}`, { method: "DELETE" }),
+  pruneStudentTursoSessions: (days = 7, target = "all") => request("/admin/turso/students/prune", { method: "POST", body: JSON.stringify({ days, target }) }),
+  cleanRevokedStudentSessions: () => request("/admin/turso/students/clean-revoked", { method: "POST" }),
   runSecurityScan: async () => {
     try {
       return await request("/admin/security/scan");

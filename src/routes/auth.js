@@ -1526,8 +1526,11 @@ router.post("/login", authLimiter, async (req, res) => {
       userRecord.role === "admin"
     );
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+
     const payload = {
       id: docId || "admin-root",
+      sid: sessionId,
       email: userRecord.email,
       name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Academic Member"),
       role: isMasterAdmin ? "admin" : (userRecord.role || "student"),
@@ -1545,6 +1548,17 @@ router.post("/login", authLimiter, async (req, res) => {
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Dedicated Turso Student DB (Zero Latency Overhead)
+    try {
+      const { recordActiveSession } = require("../services/tursoStudentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId: docId || "admin-root",
+        req,
+        tokenVersion: payload.v,
+      }).catch(() => {});
+    } catch (_) {}
 
     // Update Client Hardware Specs Asynchronously (Zero Extra Latency)
     if (req.body.deviceSpecs && docId && db) {
@@ -1794,8 +1808,11 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
       }).catch(() => {});
     }
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+
     const payload = {
       id: docId || "admin-root",
+      sid: sessionId,
       email: userRecord.email,
       name: userRecord.name || "Academic Member",
       role: inputIdentity === MAIN_ADMIN_EMAIL ? "admin" : (userRecord.role || "student"),
@@ -1810,6 +1827,17 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Dedicated Turso Student DB (Zero Latency Overhead)
+    try {
+      const { recordActiveSession } = require("../services/tursoStudentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId: docId || "admin-root",
+        req,
+        tokenVersion: payload.v,
+      }).catch(() => {});
+    } catch (_) {}
 
     // Send Real-time Telegram Security Notice to Security Bot (Zero latency overhead)
     setImmediate(() => {
@@ -2458,6 +2486,13 @@ router.post("/logout", authenticateToken, async (req, res) => {
       });
     }
 
+    if (req.user && req.user.sid && req.user.id) {
+      try {
+        const { terminateSingleSession } = require("../services/tursoStudentSessionService");
+        terminateSingleSession(req.user.id, req.user.sid, "Manual Logout").catch(() => {});
+      } catch (_) {}
+    }
+
     clearAuthCookie(res, req);
     return res.json({
       success: true,
@@ -2507,7 +2542,7 @@ router.get("/me", authenticateToken, async (req, res) => {
 /**
  * 🛡️ Category 1 Feature 4: Multi-Device Session Invalidation
  * POST /api/auth/logout-all-devices
- * Bumps user's tokenVersion in Firestore and server cache, invalidating all other active JWTs.
+ * Bumps user's tokenVersion in Firestore and server cache, invalidating all active JWTs and Turso sessions.
  */
 router.post("/logout-all-devices", authenticateToken, async (req, res) => {
   if (!req.user || !req.user.id) {
@@ -2516,6 +2551,13 @@ router.post("/logout-all-devices", authenticateToken, async (req, res) => {
   try {
     const newVersion = Date.now();
     setRevokedTokenVersion(req.user.id, newVersion);
+
+    // Revoke all sessions in Turso Student DB
+    try {
+      const { terminateAllUserSessions } = require("../services/tursoStudentSessionService");
+      await terminateAllUserSessions(req.user.id);
+    } catch (_) {}
+
     if (db && req.user.id !== "admin-root") {
       await db.collection("users").doc(req.user.id).update({
         tokenVersion: newVersion,
@@ -2530,6 +2572,107 @@ router.post("/logout-all-devices", authenticateToken, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to invalidate sessions: " + err.message });
+  }
+});
+
+/**
+ * 📱 GET /api/auth/active-sessions
+ * Returns all active devices / sessions for current user from Turso
+ */
+router.get("/active-sessions", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  try {
+    const { getUserActiveSessions } = require("../services/tursoStudentSessionService");
+    const sessions = await getUserActiveSessions(req.user.id, req.user.sid || "");
+    return res.json({ success: true, sessions });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to fetch active sessions: " + err.message });
+  }
+});
+
+/**
+ * 📱 POST /api/auth/terminate-session
+ * Terminate a single specific remote device session
+ */
+router.post("/terminate-session", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, message: "Session ID required." });
+  }
+  try {
+    const { terminateSingleSession } = require("../services/tursoStudentSessionService");
+    const ua = req.headers["user-agent"] || "";
+    const deviceLabel = /Mobile/i.test(ua) ? "Phone" : "Computer";
+    const success = await terminateSingleSession(req.user.id, sessionId, `this ${deviceLabel}`);
+    return res.json({
+      success,
+      message: success ? "Device session terminated successfully. That device will be logged out." : "Session not found.",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to terminate session: " + err.message });
+  }
+});
+
+/**
+ * 📱 POST /api/auth/terminate-other-sessions
+ * Terminate all other devices while KEEPING current device logged in!
+ */
+router.post("/terminate-other-sessions", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  try {
+    const { terminateAllOtherSessions } = require("../services/tursoStudentSessionService");
+    const success = await terminateAllOtherSessions(req.user.id, req.user.sid || "");
+
+    // Also bump tokenVersion so older JWT tokens without sid are rejected
+    const newVersion = Date.now();
+    setRevokedTokenVersion(req.user.id, newVersion);
+
+    // Re-issue cookie for THIS device with newVersion
+    const updatedPayload = {
+      ...req.user,
+      v: newVersion,
+    };
+    const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
+    setAuthCookie(res, req, freshToken);
+
+    if (db && req.user.id !== "admin-root") {
+      db.collection("users").doc(req.user.id).update({
+        tokenVersion: newVersion,
+        sessionRevokedAt: Date.now(),
+        updatedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
+    return res.json({
+      success,
+      message: "All other devices logged out successfully. You remain logged in on this device.",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to terminate other sessions: " + err.message });
+  }
+});
+
+/**
+ * 📜 GET /api/auth/recent-activity
+ * Returns last 10 security & login activity updates from Turso
+ */
+router.get("/recent-activity", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  try {
+    const { getUserSecurityLogs } = require("../services/tursoStudentSessionService");
+    const logs = await getUserSecurityLogs(req.user.id, 10);
+    return res.json({ success: true, logs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Failed to fetch security activity: " + err.message });
   }
 });
 
