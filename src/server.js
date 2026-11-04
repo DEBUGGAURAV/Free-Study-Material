@@ -378,6 +378,7 @@ const server = http.createServer(app);
 // 🛡️ Traffic Spike & Reverse Proxy Keep-Alive Hardening (Prevents 502 Bad Gateway under sudden bursts)
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
+server.requestTimeout = 30000; // 30s connection timeout prevents hanging sockets under heavy bursts
 if (server.maxRequestsPerSocket !== undefined) {
   server.maxRequestsPerSocket = 1000;
 }
@@ -395,7 +396,8 @@ function startServer(portToTry, attempt = 1) {
     }
   });
 
-  server.listen(portToTry, "0.0.0.0", async () => {
+  // 🛡️ High-Concurrency TCP Backlog (2,048 Queue Depth): Prevents ECONNREFUSED under massive traffic surges
+  server.listen(portToTry, "0.0.0.0", 2048, async () => {
     console.log(`=======================================================`);
     console.log(`⚡ ${getVaultName().toUpperCase()} RUNNING ON PORT ${portToTry}`);
     console.log(`🌐 Domain: ${getSiteUrl()}`);

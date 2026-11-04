@@ -1,0 +1,164 @@
+[
+  {
+    "stageName": "Stage 1: Normal Active Usage",
+    "concurrency": 50,
+    "totalRequests": 1000,
+    "totalTimeSeconds": 9.41,
+    "rps": 106.2,
+    "throughputMBps": 0.32,
+    "latencies": {
+      "min": 0.3,
+      "avg": 461.9,
+      "p50": 9.9,
+      "p95": 3749.2,
+      "p99": 4644.4,
+      "max": 4729.7
+    },
+    "eventLoopLagMs": {
+      "p50": 15.65,
+      "p95": 19.12,
+      "max": 51.68
+    },
+    "memoryMB": {
+      "start": 162.9,
+      "peak": 246.4,
+      "end": 246.5,
+      "heapUsed": 98.8
+    },
+    "cpuPercent": 33,
+    "statusCodes": {
+      "200": 1000
+    },
+    "errorsCount": 0
+  },
+  {
+    "stageName": "Stage 2: Peak Class / College Rush",
+    "concurrency": 150,
+    "totalRequests": 2500,
+    "totalTimeSeconds": 4.21,
+    "rps": 594.2,
+    "throughputMBps": 1.88,
+    "latencies": {
+      "min": 0.2,
+      "avg": 241,
+      "p50": 70.3,
+      "p95": 1117.7,
+      "p99": 1640.4,
+      "max": 1764.7
+    },
+    "eventLoopLagMs": {
+      "p50": 15.07,
+      "p95": 35,
+      "max": 60.59
+    },
+    "memoryMB": {
+      "start": 236.7,
+      "peak": 317.6,
+      "end": 301,
+      "heapUsed": 75.9
+    },
+    "cpuPercent": 120.7,
+    "statusCodes": {
+      "200": 2500
+    },
+    "errorsCount": 0
+  },
+  {
+    "stageName": "Stage 3: Exam Morning Spike",
+    "concurrency": 350,
+    "totalRequests": 5000,
+    "totalTimeSeconds": 7.6,
+    "rps": 657.5,
+    "throughputMBps": 1.99,
+    "latencies": {
+      "min": 47.1,
+      "avg": 451.5,
+      "p50": 256.8,
+      "p95": 1913.6,
+      "p99": 2623.9,
+      "max": 3097.4
+    },
+    "eventLoopLagMs": {
+      "p50": 16.72,
+      "p95": 86.7,
+      "max": 118.69
+    },
+    "memoryMB": {
+      "start": 293.2,
+      "peak": 447.9,
+      "end": 380.9,
+      "heapUsed": 86.6
+    },
+    "cpuPercent": 115,
+    "statusCodes": {
+      "200": 5000
+    },
+    "errorsCount": 0
+  },
+  {
+    "stageName": "Stage 4: Extreme Stress Testing",
+    "concurrency": 750,
+    "totalRequests": 7500,
+    "totalTimeSeconds": 12.53,
+    "rps": 598.4,
+    "throughputMBps": 1.68,
+    "latencies": {
+      "min": 0.3,
+      "avg": 1094.6,
+      "p50": 442.9,
+      "p95": 5616.2,
+      "p99": 7947.6,
+      "max": 8882.7
+    },
+    "eventLoopLagMs": {
+      "p50": 16.3,
+      "p95": 77.79,
+      "max": 175.64
+    },
+    "memoryMB": {
+      "start": 372.5,
+      "peak": 524.3,
+      "end": 524.3,
+      "heapUsed": 225.5
+    },
+    "cpuPercent": 102.7,
+    "statusCodes": {
+      "200": 6876,
+      "ERR_connect ECONNREFUSED 127.0.0.1:5055": 624
+    },
+    "errorsCount": 624
+  },
+  {
+    "stageName": "Stage 5: Maximum Capacity Breaking Point",
+    "concurrency": 1500,
+    "totalRequests": 10000,
+    "totalTimeSeconds": 13.43,
+    "rps": 744.6,
+    "throughputMBps": 1.21,
+    "latencies": {
+      "min": 298,
+      "avg": 1435.9,
+      "p50": 872,
+      "p95": 5667.6,
+      "p99": 8869.9,
+      "max": 12246.7
+    },
+    "eventLoopLagMs": {
+      "p50": 16.43,
+      "p95": 119.73,
+      "max": 220.99
+    },
+    "memoryMB": {
+      "start": 524.1,
+      "peak": 582.3,
+      "end": 456,
+      "heapUsed": 118.4
+    },
+    "cpuPercent": 110.9,
+    "statusCodes": {
+      "200": 5286,
+      "ERR_connect ECONNREFUSED 127.0.0.1:5055": 4714
+    },
+    "errorsCount": 4714
+  }
+]
