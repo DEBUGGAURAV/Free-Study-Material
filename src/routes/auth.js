@@ -1380,8 +1380,10 @@ router.post("/login", authLimiter, async (req, res) => {
         cleanPassword === unquotedEnv ||
         unquotedPass === envAdminPassword)
     ) {
+      const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
       const payload = {
         id: "admin-root",
+        sid: sessionId,
         email: MAIN_ADMIN_EMAIL || (process.env.ADMIN_EMAIL || "admin@studyvault.in").trim(),
         name: "Master Administrator",
         role: "admin",
@@ -1394,6 +1396,18 @@ router.post("/login", authLimiter, async (req, res) => {
 
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
       setAuthCookie(res, req, token);
+
+      // 🚀 Track Master Admin Active Session in Firestore & Memory
+      try {
+        const { recordActiveSession } = require("../services/studentSessionService");
+        recordActiveSession({
+          sessionId,
+          userId: "admin-root",
+          req,
+          tokenVersion: 0,
+          deviceSpecs: req.body?.deviceSpecs,
+        }).catch(() => {});
+      } catch (_) {}
 
       // Background tasks (Zero latency overhead for login response!)
       setImmediate(async () => {
@@ -2428,6 +2442,16 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
     const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, freshToken);
 
+    // 📜 Record Password Change Security Event (Auto-capped at 15)
+    try {
+      const { recordSecurityActivity } = require("../services/studentSessionService");
+      recordSecurityActivity(req.user.id, {
+        action: "PASSWORD_CHANGED",
+        details: "Account password changed successfully",
+        req,
+      }).catch(() => {});
+    } catch (_) {}
+
     return res.json({
       success: true,
       message: "Password changed successfully!",
@@ -2702,6 +2726,16 @@ router.post("/terminate-other-sessions", authenticateToken, async (req, res) => 
     const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, freshToken);
 
+    // 📜 Record Password Change Security Event (Auto-capped at 15)
+    try {
+      const { recordSecurityActivity } = require("../services/studentSessionService");
+      recordSecurityActivity(req.user.id, {
+        action: "PASSWORD_CHANGED",
+        details: "Account password changed successfully",
+        req,
+      }).catch(() => {});
+    } catch (_) {}
+
     if (db && req.user.id !== "admin-root") {
       db.collection("users").doc(req.user.id).update({
         tokenVersion: newVersion,
@@ -2721,7 +2755,7 @@ router.post("/terminate-other-sessions", authenticateToken, async (req, res) => 
 
 /**
  * 📜 GET /api/auth/recent-activity
- * Returns last 10 security & login activity updates from Firestore
+ * Returns last 15 security & login activity updates from Firestore (Rolling Auto-Delete)
  */
 router.get("/recent-activity", authenticateToken, async (req, res) => {
   if (!req.user || !req.user.id) {
@@ -2729,7 +2763,7 @@ router.get("/recent-activity", authenticateToken, async (req, res) => {
   }
   try {
     const { getUserSecurityLogs } = require("../services/studentSessionService");
-    const logs = await getUserSecurityLogs(req.user.id, 10);
+    const logs = await getUserSecurityLogs(req.user.id, 15);
     return res.json({ success: true, logs });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to fetch security activity: " + err.message });

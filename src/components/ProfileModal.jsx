@@ -342,7 +342,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [terminatingAllOther, setTerminatingAllOther] = useState(false);
   const [securityLogs, setSecurityLogs] = useState([]);
   const [securityLogsLoading, setSecurityLogsLoading] = useState(false);
-  const [showSecurityHistory, setShowSecurityHistory] = useState(false);
+  const [showSecurityHistory, setShowSecurityHistory] = useState(true);
 
   const loadSessionsAndActivity = async () => {
     setSessionsLoading(true);
@@ -1037,8 +1037,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
                   <Activity size={14} color="#a78bfa" />
-                  <span>Recent Security Activity (Last 10 Events)</span>
-
+                  <span>Recent Security Activity (Last 15 Events)</span>
                 </div>
                 <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                   {showSecurityHistory ? "▲ Hide" : "▼ Show"}
@@ -1056,7 +1055,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       No recent security activity recorded yet.
                     </div>
                   ) : (
-                    securityLogs.slice(0, 10).map((log) => {
+                    securityLogs.slice(0, 15).map((log) => {
                       const diff = Date.now() - Number(log.createdAt);
                       const mins = Math.floor(diff / 60000);
                       const timeStr = mins < 2 ? "Just now" : (mins < 60 ? `${mins}m ago` : (mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`));
