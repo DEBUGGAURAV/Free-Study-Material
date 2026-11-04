@@ -212,10 +212,10 @@ export default function NoteCard({
     setDownloading(true);
     setDownloadProgress({
       tier: 1,
-      tierLabel: "Checking Local Device Storage (IndexedDB)...",
+      tierLabel: "Tier 1: IndexedDB (Client Local Storage)...",
       icon: "📱",
       percent: 5,
-      speed: "Checking local cache...",
+      speed: "Checking local cache (0ms)...",
       loadedMB: "0",
       totalMB: formatMB(note.compressedSize || note.fileSize || 1048576),
       timeRemaining: "Estimating...",

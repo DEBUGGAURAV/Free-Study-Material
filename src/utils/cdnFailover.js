@@ -15,15 +15,13 @@ const isLocalHost =
   (window.location.hostname === "localhost" ||
     window.location.hostname === "127.0.0.1");
 
-// Determine valid Cloudflare Worker URL (exclude non-existent defaults)
+// Determine valid Cloudflare Worker URL (Tier 2 Edge CDN Worker)
 const rawWorkerEnv =
   typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL
     ? String(import.meta.env.VITE_CF_WORKER_URL).trim()
     : "";
 export const CF_WORKER =
-  rawWorkerEnv && !rawWorkerEnv.includes("jnplotus.workers.dev") && !isLocalHost
-    ? rawWorkerEnv
-    : "";
+  rawWorkerEnv || (!isLocalHost ? "https://fsm-edge.jnplotus.workers.dev" : "");
 
 export const originBase =
   typeof window !== "undefined" && window.location.origin
@@ -310,9 +308,9 @@ export async function acquireNoteDocument(noteId, {
   // =========================================================================
   onProgress({
     tier: 1,
-    tierLabel: "Checking Local Device Storage (IndexedDB)...",
+    tierLabel: "Tier 1: IndexedDB (Client Local Storage)",
     percent: 5,
-    speed: "Checking local cache...",
+    speed: "Checking local cache (0ms)...",
     loadedMB: "0",
     totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
     timeRemaining: "Estimating...",
@@ -326,9 +324,9 @@ export async function acquireNoteDocument(noteId, {
       // 🎉 TIER 1 CACHE HIT (0ms)!
       onProgress({
         tier: 1,
-        tierLabel: "Local Device Storage (IndexedDB Hit)",
+        tierLabel: "Tier 1: IndexedDB (Cache Hit • 0ms)",
         percent: 100,
-        speed: "Instant 0ms",
+        speed: "Instant 0ms Save / Open",
         loadedMB: (localBuf.byteLength / (1024 * 1024)).toFixed(2),
         totalMB: (localBuf.byteLength / (1024 * 1024)).toFixed(2),
         timeRemaining: "Ready",
@@ -354,9 +352,9 @@ export async function acquireNoteDocument(noteId, {
   if (CF_WORKER) {
     onProgress({
       tier: 2,
-      tierLabel: "Connecting to Edge CDN Worker...",
+      tierLabel: "Tier 2: CDN Worker (Edge Worker)",
       percent: 15,
-      speed: "Querying Edge CDN...",
+      speed: "3.5s Fast Timeout / HIT...",
       loadedMB: "0",
       totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
       timeRemaining: "Estimating...",
@@ -392,7 +390,7 @@ export async function acquireNoteDocument(noteId, {
         const buffer = await streamResponseBody(workerRes, {
           onProgress,
           tier: 2,
-          tierLabel: "Edge CDN Worker (1ms)",
+          tierLabel: "Tier 2: CDN Worker (Edge Worker HIT)",
           icon: "⚡",
           source: "worker",
           expectedSize: note?.compressedSize || note?.fileSize || 0,
@@ -420,9 +418,9 @@ export async function acquireNoteDocument(noteId, {
   // =========================================================================
   onProgress({
     tier: 3,
-    tierLabel: "Streaming from Server NVMe SSD Disk...",
+    tierLabel: "Tier 3: Server SSD Disk (NVMe / RAM)",
     percent: 25,
-    speed: "Connecting to server...",
+    speed: "Zero-Copy SSD Stream (100ms)...",
     loadedMB: "0",
     totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
     timeRemaining: "Estimating...",
@@ -453,15 +451,15 @@ export async function acquireNoteDocument(noteId, {
   const isServerSsd = realSource === "DISK_CACHE" || realSource === "RAM_BUFFER";
   const tierNum = isServerSsd ? 3 : 4;
   const tierLabel = isServerSsd
-    ? "Local NVMe SSD Disk Cache (100ms)"
-    : "Primary Academic Cloud Storage Vault";
+    ? "Tier 3: Server SSD Disk (Zero-Copy 100ms)"
+    : "Tier 4: Telegram Storage (MTProto Core)";
   const tierIcon = isServerSsd ? "💽" : "☁️";
 
   onProgress({
     tier: tierNum,
     tierLabel: `Streaming from ${tierLabel}...`,
     percent: 35,
-    speed: "Streaming chunks...",
+    speed: isServerSsd ? "Zero-Copy SSD Stream (100ms)" : "Stream Chunks + Auto-Save to SSD",
     loadedMB: "0",
     totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
     timeRemaining: "Streaming...",

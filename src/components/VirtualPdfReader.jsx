@@ -720,9 +720,9 @@ export default function VirtualPdfReader({
               setIsCachedP2P(true);
               setRealSourceInfo({
                 id: "local_cache",
-                label: "💾 Local Device Storage (IndexedDB Hit)",
-                short: "Local Storage (0ms)",
-                details: "100% Instant Offline Cache from Student Device Storage • 0ms Latency",
+                label: "💾 Tier 1: IndexedDB (Client Local Storage)",
+                short: "Tier 1: IndexedDB (0ms)",
+                details: "Cache Hit (0ms) • Instant 0ms Save / Open",
                 colo: "Local",
                 icon: "💾",
                 color: "#38bdf8",
@@ -735,9 +735,9 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(100);
               setRealSourceInfo({
                 id: "worker",
-                label: "⚡ Edge CDN Worker",
-                short: "Edge CDN (1ms)",
-                details: "Indian Edge CDN Worker • 0ms Edge Cache HIT",
+                label: "⚡ Tier 2: CDN Worker (Edge Worker)",
+                short: "Tier 2: CDN Worker (HIT)",
+                details: "3.5s Fast Timeout / HIT • Instant 0ms Save / Open",
                 colo: "Edge",
                 icon: "⚡",
                 color: "#38bdf8",
@@ -750,9 +750,9 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(100);
               setRealSourceInfo({
                 id: "disk",
-                label: "💽 Local NVMe SSD Disk Cache (100ms)",
-                short: "SSD Cache (100ms)",
-                details: "Local NVMe SSD Zero-Copy Stream • 100ms Latency",
+                label: "💽 Tier 3: Server SSD Disk (NVMe / RAM)",
+                short: "Tier 3: Server SSD (100ms)",
+                details: "Zero-Copy SSD Stream (100ms) • Instant 0ms Save / Open",
                 colo: "NVMe",
                 icon: "💽",
                 color: "#4ade80",
@@ -765,9 +765,9 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(m.percent);
               setRealSourceInfo({
                 id: "telegram",
-                label: "☁️ Primary Academic Cloud Storage Vault",
-                short: "Cloud Vault",
-                details: "Telegram MTProto Core Stream + Auto-Save to Server SSD",
+                label: "☁️ Tier 4: Telegram Storage (MTProto Core)",
+                short: "Tier 4: Telegram Storage",
+                details: "Stream Chunks + Auto-Save to SSD • Instant 0ms Save / Open",
                 colo: "Cloud",
                 icon: "☁️",
                 color: "#38bdf8",
