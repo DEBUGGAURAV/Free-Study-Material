@@ -60,6 +60,143 @@ if (typeof window !== "undefined") {
     `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || "6.4.299"}/build/pdf.worker.min.mjs`;
 }
 
+/**
+ * 📜 ContinuousPage: Individual page canvas inside the continuous vertical scroll stream.
+ * Employs IntersectionObserver to lazily render nearby pages and preserve mobile memory.
+ */
+function ContinuousPage({
+  pageNum,
+  pdfDoc,
+  scale,
+  nightMode,
+  isEcoMode,
+  onInView,
+}) {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const [rendered, setRendered] = useState(false);
+  const [rendering, setRendering] = useState(false);
+  const renderTaskRef = useRef(null);
+
+  useEffect(() => {
+    let observer;
+    if (containerRef.current && typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (entry.isIntersecting) {
+            if (onInView) onInView(pageNum);
+            if (!rendered && !rendering) {
+              renderPage();
+            }
+          }
+        },
+        { rootMargin: "650px 0px" }
+      );
+      observer.observe(containerRef.current);
+    } else {
+      renderPage();
+    }
+    return () => {
+      if (observer) observer.disconnect();
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch (_) {}
+      }
+    };
+  }, [pageNum, rendered, rendering, pdfDoc, scale]);
+
+  const renderPage = async () => {
+    if (!pdfDoc) return;
+    try {
+      setRendering(true);
+      const page = await pdfDoc.getPage(pageNum);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const ctx = canvas.getContext("2d");
+      const dpr = isEcoMode ? Math.min(1.25, window.devicePixelRatio || 1) : (window.devicePixelRatio || 1);
+      const viewport = page.getViewport({ scale });
+
+      const displayWidth = Math.floor(viewport.width);
+      const displayHeight = Math.floor(viewport.height);
+
+      canvas.width = Math.floor(viewport.width * dpr);
+      canvas.height = Math.floor(viewport.height * dpr);
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const task = page.render({
+        canvasContext: ctx,
+        viewport: viewport,
+      });
+      renderTaskRef.current = task;
+      await task.promise;
+      setRendered(true);
+    } catch (e) {
+      if (e.name !== "RenderingCancelledException") {
+        console.debug(`[PDF.js] Page ${pageNum} render notice:`, e.message);
+      }
+    } finally {
+      setRendering(false);
+      renderTaskRef.current = null;
+    }
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      id={`continuous-page-${pageNum}`}
+      style={{
+        margin: "0 auto 18px auto",
+        position: "relative",
+        boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
+        borderRadius: "4px",
+        background: nightMode ? "#0b0f19" : "#ffffff",
+        minHeight: rendered ? "auto" : "320px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "box-shadow 0.2s ease",
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: rendered ? "block" : "none",
+          filter: nightMode ? "invert(0.9) hue-rotate(180deg) contrast(1.05)" : "none",
+          transition: "filter 0.2s ease",
+          borderRadius: "4px",
+        }}
+      />
+      {!rendered && (
+        <div style={{ color: "var(--text-dim)", fontSize: "0.8rem", padding: "40px 20px", textAlign: "center" }}>
+          📄 Loading Page {pageNum}...
+        </div>
+      )}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "6px",
+          right: "10px",
+          background: "rgba(0,0,0,0.65)",
+          color: "#fff",
+          fontSize: "0.68rem",
+          fontWeight: 600,
+          padding: "2px 8px",
+          borderRadius: "10px",
+          pointerEvents: "none",
+        }}
+      >
+        {pageNum} / {pdfDoc?.numPages || ""}
+      </div>
+    </div>
+  );
+}
+
 export default function VirtualPdfReader({
   url,
   file,
@@ -142,15 +279,61 @@ export default function VirtualPdfReader({
     !isTouchOrMobileDevice;
   const canUseNativePdfViewer = hasNativePdfium;
 
-  // Safety Shield: Mobile browsers (Chrome Android / Safari iOS) lack embedded iframe PDFium support and trigger "Open" prompt.
-  // Force high-performance Canvas Streamer on mobile ALWAYS for notes without external Drive preview or when blocked!
+  const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
+
+  // Touch Swipe & Pinch-to-Zoom refs for mobile reading
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchDistanceRef = useRef(0);
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      touchDistanceRef.current = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && touchDistanceRef.current > 0) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const diff = currentDist - touchDistanceRef.current;
+      if (Math.abs(diff) > 25) {
+        setScale((prev) => Math.min(3.0, Math.max(0.6, prev + (diff > 0 ? 0.05 : -0.05))));
+        touchDistanceRef.current = currentDist;
+      }
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (scrollMode === "single" && e.changedTouches.length === 1) {
+      const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+      const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+      if (Math.abs(deltaX) > 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4) {
+        if (deltaX < 0 && currentPage < numPages) {
+          changePage(currentPage + 1);
+        } else if (deltaX > 0 && currentPage > 1) {
+          changePage(currentPage - 1);
+        }
+      }
+    }
+  };
+
+  // Safety Shield: If note is read-only DRM protected, force Streamer Engine
   useEffect(() => {
-    if ((isTouchOrMobileDevice || !hasNativePdfium) && useNativeViewer && (!note?.driveLink || isBlocked)) {
+    if (useNativeViewer && isBlocked) {
       setUseNativeViewer(false);
-      setOcrStatusText("📱 High-Speed Streamer Engine active (optimized for mobile touch screen).");
+      setOcrStatusText("🔒 Note is read-protected. High-Speed Streamer Engine is active.");
       setTimeout(() => setOcrStatusText(""), 4000);
     }
-  }, [isTouchOrMobileDevice, hasNativePdfium, useNativeViewer, note?.driveLink, isBlocked]);
+  }, [useNativeViewer, isBlocked]);
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -1387,12 +1570,17 @@ export default function VirtualPdfReader({
     const pageNum = Math.max(1, Math.min(numPages || 1, newPage));
     if (pageNum !== currentPage) {
       setCurrentPage(pageNum);
-      if (mainScrollRef.current) {
+      if (scrollMode === "continuous" && !useNativeViewer) {
+        const el = document.getElementById(`continuous-page-${pageNum}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      } else if (mainScrollRef.current) {
         mainScrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
       }
       if (useNativeViewer && iframeRef.current) {
         const baseSrc = (nativeSrc || url || "").split("#")[0];
-        if (baseSrc) {
+        if (baseSrc && !baseSrc.includes("docs.google.com") && !baseSrc.includes("drive.google.com")) {
           iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(pageNum, searchQuery)}`;
         }
       }
@@ -2394,12 +2582,14 @@ export default function VirtualPdfReader({
   };
 
   const handleSwitchToNative = async () => {
-    // 📱 Mobile / Touch devices lack desktop PDFium plugins:
+    setError(null);
+    setLoading(false);
+    setUseNativeViewer(true);
+    setNativeLoading(true);
+
+    // 📱 Mobile / Touch devices:
     if (isTouchOrMobileDevice || !hasNativePdfium) {
       if (note?.driveLink && !isBlocked) {
-        setError(null);
-        setLoading(false);
-        setUseNativeViewer(true);
         let dLink = note.driveLink;
         const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
         if (match && match[1]) {
@@ -2410,19 +2600,13 @@ export default function VirtualPdfReader({
         return;
       }
 
-      // If no Google Drive link or note is read-only protected:
-      // Mobile browsers display an external "Open" download prompt on raw PDF iframes, breaking reading & DRM.
-      // Keep student in the high-performance Streamer Engine and show a clear notification:
-      setUseNativeViewer(false);
-      setOcrStatusText("📱 Mobile Touch Notice: Android Chrome lacks built-in PDFium iframe plugins (shows external Open prompt). 🚀 High-Speed Streamer is active for your touch screen!");
-      setTimeout(() => setOcrStatusText(""), 5000);
+      // Safe Cloud Web Viewer for mobile (prevents raw PDF iframe download prompts):
+      const streamBase = url && url.startsWith("http") ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`;
+      setNativeSrc(`https://docs.google.com/viewer?url=${encodeURIComponent(streamBase)}&embedded=true`);
       return;
     }
 
     // 💻 Genuine Desktop with PDFium:
-    setError(null);
-    setLoading(false);
-    setUseNativeViewer(true);
     if (pdfDoc && typeof pdfDoc.getData === "function") {
       try {
         const data = await pdfDoc.getData();
@@ -2430,9 +2614,12 @@ export default function VirtualPdfReader({
           const blob = new Blob([data], { type: "application/pdf" });
           const blobUrl = URL.createObjectURL(blob);
           setNativeSrc(blobUrl);
+          return;
         }
       } catch (_) {}
     }
+    const streamBase = url && url.startsWith("http") ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`;
+    setNativeSrc(streamBase);
   };
 
   return (
@@ -2751,11 +2938,68 @@ export default function VirtualPdfReader({
                 boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
                 transition: "all 0.15s ease",
               }}
-              title="Switch to Native Browser Engine (Chrome/Edge PDF plugin)"
+              title="Switch to PDF.js Web Reader (full document web reader with mobile cloud support)"
             >
-              ⚡ Native Browser
+              📖 PDF.js Web Reader
             </button>
           </div>
+
+          {/* Option 3: Continuous Scroll vs Single Page Toggle (Streamer Mode) */}
+          {!useNativeViewer && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
+                padding: "3px",
+                borderRadius: "8px",
+                border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setScrollMode("continuous")}
+                style={{
+                  padding: "5px 10px",
+                  fontSize: "0.76rem",
+                  fontWeight: scrollMode === "continuous" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: "none",
+                  background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#ffffff") : "transparent",
+                  color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  boxShadow: scrollMode === "continuous" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                }}
+                title="Continuous Vertical Scroll (best for mobile reading & smooth scrolling)"
+              >
+                📜 Scroll
+              </button>
+              <button
+                type="button"
+                onClick={() => setScrollMode("single")}
+                style={{
+                  padding: "5px 10px",
+                  fontSize: "0.76rem",
+                  fontWeight: scrollMode === "single" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: "none",
+                  background: scrollMode === "single" ? (nightMode ? "#334155" : "#ffffff") : "transparent",
+                  color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  boxShadow: scrollMode === "single" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                }}
+                title="Single Page Flip (touch swipe left/right to turn pages)"
+              >
+                📄 Page
+              </button>
+            </div>
+          )}
 
           {(onDownload || noteId) && !isBlocked && (
             <button
@@ -3902,20 +4146,26 @@ export default function VirtualPdfReader({
       {/* Main Virtual Document Canvas Area */}
       <div
         ref={mainScrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         style={{
           flex: 1,
           overflow: "auto",
           display: "flex",
-          justifyContent: "center",
-          alignItems: useNativeViewer ? "stretch" : "flex-start",
-          padding: useNativeViewer ? "0" : "24px",
+          flexDirection: scrollMode === "continuous" && !useNativeViewer ? "column" : "row",
+          justifyContent: scrollMode === "continuous" && !useNativeViewer ? "flex-start" : "center",
+          alignItems: useNativeViewer ? "stretch" : (scrollMode === "continuous" ? "center" : "flex-start"),
+          padding: useNativeViewer ? "0" : (isTouchOrMobileDevice ? "12px 6px" : "24px"),
           background: nightMode ? "#060911" : "#e2e8f0",
           position: "relative",
           height: "100%",
+          width: "100%",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* Native Browser PDF Engine Embed (Desktop PDFium or Safe Mobile Google Drive Preview ONLY) */}
-        {useNativeViewer && (!isTouchOrMobileDevice || (note?.driveLink && !isBlocked)) && (
+        {/* PDF.js Web Reader Embed (Desktop PDFium or Safe Mobile Cloud Viewer) */}
+        {useNativeViewer && !isBlocked && (
           <div
             style={{
               width: "100%",
@@ -3941,10 +4191,10 @@ export default function VirtualPdfReader({
                 gap: "8px",
               }}
             >
-              <span>⚡ <strong>Native Browser PDF Engine</strong> {isMobileDevice ? "(Google Drive Cloud Preview)" : "(Chrome/Edge Native PDFium)"}</span>
+              <span>📖 <strong>PDF.js Web Reader</strong> {isMobileDevice ? "(Mobile Cloud Viewer)" : "(Full Document Web Engine)"}</span>
               <span>
                 {isMobileDevice
-                  ? "💡 Tip: Switch to 🚀 Streamer Engine for fast mobile touch scrolling & dark mode!"
+                  ? "💡 Tip: Switch to 🚀 Streamer Engine for touch swipe & continuous dark mode!"
                   : <span>💡 Tip: Press <kbd style={{ padding: "2px 6px", borderRadius: "4px", background: nightMode ? "#334155" : "#cbd5e1", fontWeight: 700 }}>Ctrl + F</kbd> for browser highlight, or switch to <strong>🚀 Streamer Engine</strong> for instant glowing overlays!</span>}
               </span>
             </div>
@@ -3952,12 +4202,14 @@ export default function VirtualPdfReader({
               ref={iframeRef}
               key={`native-frame-${noteId || "pdf"}`}
               src={
-                nativeSrc && nativeSrc.startsWith("https://drive.google.com")
+                nativeSrc && (nativeSrc.startsWith("https://drive.google.com") || nativeSrc.startsWith("https://docs.google.com") || nativeSrc.startsWith("blob:"))
                   ? nativeSrc
                   : (isMobileDevice
                       ? (note?.driveLink && note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
                           ? `https://drive.google.com/file/d/${note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)[1]}/preview`
-                          : "")
+                          : `https://docs.google.com/viewer?url=${encodeURIComponent(
+                              (url && url.startsWith("http")) ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`
+                            )}&embedded=true`)
                       : (nativeSrc
                           ? `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`
                           : (noteId || note?.id
@@ -4354,14 +4606,38 @@ export default function VirtualPdfReader({
         )}
 
         {/* Virtual Page Canvas Wrapper with Highlight Overlay Layer */}
-        {!loading && !error && !isAuthGated && (!useNativeViewer || (isTouchOrMobileDevice && (!note?.driveLink || isBlocked))) && (
-          <div
-            style={{
-              position: "relative",
-              display: "inline-block",
-              margin: "auto",
-            }}
-          >
+        {!loading && !error && !isAuthGated && !useNativeViewer && (
+          scrollMode === "continuous" ? (
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "100%",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                paddingBottom: "60px",
+              }}
+            >
+              {Array.from({ length: numPages || 0 }, (_, i) => i + 1).map((pNum) => (
+                <ContinuousPage
+                  key={`cont-page-${pNum}-s${scale}`}
+                  pageNum={pNum}
+                  pdfDoc={pdfDoc}
+                  scale={scale}
+                  nightMode={nightMode}
+                  isEcoMode={isEcoMode}
+                  onInView={(p) => setCurrentPage(p)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                position: "relative",
+                display: "inline-block",
+                margin: "auto",
+              }}
+            >
             <canvas
               key={`pdf-canvas-p${currentPage}-s${scale}`}
               ref={canvasRef}
@@ -4458,6 +4734,7 @@ export default function VirtualPdfReader({
               </div>
             )}
           </div>
+          )
         )}
 
         {/* 💬 Smart Page Discussion & QR Bridge Pill (Preview Mode Only) */}
