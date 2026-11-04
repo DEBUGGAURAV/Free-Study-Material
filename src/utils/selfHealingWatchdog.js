@@ -579,6 +579,69 @@ function startTempFolderPruner(tempDir = path.join(process.cwd(), "temp"), maxAg
   setInterval(sweepTemp, 15 * 60 * 1000);
 }
 
+/**
+ * 9. 🧹 Auto-Chat Media Pruner (15-Day Policy / 500MB Disk Quota Guard)
+ * Prunes old chat media, voice notes, and image attachments older than 15 days or when total exceeds 500MB.
+ */
+function startChatMediaPruner(chatMediaDir = path.join(process.cwd(), "cache", "chat_media"), maxBytes = 500 * 1024 * 1024, maxAgeMs = 15 * 86400 * 1000) {
+  const pruneMedia = () => {
+    try {
+      if (!fs.existsSync(chatMediaDir)) return;
+      const files = fs.readdirSync(chatMediaDir);
+      const now = Date.now();
+      let totalBytes = 0;
+      const fileStats = [];
+
+      for (const file of files) {
+        try {
+          const fullPath = path.join(chatMediaDir, file);
+          const st = fs.statSync(fullPath);
+          totalBytes += st.size;
+          fileStats.push({ file, fullPath, size: st.size, mtime: st.mtimeMs });
+        } catch (_) {}
+      }
+
+      let prunedOldCount = 0;
+      for (const item of fileStats) {
+        if (now - item.mtime > maxAgeMs) {
+          try {
+            fs.unlinkSync(item.fullPath);
+            totalBytes -= item.size;
+            prunedOldCount++;
+          } catch (_) {}
+        }
+      }
+
+      if (totalBytes > maxBytes) {
+        fileStats.sort((a, b) => a.mtime - b.mtime);
+        let prunedQuotaCount = 0;
+        for (const item of fileStats) {
+          if (totalBytes <= maxBytes * 0.75) break;
+          if (fs.existsSync(item.fullPath)) {
+            try {
+              fs.unlinkSync(item.fullPath);
+              totalBytes -= item.size;
+              prunedQuotaCount++;
+            } catch (_) {}
+          }
+        }
+        if (prunedQuotaCount > 0) {
+          console.log(`[SELF-HEALING-CHAT] 💾 Pruned ${prunedQuotaCount} chat media files to keep disk within ${(maxBytes / (1024 * 1024)).toFixed(0)}MB.`);
+        }
+      }
+
+      if (prunedOldCount > 0) {
+        console.log(`[SELF-HEALING-CHAT] 🧹 Pruned ${prunedOldCount} stale chat media files (>15 days old).`);
+      }
+    } catch (err) {
+      console.warn("[SELF-HEALING-CHAT] Media prune notice:", err.message);
+    }
+  };
+
+  setTimeout(pruneMedia, 30 * 1000);
+  setInterval(pruneMedia, 12 * 3600 * 1000); // Run twice a day
+}
+
 module.exports = {
   attachWorkerWatchdog,
   startRamBufferGuard,
@@ -591,6 +654,7 @@ module.exports = {
   startIdleMemoryCleaner,
   startDiskQuotaPruner,
   startTempFolderPruner,
+  startChatMediaPruner,
   getSystemMemoryCeilingMb,
   getMemoryThresholds,
   getMemoryGuardStats,

@@ -656,11 +656,18 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
       }
     }
 
-    // 🛡️ Half Admin cannot promote or demote Full Admins
-    if (req.user?.role === "half_admin" && (role === "admin" || targetUser.role === "admin")) {
+    // 🛡️ Only Master Admin or Full Admin can assign or modify Administrator privileges
+    const isCallerFullAdmin = Boolean(
+      req.user?.isMainAdmin ||
+      req.user?.isMasterAdmin ||
+      req.user?.id === "admin-root" ||
+      req.user?.role === "admin" ||
+      (req.user?.email && MAIN_ADMIN_EMAIL && req.user.email.toLowerCase() === MAIN_ADMIN_EMAIL)
+    );
+    if (!isCallerFullAdmin && (role === "admin" || role === "half_admin" || targetUser.role === "admin" || targetUser.role === "half_admin")) {
       return res.status(403).json({
         success: false,
-        message: "PERMISSION DENIED: Half Admins cannot modify or assign Full Administrator privileges.",
+        message: "PERMISSION DENIED: Only Full Platform Administrators can assign or modify Administrator privileges.",
       });
     }
 
@@ -2943,6 +2950,7 @@ router.get("/database/export", authenticateToken, checkAdminOrPermission("databa
       users: usersSnap.docs.map((d) => {
         const u = d.data();
         delete u.passwordHash; // Don't export password hashes for security
+        delete u.password;
         return { id: d.id, ...u };
       }),
       notices: noticesSnap.docs.map((d) => ({ id: d.id, ...d.data() })),
@@ -2970,6 +2978,7 @@ router.get("/database/collection/:collectionName", authenticateToken, checkAdmin
     const items = snap.docs.map((doc) => {
       const data = doc.data();
       if (data.passwordHash) delete data.passwordHash;
+      if (data.password) delete data.password;
       return { id: doc.id, ...data };
     });
     return res.json({ success: true, collection: collectionName, total: items.length, items });
@@ -3907,7 +3916,6 @@ router.get("/tech-flags", (req, res) => {
       maintenanceTitle: techSettings.maintenanceTitle,
       maintenanceMessage: techSettings.maintenanceMessage,
       maintenanceEstimatedEnd: techSettings.maintenanceEstimatedEnd,
-      maintenanceBypassKey: techSettings.maintenanceBypassKey,
       allowNotesDownload: downloadAllowed,
       downloadSchedule: techSettings.downloadSchedule || "manual",
       downloadDisabledReason: techSettings.downloadDisabledReason || "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.",

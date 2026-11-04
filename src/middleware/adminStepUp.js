@@ -29,56 +29,31 @@ function createStepUpToken(adminUser) {
 }
 
 /**
- * Middleware: Enforces valid Step-Up Token for sensitive operations
+ * Middleware: Enforces valid Step-Up Token or fresh admin session for sensitive operations
  */
 function requireStepUpAuth(req, res, next) {
-  // 🛡️ If admin is already authenticated with a valid session, permit the action directly!
-  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-  const isAdminSession = Boolean(
-    req.user &&
-      (req.user.role === "admin" ||
-        req.user.role === "half_admin" ||
-        req.user.role === "sub_admin" ||
-        req.user.isMainAdmin ||
-        req.user.isMasterAdmin ||
-        req.user.id === "admin-root" ||
-        (adminEmail && req.user.email && req.user.email.toLowerCase().trim() === adminEmail) ||
-        (Array.isArray(req.user.permissions) && req.user.permissions.includes("all")))
-  );
+  const stepUpToken = req.headers["x-step-up-token"] || req.body?.stepUpToken || req.query?.stepUpToken;
 
-  if (isAdminSession) {
+  if (stepUpToken) {
+    try {
+      const decoded = jwt.verify(stepUpToken, JWT_SECRET);
+      if (decoded && decoded.stepUp) {
+        req.stepUpAuth = decoded;
+        return next();
+      }
+    } catch (_) {}
+  }
+
+  // Fresh Session Shield: Allow if authenticated within the last 10 minutes (600s)
+  if (req.user && req.user.iat && (Date.now() / 1000 - req.user.iat < STEP_UP_DURATION_SEC)) {
     return next();
   }
 
-  const stepUpToken = req.headers["x-step-up-token"] || req.body?.stepUpToken || req.query?.stepUpToken;
-
-  if (!stepUpToken) {
-    return res.status(428).json({
-      error: "Admin Step-Up Re-Authentication Required. Please confirm your Master Password or Passkey to authorize this critical operation.",
-      code: "STEP_UP_REQUIRED",
-      requiresStepUp: true,
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(stepUpToken, JWT_SECRET);
-    if (!decoded || !decoded.stepUp || decoded.role !== "admin") {
-      return res.status(403).json({
-        error: "Invalid or unauthorized step-up authentication token.",
-        code: "STEP_UP_INVALID",
-        requiresStepUp: true,
-      });
-    }
-
-    req.stepUpAuth = decoded;
-    next();
-  } catch (err) {
-    return res.status(428).json({
-      error: "Step-Up authorization session has expired (valid for 10 minutes). Please re-confirm your credentials.",
-      code: "STEP_UP_EXPIRED",
-      requiresStepUp: true,
-    });
-  }
+  return res.status(428).json({
+    error: "Admin Step-Up Re-Authentication Required. Please confirm your Master Password or Passkey to authorize this critical operation.",
+    code: "STEP_UP_REQUIRED",
+    requiresStepUp: true,
+  });
 }
 
 module.exports = {

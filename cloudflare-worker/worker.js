@@ -4,9 +4,20 @@
  * Concept: Note Storage -> Cloudflare Worker Edge -> Client View/Download (with RAM/Disk cache fallback)
  */
 
+function isTrustedOrigin(origin) {
+  if (!origin) return false;
+  return (
+    origin.includes('onrender.com') ||
+    origin.includes('localhost') ||
+    origin.includes('127.0.0.1') ||
+    origin.includes('workers.dev') ||
+    origin.includes('freestudymaterial')
+  );
+}
+
 function applyCors(headers, req) {
   const o = req ? req.headers.get('Origin') : null;
-  if (o) {
+  if (o && isTrustedOrigin(o)) {
     headers.set('Access-Control-Allow-Origin', o);
     headers.set('Access-Control-Allow-Credentials', 'true');
   } else {
@@ -157,6 +168,9 @@ export default {
         forwardHeaders.set('X-Forwarded-Host', url.host);
         forwardHeaders.set('X-Via-Worker', 'true');
         forwardHeaders.set('CF-Worker', 'true');
+        if (env.CF_WORKER_SECRET) {
+          forwardHeaders.set('X-Worker-Signature', env.CF_WORKER_SECRET);
+        }
         forwardHeaders.delete('Sec-Fetch-Site');
         forwardHeaders.delete('sec-fetch-site');
 

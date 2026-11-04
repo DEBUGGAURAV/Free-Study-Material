@@ -28,6 +28,7 @@ const {
   startIdleMemoryCleaner,
   startDiskQuotaPruner,
   startTempFolderPruner,
+  startChatMediaPruner,
 } = require("./utils/selfHealingWatchdog");
 const { warmCacheOnBoot } = require("./utils/cacheWarmer");
 const { ipJailFirewall } = require("./middleware/ipJail");
@@ -39,7 +40,8 @@ initProcessImmortalityShield();
 startEventLoopLagDetector();
 startIdleMemoryCleaner(3 * 60 * 1000); // Purge idle memory after 3 min
 startDiskQuotaPruner(); // Auto-prune stale CDN files (>30 days / >1.5GB)
-startTempFolderPruner(path.join(__dirname, "../temp"), 60 * 60 * 1000); // Strict 1-Hour Temp Pruner (Upload Immunity Protected)
+startTempFolderPruner(path.join(__dirname, "../temp"), 60 * 60 * 1000);
+startChatMediaPruner(path.join(__dirname, "../cache/chat_media")); // Strict 1-Hour Temp Pruner (Upload Immunity Protected)
 startRamBufferGuard(path.join(__dirname, "../temp")); // Dynamic Self-Adapting RAM Guard (Auto-scales to 512MB, 1GB, 2GB, 4GB, 8GB)
 
 // ⚡ Pillar 2: Turso (LibSQL / Edge SQLite) Cloud Initialization

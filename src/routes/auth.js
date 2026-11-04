@@ -1370,16 +1370,25 @@ router.post("/login", authLimiter, async (req, res) => {
     const unquotedPass = cleanPassword.replace(/^["']|["']$/g, "");
     const unquotedEnv = (envAdminPassword || "").replace(/^["']|["']$/g, "");
 
-    // ⚡ 1. ULTRA-FAST MASTER ADMIN FAST-PATH (0ms latency, zero database wait):
-    if (
-      isMainAdminAlias &&
+    // ⚡ 1. ULTRA-FAST MASTER ADMIN FAST-PATH (Constant-Time Side-Channel Timing Shield):
+    const timingSafeEqualStr = (a, b) => {
+      if (typeof a !== "string" || typeof b !== "string") return false;
+      const bufA = Buffer.from(a);
+      const bufB = Buffer.from(b);
+      if (bufA.length !== bufB.length) return false;
+      return crypto.timingSafeEqual(bufA, bufB);
+    };
+
+    const isMasterPassMatch = Boolean(
       envAdminPassword &&
-      (password === envAdminPassword ||
-        cleanPassword === envAdminPassword ||
-        unquotedPass === unquotedEnv ||
-        cleanPassword === unquotedEnv ||
-        unquotedPass === envAdminPassword)
-    ) {
+      (timingSafeEqualStr(password, envAdminPassword) ||
+        timingSafeEqualStr(cleanPassword, envAdminPassword) ||
+        timingSafeEqualStr(unquotedPass, unquotedEnv) ||
+        timingSafeEqualStr(cleanPassword, unquotedEnv) ||
+        timingSafeEqualStr(unquotedPass, envAdminPassword))
+    );
+
+    if (isMainAdminAlias && isMasterPassMatch) {
       const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
       const payload = {
         id: "admin-root",

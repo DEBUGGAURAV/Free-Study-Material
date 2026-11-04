@@ -12,7 +12,7 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
-const { JWT_SECRET } = require("../middleware/auth");
+const { JWT_SECRET, authenticateToken, requireAdmin } = require("../middleware/auth");
 const { db } = require("../firebase");
 const { tursoClient } = require("../services/tursoService");
 const {
@@ -237,19 +237,25 @@ router.post("/tamper-alert", async (req, res) => {
     }
 
     // 🛡️ 1.5. Absolute Master Immunity for Administrators (Never record strikes, never jail IP/Device)
+    // CRITICAL SECURITY HARDENING: ONLY verified JWT session (authUser) can grant admin immunity!
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-    const isAdminUser =
-      (authUser && (authUser.role === "admin" || authUser.role === "half_admin" || authUser.isMainAdmin || authUser.isMasterAdmin)) ||
-      (fullUser && (fullUser.role === "admin" || fullUser.role === "half_admin" || fullUser.isMainAdmin || fullUser.isMasterAdmin)) ||
-      Boolean(req.headers["x-admin-token"]) ||
-      (fullUser?.email && adminEmail && fullUser.email.toLowerCase().trim() === adminEmail);
+    const isAdminUser = Boolean(
+      authUser &&
+        (authUser.role === "admin" ||
+          authUser.role === "half_admin" ||
+          authUser.isMainAdmin ||
+          authUser.isMasterAdmin ||
+          authUser.id === "admin-root" ||
+          (authUser.email && adminEmail && authUser.email.toLowerCase().trim() === adminEmail) ||
+          (Array.isArray(authUser.permissions) && authUser.permissions.includes("all")))
+    );
 
     if (isAdminUser) {
       try {
         const { registerAdminIp } = require("../middleware/ipJail");
         if (clientIp) registerAdminIp(clientIp);
       } catch (_) {}
-      console.log(`[ANTI-TAMPER] 🛡️ Administrator session active (${fullUser.email || fullUser.name || clientIp}). Bypassing anti-tamper inspection.`);
+      console.log(`[ANTI-TAMPER] 🛡️ Administrator session active (${authUser.email || authUser.name || clientIp}). Bypassing anti-tamper inspection.`);
       return res.json({
         success: true,
         action: "BYPASS",
@@ -306,12 +312,12 @@ router.post("/tamper-alert", async (req, res) => {
         }
       }
 
-      // B. Permanent Block in Turso Database
-      if (tursoClient && fullUser.email && fullUser.email !== "N/A" && fullUser.email !== "Unauthenticated Guest") {
+      // B. Permanent Block in Turso Database (ONLY for verified authenticated users)
+      if (tursoClient && authUser && authUser.email && authUser.email !== "N/A") {
         try {
           await tursoClient.execute({
             sql: `UPDATE users SET is_blocked = 1 WHERE email = ?`,
-            args: [fullUser.email.toLowerCase().trim()],
+            args: [authUser.email.toLowerCase().trim()],
           }).catch(() => {});
         } catch (_) {}
       }
@@ -597,9 +603,9 @@ router.get("/status", (req, res) => {
 
 /**
  * POST /api/security/unjail-incident
- * Release connection or incident from security quarantine
+ * Release connection or incident from security quarantine (Administrator only)
  */
-router.post("/unjail-incident", (req, res) => {
+router.post("/unjail-incident", authenticateToken, requireAdmin, (req, res) => {
   try {
     const incidentId = (req.query?.incidentId || req.body?.incidentId || "").trim();
     const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || req.query?.deviceId || "").trim();

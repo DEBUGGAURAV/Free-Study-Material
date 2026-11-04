@@ -451,17 +451,32 @@ router.post("/login-verify", async (req, res) => {
       userId = idxData.userId;
       userDocSnap = await db.collection("users").doc(userId).get();
     } else {
-      // Fallback: search users collection
-      const usersSnap = await db.collection("users").get();
-      for (const d of usersSnap.docs) {
-        const uData = d.data();
-        const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
-        const match = pList.find((p) => p.id === credential.id);
-        if (match) {
-          userId = d.id;
-          userDocSnap = d;
-          passkeyRecord = match;
-          break;
+      // 🛡️ QUOTA PROTECTION: Targeted query by email (Max 1 read instead of full collection scan)
+      if (stored && stored.email) {
+        const snap = await db.collection("users").where("email", "==", stored.email).limit(1).get();
+        if (!snap.empty) {
+          const uData = snap.docs[0].data();
+          const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
+          const match = pList.find((p) => p.id === credential.id);
+          if (match) {
+            userId = snap.docs[0].id;
+            userDocSnap = snap.docs[0];
+            passkeyRecord = match;
+          }
+        }
+      }
+      // Check admin-root document fallback
+      if (!userDocSnap) {
+        const adminDoc = await db.collection("users").doc("admin-root").get().catch(() => null);
+        if (adminDoc && adminDoc.exists) {
+          const uData = adminDoc.data();
+          const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
+          const match = pList.find((p) => p.id === credential.id);
+          if (match) {
+            userId = "admin-root";
+            userDocSnap = adminDoc;
+            passkeyRecord = match;
+          }
         }
       }
     }

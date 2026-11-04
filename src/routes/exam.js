@@ -10,6 +10,7 @@
 
 const express = require("express");
 const router = express.Router();
+const { authenticateToken, requireAdmin } = require("../middleware/auth");
 const {
   CURATED_EXAM_SCHEDULES,
   getExamRevisionDossier,
@@ -60,16 +61,17 @@ router.get("/dossier", (req, res) => {
 
 /**
  * POST /api/exam/trigger-pulse
- * Triggers Telegram Daily 7:00 AM Revision Alert
+ * Triggers Telegram Daily 7:00 AM Revision Alert (Admin Only)
  */
-router.post("/trigger-pulse", async (req, res) => {
+router.post("/trigger-pulse", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = req.body.chatId || process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+    const allowedChatId = process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+    const chatId = allowedChatId;
     const threadId = req.body.threadId || process.env.SECURITY_BOT_TOPIC_ID || null;
 
     if (!botToken || !chatId) {
-      return res.status(400).json({ success: false, message: "Telegram botToken and chatId required" });
+      return res.status(400).json({ success: false, message: "Telegram botToken and chatId not configured." });
     }
 
     await dispatchDailyRevisionAlert(botToken, chatId, threadId, req.body.branch, req.body.year);
@@ -81,17 +83,18 @@ router.post("/trigger-pulse", async (req, res) => {
 
 /**
  * POST /api/exam/trigger-quiz
- * Dispatches Native Telegram Quiz Poll (sendPoll - 0% server CPU)
+ * Dispatches Native Telegram Quiz Poll (sendPoll - 0% server CPU) (Admin Only)
  */
-router.post("/trigger-quiz", async (req, res) => {
+router.post("/trigger-quiz", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatId = req.body.chatId || process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+    const allowedChatId = process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
+    const chatId = allowedChatId;
     const threadId = req.body.threadId || process.env.SECURITY_BOT_TOPIC_ID || null;
     const subjectCode = req.body.subjectCode || "KCS-503";
 
     if (!botToken || !chatId) {
-      return res.status(400).json({ success: false, message: "Telegram botToken and chatId required" });
+      return res.status(400).json({ success: false, message: "Telegram botToken and chatId not configured." });
     }
 
     await dispatchTelegramQuizPoll(botToken, chatId, threadId, subjectCode);
