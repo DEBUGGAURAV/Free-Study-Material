@@ -250,7 +250,12 @@ export const api = {
         const cores = navigator.hardwareConcurrency || 4;
         const memoryGB = navigator.deviceMemory || 4;
         const isMobile = window.innerWidth < 768;
-        specs = specs || { cores, memoryGB, isMobile };
+        const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
+        const ua = navigator.userAgent || "";
+        let modelHint = "";
+        const m = ua.match(/;\s([^;)]+)\sBuild\//i);
+        if (m && m[1]) modelHint = m[1].trim();
+        specs = specs || { cores, memoryGB, isMobile, screen: screenRes, model: modelHint };
         fingerprint = `${screen.width}x${screen.height}:${Intl.DateTimeFormat().resolvedOptions().timeZone}:${navigator.language}`;
       } catch (_) {}
     }
@@ -372,10 +377,24 @@ export const api = {
       body: JSON.stringify({ identifier, password }),
     }),
 
-  verifyLoginOtp: async (email, otp) => {
+  verifyLoginOtp: async (email, otp, deviceSpecs = null) => {
+    let specs = deviceSpecs;
+    if (typeof window !== "undefined") {
+      try {
+        const cores = navigator.hardwareConcurrency || 4;
+        const memoryGB = navigator.deviceMemory || 4;
+        const isMobile = window.innerWidth < 768;
+        const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
+        const ua = navigator.userAgent || "";
+        let modelHint = "";
+        const m = ua.match(/;\s([^;)]+)\sBuild\//i);
+        if (m && m[1]) modelHint = m[1].trim();
+        specs = specs || { cores, memoryGB, isMobile, screen: screenRes, model: modelHint };
+      } catch (_) {}
+    }
     const data = await request("/auth/login-verify-otp", {
       method: "POST",
-      body: JSON.stringify({ email, otp }),
+      body: JSON.stringify({ email, otp, deviceSpecs: specs }),
     });
     if (data.token) {
       setAuthToken(data.token);
@@ -1287,8 +1306,6 @@ export const api = {
   getTursoAudits: (limit = 100) => request(`/admin/turso/audits?limit=${limit}`),
   pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
   deleteTursoAudit: (roomId) => request(`/admin/turso/audits/${encodeURIComponent(roomId)}`, { method: "DELETE" }),
-  pruneStudentTursoSessions: (days = 7, target = "all") => request("/admin/turso/students/prune", { method: "POST", body: JSON.stringify({ days, target }) }),
-  cleanRevokedStudentSessions: () => request("/admin/turso/students/clean-revoked", { method: "POST" }),
   runSecurityScan: async () => {
     try {
       return await request("/admin/security/scan");

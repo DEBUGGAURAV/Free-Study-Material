@@ -4288,7 +4288,7 @@ export default function VirtualPdfReader({
             </div>
 
             {/* Document Content in Web Reader */}
-            {note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached ? (
+            {!pdfDoc && note?.driveLink && !isTouchOrMobileDevice && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached ? (
               <iframe
                 ref={iframeRef}
                 src={nativeSrc}

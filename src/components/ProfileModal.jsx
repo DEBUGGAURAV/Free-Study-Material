@@ -365,14 +365,26 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   }, [isOpen, tab]);
 
-  const handleTerminateSingle = async (sessionId, deviceName) => {
-    if (!window.confirm(`Are you sure you want to terminate the active session on "${deviceName}"? That device will be logged out immediately.`)) {
+  const handleTerminateSingle = async (sessionId, deviceName, isCurrent = false) => {
+    const promptMsg = isCurrent
+      ? "Are you sure you want to log out from this current device? You will be logged out immediately."
+      : `Are you sure you want to terminate the active session on "${deviceName}"? That device will be logged out immediately.`;
+
+    if (!window.confirm(promptMsg)) {
       return;
     }
     setTerminatingSessionId(sessionId);
     try {
       const res = await api.terminateSession(sessionId);
       if (res?.success) {
+        if (isCurrent || res?.isCurrentDevice) {
+          setMsg({ type: "success", text: "Logged out from this device." });
+          setTimeout(() => {
+            if (onClose) onClose();
+            window.location.reload();
+          }, 350);
+          return;
+        }
         setMsg({ type: "success", text: `Session on "${deviceName}" terminated successfully.` });
         await loadSessionsAndActivity();
       } else {
@@ -892,12 +904,38 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         </div>
                       </div>
 
-                      {/* Single Terminate Button (Only for other devices) */}
-                      {!isCurrent ? (
+                      {/* Action Button: Current Device Logout OR Remote Terminate */}
+                      {isCurrent ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <button
+                            type="button"
+                            disabled={isTerminating}
+                            onClick={() => handleTerminateSingle(sess.sessionId, sess.deviceName, true)}
+                            style={{
+                              padding: "5px 10px",
+                              fontSize: "0.74rem",
+                              borderRadius: "6px",
+                              background: "rgba(244, 63, 94, 0.14)",
+                              border: "1px solid rgba(244, 63, 94, 0.35)",
+                              color: "#fda4af",
+                              cursor: isTerminating ? "not-allowed" : "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontWeight: 600,
+                              transition: "all 0.15s ease",
+                            }}
+                            title="Log out and close this current device session"
+                          >
+                            <LogOut size={12} className={isTerminating ? "spin" : ""} />
+                            <span>{isTerminating ? "Logging out..." : "Log Out This Device"}</span>
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           type="button"
                           disabled={isTerminating}
-                          onClick={() => handleTerminateSingle(sess.sessionId, sess.deviceName)}
+                          onClick={() => handleTerminateSingle(sess.sessionId, sess.deviceName, false)}
                           style={{
                             padding: "5px 10px",
                             fontSize: "0.74rem",
@@ -912,16 +950,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             fontWeight: 600,
                             transition: "all 0.15s ease",
                           }}
-                          title={`Terminate session on ${sess.deviceName}`}
+                          title={`Terminate remote session on ${sess.deviceName}`}
                         >
                           <Trash2 size={12} className={isTerminating ? "spin" : ""} />
                           <span>{isTerminating ? "Terminating..." : "Terminate"}</span>
                         </button>
-                      ) : (
-                        <div style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
-                          <CheckCircle2 size={13} />
-                          <span>Current Session</span>
-                        </div>
                       )}
                     </div>
                   );
@@ -1005,9 +1038,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
                   <Activity size={14} color="#a78bfa" />
                   <span>Recent Security Activity (Last 10 Events)</span>
-                  <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "999px", background: "rgba(167, 139, 250, 0.15)", color: "#c4b5fd" }}>
-                    Turso Edge
-                  </span>
+
                 </div>
                 <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                   {showSecurityHistory ? "▲ Hide" : "▼ Show"}

@@ -50,24 +50,18 @@ function authenticateToken(req, res, next) {
         return next();
       }
 
-      // 📱 Single Device Session Invalidation Check (Turso Student Telemetry)
+      // 📱 Single Device Session Invalidation Check (Active Device Security)
       if (user.sid) {
         try {
-          const { isSessionRevokedSync, isSessionRevoked, touchSessionActive } = require("../services/tursoStudentSessionService");
+          const { isSessionRevokedSync, isSessionRevoked, touchSessionActive } = require("../services/studentSessionService");
           if (isSessionRevokedSync(user.sid)) {
             console.log(`[AUTH-MIDDLEWARE] 🚪 Single device session terminated for user ${user.id} (sid: ${user.sid}). Invalidating.`);
             clearAuthCookie(res, req);
             req.user = null;
             return next();
           }
-          // Asynchronous touch / DB verification (Zero blocking latency)
-          isSessionRevoked(user.sid).then((revoked) => {
-            if (revoked) {
-              clearAuthCookie(res, req);
-            } else {
-              touchSessionActive(user.sid);
-            }
-          }).catch(() => {});
+          // Asynchronous touch (Zero blocking latency)
+          touchSessionActive(user.id, user.sid);
         } catch (_) {}
       }
     }

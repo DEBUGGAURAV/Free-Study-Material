@@ -1549,14 +1549,15 @@ router.post("/login", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
-    // 🚀 Track Active Device Session in Dedicated Turso Student DB (Zero Latency Overhead)
+    // 🚀 Track Active Device Session in Firestore (Zero External DB Latency)
     try {
-      const { recordActiveSession } = require("../services/tursoStudentSessionService");
+      const { recordActiveSession } = require("../services/studentSessionService");
       recordActiveSession({
         sessionId,
         userId: docId || "admin-root",
         req,
         tokenVersion: payload.v,
+        deviceSpecs: req.body?.deviceSpecs,
       }).catch(() => {});
     } catch (_) {}
 
@@ -1828,14 +1829,15 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
-    // 🚀 Track Active Device Session in Dedicated Turso Student DB (Zero Latency Overhead)
+    // 🚀 Track Active Device Session in Firestore (Zero External DB Latency)
     try {
-      const { recordActiveSession } = require("../services/tursoStudentSessionService");
+      const { recordActiveSession } = require("../services/studentSessionService");
       recordActiveSession({
         sessionId,
         userId: docId || "admin-root",
         req,
         tokenVersion: payload.v,
+        deviceSpecs: req.body?.deviceSpecs,
       }).catch(() => {});
     } catch (_) {}
 
@@ -2488,7 +2490,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
 
     if (req.user && req.user.sid && req.user.id) {
       try {
-        const { terminateSingleSession } = require("../services/tursoStudentSessionService");
+        const { terminateSingleSession } = require("../services/studentSessionService");
         terminateSingleSession(req.user.id, req.user.sid, "Manual Logout").catch(() => {});
       } catch (_) {}
     }
@@ -2552,9 +2554,9 @@ router.post("/logout-all-devices", authenticateToken, async (req, res) => {
     const newVersion = Date.now();
     setRevokedTokenVersion(req.user.id, newVersion);
 
-    // Revoke all sessions in Turso Student DB
+    // Revoke all sessions in Firestore
     try {
-      const { terminateAllUserSessions } = require("../services/tursoStudentSessionService");
+      const { terminateAllUserSessions } = require("../services/studentSessionService");
       await terminateAllUserSessions(req.user.id);
     } catch (_) {}
 
@@ -2577,14 +2579,14 @@ router.post("/logout-all-devices", authenticateToken, async (req, res) => {
 
 /**
  * 📱 GET /api/auth/active-sessions
- * Returns all active devices / sessions for current user from Turso
+ * Returns all active devices / sessions for current user from Firestore
  */
 router.get("/active-sessions", authenticateToken, async (req, res) => {
   if (!req.user || !req.user.id) {
     return res.status(401).json({ success: false, message: "Authentication required." });
   }
   try {
-    const { getUserActiveSessions } = require("../services/tursoStudentSessionService");
+    const { getUserActiveSessions } = require("../services/studentSessionService");
     const sessions = await getUserActiveSessions(req.user.id, req.user.sid || "");
     return res.json({ success: true, sessions });
   } catch (err) {
@@ -2594,7 +2596,7 @@ router.get("/active-sessions", authenticateToken, async (req, res) => {
 
 /**
  * 📱 POST /api/auth/terminate-session
- * Terminate a single specific remote device session
+ * Terminate a single specific device session (supports terminating remote device OR current device!)
  */
 router.post("/terminate-session", authenticateToken, async (req, res) => {
   if (!req.user || !req.user.id) {
@@ -2605,13 +2607,20 @@ router.post("/terminate-session", authenticateToken, async (req, res) => {
     return res.status(400).json({ success: false, message: "Session ID required." });
   }
   try {
-    const { terminateSingleSession } = require("../services/tursoStudentSessionService");
+    const { terminateSingleSession } = require("../services/studentSessionService");
+    const isCurrentDevice = Boolean(req.user.sid && req.user.sid === sessionId);
     const ua = req.headers["user-agent"] || "";
     const deviceLabel = /Mobile/i.test(ua) ? "Phone" : "Computer";
-    const success = await terminateSingleSession(req.user.id, sessionId, `this ${deviceLabel}`);
+    const success = await terminateSingleSession(req.user.id, sessionId, isCurrentDevice ? `this current ${deviceLabel}` : `remote ${deviceLabel}`);
+    if (isCurrentDevice) {
+      clearAuthCookie(res, req);
+    }
     return res.json({
       success,
-      message: success ? "Device session terminated successfully. That device will be logged out." : "Session not found.",
+      isCurrentDevice,
+      message: success
+        ? (isCurrentDevice ? "Current device session logged out." : "Device session terminated successfully.")
+        : "Session not found.",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Failed to terminate session: " + err.message });
@@ -2627,7 +2636,7 @@ router.post("/terminate-other-sessions", authenticateToken, async (req, res) => 
     return res.status(401).json({ success: false, message: "Authentication required." });
   }
   try {
-    const { terminateAllOtherSessions } = require("../services/tursoStudentSessionService");
+    const { terminateAllOtherSessions } = require("../services/studentSessionService");
     const success = await terminateAllOtherSessions(req.user.id, req.user.sid || "");
 
     // Also bump tokenVersion so older JWT tokens without sid are rejected
@@ -2661,14 +2670,14 @@ router.post("/terminate-other-sessions", authenticateToken, async (req, res) => 
 
 /**
  * 📜 GET /api/auth/recent-activity
- * Returns last 10 security & login activity updates from Turso
+ * Returns last 10 security & login activity updates from Firestore
  */
 router.get("/recent-activity", authenticateToken, async (req, res) => {
   if (!req.user || !req.user.id) {
     return res.status(401).json({ success: false, message: "Authentication required." });
   }
   try {
-    const { getUserSecurityLogs } = require("../services/tursoStudentSessionService");
+    const { getUserSecurityLogs } = require("../services/studentSessionService");
     const logs = await getUserSecurityLogs(req.user.id, 10);
     return res.json({ success: true, logs });
   } catch (err) {
