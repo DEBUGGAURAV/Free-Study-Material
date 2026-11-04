@@ -867,6 +867,25 @@ export const api = {
 
   getUserActivities: (userId) => request(`/admin/users/${userId}/activities`),
 
+  getStudentSessions: (userId) => request(`/admin/users/${userId}/sessions`),
+
+  terminateStudentSession: (userId, sessionId) =>
+    request(`/admin/users/${userId}/terminate-session`, {
+      method: "POST",
+      body: JSON.stringify({ sessionId }),
+    }),
+
+  terminateMultipleStudentSessions: (userId, sessionIds) =>
+    request(`/admin/users/${userId}/terminate-session`, {
+      method: "POST",
+      body: JSON.stringify({ sessionIds }),
+    }),
+
+  terminateAllStudentSessions: (userId) =>
+    request(`/admin/users/${userId}/terminate-all-sessions`, {
+      method: "POST",
+    }),
+
   deleteUserActivity: (userId, activityId) =>
     request(`/admin/users/${userId}/activities/${activityId}`, {
       method: "DELETE",

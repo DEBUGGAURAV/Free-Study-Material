@@ -557,6 +557,78 @@ router.delete("/users/:userId/activities", authenticateToken, checkAdminOrPermis
 });
 
 /**
+ * 📱 GET /api/admin/users/:userId/sessions
+ * Returns active device sessions and last 15 security updates for a specific student
+ */
+router.get("/users/:userId/sessions", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { getUserActiveSessions, getUserSecurityLogs } = require("../services/studentSessionService");
+    const [sessions, securityLogs] = await Promise.all([
+      getUserActiveSessions(userId),
+      getUserSecurityLogs(userId, 15),
+    ]);
+    return res.json({ success: true, sessions, securityLogs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🚪 POST /api/admin/users/:userId/terminate-session
+ * Admin terminates a single specific device or multiple selected devices for a student
+ */
+router.post("/users/:userId/terminate-session", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { sessionId, sessionIds } = req.body;
+    const { terminateSingleSession } = require("../services/studentSessionService");
+
+    const idsToTerminate = Array.isArray(sessionIds)
+      ? sessionIds
+      : sessionId
+      ? [sessionId]
+      : [];
+
+    if (idsToTerminate.length === 0) {
+      return res.status(400).json({ success: false, message: "Session ID(s) required." });
+    }
+
+    const adminIdentity = req.user?.email || "Admin";
+    for (const sId of idsToTerminate) {
+      await terminateSingleSession(userId, sId, `Admin (${adminIdentity})`);
+    }
+
+    return res.json({
+      success: true,
+      message: `Terminated ${idsToTerminate.length} active device session(s) successfully.`,
+      terminatedCount: idsToTerminate.length,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🛑 POST /api/admin/users/:userId/terminate-all-sessions
+ * Admin terminates ALL active device sessions for a student (Complete remote wipeout)
+ */
+router.post("/users/:userId/terminate-all-sessions", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { terminateAllUserSessions } = require("../services/studentSessionService");
+    await terminateAllUserSessions(userId);
+
+    return res.json({
+      success: true,
+      message: "All active device sessions terminated for this student. They have been logged out on all devices.",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
  * PUT /api/admin/users/:id
  * Edits student details & permissions
  * 🛡️ IMMUNITY: Main Admin cannot be modified or demoted by anyone!

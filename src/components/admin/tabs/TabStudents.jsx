@@ -308,7 +308,7 @@ export default function TabStudents(props) {
                                 onClick={() => loadStudentActivities(student)}
                                 className="btn-icon"
                                 style={{ width: "32px", height: "32px", background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)" }}
-                                title="Inspect Activity Logs"
+                                title="Inspect Activity & Remote Device Logout"
                               >
                                 <Activity size={15} />
                               </button>
