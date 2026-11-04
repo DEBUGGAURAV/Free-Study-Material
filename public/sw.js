@@ -4,7 +4,7 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v15';
+const CACHE_NAME = 'fsm-cache-v16';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -321,15 +321,21 @@ export default {};`,
         if (self.navigator.onLine) {
           try {
             const networkResponse = await fetch(request);
-            if (networkResponse && (networkResponse.status === 200 || networkResponse.status === 206)) {
+            if (networkResponse) {
               if (networkResponse.status === 200) {
-                const c1 = networkResponse.clone();
-                cache.put(cleanUrl, c1).catch(() => {});
-                cache.put(request, networkResponse.clone()).catch(() => {});
+                try {
+                  const c1 = networkResponse.clone();
+                  cache.put(cleanUrl, c1).catch(() => {});
+                  cache.put(request, networkResponse.clone()).catch(() => {});
+                } catch (_) {}
               }
+              // Return genuine network response directly (200, 206, 302, 401, 503, etc.)
+              // Never replace real server response with fake offline message when online!
               return networkResponse;
             }
-          } catch (_) {}
+          } catch (netErr) {
+            console.warn('[SW] Stream fetch failed, falling back to offline vault:', netErr.message);
+          }
         }
 
         // 2. Offline or Network Glitch: Check CacheStorage

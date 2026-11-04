@@ -3695,32 +3695,46 @@ let techSettings = {
   updatedAt: new Date().toISOString(),
 };
 
-// Asynchronously load saved tech settings from single document (settings/tech_controls)
+function applyTechSettings(data) {
+  if (!data) return;
+  techSettings = { ...techSettings, ...data };
+  // Sync with smart deduplication engine
+  try {
+    const { updateDedupSettings } = require("../services/dedupSettings");
+    updateDedupSettings(techSettings);
+  } catch (_) {}
+  // Sync with maintenance middleware
+  try {
+    const { updateMaintenanceConfig } = require("../middleware/maintenance");
+    updateMaintenanceConfig({
+      active: Boolean(techSettings.maintenanceMode),
+      title: techSettings.maintenanceTitle,
+      message: techSettings.maintenanceMessage,
+      estimatedEnd: techSettings.maintenanceEstimatedEnd,
+      bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
+    });
+  } catch (_) {}
+}
+
+// Asynchronously load saved tech settings and listen for real-time changes
 (async function initTechSettings() {
   try {
     if (db) {
+      db.collection("settings").doc("tech_controls").onSnapshot((doc) => {
+        if (doc && doc.exists) {
+          applyTechSettings(doc.data());
+          console.log("[TECH-NEXUS] Live tech settings updated in real time via Firestore onSnapshot.");
+        }
+      }, (err) => {
+        console.debug("[TECH-NEXUS] Snapshot listener warning:", err.message);
+      });
+
       const doc = await db.collection("settings").doc("tech_controls").get();
       if (doc.exists) {
-        techSettings = { ...techSettings, ...doc.data() };
+        applyTechSettings(doc.data());
         console.log("[TECH-NEXUS] Next-Gen tech settings successfully loaded from Firestore.");
       }
     }
-    // Sync with smart deduplication engine
-    try {
-      const { updateDedupSettings } = require("../services/dedupSettings");
-      updateDedupSettings(techSettings);
-    } catch (_) {}
-    // Sync with maintenance middleware
-    try {
-      const { updateMaintenanceConfig } = require("../middleware/maintenance");
-      updateMaintenanceConfig({
-        active: Boolean(techSettings.maintenanceMode),
-        title: techSettings.maintenanceTitle,
-        message: techSettings.maintenanceMessage,
-        estimatedEnd: techSettings.maintenanceEstimatedEnd,
-        bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
-      });
-    } catch (_) {}
   } catch (err) {
     console.debug("[TECH-NEXUS] Initialized with default settings:", err.message);
   }

@@ -264,7 +264,7 @@ function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
 /**
  * Downloads full document buffer from Telegram Bot API with timeout safety.
  */
-function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 7000) {
+function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     let resolved = false;
     const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
@@ -332,13 +332,92 @@ function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 7000) {
         reject(err);
       }
     });
-    metaReq.setTimeout(4000, () => {
+    metaReq.setTimeout(15000, () => {
       metaReq.destroy();
       if (!resolved) {
         resolved = true;
-        reject(new Error("Bot metadata timed out"));
+        reject(new Error("Telegram Bot getFile meta timed out"));
       }
     });
+  });
+}
+
+/**
+ * Streams directly from Telegram Bot API to express response & writes to Server SSD disk cache simultaneously
+ */
+function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expectedSize = 0) {
+  return new Promise((resolve, reject) => {
+    const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
+    const metaReq = https.get(metaUrl, (metaRes) => {
+      let raw = "";
+      metaRes.on("data", (c) => (raw += c));
+      metaRes.on("end", () => {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!parsed.ok || !parsed.result?.file_path) {
+            return reject(new Error("Telegram Bot getFile failed: " + (parsed.description || "Unknown")));
+          }
+          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${parsed.result.file_path}`;
+          const fileReq = https.get(fileUrl, (fileRes) => {
+            if (fileRes.statusCode !== 200) {
+              return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
+            }
+
+            const total = parseInt(fileRes.headers["content-length"] || expectedSize || 0, 10);
+            if (!res.headersSent) {
+              res.status(200);
+              res.setHeader("Content-Type", "application/pdf");
+              if (total > 0) res.setHeader("Content-Length", total);
+              res.setHeader("X-Accel-Buffering", "no");
+              res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+              res.setHeader("CDN-Cache-Control", "public, max-age=31536000");
+              res.setHeader("X-Real-Source", "CLOUD_STORAGE");
+              res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Telegram Fast-Stream)");
+            }
+
+            const binPath = path.join(CDN_DISK_DIR, `${noteId}.bin`);
+            let diskStream = null;
+            try {
+              if (fs.existsSync(CDN_DISK_DIR)) {
+                diskStream = fs.createWriteStream(binPath);
+              }
+            } catch (_) {}
+
+            fileRes.on("data", (chunk) => {
+              if (!res.writableEnded) res.write(chunk);
+              if (diskStream) diskStream.write(chunk);
+            });
+
+            fileRes.on("end", () => {
+              if (!res.writableEnded) res.end();
+              if (diskStream) diskStream.end();
+              resolve(true);
+            });
+
+            fileRes.on("error", (err) => {
+              if (diskStream) diskStream.destroy();
+              reject(err);
+            });
+          });
+
+          fileReq.setTimeout(60000, () => {
+            fileReq.destroy();
+            reject(new Error("Telegram Bot stream timed out after 60s"));
+          });
+
+          fileReq.on("error", reject);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+
+    metaReq.setTimeout(10000, () => {
+      metaReq.destroy();
+      reject(new Error("Telegram Bot getFile timed out after 10s"));
+    });
+
+    metaReq.on("error", reject);
   });
 }
 
@@ -397,7 +476,7 @@ async function fetchAndCacheNoteBuffer(id, note) {
       // Tier 1: Telegram Bot API fast buffer fetch (strictly for verified small files <= 20MB)
       if (botToken && botFileId && note.fileSize && note.fileSize <= 20 * 1024 * 1024) {
         try {
-          docData = await getTelegramBotBuffer(botToken, botFileId, 7000);
+          docData = await getTelegramBotBuffer(botToken, botFileId, 45000);
         } catch (botErr) {
           console.warn(`[INGEST] Bot API buffer fetch notice for ${id}:`, botErr.message);
         }
@@ -1944,6 +2023,18 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         return;
       } catch (streamErr) {
         console.warn(`[FAST-STREAM] Direct MTProto stream notice for ${id}, falling back to buffer fetch:`, streamErr.message);
+      }
+    }
+
+    // Fast-Stream Fallback: Stream directly via Telegram Bot API with zero buffering lag
+    const botStreamToken = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const botStreamFileId = note.telegramBotFileId || note.telegramFileId;
+    if (botStreamToken && botStreamFileId && !res.headersSent) {
+      try {
+        await streamTelegramBotDocument(botStreamToken, botStreamFileId, res, req, id, note.fileSize || note.compressedSize);
+        return;
+      } catch (botStreamErr) {
+        console.warn(`[FAST-STREAM] Bot API direct stream notice for ${id}:`, botStreamErr.message);
       }
     }
 

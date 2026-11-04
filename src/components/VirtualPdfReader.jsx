@@ -833,6 +833,27 @@ export default function VirtualPdfReader({
             return;
           }
 
+          // ⚡ Intelligent Auto-Retry for transient Cloud Vault stream warm-ups (503/network/warming up)
+          const isTransientStreamGlitch =
+            errMsg.includes("503") ||
+            errMsg.includes("warming up") ||
+            errMsg.includes("reconnecting") ||
+            errMsg.includes("Streaming error") ||
+            errMsg.includes("Failed to fetch") ||
+            errMsg.includes("network");
+
+          if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 2) {
+            streamRetryCountRef.current += 1;
+            console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
+            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
+            setTimeout(() => {
+              if (!isCancelled) {
+                setReloadTrigger((v) => v + 1);
+              }
+            }, 1800);
+            return;
+          }
+
           // Native fallback if desktop
           if (canUseNativePdfViewer && !isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
             setUseNativeViewer(true);
