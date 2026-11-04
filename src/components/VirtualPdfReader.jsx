@@ -51,6 +51,7 @@ import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api } from "../api";
 import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
+import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
 const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
 // Setup PDF.js worker
@@ -805,6 +806,13 @@ export default function VirtualPdfReader({
 
         // Pre-warm Tesseract WASM OCR worker in idle background
         setTimeout(() => warmupClientOcr(), 800);
+
+        // 🧠 Condition-based Pre-cache: Intelligently store related subject notes + recent + latest in IndexedDB
+        setTimeout(() => {
+          if (!isCancelled) {
+            smartPrecacheConditionNotes(note || { id: noteId, title, subject });
+          }
+        }, 3000);
       } catch (err) {
         if (!isCancelled) {
           console.error("[PDF.js Reader] Stream error:", err);

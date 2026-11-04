@@ -9,6 +9,7 @@
  */
 
 import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
+import { cacheNoteBuffer } from "./p2pMesh";
 
 const isLocalHost =
   typeof window !== "undefined" &&
@@ -186,7 +187,9 @@ export function saveToClientOfflineStorage(noteId, note, arrayBuffer) {
       window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
       window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = arrayBuffer;
     }
+    // Save to BOTH IndexedDB stores (fsm_offline_vault AND fsm_p2p_cache_v1)
     saveNoteOffline(note || { id: noteId, title: "Academic Document" }, arrayBuffer).catch(() => {});
+    cacheNoteBuffer(noteId, arrayBuffer).catch(() => {});
   } catch (_) {}
 }
 
@@ -319,7 +322,10 @@ export async function acquireNoteDocument(noteId, {
   });
 
   try {
-    const localBuf = await getAnyCachedNoteBuffer(cleanId);
+    const localBuf = await Promise.race([
+      getAnyCachedNoteBuffer(cleanId),
+      new Promise((resolve) => setTimeout(() => resolve(null), 800)),
+    ]);
     if (localBuf && localBuf.byteLength > 500) {
       // 🎉 TIER 1 CACHE HIT (0ms)!
       onProgress({

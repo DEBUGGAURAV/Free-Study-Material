@@ -14,6 +14,7 @@ import { syncStudentProfileContext } from "./utils/studentStudyContext";
 import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
+import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
 // AdminModal is dynamically lazy-loaded below
@@ -840,6 +841,9 @@ export default function App() {
         const sorted = e.detail.slice().sort((a, b) => getNoteTs(b) - getNoteTs(a));
         if (sorted.length > 0) sorted[0].isLatest = true;
         setNotes(sorted);
+      if (sorted.length > 0) {
+        triggerIdleCatalogPrecache(sorted);
+      }
       }
     };
 
@@ -916,6 +920,9 @@ export default function App() {
         } catch (_) {}
       }
       setNotes(sorted);
+      if (sorted.length > 0) {
+        triggerIdleCatalogPrecache(sorted);
+      }
     } catch (err) {
       console.error("[APP] Error fetching notes:", err.message);
     } finally {

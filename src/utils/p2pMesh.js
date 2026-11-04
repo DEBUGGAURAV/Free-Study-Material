@@ -27,48 +27,136 @@ function getPeerId() {
 }
 
 // Open IndexedDB for local file chunk caching
-function openDB() {
+function openDB(timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
+    if (typeof window === "undefined" || !window.indexedDB) {
       return reject(new Error("IndexedDB not supported"));
     }
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
+    let isSettled = false;
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        reject(new Error("IndexedDB open timeout"));
       }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    }, timeoutMs);
+
+    try {
+      const request = indexedDB.open(DB_NAME, 1);
+      request.onblocked = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          reject(new Error("IndexedDB open blocked"));
+        }
+      };
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          db.createObjectStore(STORE_NAME);
+        }
+      };
+      request.onsuccess = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          const db = request.result;
+          db.onversionchange = () => {
+            try { db.close(); } catch (_) {}
+          };
+          resolve(db);
+        }
+      };
+      request.onerror = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          reject(request.error || new Error("IndexedDB open error"));
+        }
+      };
+    } catch (err) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    }
   });
 }
 
 // Store downloaded note buffer into local browser cache
 export async function cacheNoteBuffer(noteId, arrayBuffer) {
+  let db = null;
   try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(arrayBuffer, noteId);
+    db = await openDB(1000);
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.oncomplete = () => {
+        try { if (db) db.close(); } catch (_) {}
+        resolve();
+      };
+      tx.onerror = () => {
+        try { if (db) db.close(); } catch (_) {}
+        reject(tx.error);
+      };
+      tx.onabort = () => {
+        try { if (db) db.close(); } catch (_) {}
+        reject(new Error("Transaction aborted"));
+      };
+      tx.objectStore(STORE_NAME).put(arrayBuffer, noteId);
+    });
     
     // Announce to signaling hub that we now seed this note
     announceAsSeeder(noteId);
   } catch (err) {
+    try { if (db) db.close(); } catch (_) {}
     console.warn("[P2P MESH] Could not cache buffer locally:", err.message);
   }
 }
 
 // Retrieve note buffer from local browser cache if present
 export async function getCachedNoteBuffer(noteId) {
+  let db = null;
   try {
-    const db = await openDB();
-    return new Promise((resolve) => {
+    db = await openDB(800);
+    return await new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { if (db) db.close(); } catch (_) {}
+          resolve(null);
+        }
+      }, 700);
+
       const tx = db.transaction(STORE_NAME, "readonly");
+      tx.oncomplete = () => { try { if (db) db.close(); } catch (_) {} };
+      tx.onerror = () => {
+        try { if (db) db.close(); } catch (_) {}
+        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+      };
+      tx.onabort = () => {
+        try { if (db) db.close(); } catch (_) {}
+        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+      };
+
       const req = tx.objectStore(STORE_NAME).get(noteId);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => resolve(null);
+      req.onsuccess = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { if (db) db.close(); } catch (_) {}
+        resolve(req.result || null);
+      };
+      req.onerror = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { if (db) db.close(); } catch (_) {}
+        resolve(null);
+      };
     });
   } catch {
+    try { if (db) db.close(); } catch (_) {}
     return null;
   }
 }

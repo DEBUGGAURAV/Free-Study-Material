@@ -8,23 +8,62 @@ const DB_VERSION = 1;
 const STORE_NOTES = 'offline_notes';
 const STORE_ACTIONS = 'pending_actions';
 
-function openDatabase() {
+function openDatabase(timeoutMs = 1200) {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.indexedDB) {
       return reject(new Error('IndexedDB not supported'));
     }
-    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NOTES)) {
-        db.createObjectStore(STORE_NOTES, { keyPath: 'id' });
+    let isSettled = false;
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        reject(new Error('IndexedDB open timeout'));
       }
-      if (!db.objectStoreNames.contains(STORE_ACTIONS)) {
-        db.createObjectStore(STORE_ACTIONS, { autoIncrement: true, keyPath: 'queueId' });
+    }, timeoutMs);
+
+    try {
+      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+      request.onblocked = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          reject(new Error('IndexedDB open blocked'));
+        }
+      };
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(STORE_NOTES)) {
+          db.createObjectStore(STORE_NOTES, { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains(STORE_ACTIONS)) {
+          db.createObjectStore(STORE_ACTIONS, { autoIncrement: true, keyPath: 'queueId' });
+        }
+      };
+      request.onsuccess = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          const db = request.result;
+          db.onversionchange = () => {
+            try { db.close(); } catch (_) {}
+          };
+          resolve(db);
+        }
+      };
+      request.onerror = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          reject(request.error || new Error('IndexedDB open error'));
+        }
+      };
+    } catch (err) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        reject(err);
       }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    }
   });
 }
 
@@ -34,10 +73,23 @@ function openDatabase() {
  * @param {ArrayBuffer} buffer 
  */
 export async function saveNoteOffline(noteMetadata, buffer) {
+  let db = null;
   try {
-    const db = await openDatabase();
-    return new Promise((resolve, reject) => {
+    db = await openDatabase(1000);
+    return await new Promise((resolve, reject) => {
       const tx = db.transaction([STORE_NOTES], 'readwrite');
+      tx.oncomplete = () => {
+        try { if (db) db.close(); } catch (_) {}
+        resolve(true);
+      };
+      tx.onerror = () => {
+        try { if (db) db.close(); } catch (_) {}
+        reject(tx.error);
+      };
+      tx.onabort = () => {
+        try { if (db) db.close(); } catch (_) {}
+        resolve(false);
+      };
       const store = tx.objectStore(STORE_NOTES);
       store.put({
         id: noteMetadata.id,
@@ -48,10 +100,9 @@ export async function saveNoteOffline(noteMetadata, buffer) {
         savedAt: new Date().toISOString(),
         buffer: buffer || null,
       });
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => reject(tx.error);
     });
   } catch (err) {
+    try { if (db) db.close(); } catch (_) {}
     console.warn('[OFFLINE-VAULT] Could not cache offline note:', err);
     return false;
   }
@@ -62,16 +113,21 @@ export async function saveNoteOffline(noteMetadata, buffer) {
  * @returns {Promise<Array<object>>}
  */
 export async function getOfflineNotes() {
+  let db = null;
   try {
-    const db = await openDatabase();
-    return new Promise((resolve) => {
+    db = await openDatabase(1000);
+    return await new Promise((resolve) => {
       const tx = db.transaction([STORE_NOTES], 'readonly');
+      tx.oncomplete = () => { try { if (db) db.close(); } catch (_) {} };
+      tx.onerror = () => { try { if (db) db.close(); } catch (_) {} resolve([]); };
+      tx.onabort = () => { try { if (db) db.close(); } catch (_) {} resolve([]); };
       const store = tx.objectStore(STORE_NOTES);
       const req = store.getAll();
       req.onsuccess = () => resolve(req.result || []);
       req.onerror = () => resolve([]);
     });
   } catch (_) {
+    try { if (db) db.close(); } catch (_) {}
     return [];
   }
 }
@@ -84,41 +140,70 @@ export async function getOfflineNotes() {
 export async function getOfflineNoteBuffer(noteId) {
   if (!noteId) return null;
   const sId = String(noteId);
+  let db = null;
   try {
-    const db = await openDatabase();
-    return new Promise((resolve) => {
+    db = await openDatabase(800);
+    return await new Promise((resolve) => {
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { if (db) db.close(); } catch (_) {}
+          resolve(null);
+        }
+      }, 700);
+
       const tx = db.transaction([STORE_NOTES], 'readonly');
+      tx.oncomplete = () => { try { if (db) db.close(); } catch (_) {} };
+      tx.onerror = () => {
+        try { if (db) db.close(); } catch (_) {}
+        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+      };
+      tx.onabort = () => {
+        try { if (db) db.close(); } catch (_) {}
+        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
+      };
+
       const store = tx.objectStore(STORE_NOTES);
       const req = store.get(noteId);
       req.onsuccess = () => {
+        if (settled) return;
         const item = req.result;
         if (item && item.buffer && item.buffer.byteLength > 0) {
+          settled = true;
+          clearTimeout(timeout);
+          try { if (db) db.close(); } catch (_) {}
           return resolve(item.buffer);
         }
         // Fallback: search all offline saved notes for string match
         const allReq = store.getAll();
         allReq.onsuccess = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          try { if (db) db.close(); } catch (_) {}
           const list = allReq.result || [];
           const match = list.find((n) => String(n.id) === sId);
           resolve(match?.buffer || null);
         };
-        allReq.onerror = () => resolve(null);
+        allReq.onerror = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          try { if (db) db.close(); } catch (_) {}
+          resolve(null);
+        };
       };
       req.onerror = () => {
-        try {
-          const allReq = store.getAll();
-          allReq.onsuccess = () => {
-            const list = allReq.result || [];
-            const match = list.find((n) => String(n.id) === sId);
-            resolve(match?.buffer || null);
-          };
-          allReq.onerror = () => resolve(null);
-        } catch (_) {
-          resolve(null);
-        }
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        try { if (db) db.close(); } catch (_) {}
+        resolve(null);
       };
     });
   } catch (_) {
+    try { if (db) db.close(); } catch (_) {}
     return null;
   }
 }
@@ -135,55 +220,60 @@ export async function getAnyCachedNoteBuffer(noteId) {
   if (!noteId) return null;
   const sId = String(noteId);
 
-  // 1. In-memory session buffer from active reader (fastest, 0ms)
-  try {
-    if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
-      const memBuf = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
-      if (memBuf && memBuf.byteLength > 0) return memBuf;
-    }
-  } catch (_) {}
+  return Promise.race([
+    (async () => {
+      // 1. In-memory session buffer from active reader (fastest, 0ms)
+      try {
+        if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+          const memBuf = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
+          if (memBuf && memBuf.byteLength > 0) return memBuf;
+        }
+      } catch (_) {}
 
-  // 2. Check high-speed P2P IndexedDB binary chunk store (fsm_p2p_cache_v1)
-  try {
-    let p2pBuf = await getCachedNoteBuffer(noteId);
-    if (!p2pBuf || p2pBuf.byteLength === 0) {
-      p2pBuf = await getCachedNoteBuffer(sId);
-    }
-    if (p2pBuf && p2pBuf.byteLength > 0) return p2pBuf;
-  } catch (_) {}
+      // 2. Check high-speed P2P IndexedDB binary chunk store (fsm_p2p_cache_v1)
+      try {
+        let p2pBuf = await getCachedNoteBuffer(noteId);
+        if (!p2pBuf || p2pBuf.byteLength === 0) {
+          p2pBuf = await getCachedNoteBuffer(sId);
+        }
+        if (p2pBuf && p2pBuf.byteLength > 0) return p2pBuf;
+      } catch (_) {}
 
-  // 3. Check offline vault store (fsm_offline_vault)
-  try {
-    const vaultBuf = await getOfflineNoteBuffer(noteId);
-    if (vaultBuf && vaultBuf.byteLength > 0) return vaultBuf;
-  } catch (_) {}
+      // 3. Check offline vault store (fsm_offline_vault)
+      try {
+        const vaultBuf = await getOfflineNoteBuffer(noteId);
+        if (vaultBuf && vaultBuf.byteLength > 0) return vaultBuf;
+      } catch (_) {}
 
-  // 4. Check browser Service Worker CacheStorage
-  try {
-    if (typeof caches !== "undefined") {
-      const candidates = [
-        `/api/notes/${sId}/stream.pdf`,
-        `/api/notes/${sId}/stream`,
-        `/api/notes/${sId}/preview`,
-        `/api/notes/${sId}`,
-        `/api/notes/${noteId}/stream.pdf`,
-        `/api/notes/${noteId}/stream`,
-      ];
-      for (const uri of candidates) {
-        const match = await caches.match(uri, { ignoreSearch: true });
-        if (match && match.ok) {
-          const buf = await match.arrayBuffer();
-          if (buf && buf.byteLength > 0) {
-            // Self-healing: persist into IndexedDB so future reads need 0 async roundtrips
-            cacheNoteBuffer(sId, buf).catch(() => {});
-            return buf;
+      // 4. Check browser Service Worker CacheStorage
+      try {
+        if (typeof caches !== "undefined") {
+          const candidates = [
+            `/api/notes/${sId}/stream.pdf`,
+            `/api/notes/${sId}/stream`,
+            `/api/notes/${sId}/preview`,
+            `/api/notes/${sId}`,
+            `/api/notes/${noteId}/stream.pdf`,
+            `/api/notes/${noteId}/stream`,
+          ];
+          for (const uri of candidates) {
+            const match = await caches.match(uri, { ignoreSearch: true });
+            if (match && match.ok) {
+              const buf = await match.arrayBuffer();
+              if (buf && buf.byteLength > 0) {
+                // Self-healing: persist into IndexedDB so future reads need 0 async roundtrips
+                cacheNoteBuffer(sId, buf).catch(() => {});
+                return buf;
+              }
+            }
           }
         }
-      }
-    }
-  } catch (_) {}
+      } catch (_) {}
 
-  return null;
+      return null;
+    })(),
+    new Promise((resolve) => setTimeout(() => resolve(null), 700)),
+  ]);
 }
 
 /**
@@ -471,6 +561,12 @@ export async function getAllStoredOfflineNotes() {
 export async function deleteSingleOfflineNote(noteId) {
   const cleanId = String(noteId);
   try {
+    if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+      delete window.__FSM_LOADED_PDF_BUFFERS__[cleanId];
+      delete window.__FSM_LOADED_PDF_BUFFERS__[noteId];
+    }
+  } catch (_) {}
+  try {
     await deleteOfflineNote(cleanId);
   } catch (_) {}
   try {
@@ -487,6 +583,9 @@ export async function deleteSingleOfflineNote(noteId) {
  * Comprehensively wipes all offline notes, IndexedDB stores, CacheStorage, and localStorage flags
  */
 export async function wipeAllDeviceOfflineStorage() {
+  if (typeof window !== "undefined") {
+    window.__FSM_LOADED_PDF_BUFFERS__ = {};
+  }
   // 1. Clear object stores
   try {
     await clearOfflineVault();

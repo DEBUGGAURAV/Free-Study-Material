@@ -4,7 +4,7 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v17';
+const CACHE_NAME = 'fsm-cache-v18';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
