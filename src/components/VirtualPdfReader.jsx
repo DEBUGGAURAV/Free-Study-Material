@@ -70,48 +70,27 @@ function ContinuousPage({
   scale,
   nightMode,
   isEcoMode,
+  scrollContainerRef,
   onInView,
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [rendered, setRendered] = useState(false);
-  const [rendering, setRendering] = useState(false);
-  const renderTaskRef = useRef(null);
+  const [pageDimensions, setPageDimensions] = useState(null);
 
-  useEffect(() => {
-    let observer;
-    if (containerRef.current && typeof IntersectionObserver !== "undefined") {
-      observer = new IntersectionObserver(
-        (entries) => {
-          const entry = entries[0];
-          if (entry.isIntersecting) {
-            if (onInView) onInView(pageNum);
-            if (!rendered && !rendering) {
-              renderPage();
-            }
-          }
-        },
-        { rootMargin: "650px 0px" }
-      );
-      observer.observe(containerRef.current);
-    } else {
-      renderPage();
-    }
-    return () => {
-      if (observer) observer.disconnect();
-      if (renderTaskRef.current) {
-        try {
-          renderTaskRef.current.cancel();
-        } catch (_) {}
-      }
-    };
-  }, [pageNum, rendered, rendering, pdfDoc, scale]);
+  const renderedRef = useRef(false);
+  const renderingRef = useRef(false);
+  const renderTaskRef = useRef(null);
+  const isMountedRef = useRef(true);
 
   const renderPage = async () => {
-    if (!pdfDoc) return;
+    if (!pdfDoc || renderingRef.current || renderedRef.current) return;
+    renderingRef.current = true;
+
     try {
-      setRendering(true);
       const page = await pdfDoc.getPage(pageNum);
+      if (!isMountedRef.current) return;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
 
@@ -122,6 +101,8 @@ function ContinuousPage({
       const displayWidth = Math.floor(viewport.width);
       const displayHeight = Math.floor(viewport.height);
 
+      setPageDimensions({ width: displayWidth, height: displayHeight });
+
       canvas.width = Math.floor(viewport.width * dpr);
       canvas.height = Math.floor(viewport.height * dpr);
       canvas.style.width = `${displayWidth}px`;
@@ -129,38 +110,96 @@ function ContinuousPage({
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+      // Cancel any existing render task on this canvas before starting new one
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch (_) {}
+        renderTaskRef.current = null;
+      }
+
       const task = page.render({
         canvasContext: ctx,
         viewport: viewport,
       });
       renderTaskRef.current = task;
       await task.promise;
-      setRendered(true);
+
+      if (isMountedRef.current) {
+        renderedRef.current = true;
+        setRendered(true);
+      }
     } catch (e) {
       if (e.name !== "RenderingCancelledException") {
-        console.debug(`[PDF.js] Page ${pageNum} render notice:`, e.message);
+        console.debug(`[ContinuousPage] Page ${pageNum} notice:`, e.message);
       }
     } finally {
-      setRendering(false);
+      renderingRef.current = false;
       renderTaskRef.current = null;
     }
   };
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    renderedRef.current = false;
+    setRendered(false);
+
+    let observer;
+    const rootEl = scrollContainerRef?.current || containerRef.current?.closest(".reader-content-scroll") || null;
+
+    if (containerRef.current && typeof IntersectionObserver !== "undefined") {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (entry && entry.isIntersecting) {
+            if (onInView) onInView(pageNum);
+            if (!renderedRef.current && !renderingRef.current) {
+              renderPage();
+            }
+          }
+        },
+        { root: rootEl, rootMargin: "900px 0px" }
+      );
+      observer.observe(containerRef.current);
+    } else {
+      renderPage();
+    }
+
+    // Always eagerly render the first 2 pages immediately on mount
+    if (pageNum <= 2) {
+      renderPage();
+    }
+
+    return () => {
+      isMountedRef.current = false;
+      if (observer) observer.disconnect();
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch (_) {}
+      }
+    };
+  }, [pageNum, pdfDoc, scale]);
 
   return (
     <div
       ref={containerRef}
       id={`continuous-page-${pageNum}`}
       style={{
-        margin: "0 auto 18px auto",
+        margin: "0 auto 20px auto",
         position: "relative",
         boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
         borderRadius: "4px",
         background: nightMode ? "#0b0f19" : "#ffffff",
-        minHeight: rendered ? "auto" : "320px",
+        width: pageDimensions ? `${pageDimensions.width}px` : "100%",
+        maxWidth: "100%",
+        minHeight: pageDimensions ? `${pageDimensions.height}px` : "500px",
+        aspectRatio: pageDimensions ? undefined : "1 / 1.414",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         transition: "box-shadow 0.2s ease",
+        overflow: "hidden",
       }}
     >
       <canvas
@@ -170,25 +209,29 @@ function ContinuousPage({
           filter: nightMode ? "invert(0.9) hue-rotate(180deg) contrast(1.05)" : "none",
           transition: "filter 0.2s ease",
           borderRadius: "4px",
+          maxWidth: "100%",
+          height: "auto",
         }}
       />
       {!rendered && (
-        <div style={{ color: "var(--text-dim)", fontSize: "0.8rem", padding: "40px 20px", textAlign: "center" }}>
-          📄 Loading Page {pageNum}...
+        <div style={{ color: nightMode ? "#94a3b8" : "#64748b", fontSize: "0.82rem", padding: "40px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+          <div className="spinner" style={{ width: "22px", height: "22px" }} />
+          <span>Loading Page {pageNum} of {pdfDoc?.numPages || ""}...</span>
         </div>
       )}
       <div
         style={{
           position: "absolute",
-          bottom: "6px",
-          right: "10px",
-          background: "rgba(0,0,0,0.65)",
+          bottom: "8px",
+          right: "12px",
+          background: "rgba(0,0,0,0.7)",
           color: "#fff",
           fontSize: "0.68rem",
           fontWeight: 600,
           padding: "2px 8px",
           borderRadius: "10px",
           pointerEvents: "none",
+          backdropFilter: "blur(4px)",
         }}
       >
         {pageNum} / {pdfDoc?.numPages || ""}
@@ -326,14 +369,7 @@ export default function VirtualPdfReader({
     }
   };
 
-  // Safety Shield: If note is read-only DRM protected, force Streamer Engine
-  useEffect(() => {
-    if (useNativeViewer && isBlocked) {
-      setUseNativeViewer(false);
-      setOcrStatusText("🔒 Note is read-protected. High-Speed Streamer Engine is active.");
-      setTimeout(() => setOcrStatusText(""), 4000);
-    }
-  }, [useNativeViewer, isBlocked]);
+
 
   // Search inside PDF
   const [searchQuery, setSearchQuery] = useState("");
@@ -2581,45 +2617,21 @@ export default function VirtualPdfReader({
     }
   };
 
-  const handleSwitchToNative = async () => {
+  const handleSwitchToNative = () => {
     setError(null);
     setLoading(false);
     setUseNativeViewer(true);
-    setNativeLoading(true);
+    setNativeLoading(false);
 
-    // 📱 Mobile / Touch devices:
-    if (isTouchOrMobileDevice || !hasNativePdfium) {
-      if (note?.driveLink && !isBlocked) {
-        let dLink = note.driveLink;
-        const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-        if (match && match[1]) {
-          setNativeSrc(`https://drive.google.com/file/d/${match[1]}/preview`);
-        } else {
-          setNativeSrc(dLink);
-        }
-        return;
+    if (note?.driveLink) {
+      let dLink = note.driveLink;
+      const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (match && match[1]) {
+        setNativeSrc(`https://drive.google.com/file/d/${match[1]}/preview`);
+      } else {
+        setNativeSrc(dLink);
       }
-
-      // Safe Cloud Web Viewer for mobile (prevents raw PDF iframe download prompts):
-      const streamBase = url && url.startsWith("http") ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`;
-      setNativeSrc(`https://docs.google.com/viewer?url=${encodeURIComponent(streamBase)}&embedded=true`);
-      return;
     }
-
-    // 💻 Genuine Desktop with PDFium:
-    if (pdfDoc && typeof pdfDoc.getData === "function") {
-      try {
-        const data = await pdfDoc.getData();
-        if (data && data.length > 0) {
-          const blob = new Blob([data], { type: "application/pdf" });
-          const blobUrl = URL.createObjectURL(blob);
-          setNativeSrc(blobUrl);
-          return;
-        }
-      } catch (_) {}
-    }
-    const streamBase = url && url.startsWith("http") ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`;
-    setNativeSrc(streamBase);
   };
 
   return (
@@ -4164,8 +4176,8 @@ export default function VirtualPdfReader({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* Web Reader Embed (Desktop PDFium or Safe Mobile Cloud Viewer) */}
-        {useNativeViewer && !isBlocked && (
+        {/* 📖 Web Reader View */}
+        {useNativeViewer && (
           <div
             style={{
               width: "100%",
@@ -4174,16 +4186,17 @@ export default function VirtualPdfReader({
               minHeight: "100%",
               display: "flex",
               flexDirection: "column",
-              background: nightMode ? "#0f172a" : "#f8fafc",
+              background: nightMode ? "#090d16" : "#f1f5f9",
             }}
           >
+            {/* Web Reader Clean Reading Toolbar */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "8px 16px",
-                background: nightMode ? "rgba(30, 41, 59, 0.95)" : "#e2e8f0",
+                background: nightMode ? "rgba(15, 23, 42, 0.95)" : "#ffffff",
                 fontSize: "0.78rem",
                 color: nightMode ? "#94a3b8" : "#475569",
                 borderBottom: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
@@ -4191,53 +4204,125 @@ export default function VirtualPdfReader({
                 gap: "8px",
               }}
             >
-              <span>📖 <strong>Web Reader</strong> {isMobileDevice ? "(Mobile Cloud Viewer)" : "(Full Document Web Engine)"}</span>
-              <span>
-                {isMobileDevice
-                  ? "💡 Tip: Switch to 🚀 Streamer Engine for touch swipe & continuous dark mode!"
-                  : <span>💡 Tip: Press <kbd style={{ padding: "2px 6px", borderRadius: "4px", background: nightMode ? "#334155" : "#cbd5e1", fontWeight: 700 }}>Ctrl + F</kbd> for browser highlight, or switch to <strong>🚀 Streamer Engine</strong> for instant glowing overlays!</span>}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontWeight: 700, color: nightMode ? "#38bdf8" : "#0284c7", display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  📖 <strong>Web Reader</strong>
+                </span>
+                <span style={{ opacity: 0.6 }}>•</span>
+                <span>Page {currentPage} of {numPages || 1}</span>
+              </div>
+
+              {/* Quick Reader Controls: Zoom, Page Navigation, and Switch to Streamer */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => changePage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                  className="btn-secondary"
+                  style={{ padding: "4px 8px", fontSize: "0.74rem", cursor: "pointer", opacity: currentPage <= 1 ? 0.4 : 1 }}
+                >
+                  ◀ Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changePage(currentPage + 1)}
+                  disabled={currentPage >= (numPages || 1)}
+                  className="btn-secondary"
+                  style={{ padding: "4px 8px", fontSize: "0.74rem", cursor: "pointer", opacity: currentPage >= (numPages || 1) ? 0.4 : 1 }}
+                >
+                  Next ▶
+                </button>
+                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)" }} />
+                <button
+                  type="button"
+                  onClick={() => setScale((s) => Math.max(0.6, Number((s - 0.15).toFixed(2))))}
+                  className="btn-secondary"
+                  style={{ padding: "4px 8px", fontSize: "0.74rem", cursor: "pointer" }}
+                  title="Zoom Out"
+                >
+                  −
+                </button>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", minWidth: "40px", textAlign: "center" }}>
+                  {Math.round(scale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
+                  className="btn-secondary"
+                  style={{ padding: "4px 8px", fontSize: "0.74rem", cursor: "pointer" }}
+                  title="Zoom In"
+                >
+                  +
+                </button>
+                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)" }} />
+                <button
+                  type="button"
+                  onClick={() => setNightMode((n) => !n)}
+                  className="btn-secondary"
+                  style={{ padding: "4px 8px", fontSize: "0.74rem", cursor: "pointer" }}
+                  title="Toggle Night Mode"
+                >
+                  {nightMode ? "☀️ Light" : "🌙 Dark"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseNativeViewer(false)}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "0.74rem",
+                    fontWeight: 600,
+                    borderRadius: "6px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
+                    color: "#ffffff",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title="Switch back to Streamer Engine (with AI & tools)"
+                >
+                  🚀 Streamer Engine
+                </button>
+              </div>
             </div>
-            <iframe
-              ref={iframeRef}
-              key={`native-frame-${noteId || "pdf"}`}
-              src={
-                nativeSrc && (nativeSrc.startsWith("https://drive.google.com") || nativeSrc.startsWith("https://docs.google.com") || nativeSrc.startsWith("blob:"))
-                  ? nativeSrc
-                  : (isMobileDevice
-                      ? (note?.driveLink && note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)
-                          ? `https://drive.google.com/file/d/${note.driveLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/)[1]}/preview`
-                          : `https://docs.google.com/viewer?url=${encodeURIComponent(
-                              (url && url.startsWith("http")) ? url : `${typeof window !== "undefined" ? window.location.origin : ""}/api/notes/${noteId || note?.id}/stream.pdf`
-                            )}&embedded=true`)
-                      : (nativeSrc
-                          ? `${nativeSrc.split("#")[0]}${getNativeToolbarParams(currentPage)}`
-                          : (noteId || note?.id
-                              ? `/api/notes/${noteId || note?.id}/stream.pdf${getNativeToolbarParams(currentPage)}`
-                              : (url ? `${url.split("#")[0]}${getNativeToolbarParams(currentPage)}` : undefined))))
-              }
-              allow="fullscreen"
-              onLoad={() => {
-                const noteTotalSize = note?.compressedSize || note?.fileSize || 1048576;
-                setPreviewProgress({
-                  percent: 100,
-                  loadedBytes: noteTotalSize,
-                  totalBytes: noteTotalSize,
-                  speed: "Ready",
-                });
-                setNativeLoading(false);
-              }}
-              style={{
-                width: "100%",
-                height: "100%",
-                flex: 1,
-                minHeight: "500px",
-                border: "none",
-                background: "#ffffff",
-                opacity: 1,
-              }}
-              title={title}
-            />
+
+            {/* Document Content in Web Reader */}
+            {note?.driveLink && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached ? (
+              <iframe
+                ref={iframeRef}
+                src={nativeSrc}
+                allow="fullscreen"
+                style={{ width: "100%", height: "100%", flex: 1, minHeight: "500px", border: "none", background: "#ffffff" }}
+                title={title}
+              />
+            ) : (
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: isTouchOrMobileDevice ? "12px 6px" : "24px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  WebkitOverflowScrolling: "touch",
+                  background: nightMode ? "#060911" : "#e2e8f0",
+                }}
+              >
+                {Array.from({ length: numPages || 0 }, (_, i) => i + 1).map((pNum) => (
+                  <ContinuousPage
+                    key={`webreader-p${pNum}-s${scale}`}
+                    pageNum={pNum}
+                    pdfDoc={pdfDoc}
+                    scale={scale}
+                    nightMode={nightMode}
+                    isEcoMode={isEcoMode}
+                    scrollContainerRef={mainScrollRef}
+                    onInView={(p) => setCurrentPage(p)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -4584,23 +4669,13 @@ export default function VirtualPdfReader({
                 <RefreshCw size={14} />
                 <span>Retry Connection</span>
               </button>
-              {canUseNativePdfViewer ? (
-                <button
-                  onClick={handleSwitchToNative}
-                  className="btn-primary"
-                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
-                >
-                  ⚡ Switch to Native Browser Viewer
-                </button>
-              ) : (note?.driveLink && !isBlocked) ? (
-                <button
-                  onClick={handleSwitchToNative}
-                  className="btn-primary"
-                  style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
-                >
-                  🌐 Switch to Google Drive Preview
-                </button>
-              ) : null}
+              <button
+                onClick={handleSwitchToNative}
+                className="btn-primary"
+                style={{ padding: "8px 16px", fontSize: "0.85rem", cursor: "pointer" }}
+              >
+                📖 Switch to Web Reader
+              </button>
             </div>
           </div>
         )}
@@ -4626,6 +4701,7 @@ export default function VirtualPdfReader({
                   scale={scale}
                   nightMode={nightMode}
                   isEcoMode={isEcoMode}
+                  scrollContainerRef={mainScrollRef}
                   onInView={(p) => setCurrentPage(p)}
                 />
               ))}
