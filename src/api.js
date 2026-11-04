@@ -12,7 +12,10 @@ import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
 
 
 export function getAuthToken() {
-  return localStorage.getItem("vault_token") || null;
+  if (typeof localStorage !== "undefined") {
+    return localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || null;
+  }
+  return null;
 }
 
 export function setAuthToken(token) {
@@ -710,7 +713,7 @@ export const api = {
       prevTime = now;
 
       // âš¡ Full-Throttle Maximum Cloudflare Edge CDN Delivery (94.8 - 124.6 MB/s Full Speed)
-      const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 100;
+      const percent = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : Math.min(95, Math.round((loaded / (3 * 1024 * 1024)) * 60));
       const dynamicJitter = Number(((loaded % 9) * 2.6 + (percent % 5) * 1.8).toFixed(1));
       const hardcodedSpeedMB = (94.8 + dynamicJitter).toFixed(1);
       const speedFormatted = `${hardcodedSpeedMB} MB/s`;
@@ -781,15 +784,20 @@ export const api = {
       }
     }
 
-    // Standard fallback download via anchor tag (Local blob: URL ensures browsers honor a.download name)
+    // Standard reliable download via anchor tag (Local blob: URL ensures browsers honor a.download name)
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = downloadUrl;
     a.download = finalFileName;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(downloadUrl);
+    // Delayed cleanup: Give browser download engine 45s to complete transfer before revoking
+    setTimeout(() => {
+      try {
+        if (a.parentNode) document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+      } catch (_) {}
+    }, 45000);
     return blob;
   },
 

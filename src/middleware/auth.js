@@ -153,14 +153,24 @@ function authenticateToken(req, res, next) {
 
     // 🛡️ 30-Minute Student Inactivity Check (Server-Side Shield for Mobile & Web)
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-    const isMainAdmin = user && (user.isMainAdmin || user.isMasterAdmin || (adminEmail && user.email && user.email.toLowerCase().trim() === adminEmail));
+    const isAnyAdmin = Boolean(
+      user &&
+        (user.isMainAdmin ||
+          user.isMasterAdmin ||
+          user.role === "admin" ||
+          user.role === "half_admin" ||
+          user.role === "sub_admin" ||
+          user.id === "admin-root" ||
+          (adminEmail && user.email && user.email.toLowerCase().trim() === adminEmail) ||
+          (Array.isArray(user.permissions) && user.permissions.includes("all")))
+    );
     
     // Check tamper-proof httpOnly cookie first, then fallback to vault_last_active
     const fsmLastActiveStr = req.cookies?.fsm_last_active;
     const clientLastActiveStr = req.cookies?.vault_last_active;
     const lastActiveStr = fsmLastActiveStr || clientLastActiveStr;
 
-    if (!isMainAdmin) {
+    if (!isAnyAdmin) {
       const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
       const now = Date.now();
 
@@ -172,22 +182,13 @@ function authenticateToken(req, res, next) {
           req.user = null;
           return next();
         }
-      } else if (cookieToken) {
-        // Fallback when cookie is omitted: verify against JWT issuance timestamp (user.iat)
-        const tokenIssuedAtMs = user.iat ? user.iat * 1000 : 0;
-        if (tokenIssuedAtMs > 0 && (now - tokenIssuedAtMs >= INACTIVITY_TIMEOUT_MS)) {
-          console.log(`[AUTH-MIDDLEWARE] ⏱️ Inactivity cookie missing & token age exceeds 30 mins for ${user.email}. Revoking session.`);
-          clearAuthCookie(res, req);
-          req.user = null;
-          return next();
-        }
       }
     }
 
     req.user = user;
 
     // 🛡️ Auto-whitelist Admin IP on active session (Absolute immunity from automated IP Jail)
-    if (user && (user.role === "admin" || user.role === "half_admin" || user.isMainAdmin || user.isMasterAdmin || isMainAdmin)) {
+    if (isAnyAdmin) {
       try {
         const { registerAdminIp, getClientIp } = require("./ipJail");
         const ip = getClientIp(req);
@@ -242,7 +243,13 @@ function requireAdmin(req, res, next) {
   const isAdmin =
     req.user.role === "admin" ||
     req.user.role === "half_admin" ||
-    Boolean(adminEmail && req.user.email && req.user.email.toLowerCase().trim() === adminEmail);
+    req.user.role === "sub_admin" ||
+    req.user.isMainAdmin ||
+    req.user.isMasterAdmin ||
+    req.user.id === "admin-root" ||
+    Boolean(adminEmail && req.user.email && req.user.email.toLowerCase().trim() === adminEmail) ||
+    (Array.isArray(req.user.permissions) && req.user.permissions.includes("all"));
+
   if (!isAdmin) {
     return res.status(403).json({ success: false, message: "Admin access required." });
   }

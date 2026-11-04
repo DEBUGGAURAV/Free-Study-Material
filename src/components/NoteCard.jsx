@@ -21,6 +21,7 @@ import {
   isNotePinnedOffline,
   togglePinOfflineNote,
   deleteSingleOfflineNote,
+  getAnyCachedNoteBuffer,
 } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 
@@ -205,27 +206,32 @@ export default function NoteCard({
     recordStudentNoteRead(note, currentUser);
 
     const fileName = getNotePdfFileName(note);
-    let fileHandle = null;
 
-    if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
-      try {
-        fileHandle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [
-            {
-              description: "PDF Document",
-              accept: { "application/pdf": [".pdf"] },
-            },
-          ],
-        });
-      } catch (pickerErr) {
-        if (pickerErr.name === "AbortError") {
-          return;
-        }
-        console.debug("[NATIVE-FS] File picker notice:", pickerErr.message);
+    // Fast-Path 1: Instant download if already cached on user device
+    try {
+      const cachedBuf = await getAnyCachedNoteBuffer(note.id);
+      if (cachedBuf && cachedBuf.byteLength > 500) {
+        const blob = new Blob([cachedBuf], { type: note.mimeType || "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try {
+            if (a.parentNode) document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          } catch (_) {}
+        }, 45000);
+        setSavedOffline(true);
+        setIsCachedOffline(true);
+        window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
+        return;
       }
-    }
+    } catch (_) {}
 
+    // Fast-Path 2: Normal high-speed stream with live in-card HUD
     abortControllerRef.current = new AbortController();
     setDownloading(true);
     setDownloadProgress({
@@ -237,50 +243,13 @@ export default function NoteCard({
     });
 
     try {
-      try {
-        const p2pBuffer = await downloadFromPeerMesh(note.id, (metrics) => {
-          setDownloadProgress(metrics);
-        });
-
-        if (p2pBuffer) {
-          const blob = new Blob([p2pBuffer], { type: note.mimeType || "application/pdf" });
-          saveNoteOffline(note, p2pBuffer);
-
-          if (fileHandle) {
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            setSavedOffline(true);
-            setIsCachedOffline(true);
-            window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
-            return;
-          }
-
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          setSavedOffline(true);
-          setIsCachedOffline(true);
-          window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
-          return;
-        }
-      } catch (p2pErr) {
-        console.debug("[P2P] Peer transfer fallback to Cloudflare stream:", p2pErr.message);
-      }
-
       await api.downloadNoteWithProgress(
         note.id,
         fileName,
         (metrics) => {
           setDownloadProgress(metrics);
         },
-        abortControllerRef.current.signal,
-        fileHandle
+        abortControllerRef.current.signal
       );
       setSavedOffline(true);
       setIsCachedOffline(true);
@@ -290,20 +259,16 @@ export default function NoteCard({
         console.log("[DOWNLOAD] User cancelled active stream.");
         return;
       }
-      console.warn("[DOWNLOAD] Download error:", err.message);
+      console.warn("[DOWNLOAD] Download stream error:", err.message);
       if (
         err.message.includes("401") ||
         err.message.includes("Restricted") ||
         err.message.includes("exclusively for registered")
       ) {
         if (onRequireAuth) onRequireAuth("signin");
-      } else if (note.driveLink) {
-        window.open(note.driveLink, "_blank");
       } else {
-        alert(
-          err.message ||
-            "Document is currently being processed in the vault. Please try another note."
-        );
+        // Instant direct download fallback (Ensures real user download always succeeds!)
+        window.open(api.getDownloadUrl(note.id, fileName), "_blank");
       }
     } finally {
       setTimeout(() => {

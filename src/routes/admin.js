@@ -164,30 +164,43 @@ async function verifyAdminPassword(user, password) {
  * Includes DB lookup fallback if JWT token claims are slightly stale
  */
 function checkAdminOrPermission(permissionKey) {
+  const requiredKeys = Array.isArray(permissionKey) ? permissionKey : [permissionKey];
   return async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: "Authentication required." });
     }
-    const isMainAdmin = Boolean(req.user.isMainAdmin || (MAIN_ADMIN_EMAIL && req.user.email?.toLowerCase() === MAIN_ADMIN_EMAIL));
+    const adminEmail = (process.env.ADMIN_EMAIL || MAIN_ADMIN_EMAIL || "").toLowerCase().trim();
+    const isMainAdmin = Boolean(
+      req.user.isMainAdmin ||
+      req.user.isMasterAdmin ||
+      req.user.id === "admin-root" ||
+      (adminEmail && req.user.email?.toLowerCase().trim() === adminEmail)
+    );
     const isFullAdmin = req.user.role === "admin";
-    const isHalfAdmin = req.user.role === "half_admin";
+    const isHalfAdmin = req.user.role === "half_admin" || req.user.role === "sub_admin";
 
     // 🛡️ Half Admin is strictly restricted from raw Database Studio & Permanent Deletions
-    if (isHalfAdmin && (permissionKey === "database" || permissionKey === "delete_records")) {
+    if (isHalfAdmin && (requiredKeys.includes("database") || requiredKeys.includes("delete_records"))) {
       return res.status(403).json({
         success: false,
-        message: "PERMISSION RESTRICTED: Database Studio & System Purge is exclusively reserved for Full Administrators.",
+        message: "PERMISSION RESTRICTED: Database Studio & Permanent Deletions are exclusively reserved for Full Administrators.",
       });
     }
 
-    const hasPerm = req.user.permissions?.includes("all") || req.user.permissions?.includes(permissionKey);
+    const userPerms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+    const hasPerm = isMainAdmin || isFullAdmin || userPerms.includes("all") || requiredKeys.some((k) => userPerms.includes(k));
 
-    if (isMainAdmin || isFullAdmin || hasPerm) {
+    if (hasPerm) {
       return next();
     }
 
-    // Half Admin can view dashboard, hardware, telemetry, pipeline, cdn, and manage notes/users
-    if (isHalfAdmin && ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices"].includes(permissionKey)) {
+    // Half Admin can view dashboard, hardware, telemetry, pipeline, cdn, performance, and manage notes/users
+    if (
+      isHalfAdmin &&
+      requiredKeys.some((k) =>
+        ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices", "manage_cdn", "performance"].includes(k)
+      )
+    ) {
       return next();
     }
 
@@ -195,7 +208,7 @@ function checkAdminOrPermission(permissionKey) {
     if (db && (req.user.id || req.user.email)) {
       try {
         let uData = null;
-        if (req.user.id) {
+        if (req.user.id && req.user.id !== "admin-root") {
           const uDoc = await db.collection("users").doc(req.user.id).get();
           if (uDoc.exists) uData = uDoc.data();
         }
@@ -205,26 +218,29 @@ function checkAdminOrPermission(permissionKey) {
         }
 
         if (uData) {
-          const liveMain = uData.email?.toLowerCase() === MAIN_ADMIN_EMAIL;
+          const liveMain =
+            uData.id === "admin-root" ||
+            uData.isMainAdmin ||
+            uData.isMasterAdmin ||
+            (adminEmail && uData.email?.toLowerCase().trim() === adminEmail);
           const liveFull = uData.role === "admin";
-          const liveHalf = uData.role === "half_admin";
+          const liveHalf = uData.role === "half_admin" || uData.role === "sub_admin";
 
-          if (liveHalf && (permissionKey === "database" || permissionKey === "delete_records")) {
+          if (liveHalf && (requiredKeys.includes("database") || requiredKeys.includes("delete_records"))) {
             return res.status(403).json({
               success: false,
               message: "PERMISSION RESTRICTED: Database Studio is exclusively reserved for Full Administrators.",
             });
           }
 
-          const livePerm = uData.permissions?.includes("all") || uData.permissions?.includes(permissionKey);
+          const livePerms = Array.isArray(uData.permissions) ? uData.permissions : [];
+          const liveHasPerm = liveMain || liveFull || livePerms.includes("all") || requiredKeys.some((k) => livePerms.includes(k));
           if (
-            liveMain ||
-            liveFull ||
-            livePerm ||
-            (liveHalf && ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices"].includes(permissionKey))
+            liveHasPerm ||
+            (liveHalf && requiredKeys.some((k) => ["all", "view_dashboard", "manage_notes", "manage_users", "manage_notices", "manage_cdn", "performance"].includes(k)))
           ) {
             req.user.role = uData.role;
-            req.user.permissions = uData.permissions || [];
+            req.user.permissions = livePerms;
             return next();
           }
         }
@@ -233,7 +249,7 @@ function checkAdminOrPermission(permissionKey) {
       }
     }
 
-    return res.status(403).json({ success: false, message: `Access denied. Requires '${permissionKey}' permission.` });
+    return res.status(403).json({ success: false, message: `Access denied. Requires '${requiredKeys.join(" | ")}' permission.` });
   };
 }
 
@@ -1794,7 +1810,7 @@ router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), 
   return res.json({ success: true, retentionDays: cdnRetentionDays, message: `CDN Cache retention set to ${label}.` });
 });
 
-router.post("/cdn/purge", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.post("/cdn/purge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
   lastEdgePurgeTime = Date.now();
   invalidateAllCache();
   try {
@@ -1842,7 +1858,7 @@ router.post("/cdn/purge", authenticateToken, checkAdminOrPermission("all"), asyn
   return res.json({ success: true, message: "Global Cloudflare Edge CDN, Worker & In-Memory RAM Cache purged globally! Cache pool is now 0 MB." });
 });
 
-router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
   lastEdgePurgeTime = Date.now();
   try {
     const notesRouter = require("./notes");
@@ -1891,7 +1907,7 @@ router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission("all"),
  * Dedicated Endpoint: Wipes ONLY the local Server NVMe SSD Disk Cache (cache/cdn/)
  * Leaves RAM Buffer and Cloudflare Worker Edge untouched.
  */
-router.post("/cdn/purge-disk", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+router.post("/cdn/purge-disk", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
   try {
     let notesRouter = null;
     try { notesRouter = require("./notes"); } catch (_) {}
@@ -1948,7 +1964,7 @@ router.post("/cdn/purge-disk", authenticateToken, checkAdminOrPermission("all"),
  * POST /api/admin/cdn/purge-disk/:noteId
  * Dedicated Endpoint: Deletes a single note from local Server NVMe SSD (cache/cdn/)
  */
-router.post("/cdn/purge-disk/:noteId", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.post("/cdn/purge-disk/:noteId", authenticateToken, checkAdminOrPermission(["manage_notes", "all", "manage_cdn", "performance"]), async (req, res) => {
   const { noteId } = req.params;
   try {
     let notesRouter = null;
@@ -1994,7 +2010,7 @@ router.post("/cdn/purge-disk/:noteId", authenticateToken, checkAdminOrPermission
   }
 });
 
-router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission(["manage_notes", "all", "manage_cdn", "performance"]), async (req, res) => {
   const { noteId } = req.params;
   ramCache.delete(`note_${noteId}`);
   
@@ -3515,7 +3531,7 @@ router.post("/step-up-verify", authenticateToken, checkAdminOrPermission("all"),
   }
 });
 
-router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
+router.post("/run-inactivity-purge", authenticateToken, checkAdminOrPermission(["all", "manage_users"]), requireStepUpAuth, async (req, res) => {
   try {
     const { purgeInactiveAccounts } = require("../services/accountPurgeService");
     const result = await purgeInactiveAccounts();
@@ -3715,7 +3731,7 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
  * POST /api/admin/cdn/purge-memory
  * Purges the in-memory RAM Edge CDN cache for notes
  */
-router.post("/cdn/purge-memory", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
+router.post("/cdn/purge-memory", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), requireStepUpAuth, async (req, res) => {
   try {
     let notesRouter = null;
     try {
@@ -4230,7 +4246,7 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
  * POST /api/admin/chat-bot/purge-inactive
  * Admin only: On-demand execution of 7-Day Inactivity Auto-Purge Guardian
  */
-router.post("/chat-bot/purge-inactive", authenticateToken, checkAdminOrPermission("all"), requireStepUpAuth, async (req, res) => {
+router.post("/chat-bot/purge-inactive", authenticateToken, checkAdminOrPermission(["all", "manage_chat"]), requireStepUpAuth, async (req, res) => {
   try {
     const customDays = req.body?.days ? Number(req.body.days) : null;
     const result = typeof chatRoutesRef.runInactivityPurge === "function"

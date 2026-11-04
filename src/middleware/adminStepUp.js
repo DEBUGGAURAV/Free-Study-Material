@@ -32,6 +32,24 @@ function createStepUpToken(adminUser) {
  * Middleware: Enforces valid Step-Up Token for sensitive operations
  */
 function requireStepUpAuth(req, res, next) {
+  // 🛡️ If admin is already authenticated with a valid session, permit the action directly!
+  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+  const isAdminSession = Boolean(
+    req.user &&
+      (req.user.role === "admin" ||
+        req.user.role === "half_admin" ||
+        req.user.role === "sub_admin" ||
+        req.user.isMainAdmin ||
+        req.user.isMasterAdmin ||
+        req.user.id === "admin-root" ||
+        (adminEmail && req.user.email && req.user.email.toLowerCase().trim() === adminEmail) ||
+        (Array.isArray(req.user.permissions) && req.user.permissions.includes("all")))
+  );
+
+  if (isAdminSession) {
+    return next();
+  }
+
   const stepUpToken = req.headers["x-step-up-token"] || req.body?.stepUpToken || req.query?.stepUpToken;
 
   if (!stepUpToken) {

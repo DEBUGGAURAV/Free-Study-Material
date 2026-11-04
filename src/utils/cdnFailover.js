@@ -6,12 +6,14 @@
 
 const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-const CF_WORKER = (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL) || "https://fsm-edge.jnplotus.workers.dev";
+const rawWorkerEnv = typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL ? String(import.meta.env.VITE_CF_WORKER_URL).trim() : "";
+// Exclude obsolete/non-existent fallback worker domain
+const CF_WORKER = (rawWorkerEnv && !rawWorkerEnv.includes("jnplotus.workers.dev")) ? rawWorkerEnv : "";
 
 const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
 
-// Prioritize localOrigin on localhost, or Edge Worker in production
-export const CDN_ENDPOINTS = isLocal ? [originBase] : [CF_WORKER, originBase].filter(Boolean);
+// Prioritize local origin; only include CF_WORKER if a valid custom worker URL is explicitly configured
+export const CDN_ENDPOINTS = (CF_WORKER && !isLocal) ? [CF_WORKER, originBase] : [originBase];
 
 let activeCdnIndex = 0;
 let lastFailoverTimestamp = 0;
@@ -180,7 +182,9 @@ export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwit
     const candidateUrl = `${candidateBase}/api/notes/${noteId}/${pathSegment}${query}`;
 
     const controller = new AbortController();
-    const fetchTimeout = isDownload ? 60000 : 35000;
+    // Fast Tier Failover: If multi-tier is configured and this isn't the last tier, fail over within 5s instead of hanging 60s
+    const isMultiTier = CDN_ENDPOINTS.length > 1 && i < CDN_ENDPOINTS.length - 1;
+    const fetchTimeout = isMultiTier ? 5000 : (isDownload ? 35000 : 25000);
     const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
     if (fetchOptions.signal) {
       fetchOptions.signal.addEventListener("abort", () => {

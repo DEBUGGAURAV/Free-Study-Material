@@ -1163,7 +1163,7 @@ export default function VirtualPdfReader({
     };
   }, [useNativeViewer, nativeSrc, url, streamSource, note]);
 
-  // ⚡ High-Speed CDN Download with Real-Time Percentage and Speed HUD
+  // ⚡ High-Speed Instant Download with In-Memory Buffer & Fallback Stream
   const handleInternalDownload = async () => {
     if (isBlocked) {
       alert(effectiveReason);
@@ -1173,18 +1173,50 @@ export default function VirtualPdfReader({
 
     const fileName = getNotePdfFileName(note || { title, id: noteId });
 
-    let fileHandle = null;
-    if (typeof window !== "undefined" && "showSaveFilePicker" in window) {
+    // 🚀 Fast-Path 1: Instant 0ms Save from already-loaded Memory/Reader Buffer
+    let instantBuffer = localPdfBuffer;
+    if (!instantBuffer && typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__?.[String(noteId)]) {
+      instantBuffer = window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)];
+    }
+    if (!instantBuffer && pdfDoc && typeof pdfDoc.getData === "function") {
       try {
-        fileHandle = await window.showSaveFilePicker({
-          suggestedName: fileName,
-          types: [{ description: "PDF Document", accept: { "application/pdf": [".pdf"] } }],
-        });
-      } catch (pickerErr) {
-        if (pickerErr.name === "AbortError") return; // User cancelled Save dialog
+        const u8 = await pdfDoc.getData();
+        if (u8 && u8.buffer && u8.byteLength > 500) {
+          instantBuffer = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+        }
+      } catch (_) {}
+    }
+    if (!instantBuffer && noteId) {
+      try {
+        instantBuffer = await getAnyCachedNoteBuffer(noteId);
+      } catch (_) {}
+    }
+
+    if (instantBuffer && instantBuffer.byteLength > 500) {
+      try {
+        const blob = new Blob([instantBuffer], { type: "application/pdf" });
+        const dlUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = dlUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try {
+            if (a.parentNode) document.body.removeChild(a);
+            window.URL.revokeObjectURL(dlUrl);
+          } catch (_) {}
+        }, 45000);
+
+        setOcrStatusText("✅ Document downloaded successfully!");
+        setTimeout(() => setOcrStatusText(""), 4000);
+        return;
+      } catch (instantErr) {
+        console.warn("[DOWNLOAD] Instant buffer save notice:", instantErr.message);
       }
     }
 
+    // Fast-Path 2: Stream from server with live HUD
     const controller = new AbortController();
     downloadAbortRef.current = controller;
     setIsDownloadingPdf(true);
@@ -1205,8 +1237,7 @@ export default function VirtualPdfReader({
           (metrics) => {
             setDownloadProgress(metrics);
           },
-          controller.signal,
-          fileHandle
+          controller.signal
         );
       } else if (onDownload) {
         onDownload();
@@ -1219,8 +1250,13 @@ export default function VirtualPdfReader({
         return;
       }
       console.warn("[DOWNLOAD] Error downloading from reader:", err.message);
-      if (onDownload) onDownload();
-      else alert("Download failed: " + err.message);
+      if (noteId) {
+        window.open(api.getDownloadUrl(noteId, fileName), "_blank");
+      } else if (onDownload) {
+        onDownload();
+      } else {
+        alert("Download failed: " + err.message);
+      }
     } finally {
       setIsDownloadingPdf(false);
       setDownloadProgress(null);
