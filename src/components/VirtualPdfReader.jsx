@@ -782,8 +782,55 @@ export default function VirtualPdfReader({
         if (isCancelled) return;
         setLocalPdfBuffer(result.buffer);
 
-        const loadingTask = pdfjsLib.getDocument({ data: result.buffer });
-        const doc = await loadingTask.promise;
+        // Ensure clean cloned Uint8Array to prevent buffer detaching and worker locks
+        const pdfData = result.buffer instanceof Uint8Array
+          ? new Uint8Array(result.buffer.slice(0))
+          : new Uint8Array(result.buffer.slice(0));
+
+        // Create Blob URL for instant native Web Reader iframe fallback
+        try {
+          const blob = new Blob([pdfData], { type: "application/pdf" });
+          const blobUrl = URL.createObjectURL(blob);
+          setNativeSrc(blobUrl);
+        } catch (_) {}
+
+        const loadingTask = pdfjsLib.getDocument({
+          data: pdfData,
+          cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/",
+          cMapPacked: true,
+        });
+
+        loadingTask.onProgress = (p) => {
+          if (p.total > 0 && !isCancelled) {
+            setPreviewProgress((prev) => ({
+              ...prev,
+              percent: Math.min(100, Math.round((p.loaded / p.total) * 100)),
+            }));
+          }
+        };
+
+        // 4.5-second safety timeout so student is NEVER stuck on 100%
+        const parseTimeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Virtual rendering timeout - switching to Web Reader")), 4500)
+        );
+
+        let doc = null;
+        try {
+          doc = await Promise.race([loadingTask.promise, parseTimeout]);
+        } catch (parseErr) {
+          console.warn("[PDF.js] Virtual engine parse notice, auto-activating Web Reader:", parseErr.message);
+          try { loadingTask.destroy(); } catch (_) {}
+
+          if (!isCancelled) {
+            setUseNativeViewer(true);
+            setLoading(false);
+            setNativeLoading(false);
+            setOcrStatusText("⚡ Auto-switched to Web Reader for seamless viewing.");
+            setTimeout(() => setOcrStatusText(""), 4000);
+          }
+          return;
+        }
+
         if (isCancelled || !doc) return;
 
         setPdfDoc(doc);
@@ -862,10 +909,11 @@ export default function VirtualPdfReader({
             return;
           }
 
-          // Native fallback if desktop
-          if (canUseNativePdfViewer && !isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
+          // Native Web Reader fallback
+          if (!isDeletedNote && (nativeSrc || noteId || note?.fileUrl || note?.driveLink)) {
             setUseNativeViewer(true);
             setLoading(false);
+            setNativeLoading(false);
             setOcrStatusText("⚡ Auto-switched to Web Reader for seamless reading.");
             setTimeout(() => setOcrStatusText(""), 4000);
             return;
@@ -2402,9 +2450,27 @@ export default function VirtualPdfReader({
       const match = dLink.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
         setNativeSrc(`https://drive.google.com/file/d/${match[1]}/preview`);
+        return;
       } else {
         setNativeSrc(dLink);
+        return;
       }
+    }
+
+    // ⚡ Instant 0ms Native Buffer: If cached in memory or IndexedDB, create Blob URL immediately
+    const activeBuf =
+      localPdfBuffer ||
+      (typeof window !== "undefined" &&
+        window.__FSM_LOADED_PDF_BUFFERS__ &&
+        (window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] ||
+          window.__FSM_LOADED_PDF_BUFFERS__[noteId]));
+
+    if (activeBuf) {
+      try {
+        const blob = new Blob([activeBuf], { type: "application/pdf" });
+        const blobUrl = URL.createObjectURL(blob);
+        setNativeSrc(blobUrl);
+      } catch (_) {}
     }
   };
 
@@ -2686,6 +2752,7 @@ export default function VirtualPdfReader({
               onClick={() => {
                 setError(null);
                 setUseNativeViewer(false);
+                if (!pdfDoc) setReloadTrigger((v) => v + 1);
               }}
               style={{
                 padding: "5px 12px",
@@ -4040,7 +4107,10 @@ export default function VirtualPdfReader({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setUseNativeViewer(false)}
+                  onClick={() => {
+                    setUseNativeViewer(false);
+                    if (!pdfDoc) setReloadTrigger((v) => v + 1);
+                  }}
                   style={{
                     padding: "4px 10px",
                     fontSize: "0.74rem",
@@ -4062,13 +4132,17 @@ export default function VirtualPdfReader({
             </div>
 
             {/* Document Content in Web Reader */}
-            {!pdfDoc && note?.driveLink && !isTouchOrMobileDevice && !note?.telegramMessageId && !note?.telegramBotFileId && !note?.telegramFileId && !note?.isCdnCached ? (
+            {(!pdfDoc || !numPages || !isTouchOrMobileDevice) ? (
               <iframe
                 ref={iframeRef}
-                src={nativeSrc}
+                src={nativeSrc || `/api/notes/${noteId}/stream.pdf?preview=1`}
                 allow="fullscreen"
                 style={{ width: "100%", height: "100%", flex: 1, minHeight: "500px", border: "none", background: "#ffffff" }}
                 title={title}
+                onLoad={() => {
+                  setNativeLoading(false);
+                  setLoading(false);
+                }}
               />
             ) : (
               <div
@@ -4312,6 +4386,30 @@ export default function VirtualPdfReader({
                   <span>P2P Mesh ({p2pPeerCount} Peers)</span>
                 </span>
               )}
+            </div>
+
+            {/* Instant Web Reader Switch Bypass in Loading Modal */}
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "4px" }}>
+              <button
+                type="button"
+                onClick={handleSwitchToNative}
+                style={{
+                  background: "rgba(56, 189, 248, 0.12)",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  color: "#38bdf8",
+                  padding: "5px 12px",
+                  borderRadius: "8px",
+                  fontSize: "0.76rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <span>📖 Switch to Web Reader</span>
+              </button>
             </div>
           </div>
         )}

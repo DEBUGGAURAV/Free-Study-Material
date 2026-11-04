@@ -23,6 +23,7 @@ const OPTIONAL_ASSETS = [
   '/assets/vendor-pdf.js',
   '/assets/vendor-pdflib.js',
   '/assets/vendor-yjs.js',
+  '/assets/pdf.worker.min.mjs',
 ];
 
 self.addEventListener('install', (event) => {
