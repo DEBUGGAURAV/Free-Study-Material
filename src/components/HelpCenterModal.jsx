@@ -35,7 +35,7 @@ const INITIAL_FAQS = [
     category: "download",
     question: "How do I download PDF notes, or what should I do if a download is paused?",
     answer:
-      "Free Study Material employs an autonomous 3-layer resilient failover network. Download requests seamlessly cycle through the Primary Storage Vault, Cloudflare Edge CDN, and native streaming fallback. If a download pauses, click 'Retry Download' or use 'Online Preview' for instant in-browser reading.",
+      "Free Study Material employs an autonomous 3-layer resilient failover network. Download requests seamlessly cycle through the Primary Storage Vault, Local Server, and native streaming fallback. If a download pauses, click 'Retry Download' or use 'Online Preview' for instant in-browser reading.",
   },
   {
     id: "faq_2",

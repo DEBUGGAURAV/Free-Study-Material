@@ -8,7 +8,7 @@ export default function HeroBanner({ totalNotes }) {
       icon: "☁️",
       color: "#38bdf8",
       name: "Ultra-Fast Academic Cloud Engine",
-      desc: "Unlimited direct cloud streaming through High-Performance Academic Storage Nodes and Indian Edge CDN for 1ms cached downloads.",
+      desc: "Unlimited direct cloud streaming through High-Performance Academic Storage Nodes and Local Server for 1ms cached downloads.",
     },
     {
       icon: "⚡",
@@ -19,7 +19,7 @@ export default function HeroBanner({ totalNotes }) {
     {
       icon: "📑",
       color: "#a855f7",
-      name: "Mozilla PDF.js Virtual Reader",
+      name: "Virtual Reader",
       desc: "Read handwritten notes and textbooks instantly in your browser with Night Mode, page jump, and zero download waiting time.",
     },
     {
@@ -72,8 +72,8 @@ export default function HeroBanner({ totalNotes }) {
       </h1>
 
       <p className="hero-subtitle">
-        Powered by WebRTC Campus Mesh, Mozilla PDF.js Virtual Reader, Tesseract OCR handwritten search,
-        Brotli compression, and Multi-Gigabit High-Speed Cloud Streaming with Indian Edge CDN caching.
+        Powered by WebRTC Campus Mesh, Virtual Reader, Tesseract OCR handwritten search,
+        Brotli compression, and Multi-Gigabit High-Speed Cloud Streaming with Local Server caching.
       </p>
 
       {/* Technology HUD: 3x3 Grid (3 columns, exactly 3 in each column/row) */}

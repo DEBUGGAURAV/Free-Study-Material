@@ -476,10 +476,10 @@ export default function VirtualPdfReader({
       return { id: "p2p", label: "P2P Local Mesh (0ms)", short: "P2P Mesh (0ms)", details: "Browser-to-Browser WebRTC Peer Mesh", colo: "P2P", icon: "⚡", color: "#10b981", bgColor: "rgba(16, 185, 129, 0.14)", borderColor: "rgba(16, 185, 129, 0.35)" };
     }
     if (note?.isCdnCached || (typeof window !== "undefined" && noteId && localStorage.getItem(`fsm_cdn_${noteId}`) === "1")) {
-      return { id: "worker", label: "Cloudflare Edge CDN (1ms)", short: "Cloudflare Edge", details: "Cloudflare Global Edge CDN • 0ms Cache HIT", colo: "Edge", icon: "⚡", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.14)", borderColor: "rgba(56, 189, 248, 0.35)" };
+      return { id: "worker", label: "Local Server (1ms)", short: "Local Server", details: "Local Server • 0ms Cache HIT", colo: "Edge", icon: "⚡", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.14)", borderColor: "rgba(56, 189, 248, 0.35)" };
     }
     // Honest initial source: Cloud Storage until headers or local cache confirm otherwise
-    return { id: "storage", label: "Primary Cloud Storage Vault", short: "Cloud Storage", details: "Streaming from Cloud Storage • Caching to Edge CDN", colo: "Origin", icon: "☁️", color: "#f59e0b", bgColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.35)" };
+    return { id: "storage", label: "Primary Cloud Storage Vault", short: "Cloud Storage", details: "Streaming from Cloud Storage • Caching to Local Server", colo: "Origin", icon: "☁️", color: "#f59e0b", bgColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.35)" };
   });
 
   // 6.5 Smart Page-Level Discussion & QR Bridge State (Preview Mode Only)
@@ -802,7 +802,7 @@ export default function VirtualPdfReader({
             percent: 15,
             loadedBytes: 0,
             totalBytes: noteTotalSize,
-            speed: note?.isCdnCached ? "Streaming via Edge CDN (1ms)..." : "High-Speed Stream (Direct Cloud Vault)...",
+            speed: note?.isCdnCached ? "Streaming via Local Server (1ms)..." : "High-Speed Stream (Direct Cloud Vault)...",
           });
 
           const handleProgress = (progressData) => {
@@ -1048,10 +1048,10 @@ export default function VirtualPdfReader({
 
           // ⚡ Pillar 4: Multi-Engine Auto-Failover (<500ms): Auto-switch to Native Browser Engine ONLY if desktop and external backup URL exists
           if (canUseNativePdfViewer && !isMobileDevice && (note?.fileUrl || note?.driveLink) && !isDeletedNote) {
-            console.log("[AUTO-FAILOVER] ⚡ Switching to Native Browser Engine (<500ms)");
+            console.log("[AUTO-FAILOVER] ⚡ Switching to Web Reader (<500ms)");
             setUseNativeViewer(true);
             setLoading(false);
-            setOcrStatusText("⚡ Auto-switched to Native Browser Engine for seamless reading.");
+            setOcrStatusText("⚡ Auto-switched to Web Reader for seamless reading.");
             setTimeout(() => setOcrStatusText(""), 4000);
             return;
           }
@@ -1081,7 +1081,7 @@ export default function VirtualPdfReader({
       percent: 25,
       loadedBytes: Math.round(noteTotalSize * 0.25),
       totalBytes: noteTotalSize,
-      speed: streamSource === "storage" ? "Streaming from Store..." : "Streaming from CDN...",
+      speed: streamSource === "storage" ? "Streaming from Store..." : "Streaming from Local Server...",
     });
 
     const nativeTimer = setInterval(() => {
@@ -1092,7 +1092,7 @@ export default function VirtualPdfReader({
           ...prev,
           percent: nextPct,
           loadedBytes: Math.round((noteTotalSize * nextPct) / 100),
-          speed: prev.speed || (streamSource === "storage" ? "Streaming from Store..." : "Streaming from CDN..."),
+          speed: prev.speed || (streamSource === "storage" ? "Streaming from Store..." : "Streaming from Local Server..."),
         };
       });
     }, 120);
@@ -1221,7 +1221,7 @@ export default function VirtualPdfReader({
                 if (typeof window !== "undefined") {
                   try { localStorage.setItem(`fsm_cdn_${noteId}`, "1"); } catch (_) {}
                 }
-                setOcrStatusText("🌐 100% Cached on Cloudflare Global Edge CDN! Now streaming at 1ms latency.");
+                setOcrStatusText("🌐 100% Cached on Local Server! Now streaming at 1ms latency.");
                 setTimeout(() => setOcrStatusText(""), 3500);
               }
             }, 600);
@@ -1258,13 +1258,13 @@ export default function VirtualPdfReader({
     if (!noteId) return;
     const isAlreadyCdn = streamSource === "cdn" && (note?.isCdnCached || (typeof window !== "undefined" && localStorage.getItem(`fsm_cdn_${noteId}`) === "1"));
     if (isAlreadyCdn) {
-      setOcrStatusText("⚡ Note is already permanently cached on Cloudflare Edge CDN (1ms ready).");
+      setOcrStatusText("⚡ Note is already permanently cached on Local Server (1ms ready).");
       setTimeout(() => setOcrStatusText(""), 3500);
       return;
     }
     setIsCachingToCdn(true);
     setCdnTransferPercent(15);
-    setOcrStatusText("🌐 Transferring file to Cloudflare Edge CDN Cache...");
+    setOcrStatusText("🌐 Transferring file to Local Server Cache...");
 
     const progressTimer = setInterval(() => {
       setCdnTransferPercent((prev) => {
@@ -1292,7 +1292,7 @@ export default function VirtualPdfReader({
             try { localStorage.setItem(`fsm_cdn_${noteId}`, "1"); } catch (_) {}
           }
         }, 300);
-        setOcrStatusText(data.alreadyCached ? "⚡ Already permanently cached on Cloudflare Edge CDN (1ms ready)!" : "✅ File permanently cached on Edge CDN! Now streaming at 1ms latency.");
+        setOcrStatusText(data.alreadyCached ? "⚡ Already permanently cached on Local Server (1ms ready)!" : "✅ File permanently cached on Local Server! Now streaming at 1ms latency.");
         setTimeout(() => setOcrStatusText(""), 4500);
       } else {
         setIsCachingToCdn(false);
@@ -1365,7 +1365,7 @@ export default function VirtualPdfReader({
       setStreamSource("cdn");
       setIsCachingToCdn(false);
       try { localStorage.setItem(`fsm_cdn_${noteId}`, "1"); } catch (_) {}
-      setOcrStatusText("🌐 Cloudflare Edge CDN Active: 1ms instant global cache.");
+      setOcrStatusText("🌐 Local Server Active: 1ms instant global cache.");
       setTimeout(() => setOcrStatusText(""), 3000);
       return;
     }
@@ -1375,7 +1375,7 @@ export default function VirtualPdfReader({
       setStreamSource("cdn");
       setIsCachingToCdn(false);
       try { localStorage.setItem(`fsm_cdn_${noteId}`, "1"); } catch (_) {}
-      setOcrStatusText("🌐 Cloudflare Edge CDN Active: 1ms instant global cache (0.0% storage calls).");
+      setOcrStatusText("🌐 Local Server Active: 1ms instant global cache (0.0% storage calls).");
       setTimeout(() => setOcrStatusText(""), 3000);
       return;
     }
@@ -2938,9 +2938,9 @@ export default function VirtualPdfReader({
                 boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
                 transition: "all 0.15s ease",
               }}
-              title="Switch to PDF.js Web Reader (full document web reader with mobile cloud support)"
+              title="Switch to Web Reader (full document web reader with mobile cloud support)"
             >
-              📖 PDF.js Web Reader
+              📖 Web Reader
             </button>
           </div>
 
@@ -4164,7 +4164,7 @@ export default function VirtualPdfReader({
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {/* PDF.js Web Reader Embed (Desktop PDFium or Safe Mobile Cloud Viewer) */}
+        {/* Web Reader Embed (Desktop PDFium or Safe Mobile Cloud Viewer) */}
         {useNativeViewer && !isBlocked && (
           <div
             style={{
@@ -4191,7 +4191,7 @@ export default function VirtualPdfReader({
                 gap: "8px",
               }}
             >
-              <span>📖 <strong>PDF.js Web Reader</strong> {isMobileDevice ? "(Mobile Cloud Viewer)" : "(Full Document Web Engine)"}</span>
+              <span>📖 <strong>Web Reader</strong> {isMobileDevice ? "(Mobile Cloud Viewer)" : "(Full Document Web Engine)"}</span>
               <span>
                 {isMobileDevice
                   ? "💡 Tip: Switch to 🚀 Streamer Engine for touch swipe & continuous dark mode!"
@@ -4306,9 +4306,9 @@ export default function VirtualPdfReader({
             <div>
               <div style={{ fontWeight: 700, fontSize: "1.05rem", color: nightMode ? "#f8fafc" : "#0f172a" }}>
                 {realSourceInfo?.id === "storage"
-                  ? "☁️ Fetching from Storage & Caching to Edge CDN"
+                  ? "☁️ Fetching from Storage & Caching to Local Server"
                   : useNativeViewer
-                  ? "⚡ Streaming to Native Browser Engine"
+                  ? "⚡ Streaming to Web Reader"
                   : "⚡ Streaming Pages On-Demand (Virtual Streamer)"}
               </div>
               <div style={{ fontSize: "0.84rem", color: "var(--accent-cyan)", marginTop: "4px", fontWeight: 600, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
@@ -4334,7 +4334,7 @@ export default function VirtualPdfReader({
                   >
                     <span>{realSourceInfo.icon || "🌐"}</span>
                     <span>{realSourceInfo.short || realSourceInfo.label}</span>
-                    {previewProgress.speed && !previewProgress.speed.includes("Edge CDN") && !previewProgress.speed.includes("Connecting") && (
+                    {previewProgress.speed && !previewProgress.speed.includes("Local Server") && !previewProgress.speed.includes("Edge CDN") && !previewProgress.speed.includes("Connecting") && (
                       <span>• {previewProgress.speed}</span>
                     )}
                   </span>
@@ -4404,7 +4404,7 @@ export default function VirtualPdfReader({
               >
                 <span style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontWeight: 600 }}>
                   <RefreshCw size={11} className="animate-spin" />
-                  <span>Cloud Storage ➔ Edge CDN Buffer Caching:</span>
+                  <span>Cloud Storage ➔ Local Server Buffer Caching:</span>
                 </span>
                 <strong style={{ fontFamily: "var(--font-mono)", color: "#fde047", fontSize: "0.8rem" }}>
                   {Math.max(previewProgress.percent || 0, cdnTransferPercent || 0)}%
@@ -4821,7 +4821,7 @@ export default function VirtualPdfReader({
       >
         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <Sparkles size={12} style={{ color: "var(--accent-cyan)" }} />
-          <span>Mozilla PDF.js Virtual Engine • On-demand 64KB Byte Streaming</span>
+          <span>Virtual Engine • On-demand 64KB Byte Streaming</span>
         </span>
 
         <span>
@@ -4855,7 +4855,7 @@ export default function VirtualPdfReader({
             <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
               <Download size={14} style={{ color: "var(--accent-cyan)" }} />
               <span>
-                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Edge CDN")}: {downloadProgress.percent}%
+                Streaming from {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Local Server")}: {downloadProgress.percent}%
               </span>
             </span>
             <button
@@ -4905,7 +4905,7 @@ export default function VirtualPdfReader({
             >
               <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontWeight: 600 }}>
                 <RefreshCw size={11} className="animate-spin" />
-                <span>Store ➔ Edge CDN:</span>
+                <span>Store ➔ Local Server:</span>
               </span>
               <strong style={{ fontFamily: "var(--font-mono)", color: "#e9d5ff", fontSize: "0.75rem" }}>
                 {cdnTransferPercent}%
@@ -4916,7 +4916,7 @@ export default function VirtualPdfReader({
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
             <span>{downloadProgress.loadedMB} MB / {downloadProgress.totalMB} MB</span>
             <span style={{ color: realSourceInfo?.color || (downloadProgress.source === "storage" || streamSource === "storage" ? "#fbbf24" : "var(--accent-cyan)"), fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-              {realSourceInfo?.icon || (downloadProgress.source === "storage" || streamSource === "storage" ? "☁️" : "⚡")} {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Edge CDN")} • {downloadProgress.speed}
+              {realSourceInfo?.icon || (downloadProgress.source === "storage" || streamSource === "storage" ? "☁️" : "⚡")} {realSourceInfo?.short || (downloadProgress.source === "storage" || streamSource === "storage" ? "Cloud Vault" : "Local Server")} • {downloadProgress.speed}
             </span>
           </div>
         </div>

@@ -482,7 +482,7 @@ export default function NoteCard({
                   title={downloadProgress.realSource?.details || downloadProgress.realSourceLabel || "Real-time Stream Source"}
                 >
                   {downloadProgress.realSource?.icon || "⚡"}{" "}
-                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Cloud Vault" : "Edge CDN")}
+                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Cloud Vault" : "Local Server")}
                 </span>
               </span>
 
@@ -598,7 +598,7 @@ export default function NoteCard({
                 type="button"
                 onClick={handleTrackedDownload}
                 className="btn-action-download"
-                title="Download note via Cloudflare Edge CDN"
+                title="Download note via Local Server"
                 disabled={downloading}
               >
                 {downloading ? (

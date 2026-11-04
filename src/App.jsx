@@ -1605,7 +1605,7 @@ export default function App() {
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>Ultra-Fast Academic Cloud Engine</strong>
                   </div>
                   <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
-                    Unlimited direct cloud streaming through High-Performance Academic Storage Nodes and Indian Edge CDN for 1ms cached downloads.
+                    Unlimited direct cloud streaming through High-Performance Academic Storage Nodes and Local Server for 1ms cached downloads.
                   </p>
                 </div>
 
@@ -1858,7 +1858,7 @@ export default function App() {
               <div style={{ textAlign: "center", padding: "60px 0" }}>
                 <div className="spinner" style={{ width: "32px", height: "32px", margin: "0 auto 16px" }}></div>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>
-                  Connecting to Indian Edge CDN & loading notes...
+                  Connecting to Local Server & loading notes...
                 </p>
               </div>
             ) : notes.length > 0 ? (
