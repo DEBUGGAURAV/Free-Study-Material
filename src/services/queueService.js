@@ -281,7 +281,7 @@ function enqueueUpload(task) {
         });
 
         updatePipelineStage(noteId, 3, "completed", "Deduplication Hit! Reused existing file reference", { progress: 70 });
-        updatePipelineStage(noteId, 5, "completed", `Reused Telegram Storage Ref (Msg ID: #${duplicate.telegramMessageId})`, {
+        updatePipelineStage(noteId, 5, "completed", `Reused Cloud Storage Ref (Msg ID: #${duplicate.telegramMessageId})`, {
           telegramReached: true,
           telegramMessageId: duplicate.telegramMessageId,
           progress: 90,
@@ -320,13 +320,13 @@ function enqueueUpload(task) {
 
         updatePipelineStage(noteId, 3, "completed", `Compressed with pdf-lib (${savingsPercent}% saved, ${formatRealSize(compressedSize)})`, {
           progress: 55,
-          currentStage: "Syncing to Telegram Storage Channel (MTProto)",
+          currentStage: "Syncing to Cloud Storage (Primary Vault)",
         });
       } else {
         const isLarge = originalSize > 50 * 1024 * 1024;
-        updatePipelineStage(noteId, 3, "completed", isLarge ? "Large File (>50MB): Direct Async MTProto Transfer (Zero RAM Cache)" : "Stream verified • Direct binary pass-through", {
+        updatePipelineStage(noteId, 3, "completed", isLarge ? "Large File (>50MB): Direct Async Cloud Transfer (Zero RAM Cache)" : "Stream verified • Direct binary pass-through", {
           progress: 55,
-          currentStage: isLarge ? "Direct Async MTProto Cloud Transfer (>50MB)" : "Syncing to Telegram Storage Channel (MTProto)",
+          currentStage: isLarge ? "Direct Async Cloud Transfer (>50MB)" : "Syncing to Cloud Storage (Primary Vault)",
         });
       }
 
@@ -352,17 +352,17 @@ function enqueueUpload(task) {
         ocrText = await extractOcrText(tempFilePath, mimeType);
       }
 
-      // Stage 4: Telegram MTProto Cloud Push (8-Worker Engine)
+      // Stage 4: Cloud Push (High-Speed Engine)
       jobStatusMap.set(noteId, {
         noteId,
         status: "processing",
-        stage: "Syncing to Telegram Cloud (MTProto)",
+        stage: "Syncing to Cloud Storage",
         progress: 85,
       });
 
-      updatePipelineStage(noteId, 5, "processing", "Dispatching via GramJS 8-Workers Engine to Telegram Storage Channel...", {
+      updatePipelineStage(noteId, 5, "processing", "Dispatching via High-Speed Pipeline to Cloud Storage...", {
         progress: 75,
-        currentStage: "MTProto Cloud Storage Push",
+        currentStage: "Cloud Storage Push",
       });
 
       const caption = `Title: ${meta.title || originalName}\nSubject: ${meta.subject || "General"}\nCourse: ${meta.course || "All"}\nBranch: ${meta.branch || "General"}\nYear: ${meta.year || "All"}`;
@@ -370,7 +370,7 @@ function enqueueUpload(task) {
         jobStatusMap.set(noteId, {
           noteId,
           status: "processing",
-          stage: `Syncing to Telegram Cloud: ${mtMetrics.percent}% (${mtMetrics.speed})`,
+          stage: `Syncing to Cloud Storage: ${mtMetrics.percent}% (${mtMetrics.speed})`,
           progress: Math.min(95, 75 + Math.round(mtMetrics.percent * 0.2)),
           mtprotoSpeed: mtMetrics.speed,
           mtprotoPercent: mtMetrics.percent,
@@ -378,9 +378,9 @@ function enqueueUpload(task) {
           mtprotoTotalMB: mtMetrics.totalMB,
         });
 
-        updatePipelineStage(noteId, 5, "processing", `Uploading to Telegram MTProto: ${mtMetrics.percent}% • ⚡ ${mtMetrics.speed} (${mtMetrics.loadedMB} / ${mtMetrics.totalMB} MB)`, {
+        updatePipelineStage(noteId, 5, "processing", `Uploading to Cloud Storage: ${mtMetrics.percent}% • ⚡ ${mtMetrics.speed} (${mtMetrics.loadedMB} / ${mtMetrics.totalMB} MB)`, {
           progress: Math.min(95, 75 + Math.round(mtMetrics.percent * 0.2)),
-          currentStage: "MTProto Cloud Storage Push",
+          currentStage: "Cloud Storage Push",
           mtprotoSpeed: mtMetrics.speed,
           mtprotoPercent: mtMetrics.percent,
           mtprotoLoadedMB: mtMetrics.loadedMB,
@@ -388,7 +388,7 @@ function enqueueUpload(task) {
         });
       });
 
-      updatePipelineStage(noteId, 5, "completed", `Stored in Telegram Storage Channel! Msg ID: #${uploadResult.messageId}${uploadResult.documentId ? ` (Doc ID: ${uploadResult.documentId})` : ""}`, {
+      updatePipelineStage(noteId, 5, "completed", `Stored in Cloud Storage! Msg ID: #${uploadResult.messageId}${uploadResult.documentId ? ` (Doc ID: ${uploadResult.documentId})` : ""}`, {
         telegramReached: true,
         telegramMessageId: uploadResult.messageId,
         progress: 90,
@@ -473,7 +473,7 @@ function enqueueUpload(task) {
       jobStatusMap.set(noteId, {
         noteId,
         status: "ready",
-        stage: "Stored in Telegram Cloud & Ready",
+        stage: "Stored in Cloud Storage & Ready",
         progress: 100,
         savingsPercent,
       });

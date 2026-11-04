@@ -5,7 +5,7 @@
  *   Tier 1: IndexedDB (Client Local Storage & In-Memory Cache) -> 0ms Cache Hit
  *   Tier 2: Local Server (with 3.5s fast timeout)
  *   Tier 3: Server SSD Disk (NVMe / RAM Cache via Zero-Copy) -> 100ms
- *   Tier 4: Telegram Storage (MTProto Core + Auto-Save to Server SSD)
+ *   Tier 4: Cloud Storage (Primary Vault + Auto-Save to Server SSD)
  */
 
 import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
@@ -281,7 +281,7 @@ async function streamResponseBody(response, { onProgress, tier, tierLabel, icon,
  *   Tier 1: IndexedDB (Client Local Storage) -> 0ms Cache Hit
  *   Tier 2: Local Server -> 3.5s Fast Timeout
  *   Tier 3: Server SSD Disk (NVMe / RAM) -> 100ms Zero-Copy
- *   Tier 4: Telegram Storage (MTProto Core) -> Stream + Auto-Save to SSD
+ *   Tier 4: Cloud Storage (Primary Vault) -> Stream + Auto-Save to SSD
  *
  * Used by BOTH "Read / Preview" and "Download"
  */
@@ -420,7 +420,7 @@ export async function acquireNoteDocument(noteId, {
   }
 
   // =========================================================================
-  // TIER 3 & TIER 4: Origin Server (Server SSD Disk -> Telegram Storage)
+  // TIER 3 & TIER 4: Origin Server (Server SSD Disk -> Cloud Storage)
   // =========================================================================
   onProgress({
     tier: 3,
@@ -458,7 +458,7 @@ export async function acquireNoteDocument(noteId, {
   const tierNum = isServerSsd ? 3 : 4;
   const tierLabel = isServerSsd
     ? "Tier 3: Server SSD Disk (Zero-Copy 100ms)"
-    : "Tier 4: Telegram Storage (MTProto Core)";
+    : "Tier 4: Cloud Storage";
   const tierIcon = isServerSsd ? "💽" : "☁️";
 
   onProgress({

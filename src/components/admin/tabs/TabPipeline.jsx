@@ -218,7 +218,7 @@ export default function TabPipeline(props) {
                               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                 <Send size={15} style={{ color: "#38bdf8" }} />
                                 <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>
-                                  Telegram MTProto Cloud Storage Push
+                                  Cloud Storage Push
                                 </span>
                                 <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
                                   (Channel: {softwareInfo?.mtproto?.storageChatId || "Configured in .env"} • DC {softwareInfo?.mtproto?.dcId || 5} Singapore)
@@ -255,7 +255,7 @@ export default function TabPipeline(props) {
 
                           {/* Current Operation Description */}
                           <div style={{ fontSize: "0.76rem", color: "var(--accent-cyan)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span>📍 <strong>Live Pipeline Action:</strong> {pipe.currentStage ? `RAM Cache / Buffer ➔ ${pipe.currentStage}` : "RAM Buffer ➔ Dispatching to Telegram Storage Channel..."}</span>
+                            <span>📍 <strong>Live Pipeline Action:</strong> {pipe.currentStage ? `RAM Cache / Buffer ➔ ${pipe.currentStage}` : "RAM Buffer ➔ Dispatching to Cloud Storage..."}</span>
                           </div>
 
                           {/* 6-Stage Stepper Bar */}

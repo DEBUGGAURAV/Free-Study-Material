@@ -3168,7 +3168,7 @@ router.get("/cdn/files", authenticateToken, checkAdminOrPermission("all"), async
         } catch (_) {}
       }
 
-      let storageLocation = "Telegram Cloud Storage (Origin)";
+      let storageLocation = "Cloud Storage (Origin)";
       if (inRam) storageLocation = "RAM Edge Buffer (0ms microsecond stream)";
       else if (onDisk) storageLocation = "Local NVMe SSD Disk Cache (1ms stream)";
       else if (isCached) storageLocation = "Cloudflare Edge Indian POP (BOM/DEL)";

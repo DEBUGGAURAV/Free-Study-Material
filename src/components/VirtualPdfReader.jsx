@@ -698,7 +698,7 @@ export default function VirtualPdfReader({
         }
 
         // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
-        // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Telegram Storage
+        // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
         const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
         const result = await acquireNoteDocument(noteId, {
           mode: "read",
@@ -765,9 +765,9 @@ export default function VirtualPdfReader({
               setIsCachingToCdn(true);
               setCdnTransferPercent(m.percent);
               setRealSourceInfo({
-                id: "telegram",
-                label: "☁️ Tier 4: Telegram Storage (MTProto Core)",
-                short: "Tier 4: Telegram Storage",
+                id: "storage",
+                label: "☁️ Tier 4: Cloud Storage",
+                short: "Tier 4: Cloud Storage",
                 details: "Stream Chunks + Auto-Save to SSD • Instant 0ms Save / Open",
                 colo: "Cloud",
                 icon: "☁️",

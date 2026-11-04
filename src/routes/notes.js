@@ -567,14 +567,14 @@ async function purgeDeletedTelegramNote(noteId, noteTitle = "") {
             typeLabel: "Note",
             title: noteData.title || noteTitle || "Study Material",
             archivedAt: new Date().toISOString(),
-            archivedBy: "Telegram Storage Deletion Sync",
-            reason: "Document deleted from Telegram academic storage channel",
+            archivedBy: "Cloud Storage Deletion Sync",
+            reason: "Document deleted from academic cloud storage",
           }).catch(() => {}),
           db.collection("deleted_notes").doc(noteId).set({
             ...noteData,
             archivedAt: new Date().toISOString(),
-            archivedBy: "Telegram Storage Deletion Sync",
-            reason: "Document deleted from Telegram academic storage channel",
+            archivedBy: "Cloud Storage Deletion Sync",
+            reason: "Document deleted from academic cloud storage",
           }).catch(() => {}),
           db.collection("notes").doc(noteId).delete().catch(() => {}),
         ]);
