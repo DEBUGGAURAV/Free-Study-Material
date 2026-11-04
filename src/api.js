@@ -659,7 +659,7 @@ export const api = {
 
   /**
    * Unified 4-Tier Document Download Engine (Waterfall)
-   * Tier 1: IndexedDB -> Tier 2: CDN Worker -> Tier 3: Server SSD -> Tier 4: Telegram Storage
+   * Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Telegram Storage
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null, fileHandle = null) => {
     const result = await acquireNoteDocument(id, {

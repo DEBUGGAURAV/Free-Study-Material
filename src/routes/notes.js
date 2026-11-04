@@ -1693,7 +1693,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     } else if (isDiskCached) {
       streamRealSource = "💽 Local NVMe SSD Cache (1ms High-Speed)";
     } else if (req.headers["cf-ray"] || req.headers["x-worker-stream"] || note.isCdnCached) {
-      streamRealSource = "⚡ Indian Edge CDN Worker (1ms Indian Edge POP)";
+      streamRealSource = "⚡ Local Server (1ms High-Speed Stream)";
     }
 
     // 🛡️ TELEGRAM STREAM MONITOR: Only dispatch for REAL Downloads or Initial Preview Opening

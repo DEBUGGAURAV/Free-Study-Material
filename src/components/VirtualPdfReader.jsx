@@ -698,7 +698,7 @@ export default function VirtualPdfReader({
         }
 
         // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
-        // Tier 1: IndexedDB -> Tier 2: CDN Worker -> Tier 3: Server SSD -> Tier 4: Telegram Storage
+        // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Telegram Storage
         const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
         const result = await acquireNoteDocument(noteId, {
           mode: "read",
@@ -736,10 +736,10 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(100);
               setRealSourceInfo({
                 id: "worker",
-                label: "⚡ Tier 2: CDN Worker (Edge Worker)",
-                short: "Tier 2: CDN Worker (HIT)",
+                label: "⚡ Tier 2: Local Server",
+                short: "Tier 2: Local Server",
                 details: "3.5s Fast Timeout / HIT • Instant 0ms Save / Open",
-                colo: "Edge",
+                colo: "Local",
                 icon: "⚡",
                 color: "#38bdf8",
                 bgColor: "rgba(56, 189, 248, 0.14)",

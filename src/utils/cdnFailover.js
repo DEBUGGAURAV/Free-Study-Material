@@ -3,7 +3,7 @@
  *
  * Sequence:
  *   Tier 1: IndexedDB (Client Local Storage & In-Memory Cache) -> 0ms Cache Hit
- *   Tier 2: CDN Worker (Edge Worker with 3.5s fast timeout)
+ *   Tier 2: Local Server (with 3.5s fast timeout)
  *   Tier 3: Server SSD Disk (NVMe / RAM Cache via Zero-Copy) -> 100ms
  *   Tier 4: Telegram Storage (MTProto Core + Auto-Save to Server SSD)
  */
@@ -65,11 +65,11 @@ export function parseSourceFromHeaders(headers) {
   ) {
     return {
       id: "worker",
-      label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Global"} POP)`,
-      short: "Edge CDN (1ms)",
+      label: sourceLabel || `Local Server (${edgeLocation || "Global"} Node)`,
+      short: "Local Server (1ms)",
       details: edgeLocation
-        ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT`
-        : "Indian Edge CDN • 0ms Cache HIT",
+        ? `Local Server (${edgeLocation}) • 0ms Cache HIT`
+        : "Local Server • 0ms Cache HIT",
       colo: edgeLocation || "Edge",
       icon: "⚡",
       color: "#38bdf8",
@@ -279,7 +279,7 @@ async function streamResponseBody(response, { onProgress, tier, tierLabel, icon,
  *
  * Implements the exact 4-tier waterfall:
  *   Tier 1: IndexedDB (Client Local Storage) -> 0ms Cache Hit
- *   Tier 2: CDN Worker (Edge Worker) -> 3.5s Fast Timeout
+ *   Tier 2: Local Server -> 3.5s Fast Timeout
  *   Tier 3: Server SSD Disk (NVMe / RAM) -> 100ms Zero-Copy
  *   Tier 4: Telegram Storage (MTProto Core) -> Stream + Auto-Save to SSD
  *
@@ -353,12 +353,12 @@ export async function acquireNoteDocument(noteId, {
   }
 
   // =========================================================================
-  // TIER 2: CDN Worker (Edge Worker) - Strict 3.5s Timeout
+  // TIER 2: Local Server - Strict 3.5s Timeout
   // =========================================================================
   if (CF_WORKER) {
     onProgress({
       tier: 2,
-      tierLabel: "Tier 2: CDN Worker (Edge Worker)",
+      tierLabel: "Tier 2: Local Server",
       percent: 15,
       speed: "3.5s Fast Timeout / HIT...",
       loadedMB: "0",
@@ -396,7 +396,7 @@ export async function acquireNoteDocument(noteId, {
         const buffer = await streamResponseBody(workerRes, {
           onProgress,
           tier: 2,
-          tierLabel: "Tier 2: CDN Worker (Edge Worker HIT)",
+          tierLabel: "Tier 2: Local Server (HIT)",
           icon: "⚡",
           source: "worker",
           expectedSize: note?.compressedSize || note?.fileSize || 0,
