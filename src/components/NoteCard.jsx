@@ -14,6 +14,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { api } from "../api";
+import { acquireNoteDocument } from "../utils/cdnFailover";
 import { downloadFromPeerMesh, getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
 import {
@@ -207,50 +208,29 @@ export default function NoteCard({
 
     const fileName = getNotePdfFileName(note);
 
-    // Fast-Path 1: Instant download if already cached on user device
-    try {
-      const cachedBuf = await getAnyCachedNoteBuffer(note.id);
-      if (cachedBuf && cachedBuf.byteLength > 500) {
-        const blob = new Blob([cachedBuf], { type: note.mimeType || "application/pdf" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          try {
-            if (a.parentNode) document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          } catch (_) {}
-        }, 45000);
-        setSavedOffline(true);
-        setIsCachedOffline(true);
-        window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
-        return;
-      }
-    } catch (_) {}
-
-    // Fast-Path 2: Normal high-speed stream with live in-card HUD
     abortControllerRef.current = new AbortController();
     setDownloading(true);
     setDownloadProgress({
+      tier: 1,
+      tierLabel: "Checking Local Device Storage (IndexedDB)...",
+      icon: "📱",
       percent: 5,
-      speed: "98.4 MB/s",
+      speed: "Checking local cache...",
       loadedMB: "0",
       totalMB: formatMB(note.compressedSize || note.fileSize || 1048576),
       timeRemaining: "Estimating...",
     });
 
     try {
-      await api.downloadNoteWithProgress(
-        note.id,
+      await acquireNoteDocument(note.id, {
+        mode: "download",
         fileName,
-        (metrics) => {
+        note,
+        signal: abortControllerRef.current.signal,
+        onProgress: (metrics) => {
           setDownloadProgress(metrics);
         },
-        abortControllerRef.current.signal
-      );
+      });
       setSavedOffline(true);
       setIsCachedOffline(true);
       window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed"));
@@ -267,7 +247,7 @@ export default function NoteCard({
       ) {
         if (onRequireAuth) onRequireAuth("signin");
       } else {
-        // Instant direct download fallback (Ensures real user download always succeeds!)
+        // Fallback to direct url
         window.open(api.getDownloadUrl(note.id, fileName), "_blank");
       }
     } finally {
@@ -443,11 +423,11 @@ export default function NoteCard({
                 <Activity size={12} style={{ color: "var(--accent-cyan)" }} />
                 <span>{downloadProgress.percent}%</span>
                 <span
-                  className={`source-mini-tag tag-${downloadProgress.realSource?.id || (downloadProgress.source === "storage" ? "storage" : "cdn")}`}
-                  title={downloadProgress.realSource?.details || downloadProgress.realSourceLabel || "Real-time Stream Source"}
+                  className={`source-mini-tag tag-${downloadProgress.tier === 1 ? "ram" : downloadProgress.tier === 2 ? "worker" : downloadProgress.tier === 3 ? "disk" : "storage"}`}
+                  title={downloadProgress.tierLabel || "Waterfall Pipeline"}
                 >
-                  {downloadProgress.realSource?.icon || "⚡"}{" "}
-                  {downloadProgress.realSource?.short || (downloadProgress.source === "storage" ? "Cloud Vault" : "Local Server")}
+                  {downloadProgress.icon || "⚡"}{" "}
+                  {downloadProgress.tierLabel || (downloadProgress.source === "storage" ? "Cloud Vault" : "Local Server")}
                 </span>
               </span>
 

@@ -7,7 +7,7 @@ const API_BASE = "/api";
 
 // Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
 export const STREAM_BASE = "/api";
-import { fetchWithCdnFailover, parseSourceFromHeaders } from "./utils/cdnFailover";
+import { fetchWithCdnFailover, parseSourceFromHeaders, acquireNoteDocument } from "./utils/cdnFailover";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
 import { getAnyCachedNoteBuffer } from "./utils/offlineQueue";
 
@@ -658,201 +658,18 @@ export const api = {
   },
 
   /**
-   * Download Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
+   * Unified 4-Tier Document Download Engine (Waterfall)
+   * Tier 1: IndexedDB -> Tier 2: CDN Worker -> Tier 3: Server SSD -> Tier 4: Telegram Storage
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null, fileHandle = null) => {
-    // 🚀 Tier 1: Check Local Client IndexedDB & In-Memory Offline Storage (0ms Instant Download)
-    try {
-      const localCached = await getAnyCachedNoteBuffer(id);
-      if (localCached && localCached.byteLength > 500) {
-        let finalFileName = (fileName || "").trim();
-        if (!finalFileName) finalFileName = `Note_${id}.pdf`;
-        finalFileName = finalFileName.replace(/[/\\?%*:|"<>]/g, "_").trim();
-        if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
-
-        if (onProgress) {
-          onProgress({
-            percent: 100,
-            speed: "120 MB/s (IndexedDB)",
-            loadedMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
-            totalMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
-            timeRemaining: "Ready",
-            source: "ram",
-            realSource: {
-              id: "ram",
-              label: "Offline Device Storage (IndexedDB Cache)",
-              short: "IndexedDB (0ms)",
-              colo: "Device",
-              icon: "📱",
-            },
-            realSourceLabel: "Offline Device Storage (IndexedDB Cache)",
-          });
-        }
-
-        const blob = new Blob([localCached], { type: "application/pdf" });
-        if (fileHandle) {
-          try {
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            return blob;
-          } catch (_) {}
-        }
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = finalFileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          try {
-            if (a.parentNode) document.body.removeChild(a);
-            window.URL.revokeObjectURL(downloadUrl);
-          } catch (_) {}
-        }, 45000);
-        return blob;
-      }
-    } catch (_) {}
-
-    const token = getAuthToken();
-    const url = `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
-    const startTime = performance.now();
-    let prevLoaded = 0;
-    let prevTime = startTime;
-
-    // Resilient Multi-Tier CDN auto-failover fetch (Zero-Downtime Guarantee)
-    const res = await fetchWithCdnFailover(id, { signal, isDownload: true, token, fileName });
-    const contentType = res.headers.get("Content-Type") || "";
-    if (!res.ok || (!contentType.includes("pdf") && !contentType.includes("octet-stream"))) {
-      let errMessage = `Document is unavailable (${res.status})`;
-      try {
-        const errorJson = await res.json();
-        if (errorJson && errorJson.message) errMessage = errorJson.message;
-        if (errorJson?.noteDeleted || errorJson?.isDeletedFromTelegram || res.status === 404) {
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("fsm:note-deleted", { detail: { noteId: id } }));
-          }
-        }
-      } catch {}
-      throw new Error(errMessage);
-    }
-
-    const contentLengthHeader = res.headers.get("Content-Length");
-    const total = contentLengthHeader ? parseInt(contentLengthHeader, 10) : 0;
-    const realSourceInfo = parseSourceFromHeaders(res.headers);
-    const dataSource = realSourceInfo.id;
-    let loaded = 0;
-
-    const reader = res.body.getReader();
-    const chunks = [];
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      chunks.push(value);
-      loaded += value.length;
-
-      const now = performance.now();
-      const timeDiff = (now - prevTime) / 1000;
-      const loadedDiff = loaded - prevLoaded;
-
-      let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
-      if (speedBytes <= 0) {
-        const totalElapsed = (now - startTime) / 1000;
-        speedBytes = totalElapsed > 0 ? loaded / totalElapsed : 0;
-      }
-
-      prevLoaded = loaded;
-      prevTime = now;
-
-      // âš¡ Full-Throttle Maximum Cloudflare Edge CDN Delivery (94.8 - 124.6 MB/s Full Speed)
-      const percent = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : Math.min(95, Math.round((loaded / (3 * 1024 * 1024)) * 60));
-      const dynamicJitter = Number(((loaded % 9) * 2.6 + (percent % 5) * 1.8).toFixed(1));
-      const hardcodedSpeedMB = (94.8 + dynamicJitter).toFixed(1);
-      const speedFormatted = `${hardcodedSpeedMB} MB/s`;
-
-      const remainingBytes = total > 0 ? total - loaded : 0;
-      const simulatedSpeedBytes = parseFloat(hardcodedSpeedMB) * 1024 * 1024;
-      const secondsRemaining = simulatedSpeedBytes > 0 && total > 0 ? (remainingBytes / simulatedSpeedBytes).toFixed(1) : "0";
-
-      if (onProgress) {
-        onProgress({
-          percent,
-          speed: speedFormatted,
-          loadedMB: (loaded / (1024 * 1024)).toFixed(2),
-          totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(2) : (loaded / (1024 * 1024)).toFixed(2),
-          timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s left` : "Ready",
-          source: dataSource,
-          realSource: realSourceInfo,
-          realSourceLabel: realSourceInfo.label,
-        });
-      }
-    }
-
-    if (typeof window !== "undefined") {
-      try {
-        if (realSourceInfo.id === "worker" || realSourceInfo.id === "ram" || realSourceInfo.id === "disk") {
-          localStorage.setItem(`fsm_cdn_${id}`, "1");
-        } else {
-          localStorage.removeItem(`fsm_cdn_${id}`);
-        }
-      } catch (_) {}
-    }
-
-    // Convert streamed chunks into downloadable blob
-    const blob = new Blob(chunks, { type: res.headers.get("Content-Type") || "application/pdf" });
-
-    // ðŸŒŸ Determine precise PDF file name from parameter or server Content-Disposition header
-    let finalFileName = (fileName || "").trim();
-    if (!finalFileName) {
-      const disposition = res.headers.get("Content-Disposition");
-      if (disposition) {
-        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-        if (utf8Match && utf8Match[1]) {
-          try { finalFileName = decodeURIComponent(utf8Match[1]); } catch (_) {}
-        }
-        if (!finalFileName) {
-          const normalMatch = disposition.match(/filename="?([^";]+)"?/i);
-          if (normalMatch && normalMatch[1]) {
-            finalFileName = normalMatch[1].trim();
-          }
-        }
-      }
-    }
-    if (!finalFileName) {
-      finalFileName = "Free_Study_Material.pdf";
-    }
-    finalFileName = finalFileName.replace(/[/\\?%*:|"<>]/g, "_").trim();
-    if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
-
-    // ðŸŒŸ Native File System Access API: Save directly into student's chosen folder
-    if (fileHandle) {
-      try {
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return blob;
-      } catch (writeErr) {
-        console.warn("[NATIVE-FS] Direct write fallback to anchor download:", writeErr.message);
-      }
-    }
-
-    // Standard reliable download via anchor tag (Local blob: URL ensures browsers honor a.download name)
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = finalFileName;
-    document.body.appendChild(a);
-    a.click();
-    // Delayed cleanup: Give browser download engine 45s to complete transfer before revoking
-    setTimeout(() => {
-      try {
-        if (a.parentNode) document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
-      } catch (_) {}
-    }, 45000);
-    return blob;
+    const result = await acquireNoteDocument(id, {
+      mode: "download",
+      fileName,
+      onProgress,
+      signal,
+      fileHandle,
+    });
+    return result.blob;
   },
 
   getUploadStatus: (noteId) => request(`/upload/status/${noteId}`),

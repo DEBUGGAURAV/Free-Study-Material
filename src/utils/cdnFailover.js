@@ -1,31 +1,55 @@
 /**
- * Multi-Tier CDN Auto-Failover Engine (Zero Downtime Guarantee)
- * Automatically detects CDN failure and falls back in <50ms
- * 100% Free Forever • 0.0% Server CPU
+ * ⚡ 4-Tier Zero-Downtime Waterfall Document Engine
+ *
+ * Sequence:
+ *   Tier 1: IndexedDB (Client Local Storage & In-Memory Cache) -> 0ms Cache Hit
+ *   Tier 2: CDN Worker (Edge Worker with 3.5s fast timeout)
+ *   Tier 3: Server SSD Disk (NVMe / RAM Cache via Zero-Copy) -> 100ms
+ *   Tier 4: Telegram Storage (MTProto Core + Auto-Save to Server SSD)
  */
 
-const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
 
-const rawWorkerEnv = typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL ? String(import.meta.env.VITE_CF_WORKER_URL).trim() : "";
-// Exclude obsolete/non-existent fallback worker domain
-const CF_WORKER = (rawWorkerEnv && !rawWorkerEnv.includes("jnplotus.workers.dev")) ? rawWorkerEnv : "";
+const isLocalHost =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1");
 
-const originBase = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:5000";
+// Determine valid Cloudflare Worker URL (exclude non-existent defaults)
+const rawWorkerEnv =
+  typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL
+    ? String(import.meta.env.VITE_CF_WORKER_URL).trim()
+    : "";
+export const CF_WORKER =
+  rawWorkerEnv && !rawWorkerEnv.includes("jnplotus.workers.dev") && !isLocalHost
+    ? rawWorkerEnv
+    : "";
 
-// Prioritize local origin; only include CF_WORKER if a valid custom worker URL is explicitly configured
-export const CDN_ENDPOINTS = (CF_WORKER && !isLocal) ? [CF_WORKER, originBase] : [originBase];
+export const originBase =
+  typeof window !== "undefined" && window.location.origin
+    ? window.location.origin
+    : "http://localhost:5000";
 
-let activeCdnIndex = 0;
-let lastFailoverTimestamp = 0;
+export const CDN_ENDPOINTS = CF_WORKER ? [CF_WORKER, originBase] : [originBase];
 
 /**
  * Extracts normalized Real Source metadata from HTTP response headers
- * Transparently reveals if note came from Cloudflare Worker, RAM, NVMe SSD Disk, or Primary Academic Cloud Vault
  */
 export function parseSourceFromHeaders(headers) {
-  if (!headers) return { id: "unknown", label: "Connecting...", short: "Connecting...", colo: "", icon: "🌐", color: "#38bdf8", bgColor: "rgba(56, 189, 248, 0.12)", borderColor: "rgba(56, 189, 248, 0.3)" };
+  if (!headers) {
+    return {
+      id: "unknown",
+      label: "Connecting...",
+      short: "Connecting...",
+      colo: "",
+      icon: "🌐",
+      color: "#38bdf8",
+      bgColor: "rgba(56, 189, 248, 0.12)",
+      borderColor: "rgba(56, 189, 248, 0.3)",
+    };
+  }
   const get = (k) => (headers.get ? headers.get(k) : headers[k]) || "";
-  
+
   const realSource = get("x-real-source");
   const sourceLabel = get("x-source-label");
   const cfCache = (get("cf-cache-status") || "").toUpperCase();
@@ -33,7 +57,7 @@ export function parseSourceFromHeaders(headers) {
   const edgeLocation = get("x-edge-location") || get("cf-ray")?.split("-")[1] || "";
   const dataSource = get("x-data-source");
 
-  // 1. Cloudflare Edge CDN HIT (Top Priority for System B: When Edge Cache returns HIT or worker serves directly)
+  // Tier 2: Cloudflare Edge CDN Worker
   if (
     realSource === "CLOUDFLARE_WORKER" ||
     xEdgeCache === "HIT" ||
@@ -44,7 +68,9 @@ export function parseSourceFromHeaders(headers) {
       id: "worker",
       label: sourceLabel || `Indian Edge CDN Worker (${edgeLocation || "Global"} POP)`,
       short: "Edge CDN (1ms)",
-      details: edgeLocation ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT` : "Indian Edge CDN • 0ms Cache HIT",
+      details: edgeLocation
+        ? `Indian Edge CDN POP (${edgeLocation}) • 0ms Edge Cache HIT`
+        : "Indian Edge CDN • 0ms Cache HIT",
       colo: edgeLocation || "Edge",
       icon: "⚡",
       color: "#38bdf8",
@@ -53,7 +79,7 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // 2. In-Memory RAM Cache (0ms)
+  // Tier 3: In-Memory RAM Buffer (0ms)
   if (realSource === "RAM_BUFFER" || dataSource === "ram") {
     return {
       id: "ram",
@@ -68,7 +94,7 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // 3. Local NVMe SSD Disk Cache (1ms)
+  // Tier 3: Local NVMe SSD Disk Cache (1ms)
   if (realSource === "DISK_CACHE" || dataSource === "disk") {
     return {
       id: "disk",
@@ -83,7 +109,7 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // 4. Primary Cloud Storage Vault (MISS or initial write-through fetch)
+  // Tier 4: Primary Cloud Storage Vault (Telegram MTProto)
   if (
     realSource === "ACADEMIC_CLOUD_VAULT" ||
     realSource === "CLOUD_STORAGE" ||
@@ -92,14 +118,13 @@ export function parseSourceFromHeaders(headers) {
     dataSource === "storage" ||
     dataSource === "bot_api" ||
     xEdgeCache === "MISS" ||
-    xEdgeCache === "MISS-SAVED" ||
     cfCache === "MISS"
   ) {
     return {
       id: "storage",
-      label: sourceLabel || "Academic Cloud Storage (Caching to Edge CDN...)",
+      label: sourceLabel || "Academic Cloud Storage Vault (Fast Stream)",
       short: "Cloud Vault",
-      details: "Streaming from Cloud Storage • Caching to Edge CDN",
+      details: "Streaming from Cloud Storage • Caching to Server SSD",
       colo: "Origin",
       icon: "☁️",
       color: "#f59e0b",
@@ -122,23 +147,382 @@ export function parseSourceFromHeaders(headers) {
 }
 
 /**
- * Gets the current primary stream endpoint with auto-failover
- * Transmits authentication so Cloudflare Worker edge can verify origin access
- * @param {string} noteId 
- * @param {string} ticket (optional ephemeral single-use 60s ticket)
- * @returns {string} streamUrl
+ * Trigger reliable browser download via anchor tag with 45s delayed revocation
+ * Or saves directly using Native File System Access API if fileHandle is provided
+ */
+export async function triggerBrowserDownload(arrayBuffer, fileName, fileHandle = null) {
+  if (typeof window === "undefined" || !arrayBuffer) return null;
+  const blob = new Blob([arrayBuffer], { type: "application/pdf" });
+  if (fileHandle) {
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return blob;
+    } catch (fsErr) {
+      console.warn("[FS-API] Direct save failed, falling back to anchor download:", fsErr);
+    }
+  }
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = fileName || "Free_Study_Material.pdf";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    try {
+      if (a.parentNode) document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (_) {}
+  }, 45000);
+  return blob;
+}
+
+/**
+ * Cache buffer locally in memory and IndexedDB offline vault
+ */
+export function saveToClientOfflineStorage(noteId, note, arrayBuffer) {
+  if (!noteId || !arrayBuffer || arrayBuffer.byteLength < 500) return;
+  try {
+    if (typeof window !== "undefined") {
+      window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = arrayBuffer;
+    }
+    saveNoteOffline(note || { id: noteId, title: "Academic Document" }, arrayBuffer).catch(() => {});
+  } catch (_) {}
+}
+
+/**
+ * Streams response body chunk-by-chunk with live progress calculation
+ */
+async function streamResponseBody(response, { onProgress, tier, tierLabel, icon, source, expectedSize = 0, signal }) {
+  const contentLength = response.headers.get("Content-Length");
+  const total = contentLength ? parseInt(contentLength, 10) : (expectedSize || 0);
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let loaded = 0;
+  const startTime = performance.now();
+  let prevLoaded = 0;
+  let prevTime = startTime;
+
+  while (true) {
+    if (signal && signal.aborted) {
+      try { reader.cancel(); } catch (_) {}
+      throw new Error("Stream cancelled by user");
+    }
+
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    chunks.push(value);
+    loaded += value.length;
+
+    const now = performance.now();
+    const timeDiff = (now - prevTime) / 1000;
+    const loadedDiff = loaded - prevLoaded;
+
+    let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
+    if (speedBytes <= 0) {
+      const totalElapsed = (now - startTime) / 1000;
+      speedBytes = totalElapsed > 0 ? loaded / totalElapsed : 0;
+    }
+    prevLoaded = loaded;
+    prevTime = now;
+
+    const speedMB = (speedBytes / (1024 * 1024)).toFixed(1);
+    const speedFormatted = Number(speedMB) > 0.1 ? `${speedMB} MB/s` : `${Math.round(speedBytes / 1024)} KB/s`;
+
+    const percent = total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : Math.min(95, Math.round((loaded / (4 * 1024 * 1024)) * 60));
+    const remainingBytes = total > 0 ? Math.max(0, total - loaded) : 0;
+    const secondsRemaining = speedBytes > 0 && remainingBytes > 0 ? (remainingBytes / speedBytes).toFixed(1) : "0";
+
+    onProgress({
+      tier,
+      tierLabel,
+      icon,
+      source,
+      percent,
+      speed: speedFormatted,
+      loadedMB: (loaded / (1024 * 1024)).toFixed(2),
+      totalMB: total > 0 ? (total / (1024 * 1024)).toFixed(2) : (loaded / (1024 * 1024)).toFixed(2),
+      timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s left` : "Finalizing...",
+    });
+  }
+
+  // Combine chunks into single ArrayBuffer
+  const combined = new Uint8Array(loaded);
+  let offset = 0;
+  for (const c of chunks) {
+    combined.set(c, offset);
+    offset += c.length;
+  }
+
+  onProgress({
+    tier,
+    tierLabel,
+    icon,
+    source,
+    percent: 100,
+    speed: "Ready",
+    loadedMB: (loaded / (1024 * 1024)).toFixed(2),
+    totalMB: (loaded / (1024 * 1024)).toFixed(2),
+    timeRemaining: "Ready",
+  });
+
+  return combined.buffer;
+}
+
+/**
+ * ⚡ CORE WATERFALL: acquireNoteDocument
+ *
+ * Implements the exact 4-tier waterfall:
+ *   Tier 1: IndexedDB (Client Local Storage) -> 0ms Cache Hit
+ *   Tier 2: CDN Worker (Edge Worker) -> 3.5s Fast Timeout
+ *   Tier 3: Server SSD Disk (NVMe / RAM) -> 100ms Zero-Copy
+ *   Tier 4: Telegram Storage (MTProto Core) -> Stream + Auto-Save to SSD
+ *
+ * Used by BOTH "Read / Preview" and "Download"
+ */
+export async function acquireNoteDocument(noteId, {
+  mode = "download", // "download" | "read"
+  fileName = "",
+  note = null,
+  token = null,
+  signal = null,
+  fileHandle = null,
+  onProgress = () => {},
+} = {}) {
+  const cleanId = String(noteId).trim();
+  const authToken =
+    token ||
+    (typeof window !== "undefined"
+      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || ""
+      : "");
+
+  let cleanName = (fileName || note?.title || `Document_${cleanId}`)
+    .replace(/[/\\?%*:|"<>]/g, "_")
+    .trim();
+  if (!cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
+
+  // =========================================================================
+  // TIER 1: IndexedDB (Client Local Storage & In-Memory Cache)
+  // =========================================================================
+  onProgress({
+    tier: 1,
+    tierLabel: "Checking Local Device Storage (IndexedDB)...",
+    percent: 5,
+    speed: "Checking local cache...",
+    loadedMB: "0",
+    totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+    timeRemaining: "Estimating...",
+    source: "local",
+    icon: "📱",
+  });
+
+  try {
+    const localBuf = await getAnyCachedNoteBuffer(cleanId);
+    if (localBuf && localBuf.byteLength > 500) {
+      // 🎉 TIER 1 CACHE HIT (0ms)!
+      onProgress({
+        tier: 1,
+        tierLabel: "Local Device Storage (IndexedDB Hit)",
+        percent: 100,
+        speed: "Instant 0ms",
+        loadedMB: (localBuf.byteLength / (1024 * 1024)).toFixed(2),
+        totalMB: (localBuf.byteLength / (1024 * 1024)).toFixed(2),
+        timeRemaining: "Ready",
+        source: "local",
+        icon: "📱",
+      });
+
+      let blob = null;
+      if (mode === "download") {
+        blob = await triggerBrowserDownload(localBuf, cleanName, fileHandle);
+      } else {
+        blob = new Blob([localBuf], { type: "application/pdf" });
+      }
+      return { buffer: localBuf, blob, source: "local", tier: 1 };
+    }
+  } catch (t1Err) {
+    console.debug("[WATERFALL] Tier 1 cache lookup notice:", t1Err.message);
+  }
+
+  // =========================================================================
+  // TIER 2: CDN Worker (Edge Worker) - Strict 3.5s Timeout
+  // =========================================================================
+  if (CF_WORKER) {
+    onProgress({
+      tier: 2,
+      tierLabel: "Connecting to Edge CDN Worker...",
+      percent: 15,
+      speed: "Querying Edge CDN...",
+      loadedMB: "0",
+      totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+      timeRemaining: "Estimating...",
+      source: "worker",
+      icon: "⚡",
+    });
+
+    try {
+      const workerUrl = `${CF_WORKER}/api/notes/${cleanId}/stream.pdf?${
+        mode === "download" ? "download=1" : "preview=1"
+      }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+
+      const workerController = new AbortController();
+      const workerTimeout = setTimeout(() => workerController.abort(), 3500); // 3.5s strict timeout
+      if (signal) {
+        signal.addEventListener("abort", () => workerController.abort(), { once: true });
+      }
+
+      const workerRes = await fetch(workerUrl, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+        signal: workerController.signal,
+      });
+      clearTimeout(workerTimeout);
+
+      const contentType = workerRes.headers.get("content-type") || "";
+      if (
+        workerRes.ok &&
+        (contentType.includes("pdf") ||
+          contentType.includes("octet-stream") ||
+          workerRes.status === 206)
+      ) {
+        // 🎉 TIER 2 HIT!
+        const buffer = await streamResponseBody(workerRes, {
+          onProgress,
+          tier: 2,
+          tierLabel: "Edge CDN Worker (1ms)",
+          icon: "⚡",
+          source: "worker",
+          expectedSize: note?.compressedSize || note?.fileSize || 0,
+          signal,
+        });
+
+        if (buffer && buffer.byteLength > 500) {
+          saveToClientOfflineStorage(cleanId, note, buffer);
+          let blob = null;
+          if (mode === "download") {
+            blob = await triggerBrowserDownload(buffer, cleanName, fileHandle);
+          } else {
+            blob = new Blob([buffer], { type: "application/pdf" });
+          }
+          return { buffer, blob, source: "worker", tier: 2 };
+        }
+      }
+    } catch (t2Err) {
+      console.debug("[WATERFALL] Tier 2 CDN worker fallback to Tier 3:", t2Err.message);
+    }
+  }
+
+  // =========================================================================
+  // TIER 3 & TIER 4: Origin Server (Server SSD Disk -> Telegram Storage)
+  // =========================================================================
+  onProgress({
+    tier: 3,
+    tierLabel: "Streaming from Server NVMe SSD Disk...",
+    percent: 25,
+    speed: "Connecting to server...",
+    loadedMB: "0",
+    totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+    timeRemaining: "Estimating...",
+    source: "disk",
+    icon: "💽",
+  });
+
+  const originUrl = `/api/notes/${cleanId}/stream.pdf?${
+    mode === "download" ? "download=1" : "preview=1"
+  }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
+
+  const serverRes = await fetch(originUrl, {
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    signal,
+    credentials: "include",
+  });
+
+  if (!serverRes.ok) {
+    let errMsg = `Document unavailable (${serverRes.status})`;
+    try {
+      const errJson = await serverRes.json();
+      if (errJson?.message) errMsg = errJson.message;
+    } catch (_) {}
+    throw new Error(errMsg);
+  }
+
+  const realSource = serverRes.headers.get("x-real-source") || "";
+  const isServerSsd = realSource === "DISK_CACHE" || realSource === "RAM_BUFFER";
+  const tierNum = isServerSsd ? 3 : 4;
+  const tierLabel = isServerSsd
+    ? "Local NVMe SSD Disk Cache (100ms)"
+    : "Primary Academic Cloud Storage Vault";
+  const tierIcon = isServerSsd ? "💽" : "☁️";
+
+  onProgress({
+    tier: tierNum,
+    tierLabel: `Streaming from ${tierLabel}...`,
+    percent: 35,
+    speed: "Streaming chunks...",
+    loadedMB: "0",
+    totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+    timeRemaining: "Streaming...",
+    source: isServerSsd ? "disk" : "telegram",
+    icon: tierIcon,
+  });
+
+  const buffer = await streamResponseBody(serverRes, {
+    onProgress,
+    tier: tierNum,
+    tierLabel,
+    icon: tierIcon,
+    source: isServerSsd ? "disk" : "telegram",
+    expectedSize: note?.compressedSize || note?.fileSize || 0,
+    signal,
+  });
+
+  // Background: Pre-cache in IndexedDB & memory so subsequent calls are Tier 1 (0ms Hit)
+  saveToClientOfflineStorage(cleanId, note, buffer);
+
+  let blob = null;
+  if (mode === "download") {
+    blob = await triggerBrowserDownload(buffer, cleanName, fileHandle);
+  } else {
+    blob = new Blob([buffer], { type: "application/pdf" });
+  }
+
+  return { buffer, blob, source: isServerSsd ? "disk" : "telegram", tier: tierNum };
+}
+
+/**
+ * Backwards-compatible helper for legacy components
+ */
+export async function fetchWithCdnFailover(noteId, fetchOptions = {}) {
+  const mode = fetchOptions.isDownload ? "download" : "read";
+  const res = await acquireNoteDocument(noteId, {
+    mode,
+    fileName: fetchOptions.fileName,
+    signal: fetchOptions.signal,
+    token: fetchOptions.token,
+  });
+  return new Response(res.buffer, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Length": String(res.buffer.byteLength),
+      "X-Real-Source": res.source === "local" ? "RAM_BUFFER" : res.source === "disk" ? "DISK_CACHE" : "CLOUD_STORAGE",
+    },
+  });
+}
+
+/**
+ * Returns stream URL for direct streaming
  */
 export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPreview = false, isCdnCached = false) {
   const localOrigin = typeof window !== "undefined" && window.location.origin ? window.location.origin : "";
-  // ⚡ Smart Route Optimization:
-  // 1. On localhost, always stream directly from localOrigin
-  // 2. If note is NOT yet cached on CDN (isCdnCached === false), route to localOrigin so direct MTProto stream renders Page 1 in <1s (avoids Cloudflare Worker 503 gateway timeouts)
-  // 3. Once cached on CDN (isCdnCached === true), stream through Cloudflare Global Edge Worker for 1ms cache hits
   let base = localOrigin;
-  if (!isLocal && isCdnCached && CF_WORKER) {
+  if (CF_WORKER && isCdnCached) {
     base = CF_WORKER;
   }
-  const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+  const token = typeof window !== "undefined" ? localStorage.getItem("vault_token") || "" : "";
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
   const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
@@ -150,108 +534,3 @@ export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPrev
   const query = params.length > 0 ? `?${params.join("&")}` : "";
   return `${base}/api/notes/${noteId}/${pathSegment}${query}`;
 }
-
-/**
- * Executes a resilient fetch with automatic Multi-Tier CDN failover
- * If Tier 1 throws an error or times out, seamlessly retries on Tier 2 in 50ms
- * @param {string} noteId 
- * @param {object} fetchOptions 
- * @param {function} onTierSwitch (optional callback)
- * @returns {Promise<Response>}
- */
-export async function fetchWithCdnFailover(noteId, fetchOptions = {}, onTierSwitch = () => {}) {
-  const isDownload = Boolean(fetchOptions.isDownload);
-  const token = fetchOptions.token || (typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "");
-  let cleanName = (fetchOptions.fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
-  if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
-  const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-  const params = [];
-  if (isDownload) params.push("download=1");
-  if (fetchOptions.ticket) params.push(`ticket=${encodeURIComponent(fetchOptions.ticket)}`);
-  if (token) params.push(`token=${encodeURIComponent(token)}`);
-  if (cleanName) params.push(`filename=${encodeURIComponent(cleanName)}`);
-  const query = params.length > 0 ? `?${params.join("&")}` : "";
-
-  const baseHeaders = {
-    ...(fetchOptions.headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  for (let i = 0; i < CDN_ENDPOINTS.length; i++) {
-    const candidateBase = CDN_ENDPOINTS[(activeCdnIndex + i) % CDN_ENDPOINTS.length];
-    const candidateUrl = `${candidateBase}/api/notes/${noteId}/${pathSegment}${query}`;
-
-    const controller = new AbortController();
-    // Fast Tier Failover: If multi-tier is configured and this isn't the last tier, fail over within 5s instead of hanging 60s
-    const isMultiTier = CDN_ENDPOINTS.length > 1 && i < CDN_ENDPOINTS.length - 1;
-    const fetchTimeout = isMultiTier ? 5000 : (isDownload ? 35000 : 25000);
-    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
-    if (fetchOptions.signal) {
-      fetchOptions.signal.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-        controller.abort();
-      }, { once: true });
-    }
-
-    try {
-      const response = await fetch(candidateUrl, {
-        ...fetchOptions,
-        headers: baseHeaders,
-        signal: fetchOptions.signal || controller.signal,
-        credentials: "include",
-      });
-
-      clearTimeout(timeoutId);
-
-      // Explicit 404 (e.g. note deleted from Telegram or moved to Restore Vault)
-      if (response.status === 404) {
-        try {
-          const bodyClone = await response.clone().json();
-          if (bodyClone?.isDeletedFromTelegram || bodyClone?.noteDeleted || bodyClone?.inRecycleBin) {
-            // Note is permanently removed. Stop retrying secondary tiers!
-            return response;
-          }
-        } catch (_) {}
-      }
-
-      // Explicit authentication or permission failure (e.g. downloads paused by admin)
-      if (response.status === 403 || response.status === 401) {
-        try {
-          const bodyClone = await response.clone().json();
-          if (bodyClone?.downloadsDisabled || bodyClone?.authRequired) {
-            return response;
-          }
-        } catch (_) {}
-        if (i < CDN_ENDPOINTS.length - 1) {
-          console.warn(`[CDN-FAILOVER] Tier ${candidateBase} returned 403/401, attempting fallback tier...`);
-          continue;
-        }
-        return response;
-      }
-
-      const contentType = response.headers.get("content-type") || "";
-      if (response.ok && (contentType.includes("pdf") || contentType.includes("octet-stream") || response.status === 206)) {
-        // Successful response! Update active CDN to current working tier
-        activeCdnIndex = (activeCdnIndex + i) % CDN_ENDPOINTS.length;
-        return response;
-      }
-      
-      console.warn(`[CDN-FAILOVER] Tier ${candidateBase} returned non-PDF response (${response.status}). Trying next tier...`);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err.name === "AbortError" && fetchOptions.signal?.aborted) {
-        throw err; // User explicitly cancelled
-      }
-      console.warn(`[CDN-FAILOVER] CDN tier ${candidateBase} unreachable (${err.message}). Auto-switching to fallback tier...`);
-      onTierSwitch(`Switching from ${candidateBase} to secondary origin...`);
-    }
-  }
-
-  // Final fallback: standard same-origin request
-  return fetch(`/api/notes/${noteId}/stream.pdf${query}`, {
-    ...fetchOptions,
-    headers: baseHeaders,
-    credentials: "include",
-  });
-}
-
