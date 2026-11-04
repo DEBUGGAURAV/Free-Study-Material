@@ -14,22 +14,27 @@
 import { getCachedNoteBuffer, cacheNoteBuffer } from "./p2pMesh";
 import { getOfflineNoteBuffer, getAnyCachedNoteBuffer } from "./offlineQueue";
 
-// Standard STUN servers (resilient worldwide pool)
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    { urls: "stun:stun2.l.google.com:19302" },
-    { urls: "stun:stun.cloudflare.com:3478" },
-  ],
-  iceCandidatePoolSize: 2,
-};
+// Dynamic ICE configuration: 0 external servers when offline (instant local host resolution)
+export function getIceConfig() {
+  const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  if (isOffline) {
+    return { iceServers: [], iceCandidatePoolSize: 0 };
+  }
+  return {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.cloudflare.com:3478" },
+    ],
+    iceCandidatePoolSize: 1,
+  };
+}
+const ICE_CONFIG = getIceConfig();
 
 /**
  * Strips non-DataChannel junk from SDP to keep it ultra-compact for offline QR Code generation (<300 bytes)
  * Prioritizes local Wi-Fi / hotspot host candidates so QR codes render instantly and scan effortlessly
  */
-export function compactSdp(sdp) {
+export function compactSdp(sdp, additionalCandidates = []) {
   if (!sdp) return "";
   const lines = sdp.split(/\r?\n/);
   const hostCandidates = [];
@@ -47,15 +52,26 @@ export function compactSdp(sdp) {
     if (t.startsWith("a=candidate:")) {
       // Prioritize host IPv4 candidates (essential for offline local Wi-Fi / hotspot AirDrop)
       if (t.includes(" typ host") && !t.includes(":") /* IPv4 */) {
-        hostCandidates.push(t);
+        if (!hostCandidates.includes(t)) hostCandidates.push(t);
       } else if (t.includes(" typ host")) {
         // IPv6 host candidate - keep only 1 as fallback
-        if (hostCandidates.length < 2) hostCandidates.push(t);
+        if (hostCandidates.length < 2 && !hostCandidates.includes(t)) hostCandidates.push(t);
       }
       continue;
     }
 
     otherLines.push(t);
+  }
+
+  // Inject gathered candidates if not already in localDescription
+  if (Array.isArray(additionalCandidates)) {
+    for (const cand of additionalCandidates) {
+      if (!cand) continue;
+      const fullCand = cand.startsWith("a=candidate:") ? cand : (cand.startsWith("candidate:") ? `a=${cand}` : `a=candidate:${cand}`);
+      if (fullCand.includes(" typ host") && !hostCandidates.includes(fullCand)) {
+        hostCandidates.push(fullCand);
+      }
+    }
   }
 
   // Include up to 2 primary host candidates
@@ -187,10 +203,11 @@ export async function decodeSignalingToken(token) {
 /**
  * Waits for ICE candidate gathering to finish or reach timeout with fast host candidate resolution
  */
-function waitForIceGathering(pc, timeoutMs = 1500) {
+function waitForIceGathering(pc, timeoutMs = 800) {
   return new Promise((resolve) => {
+    const candidates = [];
     if (pc.iceGatheringState === "complete") {
-      return resolve();
+      return resolve(candidates);
     }
     let timer = null;
     let resolved = false;
@@ -201,7 +218,7 @@ function waitForIceGathering(pc, timeoutMs = 1500) {
       if (timer) clearTimeout(timer);
       try { pc.removeEventListener("icegatheringstatechange", checkState); } catch (_) {}
       try { pc.removeEventListener("icecandidate", onCand); } catch (_) {}
-      resolve();
+      resolve(candidates);
     };
 
     const checkState = () => {
@@ -209,17 +226,16 @@ function waitForIceGathering(pc, timeoutMs = 1500) {
     };
 
     const onCand = (e) => {
-      // If we got a local host candidate (local Wi-Fi / hotspot), resolve fast (<100ms) for instant offline QR
-      if (e.candidate && (e.candidate.type === "host" || e.candidate.candidate?.includes("typ host"))) {
-        setTimeout(done, 100);
-      } else if (e.candidate && (e.candidate.type === "srflx" || e.candidate.candidate?.includes("typ srflx"))) {
-        setTimeout(done, 150);
+      if (e.candidate && e.candidate.candidate) {
+        candidates.push(e.candidate.candidate);
+        if (e.candidate.type === "host" || e.candidate.candidate.includes("typ host")) {
+          setTimeout(done, 50);
+        }
       }
     };
 
-    // If offline, use aggressive 350ms timeout instead of waiting for unreachable STUN servers
     const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
-    timer = setTimeout(done, isOffline ? 350 : timeoutMs);
+    timer = setTimeout(done, isOffline ? 200 : timeoutMs);
     pc.addEventListener("icegatheringstatechange", checkState);
     pc.addEventListener("icecandidate", onCand);
   });
@@ -232,19 +248,26 @@ function waitForIceGathering(pc, timeoutMs = 1500) {
  */
 export async function createAirDropSenderSession(noteId, callbacks = {}, directBuffer = null) {
   const { onProgress = () => {}, onConnected = () => {}, onError = () => {} } = callbacks;
+  const sId = String(noteId);
 
   let buffer = directBuffer;
+  if (!buffer || buffer.byteLength === 0) {
+    if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+      buffer = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
+    }
+  }
   if (!buffer || buffer.byteLength === 0) {
     buffer = await getAnyCachedNoteBuffer(noteId);
   }
   if (!buffer || buffer.byteLength === 0) {
-    throw new Error("This note is not yet cached on your device. Please open or view it in the Online Reader first so AirDrop can share it offline.");
+    buffer = await getOfflineNoteBuffer(noteId);
   }
+
   if (buffer && noteId) {
     cacheNoteBuffer(noteId, buffer).catch(() => {});
   }
 
-  const pc = new RTCPeerConnection(ICE_CONFIG);
+  const pc = new RTCPeerConnection(getIceConfig());
   const dc = pc.createDataChannel("campus_airdrop_channel", {
     ordered: true,
   });
@@ -252,10 +275,12 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
 
   const session = {
     role: "sender",
-    noteId,
+    noteId: sId,
     pc,
     dc,
     buffer,
+    hasBuffer: Boolean(buffer && buffer.byteLength > 0),
+    needsBuffer: !Boolean(buffer && buffer.byteLength > 0),
     active: true,
   };
 
@@ -263,7 +288,15 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
     if (!session.active) return;
     try {
       onConnected();
-      await seedNoteBufferOverChannel(session.noteId, session.buffer, dc, onProgress);
+      // Lazy load buffer if not available earlier
+      if (!session.buffer) {
+        session.buffer = await getAnyCachedNoteBuffer(session.noteId);
+      }
+      if (session.buffer) {
+        await seedNoteBufferOverChannel(session.noteId, session.buffer, dc, onProgress);
+      } else {
+        dc.send(JSON.stringify({ type: "AIRDROP_INFO", message: "Document ready. Open once in reader to cache offline bytes." }));
+      }
     } catch (err) {
       if (session.active) onError(err);
     }
@@ -277,13 +310,13 @@ export async function createAirDropSenderSession(noteId, callbacks = {}, directB
   await pc.setLocalDescription(offer);
 
   // Wait briefly to collect local network host ICE candidates
-  await waitForIceGathering(pc, 1500);
+  const gatheredCandidates = await waitForIceGathering(pc, 800);
 
   const offerPayload = {
     role: "airdrop_offer",
-    noteId,
-    fileSize: buffer.byteLength,
-    sdp: compactSdp(pc.localDescription.sdp),
+    noteId: sId,
+    fileSize: buffer?.byteLength || 0,
+    sdp: compactSdp(pc.localDescription.sdp, gatheredCandidates),
     v: 2,
   };
 
@@ -328,7 +361,7 @@ export async function createAirDropReceiverSession(offerToken, callbacks = {}) {
     throw new Error("Invalid offer QR token. Please scan the sender's AirDrop QR code.");
   }
 
-  const pc = new RTCPeerConnection(ICE_CONFIG);
+  const pc = new RTCPeerConnection(getIceConfig());
   const session = {
     role: "receiver",
     noteId: payload.noteId,
@@ -355,12 +388,12 @@ export async function createAirDropReceiverSession(offerToken, callbacks = {}) {
   await pc.setLocalDescription(answer);
 
   // Collect local network ICE candidates
-  await waitForIceGathering(pc, 1500);
+  const gatheredCandidates = await waitForIceGathering(pc, 800);
 
   const answerPayload = {
     role: "airdrop_answer",
     noteId: payload.noteId,
-    sdp: compactSdp(pc.localDescription.sdp),
+    sdp: compactSdp(pc.localDescription.sdp, gatheredCandidates),
     v: 2,
   };
 

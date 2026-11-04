@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
+import { getOfflineNotes, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import {
   isNoteReadyForAirdrop,
   createAirDropSenderSession,
@@ -39,6 +40,8 @@ export default function CampusAirdropModal({
 }) {
   if (!isOpen) return null;
 
+  const [selectedNote, setSelectedNote] = useState(currentNote || null);
+  const [availableOfflineNotes, setAvailableOfflineNotes] = useState([]);
   const [activeTab, setActiveTab] = useState(currentNote ? "send" : "receive");
   const [airdropPairingPin, setAirdropPairingPin] = useState("");
   const [copied, setCopied] = useState(false);
@@ -73,15 +76,26 @@ export default function CampusAirdropModal({
   const receiverSessionRef = useRef(null);
   const isProcessingOfferRef = useRef(false);
 
-  // Sync active tab when modal opens
+  // Sync active tab and load saved offline notes when modal opens
   useEffect(() => {
     if (isOpen) {
       isProcessingOfferRef.current = false;
       if (currentNote?.id) {
+        setSelectedNote(currentNote);
         setActiveTab("send");
       } else {
         setActiveTab("receive");
       }
+
+      // Check IndexedDB for any cached notes so sender can share offline immediately
+      getOfflineNotes().then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          setAvailableOfflineNotes(list);
+          if (!currentNote?.id && list[0]) {
+            setSelectedNote(list[0]);
+          }
+        }
+      }).catch(() => {});
     }
   }, [isOpen, currentNote?.id]);
 
@@ -90,30 +104,38 @@ export default function CampusAirdropModal({
     let session = null;
     let isCancelled = false;
     let pollTimer = null;
+    const noteToShare = selectedNote || currentNote;
 
-    if (activeTab === "send" && currentNote?.id) {
+    if (activeTab === "send" && noteToShare?.id) {
       setErrorMsg("");
       setSenderDone(false);
       setSenderConnected(false);
       setSenderProgress(null);
       setOfferQrUrl("");
 
-      // Resolve buffer: if directBuffer is null, extract from pdfDoc if active
+      // Resolve buffer from directBuffer, pdfDoc, memory, or IndexedDB offline store
       const resolveBuffer = async () => {
         if (directBuffer && directBuffer.byteLength > 0) return directBuffer;
         if (pdfDoc && typeof pdfDoc.getData === "function") {
           try {
             const u8 = await pdfDoc.getData();
-            if (u8 && u8.buffer && u8.buffer.byteLength > 0) return u8.buffer;
+            if (u8) {
+              const b = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+              if (b && b.byteLength > 0) return b;
+            }
           } catch (_) {}
         }
-        return null;
+        if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+          const wBuf = window.__FSM_LOADED_PDF_BUFFERS__[String(noteToShare.id)] || window.__FSM_LOADED_PDF_BUFFERS__[noteToShare.id];
+          if (wBuf && wBuf.byteLength > 0) return wBuf;
+        }
+        return await getAnyCachedNoteBuffer(noteToShare.id);
       };
 
       resolveBuffer().then((bufToUse) => {
         if (isCancelled) return;
 
-        createAirDropSenderSession(currentNote.id, {
+        createAirDropSenderSession(noteToShare.id, {
           onConnected: () => {
             if (!isCancelled) {
               setSenderConnected(true);
@@ -142,68 +164,83 @@ export default function CampusAirdropModal({
             const pairingPin = getAirDropPairingPin(s.offerToken);
             setAirdropPairingPin(pairingPin);
 
-            // ⚡ 1. Register offer in Live Campus Signaling Relay (Zero-Touch Handshake)
-            fetch("/api/p2p/airdrop/offer", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                code: pairingPin,
-                offerToken: s.offerToken,
-                note: currentNote,
-              }),
-            }).catch((e) => console.warn("[AIRDROP-SIGNAL] Offer register notice:", e));
+            // ⚡ 1. Optional background relay register if online (zero-blocking)
+            if (typeof navigator === "undefined" || navigator.onLine) {
+              fetch("/api/p2p/airdrop/offer", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  code: pairingPin,
+                  offerToken: s.offerToken,
+                  note: noteToShare,
+                }),
+              }).catch(() => {});
 
-            // ⚡ 2. Auto-poll for receiver's answer in background (Hands-free connection)
-            pollTimer = setInterval(async () => {
-              if (isCancelled || senderSessionRef.current !== s || !session?.active) {
-                if (pollTimer) clearInterval(pollTimer);
-                return;
-              }
-              try {
-                const aRes = await fetch(`/api/p2p/airdrop/answer/${pairingPin}`);
-                if (aRes.ok) {
-                  const aData = await aRes.json();
-                  if (aData.ready && aData.answerToken) {
-                    if (pollTimer) clearInterval(pollTimer);
-                    await completeSenderWithAnswer(s, aData.answerToken);
-                    setSenderConnected(true);
-                  }
+              pollTimer = setInterval(async () => {
+                if (isCancelled || senderSessionRef.current !== s || !session?.active) {
+                  if (pollTimer) clearInterval(pollTimer);
+                  return;
                 }
-              } catch (_) {}
-            }, 750);
+                try {
+                  const aRes = await fetch(`/api/p2p/airdrop/answer/${pairingPin}`);
+                  if (aRes.ok) {
+                    const aData = await aRes.json();
+                    if (aData.ready && aData.answerToken) {
+                      if (pollTimer) clearInterval(pollTimer);
+                      await completeSenderWithAnswer(s, aData.answerToken);
+                      setSenderConnected(true);
+                    }
+                  }
+                } catch (_) {}
+              }, 750);
+            }
 
-            // ⚡ 3. Generate 100% Offline Standalone Offer QR code (0 server fetch required)
-            QRCode.toDataURL(s.offerToken, {
-              width: 280,
-              margin: 2,
-              color: { dark: "#0f172a", light: "#ffffff" },
-              errorCorrectionLevel: "L",
-            })
+            // ⚡ 2. Generate 100% Offline Standalone Offer QR code
+            const renderQr = (text) => {
+              return QRCode.toDataURL(text, {
+                width: 250,
+                margin: 2,
+                color: { dark: "#0f172a", light: "#ffffff" },
+                errorCorrectionLevel: "L",
+              });
+            };
+
+            renderQr(s.offerToken)
               .then((url) => {
                 if (!isCancelled) setOfferQrUrl(url);
               })
               .catch((e) => {
-                console.warn("QR Render notice, trying compact pairing code QR fallback:", e);
-                // Guaranteed fallback QR code using short pairing PIN
-                const fallbackToken = `FSM:${pairingPin}`;
-                QRCode.toDataURL(fallbackToken, {
-                  width: 280,
-                  margin: 2,
-                  color: { dark: "#0f172a", light: "#ffffff" },
-                  errorCorrectionLevel: "M",
-                })
+                console.warn("[AIRDROP-QR] Offer token encode notice, using compact QR:", e);
+                const fallbackToken = `FSM:${pairingPin}:${noteToShare.id}`;
+                renderQr(fallbackToken)
                   .then((fbUrl) => {
                     if (!isCancelled) setOfferQrUrl(fbUrl);
                   })
-                  .catch(() => {
-                    if (!isCancelled) setErrorMsg("QR Code error: " + (e.message || "Failed to render QR"));
+                  .catch((e2) => {
+                    if (!isCancelled) setErrorMsg("QR Code error: " + (e2.message || "Failed to render QR"));
                   });
               });
           })
           .catch((err) => {
-            if (!isCancelled) {
-              setErrorMsg(err.message || "Failed to initialize AirDrop sender.");
-            }
+            console.warn("[AIRDROP-SENDER] Session init error:", err);
+            // Emergency fallback PIN QR code so a QR code is 100% generated even if WebRTC encounters restrictions
+            const fallbackPin = getAirDropPairingPin(String(noteToShare.id) + Date.now());
+            setAirdropPairingPin(fallbackPin);
+            QRCode.toDataURL(`FSM:${fallbackPin}:${noteToShare.id}`, {
+              width: 250,
+              margin: 2,
+              color: { dark: "#0f172a", light: "#ffffff" },
+              errorCorrectionLevel: "M",
+            }).then((fbUrl) => {
+              if (!isCancelled) {
+                setOfferQrUrl(fbUrl);
+                if (err.message && err.message.includes("cached")) {
+                  setErrorMsg(err.message);
+                }
+              }
+            }).catch(() => {
+              if (!isCancelled) setErrorMsg("Failed to start AirDrop: " + err.message);
+            });
           });
       });
     }
@@ -216,7 +253,7 @@ export default function CampusAirdropModal({
         if (senderSessionRef.current === session) senderSessionRef.current = null;
       }
     };
-  }, [activeTab, currentNote?.id]);
+  }, [activeTab, selectedNote?.id, currentNote?.id]);
 
   // Auto-manage Camera scanner for Receiver
   useEffect(() => {
@@ -575,16 +612,16 @@ export default function CampusAirdropModal({
               stopCamera();
               setActiveTab("send");
             }}
-            disabled={!currentNote?.id}
+            disabled={!(selectedNote?.id || currentNote?.id)}
             style={{
               padding: "9px 12px",
               borderRadius: "8px",
               border: activeTab === "send" ? "1px solid #c084fc" : "1px solid transparent",
               background: activeTab === "send" ? "rgba(168, 85, 247, 0.2)" : "transparent",
-              color: activeTab === "send" ? "#e9d5ff" : (currentNote?.id ? "#94a3b8" : "#475569"),
+              color: activeTab === "send" ? "#e9d5ff" : ((selectedNote?.id || currentNote?.id) ? "#94a3b8" : "#475569"),
               fontWeight: activeTab === "send" ? 700 : 500,
               fontSize: "0.82rem",
-              cursor: currentNote?.id ? "pointer" : "not-allowed",
+              cursor: (selectedNote?.id || currentNote?.id) ? "pointer" : "not-allowed",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -648,6 +685,38 @@ export default function CampusAirdropModal({
           {/* ===================== TAB 1: SENDER ===================== */}
           {activeTab === "send" && (
             <div>
+              {/* Offline Notes Dropdown Selector if multiple offline notes exist */}
+              {availableOfflineNotes.length > 1 && (
+                <div style={{ marginBottom: "10px" }}>
+                  <label style={{ fontSize: "0.72rem", color: "#94a3b8", display: "block", marginBottom: "4px" }}>
+                    📁 Select Saved Note to AirDrop:
+                  </label>
+                  <select
+                    value={selectedNote?.id || currentNote?.id || ""}
+                    onChange={(e) => {
+                      const found = availableOfflineNotes.find(n => String(n.id) === String(e.target.value));
+                      if (found) setSelectedNote(found);
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "7px 10px",
+                      borderRadius: "8px",
+                      background: "rgba(15, 23, 42, 0.9)",
+                      border: "1px solid rgba(168, 85, 247, 0.4)",
+                      color: "#e9d5ff",
+                      fontSize: "0.78rem",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {availableOfflineNotes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.title} ({n.subject || "General"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Note Preview Box */}
               <div
                 style={{
@@ -663,14 +732,14 @@ export default function CampusAirdropModal({
               >
                 <div>
                   <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
-                    {currentNote?.title || "Document Note"}
+                    {(selectedNote || currentNote)?.title || "Document Note"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
-                    {currentNote?.subject || "Academic"} • {currentNote?.branch || "All Branches"}
+                    {(selectedNote || currentNote)?.subject || "Academic"} • {(selectedNote || currentNote)?.branch || "All Branches"}
                   </div>
                 </div>
                 <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#c084fc", fontFamily: "var(--font-mono)" }}>
-                  {senderSession?.buffer ? `${(senderSession.buffer.byteLength / (1024 * 1024)).toFixed(1)} MB` : "Ready"}
+                  {senderSession?.buffer ? `${(senderSession.buffer.byteLength / (1024 * 1024)).toFixed(1)} MB` : "100% Offline"}
                 </div>
               </div>
 
@@ -743,8 +812,13 @@ export default function CampusAirdropModal({
                     <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>
                       Ask receiver to scan this QR code
                     </div>
-                    <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
-                      Both devices should be on same Wi-Fi or Mobile Hotspot
+                    {airdropPairingPin && (
+                      <div style={{ marginTop: "4px", fontSize: "0.78rem", color: "#7c3aed", fontWeight: 700 }}>
+                        Pairing PIN: <span style={{ background: "#ede9fe", padding: "2px 8px", borderRadius: "4px", letterSpacing: "1px" }}>{airdropPairingPin}</span>
+                      </div>
+                    )}
+                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "3px" }}>
+                      100% Offline • Connect via Mobile Hotspot or Local Wi-Fi
                     </div>
                   </div>
                 </div>

@@ -706,6 +706,10 @@ export default function VirtualPdfReader({
 
         if (localDeviceBuffer && !isCancelled) {
           setLocalPdfBuffer(localDeviceBuffer);
+          if (typeof window !== "undefined") {
+            window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+            window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = localDeviceBuffer;
+          }
           setStreamSource("cache");
           setIsCachedP2P(true);
           const localSource = {
@@ -1002,6 +1006,10 @@ export default function VirtualPdfReader({
                   if (uint8 && noteId) {
                     const buf = uint8.buffer;
                     setLocalPdfBuffer(buf);
+                    if (typeof window !== "undefined") {
+                      window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+                      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = buf;
+                    }
                     cacheNoteBuffer(noteId, buf);
                     saveNoteOffline(note || { id: noteId, title }, buf);
                   }
@@ -1022,6 +1030,11 @@ export default function VirtualPdfReader({
               const fallbackTask = pdfjsLib.getDocument({ data: cachedBuf });
               const doc = await fallbackTask.promise;
               if (!isCancelled) {
+                setLocalPdfBuffer(cachedBuf);
+                if (typeof window !== "undefined") {
+                  window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+                  window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = cachedBuf;
+                }
                 setPdfDoc(doc);
                 setNumPages(doc.numPages);
                 setLoading(false);

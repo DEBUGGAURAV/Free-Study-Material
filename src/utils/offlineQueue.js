@@ -83,6 +83,7 @@ export async function getOfflineNotes() {
  */
 export async function getOfflineNoteBuffer(noteId) {
   if (!noteId) return null;
+  const sId = String(noteId);
   try {
     const db = await openDatabase();
     return new Promise((resolve) => {
@@ -91,9 +92,31 @@ export async function getOfflineNoteBuffer(noteId) {
       const req = store.get(noteId);
       req.onsuccess = () => {
         const item = req.result;
-        resolve(item?.buffer || null);
+        if (item && item.buffer && item.buffer.byteLength > 0) {
+          return resolve(item.buffer);
+        }
+        // Fallback: search all offline saved notes for string match
+        const allReq = store.getAll();
+        allReq.onsuccess = () => {
+          const list = allReq.result || [];
+          const match = list.find((n) => String(n.id) === sId);
+          resolve(match?.buffer || null);
+        };
+        allReq.onerror = () => resolve(null);
       };
-      req.onerror = () => resolve(null);
+      req.onerror = () => {
+        try {
+          const allReq = store.getAll();
+          allReq.onsuccess = () => {
+            const list = allReq.result || [];
+            const match = list.find((n) => String(n.id) === sId);
+            resolve(match?.buffer || null);
+          };
+          allReq.onerror = () => resolve(null);
+        } catch (_) {
+          resolve(null);
+        }
+      };
     });
   } catch (_) {
     return null;
@@ -110,26 +133,41 @@ import { getAllCachedNoteChunks, deleteCachedNote, clearAllCachedNotes, deleteP2
  */
 export async function getAnyCachedNoteBuffer(noteId) {
   if (!noteId) return null;
+  const sId = String(noteId);
 
-  // 1. Check high-speed P2P IndexedDB binary chunk store (fsm_p2p_cache_v1)
+  // 1. In-memory session buffer from active reader (fastest, 0ms)
   try {
-    const p2pBuf = await getCachedNoteBuffer(noteId);
+    if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+      const memBuf = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
+      if (memBuf && memBuf.byteLength > 0) return memBuf;
+    }
+  } catch (_) {}
+
+  // 2. Check high-speed P2P IndexedDB binary chunk store (fsm_p2p_cache_v1)
+  try {
+    let p2pBuf = await getCachedNoteBuffer(noteId);
+    if (!p2pBuf || p2pBuf.byteLength === 0) {
+      p2pBuf = await getCachedNoteBuffer(sId);
+    }
     if (p2pBuf && p2pBuf.byteLength > 0) return p2pBuf;
   } catch (_) {}
 
-  // 2. Check offline vault store (fsm_offline_vault)
+  // 3. Check offline vault store (fsm_offline_vault)
   try {
     const vaultBuf = await getOfflineNoteBuffer(noteId);
     if (vaultBuf && vaultBuf.byteLength > 0) return vaultBuf;
   } catch (_) {}
 
-  // 3. Check browser Service Worker CacheStorage
+  // 4. Check browser Service Worker CacheStorage
   try {
     if (typeof caches !== "undefined") {
       const candidates = [
+        `/api/notes/${sId}/stream.pdf`,
+        `/api/notes/${sId}/stream`,
+        `/api/notes/${sId}/preview`,
+        `/api/notes/${sId}`,
         `/api/notes/${noteId}/stream.pdf`,
         `/api/notes/${noteId}/stream`,
-        `/api/notes/${noteId}`,
       ];
       for (const uri of candidates) {
         const match = await caches.match(uri, { ignoreSearch: true });
@@ -137,7 +175,7 @@ export async function getAnyCachedNoteBuffer(noteId) {
           const buf = await match.arrayBuffer();
           if (buf && buf.byteLength > 0) {
             // Self-healing: persist into IndexedDB so future reads need 0 async roundtrips
-            cacheNoteBuffer(noteId, buf).catch(() => {});
+            cacheNoteBuffer(sId, buf).catch(() => {});
             return buf;
           }
         }
