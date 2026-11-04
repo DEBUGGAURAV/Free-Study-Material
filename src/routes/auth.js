@@ -348,8 +348,10 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       password: hashedPassword,
     });
 
+    const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
     const payload = {
       id: userId,
+      sid: sessionId,
       email: newUser.email,
       name: newUser.name,
       role: newUser.role,
@@ -357,10 +359,23 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       mobile: newUser.mobile,
       year: newUser.year,
       permissions: newUser.permissions,
+      v: 1,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Firestore
+    try {
+      const { recordActiveSession } = require("../services/studentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId,
+        req,
+        tokenVersion: 1,
+        deviceSpecs: req.body?.deviceSpecs,
+      }).catch(() => {});
+    } catch (_) {}
 
     // ⚡ Cache user in RAM cache for instant 0ms lookup
     ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 600);
@@ -592,6 +607,12 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
     const newVersion = Date.now();
     setRevokedTokenVersion(userId, newVersion);
 
+    // 🛡️ Revoke all sessions across all devices in Firestore on password reset
+    try {
+      const { terminateAllUserSessions } = require("../services/studentSessionService");
+      await terminateAllUserSessions(userId);
+    } catch (_) {}
+
     const userDocRef = db.collection("users").doc(userId);
     await userDocRef.update({
       password: hashedPassword,
@@ -764,8 +785,10 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       password: hashedPassword,
     });
 
+    const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
     const payload = {
       id: userId,
+      sid: sessionId,
       email: newUser.email,
       name: newUser.name,
       role: newUser.role,
@@ -773,10 +796,23 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       mobile: newUser.mobile,
       year: newUser.year,
       permissions: newUser.permissions,
+      v: 1,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Firestore
+    try {
+      const { recordActiveSession } = require("../services/studentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId,
+        req,
+        tokenVersion: 1,
+        deviceSpecs: req.body?.deviceSpecs,
+      }).catch(() => {});
+    } catch (_) {}
 
     // Send Real-time Telegram Security Notice to Security Bot
     sendTelegramAuthNotice({
@@ -1094,8 +1130,10 @@ router.post("/google", authLimiter, async (req, res) => {
         }).catch(() => {});
       });
 
+      const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
       const payload = {
         id: doc.id,
+        sid: sessionId,
         email: userData.email,
         name: userData.name || verifiedName,
         role: userData.role || (userData.email === MAIN_ADMIN_EMAIL ? "admin" : "student"),
@@ -1106,10 +1144,23 @@ router.post("/google", authLimiter, async (req, res) => {
         permissions: userData.email === MAIN_ADMIN_EMAIL
           ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
           : (userData.permissions || ["download_notes", "upload_notes"]),
+        v: Number(userData.tokenVersion || Date.now()),
       };
 
       const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
       setAuthCookie(res, req, token);
+
+      // 🚀 Track Active Device Session in Firestore
+      try {
+        const { recordActiveSession } = require("../services/studentSessionService");
+        recordActiveSession({
+          sessionId,
+          userId: doc.id,
+          req,
+          tokenVersion: payload.v,
+          deviceSpecs: req.body?.deviceSpecs,
+        }).catch(() => {});
+      } catch (_) {}
 
       return res.json({
         success: true,

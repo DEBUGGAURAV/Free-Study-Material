@@ -4092,6 +4092,10 @@ router.delete("/turso/audits/:roomId", authenticateToken, requireAdmin, async (r
       ...result,
       message: `Audit transcript for room "${roomId}" permanently deleted!`,
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 /**
  * POST /api/admin/turso/students/prune & /api/admin/sessions/prune
@@ -4125,10 +4129,6 @@ router.post(["/turso/students/clean-revoked", "/sessions/clean-revoked"], authen
       success: true,
       ...result,
     });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
