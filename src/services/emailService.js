@@ -513,6 +513,8 @@ async function sendTelegramAuthNotice({
       eventTitle = "90-Day Inactive Account Purged";
     }
 
+    const isNoteEvent = event === "NOTE_UPLOAD" || event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW";
+
     function formatRealSize(bytes) {
       const num = Number(bytes || 0);
       if (!num || num <= 0) return "0.01 MB (10 KB)";

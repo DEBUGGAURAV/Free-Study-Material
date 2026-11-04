@@ -9,6 +9,7 @@ const API_BASE = "/api";
 export const STREAM_BASE = "/api";
 import { fetchWithCdnFailover, parseSourceFromHeaders } from "./utils/cdnFailover";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
+import { getAnyCachedNoteBuffer } from "./utils/offlineQueue";
 
 
 export function getAuthToken() {
@@ -660,6 +661,59 @@ export const api = {
    * Download Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null, fileHandle = null) => {
+    // 🚀 Tier 1: Check Local Client IndexedDB & In-Memory Offline Storage (0ms Instant Download)
+    try {
+      const localCached = await getAnyCachedNoteBuffer(id);
+      if (localCached && localCached.byteLength > 500) {
+        let finalFileName = (fileName || "").trim();
+        if (!finalFileName) finalFileName = `Note_${id}.pdf`;
+        finalFileName = finalFileName.replace(/[/\\?%*:|"<>]/g, "_").trim();
+        if (!finalFileName.toLowerCase().endsWith(".pdf")) finalFileName += ".pdf";
+
+        if (onProgress) {
+          onProgress({
+            percent: 100,
+            speed: "120 MB/s (IndexedDB)",
+            loadedMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
+            totalMB: (localCached.byteLength / (1024 * 1024)).toFixed(2),
+            timeRemaining: "Ready",
+            source: "ram",
+            realSource: {
+              id: "ram",
+              label: "Offline Device Storage (IndexedDB Cache)",
+              short: "IndexedDB (0ms)",
+              colo: "Device",
+              icon: "📱",
+            },
+            realSourceLabel: "Offline Device Storage (IndexedDB Cache)",
+          });
+        }
+
+        const blob = new Blob([localCached], { type: "application/pdf" });
+        if (fileHandle) {
+          try {
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return blob;
+          } catch (_) {}
+        }
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = finalFileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try {
+            if (a.parentNode) document.body.removeChild(a);
+            window.URL.revokeObjectURL(downloadUrl);
+          } catch (_) {}
+        }, 45000);
+        return blob;
+      }
+    } catch (_) {}
+
     const token = getAuthToken();
     const url = `${STREAM_BASE}/notes/${id}/stream.pdf${token ? `?token=${token}` : ""}`;
     const startTime = performance.now();

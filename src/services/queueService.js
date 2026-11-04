@@ -440,6 +440,30 @@ function enqueueUpload(task) {
         } catch {}
       }
 
+      // 💽 Pre-seed Server NVMe SSD Disk Cache so newly uploaded note streams instantly (Tier 3)
+      try {
+        const cdnCacheDir = path.join(process.cwd(), "cache", "cdn");
+        if (!fs.existsSync(cdnCacheDir)) fs.mkdirSync(cdnCacheDir, { recursive: true });
+        const targetBin = path.join(cdnCacheDir, `${noteId}.bin`);
+        const targetMeta = path.join(cdnCacheDir, `${noteId}.meta.json`);
+        if (fs.existsSync(tempFilePath)) {
+          await fs.promises.copyFile(tempFilePath, targetBin);
+          await fs.promises.writeFile(targetMeta, JSON.stringify({
+            id: noteId,
+            title: meta?.title || originalName || noteId,
+            mimeType: mimeType || "application/pdf",
+            totalSize: compressedSize || originalSize,
+            cachedAt: new Date().toISOString(),
+          }), "utf8");
+          console.log(`[QUEUE] 💽 Pre-seeded newly uploaded note ${noteId} directly to Server SSD Disk Cache!`);
+          if (db) {
+            db.collection("notes").doc(noteId).update({ isCdnCached: true }).catch(() => {});
+          }
+        }
+      } catch (ssdErr) {
+        console.warn("[QUEUE] Pre-seed Server SSD disk cache notice:", ssdErr.message);
+      }
+
       // Clean up server temp file (100% Zero Persistent Server Disk Usage)
       if (fs.existsSync(tempFilePath)) {
         await fs.promises.unlink(tempFilePath);
