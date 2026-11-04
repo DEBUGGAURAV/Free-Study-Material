@@ -1306,6 +1306,7 @@ export const api = {
   getTursoAudits: (limit = 100) => request(`/admin/turso/audits?limit=${limit}`),
   pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
   deleteTursoAudit: (roomId) => request(`/admin/turso/audits/${encodeURIComponent(roomId)}`, { method: "DELETE" }),
+  cleanTursoStudentVault: () => request("/admin/turso/student/clean", { method: "POST" }),
   runSecurityScan: async () => {
     try {
       return await request("/admin/security/scan");

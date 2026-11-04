@@ -1,21 +1,48 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { db } = require("../firebase");
+const { ramCache } = require("../utils/ramCache");
 
 const JWT_SECRET = (process.env.JWT_SECRET || crypto.randomBytes(64).toString("hex")).trim();
 
 // 🛡️ Multi-Device Session Invalidation Cache (Category 1 Feature 4)
 // Stores minimum valid tokenVersion per userId: Map<userId, { minVersion: number, revokedAt: number }>
 const userRevokedTokenVersions = new Map();
+const REVOCATION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (JWT maximum lifespan)
+
+/**
+ * Periodically prunes expired revocation entries to eliminate memory leaks
+ */
+function pruneRevocationCache() {
+  const now = Date.now();
+  for (const [uid, record] of userRevokedTokenVersions.entries()) {
+    if (!record || !record.revokedAt || (now - record.revokedAt > REVOCATION_TTL_MS)) {
+      userRevokedTokenVersions.delete(uid);
+    }
+  }
+  // Hard cap to keep RAM usage bounded
+  if (userRevokedTokenVersions.size > 5000) {
+    const keys = Array.from(userRevokedTokenVersions.keys());
+    for (let i = 0; i < keys.length - 3000; i++) {
+      userRevokedTokenVersions.delete(keys[i]);
+    }
+  }
+}
 
 /**
  * Updates revoked token version for a user (called on password reset, change, or logout-all-devices)
  */
 function setRevokedTokenVersion(userId, minVersion = 1) {
   if (!userId) return;
-  userRevokedTokenVersions.set(String(userId), {
+  pruneRevocationCache();
+  const rec = {
     minVersion: Number(minVersion),
     revokedAt: Date.now(),
-  });
+  };
+  userRevokedTokenVersions.set(String(userId), rec);
+  if (ramCache) {
+    ramCache.set(`user_min_version_${userId}`, rec, 7 * 86400);
+  }
 }
 
 function authenticateToken(req, res, next) {
@@ -25,7 +52,30 @@ function authenticateToken(req, res, next) {
   const cookieToken = req.cookies?.fsm_token || req.cookies?.token || req.cookies?.vault_token;
   const authHeader = req.headers?.["authorization"] || req.headers?.authorization;
   const headerToken = authHeader && typeof authHeader === "string" ? authHeader.split(" ")[1] : null;
-  const queryToken = req.query?.token;
+  let queryToken = req.query?.token;
+
+  // 🛡️ Security Check: Prevent query token exposure on mutating requests or non-streaming routes
+  if (queryToken && !cookieToken && !headerToken) {
+    const method = (req.method || "").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") {
+      // Reject query token on state-changing actions (POST, PUT, DELETE, PATCH)
+      queryToken = null;
+    } else {
+      const cleanPath = (req.path || "").toLowerCase();
+      // Allow query tokens only for safe streaming, preview, file delivery, or database export
+      const isAllowedStreamOrExport =
+        cleanPath.startsWith("/api/notes/") ||
+        cleanPath.startsWith("/notes/") ||
+        cleanPath.startsWith("/api/cdn/") ||
+        cleanPath.includes("/stream") ||
+        cleanPath.includes("/preview") ||
+        cleanPath === "/api/admin/database/export";
+      if (!isAllowedStreamOrExport) {
+        queryToken = null;
+      }
+    }
+  }
+
   const token = cookieToken || headerToken || queryToken;
 
   if (!token) {
@@ -33,16 +83,51 @@ function authenticateToken(req, res, next) {
     return next();
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
       req.user = null;
       return next();
     }
 
-    // 🛡️ Category 1 Feature 4: Multi-Device Session Invalidation Check
+    // 🛡️ Multi-Device & Server Restart Session Invalidation Check
     if (user && user.id) {
-      const revocation = userRevokedTokenVersions.get(String(user.id));
+      const uId = String(user.id);
       const userTokenVersion = typeof user.v === "number" ? user.v : 0;
+      let revocation = userRevokedTokenVersions.get(uId);
+
+      // If not in node memory, check fast RAM cache
+      if (!revocation && ramCache) {
+        revocation = ramCache.get(`user_min_version_${uId}`);
+        if (revocation) {
+          userRevokedTokenVersions.set(uId, revocation);
+        }
+      }
+
+      // If still not in memory/RAM cache, fetch persisted version from Firestore to survive server restarts
+      if (!revocation && db && uId !== "admin-root") {
+        try {
+          const userDoc = await db.collection("users").doc(uId).get();
+          if (userDoc.exists) {
+            const uData = userDoc.data() || {};
+            // If user is suspended/blocked in database, invalidate immediately!
+            if (uData.isBlocked) {
+              console.log(`[AUTH-MIDDLEWARE] 🚨 Blocked user detected: ${user.email} (${uId}). Revoking session.`);
+              clearAuthCookie(res, req);
+              req.user = null;
+              return next();
+            }
+            const minV = Number(uData.tokenVersion || uData.sessionRevokedAt || 0);
+            if (minV > 0) {
+              revocation = { minVersion: minV, revokedAt: Date.now() };
+              userRevokedTokenVersions.set(uId, revocation);
+              if (ramCache) {
+                ramCache.set(`user_min_version_${uId}`, revocation, 7 * 86400);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       if (revocation && userTokenVersion < revocation.minVersion) {
         console.log(`[AUTH-MIDDLEWARE] 🚪 Revoked session detected for user ${user.id} (token v:${userTokenVersion} < required v:${revocation.minVersion}). Invalidating.`);
         clearAuthCookie(res, req);
@@ -53,7 +138,7 @@ function authenticateToken(req, res, next) {
       // 📱 Single Device Session Invalidation Check (Active Device Security)
       if (user.sid) {
         try {
-          const { isSessionRevokedSync, isSessionRevoked, touchSessionActive } = require("../services/studentSessionService");
+          const { isSessionRevokedSync, touchSessionActive } = require("../services/studentSessionService");
           if (isSessionRevokedSync(user.sid)) {
             console.log(`[AUTH-MIDDLEWARE] 🚪 Single device session terminated for user ${user.id} (sid: ${user.sid}). Invalidating.`);
             clearAuthCookie(res, req);
@@ -69,16 +154,33 @@ function authenticateToken(req, res, next) {
     // 🛡️ 30-Minute Student Inactivity Check (Server-Side Shield for Mobile & Web)
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
     const isMainAdmin = user && (user.isMainAdmin || user.isMasterAdmin || (adminEmail && user.email && user.email.toLowerCase().trim() === adminEmail));
-    const lastActiveStr = req.cookies?.vault_last_active;
+    
+    // Check tamper-proof httpOnly cookie first, then fallback to vault_last_active
+    const fsmLastActiveStr = req.cookies?.fsm_last_active;
+    const clientLastActiveStr = req.cookies?.vault_last_active;
+    const lastActiveStr = fsmLastActiveStr || clientLastActiveStr;
 
-    if (!isMainAdmin && lastActiveStr) {
-      const lastActive = parseInt(lastActiveStr, 10);
+    if (!isMainAdmin) {
       const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
-      if (lastActive > 0 && Date.now() - lastActive >= INACTIVITY_TIMEOUT_MS) {
-        console.log(`[AUTH-MIDDLEWARE] ⏱️ Server detected 30-min inactivity for ${user.email} (${Math.round((Date.now() - lastActive) / 60000)} mins). Revoking session.`);
-        clearAuthCookie(res, req);
-        req.user = null;
-        return next();
+      const now = Date.now();
+
+      if (lastActiveStr) {
+        const lastActive = parseInt(lastActiveStr, 10);
+        if (lastActive > 0 && now - lastActive >= INACTIVITY_TIMEOUT_MS) {
+          console.log(`[AUTH-MIDDLEWARE] ⏱️ Server detected 30-min inactivity for ${user.email} (${Math.round((now - lastActive) / 60000)} mins). Revoking session.`);
+          clearAuthCookie(res, req);
+          req.user = null;
+          return next();
+        }
+      } else if (cookieToken) {
+        // Fallback when cookie is omitted: verify against JWT issuance timestamp (user.iat)
+        const tokenIssuedAtMs = user.iat ? user.iat * 1000 : 0;
+        if (tokenIssuedAtMs > 0 && (now - tokenIssuedAtMs >= INACTIVITY_TIMEOUT_MS)) {
+          console.log(`[AUTH-MIDDLEWARE] ⏱️ Inactivity cookie missing & token age exceeds 30 mins for ${user.email}. Revoking session.`);
+          clearAuthCookie(res, req);
+          req.user = null;
+          return next();
+        }
       }
     }
 
@@ -93,13 +195,25 @@ function authenticateToken(req, res, next) {
       } catch (_) {}
     }
 
-    // Refresh vault_last_active cookie periodically (debounced to 30s) on active API requests
+    // Refresh cookies periodically (debounced to 30s) on active API requests
     if (req.user && (!lastActiveStr || Date.now() - parseInt(lastActiveStr, 10) > 30000)) {
       const isProd = process.env.NODE_ENV === "production";
       const host = (req && req.get) ? (req.get("host") || "") : "";
       const isLocal = !host || host.includes("localhost") || host.includes("127.0.0.1");
       const secure = isProd && !isLocal;
-      res.cookie("vault_last_active", String(Date.now()), {
+      const nowStr = String(Date.now());
+
+      // 1. Server-controlled httpOnly cookie (Tamper-proof server check)
+      res.cookie("fsm_last_active", nowStr, {
+        httpOnly: true,
+        secure: secure,
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: "/",
+      });
+
+      // 2. Client-readable cookie for UI countdown timers
+      res.cookie("vault_last_active", nowStr, {
         httpOnly: false,
         secure: secure,
         sameSite: "lax",
@@ -148,6 +262,7 @@ function setAuthCookie(res, req, token) {
   const host = (req && req.get) ? (req.get("host") || "") : "";
   const isLocal = !host || host.includes("localhost") || host.includes("127.0.0.1");
   const secure = isProd && !isLocal;
+  const nowStr = String(Date.now());
 
   res.cookie("fsm_token", token, {
     httpOnly: true,
@@ -157,7 +272,15 @@ function setAuthCookie(res, req, token) {
     path: "/",
   });
 
-  res.cookie("vault_last_active", String(Date.now()), {
+  res.cookie("fsm_last_active", nowStr, {
+    httpOnly: true,
+    secure: secure,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: "/",
+  });
+
+  res.cookie("vault_last_active", nowStr, {
     httpOnly: false,
     secure: secure,
     sameSite: "lax",
@@ -176,6 +299,13 @@ function clearAuthCookie(res, req) {
   const secure = isProd && !isLocal;
 
   res.clearCookie("fsm_token", {
+    httpOnly: true,
+    secure: secure,
+    sameSite: secure ? "strict" : "lax",
+    path: "/",
+  });
+
+  res.clearCookie("fsm_last_active", {
     httpOnly: true,
     secure: secure,
     sameSite: secure ? "strict" : "lax",

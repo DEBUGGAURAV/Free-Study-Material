@@ -14,8 +14,18 @@ const EXEMPTED_PATHS = [
   "/health",
   "/api/health",
   "/api/auth/register-telegram-initiate",
+  "/api/auth/register-telegram-verify",
+  "/api/auth/forgot-telegram-initiate",
+  "/api/auth/forgot-telegram-verify",
+  "/api/auth/register-request-otp",
+  "/api/auth/register-verify-otp",
   "/api/auth/login",
+  "/api/auth/login-request-otp",
+  "/api/auth/login-verify-otp",
+  "/api/auth/forgot-password-request-otp",
+  "/api/auth/forgot-password-verify-otp",
   "/api/auth/register",
+  "/api/auth/google",
 ];
 
 /**

@@ -6,7 +6,7 @@ import {
   Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
   Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
   FileText, Sliders, Layers, Scissors, RotateCcw, Megaphone, Plus, Lock,
-  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug
+  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug, Smartphone
 } from "lucide-react";
 import { api, getAuthToken } from "../../../api";
 import { formatFileSize, formatMB } from "../../../utils/formatUtils";
@@ -35,6 +35,27 @@ export default function TabSoftware(props) {
   const [liveSpeeds, setLiveSpeeds] = useState(null);
   const [speedMeasuring, setSpeedMeasuring] = useState(false);
   const [pulseCount, setPulseCount] = useState(0);
+  const [cleaningStudentTurso, setCleaningStudentTurso] = useState(false);
+  const [studentTursoCleanMsg, setStudentTursoCleanMsg] = useState(null);
+
+  const handleCleanStudentTurso = async () => {
+    if (!window.confirm("Clean stale revoked sessions and old telemetry records from Turso Student Vault?")) return;
+    setCleaningStudentTurso(true);
+    setStudentTursoCleanMsg(null);
+    try {
+      const res = await api.cleanTursoStudentVault();
+      if (res?.success) {
+        setStudentTursoCleanMsg({ type: "success", text: res.message || "Turso Student Vault cleaned successfully!" });
+        if (typeof loadSoftwareInfo === "function") loadSoftwareInfo();
+      } else {
+        setStudentTursoCleanMsg({ type: "error", text: res?.message || "Failed to clean Student Vault." });
+      }
+    } catch (err) {
+      setStudentTursoCleanMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setCleaningStudentTurso(false);
+    }
+  };
 
   const measureSpeeds = async (showSpin = false) => {
     try {
@@ -216,6 +237,15 @@ export default function TabSoftware(props) {
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#38bdf8", marginTop: "4px", fontWeight: 600 }}>● DC #5 Singapore • {liveSpeeds?.bandwidthMbps || softwareInfo?.mtproto?.bandwidthMbps || "120 MB/s"}</div>
                   </div>
+
+                  {/* Engine 6: Turso 4 Student Sessions Vault */}
+                  <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(168, 85, 247, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 4: Student Vault</div>
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#c084fc", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Zap size={16} /> {liveSpeeds?.tursoStudent?.latencyMs != null ? `${liveSpeeds.tursoStudent.latencyMs} ms` : (softwareInfo?.tursoStudentVault?.latencyMs != null ? `${softwareInfo.tursoStudentVault.latencyMs}` : "< 8 ms")}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#c084fc", marginTop: "4px", fontWeight: 600 }}>● Multi-Device &amp; Telemetry Edge</div>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -241,13 +271,13 @@ export default function TabSoftware(props) {
                     </div>
                     <div>
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <span>Triple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
+                        <span>Quadruple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
                         <span style={{ fontSize: "0.72rem", background: "#06b6d4", color: "#000", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
-                          3 ENGINES ACTIVE
+                          4 ENGINES ACTIVE
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache &amp; Support Help Vault.
+                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault &amp; Student Sessions Vault.
                       </div>
                     </div>
                   </div>
@@ -264,7 +294,7 @@ export default function TabSoftware(props) {
                         border: `1px solid ${(softwareInfo?.tursoVault?.connected && softwareInfo?.tursoNotesCache?.connected && (softwareInfo?.tursoHelp?.connected ?? true)) ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
                       }}
                     >
-                      ● TRIPLE ENGINE HEALTH: {(softwareInfo?.tursoVault?.connected && softwareInfo?.tursoNotesCache?.connected && (softwareInfo?.tursoHelp?.connected ?? true)) ? "100% OPERATIONAL" : "STANDBY PROTECTED"}
+                      ● QUADRUPLE ENGINE HEALTH: {(softwareInfo?.tursoVault?.connected && softwareInfo?.tursoNotesCache?.connected && (softwareInfo?.tursoHelp?.connected ?? true) && (softwareInfo?.tursoStudentVault?.connected ?? true)) ? "100% OPERATIONAL" : "STANDBY PROTECTED"}
                     </span>
                   </div>
                 </div>
@@ -479,6 +509,127 @@ export default function TabSoftware(props) {
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Turso Engine 4: Student Sessions & Security Telemetry Vault */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.7)",
+                      border: "1.5px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Smartphone size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
+                              4. Turso Student Vault (Sessions &amp; Security)
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              Active Multi-Device Sessions, Revocations &amp; Security Logs
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            background: (softwareInfo?.tursoStudentVault?.connected ?? true) ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                            color: (softwareInfo?.tursoStudentVault?.connected ?? true) ? "#34d399" : "#fbbf24",
+                            border: `1px solid ${(softwareInfo?.tursoStudentVault?.connected ?? true) ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
+                          }}
+                        >
+                          {(softwareInfo?.tursoStudentVault?.connected ?? true) ? "🟢 LIVE & ONLINE" : "🟡 STANDBY"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
+                          <span style={{ color: "#38bdf8", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Zap size={12} /> {liveSpeeds?.tursoStudent?.latencyMs != null ? `${liveSpeeds.tursoStudent.latencyMs}ms (Live Speed)` : (softwareInfo?.tursoStudentVault?.latencyMs || "< 8ms (Direct Edge)")}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database Region:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                            {softwareInfo?.tursoStudentVault?.isCloud ? "AWS Mumbai (aws-ap-south-1.turso.io)" : "Local LibSQL Vault Cache"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Active Sessions:</span>
+                          <span style={{ color: "#34d399", fontWeight: 800 }}>
+                            {softwareInfo?.tursoStudentVault?.sessionsCount ?? 0} Sessions Active
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Security Activity Logs:</span>
+                          <span style={{ color: "#fbbf24", fontWeight: 800 }}>
+                            {softwareInfo?.tursoStudentVault?.logsCount ?? 0} Security Events
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database URL:</span>
+                          <span style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.72rem" }}>
+                            {softwareInfo?.tursoStudentVault?.database || "TURSO_STUDENT_DATABASE_URL"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Maintenance Clean Controller */}
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Maintenance:</span>
+                      <button
+                        type="button"
+                        disabled={cleaningStudentTurso}
+                        onClick={handleCleanStudentTurso}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid rgba(56, 189, 248, 0.4)",
+                          background: "rgba(56, 189, 248, 0.15)",
+                          color: "#38bdf8",
+                          cursor: cleaningStudentTurso ? "not-allowed" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Clean stale revoked sessions and optimize student vault"
+                      >
+                        <Trash2 size={12} className={cleaningStudentTurso ? "spin" : ""} />
+                        <span>{cleaningStudentTurso ? "Cleaning..." : "Clean Student Vault"}</span>
+                      </button>
+                    </div>
+
+                    {studentTursoCleanMsg && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "0.72rem",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          background: studentTursoCleanMsg.type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                          color: studentTursoCleanMsg.type === "success" ? "#34d399" : "#f87171",
+                        }}
+                      >
+                        {studentTursoCleanMsg.text}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

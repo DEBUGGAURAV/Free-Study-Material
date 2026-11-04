@@ -22,6 +22,30 @@ const memoryRevokedSessions = new Set();
 const sessionActiveThrottle = new Map();
 
 /**
+ * Bounds in-memory caches to prevent memory leaks over long server uptimes
+ */
+function pruneSessionCaches() {
+  const now = Date.now();
+  if (sessionActiveThrottle.size > 2000) {
+    for (const [sid, timestamp] of sessionActiveThrottle.entries()) {
+      if (now - timestamp > 24 * 3600 * 1000) {
+        sessionActiveThrottle.delete(sid);
+      }
+    }
+    if (sessionActiveThrottle.size > 5000) {
+      sessionActiveThrottle.clear();
+    }
+  }
+
+  if (memoryRevokedSessions.size > 10000) {
+    const items = Array.from(memoryRevokedSessions);
+    for (let i = 0; i < 5000; i++) {
+      memoryRevokedSessions.delete(items[i]);
+    }
+  }
+}
+
+/**
  * Format an ultra-clear, easily identifiable human device name
  */
 function formatDeviceIdentifier({ ua = "", deviceSpecs = null, req = null }) {
@@ -193,6 +217,7 @@ async function touchSessionActive(userId, sessionId) {
   const last = sessionActiveThrottle.get(sessionId) || 0;
   if (now - last < 10 * 60 * 1000) return; // 10-minute throttle
 
+  pruneSessionCaches();
   sessionActiveThrottle.set(sessionId, now);
 
   if (!db) return;
@@ -280,6 +305,7 @@ async function terminateSingleSession(userId, sessionIdToTerminate, terminatedBy
     const uId = String(userId);
 
     // Instant in-memory rejection
+    pruneSessionCaches();
     memoryRevokedSessions.add(sId);
 
     if (db && uId !== "admin-root") {
@@ -447,7 +473,43 @@ async function getUserSecurityLogs(userId, limit = 10) {
   }
 }
 
+/**
+ * Prune inactive sessions older than X days across all students in Firestore
+ */
+async function pruneInactiveSessions(days = 30) {
+  const cutoff = Date.now() - (Number(days || 30) * 24 * 3600 * 1000);
+  let cleanedCount = 0;
+  pruneSessionCaches();
+  if (!db) return { success: true, count: 0 };
+  try {
+    const snap = await db.collection("users").get();
+    for (const doc of snap.docs) {
+      const uData = doc.data() || {};
+      const sessions = Array.isArray(uData.activeSessions) ? uData.activeSessions : [];
+      const valid = sessions.filter(s => Number(s.lastActiveAt) > cutoff);
+      if (valid.length !== sessions.length) {
+        cleanedCount += (sessions.length - valid.length);
+        await doc.ref.update({ activeSessions: valid }).catch(() => {});
+      }
+    }
+    return { success: true, count: cleanedCount };
+  } catch (err) {
+    return { success: false, error: err.message, count: 0 };
+  }
+}
+
+/**
+ * Flush revoked session in-memory caches
+ */
+async function cleanRevokedSessions() {
+  memoryRevokedSessions.clear();
+  sessionActiveThrottle.clear();
+  return { success: true, message: "Revoked session cache cleared." };
+}
+
 module.exports = {
+  pruneInactiveSessions,
+  cleanRevokedSessions,
   recordActiveSession,
   touchSessionActive,
   getUserActiveSessions,
