@@ -21,8 +21,8 @@ const DEFAULT_AI_SETTINGS = {
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
   circleSearchCooldownSec: 3, // ⭕ Cooldown between circle searches
   circleSearchUsedToday: 0,
-  groqModel: "llama-3.3-70b-versatile",
-  geminiModel: "gemini-2.0-flash",
+  groqModel: "openai/gpt-oss-20b",
+  geminiModel: "gemini-flash-lite-latest",
   groqLimit: 14400,
   geminiLimit: 1500,
   groqUsedToday: 0,
@@ -103,12 +103,12 @@ async function loadAiSettings() {
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
         };
 
-        // Auto-upgrade legacy/deprecated models
-        if (!currentAiSettings.geminiModel || currentAiSettings.geminiModel === "gemini-flash-lite-latest") {
-          currentAiSettings.geminiModel = "gemini-2.0-flash";
+        // Auto-upgrade legacy/deprecated models to active, working models
+        if (!currentAiSettings.geminiModel || currentAiSettings.geminiModel.includes("gemini-2.0") || currentAiSettings.geminiModel.includes("gemini-1.5") || currentAiSettings.geminiModel.includes("gemini-2.5")) {
+          currentAiSettings.geminiModel = "gemini-flash-lite-latest";
         }
-        if (!currentAiSettings.groqModel || currentAiSettings.groqModel === "openai/gpt-oss-20b") {
-          currentAiSettings.groqModel = "llama-3.3-70b-versatile";
+        if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
+          currentAiSettings.groqModel = "openai/gpt-oss-20b";
         }
         saveAiSettingsToDb().catch(() => {});
       } else {
