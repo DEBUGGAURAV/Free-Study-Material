@@ -937,16 +937,37 @@ export default function VirtualPdfReader({
       }
     }
 
+    // 🛡️ Ultimate safety watchdog: Guarantee reader is NEVER stuck at 100% past 4.5 seconds
+    const globalSafetyWatchdog = setTimeout(() => {
+      if (!isCancelled) {
+        setLoading((prevLoading) => {
+          if (prevLoading) {
+            console.warn("[VirtualPdfReader] Global watchdog tripped: auto-clearing stuck loader state");
+            setNativeLoading(false);
+            setUseNativeViewer(true);
+            return false;
+          }
+          return prevLoading;
+        });
+      }
+    }, 4500);
+
     loadPdf();
 
     return () => {
       isCancelled = true;
+      clearTimeout(globalSafetyWatchdog);
     };
-  }, [url, noteId, file, note, reloadTrigger]);
+  }, [url, noteId, file, note?.id, reloadTrigger]);
 
   // ⚡ Real-Time Native Browser Engine Loading Simulator & Progress Sync
   useEffect(() => {
     if (!useNativeViewer) {
+      setNativeLoading(false);
+      return;
+    }
+    // Instant 0ms show if document is already parsed or if loading has already resolved
+    if (pdfDoc || !loading) {
       setNativeLoading(false);
       return;
     }
@@ -972,7 +993,7 @@ export default function VirtualPdfReader({
       });
     }, 120);
 
-    // 🛡️ Auto-resolve native loader in 800ms because Chromium PDFium suppresses iframe onLoad
+    // 🛡️ Auto-resolve native loader in 600ms because Chromium PDFium suppresses iframe onLoad
     const safetyTimer = setTimeout(() => {
       setNativeLoading(false);
       setPreviewProgress({
@@ -981,13 +1002,13 @@ export default function VirtualPdfReader({
         totalBytes: noteTotalSize,
         speed: "Ready",
       });
-    }, 800);
+    }, 600);
 
     return () => {
       clearInterval(nativeTimer);
       clearTimeout(safetyTimer);
     };
-  }, [useNativeViewer, nativeSrc, url, streamSource, note]);
+  }, [useNativeViewer, nativeSrc, url, streamSource, note?.id]);
 
   // ⚡ Unified 4-Tier Document Download Engine (Waterfall)
   const handleInternalDownload = async () => {
@@ -4143,19 +4164,54 @@ export default function VirtualPdfReader({
               </div>
             </div>
 
-            {/* Document Content in Web Reader */}
-            {(!pdfDoc || !numPages || !isTouchOrMobileDevice) ? (
-              <iframe
-                ref={iframeRef}
-                src={nativeSrc || `/api/notes/${noteId}/stream.pdf?preview=1`}
-                allow="fullscreen"
-                style={{ width: "100%", height: "100%", flex: 1, minHeight: "500px", border: "none", background: "#ffffff" }}
-                title={title}
-                onLoad={() => {
-                  setNativeLoading(false);
-                  setLoading(false);
-                }}
-              />
+            {/* Document Content in Web Reader: High-Performance Canvas Stream if pdfDoc ready, else Resilient Iframe Fallback */}
+            {(!pdfDoc || !numPages) ? (
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", height: "100%", position: "relative" }}>
+                <iframe
+                  ref={iframeRef}
+                  src={nativeSrc || `/api/notes/${noteId}/stream.pdf?preview=1`}
+                  allow="fullscreen"
+                  style={{ width: "100%", height: "100%", flex: 1, minHeight: "500px", border: "none", background: "#ffffff" }}
+                  title={title}
+                  onLoad={() => {
+                    setNativeLoading(false);
+                    setLoading(false);
+                  }}
+                  onError={() => {
+                    setNativeLoading(false);
+                    setLoading(false);
+                  }}
+                />
+                <div
+                  style={{
+                    padding: "8px 16px",
+                    background: nightMode ? "rgba(15, 23, 42, 0.9)" : "#f8fafc",
+                    borderTop: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+                    fontSize: "0.75rem",
+                    color: nightMode ? "#94a3b8" : "#64748b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                  }}
+                >
+                  <span>💡 If your browser restricts embedded preview:</span>
+                  <a
+                    href={nativeSrc || `/api/notes/${noteId}/stream.pdf?preview=1`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      color: "#38bdf8",
+                      fontWeight: 700,
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Open Document in New Tab ↗
+                  </a>
+                </div>
+              </div>
             ) : (
               <div
                 style={{
@@ -4400,8 +4456,36 @@ export default function VirtualPdfReader({
               )}
             </div>
 
-            {/* Instant Web Reader Switch Bypass in Loading Modal */}
-            <div style={{ display: "flex", justifyContent: "center", marginTop: "4px" }}>
+            {/* Instant Reader Bypass & Quick Controls in Loading Modal */}
+            <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "6px", flexWrap: "wrap" }}>
+              {(previewProgress.percent >= 90 || previewProgress.loadedBytes > 1000000) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoading(false);
+                    setNativeLoading(false);
+                    if (!pdfDoc) setUseNativeViewer(true);
+                  }}
+                  style={{
+                    background: "linear-gradient(135deg, #10b981, #06b6d4)",
+                    border: "none",
+                    color: "#ffffff",
+                    padding: "5px 14px",
+                    borderRadius: "8px",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Force open document immediately without waiting"
+                >
+                  <span>⚡ Open Now</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleSwitchToNative}
