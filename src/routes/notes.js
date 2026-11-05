@@ -2190,8 +2190,22 @@ function purgeMemoryCache() {
 
 async function prewarmPopularNotes(limit = 10) {
   if (!db) return { success: false, message: "Database not connected", prewarmed: 0 };
-  const safeLimit = parseInt(limit, 10);
-  const finalLimit = isNaN(safeLimit) || safeLimit <= 0 ? 10 : Math.min(safeLimit, 50);
+  let ceilingMb = 512;
+  try {
+    const watchdog = require("../utils/selfHealingWatchdog");
+    if (typeof watchdog.getSystemMemoryCeilingMb === "function") {
+      ceilingMb = watchdog.getSystemMemoryCeilingMb();
+    }
+  } catch (_) {}
+
+  // On 512MB hosts (Render), prewarm at most 2 notes to eliminate startup memory spikes.
+  // On 1GB, 2GB, 4GB+ hosts (VPS / Railway / AWS), prewarm up to the requested limit (10 - 50 notes).
+  const isConstrainedHost = ceilingMb <= 512;
+  const parsedLimit = parseInt(limit, 10);
+  const finalLimit = isConstrainedHost
+    ? Math.min(2, isNaN(parsedLimit) || parsedLimit <= 0 ? 2 : parsedLimit)
+    : (isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : Math.min(parsedLimit, 50));
+
   let snap = null;
   try {
     snap = await db.collection("notes").orderBy("viewsCount", "desc").limit(finalLimit).get();
@@ -2215,6 +2229,10 @@ async function prewarmPopularNotes(limit = 10) {
         if (docData && docData.buffer) {
           saveCdnBuffer(doc.id, docData.buffer, docData.mimeType);
           prewarmed++;
+          // Immediately reclaim buffer memory on constrained containers
+          if (global.gc) {
+            try { global.gc(); } catch (_) {}
+          }
         }
       } catch (e) {
         console.error(`Prewarm error for note ${doc.id}:`, e.message);

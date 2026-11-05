@@ -63,16 +63,17 @@ function getSystemMemoryCeilingMb() {
 function getMemoryThresholds(manualCeilingMb = null) {
   const ceilingMb = manualCeilingMb || getSystemMemoryCeilingMb();
   
-  // Warning threshold: ~75% of total RAM (e.g. ~384MB for 512MB, ~768MB for 1GB, ~1536MB for 2GB, ~3072MB for 4GB)
-  const warningMb = Math.round(ceilingMb * 0.75);
-  
-  // Critical emergency threshold: ~88% of total RAM (e.g. ~450MB for 512MB, ~900MB for 1GB, ~1800MB for 2GB, ~3600MB for 4GB)
-  const criticalMb = Math.round(ceilingMb * 0.88);
+  // For constrained environments (e.g. Render Free Tier 512MB), enforce lower triggers (310MB / 385MB)
+  // so the container auto-purges RAM well before Render's 512MB limit triggers an alert email or OOM kill.
+  // For future hosts (VPS / Railway with 1GB, 2GB, 4GB, 8GB+), dynamically scale to full hardware capacity.
+  const isConstrained512 = ceilingMb <= 512;
+  const warningMb = isConstrained512 ? 310 : Math.round(ceilingMb * 0.75);
+  const criticalMb = isConstrained512 ? 385 : Math.round(ceilingMb * 0.88);
 
   return {
     ceilingMb,
-    warningMb: Math.max(250, warningMb),
-    criticalMb: Math.max(350, criticalMb),
+    warningMb,
+    criticalMb,
   };
 }
 

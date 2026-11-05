@@ -7,7 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "start": "node --max-old-space-size=384 src/server.js",
+    "start": "node --expose-gc --max-old-space-size=280 src/server.js",
     "build": "vite build",
     "render-build": "npm install && npm run build",
     "dev": "nodemon --watch src src/server.js",
