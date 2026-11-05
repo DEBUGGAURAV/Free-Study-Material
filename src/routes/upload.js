@@ -277,12 +277,14 @@ router.post(
         originalName: file.originalname,
         mimeType: file.mimetype,
         isLargeFile,
+        clientCompressed: req.body?.clientCompressed === "true",
         meta: {
           title: noteTitle,
           subject: noteSubject,
           branch: finalBranch,
           course: finalCourse,
           year: noteYear,
+          clientCompressed: req.body?.clientCompressed === "true",
         },
       });
 

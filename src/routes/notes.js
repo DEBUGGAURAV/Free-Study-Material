@@ -766,9 +766,18 @@ router.get("/", authenticateToken, async (req, res) => {
     const cachedData = ramCache.get(cacheKey);
 
     if (cachedData) {
-      res.setHeader("X-Cache", "HIT");
+      const lastSync = getLastSyncState();
+      const etag = `W/"${cachedData.notes.length}-${cachedData.totalCount}-${lastSync?.timestamp || 0}"`;
+      res.setHeader("ETag", etag);
       res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
-      return res.json({ success: true, notes: cachedData.notes, totalCount: cachedData.totalCount, lastSync: getLastSyncState() });
+
+      if (req.headers["if-none-match"] === etag) {
+        res.setHeader("X-Cache", "HIT-304");
+        return res.status(304).end();
+      }
+
+      res.setHeader("X-Cache", "HIT");
+      return res.json({ success: true, notes: cachedData.notes, totalCount: cachedData.totalCount, lastSync });
     }
 
     if (!db) {
@@ -857,9 +866,18 @@ router.get("/", authenticateToken, async (req, res) => {
     // Cache in RAM for 45 seconds
     ramCache.set(cacheKey, { notes, totalCount }, 45);
 
-    res.setHeader("X-Cache", "MISS");
+    const lastSync = getLastSyncState();
+    const etag = `W/"${notes.length}-${totalCount}-${lastSync?.timestamp || 0}"`;
+    res.setHeader("ETag", etag);
     res.setHeader("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
-    return res.json({ success: true, notes, totalCount, lastSync: getLastSyncState() });
+
+    if (req.headers["if-none-match"] === etag) {
+      res.setHeader("X-Cache", "MISS-304");
+      return res.status(304).end();
+    }
+
+    res.setHeader("X-Cache", "MISS");
+    return res.json({ success: true, notes, totalCount, lastSync });
   } catch (err) {
     console.error("[NOTES] Query error:", err);
     return res.status(500).json({ success: false, message: "Error fetching notes: " + (err.message || String(err)) });
@@ -1860,25 +1878,32 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
       if (requestingUser && requestingUser.id && requestingUser.id !== "admin-root" && requestingUser.role !== "admin") {
         try {
-          const { admin: fbAdmin } = require("../firebase");
-          if (fbAdmin && fbAdmin.firestore) {
-            db.collection("users").doc(requestingUser.id).update({
-              activities: fbAdmin.firestore.FieldValue.arrayUnion({
-                id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-                type: "download",
-                noteId: id,
-                noteTitle: note.title || "Academic Document",
-                subject: note.subject || "General",
-                course: note.course || "",
-                branch: note.branch || "",
-                fileSize: note.fileSize || 0,
-                detail: `Downloaded: ${note.title || "Academic Document"} (${note.subject || "General"})`,
-                timestamp: new Date().toISOString(),
-              }),
-              downloadsCount: fbAdmin.firestore.FieldValue.increment(1),
+          const uDocRef = db.collection("users").doc(requestingUser.id);
+          uDocRef.get().then((snap) => {
+            if (!snap.exists) return;
+            const uData = snap.data() || {};
+            let curActs = Array.isArray(uData.activities) ? [...uData.activities] : [];
+            const newAct = {
+              id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+              type: "download",
+              noteId: id,
+              noteTitle: note.title || "Academic Document",
+              subject: note.subject || "General",
+              course: note.course || "",
+              branch: note.branch || "",
+              fileSize: note.fileSize || 0,
+              detail: `Downloaded: ${note.title || "Academic Document"} (${note.subject || "General"})`,
+              timestamp: new Date().toISOString(),
+            };
+            curActs.unshift(newAct);
+            // 🛡️ Strict 15 Rolling Auto-Cap: Auto-delete older than 15 events
+            if (curActs.length > 15) curActs = curActs.slice(0, 15);
+            uDocRef.update({
+              activities: curActs,
+              downloadsCount: (uData.downloadsCount || 0) + 1,
               updatedAt: new Date().toISOString(),
-            }).catch((err) => console.warn("[STREAM] Append download activity notice:", err.message));
-          }
+            }).catch(() => {});
+          }).catch(() => {});
         } catch (_) {}
       }
     } else {

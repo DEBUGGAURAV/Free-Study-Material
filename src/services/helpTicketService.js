@@ -1262,17 +1262,39 @@ function startHelpBotPoller() {
   helpPollerActive = true;
   console.log("[HELP-BOT] 🟢 Telegram 2-way Support Sync Poller started for @fsm_help_bot");
 
-  const pollInterval = setInterval(async () => {
-    try {
-      const url = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${helpPollerOffset}&timeout=5&allowed_updates=["message","callback_query"]`;
-      const res = await fetch(url).catch(() => null);
-      if (!res || !res.ok) return;
+  (async () => {
+    let consecutiveFailures = 0;
+    while (helpPollerActive) {
+      try {
+        const url = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${helpPollerOffset}&timeout=25&allowed_updates=["message","callback_query"]`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(32000) }).catch(() => null);
+        if (!res || !res.ok) {
+          consecutiveFailures++;
+          const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+          const jitter = Math.floor(Math.random() * 800);
+          await new Promise((r) => setTimeout(r, baseDelay + jitter));
+          continue;
+        }
 
-      const data = await res.json().catch(() => null);
-      if (!data || !data.ok || !Array.isArray(data.result)) return;
+        const data = await res.json().catch(() => null);
+        if (!data || !data.ok || !Array.isArray(data.result)) {
+          consecutiveFailures++;
+          const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+          const jitter = Math.floor(Math.random() * 800);
+          await new Promise((r) => setTimeout(r, baseDelay + jitter));
+          continue;
+        }
 
-      for (const update of data.result) {
-        helpPollerOffset = update.update_id + 1;
+        consecutiveFailures = 0;
+
+        if (data.result.length === 0) {
+          // Event-driven idle micro-pause: Yield 1 second to Node.js event loop to maintain 0.0% CPU when idle
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+
+        for (const update of data.result) {
+          helpPollerOffset = update.update_id + 1;
 
         // 1. Handle Inline Button Callback Queries (Keep Active / Close Ticket)
         if (update.callback_query) {
@@ -1490,10 +1512,15 @@ function startHelpBotPoller() {
           );
         }
       }
-    } catch (_) {}
-  }, 3000);
-
-  return pollInterval;
+    } catch (_) {
+      if (!helpPollerActive) break;
+      consecutiveFailures++;
+      const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+      const jitter = Math.floor(Math.random() * 800);
+      await new Promise((r) => setTimeout(r, baseDelay + jitter));
+    }
+  }
+  })();
 }
 
 async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null, threadId = null) {

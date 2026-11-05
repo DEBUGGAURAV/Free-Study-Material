@@ -357,6 +357,11 @@ router.post("/bulk-delete", authenticateToken, requireAdmin, async (req, res) =>
  */
 router.post("/delete-all", authenticateToken, requireAdmin, async (req, res) => {
   try {
+    const isHalfAdmin = req.user?.role === "half_admin" || req.user?.role === "sub_admin";
+    if (isHalfAdmin) {
+      return res.status(403).json({ success: false, message: "PERMISSION RESTRICTED: Mass notice purge is reserved for Full Administrators." });
+    }
+
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable." });
 
     const snap = await db.collection("notices").get();

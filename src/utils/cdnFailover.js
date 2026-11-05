@@ -183,13 +183,14 @@ export async function triggerBrowserDownload(arrayBuffer, fileName, fileHandle =
 export function saveToClientOfflineStorage(noteId, note, arrayBuffer) {
   if (!noteId || !arrayBuffer || arrayBuffer.byteLength < 500) return;
   try {
+    const safeBuffer = arrayBuffer.slice ? arrayBuffer.slice(0) : arrayBuffer;
     if (typeof window !== "undefined") {
       window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = arrayBuffer;
+      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = safeBuffer;
     }
     // Save to BOTH IndexedDB stores (fsm_offline_vault AND fsm_p2p_cache_v1)
-    saveNoteOffline(note || { id: noteId, title: "Academic Document" }, arrayBuffer).catch(() => {});
-    cacheNoteBuffer(noteId, arrayBuffer).catch(() => {});
+    saveNoteOffline(note || { id: noteId, title: "Academic Document" }, safeBuffer).catch(() => {});
+    cacheNoteBuffer(noteId, safeBuffer).catch(() => {});
   } catch (_) {}
 }
 

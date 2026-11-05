@@ -545,8 +545,10 @@ router.post("/login-verify", async (req, res) => {
       });
     }
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
     const payload = {
       id: userId,
+      sid: sessionId,
       email: userRecord.email,
       name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Academic Member"),
       role: isMasterAdmin ? "admin" : (userRecord.role || "student"),
@@ -558,10 +560,23 @@ router.post("/login-verify", async (req, res) => {
       permissions: isMasterAdmin
         ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
         : (userRecord.permissions || ["download_notes", "upload_notes"]),
+      v: Number(userRecord.tokenVersion || Date.now()),
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Firestore & Log Biometric Login Activity (Rolling 15)
+    try {
+      const { recordActiveSession } = require("../services/studentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId,
+        req,
+        tokenVersion: payload.v,
+        deviceSpecs: req.body?.deviceSpecs || { label: passkeyRecord.deviceName || "Biometric Passkey Device" },
+      }).catch(() => {});
+    } catch (_) {}
 
     // Audit Notice to Telegram Security Bot (Zero latency overhead for response!)
     setImmediate(() => {

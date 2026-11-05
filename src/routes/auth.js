@@ -1777,16 +1777,12 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     if (!passwordValid && userRecord && userRecord.password) {
       if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
-      } else {
-        passwordValid = userRecord.password === password || userRecord.password === cleanPassword;
       }
     }
 
     if (!passwordValid && userRecord && userRecord.passwordHash) {
       if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
         passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
-      } else {
-        passwordValid = userRecord.passwordHash === password || userRecord.passwordHash === cleanPassword;
       }
     }
 
@@ -2421,8 +2417,6 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
     if (userData.password) {
       if (userData.password.startsWith("$2a$") || userData.password.startsWith("$2b$")) {
         isCurrentValid = await bcrypt.compare(currentPassword, userData.password);
-      } else {
-        isCurrentValid = userData.password === currentPassword;
       }
     }
 

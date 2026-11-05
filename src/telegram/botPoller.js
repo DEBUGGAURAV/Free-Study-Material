@@ -597,8 +597,8 @@ async function startBotPoller() {
         await new Promise((r) => setTimeout(r, 2000));
         continue;
       }
-      const url = `https://api.telegram.org/bot${activeToken}/getUpdates?offset=${currentOffset}&timeout=5`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+      const url = `https://api.telegram.org/bot${activeToken}/getUpdates?offset=${currentOffset}&timeout=20`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(28000) });
 
       // Handle Telegram HTTP 429 Rate Limit (Safe backoff without getting IP blocked)
       if (res.status === 429) {
@@ -642,6 +642,9 @@ async function startBotPoller() {
             }
           })
         );
+      } else {
+        // Event-driven idle micro-pause: Yield 1 second to Node.js event loop to maintain 0.0% CPU when idle
+        await new Promise((r) => setTimeout(r, 1000));
       }
     } catch (err) {
       if (!isPollerRunning) break;

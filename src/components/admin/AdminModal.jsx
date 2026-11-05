@@ -2916,7 +2916,27 @@ export default function AdminModal({
           {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
           {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
           {activeTab === "notices_board" && <TabNotices {...tabProps} currentUser={currentUser} />}
-          {activeTab === "activities" && selectedStudentForActivity && <TabActivities {...tabProps} />}
+          {activeTab === "activities" && (
+            selectedStudentForActivity ? (
+              <TabActivities {...tabProps} />
+            ) : (
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
+                <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📊</div>
+                <h4 style={{ color: "#fff", marginBottom: "8px" }}>Student Activity & Session Inspector</h4>
+                <p style={{ fontSize: "0.85rem", maxWidth: "460px", margin: "0 auto 16px auto" }}>
+                  Please select a student from the <strong>Students</strong> tab (click the ⚡ Activity icon on any student row) to inspect their active devices, termination options, and security history.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("students")}
+                  className="btn-primary"
+                  style={{ padding: "8px 18px", fontSize: "0.84rem" }}
+                >
+                  Go to Students Directory
+                </button>
+              </div>
+            )
+          )}
 
         </div>
 

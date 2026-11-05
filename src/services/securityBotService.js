@@ -843,11 +843,20 @@ async function startSecurityBotPoller() {
   isSecurityPollerActive = true;
   console.log(`[SECURITY BOT] 🚀 Dedicated Auth Bot Poller started for @${BOT_USERNAME}`);
 
+  let consecutiveFailures = 0;
   while (isSecurityPollerActive) {
     try {
-      const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${securityPollerOffset}&timeout=8`, {
-        signal: AbortSignal.timeout(12000),
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?offset=${securityPollerOffset}&timeout=25`, {
+        signal: AbortSignal.timeout(32000),
       });
+
+      if (res.status === 429) {
+        const retryData = await res.json().catch(() => ({}));
+        const retryAfter = Number(retryData?.parameters?.retry_after) || 5;
+        console.warn(`[SECURITY BOT] 🛡️ Telegram rate limit (HTTP 429). Backing off for ${retryAfter}s.`);
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        continue;
+      }
 
       if (!res.ok) {
         await new Promise((r) => setTimeout(r, 2000));
@@ -857,6 +866,14 @@ async function startSecurityBotPoller() {
       const data = await res.json();
       if (!data.ok || !Array.isArray(data.result)) {
         await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+
+      consecutiveFailures = 0;
+
+      if (data.result.length === 0) {
+        // Event-driven idle micro-pause: Yield 1 second to Node.js event loop to maintain 0.0% CPU when idle
+        await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
 
@@ -1663,8 +1680,12 @@ async function startSecurityBotPoller() {
         );
       }
     } catch (pollErr) {
-      // Handled silently to prevent crash on connection drop
-      await new Promise((r) => setTimeout(r, 2500));
+      if (!isSecurityPollerActive) break;
+      consecutiveFailures++;
+      const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+      const jitter = Math.floor(Math.random() * 800);
+      const delay = baseDelay + jitter;
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
 }

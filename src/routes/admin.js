@@ -487,7 +487,8 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
 
 /**
  * GET /api/admin/users/:id/activities
- * Fetches all activity logs for a specific student (registered time, logins, logouts, downloaded PDFs)
+ * Fetches last 15 activity logs for a specific student (Rolling Auto-Delete after 15 events)
+ * Combines academic downloads, logins, device sessions, and security events.
  */
 router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
@@ -499,11 +500,44 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const activities = doc.data()?.activities || [];
-    // Sort newest activity first
-    activities.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    const uData = doc.data() || {};
+    const rawActivities = Array.isArray(uData.activities) ? [...uData.activities] : [];
+    const rawSecLogs = Array.isArray(uData.securityLogs) ? [...uData.securityLogs] : [];
 
-    return res.json({ success: true, activities });
+    // Unified activities list
+    const combined = [...rawActivities];
+
+    // Merge security logs as activity items so admin sees all logins, logouts, device sessions
+    for (const log of rawSecLogs) {
+      const alreadyIncluded = combined.some((a) => a.id === log.id);
+      if (!alreadyIncluded) {
+        combined.push({
+          id: log.id || `act_${log.createdAt || Date.now()}`,
+          type: log.action ? log.action.toLowerCase() : "security",
+          action: log.action || "SECURITY",
+          title: log.details || `${log.action} on ${log.deviceName || "Device"}`,
+          timestamp: log.createdAt ? (typeof log.createdAt === "number" ? new Date(log.createdAt).toISOString() : String(log.createdAt)) : new Date().toISOString(),
+          deviceName: log.deviceName || "Unknown Device",
+          ipAddress: log.ipAddress || "N/A",
+          location: log.location || "N/A",
+        });
+      }
+    }
+
+    // Sort newest activity first
+    combined.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+    // 🛡️ Strict 15 Rolling Auto-Cap: Keep only latest 15 events
+    const cappedActivities = combined.slice(0, 15);
+
+    // Auto-prune stored array in Firestore if it grew beyond 15 items
+    if (rawActivities.length > 15) {
+      db.collection("users").doc(id).update({
+        activities: rawActivities.slice(0, 15),
+      }).catch(() => {});
+    }
+
+    return res.json({ success: true, activities: cappedActivities });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -511,7 +545,7 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
 
 /**
  * DELETE /api/admin/users/:userId/activities/:activityId
- * Deletes a SINGLE activity event of a student
+ * Deletes a SINGLE activity event of a student (from both activities and securityLogs)
  */
 router.delete("/users/:userId/activities/:activityId", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
@@ -522,11 +556,16 @@ router.delete("/users/:userId/activities/:activityId", authenticateToken, checkA
     const doc = await docRef.get();
     if (!doc.exists) return res.status(404).json({ success: false, message: "User not found" });
 
-    const activities = doc.data()?.activities || [];
+    const uData = doc.data() || {};
+    const activities = Array.isArray(uData.activities) ? uData.activities : [];
+    const secLogs = Array.isArray(uData.securityLogs) ? uData.securityLogs : [];
+
     const updatedActivities = activities.filter((act) => act.id !== activityId);
+    const updatedSecLogs = secLogs.filter((log) => log.id !== activityId);
 
     await docRef.update({
-      activities: updatedActivities,
+      activities: updatedActivities.slice(0, 15),
+      securityLogs: updatedSecLogs.slice(0, 15),
       updatedAt: new Date().toISOString(),
     });
 
@@ -538,7 +577,7 @@ router.delete("/users/:userId/activities/:activityId", authenticateToken, checkA
 
 /**
  * DELETE /api/admin/users/:userId/activities
- * Deletes ALL activity logs for a student
+ * Deletes ALL activity logs for a student (clears both activities and securityLogs)
  */
 router.delete("/users/:userId/activities", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
@@ -547,6 +586,7 @@ router.delete("/users/:userId/activities", authenticateToken, checkAdminOrPermis
 
     await db.collection("users").doc(userId).update({
       activities: [],
+      securityLogs: [],
       updatedAt: new Date().toISOString(),
     });
 

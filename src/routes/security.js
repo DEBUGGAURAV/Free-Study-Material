@@ -271,15 +271,10 @@ router.post("/tamper-alert", async (req, res) => {
     const now = Date.now();
     let currentRecord = tamperStrikes.get(strikeKey) || { count: 0, violations: [], lastAt: 0 };
 
-    // De-bounce rapid multi-detector bursts: Enforce session separation
+    // De-bounce rapid multi-detector bursts: Enforce server-side strike accumulation
     const timeSinceLast = now - (currentRecord.lastAt || 0);
-    const clientStrikeNum = Number(clientStrikes);
-
-    if (!isNaN(clientStrikeNum) && clientStrikeNum > 0) {
-      // Sync strictly with verified client strike state
-      currentRecord.count = clientStrikeNum;
-    } else if (timeSinceLast > 3500 || currentRecord.count === 0) {
-      // Only increment if at least 3.5 seconds have elapsed since last strike event
+    if (timeSinceLast > 2500 || currentRecord.count === 0) {
+      // Server increments strike incrementally to prevent DoS injection
       currentRecord.count += 1;
     }
 
@@ -322,14 +317,17 @@ router.post("/tamper-alert", async (req, res) => {
         } catch (_) {}
       }
 
-      // C. 24-Hour IP & Device Dual-Key Detention in Firewall
+      // C. Dual-Key Detention: 24h Device Quarantine + Shared-Network Safe IP Cool-off
       const incidentId = req.body?.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
       const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || forensics?.deviceHash || guestUid || "").trim();
 
-      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, 24 * 60 * 60 * 1000, incidentId, rawDeviceId);
+      // Device is quarantined for full 24 hours
       if (rawDeviceId) {
         jailSpecificDevice(rawDeviceId, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name})`, 24 * 60 * 60 * 1000, incidentId, clientIp);
       }
+      // IP receives a targeted 10-minute cool-off to avoid paralyzing innocent students on campus/hostel shared Wi-Fi
+      const ipDetentionMs = rawDeviceId ? (10 * 60 * 1000) : (60 * 60 * 1000);
+      jailSpecificIp(clientIp, `Repeated client script tampering: 3 strikes exceeded (${fullUser.name} • ${fullUser.email || clientIp})`, ipDetentionMs, incidentId, rawDeviceId);
 
       // D. Dispatch Critical Ban Alert to Telegram Supergroup Topic 6
       await dispatchTamperTelegramAlert({

@@ -144,6 +144,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
 
     // 🗜️ Instant Client Compress via WebAssembly & pdf-lib (Auto-Network Adaptive)
     let uploadFile = file;
+    let isClientCompressed = false;
     if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
       setClientCompressMsg("🗜️ Optimizing PDF document streams...");
       try {
@@ -151,6 +152,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
         const comp = await compressPdfClient(file, (p, msg) => setClientCompressMsg(msg), { quality: savedQuality });
         if (comp.isCompressed) {
           uploadFile = comp.file;
+          isClientCompressed = true;
         }
       } catch (cErr) {
         console.warn("[UPLOAD] Client compression skipped:", cErr.message);
@@ -168,6 +170,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
+      formData.append("clientCompressed", isClientCompressed ? "true" : "false");
       if (hardwareHash) {
         formData.append("fileHash", hardwareHash);
       }

@@ -668,16 +668,28 @@ export default function VirtualPdfReader({
           setPreviewProgress({ percent: 50, loadedBytes: file.size, totalBytes: file.size, speed: "Local Buffer" });
           const arrayBuffer = await file.arrayBuffer();
           if (!isCancelled) {
-            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+            const pdfData = new Uint8Array(arrayBuffer.slice(0));
+            const loadingTask = pdfjsLib.getDocument({ data: pdfData });
             loadingTask.onProgress = (p) => {
               if (p.total > 0) setPreviewProgress({ percent: Math.round((p.loaded / p.total) * 100), loadedBytes: p.loaded, totalBytes: p.total, speed: "Local Buffer" });
             };
-            const doc = await loadingTask.promise;
-            if (!isCancelled) {
-              setPreviewProgress({ percent: 100, loadedBytes: file.size, totalBytes: file.size, speed: "Ready" });
-              setPdfDoc(doc);
-              setNumPages(doc.numPages);
-              setLoading(false);
+            const previewTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Preview render timeout")), 5000));
+            try {
+              const doc = await Promise.race([loadingTask.promise, previewTimeout]);
+              if (!isCancelled) {
+                setPreviewProgress({ percent: 100, loadedBytes: file.size, totalBytes: file.size, speed: "Ready" });
+                setPdfDoc(doc);
+                setNumPages(doc.numPages);
+                setLoading(false);
+              }
+            } catch (err) {
+              console.warn("[PDF.js] Local file parse notice:", err.message);
+              try { loadingTask.destroy(); } catch (_) {}
+              if (!isCancelled) {
+                setUseNativeViewer(true);
+                setLoading(false);
+                setNativeLoading(false);
+              }
             }
           }
           return;

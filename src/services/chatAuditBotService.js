@@ -1427,11 +1427,12 @@ async function startChatAuditBotPoller() {
   } catch {}
 
   const pollLoop = async () => {
+    let consecutiveFailures = 0;
     while (pollerRunning) {
       try {
         const res = await callTelegram("getUpdates", {
           offset: lastUpdateId + 1,
-          timeout: 10,
+          timeout: 25,
           allowed_updates: ["message", "edited_message", "callback_query", "my_chat_member"],
         });
 
@@ -1442,20 +1443,32 @@ async function startChatAuditBotPoller() {
             pollerRunning = false;
             break;
           }
-          await new Promise((r) => setTimeout(r, 5000));
+          consecutiveFailures++;
+          const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+          const jitter = Math.floor(Math.random() * 800);
+          await new Promise((r) => setTimeout(r, baseDelay + jitter));
           continue;
         }
+
+        consecutiveFailures = 0;
 
         if (Array.isArray(res.result) && res.result.length > 0) {
           for (const update of res.result) {
             lastUpdateId = update.update_id;
             await processUpdate(update);
           }
+          continue;
+        } else {
+          // Event-driven idle micro-pause: Yield 1 second to Node.js event loop to maintain 0.0% CPU when idle
+          await new Promise((r) => setTimeout(r, 1000));
         }
       } catch (err) {
-        await new Promise((r) => setTimeout(r, 3000));
+        if (!pollerRunning) break;
+        consecutiveFailures++;
+        const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
+        const jitter = Math.floor(Math.random() * 800);
+        await new Promise((r) => setTimeout(r, baseDelay + jitter));
       }
-      await new Promise((r) => setTimeout(r, 1000));
     }
   };
 

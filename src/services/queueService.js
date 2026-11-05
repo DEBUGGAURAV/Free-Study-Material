@@ -306,7 +306,16 @@ function enqueueUpload(task) {
       let savingsPercent = 0;
       const ext = path.extname(originalName).toLowerCase();
 
-      if ((ext === ".pdf" || mimeType === "application/pdf") && originalSize <= 25 * 1024 * 1024) {
+      // ⚡ Zero-Server CPU/RAM optimization: If client browser already compressed the PDF, skip server pdf-lib!
+      const isClientPreCompressed = Boolean(task?.clientCompressed || meta?.clientCompressed);
+
+      if (isClientPreCompressed) {
+        console.log(`[QUEUE] ⚡ Note ${noteId} was pre-compressed by client browser. Skipping server pdf-lib (0% Server RAM used).`);
+        updatePipelineStage(noteId, 3, "completed", `Client Hardware-Compressed (${formatRealSize(originalSize)}) • 0% Server CPU`, {
+          progress: 55,
+          currentStage: "Syncing to Cloud Storage (Primary Vault)",
+        });
+      } else if ((ext === ".pdf" || mimeType === "application/pdf") && originalSize <= 25 * 1024 * 1024) {
         jobStatusMap.set(noteId, {
           noteId,
           status: "processing",
