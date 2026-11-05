@@ -25,6 +25,7 @@ import {
   getStudySessionHistory,
   addStudySessionItem,
 } from "../utils/studentSessionHistory";
+import MathMarkdown from "./MathMarkdown";
 
 export default function AiStudyPodModal({
   isOpen,
@@ -120,7 +121,7 @@ export default function AiStudyPodModal({
   }, [isOpen, activeTab, currentNoteId]);
 
   // Generate / Fetch Flashcards
-  const handleGenerateFlashcards = async () => {
+  const handleGenerateFlashcards = async (forceFresh = false) => {
     setLoadingCards(true);
     setIsFlipped(false);
     try {
@@ -129,6 +130,7 @@ export default function AiStudyPodModal({
         title: currentTitle,
         context,
         subject: currentSubject,
+        forceFresh,
       });
       if (res && res.success && Array.isArray(res.flashcards)) {
         setFlashcards(res.flashcards);
@@ -161,7 +163,7 @@ export default function AiStudyPodModal({
   };
 
   // Generate / Fetch Summary
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = async (forceFresh = false) => {
     setLoadingSummary(true);
     try {
       const res = await api.getNoteSummary({
@@ -169,6 +171,7 @@ export default function AiStudyPodModal({
         title: currentTitle,
         context,
         subject: currentSubject,
+        forceFresh,
       });
       if (res && res.success && res.summary) {
         setSummary(res.summary);
@@ -561,7 +564,7 @@ export default function AiStudyPodModal({
                   </button>
                   <button
                     type="button"
-                    onClick={handleGenerateFlashcards}
+                    onClick={() => handleGenerateFlashcards(true)}
                     disabled={loadingCards}
                     style={{
                       background: "rgba(139, 92, 246, 0.15)",
@@ -709,17 +712,16 @@ export default function AiStudyPodModal({
                       </button>
                     </div>
 
-                    <div style={{ margin: "auto 0", padding: "16px 0" }}>
+                    <div style={{ margin: "auto 0", padding: "16px 0", maxHeight: "300px", overflowY: "auto" }}>
                       <div
                         style={{
-                          fontSize: isFlipped ? "1.05rem" : "1.2rem",
+                          fontSize: isFlipped ? "1.05rem" : "1.15rem",
                           fontWeight: isFlipped ? 500 : 700,
-                          lineHeight: 1.55,
+                          lineHeight: 1.6,
                           color: isFlipped ? "#f1f5f9" : "#fff",
-                          whiteSpace: "pre-line",
                         }}
                       >
-                        {isFlipped ? currentCard?.answer : currentCard?.question}
+                        <MathMarkdown content={isFlipped ? currentCard?.answer : currentCard?.question} />
                       </div>
                     </div>
 
@@ -824,7 +826,7 @@ export default function AiStudyPodModal({
                   )}
                   <button
                     type="button"
-                    onClick={handleGenerateSummary}
+                    onClick={() => handleGenerateSummary(true)}
                     disabled={loadingSummary}
                     style={{
                       background: "rgba(2, 132, 199, 0.15)",
@@ -917,13 +919,9 @@ export default function AiStudyPodModal({
                     borderRadius: "16px",
                     padding: "20px",
                     overflowY: "auto",
-                    fontSize: "0.86rem",
-                    lineHeight: 1.65,
-                    color: "#e2e8f0",
-                    whiteSpace: "pre-wrap",
                   }}
                 >
-                  {summary}
+                  <MathMarkdown content={summary} />
                 </div>
               )}
             </div>
@@ -1121,3 +1119,4 @@ export default function AiStudyPodModal({
     </div>
   );
 }
+

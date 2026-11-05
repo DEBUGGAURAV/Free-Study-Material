@@ -1273,10 +1273,10 @@ export const api = {
     request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
   askAiQuestion: (query, context = "", noteId = null, subject = "") =>
     request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId, subject }) }),
-  getNoteFlashcards: ({ noteId, title, context = "", subject = "" }) =>
-    request("/ai/flashcards", { method: "POST", body: JSON.stringify({ noteId, title, context, subject }) }),
-  getNoteSummary: ({ noteId, title, context = "", subject = "" }) =>
-    request("/ai/summary", { method: "POST", body: JSON.stringify({ noteId, title, context, subject }) }),
+  getNoteFlashcards: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>
+    request("/ai/flashcards", { method: "POST", body: JSON.stringify({ noteId, title, context, subject, forceFresh }) }),
+  getNoteSummary: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>
+    request("/ai/summary", { method: "POST", body: JSON.stringify({ noteId, title, context, subject, forceFresh }) }),
   getAiStatus: () => request("/ai/status"),
   setupAiTelegramTopics: () =>
     request("/ai/admin/setup-telegram-topics", { method: "POST" }),

@@ -163,7 +163,7 @@ function getApiKey(provider) {
 /**
  * Query Groq Cloud LPU API (Llama 3.1 8B Instant)
  */
-async function queryGroq(query, context) {
+async function queryGroq(query, context, options = {}) {
   const apiKey = getApiKey("groq");
   if (!apiKey) {
     throw new Error("GROQ_API_KEY_MISSING");
@@ -176,10 +176,9 @@ async function queryGroq(query, context) {
   const systemPrompt = `You are a brilliant, supportive AI academic tutor for college students studying engineering, science, and higher education. 
 Answer the student's question accurately, concisely, and clearly based primarily on their provided lecture notes context.
 Formatting rules:
-- Highlight key definitions and formulas in **bold**.
+- Highlight key definitions and formulas in **bold** or standard LaTeX notation like \\(x = \\pm 2\\).
 - If page numbers or excerpts exist in the context, cite them clearly (e.g. "📌 [Reference: Page X]").
 - Use clean bullet points for steps, algorithms, or properties.
-- Keep the explanation under 220 words so students can grasp it instantly on mobile.
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
   const userContent = context && context.trim()
@@ -187,7 +186,9 @@ Formatting rules:
     : `[Student Question]:\n${query}`;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
+
+  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 600;
 
   try {
     const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -203,7 +204,7 @@ Formatting rules:
           { role: "user", content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 500,
+        max_tokens: maxTokens,
       }),
       signal: controller.signal,
     });
@@ -229,7 +230,7 @@ Formatting rules:
 /**
  * Query Google Gemini 2.0 Flash API (Text + Multimodal Image / Handwritten Notes)
  */
-async function queryGemini(query, context, imageBase64 = null, imageMimeType = "image/jpeg") {
+async function queryGemini(query, context, imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
   const apiKey = getApiKey("gemini");
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY_MISSING");
@@ -242,9 +243,9 @@ async function queryGemini(query, context, imageBase64 = null, imageMimeType = "
   const systemInstruction = `You are a brilliant, friendly academic tutor for college students studying engineering, science, and higher education.
 Answer clearly and accurately based on the provided notes context or diagram/handwritten image.
 - If page numbers or excerpts exist in the context, cite them prominently (e.g. "📌 [From Page X]").
-- Highlight key definitions and formulas in **bold**.
+- Highlight key definitions and formulas in **bold** or LaTeX format \\(x = \\pm 2\\).
 - Use clean bullet points for steps or derivations.
-- Keep the explanation high-yield, structured, and concise.
+- Keep the explanation high-yield, structured, and complete.
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
   const promptText = `${systemInstruction}\n\n${context ? `[Study Notes Context & Citations]:\n${context.slice(0, 4500)}\n\n` : ""}[Student Question]:\n${query || "Analyze and solve the problem/diagram shown in this study note."}\n\nProvide an authoritative, student-friendly answer.`;
@@ -265,6 +266,7 @@ Answer clearly and accurately based on the provided notes context or diagram/han
   const modelsToTry = [primaryModel, fallbackModel];
 
   let lastError = null;
+  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 700;
 
   for (const model of modelsToTry) {
     const controller = new AbortController();
@@ -283,7 +285,7 @@ Answer clearly and accurately based on the provided notes context or diagram/han
           ],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 600,
+            maxOutputTokens: maxTokens,
           },
         }),
         signal: controller.signal,
@@ -403,7 +405,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
                          Boolean(getApiKey("gemini"));
     if (canUseGemini) {
       try {
-        finalAnswer = await queryGemini(cleanQuery, context, imageBase64, imageMimeType);
+        finalAnswer = await queryGemini(cleanQuery, context, imageBase64, imageMimeType, options);
         currentAiSettings.geminiUsedToday += 1;
         finalProvider = "gemini";
         finalModel = currentAiSettings.geminiModel;
@@ -422,7 +424,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
     if (canUseGroq) {
       try {
-        finalAnswer = await queryGroq(cleanQuery, context);
+        finalAnswer = await queryGroq(cleanQuery, context, options);
         currentAiSettings.groqUsedToday += 1;
         finalProvider = "groq";
         finalModel = currentAiSettings.groqModel;
@@ -443,7 +445,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
                        isCloudflareAiAvailable();
     if (canUseCfAi) {
       try {
-        finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context);
+        finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context, options);
         currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
         finalProvider = "cloudflare_workers_ai";
         finalModel = "@cf/meta/llama-3.1-8b-instruct";
@@ -460,7 +462,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
                          Boolean(getApiKey("gemini"));
     if (canUseGemini) {
       try {
-        finalAnswer = await queryGemini(cleanQuery, context);
+        finalAnswer = await queryGemini(cleanQuery, context, null, "image/jpeg", options);
         currentAiSettings.geminiUsedToday += 1;
         finalProvider = "gemini";
         finalModel = currentAiSettings.geminiModel;

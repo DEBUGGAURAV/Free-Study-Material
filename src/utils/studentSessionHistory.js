@@ -46,3 +46,4 @@ export function clearStudySessionHistory() {
     sessionStorage.removeItem(SESSION_HISTORY_KEY);
   } catch (_) {}
 }
+

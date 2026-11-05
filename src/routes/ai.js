@@ -261,7 +261,7 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
 router.post("/flashcards", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { noteId, title = "Lecture Note", context = "", subject = "" } = req.body;
+    const { noteId, title = "Lecture Note", context = "", subject = "", forceFresh = false } = req.body;
     if (!noteId && !context && !title) {
       return res.status(400).json({ success: false, message: "noteId, title or context is required" });
     }
@@ -272,7 +272,7 @@ router.post("/flashcards", studentAiLimiter, async (req, res) => {
     const queryHash = computeQueryHash(hashKey);
 
     // 1. Check Turso L2 / RAM L1 Cache (0ms Instant Hit)
-    const cachedSolution = await getCachedCircleSolution(queryHash);
+    const cachedSolution = !forceFresh ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution && cachedSolution.answer) {
       let cards = [];
       try {
@@ -313,7 +313,7 @@ Return ONLY a valid JSON array of objects with this exact structure without mark
 [
   {
     "question": "Clear concept, definition or formula question",
-    "answer": "Accurate, high-yield explanation with formula if applicable",
+    "answer": "Accurate, high-yield explanation with formula if applicable using standard LaTeX notation like \\(x = \\pm 2\\)",
     "category": "Formula"
   }
 ]`;
@@ -324,6 +324,7 @@ Return ONLY a valid JSON array of objects with this exact structure without mark
       noteTitle: cleanTitle,
       subject,
       queryType: "flashcards",
+      maxTokens: 1600,
     });
 
     let flashcards = [];
@@ -369,7 +370,7 @@ Return ONLY a valid JSON array of objects with this exact structure without mark
 router.post("/summary", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { noteId, title = "Lecture Note", context = "", subject = "" } = req.body;
+    const { noteId, title = "Lecture Note", context = "", subject = "", forceFresh = false } = req.body;
     if (!noteId && !context && !title) {
       return res.status(400).json({ success: false, message: "noteId, title or context is required" });
     }
@@ -380,8 +381,20 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
     const queryHash = computeQueryHash(hashKey);
 
     // 1. Check Turso L2 / RAM L1 Cache (0ms Instant Hit)
-    const cachedSolution = await getCachedCircleSolution(queryHash);
-    if (cachedSolution && cachedSolution.answer) {
+    const cachedSolution = !forceFresh ? await getCachedCircleSolution(queryHash) : null;
+    const isTruncatedCache = Boolean(
+      cachedSolution &&
+      cachedSolution.answer &&
+      (cachedSolution.answer.trim().endsWith("\\") ||
+       cachedSolution.answer.trim().endsWith("\\(") ||
+       cachedSolution.answer.trim().endsWith("\\frac{1") ||
+       cachedSolution.answer.trim().endsWith("{1") ||
+       cachedSolution.answer.trim().endsWith("\\frac{") ||
+       !cachedSolution.answer.includes("💡") ||
+       cachedSolution.answer.length < 180)
+    );
+
+    if (cachedSolution && cachedSolution.answer && !isTruncatedCache) {
       dispatchAiSearchTelegramAudit({
         user: req.user,
         query: `📄 Summary: ${cleanTitle}`,
@@ -407,9 +420,9 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
 
     // 2. Cache Miss: Generate Fresh Summary using AI Waterfall
     const prompt = `Provide an Executive Exam Summary of "${cleanTitle}" [Subject: ${subject || "Engineering"}].
-Structure with:
+Structure strictly with these 3 sections:
 - 📌 Core Summary (5-7 clear high-yield bullet points)
-- ⚡ Key Formulas & Theorems (with LaTeX notation like \\(x = \\pm 2\\))
+- ⚡ Key Formulas & Theorems (with standard LaTeX notation like \\(P = \\frac{1}{2}\\rho A v^3\\) or \\(q = k \\frac{\\Delta T}{\\Delta z}\\))
 - 💡 Exam Takeaways (vital definitions and likely semester exam questions)
 
 Context Notes Excerpt:
@@ -421,6 +434,7 @@ ${cleanContext.slice(0, 5000) || cleanTitle}`;
       noteTitle: cleanTitle,
       subject,
       queryType: "summary",
+      maxTokens: 1600,
     });
 
     const summaryText = result?.answer || "Summary generation completed.";

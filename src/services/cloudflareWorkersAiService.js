@@ -37,9 +37,10 @@ function isCloudflareAiAvailable() {
  * Query Cloudflare Workers AI Llama 3.1 8B Instruct model
  * @param {string} query 
  * @param {string} context 
+ * @param {object} options
  * @returns {Promise<string>}
  */
-async function queryCloudflareWorkersAi(query, context = "") {
+async function queryCloudflareWorkersAi(query, context = "", options = {}) {
   const { accountId, apiToken } = getCfCredentials();
   if (!accountId || !apiToken) {
     throw new Error("CLOUDFLARE_AI_CREDENTIALS_MISSING");
@@ -61,6 +62,8 @@ Formatting rules:
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 9000);
 
+  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 600;
+
   try {
     const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`;
     const response = await fetch(url, {
@@ -74,7 +77,7 @@ Formatting rules:
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
         ],
-        max_tokens: 500,
+        max_tokens: maxTokens,
         temperature: 0.3,
       }),
       signal: controller.signal,

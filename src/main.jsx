@@ -6,6 +6,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
+import "katex/dist/katex.min.css";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");

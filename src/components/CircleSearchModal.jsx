@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Search, Sparkles, Copy, Check, ExternalLink, Zap, BookOpen, Layers } from "lucide-react";
 import { solveCircleQuery } from "../utils/circleSearchEngine";
+import MathMarkdown from "./MathMarkdown";
 
 export default function CircleSearchModal({
   isOpen,
@@ -441,11 +442,10 @@ export default function CircleSearchModal({
                       fontSize: "0.88rem",
                       lineHeight: "1.65",
                       color: "#f1f5f9",
-                      whiteSpace: "pre-wrap",
                       fontFamily: "var(--font-sans, inherit)",
                     }}
                   >
-                    {solution.answer}
+                    <MathMarkdown content={solution.answer} />
                   </div>
 
                   {/* Auto-Save & Sync Footer Note */}
