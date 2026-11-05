@@ -5215,71 +5215,120 @@ export default function VirtualPdfReader({
           )
         )}
 
-        {/* 💬 Smart Page Discussion & QR Bridge Pill (Preview Mode Only) */}
-        {enableDiscussionBridge && !loading && !error && !isAuthGated && (
+        {/* 🌟 Floating Action Controls (AI Pod + Smart Page Discussion Bridge) */}
+        {!loading && !error && !isAuthGated && (
           <div
             style={{
               position: "fixed",
               bottom: "44px",
               right: "24px",
-              zIndex: 100,
+              zIndex: 9999,
               display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              background: nightMode ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.95)",
-              backdropFilter: "blur(14px)",
-              padding: "6px 10px 6px 14px",
-              borderRadius: "999px",
-              border: nightMode ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(6, 182, 212, 0.6)",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(6, 182, 212, 0.2)",
-              animation: "fadeIn 0.2s ease-out",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: "8px",
+              pointerEvents: "none",
             }}
           >
+            {/* 🚀 Floating AI Study Pod Trigger Capsule */}
             <button
               type="button"
-              onClick={handleOpenPageDiscussion}
+              onClick={() => setAiStudyPodOpen(true)}
               style={{
-                background: "transparent",
-                border: "none",
-                color: nightMode ? "#38bdf8" : "#0284c7",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: 0,
-              }}
-              title={`Open Live Study Pod discussion for Page ${currentPage}`}
-            >
-              <MessageSquare size={14} color="#06b6d4" />
-              <span>Stuck on Pg {currentPage}? Discuss</span>
-            </button>
-
-            <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 4px" }} />
-
-            <button
-              type="button"
-              onClick={handleOpenPageQr}
-              style={{
-                background: "rgba(6, 182, 212, 0.15)",
-                border: "1px solid rgba(6, 182, 212, 0.4)",
-                color: nightMode ? "#67e8f9" : "#0891b2",
-                fontSize: "0.72rem",
-                fontWeight: 700,
+                pointerEvents: "auto",
+                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                color: "#fff",
+                border: "1.5px solid rgba(255, 255, 255, 0.25)",
                 borderRadius: "999px",
-                padding: "3px 9px",
+                padding: "8px 16px",
+                fontSize: "0.78rem",
+                fontWeight: 800,
                 cursor: "pointer",
-                display: "flex",
+                display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
-                transition: "all 0.15s ease",
+                gap: "7px",
+                boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)",
+                backdropFilter: "blur(8px)",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
-              title="Scan QR to open this page and chat directly on mobile"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
+                e.currentTarget.style.boxShadow = "0 12px 28px rgba(139, 92, 246, 0.6), 0 0 20px rgba(6, 182, 212, 0.5)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0) scale(1)";
+                e.currentTarget.style.boxShadow = "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)";
+              }}
+              title="✨ Open AI Study Pod (Flashcards, Summary & Filter Notes)"
             >
-              <QrCode size={13} />
-              <span>QR</span>
+              <Sparkles size={15} />
+              <span>✨ AI Pod</span>
             </button>
+
+            {/* 💬 Smart Page Discussion & QR Bridge Pill (Preview Mode Only) */}
+            {enableDiscussionBridge && (
+              <div
+                style={{
+                  pointerEvents: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  background: nightMode ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.95)",
+                  backdropFilter: "blur(14px)",
+                  padding: "6px 10px 6px 14px",
+                  borderRadius: "999px",
+                  border: nightMode ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(6, 182, 212, 0.6)",
+                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(6, 182, 212, 0.2)",
+                  animation: "fadeIn 0.2s ease-out",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleOpenPageDiscussion}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: nightMode ? "#38bdf8" : "#0284c7",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: 0,
+                  }}
+                  title={`Open Live Study Pod discussion for Page ${currentPage}`}
+                >
+                  <MessageSquare size={14} color="#06b6d4" />
+                  <span>Stuck on Pg {currentPage}? Discuss</span>
+                </button>
+
+                <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 4px" }} />
+
+                <button
+                  type="button"
+                  onClick={handleOpenPageQr}
+                  style={{
+                    background: "rgba(6, 182, 212, 0.15)",
+                    border: "1px solid rgba(6, 182, 212, 0.4)",
+                    color: nightMode ? "#67e8f9" : "#0891b2",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    borderRadius: "999px",
+                    padding: "3px 9px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    transition: "all 0.15s ease",
+                  }}
+                  title="Scan QR to open this page and chat directly on mobile"
+                >
+                  <QrCode size={13} />
+                  <span>QR</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -5590,35 +5639,7 @@ export default function VirtualPdfReader({
         />
       )}
 
-      {/* 🚀 Floating AI Study Pod Trigger Capsule (Easy 1-touch open on mobile & other devices) */}
-      <button
-        type="button"
-        onClick={() => setAiStudyPodOpen(true)}
-        style={{
-          position: "fixed",
-          bottom: "24px",
-          right: "24px",
-          zIndex: 9999,
-          background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
-          color: "#fff",
-          border: "1.5px solid rgba(255, 255, 255, 0.25)",
-          borderRadius: "999px",
-          padding: "9px 18px",
-          fontSize: "0.8rem",
-          fontWeight: 800,
-          cursor: "pointer",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "8px",
-          boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)",
-          backdropFilter: "blur(8px)",
-          transition: "transform 0.2s ease, box-shadow 0.2s ease",
-        }}
-        title="✨ Open AI Study Pod (Flashcards, Summary & Filter Notes)"
-      >
-        <Sparkles size={16} />
-        <span>✨ AI Pod</span>
-      </button>
+
 
       {/* ⭕ Floating Banner when Circle to Search Mode is Active */}
       {isCircleSearchMode && (
