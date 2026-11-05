@@ -640,8 +640,15 @@ async function testAiProvider(provider) {
     const res = await queryGroq("Test ping. Reply 'Groq LPU Ready' in 3 words.", "College test");
     return { provider: "groq", success: true, answer: res, latencyMs: Date.now() - start };
   } else if (provider === "gemini") {
-    const res = await queryGemini("Test ping. Reply 'Gemini 2.0 Ready' in 3 words.", "College test");
+    const res = await queryGemini("Test ping. Reply 'Gemini Ready' in 3 words.", "College test");
     return { provider: "gemini", success: true, answer: res, latencyMs: Date.now() - start };
+  } else if (provider === "cloudflare") {
+    const res = await queryCloudflareWorkersAi("Test ping. Reply 'Cloudflare AI Ready' in 3 words.", "College test");
+    return { provider: "cloudflare", success: true, answer: res, latencyMs: Date.now() - start };
+  } else if (provider === "turso") {
+    const { getCachedCircleSolution, computeQueryHash } = require("./tursoCircleSearchService");
+    await getCachedCircleSolution(computeQueryHash("test-ping"));
+    return { provider: "turso", success: true, answer: "Turso LibSQL Edge Cloud Ready (0ms Cache Active)", latencyMs: Date.now() - start };
   }
   throw new Error("Unknown provider");
 }

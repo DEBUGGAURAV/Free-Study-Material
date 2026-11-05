@@ -35,6 +35,8 @@ export default function TabAiEngine() {
   // Testing AI
   const [testingGroq, setTestingGroq] = useState(false);
   const [testingGemini, setTestingGemini] = useState(false);
+  const [testingCloudflare, setTestingCloudflare] = useState(false);
+  const [testingTurso, setTestingTurso] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
   // Student Query Playground
@@ -196,6 +198,8 @@ export default function TabAiEngine() {
     try {
       if (provider === "groq") setTestingGroq(true);
       if (provider === "gemini") setTestingGemini(true);
+      if (provider === "cloudflare") setTestingCloudflare(true);
+      if (provider === "turso") setTestingTurso(true);
       setTestResult(null);
 
       const res = await api.testAiConnection(provider);
@@ -208,6 +212,8 @@ export default function TabAiEngine() {
     } finally {
       setTestingGroq(false);
       setTestingGemini(false);
+      setTestingCloudflare(false);
+      setTestingTurso(false);
     }
   };
 
@@ -726,6 +732,258 @@ export default function TabAiEngine() {
             >
               <Zap size={11} className={testingGemini ? "animate-spin" : ""} />
               <span>{testingGemini ? "Pinging..." : "Test Ping"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* 3. Cloudflare Workers AI Card (Tier 2 Native Edge GPU)          */}
+        {/* ============================================================== */}
+        <div
+          style={{
+            background: "rgba(15, 23, 42, 0.65)",
+            border: "1px solid rgba(245, 158, 11, 0.35)",
+            borderRadius: "16px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+            position: "relative",
+            boxShadow: "0 10px 30px rgba(245, 158, 11, 0.08)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "1.2rem" }}>🔥</span>
+                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                  Cloudflare Workers AI (Tier 2 Edge GPU)
+                </h4>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    padding: "2px 7px",
+                    borderRadius: "6px",
+                    background: "rgba(245, 158, 11, 0.2)",
+                    color: "#fbbf24",
+                    fontWeight: 700,
+                  }}
+                >
+                  Model: {settings.cloudflareModel || "@cf/meta/llama-3.1-8b-instruct"}
+                </span>
+              </div>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+                Zero-egress serverless GPU inference across 330+ global cities. 10,000 Neurons/Day FREE.
+              </p>
+            </div>
+
+            <span
+              style={{
+                background: "rgba(245, 158, 11, 0.15)",
+                color: "#fbbf24",
+                border: "1px solid rgba(245, 158, 11, 0.35)",
+                borderRadius: "999px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Cpu size={13} />
+              <span>EDGE ACTIVE</span>
+            </span>
+          </div>
+
+          {/* Quota & Capacity Info */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
+              <span style={{ color: "var(--text-dim)" }}>Daily Edge GPU Quota:</span>
+              <strong style={{ color: "#fbbf24", fontFamily: "var(--font-mono)" }}>
+                10,000 Neurons / Day FREE (~1,000 Queries)
+              </strong>
+            </div>
+            <div
+              style={{
+                width: "100%",
+                height: "8px",
+                borderRadius: "999px",
+                background: "rgba(255, 255, 255, 0.08)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, #f59e0b, #ef4444)",
+                  borderRadius: "999px",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
+              <span>Role: Tier 2 Failover (when Groq 429)</span>
+              <span>Latency: ~0.3s Edge GPU</span>
+            </div>
+          </div>
+
+          {/* Status & Key Info */}
+          <div
+            style={{
+              padding: "10px 14px",
+              background: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "10px",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.76rem",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <ShieldCheck size={14} color={settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8"} />
+              <span style={{ color: "var(--text-dim)" }}>Routing: </span>
+              <strong style={{ color: settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8" }}>
+                {settings.cloudflareAiConfigured ? "🔒 REST API + Native Worker (env.AI)" : "⚡ Native Worker Edge Binding (env.AI)"}
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleTestPing("cloudflare")}
+              disabled={testingCloudflare}
+              className="btn-secondary"
+              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
+            >
+              <Zap size={11} className={testingCloudflare ? "animate-spin" : ""} />
+              <span>{testingCloudflare ? "Pinging..." : "Test Ping"}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ============================================================== */}
+        {/* 4. Turso LibSQL Edge Cache Card (Tier 0 Instant 0ms Saver)       */}
+        {/* ============================================================== */}
+        <div
+          style={{
+            background: "rgba(15, 23, 42, 0.65)",
+            border: "1px solid rgba(52, 211, 153, 0.35)",
+            borderRadius: "16px",
+            padding: "20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+            position: "relative",
+            boxShadow: "0 10px 30px rgba(52, 211, 153, 0.08)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "1.2rem" }}>⚡</span>
+                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                  Turso LibSQL Edge Cache (0ms Token Saver)
+                </h4>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    padding: "2px 7px",
+                    borderRadius: "6px",
+                    background: "rgba(52, 211, 153, 0.2)",
+                    color: "#34d399",
+                    fontWeight: 700,
+                  }}
+                >
+                  Table: circle_search_cache
+                </span>
+              </div>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+                Sub-5ms instant delivery for repeat questions. 0 Tokens consumed. 9 Billion read rows/mo FREE.
+              </p>
+            </div>
+
+            <span
+              style={{
+                background: "rgba(52, 211, 153, 0.15)",
+                color: "#34d399",
+                border: "1px solid rgba(52, 211, 153, 0.35)",
+                borderRadius: "999px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Database size={13} />
+              <span>CACHE ACTIVE</span>
+            </span>
+          </div>
+
+          {/* Cache Hits & Stats */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
+              <span style={{ color: "var(--text-dim)" }}>Today's 0ms Cache Hits:</span>
+              <strong style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>
+                {usage.cachedHitsToday || 0} Queries Saved (0 Tokens Burned)
+              </strong>
+            </div>
+            <div
+              style={{
+                width: "100%",
+                height: "8px",
+                borderRadius: "999px",
+                background: "rgba(255, 255, 255, 0.08)",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  background: "linear-gradient(90deg, #10b981, #38bdf8)",
+                  borderRadius: "999px",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
+              <span>Latency: 0-4ms Sub-second</span>
+              <span>TTL: 48h (Pin to Keep Forever)</span>
+            </div>
+          </div>
+
+          {/* Status & Key Info */}
+          <div
+            style={{
+              padding: "10px 14px",
+              background: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "10px",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "0.76rem",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <ShieldCheck size={14} color="#34d399" />
+              <span style={{ color: "var(--text-dim)" }}>Security: </span>
+              <strong style={{ color: "#34d399" }}>
+                🔒 Dedicated Turso AWS-AP-South-1 Edge Cloud
+              </strong>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleTestPing("turso")}
+              disabled={testingTurso}
+              className="btn-secondary"
+              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
+            >
+              <Zap size={11} className={testingTurso ? "animate-spin" : ""} />
+              <span>{testingTurso ? "Pinging..." : "Test Ping"}</span>
             </button>
           </div>
         </div>
