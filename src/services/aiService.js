@@ -213,7 +213,7 @@ Formatting rules:
     }
 
     const data = await response.json();
-    const answer = data.choices?.[0]?.message?.content || "";
+    const answer = (data.choices?.[0]?.message?.content || data.choices?.[0]?.message?.reasoning || "").trim();
     if (!answer) throw new Error("Empty response from Groq");
     return answer;
   } finally {
@@ -255,44 +255,66 @@ Answer clearly and accurately based on the provided notes context or diagram/han
     });
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const primaryModel = currentAiSettings.geminiModel || "gemini-flash-lite-latest";
+  const fallbackModel = primaryModel === "gemini-3.5-flash-lite" ? "gemini-flash-lite-latest" : "gemini-3.5-flash-lite";
+  const modelsToTry = [primaryModel, fallbackModel];
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentAiSettings.geminiModel || "gemini-flash-lite-latest"}:generateContent?key=${apiKey}`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts,
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts,
+            },
+          ],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 600,
           },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 600,
-        },
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
-        throw new Error(`GEMINI_RATE_LIMIT_429: ${errText}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 429) {
+          throw new Error(`GEMINI_RATE_LIMIT_429: ${errText}`);
+        }
+        // If 503 (high demand) or 404 (model unavailable), try fallback model
+        if ((response.status === 503 || response.status === 404) && model !== fallbackModel) {
+          console.warn(`[AI-ENGINE] Gemini ${model} returned ${response.status}. Attempting resilient fallback to ${fallbackModel}...`);
+          lastError = new Error(`Gemini API Error (${response.status}): ${errText}`);
+          continue;
+        }
+        throw new Error(`Gemini API Error (${response.status}): ${errText}`);
       }
-      throw new Error(`Gemini API Error (${response.status}): ${errText}`);
-    }
 
-    const data = await response.json();
-    const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidate) throw new Error("Empty response from Gemini");
-    return candidate;
-  } finally {
-    clearTimeout(timeout);
+      const data = await response.json();
+      const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!candidate) throw new Error("Empty response from Gemini");
+      return candidate;
+    } catch (err) {
+      clearTimeout(timeout);
+      lastError = err;
+      if (model !== fallbackModel && !err.message.includes("GEMINI_RATE_LIMIT_429")) {
+        console.warn(`[AI-ENGINE] Retrying Gemini with fallback model ${fallbackModel} after error:`, err.message);
+        continue;
+      }
+      throw err;
+    }
   }
+
+  throw lastError || new Error("All Gemini models failed");
 }
 
 /**
