@@ -456,9 +456,13 @@ function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
     console.clear();
     if (!isDevToolsBypassed()) {
       const noop = () => {};
-      console.log = noop;
-      console.debug = noop;
-      console.info = noop;
+      ["log", "debug", "info", "table", "dir", "dirxml"].forEach((method) => {
+        try {
+          Object.defineProperty(console, method, { value: noop, writable: false, configurable: true });
+        } catch (_) {
+          console[method] = noop;
+        }
+      });
     }
   } catch (_) {}
 
@@ -1188,12 +1192,14 @@ export function initAntiTamperDefense() {
   // Preserves console.warn and console.error for critical runtime errors and SDK compatibility.
   // Respects admin debug overrides (?admin_dev=1, ?debug=1, or active admin session).
   if (typeof window !== "undefined" && import.meta.env.PROD && !isDevToolsBypassed()) {
-    try {
-      const noop = () => {};
-      console.log = noop;
-      console.debug = noop;
-      console.info = noop;
-    } catch (_) {}
+    const noop = () => {};
+    ["log", "debug", "info", "table", "dir", "dirxml"].forEach((method) => {
+      try {
+        Object.defineProperty(console, method, { value: noop, writable: false, configurable: true });
+      } catch (_) {
+        console[method] = noop;
+      }
+    });
   }
 
   // 4. Option 2: Multi-Vector disable-devtool Guard with ALL Detectors
