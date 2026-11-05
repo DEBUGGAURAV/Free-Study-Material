@@ -46,6 +46,11 @@ export default function TabAiEngine() {
   const [playLoading, setPlayLoading] = useState(false);
   const [playAnswer, setPlayAnswer] = useState(null);
 
+  // Circle to Search Controls (ON/OFF & Limits)
+  const [circleLimitInput, setCircleLimitInput] = useState("");
+  const [circleCooldownInput, setCircleCooldownInput] = useState("");
+  const [savingCircleConfig, setSavingCircleConfig] = useState(false);
+
   const loadTelemetry = async () => {
     try {
       setLoading(true);
@@ -65,6 +70,17 @@ export default function TabAiEngine() {
     loadTelemetry();
   }, []);
 
+  useEffect(() => {
+    if (telemetry?.settings) {
+      if (circleLimitInput === "" && telemetry.settings.circleSearchDailyLimit !== undefined) {
+        setCircleLimitInput(String(telemetry.settings.circleSearchDailyLimit));
+      }
+      if (circleCooldownInput === "" && telemetry.settings.circleSearchCooldownSec !== undefined) {
+        setCircleCooldownInput(String(telemetry.settings.circleSearchCooldownSec));
+      }
+    }
+  }, [telemetry]);
+
   const showNotice = (msg, type = "info") => {
     setFeedback(msg);
     setFeedbackType(type);
@@ -75,14 +91,41 @@ export default function TabAiEngine() {
   const handleToggle = async (provider, currentState) => {
     try {
       const nextState = !currentState;
-      showNotice(`Updating ${provider.toUpperCase()} state...`, "info");
+      const label = provider === "circle" ? "CIRCLE TO SEARCH" : provider.toUpperCase();
+      showNotice(`Updating ${label} state...`, "info");
       const res = await api.updateAiToggle(provider, nextState);
       if (res && res.success) {
         setTelemetry(res.telemetry);
-        showNotice(`✅ ${provider.toUpperCase()} is now ${nextState ? "ACTIVE (ON)" : "PAUSED (OFF)"}!`, "success");
+        showNotice(`✅ ${label} is now ${nextState ? "ACTIVE (ON)" : "PAUSED (OFF)"}!`, "success");
       }
     } catch (err) {
       showNotice("Error toggling engine: " + err.message, "error");
+    }
+  };
+
+  // Save Circle to Search Limits
+  const handleSaveCircleConfig = async (e) => {
+    e.preventDefault();
+    try {
+      setSavingCircleConfig(true);
+      const limitVal = parseInt(circleLimitInput, 10);
+      const cooldownVal = parseInt(circleCooldownInput, 10);
+      if (isNaN(limitVal) || limitVal <= 0) {
+        showNotice("Please enter a valid positive number for Daily Circle Limit.", "error");
+        return;
+      }
+      const res = await api.updateCircleSearchConfig({
+        dailyLimit: limitVal,
+        cooldownSec: isNaN(cooldownVal) ? 3 : Math.max(0, cooldownVal),
+      });
+      if (res && res.success) {
+        setTelemetry(res.telemetry);
+        showNotice(`✅ Circle to Search limits updated! Daily Limit: ${limitVal} queries, Cooldown: ${isNaN(cooldownVal) ? 3 : cooldownVal}s`, "success");
+      }
+    } catch (err) {
+      showNotice("Failed to update Circle to Search limits: " + err.message, "error");
+    } finally {
+      setSavingCircleConfig(false);
     }
   };
 
@@ -174,6 +217,9 @@ export default function TabAiEngine() {
     geminiUsedToday: 0,
     geminiRemainingToday: 1500,
     geminiPercent: 0,
+    circleSearchUsedToday: 0,
+    circleSearchRemainingToday: 2000,
+    circleSearchPercent: 0,
     totalDailyCapacity: 15900,
     totalDailyUsed: 0,
     totalQueriesToday: 0,
@@ -186,6 +232,9 @@ export default function TabAiEngine() {
     groqEnabled: true,
     geminiEnabled: true,
     edgeProxyEnabled: true,
+    circleSearchEnabled: true,
+    circleSearchDailyLimit: 2000,
+    circleSearchCooldownSec: 3,
     groqApiKeyConfigured: false,
     geminiApiKeyConfigured: false,
     groqKeyPreview: "Not Configured",
@@ -656,6 +705,228 @@ export default function TabAiEngine() {
               <Zap size={11} className={testingGemini ? "animate-spin" : ""} />
               <span>{testingGemini ? "Pinging..." : "Test Ping"}</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================================== */}
+      {/* 3. ⭕ Circle to Search & Solve Controls (ON / OFF & Limits)     */}
+      {/* ============================================================== */}
+      <div
+        style={{
+          background: "rgba(15, 23, 42, 0.65)",
+          border: settings.circleSearchEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+          borderRadius: "16px",
+          padding: "20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+          position: "relative",
+          boxShadow: settings.circleSearchEnabled ? "0 10px 30px rgba(56, 189, 248, 0.08)" : "none",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: "1.2rem" }}>⭕</span>
+              <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                Circle to Search &amp; Solve Engine (PDFs &amp; Handwritten Notes)
+              </h4>
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  background: settings.circleSearchEnabled ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                  color: settings.circleSearchEnabled ? "#38bdf8" : "#94a3b8",
+                  fontWeight: 700,
+                  border: `1px solid ${settings.circleSearchEnabled ? "rgba(56, 189, 248, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                }}
+              >
+                {settings.circleSearchEnabled ? "ONLINE & ACTIVE" : "PAUSED BY ADMIN"}
+              </span>
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  color: "#34d399",
+                  fontWeight: 700,
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                }}
+              >
+                🕒 48h Vault Auto-Expire
+              </span>
+            </div>
+            <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+              Instant PDF Text extraction ➔ Client Tesseract WASM OCR ➔ Turso L2 / RAM L1 Cache ➔ Groq / Gemini AI step-by-step solver.
+            </p>
+          </div>
+
+          {/* Master ON / OFF Toggle Switch */}
+          <button
+            type="button"
+            onClick={() => handleToggle("circle", settings.circleSearchEnabled)}
+            style={{
+              background: settings.circleSearchEnabled
+                ? "linear-gradient(135deg, #0284c7, #06b6d4)"
+                : "rgba(255, 255, 255, 0.1)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "999px",
+              padding: "7px 16px",
+              fontSize: "0.78rem",
+              fontWeight: 800,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: settings.circleSearchEnabled ? "0 2px 12px rgba(2, 132, 199, 0.45)" : "none",
+              transition: "all 0.2s ease",
+            }}
+            title={settings.circleSearchEnabled ? "Click to Pause Circle to Search" : "Click to Enable Circle to Search"}
+          >
+            <Power size={13} />
+            <span>{settings.circleSearchEnabled ? "ACTIVE (ON)" : "PAUSED (OFF)"}</span>
+          </button>
+        </div>
+
+        {/* Usage & Quota Meter */}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
+            <span style={{ color: "var(--text-dim)" }}>Today's Circle Searches:</span>
+            <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>
+              {usage.circleSearchUsedToday || 0} / {settings.circleSearchDailyLimit || 2000} ({usage.circleSearchPercent || 0}%)
+            </strong>
+          </div>
+          <div
+            style={{
+              width: "100%",
+              height: "8px",
+              borderRadius: "999px",
+              background: "rgba(255, 255, 255, 0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${Math.min(100, usage.circleSearchPercent || 0)}%`,
+                height: "100%",
+                background: "linear-gradient(90deg, #38bdf8, #818cf8)",
+                borderRadius: "999px",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
+            <span>Remaining: {usage.circleSearchRemainingToday || 2000} queries today</span>
+            <span>Rate Cooldown: {settings.circleSearchCooldownSec || 3}s per student</span>
+          </div>
+        </div>
+
+        {/* Limits & Cooldown Controls Form */}
+        <form
+          onSubmit={handleSaveCircleConfig}
+          style={{
+            background: "rgba(255, 255, 255, 0.02)",
+            border: "1px solid rgba(255, 255, 255, 0.06)",
+            borderRadius: "12px",
+            padding: "14px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", flex: 1 }}>
+            {/* Daily Limit Input */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600 }}>
+                Daily Query Limit (All Students):
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="50000"
+                value={circleLimitInput}
+                onChange={(e) => setCircleLimitInput(e.target.value)}
+                placeholder="2000"
+                style={{
+                  width: "130px",
+                  padding: "6px 10px",
+                  fontSize: "0.8rem",
+                  background: "rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  borderRadius: "6px",
+                  color: "#fff",
+                }}
+              />
+            </div>
+
+            {/* Cooldown Sec Input */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <label style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600 }}>
+                Student Cooldown (Seconds):
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="60"
+                value={circleCooldownInput}
+                onChange={(e) => setCircleCooldownInput(e.target.value)}
+                placeholder="3"
+                style={{
+                  width: "110px",
+                  padding: "6px 10px",
+                  fontSize: "0.8rem",
+                  background: "rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(56, 189, 248, 0.3)",
+                  borderRadius: "6px",
+                  color: "#fff",
+                }}
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={savingCircleConfig}
+            className="btn-primary"
+            style={{
+              padding: "7px 16px",
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            {savingCircleConfig ? <RefreshCw size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+            <span>{savingCircleConfig ? "Saving..." : "Save Limit & Cooldown"}</span>
+          </button>
+        </form>
+
+        {/* Telemetry Architecture Notes */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "8px",
+            fontSize: "0.72rem",
+            color: "var(--text-dim)",
+          }}
+        >
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+            ⚡ <strong>Turso L2 / RAM L1 Cache:</strong> Repeated questions solve in 0ms without hitting AI API quota.
+          </div>
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+            🕒 <strong>48h TTL Auto-Eviction:</strong> Questions auto-expire in 48h unless pinned in student profile.
+          </div>
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+            📱 <strong>0% Server CPU Impact:</strong> OCR runs completely inside student browser via Tesseract WASM.
           </div>
         </div>
       </div>

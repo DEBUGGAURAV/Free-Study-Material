@@ -7,6 +7,7 @@ const {
   updateAiSettings,
   resetDailyCounters,
   testAiProvider,
+  incrementCircleSearchUsage,
 } = require("../services/aiService");
 const {
   computeQueryHash,
@@ -21,12 +22,21 @@ function studentAiLimiter(req, res, next) {
   const identifier = req.user?.id || req.ip || "127.0.0.1";
   const now = Date.now();
   const lastTime = studentRateLimitMap.get(identifier) || 0;
-  // Enforce 3-second cooldown per student
-  if (now - lastTime < 3000) {
+  
+  let cooldownSec = 3;
+  try {
+    const tel = getAiTelemetry();
+    if (req.path.includes("circle") && tel?.settings?.circleSearchCooldownSec !== undefined) {
+      cooldownSec = tel.settings.circleSearchCooldownSec;
+    }
+  } catch (_) {}
+
+  // Enforce cooldown per student
+  if (now - lastTime < cooldownSec * 1000) {
     return res.status(429).json({
       success: false,
-      message: "Please wait 3 seconds before submitting another AI question.",
-      retryAfterSeconds: 3,
+      message: `Please wait ${cooldownSec} seconds before submitting another question.`,
+      retryAfterSeconds: cooldownSec,
     });
   }
   studentRateLimitMap.set(identifier, now);
@@ -82,6 +92,26 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Query text or formula is required" });
     }
 
+    // 0. Check Master Admin Toggle & Daily Limit
+    const telemetry = getAiTelemetry();
+    if (telemetry?.settings?.circleSearchEnabled === false) {
+      return res.status(403).json({
+        success: false,
+        disabled: true,
+        message: "Circle to Search AI is currently paused by admin in Tab 16.",
+      });
+    }
+
+    const circleUsed = telemetry?.usage?.circleSearchUsedToday || 0;
+    const circleLimit = telemetry?.settings?.circleSearchDailyLimit || 2000;
+    if (circleUsed >= circleLimit) {
+      return res.status(429).json({
+        success: false,
+        limitExceeded: true,
+        message: `Daily Circle to Search quota (${circleLimit} queries) reached for today.`,
+      });
+    }
+
     const cleanQuery = query.trim();
     const queryHash = computeQueryHash(cleanQuery);
 
@@ -105,6 +135,9 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
       ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
     const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user });
+
+    // Track circle search usage
+    incrementCircleSearchUsage();
 
     // 3. Async save to Turso & RAM Cache for next students
     if (result && result.answer) {
@@ -178,12 +211,31 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     if (provider === "groq") update.groqEnabled = Boolean(enabled);
     else if (provider === "gemini") update.geminiEnabled = Boolean(enabled);
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);
+    else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
     else {
       return res.status(400).json({ success: false, message: "Invalid provider specified" });
     }
 
     const result = await updateAiSettings(update);
     return res.json({ success: true, message: `${provider.toUpperCase()} state updated`, telemetry: result });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN CIRCLE SEARCH CONFIG: POST /api/ai/admin/circle-config
+ */
+router.post("/admin/circle-config", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, dailyLimit, cooldownSec } = req.body;
+    const update = {};
+    if (typeof enabled === "boolean") update.circleSearchEnabled = enabled;
+    if (dailyLimit !== undefined && !isNaN(Number(dailyLimit))) update.circleSearchDailyLimit = Number(dailyLimit);
+    if (cooldownSec !== undefined && !isNaN(Number(cooldownSec))) update.circleSearchCooldownSec = Number(cooldownSec);
+
+    const result = await updateAiSettings(update);
+    return res.json({ success: true, message: "Circle to Search settings updated successfully", telemetry: result });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

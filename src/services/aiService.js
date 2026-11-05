@@ -15,6 +15,10 @@ const DEFAULT_AI_SETTINGS = {
   groqEnabled: true,
   geminiEnabled: true,
   edgeProxyEnabled: true,
+  circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
+  circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
+  circleSearchCooldownSec: 3, // ⭕ Cooldown between circle searches
+  circleSearchUsedToday: 0,
   groqModel: "llama-3.1-8b-instant",
   geminiModel: "gemini-2.0-flash",
   groqLimit: 14400,
@@ -69,6 +73,7 @@ function checkDailyReset() {
     console.log(`[AI-ENGINE] 🌅 New day detected (${today}). Auto-resetting daily AI counters...`);
     currentAiSettings.groqUsedToday = 0;
     currentAiSettings.geminiUsedToday = 0;
+    currentAiSettings.circleSearchUsedToday = 0;
     currentAiSettings.totalQueriesToday = 0;
     currentAiSettings.failoversToday = 0;
     currentAiSettings.cachedHitsToday = 0;
@@ -368,6 +373,9 @@ function getAiTelemetry() {
       groqEnabled: currentAiSettings.groqEnabled,
       geminiEnabled: currentAiSettings.geminiEnabled,
       edgeProxyEnabled: currentAiSettings.edgeProxyEnabled,
+      circleSearchEnabled: currentAiSettings.circleSearchEnabled !== false,
+      circleSearchDailyLimit: currentAiSettings.circleSearchDailyLimit || 2000,
+      circleSearchCooldownSec: currentAiSettings.circleSearchCooldownSec || 3,
       groqModel: currentAiSettings.groqModel,
       geminiModel: currentAiSettings.geminiModel,
       groqLimit: currentAiSettings.groqLimit,
@@ -384,6 +392,9 @@ function getAiTelemetry() {
       geminiUsedToday: currentAiSettings.geminiUsedToday,
       geminiRemainingToday: Math.max(0, currentAiSettings.geminiLimit - currentAiSettings.geminiUsedToday),
       geminiPercent: Number(((currentAiSettings.geminiUsedToday / currentAiSettings.geminiLimit) * 100).toFixed(1)),
+      circleSearchUsedToday: currentAiSettings.circleSearchUsedToday || 0,
+      circleSearchRemainingToday: Math.max(0, (currentAiSettings.circleSearchDailyLimit || 2000) - (currentAiSettings.circleSearchUsedToday || 0)),
+      circleSearchPercent: Number((((currentAiSettings.circleSearchUsedToday || 0) / (currentAiSettings.circleSearchDailyLimit || 2000)) * 100).toFixed(1)),
       totalDailyCapacity: currentAiSettings.groqLimit + currentAiSettings.geminiLimit,
       totalDailyUsed: currentAiSettings.groqUsedToday + currentAiSettings.geminiUsedToday,
       totalQueriesToday: currentAiSettings.totalQueriesToday,
@@ -396,6 +407,7 @@ function getAiTelemetry() {
     status: {
       groqStatus: !groqKeySet ? "KEY_MISSING" : (!currentAiSettings.groqEnabled ? "PAUSED" : (currentAiSettings.groqUsedToday >= currentAiSettings.groqLimit ? "QUOTA_EXHAUSTED" : "HEALTHY_ACTIVE")),
       geminiStatus: !geminiKeySet ? "KEY_MISSING" : (!currentAiSettings.geminiEnabled ? "PAUSED" : (currentAiSettings.geminiUsedToday >= currentAiSettings.geminiLimit ? "QUOTA_EXHAUSTED" : "READY_STANDBY")),
+      circleSearchStatus: currentAiSettings.circleSearchEnabled === false ? "PAUSED" : ((currentAiSettings.circleSearchUsedToday || 0) >= (currentAiSettings.circleSearchDailyLimit || 2000) ? "LIMIT_EXCEEDED" : "HEALTHY_ACTIVE"),
       edgeProxyStatus: currentAiSettings.edgeProxyEnabled ? "ACTIVE_EDGE" : "DISABLED",
     },
   };
@@ -404,10 +416,24 @@ function getAiTelemetry() {
 /**
  * Updates AI toggle states or keys from Admin Studio
  */
-async function updateAiSettings({ groqEnabled, geminiEnabled, edgeProxyEnabled, groqApiKey, geminiApiKey, groqLimit, geminiLimit }) {
+async function updateAiSettings({
+  groqEnabled,
+  geminiEnabled,
+  edgeProxyEnabled,
+  circleSearchEnabled,
+  circleSearchDailyLimit,
+  circleSearchCooldownSec,
+  groqApiKey,
+  geminiApiKey,
+  groqLimit,
+  geminiLimit,
+}) {
   if (typeof groqEnabled === "boolean") currentAiSettings.groqEnabled = groqEnabled;
   if (typeof geminiEnabled === "boolean") currentAiSettings.geminiEnabled = geminiEnabled;
   if (typeof edgeProxyEnabled === "boolean") currentAiSettings.edgeProxyEnabled = edgeProxyEnabled;
+  if (typeof circleSearchEnabled === "boolean") currentAiSettings.circleSearchEnabled = circleSearchEnabled;
+  if (typeof circleSearchDailyLimit === "number" && circleSearchDailyLimit > 0) currentAiSettings.circleSearchDailyLimit = circleSearchDailyLimit;
+  if (typeof circleSearchCooldownSec === "number" && circleSearchCooldownSec >= 0) currentAiSettings.circleSearchCooldownSec = circleSearchCooldownSec;
 
   if (typeof groqApiKey === "string" && groqApiKey.trim()) {
     currentAiSettings.groqApiKey = groqApiKey.trim();
@@ -424,11 +450,20 @@ async function updateAiSettings({ groqEnabled, geminiEnabled, edgeProxyEnabled, 
 }
 
 /**
+ * Increments circle search query usage counter
+ */
+function incrementCircleSearchUsage() {
+  currentAiSettings.circleSearchUsedToday = (currentAiSettings.circleSearchUsedToday || 0) + 1;
+  saveAiSettingsToDb().catch(() => {});
+}
+
+/**
  * Resets daily usage counters to zero
  */
 async function resetDailyCounters() {
   currentAiSettings.groqUsedToday = 0;
   currentAiSettings.geminiUsedToday = 0;
+  currentAiSettings.circleSearchUsedToday = 0;
   currentAiSettings.totalQueriesToday = 0;
   currentAiSettings.failoversToday = 0;
   currentAiSettings.cachedHitsToday = 0;
@@ -461,5 +496,6 @@ module.exports = {
   updateAiSettings,
   resetDailyCounters,
   testAiProvider,
+  incrementCircleSearchUsage,
 };
 

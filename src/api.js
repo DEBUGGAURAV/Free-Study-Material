@@ -1257,6 +1257,8 @@ export const api = {
   getAiTelemetry: () => request("/ai/admin/telemetry"),
   updateAiToggle: (provider, enabled) =>
     request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) }),
+  updateCircleSearchConfig: (config) =>
+    request("/ai/admin/circle-config", { method: "POST", body: JSON.stringify(config) }),
   updateAiKeys: (keys) =>
     request("/ai/admin/keys", { method: "POST", body: JSON.stringify(keys) }),
   resetAiCounters: () =>
