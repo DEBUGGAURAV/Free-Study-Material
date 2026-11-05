@@ -341,6 +341,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   const user = options.user || null;
   const noteId = options.noteId || null;
   const noteTitle = options.noteTitle || null;
+  const queryType = options.queryType || (options.isCircleSearch ? "circle_search" : "ai_query");
 
   if (cachedAnswer) {
     currentAiSettings.cachedHitsToday += 1;
@@ -370,6 +371,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       cached: true,
       noteId,
       noteTitle,
+      queryType,
     }).catch(() => {});
 
     return {
@@ -394,7 +396,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   const imageMimeType = options.imageMimeType || "image/jpeg";
 
   // 🎯 SMART INTENT ROUTER:
-  // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Route directly to GEMINI 2.0 FLASH!
+  // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Route directly to GEMINI FLASH!
   if (isImageOrDiagram) {
     const canUseGemini = currentAiSettings.geminiEnabled && 
                          currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
@@ -413,7 +415,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Intent 2: Normal Text Doubt / Query -> Route to GROQ LPU (0.3s sub-second speed champion)
-  if (!finalAnswer) {
+  if (!finalAnswer && !isImageOrDiagram) {
     const canUseGroq = currentAiSettings.groqEnabled && 
                        currentAiSettings.groqUsedToday < currentAiSettings.groqLimit && 
                        Boolean(getApiKey("groq"));
@@ -428,28 +430,30 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Tier 2 Failover...");
         failoverOccurred = true;
         currentAiSettings.failoversToday += 1;
-
-        // Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
-        const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
-                           (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
-                           isCloudflareAiAvailable();
-        if (canUseCfAi) {
-          try {
-            finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context);
-            currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
-            finalProvider = "cloudflare_workers_ai";
-            finalModel = "@cf/meta/llama-3.1-8b-instruct";
-          } catch (cfErr) {
-            console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 3...");
-          }
-        }
       }
     } else {
       failoverOccurred = true;
     }
   }
 
-  // Fallback / Secondary for Text: If Groq failed, seamlessly fallback to Gemini 2.0 Flash
+  // Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
+  if (!finalAnswer && !isImageOrDiagram) {
+    const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
+                       (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
+                       isCloudflareAiAvailable();
+    if (canUseCfAi) {
+      try {
+        finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context);
+        currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
+        finalProvider = "cloudflare_workers_ai";
+        finalModel = "@cf/meta/llama-3.1-8b-instruct";
+      } catch (cfErr) {
+        console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 3...");
+      }
+    }
+  }
+
+  // Fallback / Secondary for Text: If Groq & Cloudflare failed, seamlessly fallback to Gemini Flash
   if (!finalAnswer && !isImageOrDiagram) {
     const canUseGemini = currentAiSettings.geminiEnabled && 
                          currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
@@ -493,7 +497,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     userName: user?.name,
     userEmail: user?.email,
     userMobile: user?.mobile,
-    query: cleanQuery || "Academic Diagram / Formula Solver",
+    query: cleanQuery || (isImageOrDiagram ? "[Circled Image / Formula Crop]" : "Academic Diagram / Formula Solver"),
     provider: finalProvider,
     model: finalModel,
     latencyMs,
@@ -504,13 +508,15 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
   dispatchAiSearchTelegramAudit({
     user,
-    query: cleanQuery || "Academic Diagram / Formula Solver",
+    query: cleanQuery || (isImageOrDiagram ? "[Circled Visual Crop / Formula]" : "Academic Diagram / Formula Solver"),
     provider: finalProvider,
     model: finalModel,
     latencyMs,
     cached: false,
     noteId,
     noteTitle,
+    queryType,
+    failover: failoverOccurred,
   }).catch(() => {});
 
   return {
@@ -740,6 +746,65 @@ async function setupTelegramAiSupportTopics(customChatId = null) {
 }
 
 /**
+ * 🏷️ Helper to identify which AI engine answered and format user-friendly display labels
+ */
+function getAiEngineAuditDetails(provider, model, cached) {
+  const p = String(provider || "").toLowerCase();
+
+  if (cached || p === "cache" || p === "turso_cache" || p === "turso") {
+    return {
+      name: "💾 Turso LibSQL Edge Cloud Cache",
+      tier: "🎯 Tier 0 (0ms Instant Hit • 0 Tokens Burned)",
+      model: model || "Turso Edge Key-Value Store",
+      speed: "⚡ Sub-5ms Instant",
+    };
+  }
+
+  if (p.includes("cloudflare") || p.includes("cf")) {
+    return {
+      name: "🔥 Cloudflare Workers AI (Native Edge GPU)",
+      tier: "🌐 Tier 2 (Serverless Edge GPU Inference)",
+      model: model || "@cf/meta/llama-3.1-8b-instruct",
+      speed: "⚡ ~0.3s Edge GPU",
+    };
+  }
+
+  if (p.includes("groq")) {
+    return {
+      name: "⚡ Groq Cloud LPU",
+      tier: "🚀 Tier 1 (Ultra-Fast Hardware LPU)",
+      model: model || "openai/gpt-oss-20b",
+      speed: "⚡ ~800 tokens/sec",
+    };
+  }
+
+  if (p.includes("gemini")) {
+    return {
+      name: "🌐 Google Gemini Flash",
+      tier: "🧠 Tier 3 (Multimodal Vision & Deep Academic Reasoning)",
+      model: model || "gemini-flash-lite-latest",
+      speed: "⚡ ~0.4s Cloud TPU",
+    };
+  }
+
+  if (p.includes("heuristic") || p.includes("standby") || p.includes("offline")) {
+    return {
+      name: "🛡️ FSM Offline Heuristic Notes Solver",
+      tier: "📄 Tier 4 (Offline Extractive Fallback)",
+      model: model || "Extractive RAG (Offline)",
+      speed: "⚡ ~0ms Local",
+    };
+  }
+
+  return {
+    name: `🤖 ${String(provider || "AI Engine").toUpperCase()}`,
+    tier: "Cloud AI Inference",
+    model: model || "Academic Model",
+    speed: "⚡ Cloud",
+  };
+}
+
+/**
  * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic
  */
 async function dispatchAiSearchTelegramAudit({
@@ -751,11 +816,14 @@ async function dispatchAiSearchTelegramAudit({
   cached = false,
   noteId = null,
   noteTitle = null,
+  queryType = "ai_query",
+  failover = false,
 }) {
   const token = getHelpBotToken();
   const chatId = getHelpChatId();
-  const topicId = currentAiSettings.aiSearchTopicId;
-  if (!token || !chatId || !topicId) return false;
+  // Support dynamic thread ID from admin settings, or fallback to environment variables
+  const topicId = currentAiSettings.aiSearchTopicId || process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || null;
+  if (!token || !chatId) return false;
 
   try {
     const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
@@ -764,29 +832,45 @@ async function dispatchAiSearchTelegramAudit({
     const cleanQuery = String(query || "").slice(0, 400).replace(/[<>]/g, "");
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
+    const isCircle = queryType === "circle_search" || String(queryType).includes("circle");
+    const headline = isCircle
+      ? `⭕ <b>Circle to Search & Solve</b>`
+      : `🤖 <b>AI Academic Query</b>`;
+
+    const engine = getAiEngineAuditDetails(provider, model, cached);
+
     const text = [
-      `🤖 <b>AI Academic Search Query</b>`,
+      headline,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `🧠 <b>AI Used:</b> <b>${engine.name}</b>`,
+      `📦 <b>Model:</b> <code>${engine.model}</code>`,
+      `🏷️ <b>Engine Tier:</b> ${engine.tier}`,
+      failover ? `🛡️ <b>Auto-Failover:</b> ⚠️ Primary engine shifted to failover backup` : "",
+      `⏱️ <b>Response Time:</b> ${latencyMs || 0}ms (${engine.speed})`,
+      `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
       `━━━━━━━━━━━━━━━━━━━━`,
       `👤 <b>Student:</b> ${studentName}`,
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
-      `⚡ <b>Provider:</b> <b>${String(provider).toUpperCase()}</b> (${model || "Llama 3.1 8B"})`,
-      `⏱️ <b>Latency:</b> ${latencyMs}ms | 💾 <b>Cached:</b> ${cached ? "Yes (0ms)" : "No"}`,
       noteTitle ? `📚 <b>Document:</b> ${noteTitle.replace(/[<>]/g, "")}` : "",
-      `❓ <b>Student Query:</b>\n<blockquote>${cleanQuery}</blockquote>`,
+      `❓ <b>Query / Formula:</b>\n<blockquote>${cleanQuery}</blockquote>`,
       `🕒 <b>Timestamp:</b> ${timeStr}`,
     ].filter(Boolean).join("\n");
+
+    const payload = {
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    };
+    if (topicId) {
+      payload.message_thread_id = Number(topicId);
+    }
 
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_thread_id: topicId,
-        text,
-        parse_mode: "HTML",
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify(payload),
     });
     return true;
   } catch (err) {

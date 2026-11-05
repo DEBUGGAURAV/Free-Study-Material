@@ -13,6 +13,7 @@ const {
   incrementCircleSearchUsage,
   setupTelegramAiSupportTopics,
   exportAiSearchReport,
+  dispatchAiSearchTelegramAudit,
 } = require("../services/aiService");
 const {
   getAiSearchLogsFromTurso,
@@ -88,6 +89,17 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
     // 1. Check L1 RAM & L2 Turso Cloud Cache (0ms response, 0 API quota)
     const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
+      dispatchAiSearchTelegramAudit({
+        user: req.user,
+        query: cleanQuery,
+        provider: cachedSolution.provider || "turso_cache",
+        model: cachedSolution.model || "Turso Edge Cloud Cache",
+        latencyMs: Date.now() - startTime,
+        cached: true,
+        noteId,
+        queryType: "ai_query",
+      }).catch(() => {});
+
       return res.json({
         success: true,
         answer: cachedSolution.answer,
@@ -104,7 +116,14 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
     const fullContext = cleanContext
       ? `[Subject: ${subject || "Engineering/Science"}]\n${cleanContext}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
-    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, subject, imageBase64, imageMimeType });
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, {
+      noteId,
+      user: req.user,
+      subject,
+      imageBase64,
+      imageMimeType,
+      queryType: "ai_query",
+    });
 
     // 3. Save to Turso Cloud Cache so next student gets 0ms instant response
     if (result && result.answer) {
@@ -173,6 +192,17 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
     // 1. Check L1 RAM & L2 Turso Cache First (0ms / sub-5ms - 0 API cost!)
     const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
+      dispatchAiSearchTelegramAudit({
+        user: req.user,
+        query: cleanQuery || (imageBase64 ? "[Circled Visual Crop / Formula]" : "Circled Academic Question"),
+        provider: cachedSolution.provider || "turso_cache",
+        model: cachedSolution.model || "Turso Edge Cloud Cache",
+        latencyMs: Date.now() - startTime,
+        cached: true,
+        noteId,
+        queryType: "circle_search",
+      }).catch(() => {});
+
       return res.json({
         success: true,
         answer: cachedSolution.answer,
@@ -189,7 +219,13 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
     const fullContext = cleanContext
       ? `[Subject: ${subject || "Engineering/Science"}]\n${cleanContext}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
-    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, imageBase64, imageMimeType });
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, {
+      noteId,
+      user: req.user,
+      imageBase64,
+      imageMimeType,
+      queryType: "circle_search",
+    });
 
     // Track circle search usage
     incrementCircleSearchUsage();

@@ -1,5 +1,5 @@
 /**
- * ⚡ Cloudflare Edge AI Proxy Worker: aiProxyWorker.js
+ * ⚡ Cloudflare Edge AI Proxy Worker: edge-worker/aiProxyWorker.js
  * High-Speed Serverless Edge GPU Router for Free Study Material Platform
  * 
  * ARCHITECTURE (Dual Edge AI Waterfall + Native Cloudflare Workers AI):
@@ -323,6 +323,70 @@ function queryHeuristicGuard(query, context) {
   };
 }
 
+/**
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic from Edge Worker
+ */
+async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle) {
+  const token = (env.HELP_BOT_TOKEN || env.TELEGRAM_HELP_BOT_TOKEN || "").trim();
+  const chatId = (env.HELP_CHAT_ID || env.TELEGRAM_HELP_CHAT_ID || "").trim();
+  const topicId = (env.HELP_TOPIC_ACTIVE_ID || env.HELP_TOPIC_ID || "").trim();
+  if (!token || !chatId) return;
+
+  try {
+    const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const headline = isCircle ? "⭕ <b>Circle to Search & Solve</b>" : "🤖 <b>AI Academic Query</b>";
+
+    let engineName = String(provider).toUpperCase();
+    let engineTier = "Cloud AI";
+    const p = String(provider || "").toLowerCase();
+    if (cached || p.includes("turso") || p.includes("cache")) {
+      engineName = "💾 Turso LibSQL Edge Cloud Cache";
+      engineTier = "🎯 Tier 0 (0ms Instant Hit • 0 Tokens Burned)";
+    } else if (p.includes("cloudflare") || p.includes("cf")) {
+      engineName = "🔥 Cloudflare Workers AI (Native Edge GPU)";
+      engineTier = "🌐 Tier 2 (Serverless Edge GPU Inference)";
+    } else if (p.includes("groq")) {
+      engineName = "⚡ Groq Cloud LPU";
+      engineTier = "🚀 Tier 1 (Ultra-Fast Hardware LPU)";
+    } else if (p.includes("gemini")) {
+      engineName = "🌐 Google Gemini Flash";
+      engineTier = "🧠 Tier 3 (Multimodal Vision & Reasoning)";
+    } else if (p.includes("heuristic")) {
+      engineName = "🛡️ FSM Offline Heuristic Notes Solver";
+      engineTier = "📄 Tier 4 (Offline Extractive Fallback)";
+    }
+
+    const text = [
+      headline,
+      "━━━━━━━━━━━━━━━━━━━━",
+      `🧠 <b>AI Used:</b> <b>${engineName}</b>`,
+      `📦 <b>Model:</b> <code>${model || "Academic Model"}</code>`,
+      `🏷️ <b>Engine Tier:</b> ${engineTier}`,
+      `⏱️ <b>Response Time:</b> ${latencyMs}ms`,
+      `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
+      "━━━━━━━━━━━━━━━━━━━━",
+      `❓ <b>Query / Formula:</b>\n<blockquote>${String(query || "").slice(0, 300).replace(/[<>]/g, "")}</blockquote>`,
+      `🕒 <b>Timestamp:</b> ${timeStr}`,
+    ].join("\n");
+
+    const payload = {
+      chat_id: chatId,
+      text,
+      parse_mode: "HTML",
+      disable_web_page_preview: true,
+    };
+    if (topicId) {
+      payload.message_thread_id = Number(topicId);
+    }
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (_) {}
+}
+
 export default {
   async fetch(request, env, ctx) {
     const startTime = Date.now();
@@ -396,6 +460,18 @@ export default {
             });
             applyCors(cacheHeaders, request);
 
+            ctx.waitUntil(
+              dispatchTelegramAiNotification(
+                env,
+                cleanQuery,
+                "turso_cache",
+                "Turso Edge Cache (0ms)",
+                true,
+                Date.now() - startTime,
+                url.pathname.includes("circle")
+              )
+            );
+
             return new Response(
               JSON.stringify({
                 success: true,
@@ -468,6 +544,17 @@ export default {
         if (provider !== "heuristic_guard") {
           ctx.waitUntil(saveToTursoCache(env, queryHash, cleanQuery, answer, provider, model));
         }
+        ctx.waitUntil(
+          dispatchTelegramAiNotification(
+            env,
+            cleanQuery || (isImageOrDiagram ? "[Circled Image / Formula Crop]" : "Academic Question"),
+            provider,
+            model,
+            false,
+            Date.now() - startTime,
+            url.pathname.includes("circle")
+          )
+        );
 
         const outHeaders = new Headers({
           "Content-Type": "application/json",
