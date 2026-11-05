@@ -68,16 +68,16 @@ function studentAiLimiter(req, res, next) {
 router.post("/ask", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { query, context, noteId, subject } = req.body;
-    if (!query || !query.trim()) {
-      return res.status(400).json({ success: false, message: "Query text is required" });
+    const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
+    if ((!query || !query.trim()) && !imageBase64) {
+      return res.status(400).json({ success: false, message: "Query text or image is required" });
     }
 
-    const cleanQuery = query.trim();
-    const queryHash = computeQueryHash(cleanQuery);
+    const cleanQuery = (query || "").trim();
+    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? imageBase64.slice(0, 100) : "empty"));
 
     // 1. Check L1 RAM & L2 Turso Cloud Cache (0ms response, 0 API quota)
-    const cachedSolution = await getCachedCircleSolution(queryHash);
+    const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
       return res.json({
         success: true,
@@ -95,7 +95,7 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
     const fullContext = context
       ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
-    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, subject });
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, subject, imageBase64, imageMimeType });
 
     // 3. Save to Turso Cloud Cache so next student gets 0ms instant response
     if (result && result.answer) {
@@ -128,9 +128,9 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
 router.post("/circle-search", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { query, context, noteId, subject } = req.body;
-    if (!query || !query.trim()) {
-      return res.status(400).json({ success: false, message: "Query text or formula is required" });
+    const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
+    if ((!query || !query.trim()) && !imageBase64) {
+      return res.status(400).json({ success: false, message: "Query text, formula, or crop image is required" });
     }
 
     // 0. Check Master Admin Toggle & Daily Limit
@@ -175,7 +175,7 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
     const fullContext = context
       ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
-    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user });
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, imageBase64, imageMimeType });
 
     // Track circle search usage
     incrementCircleSearchUsage();

@@ -21,7 +21,7 @@ const DEFAULT_AI_SETTINGS = {
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
   circleSearchCooldownSec: 3, // ⭕ Cooldown between circle searches
   circleSearchUsedToday: 0,
-  groqModel: "llama-3.1-8b-instant",
+  groqModel: "llama-3.3-70b-versatile",
   geminiModel: "gemini-2.0-flash",
   groqLimit: 14400,
   geminiLimit: 1500,
@@ -102,6 +102,15 @@ async function loadAiSettings() {
           groqApiKey: data.groqApiKey || process.env.GROQ_API_KEY || "",
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
         };
+
+        // Auto-upgrade legacy/deprecated models
+        if (!currentAiSettings.geminiModel || currentAiSettings.geminiModel === "gemini-flash-lite-latest") {
+          currentAiSettings.geminiModel = "gemini-2.0-flash";
+        }
+        if (!currentAiSettings.groqModel || currentAiSettings.groqModel === "openai/gpt-oss-20b") {
+          currentAiSettings.groqModel = "llama-3.3-70b-versatile";
+        }
+        saveAiSettingsToDb().catch(() => {});
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
         currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
@@ -163,12 +172,13 @@ async function queryGroq(query, context) {
 Answer the student's question accurately, concisely, and clearly based primarily on their provided lecture notes context.
 Formatting rules:
 - Highlight key definitions and formulas in **bold**.
-- Use clean bullet points for steps or properties.
+- If page numbers or excerpts exist in the context, cite them clearly (e.g. "📌 [Reference: Page X]").
+- Use clean bullet points for steps, algorithms, or properties.
 - Keep the explanation under 220 words so students can grasp it instantly on mobile.
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
   const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
+    ? `[Academic Notes Excerpt & Citations]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
 
   const controller = new AbortController();
@@ -182,7 +192,7 @@ Formatting rules:
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: currentAiSettings.groqModel || "llama-3.1-8b-instant",
+        model: currentAiSettings.groqModel || "openai/gpt-oss-20b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -212,9 +222,9 @@ Formatting rules:
 }
 
 /**
- * Query Google Gemini 2.0 Flash API
+ * Query Google Gemini 2.0 Flash API (Text + Multimodal Image / Handwritten Notes)
  */
-async function queryGemini(query, context) {
+async function queryGemini(query, context, imageBase64 = null, imageMimeType = "image/jpeg") {
   const apiKey = getApiKey("gemini");
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY_MISSING");
@@ -224,26 +234,44 @@ async function queryGemini(query, context) {
     throw new Error("GEMINI_RPM_LIMIT");
   }
 
-  const systemInstruction = "You are a friendly, expert academic tutor for college students. Answer clearly and concisely using the provided notes context.";
-  const promptText = `${systemInstruction}\n\n${context ? `[Study Notes Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Student Question]:\n${query}\n\nProvide a high-yield, structured answer with bullet points and key exam takeaways.`;
+  const systemInstruction = `You are a brilliant, friendly academic tutor for college students studying engineering, science, and higher education.
+Answer clearly and accurately based on the provided notes context or diagram/handwritten image.
+- If page numbers or excerpts exist in the context, cite them prominently (e.g. "📌 [From Page X]").
+- Highlight key definitions and formulas in **bold**.
+- Use clean bullet points for steps or derivations.
+- Keep the explanation high-yield, structured, and concise.
+- Add a 1-line "💡 Exam Takeaway" at the end.`;
+
+  const promptText = `${systemInstruction}\n\n${context ? `[Study Notes Context & Citations]:\n${context.slice(0, 4500)}\n\n` : ""}[Student Question]:\n${query || "Analyze and solve the problem/diagram shown in this study note."}\n\nProvide an authoritative, student-friendly answer.`;
+
+  const parts = [{ text: promptText }];
+  if (imageBase64) {
+    const cleanB64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    parts.push({
+      inline_data: {
+        mime_type: imageMimeType || "image/jpeg",
+        data: cleanB64,
+      },
+    });
+  }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentAiSettings.geminiModel || "gemini-2.0-flash"}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentAiSettings.geminiModel || "gemini-flash-lite-latest"}:generateContent?key=${apiKey}`;
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [
           {
-            parts: [{ text: promptText }],
+            parts,
           },
         ],
         generationConfig: {
           temperature: 0.3,
-          maxOutputTokens: 500,
+          maxOutputTokens: 600,
         },
       }),
       signal: controller.signal,
@@ -329,28 +357,53 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   let finalModel = currentAiSettings.groqModel;
   let failoverOccurred = false;
 
-  // 2. Try Primary: Groq LPU (14,400 daily limit, ultra-fast 800 tps)
-  const canUseGroq = currentAiSettings.groqEnabled && 
-                     currentAiSettings.groqUsedToday < currentAiSettings.groqLimit && 
-                     Boolean(getApiKey("groq"));
+  const isImageOrDiagram = Boolean(options.imageBase64);
+  const imageBase64 = options.imageBase64 || null;
+  const imageMimeType = options.imageMimeType || "image/jpeg";
 
-  if (canUseGroq) {
-    try {
-      finalAnswer = await queryGroq(cleanQuery, context);
-      currentAiSettings.groqUsedToday += 1;
-      finalProvider = "groq";
-      finalModel = currentAiSettings.groqModel;
-    } catch (groqErr) {
-      console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Gemini Failover...");
-      failoverOccurred = true;
-      currentAiSettings.failoversToday += 1;
+  // 🎯 SMART INTENT ROUTER:
+  // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Route directly to GEMINI 2.0 FLASH!
+  if (isImageOrDiagram) {
+    const canUseGemini = currentAiSettings.geminiEnabled && 
+                         currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
+                         Boolean(getApiKey("gemini"));
+    if (canUseGemini) {
+      try {
+        finalAnswer = await queryGemini(cleanQuery, context, imageBase64, imageMimeType);
+        currentAiSettings.geminiUsedToday += 1;
+        finalProvider = "gemini";
+        finalModel = currentAiSettings.geminiModel;
+      } catch (geminiErr) {
+        console.warn("[AI-ENGINE] ⚠️ Gemini image analysis notice:", geminiErr.message, "-> Falling back to Groq text OCR...");
+        failoverOccurred = true;
+      }
     }
-  } else {
-    failoverOccurred = true;
   }
 
-  // 3. Try Secondary: Gemini 2.0 Flash (1,500 daily limit)
+  // Intent 2: Normal Text Doubt / Query -> Route to GROQ LPU (0.3s sub-second speed champion)
   if (!finalAnswer) {
+    const canUseGroq = currentAiSettings.groqEnabled && 
+                       currentAiSettings.groqUsedToday < currentAiSettings.groqLimit && 
+                       Boolean(getApiKey("groq"));
+
+    if (canUseGroq) {
+      try {
+        finalAnswer = await queryGroq(cleanQuery, context);
+        currentAiSettings.groqUsedToday += 1;
+        finalProvider = "groq";
+        finalModel = currentAiSettings.groqModel;
+      } catch (groqErr) {
+        console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Gemini Failover...");
+        failoverOccurred = true;
+        currentAiSettings.failoversToday += 1;
+      }
+    } else {
+      failoverOccurred = true;
+    }
+  }
+
+  // Fallback / Secondary for Text: If Groq failed, seamlessly fallback to Gemini 2.0 Flash
+  if (!finalAnswer && !isImageOrDiagram) {
     const canUseGemini = currentAiSettings.geminiEnabled && 
                          currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
                          Boolean(getApiKey("gemini"));
@@ -361,12 +414,12 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalProvider = "gemini";
         finalModel = currentAiSettings.geminiModel;
       } catch (geminiErr) {
-        console.warn("[AI-ENGINE] ⚠️ Gemini secondary notice:", geminiErr.message);
+        console.warn("[AI-ENGINE] ⚠️ Gemini failover notice:", geminiErr.message);
       }
     }
   }
 
-  // 4. Fallback to Local Academic Notes Synthesis if both APIs are down/unconfigured
+  // Fallback to Local Academic Notes Synthesis if both APIs are down/unconfigured
   if (!finalAnswer) {
     if (context && context.trim()) {
       finalAnswer = `🤖 [Academic Notes Synthesis]\n\nBased on your course notes, here is the direct excerpt matching "${cleanQuery}":\n\n"${context.slice(0, 300)}..."\n\n💡 Note: Cloud AI engine is currently on offline standby or awaiting API keys in Admin Studio.`;

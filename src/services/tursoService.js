@@ -859,6 +859,15 @@ async function purgeUserFromTurso(userId, userEmail = null) {
     }).catch(() => ({ rowsAffected: 0 }));
     deletedCount += (r6.rowsAffected || 0);
 
+    const aiTargetClient = getAiTursoClient();
+    if (aiTargetClient && aiTargetClient !== client) {
+      const rAi = await aiTargetClient.execute({
+        sql: `DELETE FROM ai_search_logs WHERE userId = ? OR (userEmail IS NOT NULL AND userEmail = ?)`,
+        args: [cleanId, cleanEmail || cleanId],
+      }).catch(() => ({ rowsAffected: 0 }));
+      deletedCount += (rAi.rowsAffected || 0);
+    }
+
     console.log(`[TURSO] 🗑️ Cascaded user deletion for ${cleanId} (${cleanEmail}): ${deletedCount} rows removed (including AI searches).`);
     return { success: true, deletedCount };
   } catch (err) {
@@ -885,6 +894,20 @@ async function archiveUserNotesInTurso(userEmail, archivedUploaderName) {
   }
 }
 
+let aiDedicatedClient = null;
+function getAiTursoClient() {
+  if (aiDedicatedClient) return aiDedicatedClient;
+  const aiUrl = (process.env.TURSO_CIRCLE_SEARCH_URL || process.env.TURSO_AI_CACHE_URL || "").trim();
+  const aiToken = (process.env.TURSO_CIRCLE_SEARCH_AUTH_TOKEN || process.env.TURSO_AI_CACHE_AUTH_TOKEN || "").trim();
+  if (aiUrl && aiToken) {
+    try {
+      aiDedicatedClient = createClient({ url: aiUrl, authToken: aiToken });
+      return aiDedicatedClient;
+    } catch (_) {}
+  }
+  return client;
+}
+
 /**
  * 🤖 Log AI Search query to Turso LibSQL table
  */
@@ -902,10 +925,11 @@ async function logAiSearchToTurso({
   noteId = null,
   noteTitle = null,
 }) {
-  if (!client || !query) return false;
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient || !query) return false;
   try {
     const logId = id || `ais_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-    await client.execute({
+    await targetClient.execute({
       sql: `
         INSERT INTO ai_search_logs (
           id, userId, userName, userEmail, userMobile, query, provider, model, latencyMs, cached, noteId, noteTitle, createdAt
@@ -937,7 +961,8 @@ async function logAiSearchToTurso({
  * 📥 Fetch recent AI search logs from Turso for reports / admin view
  */
 async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
-  if (!client) return [];
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient) return [];
   try {
     const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
     let sql = `SELECT * FROM ai_search_logs ORDER BY createdAt DESC LIMIT ?`;
@@ -953,7 +978,7 @@ async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
       args = [q, q, q, q, safeLimit];
     }
 
-    const res = await client.execute({ sql, args });
+    const res = await targetClient.execute({ sql, args });
     return (res.rows || []).map((r) => ({
       id: r.id,
       userId: r.userId,
@@ -979,38 +1004,40 @@ async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
  * ⚡ Live telemetry for Turso AI Search & Knowledge Vault
  */
 async function getTursoAiTelemetry() {
-  if (!client) {
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient) {
     return {
       connected: false,
       isCloud: false,
       latencyMs: 0,
       aiSearchCount: 0,
-      database: rawUrl ? "Turso LibSQL Edge" : "Local Standby Cache",
+      database: "Local Standby Cache",
       storageTier: "9 GB Lifetime Free Tier (Turso LibSQL)",
       error: "Client not initialized",
     };
   }
   try {
     const t0 = Date.now();
-    await client.execute("SELECT 1 AS ping");
+    await targetClient.execute("SELECT 1 AS ping");
     const latencyMs = Date.now() - t0;
 
-    const countRes = await client.execute("SELECT COUNT(*) AS c FROM ai_search_logs").catch(() => ({ rows: [{ c: 0 }] }));
+    const countRes = await targetClient.execute("SELECT COUNT(*) AS c FROM ai_search_logs").catch(() => ({ rows: [{ c: 0 }] }));
     const aiSearchCount = Number(countRes.rows[0]?.c || 0);
+    const aiUrl = (process.env.TURSO_CIRCLE_SEARCH_URL || rawUrl || "").trim();
 
     return {
       connected: true,
-      isCloud,
+      isCloud: true,
       latencyMs,
       aiSearchCount,
-      database: isCloud && rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "cache/turso_vault.db",
-      storageTier: isCloud ? "AWS Mumbai (aws-ap-south-1.turso.io)" : "Local LibSQL Vault Cache",
-      models: "Groq LPU (Llama 3.3 70B) • Gemini 2.0 Flash",
+      database: aiUrl ? aiUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "fsm-ai.aws-ap-south-1.turso.io",
+      storageTier: "AWS Mumbai (aws-ap-south-1.turso.io)",
+      models: "Groq LPU (Llama 3.3) • Gemini 2.0 / 2.5 Flash",
     };
   } catch (err) {
     return {
       connected: false,
-      isCloud,
+      isCloud: false,
       latencyMs: 0,
       aiSearchCount: 0,
       database: rawUrl || "Error",
@@ -1025,7 +1052,8 @@ async function getTursoAiTelemetry() {
  * 🛡️ 100% Isolated: NEVER touches notes_cache, chat_messages, or private room audits
  */
 async function pruneAiSearchLogs(days = 30) {
-  if (!client) return { success: false, deletedCount: 0, error: "Turso client not initialized" };
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient) return { success: false, deletedCount: 0, error: "Turso client not initialized" };
 
   if (days === -1 || days === "never" || String(days).toLowerCase() === "never" || days === "-1") {
     console.log("[TURSO-AI-PRUNER] 🛡️ AI Search Logs Retention set to NEVER. No records deleted.");
@@ -1046,7 +1074,7 @@ async function pruneAiSearchLogs(days = 30) {
     let deletedCount = 0;
     if (numDays === 0) {
       // Clear All
-      const res = await client.execute("DELETE FROM ai_search_logs");
+      const res = await targetClient.execute("DELETE FROM ai_search_logs");
       deletedCount = res.rowsAffected || 0;
       console.log(`[TURSO-AI-PRUNER] 💥 Cleared ALL AI Search Logs (${deletedCount} rows deleted).`);
       return {
@@ -1058,7 +1086,7 @@ async function pruneAiSearchLogs(days = 30) {
     } else {
       const cutoffDate = new Date(Date.now() - numDays * 24 * 60 * 60 * 1000);
       const cutoffIso = cutoffDate.toISOString();
-      const res = await client.execute({
+      const res = await targetClient.execute({
         sql: "DELETE FROM ai_search_logs WHERE createdAt < ?",
         args: [cutoffIso],
       });
