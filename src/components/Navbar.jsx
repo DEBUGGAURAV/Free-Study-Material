@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Users,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 
