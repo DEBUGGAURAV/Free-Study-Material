@@ -1278,4 +1278,12 @@ export const api = {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
     return `/api/ai/admin/export-report?format=${format}&search=${encodeURIComponent(search)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
   },
+  getPurgeHistory: (params = {}) => {
+    const sp = new URLSearchParams(params).toString();
+    return request(`/ai/admin/purge-history${sp ? `?${sp}` : ""}`);
+  },
+  getPurgeReportDownloadUrl: (format = "excel", search = "") => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+    return `/api/ai/admin/purge-history/export?format=${format}&search=${encodeURIComponent(search)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+  },
 };

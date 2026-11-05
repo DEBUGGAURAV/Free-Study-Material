@@ -365,6 +365,24 @@ async function cascadeDeleteUserAccount({
     console.debug("[CASCADE-DELETE] Support Topic purge alert notice:", purgeTgErr.message);
   }
 
+  // 13. Persist Immutable Purge Audit Record to Turso LibSQL Cloud
+  try {
+    const { logAccountPurgeToTurso } = require("./tursoService");
+    await logAccountPurgeToTurso({
+      userId,
+      userName: userData.name,
+      userEmail: cleanEmail,
+      userMobile: userData.mobile,
+      tursoDeletedCount,
+      uploadedNotesCount: uploadedNotes.length,
+      chatMessagesDeleted: chatMessagesCount,
+      purgedBy: admin?.email || (isAutoPurge ? "Automated Lifecycle Sweeper" : "Admin"),
+      reason,
+    });
+  } catch (tursoLogErr) {
+    console.debug("[CASCADE-DELETE] Turso purge log notice:", tursoLogErr.message);
+  }
+
   console.log(`[CASCADE-DELETE] ✅ Complete cascade deletion finished for ${cleanEmail}: Turso (${tursoDeletedCount} rows), Chat (${chatMessagesCount} msgs), Notes preserved (${uploadedNotes.length}).`);
 
   return {

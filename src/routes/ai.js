@@ -14,7 +14,11 @@ const {
   setupTelegramAiSupportTopics,
   exportAiSearchReport,
 } = require("../services/aiService");
-const { getAiSearchLogsFromTurso } = require("../services/tursoService");
+const {
+  getAiSearchLogsFromTurso,
+  getAccountPurgeLogsFromTurso,
+  exportPurgeAuditReport,
+} = require("../services/tursoService");
 const {
   computeQueryHash,
   getCachedCircleSolution,
@@ -354,6 +358,34 @@ router.get("/admin/export-report", authenticateToken, requireAdmin, async (req, 
   try {
     const { format = "csv", search = "", limit = 500 } = req.query;
     const report = await exportAiSearchReport({ format, search, limit });
+    res.setHeader("Content-Type", report.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${report.filename}"`);
+    return res.send(report.data);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN RECENT PURGES: GET /api/ai/admin/purge-history
+ */
+router.get("/admin/purge-history", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { limit = 50, search = "" } = req.query;
+    const logs = await getAccountPurgeLogsFromTurso({ limit, search });
+    return res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN EXPORT PURGE REPORT: GET /api/ai/admin/purge-history/export
+ */
+router.get("/admin/purge-history/export", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { format = "excel", search = "", limit = 500 } = req.query;
+    const report = await exportPurgeAuditReport({ format, search, limit });
     res.setHeader("Content-Type", report.contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${report.filename}"`);
     return res.send(report.data);

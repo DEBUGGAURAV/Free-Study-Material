@@ -809,27 +809,39 @@ async function dispatchUserPurgeTelegramAudit({
 }
 
 /**
- * 📥 Generate Exportable AI Search Report (CSV / JSON)
+ * 📥 Generate Exportable AI Search Report (CSV / Excel / PDF / JSON)
  */
 async function exportAiSearchReport({ format = "csv", search = "", limit = 500 } = {}) {
   const logs = await getAiSearchLogsFromTurso({ limit, search });
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  if (format === "pdf") {
+    const { generateAiSearchPdfReport } = require("../utils/reportPdfGenerator");
+    const pdfBytes = await generateAiSearchPdfReport(logs, { dateStr });
+    return {
+      contentType: "application/pdf",
+      filename: `AI_Search_History_${dateStr}.pdf`,
+      data: Buffer.from(pdfBytes),
+    };
+  }
+
   if (format === "json") {
     return {
       contentType: "application/json",
-      filename: `AI_Search_Report_${new Date().toISOString().slice(0, 10)}.json`,
+      filename: `AI_Search_History_${dateStr}.json`,
       data: JSON.stringify(logs, null, 2),
     };
   }
 
-  // CSV Generation with RFC 4180 Escaping
+  // CSV / Excel Generation with RFC 4180 Escaping & UTF-8 BOM (\uFEFF)
   const headers = [
     "Log ID",
     "Timestamp (UTC)",
     "Student Name",
     "Email",
     "Mobile",
-    "Query",
-    "Provider",
+    "Academic Query",
+    "AI Provider",
     "Model",
     "Latency (ms)",
     "Cached Hit",
@@ -858,11 +870,11 @@ async function exportAiSearchReport({ format = "csv", search = "", limit = 500 }
     escapeCsv(r.noteTitle),
   ]);
 
-  const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
 
   return {
     contentType: "text/csv; charset=utf-8",
-    filename: `AI_Search_Report_${new Date().toISOString().slice(0, 10)}.csv`,
+    filename: `AI_Search_History_${dateStr}.csv`,
     data: csvContent,
   };
 }

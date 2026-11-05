@@ -100,6 +100,7 @@ export default {
 
           if (groqKey) {
             try {
+              const groqModel = env.GROQ_MODEL || 'openai/gpt-oss-20b';
               const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -107,7 +108,7 @@ export default {
                   'Authorization': 'Bearer ' + groqKey,
                 },
                 body: JSON.stringify({
-                  model: 'llama-3.1-8b-instant',
+                  model: groqModel,
                   messages: [
                     { role: 'system', content: 'You are an expert academic tutor for college students. Answer clearly and concisely using the provided lecture notes.' },
                     { role: 'user', content: context ? '[Notes Context]:\n' + context.slice(0, 3500) + '\n\n[Question]:\n' + query : query }
@@ -118,7 +119,8 @@ export default {
               });
               if (groqRes.ok) {
                 const groqData = await groqRes.json();
-                answer = groqData.choices && groqData.choices[0] && groqData.choices[0].message && groqData.choices[0].message.content ? groqData.choices[0].message.content : '';
+                const msg = groqData.choices && groqData.choices[0] && groqData.choices[0].message;
+                answer = msg ? ((msg.content || msg.reasoning || '').trim()) : '';
               } else {
                 failover = true;
               }
@@ -131,7 +133,8 @@ export default {
 
           if (!answer && geminiKey) {
             try {
-              const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiKey;
+              const geminiModel = env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+              const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent?key=' + geminiKey;
               const geminiRes = await fetch(geminiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -161,7 +164,7 @@ export default {
               success: true,
               answer: answer,
               provider: provider,
-              model: provider === 'groq' ? 'llama-3.1-8b-instant' : 'gemini-2.0-flash',
+              model: provider === 'groq' ? (env.GROQ_MODEL || 'openai/gpt-oss-20b') : (env.GEMINI_MODEL || 'gemini-flash-lite-latest'),
               failover: failover,
               edgeLocation: edgeColo,
               cached: false

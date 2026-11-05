@@ -1106,6 +1106,209 @@ async function pruneAiSearchLogs(days = 30) {
   }
 }
 
+/**
+ * 🔥 Log Cascade Account Purge Audit to Turso LibSQL table
+ */
+async function logAccountPurgeToTurso({
+  userId,
+  userName = "Student Scholar",
+  userEmail = "N/A",
+  userMobile = "N/A",
+  tursoDeletedCount = 0,
+  uploadedNotesCount = 0,
+  chatMessagesDeleted = 0,
+  purgedBy = "Admin",
+  reason = "Account Deletion",
+}) {
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient) return false;
+  try {
+    const purgeId = `purge_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    await targetClient.execute(`
+      CREATE TABLE IF NOT EXISTS account_purge_audits (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userName TEXT,
+        userEmail TEXT,
+        userMobile TEXT,
+        tursoDeletedCount INTEGER DEFAULT 0,
+        uploadedNotesCount INTEGER DEFAULT 0,
+        chatMessagesDeleted INTEGER DEFAULT 0,
+        purgedBy TEXT,
+        reason TEXT,
+        createdAt TEXT DEFAULT (datetime('now'))
+      )
+    `).catch(() => {});
+
+    await targetClient.execute({
+      sql: `
+        INSERT INTO account_purge_audits (
+          id, userId, userName, userEmail, userMobile, tursoDeletedCount, uploadedNotesCount, chatMessagesDeleted, purgedBy, reason, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `,
+      args: [
+        purgeId,
+        userId ? String(userId).trim() : null,
+        userName ? String(userName).slice(0, 100) : null,
+        userEmail ? String(userEmail).toLowerCase().slice(0, 120) : null,
+        userMobile ? String(userMobile).slice(0, 30) : null,
+        Number(tursoDeletedCount) || 0,
+        Number(uploadedNotesCount) || 0,
+        Number(chatMessagesDeleted) || 0,
+        purgedBy ? String(purgedBy).slice(0, 100) : "Admin",
+        reason ? String(reason).slice(0, 250) : "Account Purge",
+      ],
+    });
+    console.log(`[TURSO-PURGE-LOG] 🔥 Account purge audit logged for ${userEmail || userId} (${tursoDeletedCount} rows wiped).`);
+    return true;
+  } catch (err) {
+    console.debug("[TURSO-PURGE-LOG] Notice:", err.message);
+    return false;
+  }
+}
+
+/**
+ * 🔍 Retrieve Account Purge Audit History from Turso LibSQL & Universal Vault
+ */
+async function getAccountPurgeLogsFromTurso({ limit = 100, search = "" } = {}) {
+  const targetClient = getAiTursoClient() || client;
+  let tursoRows = [];
+  if (targetClient) {
+    try {
+      await targetClient.execute(`
+        CREATE TABLE IF NOT EXISTS account_purge_audits (
+          id TEXT PRIMARY KEY,
+          userId TEXT,
+          userName TEXT,
+          userEmail TEXT,
+          userMobile TEXT,
+          tursoDeletedCount INTEGER DEFAULT 0,
+          uploadedNotesCount INTEGER DEFAULT 0,
+          chatMessagesDeleted INTEGER DEFAULT 0,
+          purgedBy TEXT,
+          reason TEXT,
+          createdAt TEXT DEFAULT (datetime('now'))
+        )
+      `).catch(() => {});
+
+      let sql = `SELECT * FROM account_purge_audits ORDER BY createdAt DESC LIMIT ?`;
+      let args = [Number(limit) || 100];
+      if (search && search.trim()) {
+        const term = `%${search.trim().toLowerCase()}%`;
+        sql = `SELECT * FROM account_purge_audits WHERE LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(reason) LIKE ? ORDER BY createdAt DESC LIMIT ?`;
+        args = [term, term, term, Number(limit) || 100];
+      }
+      const res = await targetClient.execute({ sql, args });
+      tursoRows = (res.rows || []).map((r) => ({
+        id: r.id,
+        userId: r.userId,
+        userName: r.userName || "Student",
+        userEmail: r.userEmail || "N/A",
+        userMobile: r.userMobile || "N/A",
+        tursoDeletedCount: Number(r.tursoDeletedCount || 0),
+        uploadedNotesCount: Number(r.uploadedNotesCount || 0),
+        chatMessagesDeleted: Number(r.chatMessagesDeleted || 0),
+        purgedBy: r.purgedBy || "Admin",
+        reason: r.reason || "Account Purge",
+        createdAt: r.createdAt,
+      }));
+    } catch (_) {}
+  }
+
+  // Fallback to Firestore deleted_records (Universal Vault) if available
+  try {
+    const { db } = require("../firebase");
+    if (db && tursoRows.length < 50) {
+      const snap = await db.collection("deleted_records").get().catch(() => ({ empty: true, docs: [] }));
+      if (!snap.empty) {
+        snap.docs.forEach((doc) => {
+          const d = doc.data();
+          if (d.collectionName === "users" || d.typeLabel?.includes("Student") || d.originalId) {
+            const exists = tursoRows.some((r) => r.userId === d.originalId || (d.email && r.userEmail === d.email));
+            if (!exists) {
+              tursoRows.push({
+                id: doc.id,
+                userId: d.originalId || doc.id.replace("users_", ""),
+                userName: d.name || d.userName || "Student Scholar",
+                userEmail: d.email || "N/A",
+                userMobile: d.mobile || "N/A",
+                tursoDeletedCount: Number(d.tursoRowsDeleted || 0),
+                uploadedNotesCount: Number(d.uploadedNotesCount || 0),
+                chatMessagesDeleted: Number(d.chatMessagesDeleted || 0),
+                purgedBy: d.archivedBy || "System Admin",
+                reason: d.deletionReason || "Lifecycle Purge",
+                createdAt: d.archivedAt || new Date().toISOString(),
+              });
+            }
+          }
+        });
+      }
+    }
+  } catch (_) {}
+
+  tursoRows.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  return tursoRows.slice(0, Number(limit) || 100);
+}
+
+/**
+ * 📥 Export Account Purge Audit Dossier (Excel CSV / PDF)
+ */
+async function exportPurgeAuditReport({ format = "excel", search = "", limit = 500 } = {}) {
+  const logs = await getAccountPurgeLogsFromTurso({ limit, search });
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  if (format === "pdf") {
+    const { generatePurgeAuditPdfReport } = require("../utils/reportPdfGenerator");
+    const pdfBytes = await generatePurgeAuditPdfReport(logs, { dateStr });
+    return {
+      contentType: "application/pdf",
+      filename: `Account_Purge_Audit_History_${dateStr}.pdf`,
+      data: Buffer.from(pdfBytes),
+    };
+  }
+
+  // Excel / CSV Export (with UTF-8 BOM \uFEFF for seamless Microsoft Excel rendering)
+  const headers = [
+    "Purge ID",
+    "Timestamp (IST/UTC)",
+    "Student Name",
+    "Email",
+    "Mobile",
+    "Turso Rows Purged",
+    "Notes Re-attributed",
+    "Chat Messages Purged",
+    "Purged By",
+    "Reason",
+  ];
+
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    const s = String(val).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows = logs.map((r) => [
+    escapeCsv(r.id),
+    escapeCsv(r.createdAt),
+    escapeCsv(r.userName),
+    escapeCsv(r.userEmail),
+    escapeCsv(r.userMobile),
+    escapeCsv(r.tursoDeletedCount),
+    escapeCsv(r.uploadedNotesCount),
+    escapeCsv(r.chatMessagesDeleted),
+    escapeCsv(r.purgedBy),
+    escapeCsv(r.reason),
+  ]);
+
+  const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+
+  return {
+    contentType: "text/csv; charset=utf-8",
+    filename: `Account_Purge_Audit_History_${dateStr}.csv`,
+    data: csvContent,
+  };
+}
+
 module.exports = {
   get tursoClient() {
     return client;
@@ -1138,5 +1341,8 @@ module.exports = {
   getAiSearchLogsFromTurso,
   getTursoAiTelemetry,
   pruneAiSearchLogs,
+  logAccountPurgeToTurso,
+  getAccountPurgeLogsFromTurso,
+  exportPurgeAuditReport,
 };
 
