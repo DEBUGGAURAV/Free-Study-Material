@@ -994,12 +994,22 @@ export default function TabAiEngine() {
           </div>
 
           <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
-            When enabled, student AI requests route directly through <strong>Cloudflare Global Edge</strong> to Groq/Gemini. 
+            When enabled, student AI requests route directly through <strong>Cloudflare Global Edge</strong> (330+ Cities) to Groq/Gemini. 
             Your Node.js Render backend experiences <strong>0 requests, 0 CPU load, and 0 bandwidth usage</strong>.
           </p>
 
+          <div style={{ padding: "8px 12px", background: "rgba(245, 158, 11, 0.08)", borderRadius: "8px", border: "1px solid rgba(245, 158, 11, 0.2)", display: "flex", flexDirection: "column", gap: "4px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <span style={{ color: "#fbbf24", fontWeight: 700 }}>🔥 Tier 2 Native Edge GPU:</span>
+              <span style={{ fontFamily: "var(--font-mono)", color: "#fff", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: "4px" }}>@cf/meta/llama-3.1-8b-instruct</span>
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+              Quota: 10,000 Neurons / Day FREE • Runs directly inside Cloudflare Data Center (Zero Network Egress)
+            </div>
+          </div>
+
           <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)" }}>
-            Edge Route: CF_WORKER /api/ai/ask ➔ Groq / Gemini ➔ Student Browser
+            Router: edge-worker/aiProxyWorker.js ➔ Groq LPU ➔ Cloudflare AI ➔ Gemini ➔ Turso Cache
           </div>
         </div>
 
