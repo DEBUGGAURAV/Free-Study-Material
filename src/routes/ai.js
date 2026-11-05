@@ -255,6 +255,194 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
 });
 
 /**
+ * 🗂️ POST /api/ai/flashcards
+ * Generates or retrieves cached study flashcards for a note/PDF (0ms Turso Cache)
+ */
+router.post("/flashcards", studentAiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { noteId, title = "Lecture Note", context = "", subject = "" } = req.body;
+    if (!noteId && !context && !title) {
+      return res.status(400).json({ success: false, message: "noteId, title or context is required" });
+    }
+
+    const cleanTitle = String(title || "Lecture Notes").trim().slice(0, 200);
+    const cleanContext = String(context || "").trim().slice(0, 15000);
+    const hashKey = `flashcards_${noteId || "note"}_${cleanTitle}`;
+    const queryHash = computeQueryHash(hashKey);
+
+    // 1. Check Turso L2 / RAM L1 Cache (0ms Instant Hit)
+    const cachedSolution = await getCachedCircleSolution(queryHash);
+    if (cachedSolution && cachedSolution.answer) {
+      let cards = [];
+      try {
+        cards = JSON.parse(cachedSolution.answer);
+      } catch (_) {}
+
+      if (Array.isArray(cards) && cards.length > 0) {
+        dispatchAiSearchTelegramAudit({
+          user: req.user,
+          query: `🗂️ Flashcards: ${cleanTitle}`,
+          provider: cachedSolution.provider || "turso_cache",
+          model: cachedSolution.model || "Turso Edge Cache (0ms)",
+          latencyMs: Date.now() - startTime,
+          cached: true,
+          noteId,
+          noteTitle: cleanTitle,
+          queryType: "flashcards",
+        }).catch(() => {});
+
+        return res.json({
+          success: true,
+          flashcards: cards,
+          provider: cachedSolution.provider,
+          model: cachedSolution.model,
+          cached: true,
+          cacheSource: cachedSolution.source || "Turso Edge Cache",
+          latencyMs: Date.now() - startTime,
+        });
+      }
+    }
+
+    // 2. Cache Miss: Generate Fresh Flashcards using AI Waterfall
+    const prompt = `Generate 6 to 8 high-yield exam flashcards for college engineering/science students studying "${cleanTitle}" [Subject: ${subject || "Engineering"}].
+Context Excerpt:
+${cleanContext.slice(0, 4000) || cleanTitle}
+
+Return ONLY a valid JSON array of objects with this exact structure without markdown backticks:
+[
+  {
+    "question": "Clear concept, definition or formula question",
+    "answer": "Accurate, high-yield explanation with formula if applicable",
+    "category": "Formula"
+  }
+]`;
+
+    const result = await generateAcademicAnswer(prompt, cleanContext, {
+      noteId,
+      user: req.user,
+      noteTitle: cleanTitle,
+      subject,
+      queryType: "flashcards",
+    });
+
+    let flashcards = [];
+    if (result && result.answer) {
+      try {
+        const cleanJsonStr = result.answer.replace(/```json/gi, "").replace(/```/g, "").trim();
+        flashcards = JSON.parse(cleanJsonStr);
+      } catch (_) {
+        flashcards = [
+          { question: `What is the core principle of ${cleanTitle}?`, answer: result.answer.slice(0, 200), category: "Key Concept" },
+          { question: "What is an important exam takeaway?", answer: "Review definitions and practice core formulas.", category: "Exam Question" },
+        ];
+      }
+    }
+
+    if (!Array.isArray(flashcards) || flashcards.length === 0) {
+      flashcards = [
+        { question: `Key principles of ${cleanTitle}`, answer: cleanContext.slice(0, 250) || "Study key derivations and formulas.", category: "Overview" },
+      ];
+    }
+
+    // Save to Turso Cache in the same database!
+    saveCircleSolution(queryHash, `Flashcards: ${cleanTitle}`, JSON.stringify(flashcards), result.provider, result.model).catch(() => {});
+
+    return res.json({
+      success: true,
+      flashcards,
+      provider: result.provider,
+      model: result.model,
+      cached: false,
+      latencyMs: Date.now() - startTime,
+    });
+  } catch (err) {
+    console.error("[FLASHCARDS-ROUTE] Error:", err.message);
+    return res.status(500).json({ success: false, message: "Failed to generate flashcards: " + err.message });
+  }
+});
+
+/**
+ * 📄 POST /api/ai/summary
+ * Generates or retrieves cached Executive Summary for a note/PDF (0ms Turso Cache)
+ */
+router.post("/summary", studentAiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { noteId, title = "Lecture Note", context = "", subject = "" } = req.body;
+    if (!noteId && !context && !title) {
+      return res.status(400).json({ success: false, message: "noteId, title or context is required" });
+    }
+
+    const cleanTitle = String(title || "Lecture Notes").trim().slice(0, 200);
+    const cleanContext = String(context || "").trim().slice(0, 15000);
+    const hashKey = `summary_${noteId || "note"}_${cleanTitle}`;
+    const queryHash = computeQueryHash(hashKey);
+
+    // 1. Check Turso L2 / RAM L1 Cache (0ms Instant Hit)
+    const cachedSolution = await getCachedCircleSolution(queryHash);
+    if (cachedSolution && cachedSolution.answer) {
+      dispatchAiSearchTelegramAudit({
+        user: req.user,
+        query: `📄 Summary: ${cleanTitle}`,
+        provider: cachedSolution.provider || "turso_cache",
+        model: cachedSolution.model || "Turso Edge Cache (0ms)",
+        latencyMs: Date.now() - startTime,
+        cached: true,
+        noteId,
+        noteTitle: cleanTitle,
+        queryType: "summary",
+      }).catch(() => {});
+
+      return res.json({
+        success: true,
+        summary: cachedSolution.answer,
+        provider: cachedSolution.provider,
+        model: cachedSolution.model,
+        cached: true,
+        cacheSource: cachedSolution.source || "Turso Edge Cache",
+        latencyMs: Date.now() - startTime,
+      });
+    }
+
+    // 2. Cache Miss: Generate Fresh Summary using AI Waterfall
+    const prompt = `Provide an Executive Exam Summary of "${cleanTitle}" [Subject: ${subject || "Engineering"}].
+Structure with:
+- 📌 Core Summary (5-7 clear high-yield bullet points)
+- ⚡ Key Formulas & Theorems (with LaTeX notation like \\(x = \\pm 2\\))
+- 💡 Exam Takeaways (vital definitions and likely semester exam questions)
+
+Context Notes Excerpt:
+${cleanContext.slice(0, 5000) || cleanTitle}`;
+
+    const result = await generateAcademicAnswer(prompt, cleanContext, {
+      noteId,
+      user: req.user,
+      noteTitle: cleanTitle,
+      subject,
+      queryType: "summary",
+    });
+
+    const summaryText = result?.answer || "Summary generation completed.";
+
+    // Save to Turso Cache in the same database!
+    saveCircleSolution(queryHash, `Summary: ${cleanTitle}`, summaryText, result.provider, result.model).catch(() => {});
+
+    return res.json({
+      success: true,
+      summary: summaryText,
+      provider: result.provider,
+      model: result.model,
+      cached: false,
+      latencyMs: Date.now() - startTime,
+    });
+  } catch (err) {
+    console.error("[SUMMARY-ROUTE] Error:", err.message);
+    return res.status(500).json({ success: false, message: "Failed to generate summary: " + err.message });
+  }
+});
+
+/**
  * ⭕ GET /api/ai/circle-search/telemetry
  */
 router.get("/circle-search/telemetry", async (req, res) => {

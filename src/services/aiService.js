@@ -833,9 +833,13 @@ async function dispatchAiSearchTelegramAudit({
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
     const isCircle = queryType === "circle_search" || String(queryType).includes("circle");
-    const headline = isCircle
-      ? `⭕ <b>Circle to Search & Solve</b>`
-      : `🤖 <b>AI Academic Query</b>`;
+    const isFlashcards = queryType === "flashcards" || String(queryType).includes("flashcard");
+    const isSummary = queryType === "summary" || String(queryType).includes("summary");
+
+    let headline = `🤖 <b>AI Academic Query</b>`;
+    if (isCircle) headline = `⭕ <b>Circle to Search & Solve</b>`;
+    else if (isFlashcards) headline = `🗂️ <b>Note Study Flashcards</b>`;
+    else if (isSummary) headline = `📄 <b>Note Executive Summary</b>`;
 
     const engine = getAiEngineAuditDetails(provider, model, cached);
 

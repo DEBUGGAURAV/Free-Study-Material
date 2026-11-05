@@ -18,6 +18,7 @@ import {
   FileText,
   AlertCircle,
   Sparkles,
+  Layers,
   RefreshCw,
   Volume2,
   VolumeX,
@@ -53,6 +54,7 @@ import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } fro
 import { getNotePdfFileName } from "../utils/formatUtils";
 import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
 import CircleSearchModal from "./CircleSearchModal";
+import AiStudyPodModal from "./AiStudyPodModal";
 import {
   extractTextFromPageBounds,
   cropCanvasRegion,
@@ -693,6 +695,7 @@ export default function VirtualPdfReader({
   const [isCircleSearchMode, setIsCircleSearchMode] = useState(false);
   const [circleModalOpen, setCircleModalOpen] = useState(false);
   const [circleSearchData, setCircleSearchData] = useState(null);
+  const [aiStudyPodOpen, setAiStudyPodOpen] = useState(false);
   const isCircleDragRef = useRef(false);
   const [circleStart, setCircleStart] = useState(null);
   const [circleCurrent, setCircleCurrent] = useState(null);
@@ -3915,6 +3918,31 @@ export default function VirtualPdfReader({
             <span>{isCircleSearchMode ? "Cancel Circle" : "⭕ Circle"}</span>
           </button>
 
+          {/* ✨ AI Study Pod (3D Flashcards, Summary & Filter) */}
+          <button
+            type="button"
+            onClick={() => setAiStudyPodOpen(true)}
+            style={{
+              padding: "5px 12px",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              color: "#fff",
+              border: "1px solid rgba(139, 92, 246, 0.4)",
+              borderRadius: "6px",
+              cursor: "pointer",
+              boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
+              transition: "all 0.2s ease",
+            }}
+            title="✨ AI Study Pod: Instant 3D Flashcards, Executive Summary & Notes Filter (0ms Turso Cache)"
+          >
+            <Layers size={14} />
+            <span>✨ Flashcards & Summary</span>
+          </button>
+
           {/* 📱 Screen Wake Lock Toggle */}
           <button
             type="button"
@@ -5548,6 +5576,49 @@ export default function VirtualPdfReader({
           circleData={circleSearchData}
         />
       )}
+
+      {/* ✨ AI Study Pod Modal (Instant 3D Flashcards, Summary & Filter Notes) */}
+      {aiStudyPodOpen && (
+        <AiStudyPodModal
+          isOpen={aiStudyPodOpen}
+          onClose={() => setAiStudyPodOpen(false)}
+          noteId={noteId || note?.id}
+          noteTitle={title || note?.title || "Lecture Notes"}
+          subject={subject || note?.subject || ""}
+          context={ocrStatusText || ""}
+          allNotes={[]}
+        />
+      )}
+
+      {/* 🚀 Floating AI Study Pod Trigger Capsule (Easy 1-touch open on mobile & other devices) */}
+      <button
+        type="button"
+        onClick={() => setAiStudyPodOpen(true)}
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          zIndex: 9999,
+          background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+          color: "#fff",
+          border: "1.5px solid rgba(255, 255, 255, 0.25)",
+          borderRadius: "999px",
+          padding: "9px 18px",
+          fontSize: "0.8rem",
+          fontWeight: 800,
+          cursor: "pointer",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)",
+          backdropFilter: "blur(8px)",
+          transition: "transform 0.2s ease, box-shadow 0.2s ease",
+        }}
+        title="✨ Open AI Study Pod (Flashcards, Summary & Filter Notes)"
+      >
+        <Sparkles size={16} />
+        <span>✨ AI Pod</span>
+      </button>
 
       {/* ⭕ Floating Banner when Circle to Search Mode is Active */}
       {isCircleSearchMode && (

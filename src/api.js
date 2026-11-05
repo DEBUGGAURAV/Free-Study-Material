@@ -24,6 +24,9 @@ export function setAuthToken(token) {
     localStorage.setItem("vault_token", token);
   } else {
     localStorage.removeItem("vault_token");
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("fsm_student_study_session_v1");
+    }
   }
 }
 
@@ -335,6 +338,7 @@ export const api = {
     setAuthToken(null);
     setCurrentUser(null);
     if (typeof window !== "undefined") {
+      sessionStorage.removeItem("fsm_student_study_session_v1");
       const now = Date.now();
       const lastLogout = Number(sessionStorage.getItem("fsm_last_logout_ts") || "0");
       if (now - lastLogout < 5000) {
@@ -1269,6 +1273,10 @@ export const api = {
     request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
   askAiQuestion: (query, context = "", noteId = null, subject = "") =>
     request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId, subject }) }),
+  getNoteFlashcards: ({ noteId, title, context = "", subject = "" }) =>
+    request("/ai/flashcards", { method: "POST", body: JSON.stringify({ noteId, title, context, subject }) }),
+  getNoteSummary: ({ noteId, title, context = "", subject = "" }) =>
+    request("/ai/summary", { method: "POST", body: JSON.stringify({ noteId, title, context, subject }) }),
   getAiStatus: () => request("/ai/status"),
   setupAiTelegramTopics: () =>
     request("/ai/admin/setup-telegram-topics", { method: "POST" }),
