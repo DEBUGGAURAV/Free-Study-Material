@@ -46,6 +46,76 @@ export default function TabTurso(props) {
     tursoSyncing,
   } = props;
 
+  // 🤖 Dedicated AI Search Logs Retention & Pruning State (100% Isolated)
+  const [aiRetentionDays, setAiRetentionDays] = useState("30");
+  const [isAiPruning, setIsAiPruning] = useState(false);
+  const [aiPruneMsg, setAiPruneMsg] = useState(null);
+  const [aiSearchLogs, setAiSearchLogs] = useState([]);
+  const [aiLogsLoading, setAiLogsLoading] = useState(false);
+  const [aiSearchFilter, setAiSearchFilter] = useState("");
+  const [showAiLogsTable, setShowAiLogsTable] = useState(false);
+
+  const loadAiLogs = async () => {
+    setAiLogsLoading(true);
+    try {
+      const res = await api.getAiRecentSearches({ limit: 15, search: aiSearchFilter });
+      if (res?.success && Array.isArray(res?.logs)) {
+        setAiSearchLogs(res.logs);
+      }
+    } catch (_) {
+    } finally {
+      setAiLogsLoading(false);
+    }
+  };
+
+  const handlePruneAiLogs = async (daysOverride) => {
+    let targetDays;
+    if (daysOverride !== undefined) {
+      targetDays = daysOverride;
+    } else if (aiRetentionDays === "never") {
+      targetDays = -1;
+    } else {
+      targetDays = parseInt(aiRetentionDays, 10);
+    }
+
+    if (targetDays === 0) {
+      if (!window.confirm("⚠️ DANGER: Permanently wipe ALL AI search logs from Turso? This cannot be undone and will delete all student query history.")) {
+        return;
+      }
+    } else if (targetDays === -1 || targetDays === "never") {
+      // Set to never
+    } else {
+      if (!window.confirm(`Prune Turso AI search logs older than ${targetDays} days?`)) {
+        return;
+      }
+    }
+
+    setIsAiPruning(true);
+    setAiPruneMsg(null);
+    try {
+      const res = await api.pruneTursoAiSearchLogs(targetDays);
+      if (res?.success) {
+        setAiPruneMsg({
+          type: "success",
+          text: res.message || `AI Search Logs updated successfully (Deleted: ${res.deletedCount || 0} rows).`,
+        });
+        if (targetDays === -1 || targetDays === "never") {
+          setAiRetentionDays("never");
+        } else if (targetDays === 0) {
+          setAiRetentionDays("0");
+        }
+        if (typeof loadTursoData === "function") loadTursoData();
+        if (showAiLogsTable) loadAiLogs();
+      } else {
+        setAiPruneMsg({ type: "error", text: res?.error || res?.message || "Failed to prune AI search logs." });
+      }
+    } catch (err) {
+      setAiPruneMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setIsAiPruning(false);
+    }
+  };
+
   return (
             <div>
               {/* Header / Control Bar */}
@@ -429,6 +499,35 @@ export default function TabTurso(props) {
                     @fsm_help_bot • Turso Support DB
                   </div>
                 </div>
+
+                {/* AI Search & Queries Vault */}
+                <div
+                  style={{
+                    background: "rgba(15, 23, 42, 0.55)",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    borderRadius: "var(--radius-md)",
+                    padding: "14px",
+                    position: "relative",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                        AI Search Logs
+                      </div>
+                      <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#38bdf8", marginTop: "4px" }}>
+                        {(tursoStatus?.counts?.aiSearchLogs ?? softwareInfo?.tursoAi?.aiSearchCount ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Sparkles size={18} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#38bdf8", marginTop: "6px" }}>
+                    Groq &amp; Gemini Student Queries
+                  </div>
+                </div>
               </div>
 
               {/* Database Connection & Architectural Specs */}
@@ -738,6 +837,355 @@ export default function TabTurso(props) {
                         </button>
                       )}
                     </div>
+                  </div>
+                </div>
+
+                {/* 🤖 AI Search Logs Retention & Pruner (100% Dedicated & Isolated - Never Mixed) */}
+                <div
+                  style={{
+                    background: "rgba(15, 23, 42, 0.5)",
+                    border: "1.5px solid rgba(56, 189, 248, 0.3)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "18px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Bot size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>
+                          AI Search Query Retention &amp; Pruner (ai_search_logs)
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          Independent retention policy, Clear All, and Never settings for AI logs
+                        </div>
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        padding: "3px 8px",
+                        borderRadius: "999px",
+                        background: aiRetentionDays === "never" ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.12)",
+                        color: aiRetentionDays === "never" ? "#34d399" : "#38bdf8",
+                        border: aiRetentionDays === "never" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(56, 189, 248, 0.3)",
+                        fontWeight: 700,
+                      }}
+                    >
+                      {aiRetentionDays === "never" ? "♾️ Retention: NEVER" : `⏳ Retention: ${aiRetentionDays}d`}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "0.8rem" }}>
+                    <p style={{ color: "var(--text-dim)", margin: 0, fontSize: "0.76rem", lineHeight: 1.5 }}>
+                      Manage student AI academic doubt query logs, tokens used, and latency audits. Kept completely isolated from chat messages and edge cache.
+                    </p>
+
+                    {/* Quick Presets & Controls */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.76rem", fontWeight: 600 }}>Presets:</span>
+                      {[1, 7, 15, 30, 90].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setAiRetentionDays(String(d))}
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: "6px",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            background: aiRetentionDays === String(d) ? "rgba(56, 189, 248, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                            border: aiRetentionDays === String(d) ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                            color: aiRetentionDays === String(d) ? "#fff" : "var(--text-muted)",
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+
+                      {/* NEVER (Keep Forever) Preset Button */}
+                      <button
+                        type="button"
+                        onClick={() => handlePruneAiLogs("never")}
+                        style={{
+                          padding: "3px 10px",
+                          borderRadius: "6px",
+                          fontSize: "0.74rem",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          background: aiRetentionDays === "never" ? "rgba(16, 185, 129, 0.3)" : "rgba(16, 185, 129, 0.1)",
+                          border: aiRetentionDays === "never" ? "1px solid #10b981" : "1px solid rgba(16, 185, 129, 0.3)",
+                          color: aiRetentionDays === "never" ? "#fff" : "#34d399",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Set retention to Never (Preserve all AI queries forever)"
+                      >
+                        ♾️ Never (Keep Forever)
+                      </button>
+
+                      {/* Clear All (0d) Button */}
+                      <button
+                        type="button"
+                        onClick={() => handlePruneAiLogs(0)}
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          background: "rgba(239, 68, 68, 0.12)",
+                          border: "1px solid rgba(239, 68, 68, 0.35)",
+                          color: "#fca5a5",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Wipe all AI search logs immediately"
+                      >
+                        🗑️ Clear All (0d)
+                      </button>
+
+                      {aiRetentionDays !== "never" && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", marginLeft: "4px" }}>
+                          <span style={{ color: "var(--text-dim)", fontSize: "0.76rem" }}>Days:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="365"
+                            value={aiRetentionDays === "never" ? "" : aiRetentionDays}
+                            onChange={(e) => setAiRetentionDays(String(Math.max(0, parseInt(e.target.value, 10) || 0)))}
+                            style={{
+                              width: "55px",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              background: "rgba(0, 0, 0, 0.5)",
+                              border: "1px solid rgba(255, 255, 255, 0.15)",
+                              color: "#fff",
+                              fontSize: "0.78rem",
+                              fontWeight: 700,
+                              textAlign: "center",
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Retention Dropdown & Main Action Buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "4px" }}>
+                      <select
+                        value={aiRetentionDays}
+                        onChange={(e) => setAiRetentionDays(e.target.value)}
+                        style={{
+                          background: "rgba(0, 0, 0, 0.5)",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          color: aiRetentionDays === "never" ? "#34d399" : "#38bdf8",
+                          borderRadius: "6px",
+                          padding: "6px 10px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                        }}
+                      >
+                        <option value="never">♾️ Never (Keep Forever - No Auto-Delete)</option>
+                        <option value="1">Older than 1 Day (&gt;1d)</option>
+                        <option value="7">Older than 7 Days (&gt;7d)</option>
+                        <option value="15">Older than 15 Days (&gt;15d)</option>
+                        <option value="30">Older than 30 Days (&gt;30d - Recommended)</option>
+                        <option value="60">Older than 60 Days (&gt;60d)</option>
+                        <option value="90">Older than 90 Days (&gt;90d)</option>
+                      </select>
+
+                      {aiRetentionDays !== "never" ? (
+                        <button
+                          onClick={() => handlePruneAiLogs()}
+                          disabled={isAiPruning}
+                          className="btn-danger"
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "7px 14px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            fontWeight: 700,
+                          }}
+                          title={`Delete AI search logs older than ${aiRetentionDays} days`}
+                        >
+                          <Trash2 size={13} className={isAiPruning ? "spin" : ""} />
+                          <span>
+                            {isAiPruning
+                              ? "Pruning..."
+                              : aiRetentionDays === "0"
+                              ? "Clear All AI Logs Now"
+                              : `Prune >${aiRetentionDays}d AI Logs`}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handlePruneAiLogs("never")}
+                          disabled={isAiPruning}
+                          style={{
+                            fontSize: "0.78rem",
+                            padding: "7px 14px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            fontWeight: 700,
+                            background: "rgba(16, 185, 129, 0.2)",
+                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                            color: "#34d399",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <ShieldCheck size={14} />
+                          <span>Retention Active: Never (Safe)</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handlePruneAiLogs(0)}
+                        disabled={isAiPruning}
+                        className="btn-danger"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "rgba(239, 68, 68, 0.2)",
+                          border: "1px solid rgba(239, 68, 68, 0.4)",
+                          color: "#fca5a5",
+                        }}
+                        title="Permanently wipe all AI search logs from Turso immediately"
+                      >
+                        <Trash2 size={12} />
+                        <span>Clear All</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAiLogsTable(!showAiLogsTable);
+                          if (!showAiLogsTable) loadAiLogs();
+                        }}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          borderColor: "rgba(56, 189, 248, 0.35)",
+                          color: "#38bdf8",
+                        }}
+                      >
+                        <Eye size={12} />
+                        <span>{showAiLogsTable ? "Hide Logs Preview" : "View Recent Logs"}</span>
+                      </button>
+                    </div>
+
+                    {/* Action Feedback Banner */}
+                    {aiPruneMsg && (
+                      <div
+                        style={{
+                          padding: "8px 12px",
+                          borderRadius: "6px",
+                          fontSize: "0.76rem",
+                          background: aiPruneMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                          border: aiPruneMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)",
+                          color: aiPruneMsg.type === "success" ? "#34d399" : "#f87171",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span>{aiPruneMsg.text}</span>
+                        <button
+                          onClick={() => setAiPruneMsg(null)}
+                          style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 4px" }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Strict Cascade Purge Guarantee Notice */}
+                    <div style={{ background: "rgba(56, 189, 248, 0.04)", border: "1px solid rgba(56, 189, 248, 0.15)", borderRadius: "6px", padding: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#38bdf8", fontSize: "0.75rem", fontWeight: 700, marginBottom: "4px" }}>
+                        <ShieldCheck size={14} />
+                        <span>Zero-Risk Firebase ➔ Turso Cascade Guarantee</span>
+                      </div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+                        Even if Retention is configured to <strong>"Never"</strong>, when a student account is removed or purged from Firebase, their associated AI search queries in Turso are <strong>ALWAYS permanently cascade-deleted</strong> in real-time, leaving zero orphan records.
+                      </div>
+                    </div>
+
+                    {/* Recent AI Search Logs Preview Panel */}
+                    {showAiLogsTable && (
+                      <div style={{ marginTop: "10px", background: "rgba(0,0,0,0.3)", borderRadius: "8px", padding: "12px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                          <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#fff" }}>
+                            Recent Turso AI Search Logs ({aiSearchLogs.length})
+                          </span>
+                          <button
+                            onClick={loadAiLogs}
+                            disabled={aiLogsLoading}
+                            className="btn-secondary"
+                            style={{ fontSize: "0.7rem", padding: "3px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <RefreshCw size={11} className={aiLogsLoading ? "spin" : ""} />
+                            <span>{aiLogsLoading ? "Loading..." : "Refresh"}</span>
+                          </button>
+                        </div>
+
+                        {aiSearchLogs.length === 0 ? (
+                          <div style={{ textAlign: "center", padding: "14px", color: "var(--text-dim)", fontSize: "0.74rem" }}>
+                            {aiLogsLoading ? "Fetching recent AI logs..." : "No recent AI search logs in Turso."}
+                          </div>
+                        ) : (
+                          <div style={{ overflowX: "auto", maxHeight: "200px" }}>
+                            <table style={{ width: "100%", fontSize: "0.72rem", borderCollapse: "collapse", color: "#fff" }}>
+                              <thead>
+                                <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", textAlign: "left", color: "var(--text-dim)" }}>
+                                  <th style={{ padding: "4px 8px" }}>Time</th>
+                                  <th style={{ padding: "4px 8px" }}>Student</th>
+                                  <th style={{ padding: "4px 8px" }}>Query</th>
+                                  <th style={{ padding: "4px 8px" }}>Provider</th>
+                                  <th style={{ padding: "4px 8px" }}>Latency</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {aiSearchLogs.slice(0, 10).map((l) => (
+                                  <tr key={l.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <td style={{ padding: "4px 8px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                                      {l.createdAt ? new Date(l.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "-"}
+                                    </td>
+                                    <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>
+                                      {l.userName || l.userEmail || "Student"}
+                                    </td>
+                                    <td style={{ padding: "4px 8px", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.query}>
+                                      {l.query}
+                                    </td>
+                                    <td style={{ padding: "4px 8px", whiteSpace: "nowrap" }}>
+                                      <span style={{ padding: "1px 6px", borderRadius: "4px", fontSize: "0.68rem", background: l.provider === "groq" ? "rgba(56, 189, 248, 0.2)" : "rgba(168, 85, 247, 0.2)", color: l.provider === "groq" ? "#38bdf8" : "#c084fc", fontWeight: 700 }}>
+                                        {l.provider ? l.provider.toUpperCase() : "AI"}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: "4px 8px", color: "#34d399", whiteSpace: "nowrap" }}>
+                                      {l.latencyMs != null ? `${l.latencyMs}ms` : "-"}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

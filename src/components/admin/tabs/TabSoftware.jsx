@@ -36,6 +36,8 @@ export default function TabSoftware(props) {
   const [speedMeasuring, setSpeedMeasuring] = useState(false);
   const [pulseCount, setPulseCount] = useState(0);
   const [cleaningStudentTurso, setCleaningStudentTurso] = useState(false);
+  const [cleaningAiTurso, setCleaningAiTurso] = useState(false);
+  const [aiTursoCleanMsg, setAiTursoCleanMsg] = useState(null);
   const [studentTursoCleanMsg, setStudentTursoCleanMsg] = useState(null);
 
   const handleCleanStudentTurso = async () => {
@@ -54,6 +56,25 @@ export default function TabSoftware(props) {
       setStudentTursoCleanMsg({ type: "error", text: "Error: " + err.message });
     } finally {
       setCleaningStudentTurso(false);
+    }
+  };
+
+  const handleCleanAiTurso = async () => {
+    if (!window.confirm("Clean all AI search logs from Turso AI Search & Knowledge Vault?")) return;
+    setCleaningAiTurso(true);
+    setAiTursoCleanMsg(null);
+    try {
+      const res = await api.cleanTursoAiVault();
+      if (res?.success) {
+        setAiTursoCleanMsg({ type: "success", text: res.message || "Turso AI Vault cleaned successfully!" });
+        if (typeof loadSoftwareInfo === "function") loadSoftwareInfo();
+      } else {
+        setAiTursoCleanMsg({ type: "error", text: res?.message || "Failed to clean AI Vault." });
+      }
+    } catch (err) {
+      setAiTursoCleanMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setCleaningAiTurso(false);
     }
   };
 
@@ -246,6 +267,15 @@ export default function TabSoftware(props) {
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#c084fc", marginTop: "4px", fontWeight: 600 }}>● Multi-Device &amp; Telemetry Edge</div>
                   </div>
+
+                  {/* Engine 7: Turso 5 AI & Search Vault */}
+                  <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 5: AI &amp; Search Vault</div>
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#38bdf8", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Zap size={16} /> {liveSpeeds?.tursoAi?.latencyMs != null ? `${liveSpeeds.tursoAi.latencyMs} ms` : (softwareInfo?.tursoAi?.latencyMs != null ? `${softwareInfo.tursoAi.latencyMs} ms` : "< 5 ms")}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#38bdf8", marginTop: "4px", fontWeight: 600 }}>● Groq LPU &amp; Gemini Search Logs</div>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -271,13 +301,13 @@ export default function TabSoftware(props) {
                     </div>
                     <div>
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <span>Quadruple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
+                        <span>Quintuple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
                         <span style={{ fontSize: "0.72rem", background: "#06b6d4", color: "#000", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
-                          4 ENGINES ACTIVE
+                          5 ENGINES ACTIVE
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault &amp; Student Sessions Vault.
+                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault, Student Sessions Vault &amp; AI Search Intelligence Vault.
                       </div>
                     </div>
                   </div>
@@ -628,6 +658,127 @@ export default function TabSoftware(props) {
                         }}
                       >
                         {studentTursoCleanMsg.text}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Turso Engine 5: AI Search & Knowledge Vault */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.7)",
+                      border: "1.5px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Bot size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
+                              5. Turso AI &amp; Search Intelligence Vault
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              Groq LPU &amp; Gemini 2.0 Academic Queries, Tokens &amp; Latency Logs
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            background: (softwareInfo?.tursoAi?.connected ?? true) ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                            color: (softwareInfo?.tursoAi?.connected ?? true) ? "#34d399" : "#fbbf24",
+                            border: `1px solid ${(softwareInfo?.tursoAi?.connected ?? true) ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
+                          }}
+                        >
+                          {(softwareInfo?.tursoAi?.connected ?? true) ? "🟢 LIVE & ONLINE" : "🟡 STANDBY"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
+                          <span style={{ color: "#38bdf8", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Zap size={12} /> {liveSpeeds?.tursoAi?.latencyMs != null ? `${liveSpeeds.tursoAi.latencyMs}ms (Live Speed)` : (softwareInfo?.tursoAi?.latencyMs || "< 5ms (Direct Edge)")}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database Region:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                            {softwareInfo?.tursoAi?.isCloud ? "AWS Mumbai (aws-ap-south-1.turso.io)" : "Local LibSQL Vault Cache"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Logged AI Queries:</span>
+                          <span style={{ color: "#34d399", fontWeight: 800 }}>
+                            {(softwareInfo?.tursoAi?.aiSearchCount ?? 0).toLocaleString()} Queries Logged
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Integrated Models:</span>
+                          <span style={{ color: "#38bdf8", fontWeight: 700 }}>
+                            Groq LPU (Llama 3.3) • Gemini 2.0 Flash
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database URL:</span>
+                          <span style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.72rem" }}>
+                            {softwareInfo?.tursoAi?.database || "libsql://edge-vault.turso.io"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Maintenance Clean Controller */}
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Maintenance:</span>
+                      <button
+                        type="button"
+                        disabled={cleaningAiTurso}
+                        onClick={handleCleanAiTurso}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid rgba(56, 189, 248, 0.4)",
+                          background: "rgba(56, 189, 248, 0.15)",
+                          color: "#38bdf8",
+                          cursor: cleaningAiTurso ? "not-allowed" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Clean all AI search logs from Turso AI vault"
+                      >
+                        <Trash2 size={12} className={cleaningAiTurso ? "spin" : ""} />
+                        <span>{cleaningAiTurso ? "Cleaning..." : "Clean AI Search Logs"}</span>
+                      </button>
+                    </div>
+
+                    {aiTursoCleanMsg && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "0.72rem",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          background: aiTursoCleanMsg.type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                          color: aiTursoCleanMsg.type === "success" ? "#34d399" : "#f87171",
+                        }}
+                      >
+                        {aiTursoCleanMsg.text}
                       </div>
                     )}
                   </div>

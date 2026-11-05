@@ -79,11 +79,17 @@ function ContinuousPage({
   isEcoMode,
   scrollContainerRef,
   onInView,
+  isCircleSearchMode,
+  onCircleCompleted,
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
   const [rendered, setRendered] = useState(false);
   const [pageDimensions, setPageDimensions] = useState(null);
+
+  const isContinuousDraggingRef = useRef(false);
+  const [continuousCircleStart, setContinuousCircleStart] = useState(null);
+  const [continuousCircleCurrent, setContinuousCircleCurrent] = useState(null);
 
   const renderedRef = useRef(false);
   const renderingRef = useRef(false);
@@ -243,6 +249,90 @@ function ContinuousPage({
       >
         {pageNum} / {pdfDoc?.numPages || ""}
       </div>
+
+      {/* ⭕ Continuous Page Circle to Search Overlay */}
+      {isCircleSearchMode && rendered && (
+        <div
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            setContinuousCircleStart({ x, y });
+            setContinuousCircleCurrent({ x, y });
+            isContinuousDraggingRef.current = true;
+          }}
+          onPointerMove={(e) => {
+            if (!isContinuousDraggingRef.current || !continuousCircleStart) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+            setContinuousCircleCurrent({ x, y });
+          }}
+          onPointerUp={(e) => {
+            if (!isContinuousDraggingRef.current || !continuousCircleStart || !continuousCircleCurrent) {
+              isContinuousDraggingRef.current = false;
+              return;
+            }
+            isContinuousDraggingRef.current = false;
+            try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+            const x1 = Math.min(continuousCircleStart.x, continuousCircleCurrent.x);
+            const y1 = Math.min(continuousCircleStart.y, continuousCircleCurrent.y);
+            const x2 = Math.max(continuousCircleStart.x, continuousCircleCurrent.x);
+            const y2 = Math.max(continuousCircleStart.y, continuousCircleCurrent.y);
+            const w = x2 - x1;
+            const h = y2 - y1;
+            setContinuousCircleStart(null);
+            setContinuousCircleCurrent(null);
+            if (w >= 15 && h >= 15 && onCircleCompleted && canvasRef.current) {
+              onCircleCompleted({
+                canvas: canvasRef.current,
+                bounds: { x: x1, y: y1, width: w, height: h },
+                pageNum,
+                containerDimensions: pageDimensions,
+              });
+            }
+          }}
+          onPointerCancel={() => {
+            isContinuousDraggingRef.current = false;
+            setContinuousCircleStart(null);
+            setContinuousCircleCurrent(null);
+          }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            cursor: "crosshair",
+            zIndex: 45,
+            userSelect: "none",
+            touchAction: "none",
+            background: "rgba(56, 189, 248, 0.04)",
+          }}
+        >
+          {continuousCircleStart && continuousCircleCurrent && (
+            <div
+              style={{
+                position: "absolute",
+                left: `${Math.min(continuousCircleStart.x, continuousCircleCurrent.x)}px`,
+                top: `${Math.min(continuousCircleStart.y, continuousCircleCurrent.y)}px`,
+                width: `${Math.abs(continuousCircleCurrent.x - continuousCircleStart.x)}px`,
+                height: `${Math.abs(continuousCircleCurrent.y - continuousCircleStart.y)}px`,
+                border: "3px solid #38bdf8",
+                borderRadius: "50%",
+                background: "radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
+                boxShadow: "0 0 24px rgba(56, 189, 248, 0.9), inset 0 0 16px rgba(99, 102, 241, 0.5)",
+                pointerEvents: "none",
+              }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2372,80 +2462,42 @@ export default function VirtualPdfReader({
       isCircleDragRef.current = false;
       setOcrStatusText("");
     } else {
+      if (useNativeViewer) {
+        setUseNativeViewer(false);
+      }
       setIsCircleSearchMode(true);
       setIsClipperMode(false);
-      setOcrStatusText("⭕ Circle to Search: Draw a circle or box on any formula, diagram, or question.");
+      setOcrStatusText("⭕ Circle to Search Active: Click & drag a circle around any formula or question.");
     }
   };
 
-  const handleStartCircleSearch = (e) => {
-    if (!isCircleSearchMode || !canvasRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    setCircleStart({ x, y });
-    setCircleCurrent({ x, y });
-    isCircleDragRef.current = true;
-  };
-
-  const handleMoveCircleSearch = (e) => {
-    if (!isCircleSearchMode || !isCircleDragRef.current) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
-    setCircleCurrent({ x, y });
-  };
-
-  const handleEndCircleSearch = async () => {
-    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart || !circleCurrent || !canvasRef.current) {
-      isCircleDragRef.current = false;
-      return;
-    }
-    isCircleDragRef.current = false;
-
-    const x1 = Math.min(circleStart.x, circleCurrent.x);
-    const y1 = Math.min(circleStart.y, circleCurrent.y);
-    const x2 = Math.max(circleStart.x, circleCurrent.x);
-    const y2 = Math.max(circleStart.y, circleCurrent.y);
-    const w = x2 - x1;
-    const h = y2 - y1;
-
-    setCircleStart(null);
-    setCircleCurrent(null);
-    setIsCircleSearchMode(false);
-
-    if (w < 15 || h < 15) {
-      setOcrStatusText("⭕ Circle selection too small. Please circle a larger area.");
-      setTimeout(() => setOcrStatusText(""), 3000);
-      return;
-    }
-
+  const processCircledRegion = async ({ canvas, bounds, pageNum, containerDimensions }) => {
     try {
       setOcrStatusText("⭕ Analyzing circled selection...");
-      const canvas = canvasRef.current;
-      const dprRatio = canvas.width / canvasDimensions.width;
+      const targetCanvas = canvas || canvasRef.current;
+      if (!targetCanvas) return;
+
+      const contWidth = containerDimensions?.width || canvasDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+      const dprRatio = targetCanvas.width / (contWidth || 1);
 
       const rawBounds = {
-        x: Math.round(x1 * dprRatio),
-        y: Math.round(y1 * dprRatio),
-        width: Math.round(w * dprRatio),
-        height: Math.round(h * dprRatio),
+        x: Math.round(bounds.x * dprRatio),
+        y: Math.round(bounds.y * dprRatio),
+        width: Math.round(bounds.width * dprRatio),
+        height: Math.round(bounds.height * dprRatio),
       };
 
       // 1. Crop canvas region for thumbnail and fallback OCR
-      const cropRes = cropCanvasRegion(canvas, rawBounds);
+      const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
 
       let extractedText = "";
       let source = "text-layer";
+      const targetPageNum = pageNum || currentPage;
 
       // 2. Step 1: Text-Layer First Check (0ms, 0 RAM, 0 Server Load)
       if (pdfDoc) {
         try {
-          const pageObj = await pdfDoc.getPage(currentPage);
+          const pageObj = await pdfDoc.getPage(targetPageNum);
           const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
           const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
           if (textRes && textRes.text && textRes.text.length >= 4) {
@@ -2466,7 +2518,7 @@ export default function VirtualPdfReader({
       }
 
       if (!extractedText) {
-        extractedText = `Question / Diagram from Page ${currentPage} (${subject || title || "Study Notes"})`;
+        extractedText = `Question / Diagram from Page ${targetPageNum} (${subject || title || "Study Notes"})`;
         source = "diagram-visual";
       }
 
@@ -2479,14 +2531,71 @@ export default function VirtualPdfReader({
         croppedImage: cropRes?.dataUrl || null,
         noteId: noteId || note?.id,
         subject: subject || note?.subject || "",
-        context: `From ${title || "Notes"} (Page ${currentPage}): ${extractedText}`,
+        context: `From ${title || "Notes"} (Page ${targetPageNum}): ${extractedText}`,
       });
       setCircleModalOpen(true);
+      setIsCircleSearchMode(false);
     } catch (err) {
       console.warn("[CIRCLE-SEARCH] Analysis error:", err);
       setOcrStatusText("⚠️ Circle analysis error: " + err.message);
       setTimeout(() => setOcrStatusText(""), 4000);
+      setIsCircleSearchMode(false);
     }
+  };
+
+  const handleStartCircleSearch = (e) => {
+    if (!isCircleSearchMode || !canvasRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setCircleStart({ x, y });
+    setCircleCurrent({ x, y });
+    isCircleDragRef.current = true;
+  };
+
+  const handleMoveCircleSearch = (e) => {
+    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    setCircleCurrent({ x, y });
+  };
+
+  const handleEndCircleSearch = async (e) => {
+    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart || !circleCurrent || !canvasRef.current) {
+      isCircleDragRef.current = false;
+      return;
+    }
+    isCircleDragRef.current = false;
+    try { if (e?.currentTarget && e?.pointerId !== undefined) e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    const x1 = Math.min(circleStart.x, circleCurrent.x);
+    const y1 = Math.min(circleStart.y, circleCurrent.y);
+    const x2 = Math.max(circleStart.x, circleCurrent.x);
+    const y2 = Math.max(circleStart.y, circleCurrent.y);
+    const w = x2 - x1;
+    const h = y2 - y1;
+
+    setCircleStart(null);
+    setCircleCurrent(null);
+
+    if (w < 15 || h < 15) {
+      setOcrStatusText("⭕ Circle selection too small. Please circle a larger area.");
+      setTimeout(() => setOcrStatusText(""), 3000);
+      return;
+    }
+
+    await processCircledSelection({
+      canvas: canvasRef.current,
+      bounds: { x: x1, y: y1, width: w, height: h },
+      pageNum: currentPage,
+      containerDimensions: canvasDimensions,
+    });
   };
 
   // 8. Yjs + WebRTC Peer-to-Peer Study Room
@@ -2579,7 +2688,19 @@ export default function VirtualPdfReader({
       }
 
       const uniquePages = Array.from(new Set(matchedPageNumbers)).slice(0, 5);
-      const ans = await generateClientAiAnswer(query, relevantContext, uniquePages);
+      const ans = await generateClientAiAnswer(
+        query,
+        relevantContext,
+        uniquePages,
+        (pct, status) => {
+          if (pct < 100) setAiAnswer(`🔍 ${status || "Consulting Dual AI Waterfall..."}`);
+        },
+        {
+          noteId: noteId || note?.id || "",
+          noteTitle: title || note?.title || "",
+          subject: subject || note?.subject || "",
+        }
+      );
       setAiAnswer(ans);
     } catch (err) {
       setAiAnswer(`Notice: ${err.message}`);
@@ -4147,10 +4268,15 @@ export default function VirtualPdfReader({
               background: nightMode ? "rgba(139, 92, 246, 0.12)" : "rgba(139, 92, 246, 0.08)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "0.82rem", color: "#c084fc" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, fontSize: "0.82rem", color: "#c084fc", flexWrap: "wrap" }}>
               <Bot size={16} />
-              <span>On-Device AI Assistant</span>
-              <span style={{ fontSize: "0.65rem", padding: "1px 6px", borderRadius: "4px", background: "rgba(139, 92, 246, 0.2)", color: "#e9d5ff", fontWeight: 600 }}>0% Server Load</span>
+              <span>AI Study Assistant</span>
+              <span style={{ fontSize: "0.62rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(6, 182, 212, 0.2)", color: "#38bdf8", fontWeight: 700 }}>
+                ⚡ Dual Waterfall: Groq LPU + Gemini 2.0
+              </span>
+              <span style={{ fontSize: "0.62rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", fontWeight: 600 }}>
+                ☁️ Turso & Profile Synced (48h)
+              </span>
             </div>
             <button
               onClick={() => setIsOnDeviceAiOpen(false)}
@@ -4909,6 +5035,8 @@ export default function VirtualPdfReader({
                   isEcoMode={isEcoMode}
                   scrollContainerRef={mainScrollRef}
                   onInView={(p) => setCurrentPage(p)}
+                  isCircleSearchMode={isCircleSearchMode}
+                  onCircleCompleted={processCircledRegion}
                 />
               ))}
             </div>
@@ -4975,12 +5103,14 @@ export default function VirtualPdfReader({
             {/* ⭕ Circle to Search Overlay Layer */}
             {isCircleSearchMode && (
               <div
-                onMouseDown={handleStartCircleSearch}
-                onMouseMove={handleMoveCircleSearch}
-                onMouseUp={handleEndCircleSearch}
-                onTouchStart={handleStartCircleSearch}
-                onTouchMove={handleMoveCircleSearch}
-                onTouchEnd={handleEndCircleSearch}
+                onPointerDown={handleStartCircleSearch}
+                onPointerMove={handleMoveCircleSearch}
+                onPointerUp={handleEndCircleSearch}
+                onPointerCancel={() => {
+                  isCircleDragRef.current = false;
+                  setCircleStart(null);
+                  setCircleCurrent(null);
+                }}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -4988,10 +5118,10 @@ export default function VirtualPdfReader({
                   width: "100%",
                   height: "100%",
                   cursor: "crosshair",
-                  zIndex: 36,
+                  zIndex: 45,
                   userSelect: "none",
                   touchAction: "none",
-                  background: "rgba(56, 189, 248, 0.08)",
+                  background: "rgba(56, 189, 248, 0.05)",
                 }}
               >
                 {circleStart && circleCurrent && (
@@ -5002,10 +5132,10 @@ export default function VirtualPdfReader({
                       top: `${Math.min(circleStart.y, circleCurrent.y)}px`,
                       width: `${Math.abs(circleCurrent.x - circleStart.x)}px`,
                       height: `${Math.abs(circleCurrent.y - circleStart.y)}px`,
-                      border: "2.5px solid #38bdf8",
-                      borderRadius: "16px",
-                      background: "rgba(56, 189, 248, 0.22)",
-                      boxShadow: "0 0 22px rgba(56, 189, 248, 0.85), inset 0 0 16px rgba(99, 102, 241, 0.4)",
+                      border: "3px solid #38bdf8",
+                      borderRadius: "50%",
+                      background: "radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
+                      boxShadow: "0 0 24px rgba(56, 189, 248, 0.9), inset 0 0 16px rgba(99, 102, 241, 0.5)",
                       pointerEvents: "none",
                     }}
                   />
@@ -5420,6 +5550,54 @@ export default function VirtualPdfReader({
           onClose={() => setCircleModalOpen(false)}
           circleData={circleSearchData}
         />
+      )}
+
+      {/* ⭕ Floating Banner when Circle to Search Mode is Active */}
+      {isCircleSearchMode && (
+        <div
+          style={{
+            position: "fixed",
+            top: "65px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 99999,
+            background: "rgba(15, 23, 42, 0.95)",
+            backdropFilter: "blur(14px)",
+            border: "1.5px solid #38bdf8",
+            boxShadow: "0 10px 35px rgba(56, 189, 248, 0.45), 0 0 20px rgba(99, 102, 241, 0.3)",
+            borderRadius: "32px",
+            padding: "8px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            color: "#ffffff",
+            fontSize: "0.82rem",
+            fontWeight: 600,
+            pointerEvents: "auto",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "1.2rem", filter: "drop-shadow(0 0 6px #38bdf8)" }}>⭕</span>
+            <span><strong>Circle to Search Active:</strong> Click & drag a circle around any formula or question</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleToggleCircleSearch}
+            style={{
+              background: "rgba(244, 63, 94, 0.25)",
+              color: "#fecdd3",
+              border: "1px solid rgba(244, 63, 94, 0.5)",
+              borderRadius: "16px",
+              padding: "4px 12px",
+              fontSize: "0.74rem",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            ✕ Cancel
+          </button>
+        </div>
       )}
     </div>
   );

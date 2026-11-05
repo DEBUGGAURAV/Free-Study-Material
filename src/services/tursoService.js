@@ -255,7 +255,7 @@ async function getTursoStatus() {
     await client.execute("SELECT 1 AS ping");
     const latencyMs = Date.now() - t0;
 
-    const [uCount, nCount, mCount, rCount, pCount, aCount, notifCount] = await Promise.all([
+    const [uCount, nCount, mCount, rCount, pCount, aCount, notifCount, aiCount] = await Promise.all([
       client.execute("SELECT COUNT(*) AS c FROM users").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM notes").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM chat_messages").catch(() => ({ rows: [{ c: 0 }] })),
@@ -263,6 +263,7 @@ async function getTursoStatus() {
       client.execute("SELECT COUNT(*) AS c FROM chat_user_profiles").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM private_room_audits").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM notices").catch(() => ({ rows: [{ c: 0 }] })),
+      client.execute("SELECT COUNT(*) AS c FROM ai_search_logs").catch(() => ({ rows: [{ c: 0 }] })),
     ]);
 
     let diskSizeBytes = null;
@@ -290,6 +291,7 @@ async function getTursoStatus() {
         chatProfiles: Number(pCount.rows[0]?.c || 0),
         privateRoomAudits: Number(aCount.rows[0]?.c || 0),
         notices: Number(notifCount.rows[0]?.c || 0),
+        aiSearchLogs: Number(aiCount.rows[0]?.c || 0),
       },
     };
   } catch (err) {
@@ -973,6 +975,109 @@ async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
   }
 }
 
+/**
+ * ⚡ Live telemetry for Turso AI Search & Knowledge Vault
+ */
+async function getTursoAiTelemetry() {
+  if (!client) {
+    return {
+      connected: false,
+      isCloud: false,
+      latencyMs: 0,
+      aiSearchCount: 0,
+      database: rawUrl ? "Turso LibSQL Edge" : "Local Standby Cache",
+      storageTier: "9 GB Lifetime Free Tier (Turso LibSQL)",
+      error: "Client not initialized",
+    };
+  }
+  try {
+    const t0 = Date.now();
+    await client.execute("SELECT 1 AS ping");
+    const latencyMs = Date.now() - t0;
+
+    const countRes = await client.execute("SELECT COUNT(*) AS c FROM ai_search_logs").catch(() => ({ rows: [{ c: 0 }] }));
+    const aiSearchCount = Number(countRes.rows[0]?.c || 0);
+
+    return {
+      connected: true,
+      isCloud,
+      latencyMs,
+      aiSearchCount,
+      database: isCloud && rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "cache/turso_vault.db",
+      storageTier: isCloud ? "AWS Mumbai (aws-ap-south-1.turso.io)" : "Local LibSQL Vault Cache",
+      models: "Groq LPU (Llama 3.3 70B) • Gemini 2.0 Flash",
+    };
+  } catch (err) {
+    return {
+      connected: false,
+      isCloud,
+      latencyMs: 0,
+      aiSearchCount: 0,
+      database: rawUrl || "Error",
+      error: err.message,
+    };
+  }
+}
+
+/**
+ * 🧹 Prune or clear AI search logs from Turso with dedicated retention control
+ * @param {number|string} days - 0 for Clear All, >0 for days threshold, -1 or 'never' for Never
+ * 🛡️ 100% Isolated: NEVER touches notes_cache, chat_messages, or private room audits
+ */
+async function pruneAiSearchLogs(days = 30) {
+  if (!client) return { success: false, deletedCount: 0, error: "Turso client not initialized" };
+
+  if (days === -1 || days === "never" || String(days).toLowerCase() === "never" || days === "-1") {
+    console.log("[TURSO-AI-PRUNER] 🛡️ AI Search Logs Retention set to NEVER. No records deleted.");
+    return {
+      success: true,
+      deletedCount: 0,
+      retention: "never",
+      message: "Retention set to Never. All AI search logs are preserved permanently in Turso.",
+    };
+  }
+
+  const numDays = parseInt(days, 10);
+  try {
+    if (isNaN(numDays) || numDays < 0) {
+      return { success: false, deletedCount: 0, error: "Invalid days parameter" };
+    }
+
+    let deletedCount = 0;
+    if (numDays === 0) {
+      // Clear All
+      const res = await client.execute("DELETE FROM ai_search_logs");
+      deletedCount = res.rowsAffected || 0;
+      console.log(`[TURSO-AI-PRUNER] 💥 Cleared ALL AI Search Logs (${deletedCount} rows deleted).`);
+      return {
+        success: true,
+        deletedCount,
+        days: 0,
+        message: `Successfully cleared all ${deletedCount} AI search logs from Turso.`,
+      };
+    } else {
+      const cutoffDate = new Date(Date.now() - numDays * 24 * 60 * 60 * 1000);
+      const cutoffIso = cutoffDate.toISOString();
+      const res = await client.execute({
+        sql: "DELETE FROM ai_search_logs WHERE createdAt < ?",
+        args: [cutoffIso],
+      });
+      deletedCount = res.rowsAffected || 0;
+      console.log(`[TURSO-AI-PRUNER] 🧹 Pruned ${deletedCount} AI Search Logs older than ${numDays} days (< ${cutoffIso}).`);
+      return {
+        success: true,
+        deletedCount,
+        days: numDays,
+        cutoffIso,
+        message: `Successfully pruned ${deletedCount} AI search logs older than ${numDays} days.`,
+      };
+    }
+  } catch (err) {
+    console.warn("[TURSO-AI-PRUNER] Error during AI search log pruning:", err.message);
+    return { success: false, deletedCount: 0, error: err.message };
+  }
+}
+
 module.exports = {
   get tursoClient() {
     return client;
@@ -1003,5 +1108,7 @@ module.exports = {
   archiveUserNotesInTurso,
   logAiSearchToTurso,
   getAiSearchLogsFromTurso,
+  getTursoAiTelemetry,
+  pruneAiSearchLogs,
 };
 

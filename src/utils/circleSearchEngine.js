@@ -269,7 +269,7 @@ function openCircleDb() {
   });
 }
 
-async function getIndexedDbCircleCache(key) {
+export async function getIndexedDbCircleCache(key) {
   try {
     const db = await openCircleDb();
     return new Promise((resolve) => {
@@ -292,7 +292,7 @@ async function getIndexedDbCircleCache(key) {
   }
 }
 
-async function saveIndexedDbCircleCache(key, data) {
+export async function saveIndexedDbCircleCache(key, data) {
   try {
     const db = await openCircleDb();
     const tx = db.transaction("cache", "readwrite");

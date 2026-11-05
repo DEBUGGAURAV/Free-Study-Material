@@ -63,24 +63,54 @@ function studentAiLimiter(req, res, next) {
 
 /**
  * 🎓 POST /api/ai/ask
- * Primary student endpoint to ask questions about lecture notes
+ * Primary student endpoint to ask questions about lecture notes (Dual Waterfall Engine + Turso Cloud Caching)
  */
 router.post("/ask", studentAiLimiter, async (req, res) => {
+  const startTime = Date.now();
   try {
-    const { query, context, noteId } = req.body;
+    const { query, context, noteId, subject } = req.body;
     if (!query || !query.trim()) {
       return res.status(400).json({ success: false, message: "Query text is required" });
     }
 
-    const result = await generateAcademicAnswer(query, context, { noteId, user: req.user });
+    const cleanQuery = query.trim();
+    const queryHash = computeQueryHash(cleanQuery);
+
+    // 1. Check L1 RAM & L2 Turso Cloud Cache (0ms response, 0 API quota)
+    const cachedSolution = await getCachedCircleSolution(queryHash);
+    if (cachedSolution) {
+      return res.json({
+        success: true,
+        answer: cachedSolution.answer,
+        provider: cachedSolution.provider,
+        model: cachedSolution.model,
+        cached: true,
+        cacheSource: cachedSolution.source || "Turso Cloud Cache",
+        hits: cachedSolution.hits,
+        latencyMs: Date.now() - startTime,
+      });
+    }
+
+    // 2. Cache Miss: Run Dual AI Waterfall (Groq LPU Primary -> Gemini 2.0 Failover)
+    const fullContext = context
+      ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
+      : `[Subject: ${subject || "Engineering/Science"}]`;
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, subject });
+
+    // 3. Save to Turso Cloud Cache so next student gets 0ms instant response
+    if (result && result.answer) {
+      saveCircleSolution(queryHash, cleanQuery, result.answer, result.provider, result.model).catch(() => {});
+    }
+
     return res.json({
       success: true,
       answer: result.answer,
       provider: result.provider,
       model: result.model,
       failover: result.failover,
-      latencyMs: result.latencyMs,
-      cached: result.cached || false,
+      cached: false,
+      cacheSource: "Cloud Engine (Fresh)",
+      latencyMs: Date.now() - startTime,
     });
   } catch (err) {
     console.error("[AI-ROUTE] Error processing query:", err);

@@ -1205,6 +1205,8 @@ export const api = {
   pruneTursoAudits: (days = 30) => request("/admin/turso/audits/prune", { method: "POST", body: JSON.stringify({ days }) }),
   deleteTursoAudit: (roomId) => request(`/admin/turso/audits/${encodeURIComponent(roomId)}`, { method: "DELETE" }),
   cleanTursoStudentVault: () => request("/admin/turso/student/clean", { method: "POST" }),
+  pruneTursoAiSearchLogs: (days = 30) => request("/admin/turso/ai-search/prune", { method: "POST", body: JSON.stringify({ days }) }),
+  cleanTursoAiVault: () => request("/admin/turso/ai-search/prune", { method: "POST", body: JSON.stringify({ days: 0 }) }),
   runSecurityScan: async () => {
     try {
       return await request("/admin/security/scan");
@@ -1263,8 +1265,8 @@ export const api = {
     request("/ai/admin/reset", { method: "POST" }),
   testAiConnection: (provider) =>
     request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
-  askAiQuestion: (query, context = "", noteId = null) =>
-    request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId }) }),
+  askAiQuestion: (query, context = "", noteId = null, subject = "") =>
+    request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId, subject }) }),
   getAiStatus: () => request("/ai/status"),
   setupAiTelegramTopics: () =>
     request("/ai/admin/setup-telegram-topics", { method: "POST" }),

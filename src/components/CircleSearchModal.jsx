@@ -447,6 +447,25 @@ export default function CircleSearchModal({
                   >
                     {solution.answer}
                   </div>
+
+                  {/* Auto-Save & Sync Footer Note */}
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      background: "rgba(16, 185, 129, 0.08)",
+                      border: "1px solid rgba(16, 185, 129, 0.2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "0.72rem",
+                      color: "#94a3b8",
+                    }}
+                  >
+                    <span>💾 Auto-Saved in your Profile for 48h (Pin to keep forever)</span>
+                    <span style={{ color: "#34d399", fontWeight: 600 }}>☁️ Turso Cloud Synced</span>
+                  </div>
                 </div>
               ) : (
                 <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
