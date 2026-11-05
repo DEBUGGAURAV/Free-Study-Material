@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Globe, Activity } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Globe, Activity, Sparkles, Copy, Check } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -13,6 +13,12 @@ import {
   getDeviceDynamicLRUCapacity,
   runOfflineVaultAutoMaintenance,
 } from "../utils/offlineQueue";
+import {
+  getAllStoredCircleNotes,
+  deleteSingleCircleNote,
+  togglePinCircleNote,
+  clearAllStoredCircleNotes,
+} from "../utils/circleSearchEngine";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -65,6 +71,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [dynamicLRUCapacity, setDynamicLRUCapacity] = useState(5);
   const hwProfile = detectClientHardwareProfile();
 
+  // Circle to Search Notes State (48h auto-expire default)
+  const [storedCircleNotes, setStoredCircleNotes] = useState([]);
+  const [loadingCircleNotes, setLoadingCircleNotes] = useState(false);
+  const [deletingCircleKey, setDeletingCircleKey] = useState(null);
+  const [viewingCircleAnswer, setViewingCircleAnswer] = useState(null);
+  const [copiedCircleAnswer, setCopiedCircleAnswer] = useState(false);
+
   const fetchStorageInfo = async () => {
     try {
       const info = await getStorageUsage();
@@ -88,6 +101,18 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   };
 
+  const loadStoredCircleNotes = async () => {
+    try {
+      setLoadingCircleNotes(true);
+      const list = await getAllStoredCircleNotes();
+      setStoredCircleNotes(list || []);
+    } catch (_) {
+      setStoredCircleNotes([]);
+    } finally {
+      setLoadingCircleNotes(false);
+    }
+  };
+
   const handleTogglePin = (noteId, noteTitle) => {
     const isNowPinned = togglePinOfflineNote(noteId);
     setPinnedIds(getPinnedOfflineNotes());
@@ -100,11 +125,25 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     setTimeout(() => setMsg(null), 4000);
   };
 
+  const handleTogglePinCircle = async (key, queryTitle) => {
+    try {
+      const isNowPinned = await togglePinCircleNote(key);
+      await loadStoredCircleNotes();
+      setMsg({
+        type: "success",
+        text: isNowPinned
+          ? `📌 "${(queryTitle || 'Circled question').slice(0, 32)}..." pinned! Kept forever and exempt from 48h auto-delete.`
+          : `⏳ "${(queryTitle || 'Circled question').slice(0, 32)}..." unpinned. It will auto-expire in 48 hours.`,
+      });
+      setTimeout(() => setMsg(null), 4000);
+    } catch (_) {}
+  };
+
   const handleRefreshAllStorage = async () => {
     try {
       setRefreshingStorage(true);
       setRefreshSuccess(false);
-      await Promise.all([fetchStorageInfo(), loadStoredNotes()]);
+      await Promise.all([fetchStorageInfo(), loadStoredNotes(), loadStoredCircleNotes()]);
       const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       setLastRefreshedAt(nowStr);
       setRefreshSuccess(true);
@@ -119,6 +158,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     if (tab === "storage") {
       fetchStorageInfo();
       loadStoredNotes();
+      loadStoredCircleNotes();
     }
   }, [tab]);
 
@@ -137,12 +177,28 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   };
 
+  const handleDeleteSingleCircleNote = async (key, queryTitle) => {
+    if (!window.confirm(`Are you sure you want to delete this circled solution from local storage?`)) return;
+    try {
+      setDeletingCircleKey(key);
+      await deleteSingleCircleNote(key);
+      setMsg({ type: "success", text: "Deleted circled solution from storage." });
+      await loadStoredCircleNotes();
+      await fetchStorageInfo();
+    } catch (err) {
+      setMsg({ type: "error", text: "Failed to delete: " + err.message });
+    } finally {
+      setDeletingCircleKey(null);
+    }
+  };
+
   const handleWipeStorage = async () => {
     if (!window.confirm("Are you sure you want to delete all offline notes cached on this device? This will free up storage space.")) return;
     try {
       setClearingStorage(true);
-      await wipeAllDeviceOfflineStorage();
+      await Promise.all([wipeAllDeviceOfflineStorage(), clearAllStoredCircleNotes()]);
       setStoredNotes([]);
+      setStoredCircleNotes([]);
       setMsg({ type: "success", text: "Offline notes and storage cache successfully cleared from this device!" });
       await fetchStorageInfo();
     } catch (err) {
@@ -1532,6 +1588,188 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               )}
             </div>
 
+            {/* Circled AI Q&A Notes Section (48h Auto-Evict) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontWeight: 700, color: "#f8fafc", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Sparkles size={15} style={{ color: "#38bdf8" }} />
+                  <span>Circled AI Q&amp;A Notes ({storedCircleNotes.length})</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadStoredCircleNotes}
+                  disabled={loadingCircleNotes}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: "6px",
+                    color: "var(--text-muted)",
+                    padding: "3px 8px",
+                    cursor: "pointer",
+                    fontSize: "0.7rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <RefreshCw size={11} className={loadingCircleNotes ? "spin" : ""} />
+                  Refresh List
+                </button>
+              </div>
+
+              {/* 48h Default Auto-Expire Banner */}
+              <div
+                style={{
+                  background: "rgba(56, 189, 248, 0.06)",
+                  border: "1px solid rgba(56, 189, 248, 0.2)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  fontSize: "0.72rem",
+                  color: "#7dd3fc",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  lineHeight: 1.4,
+                }}
+              >
+                <span>⭕ <strong>Circle to Search:</strong> AI answers saved offline</span>
+                <span>🕒 <strong>48h Auto-Expire:</strong> Active by default (Pin to Keep Forever)</span>
+              </div>
+
+              {loadingCircleNotes ? (
+                <div style={{ padding: "14px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                  Scanning device IndexedDB for circled solutions...
+                </div>
+              ) : storedCircleNotes.length === 0 ? (
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px dashed rgba(255, 255, 255, 0.12)",
+                    borderRadius: "10px",
+                    padding: "16px",
+                    textAlign: "center",
+                    color: "var(--text-dim)",
+                    fontSize: "0.76rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>⭕</div>
+                  <div style={{ color: "#f8fafc", fontWeight: 600, marginBottom: "2px" }}>No Circled AI Notes Saved</div>
+                  <div>Circle any question, diagram, or formula in the Virtual PDF Reader to solve it and save answers offline here.</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
+                  {storedCircleNotes.map((cn) => {
+                    const isPinned = Boolean(cn.isPinned);
+                    const ageHours = cn.savedAt ? Math.floor((Date.now() - Number(cn.savedAt)) / (3600 * 1000)) : 0;
+                    const remainingHours = Math.max(1, 48 - ageHours);
+
+                    return (
+                      <div
+                        key={cn.key}
+                        style={{
+                          background: isPinned ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.03)",
+                          border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)"}`,
+                          borderRadius: "8px",
+                          padding: "10px 12px",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => setViewingCircleAnswer(cn)}>
+                          <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {cn.query ? (cn.query.length > 55 ? `${cn.query.slice(0, 55)}...` : cn.query) : "Circled Question"}
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
+                            <span>📖 {cn.subject || "Study Notes"}</span>
+                            {isPinned ? (
+                              <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                                <Pin size={10} /> Kept Forever
+                              </span>
+                            ) : (
+                              <span style={{ color: "#fbbf24", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                                <Clock size={10} /> Auto-expires in {remainingHours}h
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                          <button
+                            type="button"
+                            onClick={() => setViewingCircleAnswer(cn)}
+                            title="View step-by-step AI solution"
+                            style={{
+                              background: "rgba(56, 189, 248, 0.12)",
+                              border: "1px solid rgba(56, 189, 248, 0.3)",
+                              color: "#38bdf8",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Eye size={11} />
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePinCircle(cn.key, cn.query)}
+                            title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion)"}
+                            style={{
+                              background: isPinned ? "rgba(16, 185, 129, 0.16)" : "rgba(255, 255, 255, 0.06)",
+                              border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.14)"}`,
+                              color: isPinned ? "#34d399" : "#cbd5e1",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Pin size={11} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
+                            {isPinned ? "Pinned" : "Keep"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSingleCircleNote(cn.key, cn.query)}
+                            disabled={deletingCircleKey === cn.key}
+                            title="Delete this circled solution from local storage"
+                            style={{
+                              background: "rgba(244, 63, 94, 0.12)",
+                              border: "1px solid rgba(244, 63, 94, 0.3)",
+                              color: "#f43f5e",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: deletingCircleKey === cn.key ? "not-allowed" : "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Trash2 size={11} />
+                            {deletingCircleKey === cn.key ? "..." : "Delete"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Clear Storage Action Button */}
             <div style={{ marginTop: "4px", display: "flex", flexDirection: "column", gap: "8px" }}>
               <button
@@ -1559,6 +1797,192 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
                 💡 <em>Note: Clearing storage deletes local offline copies. You can always re-read or download them again when internet is available. Browsers also auto-prune oldest notes when device disk space is below 10%.</em>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Circled AI Solution Viewer Popup */}
+        {viewingCircleAnswer && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0, 0, 0, 0.78)",
+              backdropFilter: "blur(5px)",
+              zIndex: 10005,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px",
+            }}
+            onClick={() => setViewingCircleAnswer(null)}
+          >
+            <div
+              style={{
+                background: "#0f172a",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
+                borderRadius: "14px",
+                maxWidth: "540px",
+                width: "100%",
+                maxHeight: "85vh",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: "0 20px 40px rgba(0, 0, 0, 0.65)",
+                overflow: "hidden",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "14px 18px",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "rgba(56, 189, 248, 0.06)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Sparkles size={18} style={{ color: "#38bdf8" }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#f8fafc" }}>
+                      Circled AI Solution
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                      {viewingCircleAnswer.subject || "Study Notes"} • {viewingCircleAnswer.provider ? `${String(viewingCircleAnswer.provider).toUpperCase()} AI` : "Cloud AI"}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingCircleAnswer(null)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    padding: "4px",
+                    display: "flex",
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Content Body */}
+              <div style={{ padding: "16px 18px", overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: "12px" }}>
+                {/* Question Snippet */}
+                <div
+                  style={{
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                  }}
+                >
+                  <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Circled Text / Question:
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: "#f1f5f9", fontStyle: "italic", lineHeight: 1.4 }}>
+                    "{viewingCircleAnswer.query}"
+                  </div>
+                </div>
+
+                {/* AI Answer */}
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      ✨ Step-by-Step AI Solution:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (viewingCircleAnswer.answer) {
+                          navigator.clipboard.writeText(viewingCircleAnswer.answer);
+                          setCopiedCircleAnswer(true);
+                          setTimeout(() => setCopiedCircleAnswer(false), 2000);
+                        }
+                      }}
+                      style={{
+                        background: copiedCircleAnswer ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.06)",
+                        border: `1px solid ${copiedCircleAnswer ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                        borderRadius: "6px",
+                        color: copiedCircleAnswer ? "#34d399" : "var(--text-muted)",
+                        padding: "3px 8px",
+                        fontSize: "0.68rem",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {copiedCircleAnswer ? <Check size={11} /> : <Copy size={11} />}
+                      <span>{copiedCircleAnswer ? "Copied!" : "Copy"}</span>
+                    </button>
+                  </div>
+                  <div
+                    style={{
+                      background: "rgba(15, 23, 42, 0.8)",
+                      border: "1px solid rgba(56, 189, 248, 0.2)",
+                      borderRadius: "8px",
+                      padding: "12px 14px",
+                      fontSize: "0.82rem",
+                      color: "#e2e8f0",
+                      lineHeight: 1.6,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      maxHeight: "340px",
+                      overflowY: "auto",
+                    }}
+                  >
+                    {viewingCircleAnswer.answer}
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px 18px",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "rgba(255, 255, 255, 0.02)",
+                }}
+              >
+                <div style={{ fontSize: "0.7rem", color: viewingCircleAnswer.isPinned ? "#34d399" : "#fbbf24", display: "flex", alignItems: "center", gap: "4px" }}>
+                  {viewingCircleAnswer.isPinned ? (
+                    <>
+                      <Pin size={11} />
+                      <span>Pinned (Kept forever)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Clock size={11} />
+                      <span>Auto-expires after 48h from creation</span>
+                    </>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewingCircleAnswer(null)}
+                  style={{
+                    background: "rgba(56, 189, 248, 0.15)",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    color: "#38bdf8",
+                    borderRadius: "6px",
+                    padding: "5px 14px",
+                    fontSize: "0.76rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>

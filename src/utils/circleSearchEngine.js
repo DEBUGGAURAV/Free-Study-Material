@@ -218,6 +218,10 @@ export async function solveCircleQuery({ query, context = "", noteId = "", subje
 
   const data = await res.json();
   const result = {
+    key: cacheKey,
+    query: cleanQuery,
+    subject: subject || "Study Notes",
+    noteId: noteId || "",
     answer: data.answer,
     provider: data.provider,
     model: data.model,
@@ -225,6 +229,8 @@ export async function solveCircleQuery({ query, context = "", noteId = "", subje
     cacheTier: data.cached ? (data.cacheSource || "Turso Cloud L2") : "Cloud Engine (Fresh)",
     hits: data.hits || 1,
     latencyMs: data.latencyMs || 0,
+    savedAt: Date.now(),
+    isPinned: false,
   };
 
   // Cache locally in IndexedDB & Memory
@@ -235,8 +241,10 @@ export async function solveCircleQuery({ query, context = "", noteId = "", subje
 }
 
 // ============================================================================
-// 📦 Lightweight IndexedDB Helper for Circle Search Cache
+// 📦 Lightweight IndexedDB Helper for Circle Search Cache (48h Default TTL)
 // ============================================================================
+export const CIRCLE_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 Hours Default TTL
+
 function openCircleDb() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
@@ -263,9 +271,9 @@ async function getIndexedDbCircleCache(key) {
       const req = store.get(key);
       req.onsuccess = () => {
         const item = req.result;
-        // Check 7-day TTL
-        if (item && Date.now() - item.savedAt < 7 * 24 * 60 * 60 * 1000) {
-          resolve(item.data);
+        // Check 48-Hour TTL (exempt if isPinned)
+        if (item && (item.isPinned || Date.now() - (item.savedAt || 0) < CIRCLE_CACHE_TTL_MS)) {
+          resolve(item.data || item);
         } else {
           resolve(null);
         }
@@ -285,8 +293,106 @@ async function saveIndexedDbCircleCache(key, data) {
     store.put({
       key,
       data,
-      savedAt: Date.now(),
+      query: data.query || "",
+      subject: data.subject || "Study Notes",
+      answer: data.answer || "",
+      noteId: data.noteId || "",
+      provider: data.provider || "gemini",
+      savedAt: data.savedAt || Date.now(),
+      isPinned: Boolean(data.isPinned),
     });
   } catch (_) {}
 }
+
+/**
+ * Loads all stored circled Q&A notes for Profile Modal
+ * Auto-evicts unpinned entries older than 48 hours
+ */
+export async function getAllStoredCircleNotes() {
+  try {
+    const db = await openCircleDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction("cache", "readwrite");
+      const store = tx.objectStore("cache");
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const items = req.result || [];
+        const now = Date.now();
+        const active = [];
+
+        for (const item of items) {
+          const age = now - (item.savedAt || now);
+          // Auto-evict unpinned entries older than 48 hours
+          if (age > CIRCLE_CACHE_TTL_MS && !item.isPinned) {
+            store.delete(item.key);
+          } else {
+            active.push(item);
+          }
+        }
+
+        active.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+        resolve(active);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * Deletes a single circled note by key
+ */
+export async function deleteSingleCircleNote(key) {
+  try {
+    const db = await openCircleDb();
+    const tx = db.transaction("cache", "readwrite");
+    tx.objectStore("cache").delete(key);
+    memorySessionCache.delete(key);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Pins or unpins a circled note (Pinned notes never auto-expire)
+ */
+export async function togglePinCircleNote(key) {
+  try {
+    const db = await openCircleDb();
+    const tx = db.transaction("cache", "readwrite");
+    const store = tx.objectStore("cache");
+    const item = await new Promise((res) => {
+      const r = store.get(key);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(null);
+    });
+
+    if (item) {
+      item.isPinned = !item.isPinned;
+      store.put(item);
+      return item.isPinned;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Clears all cached circled notes from local IndexedDB & RAM
+ */
+export async function clearAllStoredCircleNotes() {
+  try {
+    const db = await openCircleDb();
+    const tx = db.transaction("cache", "readwrite");
+    tx.objectStore("cache").clear();
+    memorySessionCache.clear();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 
