@@ -265,6 +265,7 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     const update = {};
     if (provider === "groq") update.groqEnabled = Boolean(enabled);
     else if (provider === "gemini") update.geminiEnabled = Boolean(enabled);
+    else if (provider === "cloudflare" || provider === "cf" || provider === "cloudflare-ai") update.cloudflareAiEnabled = Boolean(enabled);
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);
     else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
     else {
@@ -273,6 +274,25 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
 
     const result = await updateAiSettings(update);
     return res.json({ success: true, message: `${provider.toUpperCase()} state updated`, telemetry: result });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN CLOUDFLARE AI CONFIG: POST /api/ai/admin/cloudflare-config
+ */
+router.post("/admin/cloudflare-config", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { enabled, dailyLimit } = req.body;
+    const update = {};
+    if (typeof enabled === "boolean") update.cloudflareAiEnabled = enabled;
+    if (dailyLimit !== undefined && !isNaN(Number(dailyLimit)) && Number(dailyLimit) > 0) {
+      update.cloudflareAiLimit = Number(dailyLimit);
+    }
+
+    const result = await updateAiSettings(update);
+    return res.json({ success: true, message: "Cloudflare Workers AI settings updated successfully", telemetry: result });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

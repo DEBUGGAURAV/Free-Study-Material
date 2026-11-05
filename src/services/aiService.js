@@ -17,6 +17,7 @@ const { queryCloudflareWorkersAi, isCloudflareAiAvailable } = require("./cloudfl
 const DEFAULT_AI_SETTINGS = {
   groqEnabled: true,
   geminiEnabled: true,
+  cloudflareAiEnabled: true,
   edgeProxyEnabled: true,
   circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
@@ -26,8 +27,10 @@ const DEFAULT_AI_SETTINGS = {
   geminiModel: "gemini-flash-lite-latest",
   groqLimit: 14400,
   geminiLimit: 1500,
+  cloudflareAiLimit: 1000,
   groqUsedToday: 0,
   geminiUsedToday: 0,
+  cloudflareAiUsedToday: 0,
   totalQueriesToday: 0,
   failoversToday: 0,
   cachedHitsToday: 0,
@@ -78,6 +81,7 @@ function checkDailyReset() {
     console.log(`[AI-ENGINE] 🌅 New day detected (${today}). Auto-resetting daily AI counters...`);
     currentAiSettings.groqUsedToday = 0;
     currentAiSettings.geminiUsedToday = 0;
+    currentAiSettings.cloudflareAiUsedToday = 0;
     currentAiSettings.circleSearchUsedToday = 0;
     currentAiSettings.totalQueriesToday = 0;
     currentAiSettings.failoversToday = 0;
@@ -426,9 +430,13 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         currentAiSettings.failoversToday += 1;
 
         // Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
-        if (isCloudflareAiAvailable()) {
+        const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
+                           (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
+                           isCloudflareAiAvailable();
+        if (canUseCfAi) {
           try {
             finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context);
+            currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
             finalProvider = "cloudflare_workers_ai";
             finalModel = "@cf/meta/llama-3.1-8b-instruct";
           } catch (cfErr) {
@@ -537,6 +545,8 @@ function getAiTelemetry() {
       geminiLimit: currentAiSettings.geminiLimit,
       groqApiKeyConfigured: groqKeySet,
       geminiApiKeyConfigured: geminiKeySet,
+      cloudflareAiEnabled: currentAiSettings.cloudflareAiEnabled !== false,
+      cloudflareAiLimit: currentAiSettings.cloudflareAiLimit || 1000,
       cloudflareAiConfigured: isCloudflareAiAvailable(),
       cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
@@ -551,11 +561,14 @@ function getAiTelemetry() {
       geminiUsedToday: currentAiSettings.geminiUsedToday,
       geminiRemainingToday: Math.max(0, currentAiSettings.geminiLimit - currentAiSettings.geminiUsedToday),
       geminiPercent: Number(((currentAiSettings.geminiUsedToday / currentAiSettings.geminiLimit) * 100).toFixed(1)),
+      cloudflareAiUsedToday: currentAiSettings.cloudflareAiUsedToday || 0,
+      cloudflareAiRemainingToday: Math.max(0, (currentAiSettings.cloudflareAiLimit || 1000) - (currentAiSettings.cloudflareAiUsedToday || 0)),
+      cloudflareAiPercent: Number((((currentAiSettings.cloudflareAiUsedToday || 0) / (currentAiSettings.cloudflareAiLimit || 1000)) * 100).toFixed(1)),
       circleSearchUsedToday: currentAiSettings.circleSearchUsedToday || 0,
       circleSearchRemainingToday: Math.max(0, (currentAiSettings.circleSearchDailyLimit || 2000) - (currentAiSettings.circleSearchUsedToday || 0)),
       circleSearchPercent: Number((((currentAiSettings.circleSearchUsedToday || 0) / (currentAiSettings.circleSearchDailyLimit || 2000)) * 100).toFixed(1)),
-      totalDailyCapacity: currentAiSettings.groqLimit + currentAiSettings.geminiLimit,
-      totalDailyUsed: currentAiSettings.groqUsedToday + currentAiSettings.geminiUsedToday,
+      totalDailyCapacity: currentAiSettings.groqLimit + currentAiSettings.geminiLimit + (currentAiSettings.cloudflareAiLimit || 1000),
+      totalDailyUsed: currentAiSettings.groqUsedToday + currentAiSettings.geminiUsedToday + (currentAiSettings.cloudflareAiUsedToday || 0),
       totalQueriesToday: currentAiSettings.totalQueriesToday,
       failoversToday: currentAiSettings.failoversToday,
       cachedHitsToday: currentAiSettings.cachedHitsToday,
@@ -567,6 +580,7 @@ function getAiTelemetry() {
       groqStatus: !groqKeySet ? "KEY_MISSING" : (!currentAiSettings.groqEnabled ? "PAUSED" : (currentAiSettings.groqUsedToday >= currentAiSettings.groqLimit ? "QUOTA_EXHAUSTED" : "HEALTHY_ACTIVE")),
       geminiStatus: !geminiKeySet ? "KEY_MISSING" : (!currentAiSettings.geminiEnabled ? "PAUSED" : (currentAiSettings.geminiUsedToday >= currentAiSettings.geminiLimit ? "QUOTA_EXHAUSTED" : "READY_STANDBY")),
       circleSearchStatus: currentAiSettings.circleSearchEnabled === false ? "PAUSED" : ((currentAiSettings.circleSearchUsedToday || 0) >= (currentAiSettings.circleSearchDailyLimit || 2000) ? "LIMIT_EXCEEDED" : "HEALTHY_ACTIVE"),
+      cloudflareAiStatus: currentAiSettings.cloudflareAiEnabled === false ? "PAUSED" : ((currentAiSettings.cloudflareAiUsedToday || 0) >= (currentAiSettings.cloudflareAiLimit || 1000) ? "QUOTA_EXHAUSTED" : "HEALTHY_ACTIVE"),
       edgeProxyStatus: currentAiSettings.edgeProxyEnabled ? "ACTIVE_EDGE" : "DISABLED",
     },
   };
@@ -578,6 +592,7 @@ function getAiTelemetry() {
 async function updateAiSettings({
   groqEnabled,
   geminiEnabled,
+  cloudflareAiEnabled,
   edgeProxyEnabled,
   circleSearchEnabled,
   circleSearchDailyLimit,
@@ -586,9 +601,11 @@ async function updateAiSettings({
   geminiApiKey,
   groqLimit,
   geminiLimit,
+  cloudflareAiLimit,
 }) {
   if (typeof groqEnabled === "boolean") currentAiSettings.groqEnabled = groqEnabled;
   if (typeof geminiEnabled === "boolean") currentAiSettings.geminiEnabled = geminiEnabled;
+  if (typeof cloudflareAiEnabled === "boolean") currentAiSettings.cloudflareAiEnabled = cloudflareAiEnabled;
   if (typeof edgeProxyEnabled === "boolean") currentAiSettings.edgeProxyEnabled = edgeProxyEnabled;
   if (typeof circleSearchEnabled === "boolean") currentAiSettings.circleSearchEnabled = circleSearchEnabled;
   if (typeof circleSearchDailyLimit === "number" && circleSearchDailyLimit > 0) currentAiSettings.circleSearchDailyLimit = circleSearchDailyLimit;
@@ -603,6 +620,7 @@ async function updateAiSettings({
 
   if (typeof groqLimit === "number" && groqLimit > 0) currentAiSettings.groqLimit = groqLimit;
   if (typeof geminiLimit === "number" && geminiLimit > 0) currentAiSettings.geminiLimit = geminiLimit;
+  if (typeof cloudflareAiLimit === "number" && cloudflareAiLimit > 0) currentAiSettings.cloudflareAiLimit = cloudflareAiLimit;
 
   await saveAiSettingsToDb();
   return getAiTelemetry();
@@ -622,6 +640,7 @@ function incrementCircleSearchUsage() {
 async function resetDailyCounters() {
   currentAiSettings.groqUsedToday = 0;
   currentAiSettings.geminiUsedToday = 0;
+  currentAiSettings.cloudflareAiUsedToday = 0;
   currentAiSettings.circleSearchUsedToday = 0;
   currentAiSettings.totalQueriesToday = 0;
   currentAiSettings.failoversToday = 0;

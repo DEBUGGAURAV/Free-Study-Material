@@ -1261,6 +1261,8 @@ export const api = {
     request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) }),
   updateCircleSearchConfig: (config) =>
     request("/ai/admin/circle-config", { method: "POST", body: JSON.stringify(config) }),
+  updateCloudflareAiConfig: (config) =>
+    request("/ai/admin/cloudflare-config", { method: "POST", body: JSON.stringify(config) }),
   resetAiCounters: () =>
     request("/ai/admin/reset", { method: "POST" }),
   testAiConnection: (provider) =>

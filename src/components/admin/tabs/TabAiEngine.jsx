@@ -23,6 +23,8 @@ import {
   Trash2,
   Users,
   MessageSquare,
+  Sliders,
+  Save,
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -49,6 +51,10 @@ export default function TabAiEngine() {
   const [circleLimitInput, setCircleLimitInput] = useState("");
   const [circleCooldownInput, setCircleCooldownInput] = useState("");
   const [savingCircleConfig, setSavingCircleConfig] = useState(false);
+
+  // Cloudflare Workers AI Controls (Limits & State)
+  const [cfLimitInput, setCfLimitInput] = useState("");
+  const [savingCfConfig, setSavingCfConfig] = useState(false);
 
   // Telegram Forum Sub-Topics
   const [settingUpTopics, setSettingUpTopics] = useState(false);
@@ -128,6 +134,9 @@ export default function TabAiEngine() {
       if (circleCooldownInput === "" && telemetry.settings.circleSearchCooldownSec !== undefined) {
         setCircleCooldownInput(String(telemetry.settings.circleSearchCooldownSec));
       }
+      if (cfLimitInput === "" && telemetry.settings.cloudflareAiLimit !== undefined) {
+        setCfLimitInput(String(telemetry.settings.cloudflareAiLimit));
+      }
     }
   }, [telemetry]);
 
@@ -176,6 +185,30 @@ export default function TabAiEngine() {
       showNotice("Failed to update Circle to Search limits: " + err.message, "error");
     } finally {
       setSavingCircleConfig(false);
+    }
+  };
+
+  // Save Cloudflare Workers AI Daily Limit
+  const handleSaveCfConfig = async (e) => {
+    if (e) e.preventDefault();
+    try {
+      setSavingCfConfig(true);
+      const limitVal = parseInt(cfLimitInput, 10);
+      if (isNaN(limitVal) || limitVal <= 0) {
+        showNotice("Please enter a valid positive number for Daily Cloudflare Limit.", "error");
+        return;
+      }
+      const res = await api.updateCloudflareAiConfig({
+        dailyLimit: limitVal,
+      });
+      if (res && res.success) {
+        setTelemetry(res.telemetry);
+        showNotice(`✅ Cloudflare Workers AI Daily Limit saved: ${limitVal} requests/day!`, "success");
+      }
+    } catch (err) {
+      showNotice("Error saving Cloudflare limit: " + err.message, "error");
+    } finally {
+      setSavingCfConfig(false);
     }
   };
 
@@ -245,10 +278,13 @@ export default function TabAiEngine() {
     geminiUsedToday: 0,
     geminiRemainingToday: 1500,
     geminiPercent: 0,
+    cloudflareAiUsedToday: 0,
+    cloudflareAiRemainingToday: 1000,
+    cloudflareAiPercent: 0,
     circleSearchUsedToday: 0,
     circleSearchRemainingToday: 2000,
     circleSearchPercent: 0,
-    totalDailyCapacity: 15900,
+    totalDailyCapacity: 16900,
     totalDailyUsed: 0,
     totalQueriesToday: 0,
     failoversToday: 0,
@@ -259,12 +295,15 @@ export default function TabAiEngine() {
   const settings = telemetry?.settings || {
     groqEnabled: true,
     geminiEnabled: true,
+    cloudflareAiEnabled: true,
+    cloudflareAiLimit: 1000,
     edgeProxyEnabled: true,
     circleSearchEnabled: true,
     circleSearchDailyLimit: 2000,
     circleSearchCooldownSec: 3,
     groqApiKeyConfigured: false,
     geminiApiKeyConfigured: false,
+    cloudflareAiConfigured: false,
   };
 
   return (
@@ -393,11 +432,11 @@ export default function TabAiEngine() {
             <Sparkles size={16} color="#38bdf8" />
           </div>
           <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#fff", marginTop: "6px" }}>
-            15,900
+            {(usage.totalDailyCapacity || 16900).toLocaleString()}
             <span style={{ fontSize: "0.8rem", color: "#38bdf8", marginLeft: "4px" }}>RPD</span>
           </div>
           <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
-            14,400 (Groq) + 1,500 (Gemini)
+            Groq (14.4k) + Gemini (1.5k) + Cloudflare ({(settings.cloudflareAiLimit || 1000).toLocaleString()})
           </div>
         </div>
 
@@ -742,19 +781,19 @@ export default function TabAiEngine() {
         <div
           style={{
             background: "rgba(15, 23, 42, 0.65)",
-            border: "1px solid rgba(245, 158, 11, 0.35)",
+            border: settings.cloudflareAiEnabled !== false ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
             borderRadius: "16px",
             padding: "20px",
             display: "flex",
             flexDirection: "column",
             gap: "16px",
             position: "relative",
-            boxShadow: "0 10px 30px rgba(245, 158, 11, 0.08)",
+            boxShadow: settings.cloudflareAiEnabled !== false ? "0 10px 30px rgba(245, 158, 11, 0.08)" : "none",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span style={{ fontSize: "1.2rem" }}>🔥</span>
                 <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
                   Cloudflare Workers AI (Tier 2 Edge GPU)
@@ -777,31 +816,37 @@ export default function TabAiEngine() {
               </p>
             </div>
 
-            <span
+            {/* Toggle Switch */}
+            <button
+              type="button"
+              onClick={() => handleToggle("cloudflare", settings.cloudflareAiEnabled !== false)}
               style={{
-                background: "rgba(245, 158, 11, 0.15)",
-                color: "#fbbf24",
-                border: "1px solid rgba(245, 158, 11, 0.35)",
+                background: settings.cloudflareAiEnabled !== false ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.1)",
+                color: "#fff",
+                border: "none",
                 borderRadius: "999px",
                 padding: "6px 14px",
                 fontSize: "0.78rem",
                 fontWeight: 700,
+                cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
+                boxShadow: settings.cloudflareAiEnabled !== false ? "0 2px 10px rgba(245, 158, 11, 0.4)" : "none",
+                transition: "all 0.2s ease",
               }}
             >
-              <Cpu size={13} />
-              <span>EDGE ACTIVE</span>
-            </span>
+              <Power size={13} />
+              <span>{settings.cloudflareAiEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+            </button>
           </div>
 
-          {/* Quota & Capacity Info */}
+          {/* Usage Meter */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Daily Edge GPU Quota:</span>
+              <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
               <strong style={{ color: "#fbbf24", fontFamily: "var(--font-mono)" }}>
-                10,000 Neurons / Day FREE (~1,000 Queries)
+                {usage.cloudflareAiUsedToday || 0} / {(settings.cloudflareAiLimit || 1000).toLocaleString()} ({usage.cloudflareAiPercent || 0}%)
               </strong>
             </div>
             <div
@@ -815,18 +860,82 @@ export default function TabAiEngine() {
             >
               <div
                 style={{
-                  width: "100%",
+                  width: `${Math.min(100, usage.cloudflareAiPercent || 0)}%`,
                   height: "100%",
                   background: "linear-gradient(90deg, #f59e0b, #ef4444)",
                   borderRadius: "999px",
+                  transition: "width 0.3s ease",
                 }}
               />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-              <span>Role: Tier 2 Failover (when Groq 429)</span>
-              <span>Latency: ~0.3s Edge GPU</span>
+              <span>Remaining: {(usage.cloudflareAiRemainingToday ?? (settings.cloudflareAiLimit || 1000)).toLocaleString()} requests (~10k Neurons)</span>
+              <span>Latency: ~0.3s Native Edge GPU</span>
             </div>
           </div>
+
+          {/* Daily Limit Configuration Input */}
+          <form
+            onSubmit={handleSaveCfConfig}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              background: "rgba(255, 255, 255, 0.03)",
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "1px solid rgba(245, 158, 11, 0.2)",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: "200px" }}>
+              <Sliders size={14} color="#fbbf24" />
+              <label style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontWeight: 600 }}>
+                Daily Quota Limit:
+              </label>
+              <input
+                type="number"
+                min="10"
+                max="50000"
+                value={cfLimitInput}
+                onChange={(e) => setCfLimitInput(e.target.value)}
+                style={{
+                  width: "90px",
+                  padding: "4px 8px",
+                  fontSize: "0.78rem",
+                  background: "rgba(0, 0, 0, 0.3)",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  borderRadius: "6px",
+                  color: "#fff",
+                  fontFamily: "var(--font-mono)",
+                  textAlign: "center",
+                }}
+              />
+              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>req/day</span>
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingCfConfig}
+              className="btn-primary"
+              style={{
+                padding: "5px 12px",
+                fontSize: "0.74rem",
+                borderRadius: "6px",
+                cursor: "pointer",
+                background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                border: "none",
+                color: "#fff",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <Save size={12} />
+              <span>{savingCfConfig ? "Saving..." : "Save Limit"}</span>
+            </button>
+          </form>
 
           {/* Status & Key Info */}
           <div
@@ -1268,53 +1377,6 @@ export default function TabAiEngine() {
 
           <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)" }}>
             Router: edge-worker/aiProxyWorker.js ➔ Groq LPU ➔ Cloudflare AI ➔ Gemini ➔ Turso Cache
-          </div>
-        </div>
-
-        {/* Zero-Leak Security Card (.env Protected) */}
-        <div
-          style={{
-            background: "rgba(16, 185, 129, 0.04)",
-            border: "1px solid rgba(16, 185, 129, 0.25)",
-            borderRadius: "16px",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <ShieldCheck size={20} color="#34d399" />
-            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-              Zero-Leak Server Environment (.env)
-            </h4>
-          </div>
-
-          <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
-            To prevent accidental client leaks, AI API credentials are now loaded strictly from your server's <strong>.env</strong> file. 
-            Keys are never exposed in browser memory, DevTools, or network requests.
-          </p>
-
-          <div
-            style={{
-              padding: "10px 12px",
-              background: "rgba(0, 0, 0, 0.35)",
-              border: "1px solid rgba(255, 255, 255, 0.06)",
-              borderRadius: "8px",
-              fontSize: "0.72rem",
-              fontFamily: "var(--font-mono)",
-              color: "#94a3b8",
-              display: "flex",
-              flexDirection: "column",
-              gap: "4px",
-            }}
-          >
-            <div style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24" }}>
-              GROQ_API_KEY: {settings.groqApiKeyConfigured ? "✅ Configured in .env" : "⚠️ Missing in .env"}
-            </div>
-            <div style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24" }}>
-              GEMINI_API_KEY: {settings.geminiApiKeyConfigured ? "✅ Configured in .env" : "⚠️ Missing in .env"}
-            </div>
           </div>
         </div>
       </div>
