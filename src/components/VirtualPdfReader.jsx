@@ -52,6 +52,12 @@ import { api } from "../api";
 import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
 import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
+import CircleSearchModal from "./CircleSearchModal";
+import {
+  extractTextFromPageBounds,
+  cropCanvasRegion,
+  extractTextFromCroppedCanvas,
+} from "../utils/circleSearchEngine";
 const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
 // Setup PDF.js worker
@@ -591,6 +597,14 @@ export default function VirtualPdfReader({
   const [clipStart, setClipStart] = useState(null);
   const [clipCurrent, setClipCurrent] = useState(null);
   const isClippingDragRef = useRef(false);
+
+  // 8.5. ⭕ Circle to Search & Solve (Text-Layer -> Tesseract WASM -> Turso Cache)
+  const [isCircleSearchMode, setIsCircleSearchMode] = useState(false);
+  const [circleModalOpen, setCircleModalOpen] = useState(false);
+  const [circleSearchData, setCircleSearchData] = useState(null);
+  const isCircleDragRef = useRef(false);
+  const [circleStart, setCircleStart] = useState(null);
+  const [circleCurrent, setCircleCurrent] = useState(null);
 
   // 9. Adaptive Battery Saver & Network Mode (Decoupled & Independent)
   const [isEcoMode, setIsEcoMode] = useState(false); // ALWAYS OFF by default!
@@ -2289,6 +2303,132 @@ export default function VirtualPdfReader({
     }
   };
 
+  // ⭕ Circle to Search & Solve Handlers
+  const handleToggleCircleSearch = () => {
+    if (isCircleSearchMode) {
+      setIsCircleSearchMode(false);
+      setCircleStart(null);
+      setCircleCurrent(null);
+      isCircleDragRef.current = false;
+      setOcrStatusText("");
+    } else {
+      setIsCircleSearchMode(true);
+      setIsClipperMode(false);
+      setOcrStatusText("⭕ Circle to Search: Draw a circle or box on any formula, diagram, or question.");
+    }
+  };
+
+  const handleStartCircleSearch = (e) => {
+    if (!isCircleSearchMode || !canvasRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    setCircleStart({ x, y });
+    setCircleCurrent({ x, y });
+    isCircleDragRef.current = true;
+  };
+
+  const handleMoveCircleSearch = (e) => {
+    if (!isCircleSearchMode || !isCircleDragRef.current) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+    setCircleCurrent({ x, y });
+  };
+
+  const handleEndCircleSearch = async () => {
+    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart || !circleCurrent || !canvasRef.current) {
+      isCircleDragRef.current = false;
+      return;
+    }
+    isCircleDragRef.current = false;
+
+    const x1 = Math.min(circleStart.x, circleCurrent.x);
+    const y1 = Math.min(circleStart.y, circleCurrent.y);
+    const x2 = Math.max(circleStart.x, circleCurrent.x);
+    const y2 = Math.max(circleStart.y, circleCurrent.y);
+    const w = x2 - x1;
+    const h = y2 - y1;
+
+    setCircleStart(null);
+    setCircleCurrent(null);
+    setIsCircleSearchMode(false);
+
+    if (w < 15 || h < 15) {
+      setOcrStatusText("⭕ Circle selection too small. Please circle a larger area.");
+      setTimeout(() => setOcrStatusText(""), 3000);
+      return;
+    }
+
+    try {
+      setOcrStatusText("⭕ Analyzing circled selection...");
+      const canvas = canvasRef.current;
+      const dprRatio = canvas.width / canvasDimensions.width;
+
+      const rawBounds = {
+        x: Math.round(x1 * dprRatio),
+        y: Math.round(y1 * dprRatio),
+        width: Math.round(w * dprRatio),
+        height: Math.round(h * dprRatio),
+      };
+
+      // 1. Crop canvas region for thumbnail and fallback OCR
+      const cropRes = cropCanvasRegion(canvas, rawBounds);
+
+      let extractedText = "";
+      let source = "text-layer";
+
+      // 2. Step 1: Text-Layer First Check (0ms, 0 RAM, 0 Server Load)
+      if (pdfDoc) {
+        try {
+          const pageObj = await pdfDoc.getPage(currentPage);
+          const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+          const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+          if (textRes && textRes.text && textRes.text.length >= 4) {
+            extractedText = textRes.text;
+            source = "text-layer";
+          }
+        } catch (_) {}
+      }
+
+      // 3. Step 2: Client-Side Tesseract WASM Fallback (Handwritten Notes / Formulas)
+      if (!extractedText && cropRes && cropRes.canvas) {
+        setOcrStatusText("🔍 Recognizing handwritten formula via Tesseract WASM (Client)...");
+        const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas, (p, st) => setOcrStatusText(st));
+        if (ocrRes && ocrRes.text) {
+          extractedText = ocrRes.text;
+          source = "client-ocr-wasm";
+        }
+      }
+
+      if (!extractedText) {
+        extractedText = `Question / Diagram from Page ${currentPage} (${subject || title || "Study Notes"})`;
+        source = "diagram-visual";
+      }
+
+      setOcrStatusText("");
+
+      // 4. Open Circle Search Modal with extracted data
+      setCircleSearchData({
+        text: extractedText,
+        source,
+        croppedImage: cropRes?.dataUrl || null,
+        noteId: noteId || note?.id,
+        subject: subject || note?.subject || "",
+        context: `From ${title || "Notes"} (Page ${currentPage}): ${extractedText}`,
+      });
+      setCircleModalOpen(true);
+    } catch (err) {
+      console.warn("[CIRCLE-SEARCH] Analysis error:", err);
+      setOcrStatusText("⚠️ Circle analysis error: " + err.message);
+      setTimeout(() => setOcrStatusText(""), 4000);
+    }
+  };
+
   // 8. Yjs + WebRTC Peer-to-Peer Study Room
   const handleToggleStudyRoom = () => {
     if (isStudyRoomOpen) {
@@ -3580,6 +3720,31 @@ export default function VirtualPdfReader({
             <span>{isClipperMode ? "Cancel" : "✂️ Clip"}</span>
           </button>
 
+          {/* ⭕ Circle to Search & Solve */}
+          <button
+            type="button"
+            onClick={handleToggleCircleSearch}
+            style={{
+              padding: "5px 11px",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              background: isCircleSearchMode ? "linear-gradient(135deg, #0284c7, #6366f1)" : "rgba(255, 255, 255, 0.08)",
+              color: isCircleSearchMode ? "#fff" : (nightMode ? "#38bdf8" : "#0284c7"),
+              border: isCircleSearchMode ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(2, 132, 199, 0.3)"),
+              borderRadius: "6px",
+              cursor: "pointer",
+              boxShadow: isCircleSearchMode ? "0 0 14px rgba(56, 189, 248, 0.6)" : "none",
+              transition: "all 0.2s ease",
+            }}
+            title={isCircleSearchMode ? "Cancel Circle to Search" : "⭕ Circle to Search: Draw on any formula, diagram, or question to search & solve"}
+          >
+            <Sparkles size={14} />
+            <span>{isCircleSearchMode ? "Cancel Circle" : "⭕ Circle"}</span>
+          </button>
+
           {/* 📱 Screen Wake Lock Toggle */}
           <button
             type="button"
@@ -4734,6 +4899,47 @@ export default function VirtualPdfReader({
               </div>
             )}
 
+            {/* ⭕ Circle to Search Overlay Layer */}
+            {isCircleSearchMode && (
+              <div
+                onMouseDown={handleStartCircleSearch}
+                onMouseMove={handleMoveCircleSearch}
+                onMouseUp={handleEndCircleSearch}
+                onTouchStart={handleStartCircleSearch}
+                onTouchMove={handleMoveCircleSearch}
+                onTouchEnd={handleEndCircleSearch}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                  cursor: "crosshair",
+                  zIndex: 36,
+                  userSelect: "none",
+                  touchAction: "none",
+                  background: "rgba(56, 189, 248, 0.08)",
+                }}
+              >
+                {circleStart && circleCurrent && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: `${Math.min(circleStart.x, circleCurrent.x)}px`,
+                      top: `${Math.min(circleStart.y, circleCurrent.y)}px`,
+                      width: `${Math.abs(circleCurrent.x - circleStart.x)}px`,
+                      height: `${Math.abs(circleCurrent.y - circleStart.y)}px`,
+                      border: "2.5px solid #38bdf8",
+                      borderRadius: "16px",
+                      background: "rgba(56, 189, 248, 0.22)",
+                      boxShadow: "0 0 22px rgba(56, 189, 248, 0.85), inset 0 0 16px rgba(99, 102, 241, 0.4)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
             {/* Glowing Search Highlight Overlay Boxes */}
             {canvasDimensions.width > 0 && pageHighlights.length > 0 && (
               <div
@@ -5132,6 +5338,15 @@ export default function VirtualPdfReader({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ⭕ Circle to Search & Solve Modal */}
+      {circleModalOpen && (
+        <CircleSearchModal
+          isOpen={circleModalOpen}
+          onClose={() => setCircleModalOpen(false)}
+          circleData={circleSearchData}
+        />
       )}
     </div>
   );

@@ -8,6 +8,12 @@ const {
   resetDailyCounters,
   testAiProvider,
 } = require("../services/aiService");
+const {
+  computeQueryHash,
+  getCachedCircleSolution,
+  saveCircleSolution,
+  getCircleSearchTelemetry,
+} = require("../services/tursoCircleSearchService");
 
 // Student Rate Limiter (Prevent single student spamming AI endpoints)
 const studentRateLimitMap = new Map();
@@ -61,6 +67,77 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
       success: false,
       message: err.message || "Failed to generate AI response",
     });
+  }
+});
+
+/**
+ * ⭕ POST /api/ai/circle-search
+ * Circle to Search Solver with Instant Turso L2 & RAM L1 Caching
+ */
+router.post("/circle-search", studentAiLimiter, async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { query, context, noteId, subject } = req.body;
+    if (!query || !query.trim()) {
+      return res.status(400).json({ success: false, message: "Query text or formula is required" });
+    }
+
+    const cleanQuery = query.trim();
+    const queryHash = computeQueryHash(cleanQuery);
+
+    // 1. Check L1 RAM & L2 Turso Cache First (0ms / sub-5ms - 0 API cost!)
+    const cachedSolution = await getCachedCircleSolution(queryHash);
+    if (cachedSolution) {
+      return res.json({
+        success: true,
+        answer: cachedSolution.answer,
+        provider: cachedSolution.provider,
+        model: cachedSolution.model,
+        cached: true,
+        cacheSource: cachedSolution.source,
+        hits: cachedSolution.hits,
+        latencyMs: Date.now() - startTime,
+      });
+    }
+
+    // 2. Cache Miss: Generate fresh solution via Dual Groq / Gemini Engine
+    const fullContext = context
+      ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
+      : `[Subject: ${subject || "Engineering/Science"}]`;
+    const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user });
+
+    // 3. Async save to Turso & RAM Cache for next students
+    if (result && result.answer) {
+      saveCircleSolution(queryHash, cleanQuery, result.answer, result.provider, result.model).catch(() => {});
+    }
+
+    return res.json({
+      success: true,
+      answer: result.answer,
+      provider: result.provider,
+      model: result.model,
+      failover: result.failover,
+      cached: false,
+      latencyMs: Date.now() - startTime,
+    });
+  } catch (err) {
+    console.error("[CIRCLE-SEARCH-ROUTE] Error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to solve circled query",
+    });
+  }
+});
+
+/**
+ * ⭕ GET /api/ai/circle-search/telemetry
+ */
+router.get("/circle-search/telemetry", async (req, res) => {
+  try {
+    const stats = await getCircleSearchTelemetry();
+    return res.json({ success: true, ...stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -155,3 +232,4 @@ router.post("/admin/test", authenticateToken, requireAdmin, async (req, res) => 
 });
 
 module.exports = router;
+
