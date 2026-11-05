@@ -12,6 +12,7 @@ import {
   Trash2,
   Zap,
   ArrowUpRight,
+  Sparkles,
 } from "lucide-react";
 import { api } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
@@ -618,6 +619,35 @@ export default function NoteCard({
           >
             <Zap size={14} />
             <span>Campus AirDrop (1-Tap QR)</span>
+          </button>
+
+          {/* 🌟 Quaternary Row: AI Study Pod (3D Flashcards & Executive Summary) */}
+          <button
+            type="button"
+            className="btn-mesh-pill"
+            style={{
+              width: "100%",
+              justifyContent: "center",
+              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2))",
+              border: "1px solid rgba(139, 92, 246, 0.45)",
+              color: "#c084fc",
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.dispatchEvent(
+                new CustomEvent("open_ai_study_pod", {
+                  detail: { note, tab: "flashcards" },
+                })
+              );
+            }}
+            title="✨ AI Study Pod: Instant 3D Flashcards & Structured Summary for this note"
+          >
+            <Sparkles size={14} color="#a855f7" />
+            <span>✨ AI Flashcards & Summary</span>
           </button>
         </div>
       </div>

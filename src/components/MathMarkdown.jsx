@@ -57,25 +57,55 @@ function processLatex(text) {
 }
 
 /**
- * Format inline markdown (bold, italic, code, links) after math placeholders
+ * Format inline markdown (bold, italic, code, links) while protecting KaTeX HTML
  */
 function formatInlineMarkdown(text) {
   if (!text) return "";
 
-  // First process LaTeX so equations don't get messed up by markdown formatting
-  let res = processLatex(text);
+  const mathPlaceholders = [];
 
+  // 1. Extract block math $$...$$ and \[...\]
+  let safeText = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
+    const idx = mathPlaceholders.length;
+    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 8px 0; overflow-x: auto; padding: 4px 0;">${renderMathSafely(eq, true)}</div>`);
+    return `%%%MATH_HOLDER_${idx}%%%`;
+  });
+  safeText = safeText.replace(/\\\[([\s\S]*?)\\\]/g, (_, eq) => {
+    const idx = mathPlaceholders.length;
+    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 8px 0; overflow-x: auto; padding: 4px 0;">${renderMathSafely(eq, true)}</div>`);
+    return `%%%MATH_HOLDER_${idx}%%%`;
+  });
+
+  // 2. Extract inline math \(...\) and $...$
+  safeText = safeText.replace(/\\\(([\s\S]*?)\\\)/g, (_, eq) => {
+    const idx = mathPlaceholders.length;
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`);
+    return `%%%MATH_HOLDER_${idx}%%%`;
+  });
+  safeText = safeText.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, eq) => {
+    if (/^\s*\d/.test(eq)) return match;
+    const idx = mathPlaceholders.length;
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`);
+    return `${prefix}%%%MATH_HOLDER_${idx}%%%`;
+  });
+
+  // 3. Process Markdown (bold, italic, code)
   // Bold: **text** or __text__
-  res = res.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
-  res = res.replace(/__(.+?)__/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
+  safeText = safeText.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
+  safeText = safeText.replace(/__(.+?)__/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
 
   // Inline code: `code`
-  res = res.replace(/`([^`]+)`/g, '<code style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 2px 6px; font-size: 0.85em; font-family: monospace; color: #38bdf8;">$1</code>');
+  safeText = safeText.replace(/`([^`]+)`/g, '<code style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 2px 6px; font-size: 0.85em; font-family: monospace; color: #38bdf8;">$1</code>');
 
-  // Italic: *text* (when not preceded/followed by *)
-  res = res.replace(/(^|[^\*])\*([^\*\n]+?)\*([^\*]|$)/g, '$1<em style="color: #cbd5e1;">$2</em>$3');
+  // Italic: *text*
+  safeText = safeText.replace(/(^|[^\*])\*([^\*\n]+?)\*([^\*]|$)/g, '$1<em style="color: #cbd5e1;">$2</em>$3');
 
-  return res;
+  // 4. Restore math placeholders with rendered KaTeX HTML
+  safeText = safeText.replace(/%%%MATH_HOLDER_(\d+)%%%/g, (_, idx) => {
+    return mathPlaceholders[parseInt(idx, 10)] || "";
+  });
+
+  return safeText;
 }
 
 /**
@@ -203,3 +233,4 @@ export default function MathMarkdown({ content = "", className = "", style = {} 
     />
   );
 }
+

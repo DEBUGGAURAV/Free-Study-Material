@@ -29,6 +29,7 @@ export default function Navbar({
   onOpenHelp,
   onOpenStudyPod,
   onOpenAirDrop,
+  onOpenAiStudyPod,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -280,6 +281,31 @@ export default function Navbar({
               >
                 {isListening ? <MicOff size={14} /> : <Mic size={14} />}
               </button>
+
+              {/* ✨ AI Search & Notes Filter Button */}
+              <button
+                type="button"
+                onClick={onOpenAiStudyPod}
+                style={{
+                  background: "linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(6, 182, 212, 0.28))",
+                  border: "1px solid rgba(139, 92, 246, 0.5)",
+                  color: "#c4b5fd",
+                  borderRadius: "6px",
+                  padding: "2px 7px",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  marginLeft: "2px",
+                }}
+                title="✨ AI Study Pod: Search & Filter Notes with Flashcards & Summary"
+              >
+                <Sparkles size={11} color="#a78bfa" />
+                <span>AI</span>
+              </button>
+
               <kbd className="search-kbd-shortcut">⌘K</kbd>
             </div>
           </div>
@@ -354,6 +380,26 @@ export default function Navbar({
         {/* DECK 2: SUSPENDED HOLOGRAPHIC FEATURE LAUNCHPAD (Desktop & Tablet)
             Every feature shows BOTH Icon + Explicit Label — super easy to find! */}
         <nav className="nav-feature-launchpad" aria-label="Academic Tools & Live Features">
+          {/* ✨ AI Study Pod & Smart Filter */}
+          <button
+            type="button"
+            className="launchpad-pill pill-ai-studypod"
+            onClick={onOpenAiStudyPod}
+            style={{
+              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(6, 182, 212, 0.22))",
+              border: "1.5px solid rgba(139, 92, 246, 0.5)",
+              color: "#c4b5fd",
+              boxShadow: "0 0 12px rgba(139, 92, 246, 0.25)",
+            }}
+            title="✨ AI Study Pod: Search & Filter Notes with Instant Flashcards & Summary"
+          >
+            <Sparkles size={14} color="#a78bfa" />
+            <span>AI Study Pod</span>
+            <span className="live-pill" style={{ background: "linear-gradient(135deg, #8b5cf6, #06b6d4)", color: "#fff" }}>AI</span>
+          </button>
+
+          <span className="launchpad-divider" aria-hidden="true" />
+
           <button
             type="button"
             className="launchpad-pill pill-airdrop"

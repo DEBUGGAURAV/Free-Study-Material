@@ -5215,73 +5215,55 @@ export default function VirtualPdfReader({
           )
         )}
 
-        {/* 🌟 Floating Action Controls (AI Pod + Smart Page Discussion Bridge) */}
+        {/* 🌟 Unified Floating Action Bar (AI Pod + Smart Page Discussion Bridge - Zero Overlap) */}
         {!loading && !error && !isAuthGated && (
           <div
             style={{
               position: "fixed",
-              bottom: "44px",
-              right: "24px",
+              bottom: "26px",
+              right: "20px",
               zIndex: 9999,
               display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: "8px",
-              pointerEvents: "none",
+              alignItems: "center",
+              gap: "6px",
+              background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+              backdropFilter: "blur(14px)",
+              padding: "5px 10px 5px 12px",
+              borderRadius: "999px",
+              border: nightMode ? "1px solid rgba(139, 92, 246, 0.45)" : "1px solid rgba(139, 92, 246, 0.35)",
+              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(139, 92, 246, 0.2)",
+              pointerEvents: "auto",
             }}
           >
-            {/* 🚀 Floating AI Study Pod Trigger Capsule */}
+            {/* 🚀 AI Study Pod Capsule */}
             <button
               type="button"
               onClick={() => setAiStudyPodOpen(true)}
               style={{
-                pointerEvents: "auto",
                 background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
                 color: "#fff",
-                border: "1.5px solid rgba(255, 255, 255, 0.25)",
+                border: "none",
                 borderRadius: "999px",
-                padding: "8px 16px",
-                fontSize: "0.78rem",
+                padding: "6px 14px",
+                fontSize: "0.76rem",
                 fontWeight: 800,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "7px",
-                boxShadow: "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)",
-                backdropFilter: "blur(8px)",
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                gap: "5px",
+                boxShadow: "0 2px 10px rgba(139, 92, 246, 0.4)",
+                transition: "all 0.15s ease",
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
-                e.currentTarget.style.boxShadow = "0 12px 28px rgba(139, 92, 246, 0.6), 0 0 20px rgba(6, 182, 212, 0.5)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "translateY(0) scale(1)";
-                e.currentTarget.style.boxShadow = "0 8px 24px rgba(139, 92, 246, 0.45), 0 0 16px rgba(6, 182, 212, 0.35)";
-              }}
-              title="✨ Open AI Study Pod (Flashcards, Summary & Filter Notes)"
+              title="✨ AI Study Pod: 3D Flashcards & Executive Summary for this note"
             >
-              <Sparkles size={15} />
+              <Sparkles size={13} />
               <span>✨ AI Pod</span>
             </button>
 
-            {/* 💬 Smart Page Discussion & QR Bridge Pill (Preview Mode Only) */}
             {enableDiscussionBridge && (
-              <div
-                style={{
-                  pointerEvents: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  background: nightMode ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.95)",
-                  backdropFilter: "blur(14px)",
-                  padding: "6px 10px 6px 14px",
-                  borderRadius: "999px",
-                  border: nightMode ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid rgba(6, 182, 212, 0.6)",
-                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(6, 182, 212, 0.2)",
-                  animation: "fadeIn 0.2s ease-out",
-                }}
-              >
+              <>
+                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 2px" }} />
+
                 <button
                   type="button"
                   onClick={handleOpenPageDiscussion}
@@ -5289,21 +5271,21 @@ export default function VirtualPdfReader({
                     background: "transparent",
                     border: "none",
                     color: nightMode ? "#38bdf8" : "#0284c7",
-                    fontSize: "0.78rem",
+                    fontSize: "0.76rem",
                     fontWeight: 700,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px",
-                    padding: 0,
+                    gap: "5px",
+                    padding: "4px 8px",
                   }}
                   title={`Open Live Study Pod discussion for Page ${currentPage}`}
                 >
-                  <MessageSquare size={14} color="#06b6d4" />
+                  <MessageSquare size={13} color="#06b6d4" />
                   <span>Stuck on Pg {currentPage}? Discuss</span>
                 </button>
 
-                <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 4px" }} />
+                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 2px" }} />
 
                 <button
                   type="button"
@@ -5315,19 +5297,18 @@ export default function VirtualPdfReader({
                     fontSize: "0.72rem",
                     fontWeight: 700,
                     borderRadius: "999px",
-                    padding: "3px 9px",
+                    padding: "3px 8px",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
-                    transition: "all 0.15s ease",
                   }}
                   title="Scan QR to open this page and chat directly on mobile"
                 >
-                  <QrCode size={13} />
+                  <QrCode size={12} />
                   <span>QR</span>
                 </button>
-              </div>
+              </>
             )}
           </div>
         )}
@@ -5626,7 +5607,7 @@ export default function VirtualPdfReader({
         />
       )}
 
-      {/* ✨ AI Study Pod Modal (Instant 3D Flashcards, Summary & Filter Notes) */}
+      {/* ✨ AI Study Pod Modal (Instant 3D Flashcards & Summary for this Note) */}
       {aiStudyPodOpen && (
         <AiStudyPodModal
           isOpen={aiStudyPodOpen}
@@ -5634,7 +5615,12 @@ export default function VirtualPdfReader({
           noteId={noteId || note?.id}
           noteTitle={title || note?.title || "Lecture Notes"}
           subject={subject || note?.subject || ""}
-          context={ocrStatusText || ""}
+          context={
+            (ragIndexRef.current?.pageTextMap && ragIndexRef.current.pageTextMap.size > 0)
+              ? Array.from(ragIndexRef.current.pageTextMap.values()).join("\n\n").slice(0, 15000)
+              : (note?.ocrText || ocrStatusText || "")
+          }
+          isInsidePdf={true}
           allNotes={[]}
         />
       )}

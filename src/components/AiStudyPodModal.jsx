@@ -19,6 +19,7 @@ import {
   ExternalLink,
   ShieldCheck,
   HelpCircle,
+  Eye,
 } from "lucide-react";
 import { api } from "../api";
 import {
@@ -36,13 +37,36 @@ export default function AiStudyPodModal({
   context = "",
   allNotes = [],
   onSelectNote,
+  onOpenNote,
+  isInsidePdf = false,
+  isHomePage = false,
+  initialTab = null,
 }) {
-  const [activeTab, setActiveTab] = useState("flashcards"); // 'flashcards' | 'summary' | 'search_notes' | 'session_history'
+  const [activeTab, setActiveTab] = useState(
+    initialTab || (isInsidePdf ? "flashcards" : (noteId ? "flashcards" : "search_notes"))
+  );
 
   // Current Active Note State (can be switched via search)
   const [currentNoteId, setCurrentNoteId] = useState(noteId);
   const [currentTitle, setCurrentTitle] = useState(noteTitle);
   const [currentSubject, setCurrentSubject] = useState(subject);
+
+  // Summary user-friendly filter states
+  const [summarySectionFilter, setSummarySectionFilter] = useState("all");
+  const [summaryKeywordSearch, setSummaryKeywordSearch] = useState("");
+
+  // Sync initial tab and mode
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    } else if (isInsidePdf) {
+      setActiveTab("flashcards");
+    } else if (noteId) {
+      setActiveTab("flashcards");
+    } else {
+      setActiveTab("search_notes");
+    }
+  }, [isOpen, initialTab, isInsidePdf, noteId]);
 
   // Flashcards state
   const [flashcards, setFlashcards] = useState([]);
@@ -57,6 +81,44 @@ export default function AiStudyPodModal({
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summarySource, setSummarySource] = useState(null);
   const [copiedSummary, setCopiedSummary] = useState(false);
+
+  // User-Friendly Filtered Summary Computation
+  const displaySummary = useMemo(() => {
+    if (!summary) return "";
+    let content = summary;
+
+    if (summarySectionFilter !== "all") {
+      const sectionKeywords = {
+        blueprint: ["blueprint", "chapter", "topic blueprint", "1."],
+        concepts: ["core concepts", "crucial definitions", "definitions", "2."],
+        formulas: ["formulas", "theorems", "laws", "3."],
+        principles: ["mechanisms", "working principles", "principles", "4."],
+        exam: ["semester exam", "exam questions", "top 5", "5."],
+        cheatsheet: ["cheat-sheet", "rapid revision", "cheat sheet", "6."],
+      };
+      const targets = sectionKeywords[summarySectionFilter] || [];
+      const sections = content.split(/(?=###\s+)/g);
+      const matched = sections.filter((sec) =>
+        targets.some((kw) => sec.toLowerCase().includes(kw))
+      );
+      if (matched.length > 0) {
+        content = matched.join("\n\n");
+      }
+    }
+
+    if (summaryKeywordSearch && summaryKeywordSearch.trim()) {
+      const q = summaryKeywordSearch.trim().toLowerCase();
+      const lines = content.split("\n");
+      const matchedLines = lines.filter((line) =>
+        line.toLowerCase().includes(q) || line.startsWith("###") || line.startsWith("**")
+      );
+      if (matchedLines.length > 0) {
+        content = matchedLines.join("\n");
+      }
+    }
+
+    return content;
+  }, [summary, summarySectionFilter, summaryKeywordSearch]);
 
   // Notes Search & Filter state
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
@@ -405,6 +467,32 @@ export default function AiStudyPodModal({
             overflowX: "auto",
           }}
         >
+          {/* 🔍 Search & Filter Notes Tab (Shown on Home Page, Hidden inside PDF Reader) */}
+          {!isInsidePdf && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("search_notes")}
+              style={{
+                background: activeTab === "search_notes" ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.05)",
+                color: activeTab === "search_notes" ? "#fff" : "var(--text-dim)",
+                border: "none",
+                borderRadius: "10px",
+                padding: "7px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <Filter size={14} />
+              <span>🔍 Filter Notes ({fetchedNotes.length})</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setActiveTab("flashcards")}
@@ -425,7 +513,7 @@ export default function AiStudyPodModal({
             }}
           >
             <Layers size={14} />
-            <span>Flashcards ({flashcards.length})</span>
+            <span>🗂️ Flashcards ({flashcards.length})</span>
           </button>
 
           <button
@@ -448,30 +536,7 @@ export default function AiStudyPodModal({
             }}
           >
             <FileText size={14} />
-            <span>Executive Summary</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("search_notes")}
-            style={{
-              background: activeTab === "search_notes" ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.05)",
-              color: activeTab === "search_notes" ? "#fff" : "var(--text-dim)",
-              border: "none",
-              borderRadius: "10px",
-              padding: "7px 14px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <Filter size={14} />
-            <span>Filter Notes ({fetchedNotes.length})</span>
+            <span>📄 Executive Summary</span>
           </button>
 
           <button
@@ -494,7 +559,7 @@ export default function AiStudyPodModal({
             }}
           >
             <Clock size={14} />
-            <span>Session History ({sessionHistory.length})</span>
+            <span>🕒 Session History ({sessionHistory.length})</span>
           </button>
         </div>
 
@@ -541,7 +606,33 @@ export default function AiStudyPodModal({
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {onOpenNote && currentNoteId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const found = fetchedNotes.find((n) => (n.id || n.noteId) === currentNoteId);
+                        if (found) onOpenNote(found);
+                      }}
+                      style={{
+                        background: "rgba(16, 185, 129, 0.15)",
+                        border: "1px solid rgba(16, 185, 129, 0.4)",
+                        color: "#34d399",
+                        borderRadius: "8px",
+                        padding: "5px 10px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                      title="Open complete document in full Virtual PDF Reader"
+                    >
+                      <Eye size={12} />
+                      <span>Read PDF</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleShuffleCards}
@@ -791,18 +882,43 @@ export default function AiStudyPodModal({
           {/* TAB 2: 📄 EXECUTIVE SUMMARY                                    */}
           {/* ============================================================ */}
           {activeTab === "summary" && (
-            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "14px" }}>
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div>
                   <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
                     Executive Exam Summary
                   </h4>
                   <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#94a3b8" }}>
-                    {summarySource?.cached ? "⚡ 0ms Turso Cache Hit (0 Tokens Burned)" : "Cloud AI Synthesized"}
+                    {summarySource?.cached ? "⚡ 0ms Turso Cache Hit (0 Tokens Burned)" : "Cloud AI Synthesized from Full PDF OCR"}
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                  {onOpenNote && currentNoteId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const found = fetchedNotes.find((n) => (n.id || n.noteId) === currentNoteId);
+                        if (found) onOpenNote(found);
+                      }}
+                      style={{
+                        background: "rgba(16, 185, 129, 0.15)",
+                        border: "1px solid rgba(16, 185, 129, 0.4)",
+                        color: "#34d399",
+                        borderRadius: "8px",
+                        padding: "6px 12px",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      <Eye size={13} />
+                      <span>Read PDF</span>
+                    </button>
+                  )}
                   {summary && (
                     <button
                       type="button"
@@ -846,6 +962,82 @@ export default function AiStudyPodModal({
                   </button>
                 </div>
               </div>
+
+              {/* 🌟 User-Friendly Interactive Sub-Toolbar for Summary */}
+              {summary && !loadingSummary && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", background: "rgba(0, 0, 0, 0.25)", padding: "10px 14px", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                  <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
+                    {[
+                      { id: "all", label: "🌟 All Sections" },
+                      { id: "blueprint", label: "🎯 1. Blueprint" },
+                      { id: "concepts", label: "📌 2. Core Concepts" },
+                      { id: "formulas", label: "⚡ 3. Formulas & Laws" },
+                      { id: "principles", label: "📝 4. Principles" },
+                      { id: "exam", label: "🏆 5. Top 5 Exam Qs" },
+                      { id: "cheatsheet", label: "💡 6. Rapid Cheat-Sheet" },
+                    ].map((sec) => (
+                      <button
+                        key={sec.id}
+                        type="button"
+                        onClick={() => setSummarySectionFilter(sec.id)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: "999px",
+                          fontSize: "0.72rem",
+                          fontWeight: 700,
+                          border: summarySectionFilter === sec.id ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                          background: summarySectionFilter === sec.id ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.04)",
+                          color: summarySectionFilter === sec.id ? "#38bdf8" : "#94a3b8",
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        {sec.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Quick keyword filter inside summary */}
+                  <div style={{ position: "relative" }}>
+                    <Search size={13} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
+                    <input
+                      type="text"
+                      value={summaryKeywordSearch}
+                      onChange={(e) => setSummaryKeywordSearch(e.target.value)}
+                      placeholder="Quick filter within summary (e.g. 'voltage', 'Bernoulli', 'formula')..."
+                      style={{
+                        width: "100%",
+                        padding: "5px 10px 5px 30px",
+                        fontSize: "0.75rem",
+                        background: "rgba(0, 0, 0, 0.3)",
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderRadius: "6px",
+                        color: "#fff",
+                      }}
+                    />
+                    {summaryKeywordSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setSummaryKeywordSearch("")}
+                        style={{
+                          position: "absolute",
+                          right: "8px",
+                          top: "50%",
+                          transform: "translateY(-50%)",
+                          background: "none",
+                          border: "none",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {loadingSummary ? (
                 <div
@@ -921,7 +1113,7 @@ export default function AiStudyPodModal({
                     overflowY: "auto",
                   }}
                 >
-                  <MathMarkdown content={summary} />
+                  <MathMarkdown content={displaySummary} />
                 </div>
               )}
             </div>
@@ -993,22 +1185,86 @@ export default function AiStudyPodModal({
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          style={{
-                            background: isSelected ? "#f59e0b" : "rgba(255, 255, 255, 0.08)",
-                            color: isSelected ? "#000" : "#fff",
-                            border: "none",
-                            borderRadius: "8px",
-                            padding: "6px 12px",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {isSelected ? "Active Note" : "Load Cards & Summary"}
-                        </button>
+                        <div style={{ display: "flex", gap: "6px", flexShrink: 0, flexWrap: "wrap", alignItems: "center" }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectNoteFromSearch(n);
+                              setActiveTab("flashcards");
+                            }}
+                            style={{
+                              background: "rgba(139, 92, 246, 0.2)",
+                              border: "1px solid rgba(139, 92, 246, 0.45)",
+                              color: "#c4b5fd",
+                              borderRadius: "8px",
+                              padding: "6px 10px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Generate & view instant exam flashcards for this note"
+                          >
+                            <Layers size={12} />
+                            <span>Flashcards</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectNoteFromSearch(n);
+                              setActiveTab("summary");
+                            }}
+                            style={{
+                              background: "rgba(2, 132, 199, 0.2)",
+                              border: "1px solid rgba(2, 132, 199, 0.45)",
+                              color: "#38bdf8",
+                              borderRadius: "8px",
+                              padding: "6px 10px",
+                              fontSize: "0.72rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                            title="Generate & view full structured executive summary for this note"
+                          >
+                            <FileText size={12} />
+                            <span>Summary</span>
+                          </button>
+
+                          {onOpenNote && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenNote(n);
+                              }}
+                              style={{
+                                background: "rgba(16, 185, 129, 0.18)",
+                                border: "1px solid rgba(16, 185, 129, 0.45)",
+                                color: "#34d399",
+                                borderRadius: "8px",
+                                padding: "6px 10px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                              title="Open this complete document in the full Virtual PDF Reader"
+                            >
+                              <Eye size={12} />
+                              <span>Read PDF</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })

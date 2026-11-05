@@ -15,6 +15,7 @@ import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
 import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
 import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
+import { clearStudySessionHistory } from "./utils/studentSessionHistory";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
 // AdminModal is dynamically lazy-loaded below
@@ -59,6 +60,7 @@ const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatMod
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdropModal"));
 const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
+const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -157,6 +159,11 @@ export default function App() {
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
   const [airdropInitialMode, setAirdropInitialMode] = useState("qr");
 
+  // 🌟 Home Page AI Study Pod State (Instant Flashcards, Structured Summary & Global Note Filter)
+  const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
+  const [homeAiPodNote, setHomeAiPodNote] = useState(null);
+  const [homeAiPodInitialTab, setHomeAiPodInitialTab] = useState("search_notes");
+
   useEffect(() => {
     try {
       document.title = `${SITE_NAME} — ${SITE_TAGLINE}`;
@@ -173,10 +180,17 @@ export default function App() {
       setAirdropInitialMode("qr");
       setIsAirdropOpen(true);
     };
+    const handleOpenAiPod = (e) => {
+      const detail = e?.detail || {};
+      setHomeAiPodNote(detail.note || null);
+      setHomeAiPodInitialTab(detail.tab || (detail.note ? "flashcards" : "search_notes"));
+      setIsHomeAiPodOpen(true);
+    };
     window.addEventListener("open_student_chat", handleOpenChat);
     window.addEventListener("open_help_desk", handleOpenHelp);
     window.addEventListener("open_study_pod", handleOpenPod);
     window.addEventListener("open_campus_airdrop", handleOpenAirdrop);
+    window.addEventListener("open_ai_study_pod", handleOpenAiPod);
 
     // Auto-open chat, help, study pod, or specific note page if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
@@ -222,6 +236,7 @@ export default function App() {
       window.removeEventListener("open_help_desk", handleOpenHelp);
       window.removeEventListener("open_study_pod", handleOpenPod);
       window.removeEventListener("open_campus_airdrop", handleOpenAirdrop);
+      window.removeEventListener("open_ai_study_pod", handleOpenAiPod);
     };
   }, []);
 
@@ -947,6 +962,9 @@ export default function App() {
     safeStorage.removeItem("vault_last_active");
     setAutoLogoutNotice(null);
     setCurrentUser(null);
+    clearStudySessionHistory();
+    setIsHomeAiPodOpen(false);
+    setHomeAiPodNote(null);
     await api.logout("Manual Session Logout", user);
   };
 
@@ -1284,6 +1302,11 @@ export default function App() {
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenAiStudyPod={(targetTab = "search_notes", note = null) => {
+          setHomeAiPodNote(note);
+          setHomeAiPodInitialTab(targetTab || "search_notes");
+          setIsHomeAiPodOpen(true);
+        }}
         currentUser={currentUser}
         onLogout={handleLogout}
         noticeCount={notices.length}
@@ -2213,6 +2236,35 @@ export default function App() {
                     setPreviewNote(found);
                   }
                 }
+              }}
+            />
+          </ModalErrorBoundary>
+        )}
+
+        {/* 🌟 AI Study Pod Modal (Instant 3D Flashcards, Structured Summary & Global Note Filter) */}
+        {isHomeAiPodOpen && (
+          <ModalErrorBoundary
+            onClose={() => {
+              setIsHomeAiPodOpen(false);
+              setHomeAiPodNote(null);
+            }}
+          >
+            <AiStudyPodModal
+              isOpen={isHomeAiPodOpen}
+              onClose={() => {
+                setIsHomeAiPodOpen(false);
+                setHomeAiPodNote(null);
+              }}
+              noteId={homeAiPodNote?.id}
+              noteTitle={homeAiPodNote?.title}
+              subject={homeAiPodNote?.subject}
+              context={homeAiPodNote?.ocrText || ""}
+              allNotes={notes}
+              isHomePage={true}
+              initialTab={homeAiPodInitialTab}
+              onOpenNote={(note) => {
+                setIsHomeAiPodOpen(false);
+                setPreviewNote(note);
               }}
             />
           </ModalErrorBoundary>

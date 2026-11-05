@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { db } = require("../firebase");
 
 // Authenticate token on all AI routes so req.user is accurately populated
 router.use(authenticateToken);
@@ -255,6 +256,125 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
 });
 
 /**
+ * 🛠️ Robust AI JSON & LaTeX Parser
+ * Safely parses LLM JSON outputs containing unescaped LaTeX backslashes or introductory markdown
+ */
+function safeParseAiJson(rawText) {
+  if (!rawText || typeof rawText !== "string") return null;
+
+  // 1. Strip markdown codeblocks
+  let cleaned = rawText.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+
+  // 2. Extract array bounds
+  const firstBracket = cleaned.indexOf("[");
+  const lastBracket = cleaned.lastIndexOf("]");
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    cleaned = cleaned.substring(firstBracket, lastBracket + 1);
+  }
+
+  // 3. Try standard parse
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch (_) {}
+
+  // 4. Sanitize unescaped LaTeX backslashes in JSON string
+  try {
+    const sanitized = cleaned.replace(/\\(?!["\\/bfnrt]|u[0-9a-fA-F]{4})/g, "\\\\");
+    const parsed = JSON.parse(sanitized);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch (_) {}
+
+  // 5. Aggressive regex-based card extractor for stubborn LLM formats
+  try {
+    const cards = [];
+    const blockRegex = /"question"\s*:\s*"([\s\S]*?)"\s*,\s*"answer"\s*:\s*"([\s\S]*?)"(?:\s*,\s*"category"\s*:\s*"([\s\S]*?)")?/g;
+    let match;
+    while ((match = blockRegex.exec(cleaned)) !== null) {
+      cards.push({
+        question: match[1].replace(/\\n/g, "\n").trim(),
+        answer: match[2].replace(/\\n/g, "\n").trim(),
+        category: (match[3] || "Core Concept").trim(),
+      });
+    }
+    if (cards.length > 0) return cards;
+  } catch (_) {}
+
+  return null;
+}
+
+/**
+ * 🛡️ Sanitize AI Executive Summary
+ * Prevents cut-off math formulas (e.g. "\(P = \frac{1") at token boundary
+ */
+function sanitizeAiSummary(summaryText) {
+  if (!summaryText) return "";
+  let text = String(summaryText).trim();
+
+  // Check unclosed inline math \( ... \)
+  const lastOpenMath = text.lastIndexOf("\\(");
+  const lastCloseMath = text.lastIndexOf("\\)");
+  if (lastOpenMath > lastCloseMath) {
+    const lastNewline = text.lastIndexOf("\n");
+    if (lastOpenMath > lastNewline && lastNewline > 0) {
+      text = text.substring(0, lastNewline).trim();
+    } else {
+      text = text + " \\)";
+    }
+  }
+
+  // Check unclosed block math \[ ... \]
+  const lastOpenBlock = text.lastIndexOf("\\[");
+  const lastCloseBlock = text.lastIndexOf("\\]");
+  if (lastOpenBlock > lastCloseBlock) {
+    const lastNewline = text.lastIndexOf("\n");
+    if (lastOpenBlock > lastNewline && lastNewline > 0) {
+      text = text.substring(0, lastNewline).trim();
+    } else {
+      text = text + " \\]";
+    }
+  }
+
+  return text;
+}
+
+/**
+ * Pull rich note metadata & full OCR text from Firestore so flashcards & summaries
+ * reflect the complete, authentic contents of the PDF!
+ */
+async function getNoteFullContext(noteId, clientContext = "") {
+  let combined = (clientContext || "").trim();
+  if (!noteId || !db) return combined;
+
+  try {
+    const doc = await db.collection("notes").doc(noteId).get();
+    if (doc.exists) {
+      const data = doc.data() || {};
+      const ocr = (data.ocrText || "").trim();
+      const desc = (data.description || "").trim();
+      const extraParts = [];
+      if (data.title) extraParts.push(`Document Title: ${data.title}`);
+      if (data.subject) extraParts.push(`Academic Subject: ${data.subject}`);
+      if (data.branch) extraParts.push(`Branch: ${data.branch}`);
+      if (data.semester) extraParts.push(`Semester: ${data.semester}`);
+      if (desc && !desc.includes("TECH TITAN STORAGE") && !desc.includes("Synced from Telegram")) {
+        extraParts.push(`Document Overview: ${desc}`);
+      }
+      if (ocr) {
+        extraParts.push(`Complete PDF Extracted Content & OCR Text:\n${ocr.slice(0, 10000)}`);
+      }
+      const noteDetails = extraParts.join("\n\n");
+      if (noteDetails) {
+        combined = combined ? `${combined}\n\n[Database Note Details & OCR Content]:\n${noteDetails}` : noteDetails;
+      }
+    }
+  } catch (err) {
+    console.warn("[AI-ROUTE] Could not pull note document text from database:", err.message);
+  }
+  return combined;
+}
+
+/**
  * 🗂️ POST /api/ai/flashcards
  * Generates or retrieves cached study flashcards for a note/PDF (0ms Turso Cache)
  */
@@ -267,7 +387,6 @@ router.post("/flashcards", studentAiLimiter, async (req, res) => {
     }
 
     const cleanTitle = String(title || "Lecture Notes").trim().slice(0, 200);
-    const cleanContext = String(context || "").trim().slice(0, 15000);
     const hashKey = `flashcards_${noteId || "note"}_${cleanTitle}`;
     const queryHash = computeQueryHash(hashKey);
 
@@ -304,45 +423,51 @@ router.post("/flashcards", studentAiLimiter, async (req, res) => {
       }
     }
 
-    // 2. Cache Miss: Generate Fresh Flashcards using AI Waterfall
-    const prompt = `Generate 6 to 8 high-yield exam flashcards for college engineering/science students studying "${cleanTitle}" [Subject: ${subject || "Engineering"}].
-Context Excerpt:
-${cleanContext.slice(0, 4000) || cleanTitle}
+    // Pull full authentic PDF OCR text from Firestore & client
+    const enrichedContext = await getNoteFullContext(noteId, context);
+
+    // 2. Cache Miss: Generate Fresh Comprehensive Flashcards using AI Waterfall
+    const prompt = `You are an expert college professor creating an exhaustive, highly detailed study flashcard deck for engineering/science students studying "${cleanTitle}" [Subject: ${subject || "Engineering"}].
+Based on the thorough lecture notes and OCR text provided below, generate 8 to 12 comprehensive, deeply detailed exam flashcards.
+
+Rules for high quality:
+1. Cover every major aspect of the document: fundamental principles, crucial formulas, derivations, comparisons, step-by-step algorithms, and common exam questions.
+2. In the "answer", do NOT give lazy 1-line answers! Provide full, deep, educational explanations with clear variable meanings, step-by-step reasoning, and standard LaTeX notation like \\(P = \\frac{1}{2}\\rho A v^3\\).
+3. Assign appropriate categories: "Core Concept", "Formula & Derivation", "Key Theorem", "Exam Problem", or "Comparison".
+
+Context Notes & Document OCR Text:
+${enrichedContext.slice(0, 8500) || cleanTitle}
 
 Return ONLY a valid JSON array of objects with this exact structure without markdown backticks:
 [
   {
-    "question": "Clear concept, definition or formula question",
-    "answer": "Accurate, high-yield explanation with formula if applicable using standard LaTeX notation like \\(x = \\pm 2\\)",
-    "category": "Formula"
+    "question": "Clear, detailed concept, definition or problem question",
+    "answer": "Thorough, comprehensive explanation with formulas if applicable using LaTeX \\(x = \\pm 2\\)",
+    "category": "Core Concept"
   }
 ]`;
 
-    const result = await generateAcademicAnswer(prompt, cleanContext, {
+    const result = await generateAcademicAnswer(prompt, enrichedContext, {
       noteId,
       user: req.user,
       noteTitle: cleanTitle,
       subject,
       queryType: "flashcards",
-      maxTokens: 1600,
+      maxTokens: 1800,
     });
 
     let flashcards = [];
     if (result && result.answer) {
-      try {
-        const cleanJsonStr = result.answer.replace(/```json/gi, "").replace(/```/g, "").trim();
-        flashcards = JSON.parse(cleanJsonStr);
-      } catch (_) {
-        flashcards = [
-          { question: `What is the core principle of ${cleanTitle}?`, answer: result.answer.slice(0, 200), category: "Key Concept" },
-          { question: "What is an important exam takeaway?", answer: "Review definitions and practice core formulas.", category: "Exam Question" },
-        ];
-      }
+      flashcards = safeParseAiJson(result.answer) || [];
     }
 
     if (!Array.isArray(flashcards) || flashcards.length === 0) {
       flashcards = [
-        { question: `Key principles of ${cleanTitle}`, answer: cleanContext.slice(0, 250) || "Study key derivations and formulas.", category: "Overview" },
+        {
+          question: `What are the core engineering concepts in ${cleanTitle}?`,
+          answer: enrichedContext.slice(0, 500) || "Comprehensive study of concepts, laws, and exam definitions.",
+          category: "Core Concept",
+        },
       ];
     }
 
@@ -376,7 +501,6 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
     }
 
     const cleanTitle = String(title || "Lecture Notes").trim().slice(0, 200);
-    const cleanContext = String(context || "").trim().slice(0, 15000);
     const hashKey = `summary_${noteId || "note"}_${cleanTitle}`;
     const queryHash = computeQueryHash(hashKey);
 
@@ -391,7 +515,7 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
        cachedSolution.answer.trim().endsWith("{1") ||
        cachedSolution.answer.trim().endsWith("\\frac{") ||
        !cachedSolution.answer.includes("💡") ||
-       cachedSolution.answer.length < 180)
+       cachedSolution.answer.length < 250)
     );
 
     if (cachedSolution && cachedSolution.answer && !isTruncatedCache) {
@@ -418,26 +542,46 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
       });
     }
 
-    // 2. Cache Miss: Generate Fresh Summary using AI Waterfall
-    const prompt = `Provide an Executive Exam Summary of "${cleanTitle}" [Subject: ${subject || "Engineering"}].
-Structure strictly with these 3 sections:
-- 📌 Core Summary (5-7 clear high-yield bullet points)
-- ⚡ Key Formulas & Theorems (with standard LaTeX notation like \\(P = \\frac{1}{2}\\rho A v^3\\) or \\(q = k \\frac{\\Delta T}{\\Delta z}\\))
-- 💡 Exam Takeaways (vital definitions and likely semester exam questions)
+    // Pull full authentic PDF OCR text from Firestore & client
+    const enrichedContext = await getNoteFullContext(noteId, context);
 
-Context Notes Excerpt:
-${cleanContext.slice(0, 5000) || cleanTitle}`;
+    // 2. Cache Miss: Generate Fresh User-Friendly Executive Summary using AI Waterfall
+    const prompt = `You are a distinguished university professor creating an authoritative, deeply structured, and user-friendly Executive Study Summary for college students studying "${cleanTitle}" [Subject: ${subject || "Engineering"}].
+Based on the complete lecture notes and OCR text below, write an engaging, crystal-clear, exam-oriented synthesis.
 
-    const result = await generateAcademicAnswer(prompt, cleanContext, {
+Format strictly with these clean, visually distinct sections:
+### 🎯 1. Chapter & Topic Blueprint
+Explain what this entire material covers in 3-4 friendly, crystal-clear sentences so any student understands the big picture instantly.
+
+### 📌 2. Core Concepts & Crucial Definitions
+Provide 6 to 8 deep, high-yield bullet points breaking down each key concept, law, or mechanism in simple, intuitive terms.
+
+### ⚡ 3. Key Formulas, Laws & Theorems
+List all important mathematical formulas and laws in standard LaTeX notation like \\(P = \\frac{1}{2}\\rho A v^3\\). Under each formula, clearly state what each variable represents (e.g. \\(P\\) = Power, \\(\\rho\\) = Density, \\(A\\) = Area, \\(v\\) = Velocity).
+
+### 📝 4. Step-by-Step Mechanisms & Working Principles
+Explain the physical workflow, algorithm, or derivation steps systematically with numbered steps.
+
+### 🏆 5. Top 5 High-Yield Semester Exam Questions
+List 5 essential questions professors frequently ask in university exams along with concise, model scoring answers.
+
+### 💡 6. Rapid Revision Cheat-Sheet
+Provide 4-5 bulleted quick-revision golden rules for students to review right before entering the exam hall.
+
+Context Notes & Document OCR Text:
+${enrichedContext.slice(0, 9500) || cleanTitle}`;
+
+    const result = await generateAcademicAnswer(prompt, enrichedContext, {
       noteId,
       user: req.user,
       noteTitle: cleanTitle,
       subject,
       queryType: "summary",
-      maxTokens: 1600,
+      maxTokens: 1800,
     });
 
-    const summaryText = result?.answer || "Summary generation completed.";
+    let summaryText = result?.answer || "Summary generation completed.";
+    summaryText = sanitizeAiSummary(summaryText);
 
     // Save to Turso Cache in the same database!
     saveCircleSolution(queryHash, `Summary: ${cleanTitle}`, summaryText, result.provider, result.model).catch(() => {});
