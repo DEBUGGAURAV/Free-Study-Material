@@ -1276,6 +1276,10 @@ export const api = {
     const sp = new URLSearchParams(params).toString();
     return request(`/ai/admin/recent-searches${sp ? `?${sp}` : ""}`);
   },
+  getAiStudentsSummary: (params = {}) => {
+    const sp = new URLSearchParams(params).toString();
+    return request(`/ai/admin/students${sp ? `?${sp}` : ""}`);
+  },
   getAiReportDownloadUrl: (format = "csv", search = "") => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
     return `/api/ai/admin/export-report?format=${format}&search=${encodeURIComponent(search)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;

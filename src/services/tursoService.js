@@ -960,23 +960,35 @@ async function logAiSearchToTurso({
 /**
  * 📥 Fetch recent AI search logs from Turso for reports / admin view
  */
-async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
+async function getAiSearchLogsFromTurso({ limit = 50, search = "", userId = null, userEmail = null } = {}) {
   const targetClient = getAiTursoClient() || client;
   if (!targetClient) return [];
   try {
     const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
-    let sql = `SELECT * FROM ai_search_logs ORDER BY createdAt DESC LIMIT ?`;
-    let args = [safeLimit];
+    let sql = `SELECT * FROM ai_search_logs`;
+    let conditions = [];
+    let args = [];
+
+    if (userId) {
+      conditions.push(`(userId = ? OR userEmail = ?)`);
+      args.push(String(userId), String(userId));
+    } else if (userEmail) {
+      conditions.push(`LOWER(userEmail) = ?`);
+      args.push(String(userEmail).toLowerCase());
+    }
 
     if (search && search.trim()) {
       const q = `%${search.trim().toLowerCase()}%`;
-      sql = `
-        SELECT * FROM ai_search_logs 
-        WHERE LOWER(query) LIKE ? OR LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(noteTitle) LIKE ?
-        ORDER BY createdAt DESC LIMIT ?
-      `;
-      args = [q, q, q, q, safeLimit];
+      conditions.push(`(LOWER(query) LIKE ? OR LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(userMobile) LIKE ? OR LOWER(noteTitle) LIKE ? OR LOWER(provider) LIKE ?)`);
+      args.push(q, q, q, q, q, q);
     }
+
+    if (conditions.length > 0) {
+      sql += ` WHERE ` + conditions.join(" AND ");
+    }
+
+    sql += ` ORDER BY createdAt DESC LIMIT ?`;
+    args.push(safeLimit);
 
     const res = await targetClient.execute({ sql, args });
     return (res.rows || []).map((r) => ({
@@ -996,6 +1008,58 @@ async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
     }));
   } catch (err) {
     console.warn("[TURSO] Fetch AI search logs error:", err.message);
+    return [];
+  }
+}
+
+/**
+ * 👥 Fetch unique students summary who used AI / Circle Search
+ */
+async function getAiStudentsSummaryFromTurso({ limit = 100, search = "" } = {}) {
+  const targetClient = getAiTursoClient() || client;
+  if (!targetClient) return [];
+  try {
+    const safeLimit = Math.min(300, Math.max(1, parseInt(limit, 10) || 100));
+    let sql = `
+      SELECT 
+        COALESCE(NULLIF(userId, ''), NULLIF(userEmail, ''), NULLIF(userName, ''), 'anonymous') as studentKey,
+        MAX(userId) as userId,
+        MAX(userName) as userName,
+        MAX(userEmail) as userEmail,
+        MAX(userMobile) as userMobile,
+        COUNT(*) as totalQueries,
+        SUM(CASE WHEN cached = 1 THEN 1 ELSE 0 END) as cachedQueries,
+        MAX(createdAt) as lastSearchAt,
+        GROUP_CONCAT(DISTINCT provider) as enginesUsed
+      FROM ai_search_logs
+    `;
+    let args = [];
+
+    if (search && search.trim()) {
+      const q = `%${search.trim().toLowerCase()}%`;
+      sql += ` WHERE LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(userMobile) LIKE ?`;
+      args.push(q, q, q);
+    }
+
+    sql += ` GROUP BY COALESCE(NULLIF(userId, ''), NULLIF(userEmail, ''), NULLIF(userName, ''), 'anonymous')
+             ORDER BY lastSearchAt DESC
+             LIMIT ?`;
+    args.push(safeLimit);
+
+    const res = await targetClient.execute({ sql, args });
+    return (res.rows || []).map((r) => ({
+      studentKey: r.studentKey,
+      userId: r.userId,
+      userName: r.userName || "Student Scholar",
+      userEmail: r.userEmail || "anonymous",
+      userMobile: r.userMobile || null,
+      totalQueries: Number(r.totalQueries || 0),
+      cachedQueries: Number(r.cachedQueries || 0),
+      lastSearchAt: r.lastSearchAt,
+      enginesUsed: r.enginesUsed || "groq",
+    }));
+  } catch (err) {
+    console.warn("[TURSO] Fetch AI students summary error:", err.message);
     return [];
   }
 }
@@ -1344,6 +1408,7 @@ module.exports = {
   archiveUserNotesInTurso,
   logAiSearchToTurso,
   getAiSearchLogsFromTurso,
+  getAiStudentsSummaryFromTurso,
   getTursoAiTelemetry,
   pruneAiSearchLogs,
   logAccountPurgeToTurso,

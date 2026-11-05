@@ -25,6 +25,11 @@ import {
   MessageSquare,
   Sliders,
   Save,
+  User,
+  Eye,
+  X,
+  Filter,
+  ChevronRight,
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -64,6 +69,15 @@ export default function TabAiEngine() {
   const [loadingAiLogs, setLoadingAiLogs] = useState(false);
   const [aiSearchFilter, setAiSearchFilter] = useState("");
 
+  // Student-wise AI Search Explorer
+  const [searchViewMode, setSearchViewMode] = useState("stream"); // "stream" | "students"
+  const [studentsSummary, setStudentsSummary] = useState([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentSearchFilter, setStudentSearchFilter] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState(null); // { userId, userName, userEmail, userMobile }
+  const [studentSpecificLogs, setStudentSpecificLogs] = useState([]);
+  const [loadingStudentLogs, setLoadingStudentLogs] = useState(false);
+
   const loadAiLogs = async (search = "") => {
     try {
       setLoadingAiLogs(true);
@@ -75,6 +89,40 @@ export default function TabAiEngine() {
       console.warn("[AI-ENGINE] Failed to fetch AI logs:", err.message);
     } finally {
       setLoadingAiLogs(false);
+    }
+  };
+
+  const loadStudentsSummary = async (search = "") => {
+    try {
+      setLoadingStudents(true);
+      const res = await api.getAiStudentsSummary({ limit: 150, search });
+      if (res && res.success) {
+        setStudentsSummary(res.students || []);
+      }
+    } catch (err) {
+      console.warn("[AI-ENGINE] Failed to fetch AI students summary:", err.message);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
+  const loadStudentSpecificLogs = async (student) => {
+    if (!student) return;
+    try {
+      setSelectedStudent(student);
+      setLoadingStudentLogs(true);
+      const res = await api.getAiRecentSearches({
+        limit: 100,
+        userId: student.userId || "",
+        userEmail: student.userEmail || "",
+      });
+      if (res && res.success) {
+        setStudentSpecificLogs(res.logs || []);
+      }
+    } catch (err) {
+      showNotice("Failed to fetch student searches: " + err.message, "error");
+    } finally {
+      setLoadingStudentLogs(false);
     }
   };
 
@@ -124,6 +172,7 @@ export default function TabAiEngine() {
   useEffect(() => {
     loadTelemetry();
     loadAiLogs();
+    loadStudentsSummary();
   }, []);
 
   useEffect(() => {
@@ -1745,113 +1794,493 @@ export default function TabAiEngine() {
           </div>
         </div>
 
-        {/* Search Bar Filter */}
-        <div style={{ display: "flex", gap: "8px" }}>
-          <div style={{ position: "relative", flex: 1 }}>
-            <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
-            <input
-              type="text"
-              value={aiSearchFilter}
-              onChange={(e) => setAiSearchFilter(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") loadAiLogs(aiSearchFilter);
+        {/* View Mode Switcher: All Stream vs Student-Wise Explorer */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "8px", background: "rgba(0, 0, 0, 0.3)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchViewMode("stream");
+                setSelectedStudent(null);
               }}
-              placeholder="Search by student name, email, query keyword, or note title..."
               style={{
-                width: "100%",
-                padding: "8px 12px 8px 34px",
-                fontSize: "0.8rem",
+                background: searchViewMode === "stream" && !selectedStudent ? "linear-gradient(135deg, #0284c7, #06b6d4)" : "transparent",
+                color: searchViewMode === "stream" && !selectedStudent ? "#fff" : "var(--text-dim)",
+                border: "none",
                 borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                background: "rgba(0, 0, 0, 0.25)",
-                color: "#fff",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.2s ease",
               }}
-            />
+            >
+              <Activity size={14} />
+              <span>All Searches Stream ({aiLogs.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchViewMode("students");
+                setSelectedStudent(null);
+                loadStudentsSummary(studentSearchFilter);
+              }}
+              style={{
+                background: searchViewMode === "students" || selectedStudent ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "transparent",
+                color: searchViewMode === "students" || selectedStudent ? "#fff" : "var(--text-dim)",
+                border: "none",
+                borderRadius: "8px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <Users size={14} />
+              <span>Student-Wise Explorer ({studentsSummary.length})</span>
+            </button>
           </div>
+
           <button
             type="button"
-            onClick={() => loadAiLogs(aiSearchFilter)}
-            className="btn-primary"
-            style={{ padding: "8px 16px", fontSize: "0.8rem" }}
+            onClick={() => {
+              loadAiLogs(aiSearchFilter);
+              loadStudentsSummary(studentSearchFilter);
+              if (selectedStudent) loadStudentSpecificLogs(selectedStudent);
+            }}
+            disabled={loadingAiLogs || loadingStudents || loadingStudentLogs}
+            className="btn-secondary"
+            style={{ padding: "6px 12px", fontSize: "0.76rem" }}
+            title="Refresh logs & students"
           >
-            Search
+            <RefreshCw size={13} className={(loadingAiLogs || loadingStudents || loadingStudentLogs) ? "animate-spin" : ""} />
+            <span>Refresh</span>
           </button>
         </div>
 
-        {/* Turso AI Logs Table */}
-        <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
-            <thead>
-              <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
-                <th style={{ padding: "10px 12px" }}>Time (UTC)</th>
-                <th style={{ padding: "10px 12px" }}>Student Details</th>
-                <th style={{ padding: "10px 12px" }}>Query / Question</th>
-                <th style={{ padding: "10px 12px" }}>Engine & Model</th>
-                <th style={{ padding: "10px 12px" }}>Latency</th>
-                <th style={{ padding: "10px 12px" }}>Doc Context</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingAiLogs ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
-                    <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
-                    Loading Turso search logs...
-                  </td>
-                </tr>
-              ) : aiLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
-                    No AI search logs found in Turso table. Student searches will appear here in real-time.
-                  </td>
-                </tr>
-              ) : (
-                aiLogs.map((log) => (
-                  <tr
-                    key={log.id}
+        {/* ============================================================== */}
+        {/* 1. DEDICATED STUDENT DOSSIER VIEW (When a student is inspected) */}
+        {/* ============================================================== */}
+        {selectedStudent && (
+          <div
+            style={{
+              background: "rgba(139, 92, 246, 0.08)",
+              border: "1px solid rgba(139, 92, 246, 0.35)",
+              borderRadius: "14px",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              boxShadow: "0 8px 24px rgba(139, 92, 246, 0.12)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <User size={18} color="#a78bfa" />
+                  <h4 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                    {selectedStudent.userName || "Student Scholar"}
+                  </h4>
+                  <span
                     style={{
-                      borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
-                      transition: "background 0.15s ease",
+                      background: "rgba(139, 92, 246, 0.25)",
+                      color: "#c4b5fd",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
                     }}
                   >
-                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-                      {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
-                    </td>
-                    <td style={{ padding: "10px 12px" }}>
-                      <div style={{ fontWeight: 600, color: "#f8fafc" }}>{log.userName || "Student"}</div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{log.userEmail || "anonymous"}</div>
-                      {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>📱 {log.userMobile}</div>}
-                    </td>
-                    <td style={{ padding: "10px 12px", maxWidth: "300px" }}>
-                      <div style={{ color: "#e2e8f0", wordBreak: "break-word" }}>{log.query}</div>
-                    </td>
-                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      <span
+                    {studentSpecificLogs.length} Questions Asked
+                  </span>
+                </div>
+                <div style={{ display: "flex", gap: "14px", fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "4px", flexWrap: "wrap" }}>
+                  <span>📧 <code>{selectedStudent.userEmail || "anonymous"}</code></span>
+                  {selectedStudent.userMobile && <span>📱 <code>{selectedStudent.userMobile}</code></span>}
+                  {selectedStudent.userId && <span>🆔 <code>{selectedStudent.userId}</code></span>}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudent(null)}
+                  className="btn-secondary"
+                  style={{
+                    padding: "6px 14px",
+                    fontSize: "0.76rem",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    background: "rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  <X size={13} />
+                  <span>Close Dossier</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Student Specific Logs Table */}
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)", background: "rgba(0,0,0,0.25)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                    <th style={{ padding: "8px 12px" }}>Time (UTC)</th>
+                    <th style={{ padding: "8px 12px" }}>Student Query / Circled Formula</th>
+                    <th style={{ padding: "8px 12px" }}>Engine & Model</th>
+                    <th style={{ padding: "8px 12px" }}>Latency</th>
+                    <th style={{ padding: "8px 12px" }}>Document Context</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingStudentLogs ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)" }}>
+                        <RefreshCw size={16} className="animate-spin" style={{ margin: "0 auto 6px auto", display: "block" }} />
+                        Loading student query history...
+                      </td>
+                    </tr>
+                  ) : studentSpecificLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)" }}>
+                        No searches recorded for this student yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    studentSpecificLogs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                          {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
+                        </td>
+                        <td style={{ padding: "8px 12px", maxWidth: "420px" }}>
+                          <div style={{ color: "#e2e8f0", wordBreak: "break-word", fontWeight: 500 }}>{log.query}</div>
+                        </td>
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              background: log.provider === "groq" ? "rgba(249, 115, 22, 0.15)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.15)" : (log.provider?.includes("cloudflare") ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)"),
+                              color: log.provider === "groq" ? "#fb923c" : log.provider === "gemini" ? "#818cf8" : (log.provider?.includes("cloudflare") ? "#fbbf24" : "#34d399"),
+                              border: "1px solid rgba(255, 255, 255, 0.1)",
+                            }}
+                          >
+                            {String(log.provider).toUpperCase()} ({log.model || "Default"})
+                          </span>
+                        </td>
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                          {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
+                        </td>
+                        <td style={{ padding: "8px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                          {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 2. STUDENT-WISE DIRECTORY VIEW (List of all students)           */}
+        {/* ============================================================== */}
+        {!selectedStudent && searchViewMode === "students" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* Student Search Bar */}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <input
+                  type="text"
+                  value={studentSearchFilter}
+                  onChange={(e) => setStudentSearchFilter(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") loadStudentsSummary(studentSearchFilter);
+                  }}
+                  placeholder="Search student by name, email, or mobile number..."
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 34px",
+                    fontSize: "0.8rem",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "rgba(0, 0, 0, 0.25)",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => loadStudentsSummary(studentSearchFilter)}
+                className="btn-primary"
+                style={{ padding: "8px 16px", fontSize: "0.8rem" }}
+              >
+                Search Students
+              </button>
+            </div>
+
+            {/* Students Table */}
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                    <th style={{ padding: "10px 12px" }}>Student Profile</th>
+                    <th style={{ padding: "10px 12px" }}>Contact Info</th>
+                    <th style={{ padding: "10px 12px" }}>Total Queries</th>
+                    <th style={{ padding: "10px 12px" }}>0ms Cache Saved</th>
+                    <th style={{ padding: "10px 12px" }}>Engines Used</th>
+                    <th style={{ padding: "10px 12px" }}>Last Search</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Inspect</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingStudents ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                        <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
+                        Loading student directory...
+                      </td>
+                    </tr>
+                  ) : studentsSummary.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                        No students have queried AI yet. When students use Circle to Search or Ask AI, their profiles will appear here.
+                      </td>
+                    </tr>
+                  ) : (
+                    studentsSummary.map((st, idx) => (
+                      <tr
+                        key={st.studentKey || idx}
                         style={{
-                          padding: "2px 8px",
-                          borderRadius: "6px",
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          background: log.provider === "groq" ? "rgba(249, 115, 22, 0.15)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                          color: log.provider === "groq" ? "#fb923c" : log.provider === "gemini" ? "#818cf8" : "#34d399",
-                          border: `1px solid ${log.provider === "groq" ? "rgba(249, 115, 22, 0.35)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.35)" : "rgba(16, 185, 129, 0.35)"}`,
+                          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                          transition: "background 0.15s ease",
                         }}
                       >
-                        {String(log.provider).toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
-                      {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
-                    </td>
-                    <td style={{ padding: "10px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
-                      {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
-                    </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <User size={14} color="#38bdf8" />
+                            <span>{st.userName || "Student Scholar"}</span>
+                          </div>
+                          {st.userId && <div style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>ID: {st.userId}</div>}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#e2e8f0" }}>{st.userEmail || "anonymous"}</div>
+                          {st.userMobile && <div style={{ fontSize: "0.68rem", color: "#34d399" }}>📱 {st.userMobile}</div>}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <strong style={{ color: "#38bdf8", fontSize: "0.85rem" }}>{st.totalQueries}</strong> searches
+                        </td>
+                        <td style={{ padding: "10px 12px", color: "#34d399" }}>
+                          {st.cachedQueries > 0 ? `🎯 ${st.cachedQueries} (0ms)` : "0"}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                            {String(st.enginesUsed || "groq").split(",").map((eng, eIdx) => (
+                              <span
+                                key={eIdx}
+                                style={{
+                                  fontSize: "0.65rem",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  background: "rgba(255, 255, 255, 0.06)",
+                                  color: "#94a3b8",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {eng.trim().toUpperCase()}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 12px", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                          {st.lastSearchAt ? st.lastSearchAt.replace("T", " ").slice(0, 16) : "N/A"}
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                          <button
+                            type="button"
+                            onClick={() => loadStudentSpecificLogs(st)}
+                            className="btn-primary"
+                            style={{
+                              padding: "4px 12px",
+                              fontSize: "0.74rem",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "5px",
+                              background: "linear-gradient(135deg, #8b5cf6, #6366f1)",
+                            }}
+                          >
+                            <Eye size={12} />
+                            <span>View Searches ({st.totalQueries})</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 3. ALL SEARCHES STREAM TABLE (With inline View Searches button) */}
+        {/* ============================================================== */}
+        {!selectedStudent && searchViewMode === "stream" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* Search Bar Filter */}
+            <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ position: "relative", flex: 1 }}>
+                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <input
+                  type="text"
+                  value={aiSearchFilter}
+                  onChange={(e) => setAiSearchFilter(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") loadAiLogs(aiSearchFilter);
+                  }}
+                  placeholder="Search by student name, email, query keyword, or note title..."
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px 8px 34px",
+                    fontSize: "0.8rem",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "rgba(0, 0, 0, 0.25)",
+                    color: "#fff",
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => loadAiLogs(aiSearchFilter)}
+                className="btn-primary"
+                style={{ padding: "8px 16px", fontSize: "0.8rem" }}
+              >
+                Search
+              </button>
+            </div>
+
+            {/* Turso AI Logs Table */}
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                    <th style={{ padding: "10px 12px" }}>Time (UTC)</th>
+                    <th style={{ padding: "10px 12px" }}>Student Details</th>
+                    <th style={{ padding: "10px 12px" }}>Query / Question</th>
+                    <th style={{ padding: "10px 12px" }}>Engine & Model</th>
+                    <th style={{ padding: "10px 12px" }}>Latency</th>
+                    <th style={{ padding: "10px 12px" }}>Doc Context</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {loadingAiLogs ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                        <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
+                        Loading Turso search logs...
+                      </td>
+                    </tr>
+                  ) : aiLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                        No AI search logs found in Turso table. Student searches will appear here in real-time.
+                      </td>
+                    </tr>
+                  ) : (
+                    aiLogs.map((log) => (
+                      <tr
+                        key={log.id}
+                        style={{
+                          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                          transition: "background 0.15s ease",
+                        }}
+                      >
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                          {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <div style={{ fontWeight: 600, color: "#f8fafc" }}>{log.userName || "Student"}</div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                loadStudentSpecificLogs({
+                                  userId: log.userId,
+                                  userName: log.userName,
+                                  userEmail: log.userEmail,
+                                  userMobile: log.userMobile,
+                                });
+                              }}
+                              title="Inspect this student's full search history"
+                              style={{
+                                background: "rgba(139, 92, 246, 0.15)",
+                                border: "1px solid rgba(139, 92, 246, 0.35)",
+                                color: "#c4b5fd",
+                                borderRadius: "6px",
+                                padding: "2px 7px",
+                                fontSize: "0.68rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
+                              }}
+                            >
+                              <Eye size={10} />
+                              <span>View Searches</span>
+                            </button>
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{log.userEmail || "anonymous"}</div>
+                          {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>📱 {log.userMobile}</div>}
+                        </td>
+                        <td style={{ padding: "10px 12px", maxWidth: "300px" }}>
+                          <div style={{ color: "#e2e8f0", wordBreak: "break-word" }}>{log.query}</div>
+                        </td>
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "6px",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                              background: log.provider === "groq" ? "rgba(249, 115, 22, 0.15)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.15)" : (log.provider?.includes("cloudflare") ? "rgba(245, 158, 11, 0.15)" : "rgba(16, 185, 129, 0.15)"),
+                              color: log.provider === "groq" ? "#fb923c" : log.provider === "gemini" ? "#818cf8" : (log.provider?.includes("cloudflare") ? "#fbbf24" : "#34d399"),
+                              border: `1px solid ${log.provider === "groq" ? "rgba(249, 115, 22, 0.35)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.35)" : "rgba(16, 185, 129, 0.35)"}`,
+                            }}
+                          >
+                            {String(log.provider).toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                          {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
+                        </td>
+                        <td style={{ padding: "10px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                          {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

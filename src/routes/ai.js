@@ -17,6 +17,7 @@ const {
 } = require("../services/aiService");
 const {
   getAiSearchLogsFromTurso,
+  getAiStudentsSummaryFromTurso,
   getAccountPurgeLogsFromTurso,
   exportPurgeAuditReport,
 } = require("../services/tursoService");
@@ -411,8 +412,24 @@ router.get("/admin/recent-searches", authenticateToken, requireAdmin, async (req
   try {
     const safeLimit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 50));
     const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
-    const logs = await getAiSearchLogsFromTurso({ limit: safeLimit, search });
+    const userId = typeof req.query.userId === "string" ? req.query.userId.trim() : null;
+    const userEmail = typeof req.query.userEmail === "string" ? req.query.userEmail.trim() : null;
+    const logs = await getAiSearchLogsFromTurso({ limit: safeLimit, search, userId, userEmail });
     return res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN AI STUDENTS SUMMARY: GET /api/ai/admin/students
+ */
+router.get("/admin/students", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const safeLimit = Math.min(300, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
+    const students = await getAiStudentsSummaryFromTurso({ limit: safeLimit, search });
+    return res.json({ success: true, count: students.length, students });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
