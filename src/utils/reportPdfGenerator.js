@@ -58,6 +58,7 @@ function truncateText(str, maxLen = 30) {
  * 🤖 Generate Branded PDF for AI Search Query History
  */
 async function generateAiSearchPdfReport(logs = [], meta = {}) {
+  const safeLogs = (logs || []).slice(0, 500);
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -67,10 +68,10 @@ async function generateAiSearchPdfReport(logs = [], meta = {}) {
   const marginX = 36;
   const contentWidth = pageWidth - marginX * 2; // 523.28
 
-  const totalLogs = logs.length;
-  const totalCached = logs.filter((l) => l.cached).length;
+  const totalLogs = safeLogs.length;
+  const totalCached = safeLogs.filter((l) => l.cached).length;
   const cacheHitRate = totalLogs > 0 ? ((totalCached / totalLogs) * 100).toFixed(1) + "%" : "0.0%";
-  const avgLatency = totalLogs > 0 ? Math.round(logs.reduce((acc, l) => acc + (Number(l.latencyMs) || 0), 0) / totalLogs) + " ms" : "0 ms";
+  const avgLatency = totalLogs > 0 ? Math.round(safeLogs.reduce((acc, l) => acc + (Number(l.latencyMs) || 0), 0) / totalLogs) + " ms" : "0 ms";
 
   const rowsPerPage = 24;
   const totalPages = Math.max(1, Math.ceil((Math.max(1, totalLogs)) / rowsPerPage));
@@ -260,6 +261,7 @@ async function generateAiSearchPdfReport(logs = [], meta = {}) {
  * 🔥 Generate Branded PDF for Cascade Account Purge Audit History
  */
 async function generatePurgeAuditPdfReport(purges = [], meta = {}) {
+  const safePurges = (purges || []).slice(0, 500);
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const boldFont = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -269,9 +271,9 @@ async function generatePurgeAuditPdfReport(purges = [], meta = {}) {
   const marginX = 36;
   const contentWidth = pageWidth - marginX * 2;
 
-  const totalPurges = purges.length;
-  const totalTursoRowsDeleted = purges.reduce((acc, p) => acc + (Number(p.tursoDeletedCount) || 0), 0);
-  const totalNotesPreserved = purges.reduce((acc, p) => acc + (Number(p.uploadedNotesCount) || 0), 0);
+  const totalPurges = safePurges.length;
+  const totalTursoRowsDeleted = safePurges.reduce((acc, p) => acc + (Number(p.tursoDeletedCount) || 0), 0);
+  const totalNotesPreserved = safePurges.reduce((acc, p) => acc + (Number(p.uploadedNotesCount) || 0), 0);
 
   const rowsPerPage = 22;
   const totalPages = Math.max(1, Math.ceil((Math.max(1, totalPurges)) / rowsPerPage));

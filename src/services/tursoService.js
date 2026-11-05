@@ -1087,7 +1087,7 @@ async function pruneAiSearchLogs(days = 30) {
       const cutoffDate = new Date(Date.now() - numDays * 24 * 60 * 60 * 1000);
       const cutoffIso = cutoffDate.toISOString();
       const res = await targetClient.execute({
-        sql: "DELETE FROM ai_search_logs WHERE createdAt < ?",
+        sql: "DELETE FROM ai_search_logs WHERE datetime(createdAt) < datetime(?)",
         args: [cutoffIso],
       });
       deletedCount = res.rowsAffected || 0;
@@ -1191,12 +1191,13 @@ async function getAccountPurgeLogsFromTurso({ limit = 100, search = "" } = {}) {
         )
       `).catch(() => {});
 
+      const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
       let sql = `SELECT * FROM account_purge_audits ORDER BY createdAt DESC LIMIT ?`;
-      let args = [Number(limit) || 100];
+      let args = [safeLimit];
       if (search && search.trim()) {
         const term = `%${search.trim().toLowerCase()}%`;
         sql = `SELECT * FROM account_purge_audits WHERE LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(reason) LIKE ? ORDER BY createdAt DESC LIMIT ?`;
-        args = [term, term, term, Number(limit) || 100];
+        args = [term, term, term, safeLimit];
       }
       const res = await targetClient.execute({ sql, args });
       tursoRows = (res.rows || []).map((r) => ({
@@ -1283,7 +1284,11 @@ async function exportPurgeAuditReport({ format = "excel", search = "", limit = 5
 
   const escapeCsv = (val) => {
     if (val === null || val === undefined) return '""';
-    const s = String(val).replace(/"/g, '""');
+    let s = String(val).replace(/"/g, '""');
+    // Prevent CSV Formula Injection in Microsoft Excel (CWE-1236)
+    if (/^[=+@\-\t\r]/.test(s)) {
+      s = `'${s}`;
+    }
     return `"${s}"`;
   };
 

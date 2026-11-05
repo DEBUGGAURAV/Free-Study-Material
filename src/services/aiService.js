@@ -11,6 +11,7 @@ const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
 const { logAiSearchToTurso, getAiSearchLogsFromTurso } = require("./tursoService");
 const { getHelpBotToken, getHelpChatId } = require("./helpTicketService");
+const { queryCloudflareWorkersAi, isCloudflareAiAvailable } = require("./cloudflareWorkersAiService");
 
 // Default In-Memory Telemetry State
 const DEFAULT_AI_SETTINGS = {
@@ -323,11 +324,16 @@ Answer clearly and accurately based on the provided notes context or diagram/han
 async function generateAcademicAnswer(query, context = "", options = {}) {
   checkDailyReset();
   const cleanQuery = (query || "").trim();
-  if (!cleanQuery) throw new Error("Question prompt is required");
+  if (!cleanQuery && !options.imageBase64) {
+    throw new Error("Question prompt or diagram image is required");
+  }
 
   // 1. Check In-Memory Cache (RAM cache prevents duplicate quota burns)
-  const cacheKey = `ai_ans_${Buffer.from(cleanQuery.toLowerCase()).toString("base64").slice(0, 40)}`;
-  const cachedAnswer = ramCache.get(cacheKey);
+  const effectiveKeyStr = cleanQuery || (options.imageBase64 ? `img_${String(options.imageBase64).slice(0, 60)}` : "");
+  const cacheKey = effectiveKeyStr
+    ? `ai_ans_${Buffer.from(effectiveKeyStr.toLowerCase()).toString("base64").slice(0, 40)}`
+    : null;
+  const cachedAnswer = cacheKey ? ramCache.get(cacheKey) : null;
   const user = options.user || null;
   const noteId = options.noteId || null;
   const noteTitle = options.noteTitle || null;
@@ -342,7 +348,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       userName: user?.name,
       userEmail: user?.email,
       userMobile: user?.mobile,
-      query: cleanQuery,
+      query: cleanQuery || "Academic Diagram / Formula Solver",
       provider: "cache",
       model: "In-Memory Edge Cache (0ms)",
       latencyMs: 0,
@@ -353,7 +359,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
     dispatchAiSearchTelegramAudit({
       user,
-      query: cleanQuery,
+      query: cleanQuery || "Academic Diagram / Formula Solver",
       provider: "cache",
       model: "In-Memory Edge Cache",
       latencyMs: 0,
@@ -415,9 +421,20 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalProvider = "groq";
         finalModel = currentAiSettings.groqModel;
       } catch (groqErr) {
-        console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Gemini Failover...");
+        console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Tier 2 Failover...");
         failoverOccurred = true;
         currentAiSettings.failoversToday += 1;
+
+        // Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
+        if (isCloudflareAiAvailable()) {
+          try {
+            finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context);
+            finalProvider = "cloudflare_workers_ai";
+            finalModel = "@cf/meta/llama-3.1-8b-instruct";
+          } catch (cfErr) {
+            console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 3...");
+          }
+        }
       }
     } else {
       failoverOccurred = true;
@@ -454,7 +471,9 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   } else {
     // Cache successful answer for 2 hours
-    ramCache.set(cacheKey, finalAnswer, 7200);
+    if (cacheKey) {
+      ramCache.set(cacheKey, finalAnswer, 7200);
+    }
   }
 
   saveAiSettingsToDb().catch(() => {});
@@ -466,7 +485,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     userName: user?.name,
     userEmail: user?.email,
     userMobile: user?.mobile,
-    query: cleanQuery,
+    query: cleanQuery || "Academic Diagram / Formula Solver",
     provider: finalProvider,
     model: finalModel,
     latencyMs,
@@ -477,7 +496,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
   dispatchAiSearchTelegramAudit({
     user,
-    query: cleanQuery,
+    query: cleanQuery || "Academic Diagram / Formula Solver",
     provider: finalProvider,
     model: finalModel,
     latencyMs,
@@ -518,6 +537,8 @@ function getAiTelemetry() {
       geminiLimit: currentAiSettings.geminiLimit,
       groqApiKeyConfigured: groqKeySet,
       geminiApiKeyConfigured: geminiKeySet,
+      cloudflareAiConfigured: isCloudflareAiAvailable(),
+      cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
       aiSearchTopicId: currentAiSettings.aiSearchTopicId || null,
@@ -851,7 +872,11 @@ async function exportAiSearchReport({ format = "csv", search = "", limit = 500 }
 
   const escapeCsv = (val) => {
     if (val === null || val === undefined) return '""';
-    const s = String(val).replace(/"/g, '""');
+    let s = String(val).replace(/"/g, '""');
+    // Prevent CSV Formula Injection in Microsoft Excel (CWE-1236)
+    if (/^[=+@\-\t\r]/.test(s)) {
+      s = `'${s}`;
+    }
     return `"${s}"`;
   };
 

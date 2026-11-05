@@ -73,12 +73,17 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
     const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
-    if ((!query || !query.trim()) && !imageBase64) {
+    if ((!query || !String(query).trim()) && !imageBase64) {
       return res.status(400).json({ success: false, message: "Query text or image is required" });
     }
 
-    const cleanQuery = (query || "").trim();
-    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? imageBase64.slice(0, 100) : "empty"));
+    if (imageBase64 && typeof imageBase64 === "string" && imageBase64.length > 5 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: "Image payload exceeds maximum allowed size of 5MB" });
+    }
+
+    const cleanQuery = typeof query === "string" ? query.trim().slice(0, 5000) : "";
+    const cleanContext = typeof context === "string" ? context.slice(0, 15000) : "";
+    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? String(imageBase64).slice(0, 100) : "empty"));
 
     // 1. Check L1 RAM & L2 Turso Cloud Cache (0ms response, 0 API quota)
     const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
@@ -96,8 +101,8 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
     }
 
     // 2. Cache Miss: Run Dual AI Waterfall (Groq LPU Primary -> Gemini 2.0 Failover)
-    const fullContext = context
-      ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
+    const fullContext = cleanContext
+      ? `[Subject: ${subject || "Engineering/Science"}]\n${cleanContext}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
     const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, subject, imageBase64, imageMimeType });
 
@@ -133,8 +138,12 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
     const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
-    if ((!query || !query.trim()) && !imageBase64) {
+    if ((!query || !String(query).trim()) && !imageBase64) {
       return res.status(400).json({ success: false, message: "Query text, formula, or crop image is required" });
+    }
+
+    if (imageBase64 && typeof imageBase64 === "string" && imageBase64.length > 5 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: "Image payload exceeds maximum allowed size of 5MB" });
     }
 
     // 0. Check Master Admin Toggle & Daily Limit
@@ -157,11 +166,12 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
       });
     }
 
-    const cleanQuery = query.trim();
-    const queryHash = computeQueryHash(cleanQuery);
+    const cleanQuery = typeof query === "string" ? query.trim().slice(0, 5000) : "";
+    const cleanContext = typeof context === "string" ? context.slice(0, 15000) : "";
+    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? String(imageBase64).slice(0, 100) : "empty"));
 
     // 1. Check L1 RAM & L2 Turso Cache First (0ms / sub-5ms - 0 API cost!)
-    const cachedSolution = await getCachedCircleSolution(queryHash);
+    const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
       return res.json({
         success: true,
@@ -176,8 +186,8 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
     }
 
     // 2. Cache Miss: Generate fresh solution via Dual Groq / Gemini Engine
-    const fullContext = context
-      ? `[Subject: ${subject || "Engineering/Science"}]\n${context}`
+    const fullContext = cleanContext
+      ? `[Subject: ${subject || "Engineering/Science"}]\n${cleanContext}`
       : `[Subject: ${subject || "Engineering/Science"}]`;
     const result = await generateAcademicAnswer(cleanQuery, fullContext, { noteId, user: req.user, imageBase64, imageMimeType });
 
@@ -343,8 +353,9 @@ router.post("/admin/setup-telegram-topics", authenticateToken, requireAdmin, asy
  */
 router.get("/admin/recent-searches", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { limit = 50, search = "" } = req.query;
-    const logs = await getAiSearchLogsFromTurso({ limit, search });
+    const safeLimit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
+    const logs = await getAiSearchLogsFromTurso({ limit: safeLimit, search });
     return res.json({ success: true, count: logs.length, logs });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -356,8 +367,10 @@ router.get("/admin/recent-searches", authenticateToken, requireAdmin, async (req
  */
 router.get("/admin/export-report", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { format = "csv", search = "", limit = 500 } = req.query;
-    const report = await exportAiSearchReport({ format, search, limit });
+    const safeLimit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 500));
+    const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
+    const format = req.query.format === "pdf" ? "pdf" : (req.query.format === "json" ? "json" : "excel");
+    const report = await exportAiSearchReport({ format, search, limit: safeLimit });
     res.setHeader("Content-Type", report.contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${report.filename}"`);
     return res.send(report.data);
@@ -371,8 +384,9 @@ router.get("/admin/export-report", authenticateToken, requireAdmin, async (req, 
  */
 router.get("/admin/purge-history", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { limit = 50, search = "" } = req.query;
-    const logs = await getAccountPurgeLogsFromTurso({ limit, search });
+    const safeLimit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
+    const logs = await getAccountPurgeLogsFromTurso({ limit: safeLimit, search });
     return res.json({ success: true, count: logs.length, logs });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -384,8 +398,10 @@ router.get("/admin/purge-history", authenticateToken, requireAdmin, async (req, 
  */
 router.get("/admin/purge-history/export", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { format = "excel", search = "", limit = 500 } = req.query;
-    const report = await exportPurgeAuditReport({ format, search, limit });
+    const safeLimit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 500));
+    const search = typeof req.query.search === "string" ? req.query.search.slice(0, 100) : "";
+    const format = req.query.format === "pdf" ? "pdf" : "excel";
+    const report = await exportPurgeAuditReport({ format, search, limit: safeLimit });
     res.setHeader("Content-Type", report.contentType);
     res.setHeader("Content-Disposition", `attachment; filename="${report.filename}"`);
     return res.send(report.data);
