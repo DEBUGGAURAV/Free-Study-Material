@@ -1259,8 +1259,6 @@ export const api = {
     request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) }),
   updateCircleSearchConfig: (config) =>
     request("/ai/admin/circle-config", { method: "POST", body: JSON.stringify(config) }),
-  updateAiKeys: (keys) =>
-    request("/ai/admin/keys", { method: "POST", body: JSON.stringify(keys) }),
   resetAiCounters: () =>
     request("/ai/admin/reset", { method: "POST" }),
   testAiConnection: (provider) =>
@@ -1268,4 +1266,14 @@ export const api = {
   askAiQuestion: (query, context = "", noteId = null) =>
     request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId }) }),
   getAiStatus: () => request("/ai/status"),
+  setupAiTelegramTopics: () =>
+    request("/ai/admin/setup-telegram-topics", { method: "POST" }),
+  getAiRecentSearches: (params = {}) => {
+    const sp = new URLSearchParams(params).toString();
+    return request(`/ai/admin/recent-searches${sp ? `?${sp}` : ""}`);
+  },
+  getAiReportDownloadUrl: (format = "csv", search = "") => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") || "" : "";
+    return `/api/ai/admin/export-report?format=${format}&search=${encodeURIComponent(search)}${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+  },
 };

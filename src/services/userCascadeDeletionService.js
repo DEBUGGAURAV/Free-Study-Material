@@ -347,6 +347,24 @@ async function cascadeDeleteUserAccount({
     console.warn(`[CASCADE-DELETE] Chat Audit alert warning for ${cleanEmail}:`, chatTgErr.message);
   }
 
+  // 12. Dispatch Cascade Purge Audit to dedicated FSM Support Forum Sub-Topic
+  try {
+    const { dispatchUserPurgeTelegramAudit } = require("./aiService");
+    await dispatchUserPurgeTelegramAudit({
+      userId,
+      userName: userData.name,
+      userEmail: cleanEmail,
+      userMobile: userData.mobile,
+      tursoDeletedCount,
+      uploadedNotesCount: uploadedNotes.length,
+      chatMessagesDeleted: chatMessagesCount,
+      deletedBy: admin?.email || (isAutoPurge ? "Automated Lifecycle Sweeper" : "Admin"),
+      reason,
+    });
+  } catch (purgeTgErr) {
+    console.debug("[CASCADE-DELETE] Support Topic purge alert notice:", purgeTgErr.message);
+  }
+
   console.log(`[CASCADE-DELETE] ✅ Complete cascade deletion finished for ${cleanEmail}: Turso (${tursoDeletedCount} rows), Chat (${chatMessagesCount} msgs), Notes preserved (${uploadedNotes.length}).`);
 
   return {

@@ -195,12 +195,33 @@ async function initTursoTables() {
       )
     `);
 
+    // 9. AI Academic Search & Query Audit Logs Table
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS ai_search_logs (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userName TEXT,
+        userEmail TEXT,
+        userMobile TEXT,
+        query TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model TEXT,
+        latencyMs INTEGER DEFAULT 0,
+        cached INTEGER DEFAULT 0,
+        noteId TEXT,
+        noteTitle TEXT,
+        createdAt TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
     // 🚀 High-Speed Indexes: Eliminates Full-Table Scans for Sub-Millisecond Queries
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_branch ON notes(branch)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_subject ON notes(subject)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(createdAt)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(roomId, createdAt)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_ai_search_user ON ai_search_logs(userId, userEmail)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_ai_search_created ON ai_search_logs(createdAt)`).catch(() => {});
 
     const latency = Date.now() - t0;
     console.log(`[TURSO] ✅ Database schema verified in ${latency}ms (Cloud: ${isCloud ? "YES" : "LOCAL"})`);
@@ -829,7 +850,14 @@ async function purgeUserFromTurso(userId, userEmail = null) {
     }).catch(() => ({ rowsAffected: 0 }));
     deletedCount += (r5.rowsAffected || 0);
 
-    console.log(`[TURSO] 🗑️ Cascaded user deletion for ${cleanId} (${cleanEmail}): ${deletedCount} rows removed.`);
+    // 6. Delete user's AI search & query logs (Cascade Deletion Guarantee)
+    const r6 = await client.execute({
+      sql: `DELETE FROM ai_search_logs WHERE userId = ? OR (userEmail IS NOT NULL AND userEmail = ?)`,
+      args: [cleanId, cleanEmail || cleanId],
+    }).catch(() => ({ rowsAffected: 0 }));
+    deletedCount += (r6.rowsAffected || 0);
+
+    console.log(`[TURSO] 🗑️ Cascaded user deletion for ${cleanId} (${cleanEmail}): ${deletedCount} rows removed (including AI searches).`);
     return { success: true, deletedCount };
   } catch (err) {
     console.warn("[TURSO] Purge user error:", err.message);
@@ -852,6 +880,96 @@ async function archiveUserNotesInTurso(userEmail, archivedUploaderName) {
   } catch (err) {
     console.warn("[TURSO] Archive user notes error:", err.message);
     return false;
+  }
+}
+
+/**
+ * 🤖 Log AI Search query to Turso LibSQL table
+ */
+async function logAiSearchToTurso({
+  id,
+  userId = null,
+  userName = "Anonymous Student",
+  userEmail = null,
+  userMobile = null,
+  query,
+  provider,
+  model = "",
+  latencyMs = 0,
+  cached = 0,
+  noteId = null,
+  noteTitle = null,
+}) {
+  if (!client || !query) return false;
+  try {
+    const logId = id || `ais_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    await client.execute({
+      sql: `
+        INSERT INTO ai_search_logs (
+          id, userId, userName, userEmail, userMobile, query, provider, model, latencyMs, cached, noteId, noteTitle, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `,
+      args: [
+        logId,
+        userId ? String(userId).trim() : null,
+        userName ? String(userName).trim() : "Student",
+        userEmail ? String(userEmail).trim().toLowerCase() : null,
+        userMobile ? String(userMobile).trim() : null,
+        String(query).trim(),
+        String(provider || "groq").trim().toLowerCase(),
+        String(model || "").trim(),
+        parseInt(latencyMs, 10) || 0,
+        cached ? 1 : 0,
+        noteId ? String(noteId).trim() : null,
+        noteTitle ? String(noteTitle).trim() : null,
+      ],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO] AI search log notice:", err.message);
+    return false;
+  }
+}
+
+/**
+ * 📥 Fetch recent AI search logs from Turso for reports / admin view
+ */
+async function getAiSearchLogsFromTurso({ limit = 50, search = "" } = {}) {
+  if (!client) return [];
+  try {
+    const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
+    let sql = `SELECT * FROM ai_search_logs ORDER BY createdAt DESC LIMIT ?`;
+    let args = [safeLimit];
+
+    if (search && search.trim()) {
+      const q = `%${search.trim().toLowerCase()}%`;
+      sql = `
+        SELECT * FROM ai_search_logs 
+        WHERE LOWER(query) LIKE ? OR LOWER(userName) LIKE ? OR LOWER(userEmail) LIKE ? OR LOWER(noteTitle) LIKE ?
+        ORDER BY createdAt DESC LIMIT ?
+      `;
+      args = [q, q, q, q, safeLimit];
+    }
+
+    const res = await client.execute({ sql, args });
+    return (res.rows || []).map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      userName: r.userName,
+      userEmail: r.userEmail,
+      userMobile: r.userMobile,
+      query: r.query,
+      provider: r.provider,
+      model: r.model,
+      latencyMs: r.latencyMs,
+      cached: Boolean(r.cached),
+      noteId: r.noteId,
+      noteTitle: r.noteTitle,
+      createdAt: r.createdAt,
+    }));
+  } catch (err) {
+    console.warn("[TURSO] Fetch AI search logs error:", err.message);
+    return [];
   }
 }
 
@@ -883,5 +1001,7 @@ module.exports = {
   getAllChatProfiles,
   purgeUserFromTurso,
   archiveUserNotesInTurso,
+  logAiSearchToTurso,
+  getAiSearchLogsFromTurso,
 };
 

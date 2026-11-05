@@ -9,6 +9,8 @@
 
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
+const { logAiSearchToTurso, getAiSearchLogsFromTurso } = require("./tursoService");
+const { getHelpBotToken, getHelpChatId } = require("./helpTicketService");
 
 // Default In-Memory Telemetry State
 const DEFAULT_AI_SETTINGS = {
@@ -28,6 +30,8 @@ const DEFAULT_AI_SETTINGS = {
   totalQueriesToday: 0,
   failoversToday: 0,
   cachedHitsToday: 0,
+  aiSearchTopicId: null, // 🤖 Telegram sub-topic for student AI queries
+  purgeAuditTopicId: null, // 🔥 Telegram sub-topic for Firebase/Turso purge logs
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
   geminiApiKey: "",
@@ -134,10 +138,10 @@ async function saveAiSettingsToDb() {
  */
 function getApiKey(provider) {
   if (provider === "groq") {
-    return currentAiSettings.groqApiKey || process.env.GROQ_API_KEY || "";
+    return (process.env.GROQ_API_KEY || currentAiSettings.groqApiKey || "").trim();
   }
   if (provider === "gemini") {
-    return currentAiSettings.geminiApiKey || process.env.GEMINI_API_KEY || "";
+    return (process.env.GEMINI_API_KEY || currentAiSettings.geminiApiKey || "").trim();
   }
   return "";
 }
@@ -274,9 +278,40 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   // 1. Check In-Memory Cache (RAM cache prevents duplicate quota burns)
   const cacheKey = `ai_ans_${Buffer.from(cleanQuery.toLowerCase()).toString("base64").slice(0, 40)}`;
   const cachedAnswer = ramCache.get(cacheKey);
+  const user = options.user || null;
+  const noteId = options.noteId || null;
+  const noteTitle = options.noteTitle || null;
+
   if (cachedAnswer) {
     currentAiSettings.cachedHitsToday += 1;
     currentAiSettings.totalQueriesToday += 1;
+
+    // Asynchronously log cached search to Turso and Telegram
+    logAiSearchToTurso({
+      userId: user?.id,
+      userName: user?.name,
+      userEmail: user?.email,
+      userMobile: user?.mobile,
+      query: cleanQuery,
+      provider: "cache",
+      model: "In-Memory Edge Cache (0ms)",
+      latencyMs: 0,
+      cached: 1,
+      noteId,
+      noteTitle,
+    }).catch(() => {});
+
+    dispatchAiSearchTelegramAudit({
+      user,
+      query: cleanQuery,
+      provider: "cache",
+      model: "In-Memory Edge Cache",
+      latencyMs: 0,
+      cached: true,
+      noteId,
+      noteTitle,
+    }).catch(() => {});
+
     return {
       answer: cachedAnswer,
       provider: "cache",
@@ -350,6 +385,32 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   saveAiSettingsToDb().catch(() => {});
   const latencyMs = Date.now() - startTime;
 
+  // Asynchronously log search to Turso and Telegram sub-topic
+  logAiSearchToTurso({
+    userId: user?.id,
+    userName: user?.name,
+    userEmail: user?.email,
+    userMobile: user?.mobile,
+    query: cleanQuery,
+    provider: finalProvider,
+    model: finalModel,
+    latencyMs,
+    cached: 0,
+    noteId,
+    noteTitle,
+  }).catch(() => {});
+
+  dispatchAiSearchTelegramAudit({
+    user,
+    query: cleanQuery,
+    provider: finalProvider,
+    model: finalModel,
+    latencyMs,
+    cached: false,
+    noteId,
+    noteTitle,
+  }).catch(() => {});
+
   return {
     answer: finalAnswer,
     provider: finalProvider,
@@ -382,8 +443,8 @@ function getAiTelemetry() {
       geminiLimit: currentAiSettings.geminiLimit,
       groqApiKeyConfigured: groqKeySet,
       geminiApiKeyConfigured: geminiKeySet,
-      groqKeyPreview: groqKeySet ? `${getApiKey("groq").slice(0, 4)}...${getApiKey("groq").slice(-4)}` : "Not Configured",
-      geminiKeyPreview: geminiKeySet ? `${getApiKey("gemini").slice(0, 4)}...${getApiKey("gemini").slice(-4)}` : "Not Configured",
+      groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
+      geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
     },
     usage: {
       groqUsedToday: currentAiSettings.groqUsedToday,
@@ -487,6 +548,248 @@ async function testAiProvider(provider) {
   throw new Error("Unknown provider");
 }
 
+/**
+ * 🛠️ Setup Telegram Forum Sub-Topics in FSM Support Supergroup
+ * Topic A: 🤖 AI Search Logs & Student Queries
+ * Topic B: 🔥 Firebase & Turso Account Purge Logs
+ */
+async function setupTelegramAiSupportTopics(customChatId = null) {
+  const token = getHelpBotToken();
+  const chatId = customChatId || getHelpChatId();
+
+  if (!token || !chatId) {
+    return { success: false, message: "Telegram bot token or FSM Support Supergroup chat ID not configured." };
+  }
+
+  const results = {};
+
+  // 1. Topic A: AI Search Logs & Student Queries
+  try {
+    const resA = await fetch(`https://api.telegram.org/bot${token}/createForumTopic`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        name: "🤖 AI Search Logs & Student Queries",
+        icon_color: 7322096, // Neon cyan / blue
+      }),
+    });
+    const dataA = await resA.json();
+    if (dataA.ok && dataA.result?.message_thread_id) {
+      results.aiSearchTopicId = dataA.result.message_thread_id;
+      currentAiSettings.aiSearchTopicId = dataA.result.message_thread_id;
+    } else {
+      results.aiSearchTopicError = dataA.description || "Failed to create AI Search topic";
+    }
+  } catch (err) {
+    results.aiSearchTopicError = err.message;
+  }
+
+  // 2. Topic B: Firebase & Turso Account Purge Logs
+  try {
+    const resB = await fetch(`https://api.telegram.org/bot${token}/createForumTopic`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        name: "🔥 Firebase & Turso Account Purge Logs",
+        icon_color: 16724826, // Red / Orange
+      }),
+    });
+    const dataB = await resB.json();
+    if (dataB.ok && dataB.result?.message_thread_id) {
+      results.purgeAuditTopicId = dataB.result.message_thread_id;
+      currentAiSettings.purgeAuditTopicId = dataB.result.message_thread_id;
+    } else {
+      results.purgeAuditTopicError = dataB.description || "Failed to create Purge Audit topic";
+    }
+  } catch (err) {
+    results.purgeAuditTopicError = err.message;
+  }
+
+  await saveAiSettingsToDb();
+  return {
+    success: Boolean(results.aiSearchTopicId || results.purgeAuditTopicId),
+    results,
+    settings: currentAiSettings,
+  };
+}
+
+/**
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic
+ */
+async function dispatchAiSearchTelegramAudit({
+  user,
+  query,
+  provider,
+  model,
+  latencyMs,
+  cached = false,
+  noteId = null,
+  noteTitle = null,
+}) {
+  const token = getHelpBotToken();
+  const chatId = getHelpChatId();
+  const topicId = currentAiSettings.aiSearchTopicId;
+  if (!token || !chatId || !topicId) return false;
+
+  try {
+    const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
+    const studentEmail = (user?.email || "anonymous@student.edu").replace(/[<>]/g, "");
+    const studentMobile = user?.mobile || user?.phone || "N/A";
+    const cleanQuery = String(query || "").slice(0, 400).replace(/[<>]/g, "");
+    const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    const text = [
+      `🤖 <b>AI Academic Search Query</b>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `👤 <b>Student:</b> ${studentName}`,
+      `📧 <b>Email:</b> <code>${studentEmail}</code>`,
+      `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
+      `⚡ <b>Provider:</b> <b>${String(provider).toUpperCase()}</b> (${model || "Llama 3.1 8B"})`,
+      `⏱️ <b>Latency:</b> ${latencyMs}ms | 💾 <b>Cached:</b> ${cached ? "Yes (0ms)" : "No"}`,
+      noteTitle ? `📚 <b>Document:</b> ${noteTitle.replace(/[<>]/g, "")}` : "",
+      `❓ <b>Student Query:</b>\n<blockquote>${cleanQuery}</blockquote>`,
+      `🕒 <b>Timestamp:</b> ${timeStr}`,
+    ].filter(Boolean).join("\n");
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_thread_id: topicId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.debug("[TELEGRAM-AI-AUDIT] Notice:", err.message);
+    return false;
+  }
+}
+
+/**
+ * 🔥 Real-Time Telegram Dispatch to "Firebase & Turso Account Purge Logs" Sub-Topic
+ */
+async function dispatchUserPurgeTelegramAudit({
+  userId,
+  userName = "Student Scholar",
+  userEmail = "N/A",
+  userMobile = "N/A",
+  tursoDeletedCount = 0,
+  uploadedNotesCount = 0,
+  chatMessagesDeleted = 0,
+  deletedBy = "Admin",
+  reason = "Account Deletion",
+}) {
+  const token = getHelpBotToken();
+  const chatId = getHelpChatId();
+  const topicId = currentAiSettings.purgeAuditTopicId;
+  if (!token || !chatId || !topicId) return false;
+
+  try {
+    const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    const text = [
+      `🔥 <b>Cascade Account Purge Audit</b>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `👤 <b>User:</b> ${(userName || "Unknown").replace(/[<>]/g, "")}`,
+      `🆔 <b>User ID:</b> <code>${userId}</code>`,
+      `📧 <b>Email:</b> <code>${(userEmail || "N/A").replace(/[<>]/g, "")}</code>`,
+      `📱 <b>Mobile:</b> <code>${userMobile || "N/A"}</code>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `🗑️ <b>Firebase Purge Status:</b> 100% Cleared`,
+      `  • Profile, Passkeys & Study Context: <b>Purged</b>`,
+      `  • Uploaded Notes Re-attributed: <b>${uploadedNotesCount}</b>`,
+      `  • Chat Messages Purged: <b>${chatMessagesDeleted}</b>`,
+      `⚡ <b>Turso LibSQL Cascade:</b> <b>${tursoDeletedCount} rows deleted</b>`,
+      `  • <i>Users, Chat Profiles, Rooms & AI Search Logs cascade-purged</i>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `🛡️ <b>Initiated By:</b> ${deletedBy}`,
+      `📝 <b>Reason:</b> ${reason}`,
+      `🕒 <b>Timestamp:</b> ${timeStr}`,
+    ].join("\n");
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_thread_id: topicId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+    return true;
+  } catch (err) {
+    console.debug("[TELEGRAM-PURGE-AUDIT] Notice:", err.message);
+    return false;
+  }
+}
+
+/**
+ * 📥 Generate Exportable AI Search Report (CSV / JSON)
+ */
+async function exportAiSearchReport({ format = "csv", search = "", limit = 500 } = {}) {
+  const logs = await getAiSearchLogsFromTurso({ limit, search });
+  if (format === "json") {
+    return {
+      contentType: "application/json",
+      filename: `AI_Search_Report_${new Date().toISOString().slice(0, 10)}.json`,
+      data: JSON.stringify(logs, null, 2),
+    };
+  }
+
+  // CSV Generation with RFC 4180 Escaping
+  const headers = [
+    "Log ID",
+    "Timestamp (UTC)",
+    "Student Name",
+    "Email",
+    "Mobile",
+    "Query",
+    "Provider",
+    "Model",
+    "Latency (ms)",
+    "Cached Hit",
+    "Note ID",
+    "Note Title",
+  ];
+
+  const escapeCsv = (val) => {
+    if (val === null || val === undefined) return '""';
+    const s = String(val).replace(/"/g, '""');
+    return `"${s}"`;
+  };
+
+  const rows = logs.map((r) => [
+    escapeCsv(r.id),
+    escapeCsv(r.createdAt),
+    escapeCsv(r.userName),
+    escapeCsv(r.userEmail),
+    escapeCsv(r.userMobile),
+    escapeCsv(r.query),
+    escapeCsv(r.provider),
+    escapeCsv(r.model),
+    escapeCsv(r.latencyMs),
+    escapeCsv(r.cached ? "Yes" : "No"),
+    escapeCsv(r.noteId),
+    escapeCsv(r.noteTitle),
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\r\n");
+
+  return {
+    contentType: "text/csv; charset=utf-8",
+    filename: `AI_Search_Report_${new Date().toISOString().slice(0, 10)}.csv`,
+    data: csvContent,
+  };
+}
+
 // Initial auto-load on start
 loadAiSettings().catch(() => {});
 
@@ -497,5 +800,9 @@ module.exports = {
   resetDailyCounters,
   testAiProvider,
   incrementCircleSearchUsage,
+  setupTelegramAiSupportTopics,
+  dispatchAiSearchTelegramAudit,
+  dispatchUserPurgeTelegramAudit,
+  exportAiSearchReport,
 };
 

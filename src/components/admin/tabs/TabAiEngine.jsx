@@ -14,11 +14,15 @@ import {
   AlertTriangle,
   Send,
   RotateCcw,
-  Key,
-  Eye,
-  EyeOff,
   Flame,
   Globe,
+  Download,
+  FileText,
+  Database,
+  Search,
+  Trash2,
+  Users,
+  MessageSquare,
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -27,13 +31,6 @@ export default function TabAiEngine() {
   const [telemetry, setTelemetry] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState("info"); // 'info' | 'success' | 'error'
-
-  // Keys & Credentials Form
-  const [groqKeyInput, setGroqKeyInput] = useState("");
-  const [geminiKeyInput, setGeminiKeyInput] = useState("");
-  const [showGroqKey, setShowGroqKey] = useState(false);
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
-  const [savingKeys, setSavingKeys] = useState(false);
 
   // Testing AI
   const [testingGroq, setTestingGroq] = useState(false);
@@ -50,6 +47,51 @@ export default function TabAiEngine() {
   const [circleLimitInput, setCircleLimitInput] = useState("");
   const [circleCooldownInput, setCircleCooldownInput] = useState("");
   const [savingCircleConfig, setSavingCircleConfig] = useState(false);
+
+  // Telegram Forum Sub-Topics
+  const [settingUpTopics, setSettingUpTopics] = useState(false);
+
+  // Turso AI Search Logs & Reports
+  const [aiLogs, setAiLogs] = useState([]);
+  const [loadingAiLogs, setLoadingAiLogs] = useState(false);
+  const [aiSearchFilter, setAiSearchFilter] = useState("");
+
+  const loadAiLogs = async (search = "") => {
+    try {
+      setLoadingAiLogs(true);
+      const res = await api.getAiRecentSearches({ limit: 50, search });
+      if (res && res.success) {
+        setAiLogs(res.logs || []);
+      }
+    } catch (err) {
+      console.warn("[AI-ENGINE] Failed to fetch AI logs:", err.message);
+    } finally {
+      setLoadingAiLogs(false);
+    }
+  };
+
+  const handleSetupTelegramTopics = async () => {
+    try {
+      setSettingUpTopics(true);
+      showNotice("Creating forum sub-topics in FSM Support Supergroup...", "info");
+      const res = await api.setupAiTelegramTopics();
+      if (res && res.success) {
+        showNotice("✅ Telegram forum sub-topics configured successfully!", "success");
+        loadTelemetry();
+      } else {
+        showNotice("Could not create topics: " + (res.message || "Failed"), "error");
+      }
+    } catch (err) {
+      showNotice("Telegram topic creation error: " + err.message, "error");
+    } finally {
+      setSettingUpTopics(false);
+    }
+  };
+
+  const handleExportReport = (format = "csv") => {
+    const url = api.getAiReportDownloadUrl(format, aiSearchFilter);
+    window.open(url, "_blank");
+  };
 
   const loadTelemetry = async () => {
     try {
@@ -68,6 +110,7 @@ export default function TabAiEngine() {
 
   useEffect(() => {
     loadTelemetry();
+    loadAiLogs();
   }, []);
 
   useEffect(() => {
@@ -126,32 +169,6 @@ export default function TabAiEngine() {
       showNotice("Failed to update Circle to Search limits: " + err.message, "error");
     } finally {
       setSavingCircleConfig(false);
-    }
-  };
-
-  // Save API Keys
-  const handleSaveKeys = async (e) => {
-    e.preventDefault();
-    if (!groqKeyInput && !geminiKeyInput) {
-      showNotice("Please enter at least one API key to save.", "error");
-      return;
-    }
-    try {
-      setSavingKeys(true);
-      const res = await api.updateAiKeys({
-        groqApiKey: groqKeyInput.trim() || undefined,
-        geminiApiKey: geminiKeyInput.trim() || undefined,
-      });
-      if (res && res.success) {
-        setTelemetry(res.telemetry);
-        setGroqKeyInput("");
-        setGeminiKeyInput("");
-        showNotice("✅ AI API credentials encrypted and activated successfully!", "success");
-      }
-    } catch (err) {
-      showNotice("Failed to save credentials: " + err.message, "error");
-    } finally {
-      setSavingKeys(false);
     }
   };
 
@@ -237,8 +254,6 @@ export default function TabAiEngine() {
     circleSearchCooldownSec: 3,
     groqApiKeyConfigured: false,
     geminiApiKeyConfigured: false,
-    groqKeyPreview: "Not Configured",
-    geminiKeyPreview: "Not Configured",
   };
 
   return (
@@ -556,10 +571,11 @@ export default function TabAiEngine() {
               fontSize: "0.76rem",
             }}
           >
-            <div>
-              <span style={{ color: "var(--text-dim)" }}>API Key: </span>
-              <strong style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fb7185", fontFamily: "var(--font-mono)" }}>
-                {settings.groqKeyPreview}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <ShieldCheck size={14} color={settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24"} />
+              <span style={{ color: "var(--text-dim)" }}>Security: </span>
+              <strong style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24" }}>
+                {settings.groqApiKeyConfigured ? "🔒 Protected in .env (Zero-Leak)" : "⚠️ Add GROQ_API_KEY in .env"}
               </strong>
             </div>
 
@@ -688,10 +704,11 @@ export default function TabAiEngine() {
               fontSize: "0.76rem",
             }}
           >
-            <div>
-              <span style={{ color: "var(--text-dim)" }}>API Key: </span>
-              <strong style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fb7185", fontFamily: "var(--font-mono)" }}>
-                {settings.geminiKeyPreview}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <ShieldCheck size={14} color={settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24"} />
+              <span style={{ color: "var(--text-dim)" }}>Security: </span>
+              <strong style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24" }}>
+                {settings.geminiApiKeyConfigured ? "🔒 Protected in .env (Zero-Leak)" : "⚠️ Add GEMINI_API_KEY in .env"}
               </strong>
             </div>
 
@@ -981,87 +998,51 @@ export default function TabAiEngine() {
           </div>
         </div>
 
-        {/* Configure / Update API Keys Form */}
+        {/* Zero-Leak Security Card (.env Protected) */}
         <div
           style={{
-            background: "rgba(255, 255, 255, 0.02)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            background: "rgba(16, 185, 129, 0.04)",
+            border: "1px solid rgba(16, 185, 129, 0.25)",
             borderRadius: "16px",
             padding: "20px",
             display: "flex",
             flexDirection: "column",
-            gap: "14px",
+            gap: "12px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <Key size={18} color="#38bdf8" />
+            <ShieldCheck size={20} color="#34d399" />
             <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-              Update API Credentials
+              Zero-Leak Server Environment (.env)
             </h4>
           </div>
 
-          <form onSubmit={handleSaveKeys} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {/* Groq Key Input */}
-            <div style={{ position: "relative" }}>
-              <input
-                type={showGroqKey ? "text" : "password"}
-                value={groqKeyInput}
-                onChange={(e) => setGroqKeyInput(e.target.value)}
-                placeholder="Paste Groq API Key (gsk_...)"
-                style={{
-                  width: "100%",
-                  padding: "8px 36px 8px 12px",
-                  fontSize: "0.78rem",
-                  background: "rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(16, 185, 129, 0.3)",
-                  borderRadius: "8px",
-                  color: "#fff",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowGroqKey(!showGroqKey)}
-                style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                {showGroqKey ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
-            </div>
+          <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
+            To prevent accidental client leaks, AI API credentials are now loaded strictly from your server's <strong>.env</strong> file. 
+            Keys are never exposed in browser memory, DevTools, or network requests.
+          </p>
 
-            {/* Gemini Key Input */}
-            <div style={{ position: "relative" }}>
-              <input
-                type={showGeminiKey ? "text" : "password"}
-                value={geminiKeyInput}
-                onChange={(e) => setGeminiKeyInput(e.target.value)}
-                placeholder="Paste Gemini API Key (AIza...)"
-                style={{
-                  width: "100%",
-                  padding: "8px 36px 8px 12px",
-                  fontSize: "0.78rem",
-                  background: "rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  borderRadius: "8px",
-                  color: "#fff",
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowGeminiKey(!showGeminiKey)}
-                style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                {showGeminiKey ? <EyeOff size={14} /> : <Eye size={14} />}
-              </button>
+          <div
+            style={{
+              padding: "10px 12px",
+              background: "rgba(0, 0, 0, 0.35)",
+              border: "1px solid rgba(255, 255, 255, 0.06)",
+              borderRadius: "8px",
+              fontSize: "0.72rem",
+              fontFamily: "var(--font-mono)",
+              color: "#94a3b8",
+              display: "flex",
+              flexDirection: "column",
+              gap: "4px",
+            }}
+          >
+            <div style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24" }}>
+              GROQ_API_KEY: {settings.groqApiKeyConfigured ? "✅ Configured in .env" : "⚠️ Missing in .env"}
             </div>
-
-            <button
-              type="submit"
-              disabled={savingKeys}
-              className="btn-primary"
-              style={{ padding: "8px 14px", fontSize: "0.8rem", justifyContent: "center", cursor: "pointer" }}
-            >
-              <span>{savingKeys ? "Encrypting & Activating..." : "Save & Activate Credentials"}</span>
-            </button>
-          </form>
+            <div style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24" }}>
+              GEMINI_API_KEY: {settings.geminiApiKeyConfigured ? "✅ Configured in .env" : "⚠️ Missing in .env"}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1146,6 +1127,336 @@ export default function TabAiEngine() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* 5. Telegram Support Supergroup Sub-Topics */}
+      <div
+        className="card-cyber"
+        style={{
+          padding: "22px",
+          background: "rgba(15, 23, 42, 0.75)",
+          border: "1px solid rgba(56, 189, 248, 0.25)",
+          borderRadius: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "rgba(56, 189, 248, 0.15)",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#38bdf8",
+              }}
+            >
+              <MessageSquare size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#f8fafc" }}>
+                Telegram Support Supergroup Sub-Topics
+              </h3>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
+                Two dedicated forum topics in FSM Support Supergroup for real-time AI student searches & account purge audits
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSetupTelegramTopics}
+            disabled={settingUpTopics}
+            className="btn-primary"
+            style={{
+              padding: "7px 16px",
+              fontSize: "0.8rem",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            {settingUpTopics ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+            <span>{settingUpTopics ? "Configuring Topics..." : "⚡ Setup Support Topics"}</span>
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", marginTop: "4px" }}>
+          {/* Sub-Topic A */}
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: "12px",
+              background: "rgba(6, 182, 212, 0.08)",
+              border: "1px solid rgba(6, 182, 212, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#38bdf8" }}>
+                🤖 Sub-Topic 1: AI Search Logs & Student Queries
+              </span>
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  fontWeight: 700,
+                  background: telemetry?.settings?.aiSearchTopicId ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                  color: telemetry?.settings?.aiSearchTopicId ? "#34d399" : "#fbbf24",
+                  border: `1px solid ${telemetry?.settings?.aiSearchTopicId ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
+                }}
+              >
+                {telemetry?.settings?.aiSearchTopicId ? `Thread #${telemetry.settings.aiSearchTopicId}` : "Not Created"}
+              </span>
+            </div>
+            <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", margin: 0 }}>
+              Live stream of student questions, student identity (Name, Email, Mobile), engine latency, and lecture note context.
+            </p>
+          </div>
+
+          {/* Sub-Topic B */}
+          <div
+            style={{
+              padding: "14px 16px",
+              borderRadius: "12px",
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "0.86rem", fontWeight: 700, color: "#f87171" }}>
+                🔥 Sub-Topic 2: Firebase & Turso Purge Logs
+              </span>
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  fontWeight: 700,
+                  background: telemetry?.settings?.purgeAuditTopicId ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                  color: telemetry?.settings?.purgeAuditTopicId ? "#34d399" : "#fbbf24",
+                  border: `1px solid ${telemetry?.settings?.purgeAuditTopicId ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
+                }}
+              >
+                {telemetry?.settings?.purgeAuditTopicId ? `Thread #${telemetry.settings.purgeAuditTopicId}` : "Not Created"}
+              </span>
+            </div>
+            <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", margin: 0 }}>
+              Audit dossier sent whenever a user is deleted from Firebase Firestore, confirming Turso AI rows and data purge.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 6. Turso AI Search Logs & Report Generator */}
+      <div
+        className="card-cyber"
+        style={{
+          padding: "22px",
+          background: "rgba(15, 23, 42, 0.75)",
+          border: "1px solid rgba(99, 102, 241, 0.25)",
+          borderRadius: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "rgba(99, 102, 241, 0.15)",
+                border: "1px solid rgba(99, 102, 241, 0.35)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#818cf8",
+              }}
+            >
+              <Database size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#f8fafc" }}>
+                AI Search Logs & Reports (Turso Edge Database)
+              </h3>
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
+                Persistent search logs stored in LibSQL. Auto-purged if student account is deleted from Firebase.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => handleExportReport("csv")}
+              className="btn-secondary"
+              style={{
+                padding: "7px 14px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid rgba(16, 185, 129, 0.35)",
+                color: "#34d399",
+              }}
+            >
+              <Download size={14} />
+              <span>Export CSV</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportReport("json")}
+              className="btn-secondary"
+              style={{
+                padding: "7px 14px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(56, 189, 248, 0.15)",
+                border: "1px solid rgba(56, 189, 248, 0.35)",
+                color: "#38bdf8",
+              }}
+            >
+              <FileText size={14} />
+              <span>Export JSON</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => loadAiLogs(aiSearchFilter)}
+              disabled={loadingAiLogs}
+              className="btn-secondary"
+              style={{ padding: "7px 12px", fontSize: "0.78rem" }}
+              title="Refresh logs"
+            >
+              <RefreshCw size={14} className={loadingAiLogs ? "animate-spin" : ""} />
+            </button>
+          </div>
+        </div>
+
+        {/* Search Bar Filter */}
+        <div style={{ display: "flex", gap: "8px" }}>
+          <div style={{ position: "relative", flex: 1 }}>
+            <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+            <input
+              type="text"
+              value={aiSearchFilter}
+              onChange={(e) => setAiSearchFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") loadAiLogs(aiSearchFilter);
+              }}
+              placeholder="Search by student name, email, query keyword, or note title..."
+              style={{
+                width: "100%",
+                padding: "8px 12px 8px 34px",
+                fontSize: "0.8rem",
+                borderRadius: "8px",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                background: "rgba(0, 0, 0, 0.25)",
+                color: "#fff",
+              }}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => loadAiLogs(aiSearchFilter)}
+            className="btn-primary"
+            style={{ padding: "8px 16px", fontSize: "0.8rem" }}
+          >
+            Search
+          </button>
+        </div>
+
+        {/* Turso AI Logs Table */}
+        <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
+            <thead>
+              <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                <th style={{ padding: "10px 12px" }}>Time (UTC)</th>
+                <th style={{ padding: "10px 12px" }}>Student Details</th>
+                <th style={{ padding: "10px 12px" }}>Query / Question</th>
+                <th style={{ padding: "10px 12px" }}>Engine & Model</th>
+                <th style={{ padding: "10px 12px" }}>Latency</th>
+                <th style={{ padding: "10px 12px" }}>Doc Context</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingAiLogs ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                    <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
+                    Loading Turso search logs...
+                  </td>
+                </tr>
+              ) : aiLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                    No AI search logs found in Turso table. Student searches will appear here in real-time.
+                  </td>
+                </tr>
+              ) : (
+                aiLogs.map((log) => (
+                  <tr
+                    key={log.id}
+                    style={{
+                      borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                      transition: "background 0.15s ease",
+                    }}
+                  >
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                      {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      <div style={{ fontWeight: 600, color: "#f8fafc" }}>{log.userName || "Student"}</div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{log.userEmail || "anonymous"}</div>
+                      {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>📱 {log.userMobile}</div>}
+                    </td>
+                    <td style={{ padding: "10px 12px", maxWidth: "300px" }}>
+                      <div style={{ color: "#e2e8f0", wordBreak: "break-word" }}>{log.query}</div>
+                    </td>
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          background: log.provider === "groq" ? "rgba(249, 115, 22, 0.15)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.15)" : "rgba(16, 185, 129, 0.15)",
+                          color: log.provider === "groq" ? "#fb923c" : log.provider === "gemini" ? "#818cf8" : "#34d399",
+                          border: `1px solid ${log.provider === "groq" ? "rgba(249, 115, 22, 0.35)" : log.provider === "gemini" ? "rgba(99, 102, 241, 0.35)" : "rgba(16, 185, 129, 0.35)"}`,
+                        }}
+                      >
+                        {String(log.provider).toUpperCase()}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                      {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
+                    </td>
+                    <td style={{ padding: "10px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                      {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

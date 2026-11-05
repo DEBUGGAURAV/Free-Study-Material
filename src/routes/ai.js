@@ -11,7 +11,10 @@ const {
   resetDailyCounters,
   testAiProvider,
   incrementCircleSearchUsage,
+  setupTelegramAiSupportTopics,
+  exportAiSearchReport,
 } = require("../services/aiService");
+const { getAiSearchLogsFromTurso } = require("../services/tursoService");
 const {
   computeQueryHash,
   getCachedCircleSolution,
@@ -251,19 +254,13 @@ router.post("/admin/circle-config", authenticateToken, requireAdmin, async (req,
 
 /**
  * 🔒 ADMIN KEYS: POST /api/ai/admin/keys
+ * Disabled for Zero-Leak Security: keys are loaded purely from server-side .env
  */
-router.post("/admin/keys", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { groqApiKey, geminiApiKey } = req.body;
-    const update = {};
-    if (typeof groqApiKey === "string") update.groqApiKey = groqApiKey.trim();
-    if (typeof geminiApiKey === "string") update.geminiApiKey = geminiApiKey.trim();
-
-    const result = await updateAiSettings(update);
-    return res.json({ success: true, message: "AI API credentials saved successfully", telemetry: result });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
+router.post("/admin/keys", authenticateToken, requireAdmin, (req, res) => {
+  return res.status(403).json({
+    success: false,
+    message: "Security Notice: API keys are loaded directly from the server .env file (GROQ_API_KEY & GEMINI_API_KEY) to prevent client leaks.",
+  });
 });
 
 /**
@@ -286,6 +283,50 @@ router.post("/admin/test", authenticateToken, requireAdmin, async (req, res) => 
     const { provider } = req.body;
     const testResult = await testAiProvider(provider);
     return res.json({ success: true, testResult });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN TELEGRAM TOPICS: POST /api/ai/admin/setup-telegram-topics
+ */
+router.post("/admin/setup-telegram-topics", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await setupTelegramAiSupportTopics();
+    return res.json({
+      success: result.success,
+      message: result.success ? "Support sub-topics successfully configured in FSM Support Supergroup" : "Failed to setup topics",
+      result,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN RECENT SEARCHES: GET /api/ai/admin/recent-searches
+ */
+router.get("/admin/recent-searches", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { limit = 50, search = "" } = req.query;
+    const logs = await getAiSearchLogsFromTurso({ limit, search });
+    return res.json({ success: true, count: logs.length, logs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🔒 ADMIN EXPORT REPORT: GET /api/ai/admin/export-report
+ */
+router.get("/admin/export-report", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { format = "csv", search = "", limit = 500 } = req.query;
+    const report = await exportAiSearchReport({ format, search, limit });
+    res.setHeader("Content-Type", report.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${report.filename}"`);
+    return res.send(report.data);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
