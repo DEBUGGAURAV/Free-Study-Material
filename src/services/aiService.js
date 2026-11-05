@@ -498,6 +498,8 @@ function getAiTelemetry() {
       geminiApiKeyConfigured: geminiKeySet,
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
+      aiSearchTopicId: currentAiSettings.aiSearchTopicId || null,
+      purgeAuditTopicId: currentAiSettings.purgeAuditTopicId || null,
     },
     usage: {
       groqUsedToday: currentAiSettings.groqUsedToday,
