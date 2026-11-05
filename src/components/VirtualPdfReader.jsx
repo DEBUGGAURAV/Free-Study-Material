@@ -1014,6 +1014,7 @@ export default function VirtualPdfReader({
 
           // 1. Background index into MiniSearch Client-Side RAG
           setIsRagIndexing(true);
+          ragIndexRef.current = new PdfRagSearchIndex();
           ragIndexRef.current.indexPdfDocument(doc).finally(() => setIsRagIndexing(false));
 
           // Pre-warm Tesseract WASM OCR worker in idle background

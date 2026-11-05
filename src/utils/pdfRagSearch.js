@@ -117,12 +117,26 @@ export class PdfRagSearchIndex {
   }
 
   /**
+   * Resets and clears the search index
+   */
+  clear() {
+    try {
+      this.miniSearch.removeAll();
+    } catch (_) {}
+    this.pageTextMap.clear();
+    this.isIndexed = false;
+    this.totalPages = 0;
+    this.isScannedOnly = false;
+  }
+
+  /**
    * Indexes a loaded PDF.js Document object page-by-page in browser memory
    * @param {object} pdfDoc (from pdfjsLib.getDocument)
    * @param {function} onProgress (percent)
    */
   async indexPdfDocument(pdfDoc, onProgress = () => {}) {
-    if (!pdfDoc || this.isIndexed) return;
+    if (!pdfDoc) return;
+    this.clear();
 
     this.totalPages = pdfDoc.numPages;
     const documents = [];
