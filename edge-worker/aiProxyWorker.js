@@ -10,7 +10,7 @@
  *        • Tier 1: Groq Cloud LPU (~800 tok/sec, 0.3s latency)
  *        • Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
  *        • Tier 3: Gemini Standby Failover (gemini-flash-lite-latest -> gemini-3.5-flash-lite)
- *        • Offline Guard: Atelion Heuristic Math & Notes Solver
+ *        • Offline Guard: FSM Heuristic Math & Notes Solver
  * 3. Step 3: Async Persistence -> Background write to Turso Cloud (0ms UI wait)
  * 
  * 0.00% Render CPU Load • 0.00% Render RAM Usage • 100% Mobile Optimized
@@ -308,17 +308,17 @@ ${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${quer
 }
 
 /**
- * 🛡️ Atelion Heuristic Cloud Guard (Offline Fallback)
+ * 🛡️ FSM Heuristic Cloud Guard (Offline Fallback)
  */
 function queryHeuristicGuard(query, context) {
   if (context && context.trim()) {
     return {
-      answer: `🤖 [Atelion Academic Notes Synthesis]\n\nBased on your course notes, here is the direct excerpt matching "${query}":\n\n"${context.slice(0, 320)}..."\n\n💡 Note: Cloud AI engine is currently on offline standby or awaiting keys in Admin Studio.`,
-      model: "Atelion Heuristic Guard",
+      answer: `🤖 [FSM Academic Notes Synthesis]\n\nBased on your course notes, here is the direct excerpt matching "${query}":\n\n"${context.slice(0, 320)}..."\n\n💡 Note: Cloud AI engine is currently on offline standby or awaiting keys in Admin Studio.`,
+      model: "FSM Heuristic Guard",
     };
   }
   return {
-    answer: `🤖 [Atelion Academic AI Assistant]\n\nCould not connect to Cloud AI engines right now. Please verify API keys in Admin Studio or consult your course notes directly.`,
+    answer: `🤖 [FSM Academic AI Assistant]\n\nCould not connect to Cloud AI engines right now. Please verify API keys in Admin Studio or consult your course notes directly.`,
     model: "Offline Guard",
   };
 }
