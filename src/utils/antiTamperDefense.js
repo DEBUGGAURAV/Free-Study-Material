@@ -916,11 +916,13 @@ export function triggerClientLockdown(reason, options = {}) {
   `;
 
   // 4. Live Ticking Countdown Timer & Periodic Auto-Unlock Probe
+  let lockdownDebuggerInterval = null;
   function updateCountdown() {
     const timerElem = document.getElementById("fsm-countdown-timer");
     if (!timerElem) return;
     const diff = Math.max(0, targetTimestamp - Date.now());
     if (diff <= 0) {
+      if (lockdownDebuggerInterval) clearInterval(lockdownDebuggerInterval);
       timerElem.innerHTML = "<span style='color: #34d399;'>Detention Expired. Unlocking...</span>";
       try {
         localStorage.removeItem("fsm_lockdown_until");
@@ -1012,6 +1014,7 @@ export function triggerClientLockdown(reason, options = {}) {
         if (data && data.success && data.pardoned === true) {
           clearInterval(timerInterval);
           clearInterval(pingInterval);
+          if (lockdownDebuggerInterval) clearInterval(lockdownDebuggerInterval);
           const timerElem = document.getElementById("fsm-countdown-timer");
           if (timerElem) {
             timerElem.innerHTML = "<span style='color: #34d399;'>🎉 Pardoned by Administrator! Unlocking...</span>";
@@ -1030,6 +1033,21 @@ export function triggerClientLockdown(reason, options = {}) {
       }
     } catch (_) {}
   }, 3000);
+
+  // 7. Strike 3 Conditional Anti-Debugger Trap: ONLY on confirmed security quarantine detention
+  // If an attacker detained on the Red Lockdown Screen attempts to inspect/modify client state, halt step-through.
+  // Completely inactive during normal browsing (Strikes 0-2) -> 0% CPU impact on students!
+  if (!isDevToolsBypassed()) {
+    lockdownDebuggerInterval = setInterval(() => {
+      if (isLockdownActive && !isDevToolsBypassed() && isDevToolsCurrentlyOpen()) {
+        try {
+          (function () {
+            return false;
+          }["constructor"]("debugger")["call"]());
+        } catch (_) {}
+      }
+    }, 1000);
+  }
 }
 
 /**
