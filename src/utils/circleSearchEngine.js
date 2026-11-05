@@ -42,8 +42,15 @@ export async function extractTextFromPageBounds(pdfPage, bounds, viewport) {
       if (!item.str || !item.str.trim()) continue;
 
       // item.transform: [scaleX, skewY, skewX, scaleY, tx, ty]
-      const tx = item.transform[4] * scale;
-      const ty = (vpHeight - (item.transform[5] * scale)); // Flip Y-axis to match screen coords
+      let tx, ty;
+      if (viewport && typeof viewport.convertToViewportPoint === "function") {
+        const pt = viewport.convertToViewportPoint(item.transform[4], item.transform[5]);
+        tx = pt[0];
+        ty = pt[1];
+      } else {
+        tx = item.transform[4] * scale;
+        ty = vpHeight - item.transform[5] * scale;
+      }
       const itemWidth = (item.width || 10) * scale;
       const itemHeight = (item.height || 12) * scale;
 

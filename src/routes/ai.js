@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+
+// Authenticate token on all AI routes so req.user is accurately populated
+router.use(authenticateToken);
 const {
   generateAcademicAnswer,
   getAiTelemetry,
@@ -16,10 +19,15 @@ const {
   getCircleSearchTelemetry,
 } = require("../services/tursoCircleSearchService");
 
-// Student Rate Limiter (Prevent single student spamming AI endpoints)
+// Student Rate Limiter (Prevent single student spamming AI endpoints, with Admin immunity)
 const studentRateLimitMap = new Map();
 function studentAiLimiter(req, res, next) {
-  const identifier = req.user?.id || req.ip || "127.0.0.1";
+  // 🛡️ Admin Immunity: Administrators and half-admins are never rate limited
+  if (req.user?.role === "admin" || req.user?.role === "half_admin" || req.user?.isMainAdmin) {
+    return next();
+  }
+
+  const identifier = req.user?.id ? `user_${req.user.id}` : `ip_${req.ip || "127.0.0.1"}`;
   const now = Date.now();
   const lastTime = studentRateLimitMap.get(identifier) || 0;
   

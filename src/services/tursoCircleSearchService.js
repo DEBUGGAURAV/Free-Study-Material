@@ -47,22 +47,44 @@ function initLocalCircleDb() {
   }
 }
 
-try {
-  if (cacheDbUrl && (cacheDbUrl.startsWith("libsql://") || cacheDbUrl.startsWith("https://")) && cacheDbAuthToken) {
-    isCloud = true;
-    client = createClient({
-      url: cacheDbUrl,
-      authToken: cacheDbAuthToken,
-    });
-    console.log(`[TURSO-CIRCLE-SEARCH] 🟢 Connected to Dedicated Cloud Turso: ${cacheDbUrl}`);
-    ensureTable();
-  } else {
-    initLocalCircleDb();
+async function initTursoCircleSearchTables() {
+  const url = (process.env.TURSO_CIRCLE_SEARCH_URL || process.env.TURSO_AI_CACHE_URL || "").trim();
+  const token = (process.env.TURSO_CIRCLE_SEARCH_AUTH_TOKEN || process.env.TURSO_AI_CACHE_AUTH_TOKEN || "").trim();
+
+  try {
+    if (url && (url.startsWith("libsql://") || url.startsWith("https://")) && token) {
+      isCloud = true;
+      client = createClient({
+        url,
+        authToken: token,
+      });
+      console.log(`[TURSO-CIRCLE-SEARCH] 🟢 Connected to Dedicated Cloud Turso: ${url}`);
+      await ensureTable();
+    } else if (!client) {
+      initLocalCircleDb();
+    } else {
+      await ensureTable();
+    }
+  } catch (err) {
+    console.warn("[TURSO-CIRCLE-SEARCH] Connection error:", err.message);
+    if (!client) initLocalCircleDb();
   }
-} catch (err) {
-  console.warn("[TURSO-CIRCLE-SEARCH] Client setup warning:", err.message);
-  initLocalCircleDb();
 }
+
+// Initial Boot Trigger
+initTursoCircleSearchTables().catch(() => {});
+
+// Background Pruner: Prunes stale cache entries older than 14 days every 12 hours
+setInterval(async () => {
+  if (!client) return;
+  try {
+    const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    await client.execute({
+      sql: `DELETE FROM circle_search_cache WHERE created_at < ? AND hits <= 1`,
+      args: [twoWeeksAgo],
+    });
+  } catch (_) {}
+}, 12 * 60 * 60 * 1000);
 
 async function ensureTable() {
   if (!client) return;
@@ -228,6 +250,7 @@ async function getCircleSearchTelemetry() {
 }
 
 module.exports = {
+  initTursoCircleSearchTables,
   computeQueryHash,
   getCachedCircleSolution,
   saveCircleSolution,

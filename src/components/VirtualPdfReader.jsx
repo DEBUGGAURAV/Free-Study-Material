@@ -330,6 +330,7 @@ export default function VirtualPdfReader({
   const canUseNativePdfViewer = hasNativePdfium;
 
   const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
+  const loadGenerationRef = useRef(0);
 
   // Touch Swipe & Pinch-to-Zoom refs for mobile reading
   const touchStartXRef = useRef(0);
@@ -666,6 +667,7 @@ export default function VirtualPdfReader({
   // Load document on-demand (streaming range requests or local file)
   useEffect(() => {
     let isCancelled = false;
+    const currentGeneration = ++loadGenerationRef.current;
 
     // 🎓 Record this note into the student's study context for 6 AM Targeted Exam Pre-fetch
     if (noteId || note) {
@@ -681,25 +683,28 @@ export default function VirtualPdfReader({
         if (file) {
           setPreviewProgress({ percent: 50, loadedBytes: file.size, totalBytes: file.size, speed: "Local Buffer" });
           const arrayBuffer = await file.arrayBuffer();
-          if (!isCancelled) {
+          if (!isCancelled && loadGenerationRef.current === currentGeneration) {
             const pdfData = new Uint8Array(arrayBuffer.slice(0));
             const loadingTask = pdfjsLib.getDocument({ data: pdfData });
             loadingTask.onProgress = (p) => {
-              if (p.total > 0) setPreviewProgress({ percent: Math.round((p.loaded / p.total) * 100), loadedBytes: p.loaded, totalBytes: p.total, speed: "Local Buffer" });
+              if (p.total > 0 && !isCancelled && loadGenerationRef.current === currentGeneration) {
+                setPreviewProgress({ percent: Math.round((p.loaded / p.total) * 100), loadedBytes: p.loaded, totalBytes: p.total, speed: "Local Buffer" });
+              }
             };
-            const previewTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Preview render timeout")), 5000));
+            const previewTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error("Preview render timeout")), 12000));
             try {
               const doc = await Promise.race([loadingTask.promise, previewTimeout]);
-              if (!isCancelled) {
+              if (!isCancelled && loadGenerationRef.current === currentGeneration) {
                 setPreviewProgress({ percent: 100, loadedBytes: file.size, totalBytes: file.size, speed: "Ready" });
                 setPdfDoc(doc);
                 setNumPages(doc.numPages);
                 setLoading(false);
+                setNativeLoading(false);
               }
             } catch (err) {
               console.warn("[PDF.js] Local file parse notice:", err.message);
               try { loadingTask.destroy(); } catch (_) {}
-              if (!isCancelled) {
+              if (!isCancelled && loadGenerationRef.current === currentGeneration) {
                 setUseNativeViewer(true);
                 setLoading(false);
                 setNativeLoading(false);
@@ -720,6 +725,7 @@ export default function VirtualPdfReader({
         if (note?.driveLink && !hasCloudStorage && !isBlocked && canUseNativePdfViewer && !isMobileDevice) {
           setUseNativeViewer(true);
           setLoading(false);
+          setNativeLoading(false);
           return;
         }
 
@@ -731,7 +737,7 @@ export default function VirtualPdfReader({
           note,
           token,
           onProgress: (m) => {
-            if (isCancelled) return;
+            if (isCancelled || loadGenerationRef.current !== currentGeneration) return;
             const loaded = Math.round(parseFloat(m.loadedMB || 0) * 1024 * 1024);
             const total = Math.round(parseFloat(m.totalMB || 0) * 1024 * 1024);
 
@@ -805,95 +811,147 @@ export default function VirtualPdfReader({
           },
         });
 
-        if (isCancelled) return;
-        setLocalPdfBuffer(result.buffer);
+        if (isCancelled || loadGenerationRef.current !== currentGeneration) return;
 
-        // Ensure clean cloned Uint8Array to prevent buffer detaching and worker locks
-        const pdfData = result.buffer instanceof Uint8Array
-          ? new Uint8Array(result.buffer.slice(0))
-          : new Uint8Array(result.buffer.slice(0));
+        // Ensure clean cloned ArrayBuffer (never detached, robust against worker postMessage)
+        const rawBuf = result.buffer;
+        let safeArrayBuffer = null;
+        if (rawBuf instanceof ArrayBuffer) {
+          safeArrayBuffer = rawBuf.slice(0);
+        } else if (rawBuf && rawBuf.buffer instanceof ArrayBuffer) {
+          safeArrayBuffer = rawBuf.buffer.slice(rawBuf.byteOffset, rawBuf.byteOffset + rawBuf.byteLength);
+        } else if (rawBuf && rawBuf.byteLength) {
+          const u8 = new Uint8Array(rawBuf);
+          safeArrayBuffer = u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength);
+        }
 
-        // Create Blob URL for instant native Web Reader iframe fallback
-        try {
-          const blob = new Blob([pdfData], { type: "application/pdf" });
-          const blobUrl = URL.createObjectURL(blob);
-          setNativeSrc(blobUrl);
-        } catch (_) {}
+        if (!safeArrayBuffer || safeArrayBuffer.byteLength < 50) {
+          throw new Error("Received empty or corrupt document buffer");
+        }
 
-        const loadingTask = pdfjsLib.getDocument({
-          data: pdfData,
-          cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/",
-          cMapPacked: true,
-        });
+        setLocalPdfBuffer(safeArrayBuffer);
 
-        loadingTask.onProgress = (p) => {
-          if (p.total > 0 && !isCancelled) {
-            setPreviewProgress((prev) => ({
-              ...prev,
-              percent: Math.min(100, Math.round((p.loaded / p.total) * 100)),
-            }));
-          }
-        };
+        // Compute direct origin stream URL for native Web Reader fallback
+        const activeId = noteId || note?.id;
+        const cleanName = getNotePdfFileName(note || { id: activeId, title });
+        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+        const directUrl = `/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+        setNativeSrc(directUrl);
 
-        // 4.5-second safety timeout so student is NEVER stuck on 100%
-        const parseTimeout = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Virtual rendering timeout - switching to Web Reader")), 4500)
-        );
+        // Update progress state: buffer ready, now decompressing and building pages
+        setPreviewProgress((prev) => ({
+          ...prev,
+          percent: 100,
+          speed: "Decompressing & Rendering Pages...",
+        }));
+
+        // Dynamic realistic timeout based on file size: 10 MB gets ~35s, 1 MB gets ~20s
+        const fileSizeMB = safeArrayBuffer.byteLength / (1024 * 1024);
+        const dynamicTimeoutMs = Math.max(20000, Math.min(60000, Math.round(fileSizeMB * 3500) + 15000));
 
         let doc = null;
+        let loadingTask = null;
+
+        // 🚀 Engine Attempt 1: High-Speed Web Worker
         try {
+          const pdfData1 = new Uint8Array(safeArrayBuffer.slice(0));
+          loadingTask = pdfjsLib.getDocument({
+            data: pdfData1,
+            cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/",
+            cMapPacked: true,
+            standardFontDataUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/standard_fonts/",
+            isEvalSupported: false,
+            useSystemFonts: true,
+          });
+
+          loadingTask.onProgress = (p) => {
+            if (p.total > 0 && !isCancelled && loadGenerationRef.current === currentGeneration) {
+              setPreviewProgress((prev) => ({
+                ...prev,
+                percent: Math.min(100, Math.round((p.loaded / p.total) * 100)),
+              }));
+            }
+          };
+
+          const parseTimeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Worker parse timeout - switching to resilient inline engine")), dynamicTimeoutMs)
+          );
+
           doc = await Promise.race([loadingTask.promise, parseTimeout]);
-        } catch (parseErr) {
-          console.warn("[PDF.js] Virtual engine parse notice, auto-activating Web Reader:", parseErr.message);
-          try { loadingTask.destroy(); } catch (_) {}
+        } catch (workerErr) {
+          console.warn("[PDF.js] Worker attempt notice, switching to resilient inline engine:", workerErr.message);
+          try { if (loadingTask) loadingTask.destroy(); } catch (_) {}
 
-          if (!isCancelled) {
-            setUseNativeViewer(true);
-            setLoading(false);
-            setNativeLoading(false);
-            setOcrStatusText("⚡ Auto-switched to Web Reader for seamless viewing.");
-            setTimeout(() => setOcrStatusText(""), 4000);
+          // 🛡️ Engine Attempt 2: Resilient Main-Thread Fallback (disableWorker: true)
+          // Completely immune to worker script failures, CORS, module worker unsupported, and mobile sandboxes
+          if (!isCancelled && loadGenerationRef.current === currentGeneration) {
+            try {
+              const pdfData2 = new Uint8Array(safeArrayBuffer.slice(0));
+              const fallbackTask = pdfjsLib.getDocument({
+                data: pdfData2,
+                disableWorker: true,
+                cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@6.4.299/cmaps/",
+                cMapPacked: true,
+                isEvalSupported: false,
+              });
+              const fallbackTimeout = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Inline parse timeout")), 20000)
+              );
+              doc = await Promise.race([fallbackTask.promise, fallbackTimeout]);
+            } catch (fallbackErr) {
+              console.warn("[PDF.js] Inline fallback notice, activating Web Reader:", fallbackErr.message);
+            }
           }
-          return;
         }
 
-        if (isCancelled || !doc) return;
+        if (isCancelled || loadGenerationRef.current !== currentGeneration) return;
 
-        setPdfDoc(doc);
-        setNumPages(doc.numPages);
-        setLoading(false);
-        setIsCachingToCdn(false);
-        setCdnTransferPercent(100);
+        if (doc) {
+          setPdfDoc(doc);
+          setNumPages(doc.numPages);
+          setLoading(false);
+          setNativeLoading(false);
+          setIsCachingToCdn(false);
+          setCdnTransferPercent(100);
 
-        // Pre-cache buffer into P2P mesh & IndexedDB
-        if (typeof window !== "undefined") {
-          window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-          window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = result.buffer;
-        }
-        cacheNoteBuffer(noteId, result.buffer);
-        saveNoteOffline(note || { id: noteId, title }, result.buffer);
-
-        // 1. Background index into MiniSearch Client-Side RAG
-        setIsRagIndexing(true);
-        ragIndexRef.current.indexPdfDocument(doc).finally(() => setIsRagIndexing(false));
-
-        // Pre-warm Tesseract WASM OCR worker in idle background
-        setTimeout(() => warmupClientOcr(), 800);
-
-        // 🧠 Condition-based Pre-cache: Intelligently store related subject notes + recent + latest in IndexedDB
-        setTimeout(() => {
-          if (!isCancelled) {
-            smartPrecacheConditionNotes(note || { id: noteId, title, subject });
+          // Pre-cache buffer into P2P mesh & IndexedDB
+          if (typeof window !== "undefined") {
+            window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
+            window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = safeArrayBuffer;
           }
-        }, 3000);
+          cacheNoteBuffer(noteId, safeArrayBuffer);
+          saveNoteOffline(note || { id: noteId, title }, safeArrayBuffer);
+
+          // 1. Background index into MiniSearch Client-Side RAG
+          setIsRagIndexing(true);
+          ragIndexRef.current.indexPdfDocument(doc).finally(() => setIsRagIndexing(false));
+
+          // Pre-warm Tesseract WASM OCR worker in idle background
+          setTimeout(() => warmupClientOcr(), 800);
+
+          // 🧠 Condition-based Pre-cache: Intelligently store related subject notes + recent + latest in IndexedDB
+          setTimeout(() => {
+            if (!isCancelled && loadGenerationRef.current === currentGeneration) {
+              smartPrecacheConditionNotes(note || { id: noteId, title, subject });
+            }
+          }, 3000);
+        } else {
+          // If both PDF.js passes failed, activate Web Reader with direct stream URL
+          setUseNativeViewer(true);
+          setLoading(false);
+          setNativeLoading(false);
+          setOcrStatusText("⚡ Auto-switched to Web Reader for seamless viewing.");
+          setTimeout(() => setOcrStatusText(""), 4000);
+        }
       } catch (err) {
-        if (!isCancelled) {
+        if (!isCancelled && loadGenerationRef.current === currentGeneration) {
           console.error("[PDF.js Reader] Stream error:", err);
           let errMsg = err.message || "Failed to load document";
           const hasToken = Boolean(localStorage.getItem("vault_token") || localStorage.getItem("vault_user"));
           if (!hasToken || errMsg.includes("401") || errMsg.includes("Restricted") || errMsg.includes("exclusively for registered")) {
             setIsAuthGated(true);
             setLoading(false);
+            setNativeLoading(false);
             return;
           }
 
@@ -911,6 +969,7 @@ export default function VirtualPdfReader({
             }
             setError("This study material is currently unavailable or has been archived from the cloud vault.");
             setLoading(false);
+            setNativeLoading(false);
             return;
           }
 
@@ -928,7 +987,7 @@ export default function VirtualPdfReader({
             console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
             setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
             setTimeout(() => {
-              if (!isCancelled) {
+              if (!isCancelled && loadGenerationRef.current === currentGeneration) {
                 setReloadTrigger((v) => v + 1);
               }
             }, 1800);
@@ -947,16 +1006,17 @@ export default function VirtualPdfReader({
 
           setError(errMsg);
           setLoading(false);
+          setNativeLoading(false);
         }
       }
     }
 
-    // 🛡️ Ultimate safety watchdog: Guarantee reader is NEVER stuck at 100% past 4.5 seconds
-    const globalSafetyWatchdog = setTimeout(() => {
-      if (!isCancelled) {
+    // 🛡️ Ultimate safety watchdog: Guarantee reader is NEVER stuck at 100%
+    const safetyWatchdog = setTimeout(() => {
+      if (!isCancelled && loadGenerationRef.current === currentGeneration) {
         setLoading((prevLoading) => {
           if (prevLoading) {
-            console.warn("[VirtualPdfReader] Global watchdog tripped: auto-clearing stuck loader state");
+            console.warn("[VirtualPdfReader] Safety watchdog tripped: auto-clearing stuck loader state");
             setNativeLoading(false);
             setUseNativeViewer(true);
             return false;
@@ -964,13 +1024,13 @@ export default function VirtualPdfReader({
           return prevLoading;
         });
       }
-    }, 4500);
+    }, 45000);
 
     loadPdf();
 
     return () => {
       isCancelled = true;
-      clearTimeout(globalSafetyWatchdog);
+      clearTimeout(safetyWatchdog);
     };
   }, [url, noteId, file, note?.id, reloadTrigger]);
 
@@ -2630,20 +2690,12 @@ export default function VirtualPdfReader({
       }
     }
 
-    // ⚡ Instant 0ms Native Buffer: If cached in memory or IndexedDB, create Blob URL immediately
-    const activeBuf =
-      localPdfBuffer ||
-      (typeof window !== "undefined" &&
-        window.__FSM_LOADED_PDF_BUFFERS__ &&
-        (window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] ||
-          window.__FSM_LOADED_PDF_BUFFERS__[noteId]));
-
-    if (activeBuf) {
-      try {
-        const blob = new Blob([activeBuf], { type: "application/pdf" });
-        const blobUrl = URL.createObjectURL(blob);
-        setNativeSrc(blobUrl);
-      } catch (_) {}
+    const activeId = noteId || note?.id;
+    if (activeId) {
+      const cleanName = getNotePdfFileName(note || { id: activeId, title });
+      const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+      const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+      setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
     }
   };
 
@@ -4362,19 +4414,40 @@ export default function VirtualPdfReader({
                   }}
                 >
                   <span>💡 If your browser restricts embedded preview:</span>
-                  <a
-                    href={nativeSrc || `/api/notes/${noteId}/stream.pdf?preview=1`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      color: "#38bdf8",
-                      fontWeight: 700,
-                      textDecoration: "underline",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Open Document in New Tab ↗
-                  </a>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                    <a
+                      href={nativeSrc || `/api/notes/${noteId || note?.id}/stream.pdf?preview=1`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        color: "#38bdf8",
+                        fontWeight: 700,
+                        textDecoration: "underline",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Open Document in New Tab ↗
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseNativeViewer(false);
+                        setReloadTrigger((v) => v + 1);
+                      }}
+                      style={{
+                        background: "rgba(99, 102, 241, 0.2)",
+                        border: "1px solid rgba(99, 102, 241, 0.4)",
+                        color: "#a5b4fc",
+                        borderRadius: "6px",
+                        padding: "2px 8px",
+                        fontSize: "0.72rem",
+                        cursor: "pointer",
+                        fontWeight: 600,
+                      }}
+                    >
+                      🚀 Try Streamer Engine
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
