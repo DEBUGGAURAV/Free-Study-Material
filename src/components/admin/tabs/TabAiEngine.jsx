@@ -93,6 +93,11 @@ export default function TabAiEngine() {
     window.open(url, "_blank");
   };
 
+  const handleExportPurgeReport = (format = "excel") => {
+    const url = api.getPurgeReportDownloadUrl(format);
+    window.open(url, "_blank");
+  };
+
   const loadTelemetry = async () => {
     try {
       setLoading(true);
@@ -1256,6 +1261,46 @@ export default function TabAiEngine() {
             <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", margin: 0 }}>
               Audit dossier sent whenever a user is deleted from Firebase Firestore, confirming Turso AI rows and data purge.
             </p>
+            <div style={{ display: "flex", gap: "8px", marginTop: "4px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => handleExportPurgeReport("excel")}
+                className="btn-secondary"
+                style={{
+                  padding: "5px 10px",
+                  fontSize: "0.74rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.35)",
+                  color: "#34d399",
+                }}
+                title="Download full Cascade Account Purge History as Excel (.csv)"
+              >
+                <Download size={12} />
+                <span>Excel Purge History</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportPurgeReport("pdf")}
+                className="btn-secondary"
+                style={{
+                  padding: "5px 10px",
+                  fontSize: "0.74rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  background: "rgba(239, 68, 68, 0.15)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#f87171",
+                }}
+                title="Download formatted Cascade Account Purge Dossier as PDF (.pdf)"
+              >
+                <FileText size={12} />
+                <span>PDF Purge Dossier</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1303,7 +1348,7 @@ export default function TabAiEngine() {
           <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             <button
               type="button"
-              onClick={() => handleExportReport("csv")}
+              onClick={() => handleExportReport("excel")}
               className="btn-secondary"
               style={{
                 padding: "7px 14px",
@@ -1315,9 +1360,29 @@ export default function TabAiEngine() {
                 border: "1px solid rgba(16, 185, 129, 0.35)",
                 color: "#34d399",
               }}
+              title="Download AI Search Query History in Microsoft Excel (.csv)"
             >
               <Download size={14} />
-              <span>Export CSV</span>
+              <span>Excel (.csv)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleExportReport("pdf")}
+              className="btn-secondary"
+              style={{
+                padding: "7px 14px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                color: "#f87171",
+              }}
+              title="Download branded AI Search Query History Report as PDF (.pdf)"
+            >
+              <FileText size={14} />
+              <span>PDF Report (.pdf)</span>
             </button>
             <button
               type="button"
@@ -1335,7 +1400,7 @@ export default function TabAiEngine() {
               }}
             >
               <FileText size={14} />
-              <span>Export JSON</span>
+              <span>JSON</span>
             </button>
             <button
               type="button"

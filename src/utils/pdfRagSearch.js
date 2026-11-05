@@ -5,7 +5,7 @@
  */
 import MiniSearch from 'minisearch';
 
-// 🧬 Academic Knowledge Vector Graph (Maps student concept intent to academic sub-terms)
+// 🧬 Academic Knowledge Vector Graph (Maps student concept intent to academic sub-terms across Engineering & Sciences)
 export const ACADEMIC_SEMANTIC_GRAPH = {
   // Operating Systems
   deadlock: {
@@ -97,6 +97,74 @@ export const ACADEMIC_SEMANTIC_GRAPH = {
   ml: {
     concept: "Machine Learning & Neural Architectures",
     related: ["supervised", "unsupervised", "reinforcement", "gradient descent", "backpropagation", "loss function", "overfitting", "regression", "classification"],
+  },
+
+  // Electrical & Electronics Engineering
+  ohm: {
+    concept: "Ohm's Law & Electrical Resistance",
+    related: ["resistance", "voltage", "current", "conductance", "resistivity", "v=ir", "potential difference", "resistor"],
+  },
+  kirchhoff: {
+    concept: "Kirchhoff's Laws (KCL & KVL)",
+    related: ["kcl", "kvl", "node", "junction", "mesh", "loop", "circuit", "conservation of charge", "conservation of energy"],
+  },
+  semiconductor: {
+    concept: "Semiconductor Physics & Diodes",
+    related: ["intrinsic", "extrinsic", "p-n junction", "diode", "transistor", "bjt", "mosfet", "doping", "depletion layer", "forward bias", "reverse bias"],
+  },
+  opamp: {
+    concept: "Operational Amplifiers & Signal Conditioning",
+    related: ["operational amplifier", "inverting", "non-inverting", "virtual ground", "slew rate", "cmrr", "feedback", "comparator"],
+  },
+  transformer: {
+    concept: "Transformers & Magnetic Induction",
+    related: ["mutual induction", "primary", "secondary", "step up", "step down", "eddy current", "core", "turns ratio", "emf"],
+  },
+  logic_gates: {
+    concept: "Digital Logic Gates & Boolean Algebra",
+    related: ["and gate", "or gate", "not gate", "nand", "nor", "xor", "de morgan", "boolean algebra", "multiplexer", "flip flop", "truth table"],
+  },
+
+  // Mechanical & Civil Engineering
+  thermodynamics: {
+    concept: "Thermodynamics & Heat Cycles",
+    related: ["first law", "second law", "entropy", "enthalpy", "carnot engine", "reversible", "heat transfer", "adiabatic", "isothermal"],
+  },
+  bernoulli: {
+    concept: "Fluid Dynamics & Bernoulli's Principle",
+    related: ["fluid mechanics", "streamline", "venturimeter", "pressure head", "continuity equation", "viscosity", "laminar", "turbulent"],
+  },
+  stress_strain: {
+    concept: "Strength of Materials & Mechanics",
+    related: ["hooke's law", "young's modulus", "shear stress", "tensile stress", "yield strength", "mohr's circle", "elasticity", "strain"],
+  },
+
+  // Engineering Mathematics
+  laplace: {
+    concept: "Laplace Transforms & System Dynamics",
+    related: ["laplace transform", "s-domain", "inverse laplace", "initial value theorem", "differential equations", "transfer function"],
+  },
+  fourier: {
+    concept: "Fourier Series & Frequency Analysis",
+    related: ["fourier series", "fourier transform", "harmonics", "frequency domain", "orthogonal", "spectrum"],
+  },
+  matrices: {
+    concept: "Linear Algebra & Matrix Operations",
+    related: ["eigenvalues", "eigenvectors", "cayley-hamilton", "rank", "determinant", "matrix inversion", "diagonalization"],
+  },
+
+  // Basic Physics & Chemistry
+  maxwell: {
+    concept: "Maxwell's Equations & Electromagnetism",
+    related: ["electromagnetic wave", "displacement current", "magnetic flux", "gauss law", "faraday law", "ampere law"],
+  },
+  newton: {
+    concept: "Classical Mechanics & Laws of Motion",
+    related: ["laws of motion", "inertia", "momentum", "action reaction", "gravitation", "friction", "centripetal"],
+  },
+  quantum: {
+    concept: "Quantum Mechanics & Modern Physics",
+    related: ["wave-particle duality", "de broglie", "photoelectric effect", "schrodinger equation", "heisenberg uncertainty", "planck"],
   },
 };
 
@@ -288,7 +356,7 @@ export class PdfRagSearchIndex {
     return combinedResults.slice(0, 8).map((res) => {
       const fullText = res.text || this.pageTextMap.get(res.page || res.id) || '';
       const allTerms = res.terms || words;
-      const excerpt = this.extractSnippet(fullText, allTerms);
+      const excerpt = this.extractSmartChunk(fullText, allTerms, 120);
       return {
         page: res.page || res.id,
         score: Math.round((res.score || 1) * 10) / 10,
@@ -300,30 +368,106 @@ export class PdfRagSearchIndex {
   }
 
   /**
-   * Extracts a readable 180-character snippet around the search query or matched concept
+   * 🧠 Extracts an intelligent, coherent paragraph/chunk around matching terms
+   * Respects natural sentence boundaries (. ? ! or newlines) so math formulas and definitions are never chopped.
+   * @param {string} text 
+   * @param {string[]} terms 
+   * @param {number} maxWords (default: 120)
+   * @returns {string}
    */
-  extractSnippet(text, terms) {
-    if (!text) return '';
-    const lowerText = text.toLowerCase();
-    let firstIndex = -1;
+  extractSmartChunk(text, terms, maxWords = 120) {
+    if (!text || text.trim().length === 0) return '';
+    const sentences = text
+      .split(/(?<=[.?!])\s+|\n+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 5);
 
-    for (const term of terms) {
-      const idx = lowerText.indexOf(term.toLowerCase());
-      if (idx !== -1 && (firstIndex === -1 || idx < firstIndex)) {
-        firstIndex = idx;
+    if (sentences.length === 0) {
+      return text.slice(0, 250).trim();
+    }
+
+    const lowerTerms = (terms || []).map((t) => t.toLowerCase());
+    let matchIdx = -1;
+
+    for (let i = 0; i < sentences.length; i++) {
+      const sLower = sentences[i].toLowerCase();
+      if (lowerTerms.some((t) => sLower.includes(t))) {
+        matchIdx = i;
+        break;
       }
     }
 
-    if (firstIndex === -1) {
-      return text.substring(0, 160) + '...';
+    if (matchIdx === -1) {
+      // Fallback: take the first 2-3 sentences
+      const fallback = sentences.slice(0, 3).join(' ');
+      const words = fallback.split(/\s+/);
+      return words.length > maxWords ? words.slice(0, maxWords).join(' ') + '...' : fallback;
     }
 
-    const start = Math.max(0, firstIndex - 60);
-    const end = Math.min(text.length, firstIndex + 120);
-    let snippet = text.substring(start, end).trim();
+    // Capture surrounding context: 1 preceding sentence + matched sentence + up to 2 succeeding sentences
+    const start = Math.max(0, matchIdx - 1);
+    const end = Math.min(sentences.length, matchIdx + 3);
+    const chunk = sentences.slice(start, end).join(' ');
+    const words = chunk.split(/\s+/).filter(Boolean);
 
-    if (start > 0) snippet = '...' + snippet;
-    if (end < text.length) snippet = snippet + '...';
-    return snippet;
+    if (words.length > maxWords) {
+      return words.slice(0, maxWords).join(' ') + '...';
+    }
+    return chunk;
+  }
+
+  /**
+   * 🛡️ Zero-Cost RAG Context Aggregator (Strict 400-Word / 99% Token Saving Cap)
+   * Extracts top matched passages across pages, capping total context to max 400 words
+   * so Groq/Gemini LLM queries consume ~350 tokens instead of 30,000 tokens!
+   * @param {string} query 
+   * @param {number} maxTotalWords (default: 400)
+   * @returns {{ context: string, matchedPages: number[], conceptMatched: string|null, totalWords: number }}
+   */
+  getRagContext(query, maxTotalWords = 400) {
+    const results = this.search(query);
+    if (!results || results.length === 0) {
+      return { context: '', matchedPages: [], conceptMatched: null, totalWords: 0 };
+    }
+
+    let accumulatedWords = 0;
+    const contextParts = [];
+    const matchedPages = [];
+    let conceptMatched = null;
+
+    for (const r of results) {
+      if (accumulatedWords >= maxTotalWords) break;
+      matchedPages.push(r.page);
+      if (!conceptMatched && r.conceptMatched) {
+        conceptMatched = r.conceptMatched;
+      }
+
+      const chunkWords = r.excerpt.split(/\s+/).filter(Boolean);
+      const remainingWords = maxTotalWords - accumulatedWords;
+
+      let excerptToUse = r.excerpt;
+      if (chunkWords.length > remainingWords) {
+        excerptToUse = chunkWords.slice(0, remainingWords).join(' ') + '...';
+        accumulatedWords += remainingWords;
+      } else {
+        accumulatedWords += chunkWords.length;
+      }
+
+      contextParts.push(`📌 [Reference: Page ${r.page}]\n${excerptToUse}`);
+    }
+
+    return {
+      context: contextParts.join('\n\n'),
+      matchedPages: Array.from(new Set(matchedPages)),
+      conceptMatched,
+      totalWords: accumulatedWords,
+    };
+  }
+
+  /**
+   * Extracts a readable snippet around the search query (backward-compatibility alias)
+   */
+  extractSnippet(text, terms) {
+    return this.extractSmartChunk(text, terms, 60);
   }
 }

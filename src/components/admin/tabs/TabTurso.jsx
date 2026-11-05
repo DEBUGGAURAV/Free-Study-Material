@@ -1086,6 +1086,47 @@ export default function TabTurso(props) {
                         <Eye size={12} />
                         <span>{showAiLogsTable ? "Hide Logs Preview" : "View Recent Logs"}</span>
                       </button>
+
+                      {/* Export AI Search History (Excel & PDF) */}
+                      <button
+                        type="button"
+                        onClick={() => window.open(api.getAiReportDownloadUrl("excel"), "_blank")}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "rgba(16, 185, 129, 0.12)",
+                          borderColor: "rgba(16, 185, 129, 0.35)",
+                          color: "#34d399",
+                        }}
+                        title="Download AI search query history as Excel CSV"
+                      >
+                        <Download size={12} />
+                        <span>Excel History</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => window.open(api.getAiReportDownloadUrl("pdf"), "_blank")}
+                        className="btn-secondary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "rgba(239, 68, 68, 0.12)",
+                          borderColor: "rgba(239, 68, 68, 0.35)",
+                          color: "#f87171",
+                        }}
+                        title="Download formatted AI search query history as PDF"
+                      >
+                        <FileText size={12} />
+                        <span>PDF Report</span>
+                      </button>
                     </div>
 
                     {/* Action Feedback Banner */}

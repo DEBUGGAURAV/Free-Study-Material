@@ -2659,16 +2659,12 @@ export default function VirtualPdfReader({
       let relevantContext = "";
       const matchedPageNumbers = [];
 
-      // 1. Search full document across all pages using Basic RAG MiniSearch
+      // 1. Search full document across all pages using Zero-Cost MiniSearch RAG (Strict 400-word cap)
       if (ragIndexRef.current) {
-        const ragMatches = ragIndexRef.current.search(query);
-        if (ragMatches && ragMatches.length > 0) {
-          relevantContext = ragMatches
-            .map((m) => {
-              matchedPageNumbers.push(m.page);
-              return `[Page ${m.page}]: ${m.excerpt}`;
-            })
-            .join("\n");
+        const ragRes = ragIndexRef.current.getRagContext(query, 400);
+        if (ragRes && ragRes.context) {
+          relevantContext = ragRes.context;
+          matchedPageNumbers.push(...ragRes.matchedPages);
         }
       }
 
