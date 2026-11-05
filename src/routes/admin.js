@@ -4247,7 +4247,8 @@ router.post("/turso/cache/prune", authenticateToken, requireAdmin, async (req, r
 
 router.get("/turso/audits", authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const audits = await getPrivateRoomAudits(Number(req.query.limit || 100));
+    const safeLimit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
+    const audits = await getPrivateRoomAudits(safeLimit);
     res.json({ success: true, audits });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

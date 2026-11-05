@@ -558,9 +558,10 @@ async function deleteRoomFromTurso(roomId) {
 async function getPrivateRoomAudits(limit = 50) {
   if (!client) return [];
   try {
+    const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
     const res = await client.execute({
       sql: `SELECT * FROM private_room_audits ORDER BY createdAtTimestamp DESC LIMIT ?`,
-      args: [Number(limit)],
+      args: [safeLimit],
     });
     return res.rows.map((row) => ({
       ...row,

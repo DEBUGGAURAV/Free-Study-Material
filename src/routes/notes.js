@@ -375,22 +375,41 @@ function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expect
               res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Telegram Fast-Stream)");
             }
 
-            const binPath = path.join(CDN_DISK_DIR, `${noteId}.bin`);
+            const safeId = sanitizeCacheId(noteId);
+            const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
             let diskStream = null;
+            let bytesWritten = 0;
             try {
-              if (fs.existsSync(CDN_DISK_DIR)) {
+              if (binPath && fs.existsSync(CDN_CACHE_DIR)) {
                 diskStream = fs.createWriteStream(binPath);
               }
             } catch (_) {}
 
             fileRes.on("data", (chunk) => {
               if (!res.writableEnded) res.write(chunk);
-              if (diskStream) diskStream.write(chunk);
+              if (diskStream) {
+                bytesWritten += chunk.length;
+                diskStream.write(chunk);
+              }
             });
 
             fileRes.on("end", () => {
               if (!res.writableEnded) res.end();
-              if (diskStream) diskStream.end();
+              if (diskStream) {
+                diskStream.end();
+                if (safeId) {
+                  const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
+                  fs.promises.writeFile(
+                    metaFile,
+                    JSON.stringify({
+                      mimeType: "application/pdf",
+                      totalSize: bytesWritten || total,
+                      cachedAt: Date.now(),
+                    }),
+                    "utf8"
+                  ).catch(() => {});
+                }
+              }
               resolve(true);
             });
 
@@ -534,8 +553,10 @@ function triggerBackgroundCdnCache(id, note) {
 function purgeCdnDiskBuffer(noteId) {
   try {
     if (noteId) {
-      const bin = path.join(CDN_CACHE_DIR, `${noteId}.bin`);
-      const meta = path.join(CDN_CACHE_DIR, `${noteId}.meta.json`);
+      const safeId = sanitizeCacheId(noteId);
+      if (!safeId) return;
+      const bin = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
+      const meta = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
       if (fs.existsSync(bin)) fs.unlinkSync(bin);
       if (fs.existsSync(meta)) fs.unlinkSync(meta);
     } else {

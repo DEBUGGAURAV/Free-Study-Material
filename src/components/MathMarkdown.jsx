@@ -102,6 +102,9 @@ function formatInlineMarkdown(text) {
     return `${prefix}%%%MATH_HOLDER_${idx}%%%`;
   });
 
+  // 2.5 Sanitize HTML to prevent Stored & Reflected XSS injection
+  safeText = escapeHtml(safeText);
+
   // 3. Process Markdown (bold, italic, code)
   // Bold: **text** or __text__
   safeText = safeText.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');

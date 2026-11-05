@@ -122,7 +122,19 @@ function verifyOtp(type, email, inputOtp) {
     otpStore.delete(key);
     return { valid: false, message: "Too many incorrect attempts. Please request a new OTP code." };
   }
-  if (record.otp !== String(inputOtp).trim()) {
+
+  const cleanInput = String(inputOtp || "").trim();
+  const cleanStored = String(record.otp || "").trim();
+  let matches = false;
+  if (cleanInput.length === cleanStored.length && cleanStored.length > 0) {
+    try {
+      matches = crypto.timingSafeEqual(Buffer.from(cleanInput), Buffer.from(cleanStored));
+    } catch (_) {
+      matches = cleanInput === cleanStored;
+    }
+  }
+
+  if (!matches) {
     return { valid: false, message: "Invalid OTP code. Please check and try again." };
   }
   otpStore.delete(key);
@@ -414,13 +426,15 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
  * GET /api/auth/register-telegram-poll
  * Allows frontend to poll verification status and auto-fill OTP seamlessly without user losing their modal
  */
-router.get("/register-telegram-poll", async (req, res) => {
+router.get("/register-telegram-poll", authLimiter, async (req, res) => {
   try {
-    const { regToken, mobile, email } = req.query;
-    if (!regToken && !mobile && !email) return res.json({ ready: false });
+    const { regToken } = req.query;
+    if (!regToken || typeof regToken !== "string" || !regToken.startsWith("reg_")) {
+      return res.json({ ready: false });
+    }
 
-    const record = await getPendingRegistration({ regToken, mobile, email });
-    if (!record) return res.json({ ready: false, expired: true });
+    const record = await getPendingRegistration(regToken);
+    if (!record || record.regToken !== regToken) return res.json({ ready: false, expired: true });
 
     // STRICT CHECK: Return OTP only when filled mobile number has been cryptographically verified by Telegram contact sharing!
     if (record.verified && record.phoneVerified && record.otp) {
@@ -444,13 +458,15 @@ router.get("/register-telegram-poll", async (req, res) => {
  * GET /api/auth/forgot-telegram-poll
  * Allows frontend to poll forgot password status and auto-fill OTP seamlessly when user starts bot!
  */
-router.get("/forgot-telegram-poll", async (req, res) => {
+router.get("/forgot-telegram-poll", authLimiter, async (req, res) => {
   try {
-    const { resetToken, mobile, email } = req.query;
-    if (!resetToken && !mobile && !email) return res.json({ ready: false });
+    const { resetToken } = req.query;
+    if (!resetToken || typeof resetToken !== "string" || !resetToken.startsWith("reset_")) {
+      return res.json({ ready: false });
+    }
 
-    const record = await getPendingReset({ resetToken, mobile, email });
-    if (!record) return res.json({ ready: false, expired: true });
+    const record = await getPendingReset(resetToken);
+    if (!record || record.resetToken !== resetToken) return res.json({ ready: false, expired: true });
 
     // STRICT CHECK: Return OTP only when filled mobile number has been cryptographically verified by Telegram contact sharing!
     if (record.verified && record.phoneVerified && record.otp) {

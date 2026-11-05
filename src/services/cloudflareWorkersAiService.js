@@ -7,6 +7,11 @@
  * executing directly on Cloudflare Edge GPUs with zero server memory footprint!
  */
 
+try {
+  const dns = require("node:dns");
+  if (dns.setDefaultResultOrder) dns.setDefaultResultOrder("ipv4first");
+} catch (_) {}
+
 function getCfCredentials() {
   const accountId = (
     process.env.CLOUDFLARE_ACCOUNT_ID ||
@@ -59,49 +64,71 @@ Formatting rules:
     ? `[Academic Notes Excerpt & Citations]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 9000);
+  const candidateModels = [
+    "@cf/meta/llama-3.1-8b-instruct",
+    "@cf/mistral/mistral-7b-instruct-v0.1",
+    "@cf/meta/llama-3.2-1b-instruct",
+  ];
 
   const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 600;
+  let lastError = null;
 
-  try {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`;
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userContent },
-        ],
-        max_tokens: maxTokens,
-        temperature: 0.3,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  for (const model of candidateModels) {
+    const controller = new AbortController();
+    const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 15000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
-        throw new Error(`CF_WORKERS_AI_RATE_LIMIT_429: ${errText}`);
+    try {
+      const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.3,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 429) {
+          throw new Error(`CF_WORKERS_AI_RATE_LIMIT_429: ${errText}`);
+        }
+        // If 502/503 routing error, log and try next model
+        console.warn(`[CF-AI] Notice: ${model} returned ${response.status}. Attempting fallback model...`);
+        lastError = new Error(`Cloudflare Workers AI Error (${response.status}): ${errText}`);
+        continue;
       }
-      throw new Error(`Cloudflare Workers AI Error (${response.status}): ${errText}`);
-    }
 
-    const data = await response.json();
-    const answer = data.result?.response || data.response || "";
-    if (!answer) {
-      throw new Error("Empty response from Cloudflare Workers AI");
-    }
+      const data = await response.json();
+      const answer = data.result?.response || data.response || "";
+      if (!answer) {
+        lastError = new Error("Empty response from Cloudflare Workers AI");
+        continue;
+      }
 
-    return answer.trim();
-  } finally {
-    clearTimeout(timeout);
+      return answer.trim();
+    } catch (err) {
+      clearTimeout(timeout);
+      lastError = err;
+      if (err.name === "AbortError") {
+        console.warn(`[CF-AI] ${model} timed out. Trying fallback...`);
+      } else {
+        console.warn(`[CF-AI] ${model} error:`, err.message);
+      }
+    }
   }
+
+  throw lastError || new Error("All Cloudflare Workers AI models failed");
 }
 
 module.exports = {

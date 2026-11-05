@@ -674,7 +674,7 @@ export default function TabAiEngine() {
               <ShieldCheck size={14} color={settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24"} />
               <span style={{ color: "var(--text-dim)" }}>Security: </span>
               <strong style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24" }}>
-                {settings.groqApiKeyConfigured ? "🔒 Protected in .env (Zero-Leak)" : "⚠️ Add GROQ_API_KEY in .env"}
+                {settings.groqApiKeyConfigured ? "🔒 Protected in .env (Server-side)" : "⚠️ Add GROQ_API_KEY in .env"}
               </strong>
             </div>
 
@@ -807,7 +807,7 @@ export default function TabAiEngine() {
               <ShieldCheck size={14} color={settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24"} />
               <span style={{ color: "var(--text-dim)" }}>Security: </span>
               <strong style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24" }}>
-                {settings.geminiApiKeyConfigured ? "🔒 Protected in .env (Zero-Leak)" : "⚠️ Add GEMINI_API_KEY in .env"}
+                {settings.geminiApiKeyConfigured ? "🔒 Protected in .env (Server-side)" : "⚠️ Add GEMINI_API_KEY in .env"}
               </strong>
             </div>
 

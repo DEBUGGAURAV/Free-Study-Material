@@ -97,13 +97,18 @@ const uploadChatAvatar = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => cb(null, CHAT_MEDIA_DIR),
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-      cb(null, `dp-${req.user?.id || "user"}-${Date.now()}${ext}`);
+      let ext = path.extname(file.originalname).toLowerCase();
+      if (![".jpg", ".jpeg", ".png", ".webp"].includes(ext)) {
+        ext = ".jpg";
+      }
+      const safeUserId = String(req.user?.id || "user").replace(/[^a-zA-Z0-9_-]/g, "");
+      cb(null, `dp-${safeUserId}-${Date.now()}${ext}`);
     },
   }),
   limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB max
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith("image/")) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if ([".jpg", ".jpeg", ".png", ".webp"].includes(ext) && file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
       cb(new Error("Only image files (PNG, JPG, WebP) are allowed for DP."));
@@ -3160,9 +3165,11 @@ router.post("/upload", authenticateToken, requireAuth, uploadChatMedia.single("f
  */
 router.get("/media/:filename", (req, res) => {
   try {
-    const safeName = path.basename(req.params.filename);
-    const filePath = path.join(CHAT_MEDIA_DIR, safeName);
-    if (!fs.existsSync(filePath)) {
+    const rawName = String(req.params.filename || "");
+    const safeName = path.basename(rawName).replace(/[^a-zA-Z0-9._-]/g, "");
+    if (!safeName) return res.status(400).send("Invalid filename.");
+    const filePath = path.resolve(CHAT_MEDIA_DIR, safeName);
+    if (!filePath.startsWith(path.resolve(CHAT_MEDIA_DIR)) || !fs.existsSync(filePath)) {
       return res.status(404).send("Chat media not found.");
     }
     const ext = path.extname(safeName).toLowerCase();
@@ -3606,9 +3613,14 @@ router.post("/admin/delete-user-messages", authenticateToken, requireAuth, async
         .get()
         .then((snap) => {
           if (!snap.empty) {
-            const batch = db.batch();
-            snap.forEach((d) => batch.delete(d.ref));
-            return batch.commit();
+            const docs = snap.docs;
+            const promises = [];
+            for (let i = 0; i < docs.length; i += 450) {
+              const batch = db.batch();
+              docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+              promises.push(batch.commit());
+            }
+            return Promise.all(promises);
           }
         })
         .catch(() => {});

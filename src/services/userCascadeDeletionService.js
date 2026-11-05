@@ -181,11 +181,15 @@ async function cascadeDeleteUserAccount({
       if (md.roomId) chatRoomsSet.add(md.roomId);
     });
 
-    // Batch delete chat messages from Firestore
+    // Batch delete chat messages from Firestore (safely chunked by 450 to comply with 500 max batch limit)
     if (!chatSnap.empty) {
-      const batch = db.batch();
-      chatSnap.docs.forEach((d) => batch.delete(d.ref));
-      await batch.commit().catch(() => {});
+      const docs = chatSnap.docs;
+      for (let i = 0; i < docs.length; i += 450) {
+        const batch = db.batch();
+        const chunk = docs.slice(i, i + 450);
+        chunk.forEach((d) => batch.delete(d.ref));
+        await batch.commit().catch(() => {});
+      }
     }
 
     // Filter from active in-memory messages if chat module is loaded
