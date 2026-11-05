@@ -454,6 +454,12 @@ function removeAntiScrapeCurtain() {
 function onDevToolsDetected(detail = "Developer Tools opened", extra = {}) {
   try {
     console.clear();
+    if (!isDevToolsBypassed()) {
+      const noop = () => {};
+      console.log = noop;
+      console.debug = noop;
+      console.info = noop;
+    }
   } catch (_) {}
 
   // If DevTools is ALREADY open and we are in an active session, DO NOT ADD ANOTHER STRIKE!
@@ -1157,6 +1163,20 @@ export function initAntiTamperDefense() {
       maxStrikes: 3,
     });
   } catch (_) {}
+
+  // 3.5. Smart Production Console Hygiene & Memory Purge
+  // In production builds, neutralize console.log, console.debug, console.info
+  // to prevent memory leaks and prevent inspecting internal states / token objects.
+  // Preserves console.warn and console.error for critical runtime errors and SDK compatibility.
+  // Respects admin debug overrides (?admin_dev=1, ?debug=1, or active admin session).
+  if (typeof window !== "undefined" && import.meta.env.PROD && !isDevToolsBypassed()) {
+    try {
+      const noop = () => {};
+      console.log = noop;
+      console.debug = noop;
+      console.info = noop;
+    } catch (_) {}
+  }
 
   // 4. Option 2: Multi-Vector disable-devtool Guard with ALL Detectors
   if (!isDevToolsBypassed()) {
