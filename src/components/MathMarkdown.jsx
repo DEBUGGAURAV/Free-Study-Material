@@ -62,10 +62,23 @@ function processLatex(text) {
 function formatInlineMarkdown(text) {
   if (!text) return "";
 
+  // Defensively balance any unclosed LaTeX math delimiters to prevent raw unparsed formulas
+  let balanced = String(text);
+  const openInline = (balanced.match(/\\\(/g) || []).length;
+  const closeInline = (balanced.match(/\\\)/g) || []).length;
+  if (openInline > closeInline) {
+    balanced += " \\)".repeat(openInline - closeInline);
+  }
+  const openBlock = (balanced.match(/\\\[/g) || []).length;
+  const closeBlock = (balanced.match(/\\\]/g) || []).length;
+  if (openBlock > closeBlock) {
+    balanced += " \\]".repeat(openBlock - closeBlock);
+  }
+
   const mathPlaceholders = [];
 
   // 1. Extract block math $$...$$ and \[...\]
-  let safeText = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
+  let safeText = balanced.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
     const idx = mathPlaceholders.length;
     mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 8px 0; overflow-x: auto; padding: 4px 0;">${renderMathSafely(eq, true)}</div>`);
     return `%%%MATH_HOLDER_${idx}%%%`;

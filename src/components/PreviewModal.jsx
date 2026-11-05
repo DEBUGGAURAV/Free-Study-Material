@@ -46,19 +46,22 @@ export default function PreviewModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ padding: "12px", zIndex: 1100 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ padding: "8px", zIndex: 1100 }}>
       <div
         className="modal-content"
         style={{
-          maxWidth: "1050px",
-          width: "95vw",
-          height: "90vh",
+          maxWidth: "1680px",
+          width: "98vw",
+          height: "96vh",
+          maxHeight: "96vh",
           display: "flex",
           flexDirection: "column",
           padding: "0",
           overflow: "hidden",
+          borderRadius: "14px",
           border: "1px solid rgba(255, 255, 255, 0.15)",
-          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.7)",
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.8), 0 0 40px rgba(99, 102, 241, 0.15)",
+          background: "#0b0f19",
         }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -389,7 +389,10 @@ export default function VirtualPdfReader({
     return 1;
   });
   const [numPages, setNumPages] = useState(0);
-  const [scale, setScale] = useState(1.2);
+  const [scale, setScale] = useState(1.0);
+  const [fitMode, setFitMode] = useState("page"); // "page" | "width" | "custom"
+  const [showToolsDrawer, setShowToolsDrawer] = useState(false);
+  const [showSearchInline, setShowSearchInline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pageRendering, setPageRendering] = useState(false);
   const [nightMode, setNightMode] = useState(true); // Default to eye-care Dark Mode
@@ -423,6 +426,54 @@ export default function VirtualPdfReader({
 
   const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
   const loadGenerationRef = useRef(0);
+
+  // 📐 Auto-Fit Scale Engine: Computes exact scale so 100% of the page fits on screen with ZERO cut-off
+  const calculateFitScale = useCallback(async (targetMode = fitMode, targetPage = currentPage) => {
+    if (!pdfDoc || !mainScrollRef.current) return;
+    try {
+      const page = await pdfDoc.getPage(targetPage);
+      const unscaled = page.getViewport({ scale: 1.0 });
+      const container = mainScrollRef.current;
+      const availableWidth = container.clientWidth - (isTouchOrMobileDevice ? 16 : 40);
+      const availableHeight = container.clientHeight - (isTouchOrMobileDevice ? 16 : 40);
+
+      if (availableWidth <= 50 || availableHeight <= 50) return;
+
+      let targetScale;
+      if (targetMode === "page") {
+        // Fits entire page vertically AND horizontally: zero cut-off, whole slide visible!
+        targetScale = Math.min(availableWidth / unscaled.width, availableHeight / unscaled.height);
+      } else if (targetMode === "width") {
+        targetScale = availableWidth / unscaled.width;
+      } else {
+        return;
+      }
+
+      targetScale = Math.min(2.5, Math.max(0.35, Number(targetScale.toFixed(2))));
+      setScale(targetScale);
+    } catch (_) {}
+  }, [pdfDoc, fitMode, currentPage, isTouchOrMobileDevice]);
+
+  // Re-fit on page change or document load when in page/width mode
+  useEffect(() => {
+    if (pdfDoc && (fitMode === "page" || fitMode === "width")) {
+      const timer = setTimeout(() => {
+        calculateFitScale(fitMode, currentPage);
+      }, 70);
+      return () => clearTimeout(timer);
+    }
+  }, [pdfDoc, currentPage, fitMode, calculateFitScale]);
+
+  // Re-fit on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (fitMode === "page" || fitMode === "width") {
+        calculateFitScale(fitMode, currentPage);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [fitMode, currentPage, calculateFitScale]);
 
   // Touch Swipe & Pinch-to-Zoom refs for mobile reading
   const touchStartXRef = useRef(0);
@@ -2888,27 +2939,28 @@ export default function VirtualPdfReader({
           </div>
         </>
       )}
-      {/* Header Tier 1: Document Details & Primary Action Bar with PROMINENT CLOSE BUTTON */}
+      {/* 🌟 Unified Clean Header Bar (~46px Height, Zero Wrap, Maximum Reading Space) */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "12px 18px",
-          background: nightMode ? "rgba(15, 23, 42, 0.95)" : "rgba(255, 255, 255, 0.98)",
+          padding: "6px 14px",
+          background: nightMode ? "rgba(15, 23, 42, 0.96)" : "rgba(255, 255, 255, 0.98)",
           borderBottom: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.08)",
           backdropFilter: "blur(16px)",
-          gap: "12px",
-          flexWrap: "wrap",
+          gap: "8px",
+          zIndex: 40,
+          flexShrink: 0,
         }}
       >
-        {/* Left: Document Icon & Title */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: "200px", flex: "1 1 280px" }}>
+        {/* Left: Document Title, Subject & Compact Page Stepper */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: "0 1 auto" }}>
           <div
             style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "10px",
+              width: "28px",
+              height: "28px",
+              borderRadius: "6px",
               background: "rgba(99, 102, 241, 0.15)",
               color: "var(--accent-indigo)",
               display: "flex",
@@ -2917,484 +2969,420 @@ export default function VirtualPdfReader({
               flexShrink: 0,
             }}
           >
-            <FileText size={20} />
+            <FileText size={16} />
           </div>
-          <div style={{ overflow: "hidden" }}>
-            <div
+
+          <div style={{ overflow: "hidden", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span
               style={{
                 fontWeight: 700,
-                fontSize: "0.95rem",
-                lineHeight: 1.25,
+                fontSize: "0.85rem",
                 color: nightMode ? "#fff" : "#0f172a",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                maxWidth: "480px",
+                maxWidth: "220px",
               }}
               title={title}
             >
               {title}
-            </div>
-            <div style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", display: "flex", alignItems: "center", gap: "8px", marginTop: "2px", flexWrap: "wrap" }}>
-              <span>{subject || "Mozilla PDF Engine"}</span>
-
-              {/* Dynamic Live Stream Realtime Source Badge */}
-              {realSourceInfo && (
-                <span
-                  title={realSourceInfo.details || realSourceInfo.label}
-                  style={{
-                    padding: "2px 8px",
-                    fontSize: "0.64rem",
-                    fontWeight: 700,
-                    background: realSourceInfo.bgColor || "rgba(56, 189, 248, 0.14)",
-                    color: realSourceInfo.color || "#38bdf8",
-                    border: `1px solid ${realSourceInfo.borderColor || "rgba(56, 189, 248, 0.3)"}`,
-                    borderRadius: "6px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    userSelect: "none",
-                  }}
-                >
-                  <span>{realSourceInfo.icon || "⚡"}</span>
-                  <span>{realSourceInfo.short || realSourceInfo.label}</span>
-                </span>
-              )}
-
-              {/* Dynamic Live Stream Source Indicator: Auto-shown ONLY when P2P Mesh is active with peers */}
-              {streamSource === "p2p" && isCachedP2P && p2pPeerCount > 0 && (
-                <span
-                  className="tech-pill dedup"
-                  onClick={toggleStreamSource}
-                  title="Direct Device-to-Device P2P / Local Cache (0ms) • Click to switch stream source"
-                  style={{
-                    padding: "2px 8px",
-                    fontSize: "0.62rem",
-                    fontWeight: 700,
-                    background: "rgba(16, 185, 129, 0.16)",
-                    color: "#34d399",
-                    border: "1px solid rgba(16, 185, 129, 0.35)",
-                    borderRadius: "6px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    cursor: "pointer",
-                    userSelect: "none",
-                    transition: "all 0.25s ease",
-                  }}
-                >
-                  <Zap size={11} />
-                  <span>P2P (0ms)</span>
-                  <span style={{ opacity: 0.85, fontSize: "0.58rem", background: "rgba(16, 185, 129, 0.25)", padding: "1px 4px", borderRadius: "3px" }}>
-                    {p2pPeerCount > 1 ? `${p2pPeerCount} Peers` : "Mesh Active"}
-                  </span>
-                </span>
-              )}
-
-              {/* 🔋 Independent Battery Saver (Defaults to OFF, 1-Click Toggle ON/OFF) */}
+            </span>
+            {subject && (
               <span
-                onClick={toggleEcoMode}
                 style={{
+                  fontSize: "0.66rem",
                   padding: "1px 6px",
-                  fontSize: "0.62rem",
+                  borderRadius: "4px",
+                  background: "rgba(56, 189, 248, 0.15)",
+                  color: "#38bdf8",
                   fontWeight: 700,
-                  background: isEcoMode ? "rgba(34, 197, 94, 0.2)" : "rgba(255, 255, 255, 0.08)",
-                  color: isEcoMode ? "#4ade80" : "var(--text-muted, #94a3b8)",
-                  border: isEcoMode ? "1px solid rgba(34, 197, 94, 0.45)" : "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  userSelect: "none",
-                  transition: "all 0.2s ease",
+                  whiteSpace: "nowrap",
                 }}
-                title={`Battery Saver: ${isEcoMode ? "Active (Click to Turn OFF)" : "Disabled (Click to Turn ON)"}${batteryLevel !== null ? ` • Device Battery: ${batteryLevel}%` : ""}`}
               >
-                <Battery size={11} color={isEcoMode ? "#4ade80" : (batteryLevel !== null && batteryLevel <= 20 ? "#f59e0b" : "#94a3b8")} />
-                <span>🔋 Battery Saver</span>
-                {batteryLevel !== null && (
-                  <span style={{ fontSize: "0.58rem", opacity: 0.85 }}>
-                    ({batteryLevel}%{isCharging ? "⚡" : ""})
-                  </span>
-                )}
-                <span
-                  style={{
-                    opacity: 0.95,
-                    fontSize: "0.58rem",
-                    fontWeight: 800,
-                    background: isEcoMode ? "rgba(34, 197, 94, 0.35)" : "rgba(255, 255, 255, 0.14)",
-                    color: isEcoMode ? "#4ade80" : (nightMode ? "#cbd5e1" : "#475569"),
-                    padding: "1px 4px",
-                    borderRadius: "3px",
-                  }}
-                >
-                  {isEcoMode ? "ON" : "OFF"}
-                </span>
+                {subject}
               </span>
+            )}
+          </div>
 
-              {/* 📶 Independent Network Mode Badge with 1-Click Toggle */}
-              <span
-                onClick={() => {
-                  if (networkMode === "offline") {
-                    setOcrStatusText("📴 Offline Vault: Serving note from local browser storage (Zero internet data used).");
-                  } else if (networkMode === "high") {
-                    setNetworkMode("lite");
-                    setNetworkLabel("📶 Data Saver (Lite)");
-                    setIsSlowNetwork(true);
-                    setOcrStatusText("📶 Data Saver (Lite) Enabled: 32KB chunk streaming active for weak mobile data.");
-                  } else {
-                    setNetworkMode("high");
-                    setNetworkLabel("📶 High-Speed (HQ)");
-                    setIsSlowNetwork(false);
-                    setOcrStatusText("📶 High-Speed (HQ) Mode Active: Full resolution crystal-clear rendering.");
-                  }
-                  setTimeout(() => setOcrStatusText(""), 3500);
-                }}
-                style={{
-                  padding: "1px 6px",
-                  fontSize: "0.62rem",
-                  fontWeight: 700,
-                  background: networkMode === "lite" 
-                    ? "rgba(245, 158, 11, 0.16)" 
-                    : (networkMode === "offline" ? "rgba(239, 68, 68, 0.16)" : "rgba(16, 185, 129, 0.15)"),
-                  color: networkMode === "lite" 
-                    ? "#fbbf24" 
-                    : (networkMode === "offline" ? "#f87171" : "#34d399"),
-                  border: networkMode === "lite"
-                    ? "1px solid rgba(245, 158, 11, 0.4)"
-                    : (networkMode === "offline" ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid rgba(16, 185, 129, 0.35)"),
-                  borderRadius: "5px",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  userSelect: "none",
-                  transition: "all 0.2s ease",
-                }}
-                title={`Network Mode: ${networkLabel} (Click to toggle High-Speed / Data Saver)`}
-              >
-                <Wifi size={10} />
-                <span>{networkLabel}</span>
-              </span>
-            </div>
+          <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+
+          {/* Page Navigator Stepper */}
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <button
+              type="button"
+              onClick={() => changePage(currentPage - 1)}
+              disabled={currentPage <= 1 || loading}
+              style={{
+                padding: "3px 8px",
+                borderRadius: "5px",
+                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
+                background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
+                color: nightMode ? "#fff" : "#0f172a",
+                cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+                opacity: currentPage <= 1 ? 0.4 : 1,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2px",
+                fontSize: "0.74rem",
+                fontWeight: 600,
+              }}
+              title="Previous Page (Left Arrow)"
+            >
+              <ChevronLeft size={13} />
+            </button>
+
+            <span
+              style={{
+                padding: "2px 8px",
+                borderRadius: "5px",
+                background: nightMode ? "rgba(255,255,255,0.08)" : "#fff",
+                border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                color: nightMode ? "#fff" : "#0f172a",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {currentPage} / {numPages || "..."}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => changePage(currentPage + 1)}
+              disabled={currentPage >= numPages || loading}
+              style={{
+                padding: "3px 8px",
+                borderRadius: "5px",
+                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
+                background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
+                color: nightMode ? "#fff" : "#0f172a",
+                cursor: currentPage >= numPages ? "not-allowed" : "pointer",
+                opacity: currentPage >= numPages ? 0.4 : 1,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "2px",
+                fontSize: "0.74rem",
+                fontWeight: 600,
+              }}
+              title="Next Page (Right Arrow)"
+            >
+              <ChevronRight size={13} />
+            </button>
           </div>
         </div>
 
-        {/* Right: Engine Switcher, Download & BIG HIGH-VISIBILITY CLOSE BUTTON */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-          <div
+        {/* Center: Auto-Fit & Zoom Controls (The Student Favorite!) */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* 📐 Fit to Entire Page (Zero Cut-Off) */}
+          <button
+            type="button"
+            onClick={() => {
+              setFitMode("page");
+              calculateFitScale("page");
+            }}
             style={{
+              padding: "4px 10px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-              padding: "3px",
-              borderRadius: "8px",
-              border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+              gap: "4px",
+              background: fitMode === "page" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+              border: fitMode === "page" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+              color: fitMode === "page" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+              boxShadow: fitMode === "page" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
+              transition: "all 0.15s ease",
             }}
+            title="Fit whole page on screen (Zero cut-off, full slide visible top-to-bottom)"
           >
+            <span>📐 Fit Page</span>
+          </button>
+
+          {/* ↔️ Fit Width */}
+          <button
+            type="button"
+            onClick={() => {
+              setFitMode("width");
+              calculateFitScale("width");
+            }}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              background: fitMode === "width" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+              border: fitMode === "width" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+              color: fitMode === "width" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+              boxShadow: fitMode === "width" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
+              transition: "all 0.15s ease",
+            }}
+            title="Fit page width to container"
+          >
+            <span>↔️ Fit Width</span>
+          </button>
+
+          {/* Zoom Stepper */}
+          <div style={{ display: "flex", alignItems: "center", gap: "2px", background: nightMode ? "rgba(255,255,255,0.05)" : "#f1f5f9", borderRadius: "6px", padding: "2px 4px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
             <button
               type="button"
               onClick={() => {
-                setError(null);
-                setUseNativeViewer(false);
-                if (!pdfDoc) setReloadTrigger((v) => v + 1);
+                setFitMode("custom");
+                setScale((s) => Math.max(0.35, Number((s - 0.15).toFixed(2))));
               }}
-              style={{
-                padding: "5px 12px",
-                fontSize: "0.78rem",
-                fontWeight: !useNativeViewer ? 700 : 500,
-                borderRadius: "6px",
-                border: "none",
-                background: !useNativeViewer ? "linear-gradient(135deg, #4f46e5, #06b6d4)" : "transparent",
-                color: !useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                boxShadow: !useNativeViewer ? "0 2px 6px rgba(79, 70, 229, 0.4)" : "none",
-                transition: "all 0.15s ease",
-              }}
-              title="Switch to Range Streamer Engine (instant glowing highlights & rapid scrolling)"
+              style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              title="Zoom Out (-)"
             >
-              🚀 Streamer Engine
+              <ZoomOut size={13} />
             </button>
+            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: nightMode ? "#cbd5e1" : "#1e293b", minWidth: "36px", textAlign: "center" }}>
+              {Math.round(scale * 100)}%
+            </span>
             <button
               type="button"
-              onClick={handleSwitchToNative}
-              style={{
-                padding: "5px 12px",
-                fontSize: "0.78rem",
-                fontWeight: useNativeViewer ? 700 : 500,
-                borderRadius: "6px",
-                border: "none",
-                background: useNativeViewer ? "linear-gradient(135deg, #2563eb, #38bdf8)" : "transparent",
-                color: useNativeViewer ? "#ffffff" : (nightMode ? "#94a3b8" : "#64748b"),
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                boxShadow: useNativeViewer ? "0 2px 6px rgba(37, 99, 235, 0.4)" : "none",
-                transition: "all 0.15s ease",
+              onClick={() => {
+                setFitMode("custom");
+                setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))));
               }}
-              title="Switch to Web Reader (full document web reader with mobile cloud support)"
+              style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+              title="Zoom In (+)"
             >
-              📖 Web Reader
+              <ZoomIn size={13} />
             </button>
           </div>
 
-          {/* Option 3: Continuous Scroll vs Single Page Toggle (Streamer Mode) */}
-          {!useNativeViewer && (
-            <div
+          {/* Reading Mode Switcher: Page vs Scroll */}
+          <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#f1f5f9", padding: "2px", borderRadius: "6px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
+            <button
+              type="button"
+              onClick={() => setScrollMode("single")}
               style={{
-                display: "inline-flex",
-                alignItems: "center",
-                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)",
-                padding: "3px",
-                borderRadius: "8px",
-                border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid rgba(0, 0, 0, 0.12)",
+                padding: "3px 8px",
+                fontSize: "0.72rem",
+                fontWeight: scrollMode === "single" ? 700 : 500,
+                border: "none",
+                borderRadius: "4px",
+                background: scrollMode === "single" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                cursor: "pointer",
               }}
+              title="Single Page Mode (Touch swipe or arrows to turn pages)"
             >
-              <button
-                type="button"
-                onClick={() => setScrollMode("continuous")}
-                style={{
-                  padding: "5px 10px",
-                  fontSize: "0.76rem",
-                  fontWeight: scrollMode === "continuous" ? 700 : 500,
-                  borderRadius: "6px",
-                  border: "none",
-                  background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#ffffff") : "transparent",
-                  color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  boxShadow: scrollMode === "continuous" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-                }}
-                title="Continuous Vertical Scroll (best for mobile reading & smooth scrolling)"
-              >
-                📜 Scroll
-              </button>
-              <button
-                type="button"
-                onClick={() => setScrollMode("single")}
-                style={{
-                  padding: "5px 10px",
-                  fontSize: "0.76rem",
-                  fontWeight: scrollMode === "single" ? 700 : 500,
-                  borderRadius: "6px",
-                  border: "none",
-                  background: scrollMode === "single" ? (nightMode ? "#334155" : "#ffffff") : "transparent",
-                  color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  boxShadow: scrollMode === "single" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-                }}
-                title="Single Page Flip (touch swipe left/right to turn pages)"
-              >
-                📄 Page
-              </button>
-            </div>
-          )}
+              📄 Page
+            </button>
+            <button
+              type="button"
+              onClick={() => setScrollMode("continuous")}
+              style={{
+                padding: "3px 8px",
+                fontSize: "0.72rem",
+                fontWeight: scrollMode === "continuous" ? 700 : 500,
+                border: "none",
+                borderRadius: "4px",
+                background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                cursor: "pointer",
+              }}
+              title="Continuous Vertical Scroll Mode"
+            >
+              📜 Scroll
+            </button>
+          </div>
+        </div>
 
+        {/* Right: Search, Tools Toggle, Night Mode, Download, Close */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* 🔍 Search Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowSearchInline((prev) => !prev)}
+            style={{
+              padding: "5px 9px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
+              background: showSearchInline ? "rgba(56, 189, 248, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+              border: showSearchInline ? "1px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+              color: showSearchInline ? "#38bdf8" : (nightMode ? "#cbd5e1" : "#475569"),
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title="Search inside PDF text"
+          >
+            <Search size={13} />
+            <span>Search</span>
+          </button>
+
+          {/* ✨ Study & AI Tools Drawer Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setShowToolsDrawer((prev) => !prev)}
+            style={{
+              padding: "5px 11px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              background: showToolsDrawer ? "linear-gradient(135deg, #8b5cf6, #06b6d4)" : "rgba(139, 92, 246, 0.18)",
+              border: showToolsDrawer ? "1px solid #a855f7" : "1px solid rgba(139, 92, 246, 0.4)",
+              color: showToolsDrawer ? "#fff" : "#c084fc",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+              boxShadow: showToolsDrawer ? "0 0 12px rgba(139, 92, 246, 0.45)" : "none",
+              transition: "all 0.15s ease",
+            }}
+            title="Toggle AI Study Tools & Advanced Features (Flashcards, Summary, AI Query, Circle, Clipper, Room, AirDrop)"
+          >
+            <Sparkles size={13} />
+            <span>Study Tools {showToolsDrawer ? "▲" : "▼"}</span>
+          </button>
+
+          {/* 🌙 Night Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => setNightMode((prev) => !prev)}
+            style={{
+              padding: "5px 9px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              background: nightMode ? "rgba(99, 102, 241, 0.15)" : "rgba(251, 191, 36, 0.15)",
+              color: nightMode ? "#818cf8" : "#d97706",
+              border: `1px solid ${nightMode ? "rgba(99, 102, 241, 0.3)" : "rgba(251, 191, 36, 0.3)"}`,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title={nightMode ? "Switch to Day Mode" : "Switch to Night Mode"}
+          >
+            {nightMode ? <Moon size={13} /> : <Sun size={13} />}
+          </button>
+
+          {/* 💾 Save (Download) */}
           {(onDownload || noteId) && !isBlocked && (
             <button
-              className="btn-primary"
+              type="button"
               onClick={handleInternalDownload}
               disabled={isDownloadingPdf}
               style={{
-                padding: "7px 14px",
-                fontSize: "0.8rem",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                background: isDownloadingPdf ? "rgba(6, 182, 212, 0.2)" : undefined,
-                border: isDownloadingPdf ? "1px solid var(--accent-cyan)" : undefined,
-                color: isDownloadingPdf ? "var(--accent-cyan)" : undefined,
-                transition: "all 0.15s ease",
-              }}
-              title={isDownloadingPdf ? `Downloading: ${downloadProgress?.percent || 0}% (${downloadProgress?.speed || ""})` : "Save Document"}
-            >
-              {isDownloadingPdf ? (
-                <>
-                  <div className="spinner" style={{ width: "12px", height: "12px", borderTopColor: "var(--accent-cyan)" }}></div>
-                  <span style={{ fontWeight: 700, fontFamily: "var(--font-mono)" }}>
-                    {downloadProgress?.percent || 0}%
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Download size={14} />
-                  <span>Save</span>
-                </>
-              )}
-            </button>
-          )}
-
-          {noteId && !isBlocked && (
-            <button
-              type="button"
-              onClick={handleToggleReaderPin}
-              style={{
-                padding: "7px 12px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
+                padding: "5px 11px",
                 borderRadius: "6px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                background: "rgba(16, 185, 129, 0.18)",
+                border: "1px solid rgba(16, 185, 129, 0.45)",
+                color: "#34d399",
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                background: isPinnedOffline ? "rgba(16, 185, 129, 0.18)" : "rgba(255, 255, 255, 0.06)",
-                border: `1px solid ${isPinnedOffline ? "rgba(16, 185, 129, 0.45)" : "rgba(255, 255, 255, 0.15)"}`,
-                color: isPinnedOffline ? "#34d399" : "#cbd5e1",
-                transition: "all 0.15s ease",
+                gap: "4px",
               }}
-              title={isPinnedOffline ? "Kept Forever: Exempt from 48h auto-deletion and dynamic LRU" : "Click to Keep Note permanently (exempt from 48h auto-delete)"}
+              title="Save Document"
             >
-              <Pin size={12} style={{ transform: isPinnedOffline ? "rotate(-45deg)" : "none" }} />
-              <span>{isPinnedOffline ? "Pinned (Kept Forever)" : "Keep Note"}</span>
+              <Download size={13} />
+              <span>Save</span>
             </button>
           )}
 
-          {isBlocked && (
-            <div
-              style={{
-                padding: "6px 12px",
-                fontSize: "0.76rem",
-                borderRadius: "6px",
-                background: "rgba(239, 68, 68, 0.12)",
-                border: "1px solid rgba(239, 68, 68, 0.3)",
-                color: "#f87171",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                fontWeight: 600,
-              }}
-              title={effectiveReason}
-            >
-              <Download size={13} style={{ opacity: 0.5 }} />
-              <span>Save Disabled</span>
-            </div>
-          )}
-
-          {/* PROMINENT, UNMISTAKABLE CLOSE BUTTON */}
+          {/* ✕ Close (Esc) */}
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
               style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                background: "rgba(239, 68, 68, 0.18)",
+                border: "1px solid rgba(239, 68, 68, 0.45)",
+                color: "#f87171",
+                cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "6px",
-                padding: "7px 16px",
-                borderRadius: "8px",
-                background: "rgba(239, 68, 68, 0.18)",
-                color: "#f87171",
-                border: "1px solid rgba(239, 68, 68, 0.45)",
-                fontSize: "0.82rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
+                gap: "4px",
+                transition: "all 0.15s ease",
               }}
-              title="Close Viewer (ESC)"
+              title="Close Reader (Esc)"
             >
-              <X size={16} />
-              <span>Close (Esc)</span>
+              <X size={14} />
+              <span>Close</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* Header Tier 2: Reading & View Controls (Search, Pages, Zoom, Night Mode, Fullscreen) */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "8px 18px",
-          background: nightMode ? "rgba(10, 15, 29, 0.85)" : "rgba(241, 245, 249, 0.95)",
-          borderBottom: nightMode ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.06)",
-          gap: "12px",
-          flexWrap: "wrap",
-        }}
-      >
-        {/* Left: Text Search Bar */}
-        <form onSubmit={handleSearch} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              placeholder="Search inside PDF text..."
-              value={searchQuery}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSearchQuery(val);
-                if (!val.trim()) {
-                  searchMatchesRef.current = [];
-                  matchIndexRef.current = 0;
-                  setSearchMatches([]);
-                  setPageHighlights([]);
-                }
-              }}
-              style={{
-                background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
-                border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
-                color: nightMode ? "#ffffff" : "#0f172a",
-                padding: "6px 52px 6px 12px",
-                borderRadius: "6px",
-                fontSize: "0.78rem",
-                width: "230px",
-                outline: "none",
-                boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.06)",
-              }}
-            />
-            {/* Voice Search (Microphone) */}
-            <button
-              type="button"
-              onClick={handleVoiceSearch}
-              style={{
-                position: "absolute",
-                right: "26px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: isListening ? "rgba(239, 68, 68, 0.25)" : "transparent",
-                border: isListening ? "1px solid #ef4444" : "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                color: isListening ? "#ef4444" : (nightMode ? "#94a3b8" : "#64748b"),
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "3px",
-              }}
-              title={isListening ? "Listening... Click to stop" : "Voice Search (Speak question or topic)"}
-            >
-              {isListening ? <MicOff size={13} /> : <Mic size={13} />}
-            </button>
-            {isSearching ? (
-              <div
+      {/* 🔍 Inline Search Toolbar (Row 2A - Shown when Search is toggled) */}
+      {showSearchInline && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "6px 16px",
+            background: nightMode ? "rgba(10, 15, 29, 0.95)" : "rgba(241, 245, 249, 0.95)",
+            borderBottom: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.08)",
+            zIndex: 39,
+          }}
+        >
+          <form onSubmit={handleSearch} style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, maxWidth: "420px" }}>
+            <div style={{ position: "relative", width: "100%" }}>
+              <input
+                type="text"
+                placeholder="Search inside PDF text..."
+                value={searchQuery}
+                autoFocus
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSearchQuery(val);
+                  if (!val.trim()) {
+                    searchMatchesRef.current = [];
+                    matchIndexRef.current = 0;
+                    setSearchMatches([]);
+                    setPageHighlights([]);
+                  }
+                }}
+                style={{
+                  background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
+                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
+                  color: nightMode ? "#ffffff" : "#0f172a",
+                  padding: "5px 52px 5px 10px",
+                  borderRadius: "6px",
+                  fontSize: "0.78rem",
+                  width: "100%",
+                  outline: "none",
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleVoiceSearch}
                 style={{
                   position: "absolute",
-                  right: "8px",
+                  right: "26px",
                   top: "50%",
                   transform: "translateY(-50%)",
+                  background: isListening ? "rgba(239, 68, 68, 0.25)" : "transparent",
+                  border: isListening ? "1px solid #ef4444" : "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  color: isListening ? "#ef4444" : (nightMode ? "#94a3b8" : "#64748b"),
+                  padding: "2px",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  pointerEvents: "none",
                 }}
+                title={isListening ? "Listening..." : "Voice Search"}
               >
-                <RefreshCw
-                  size={13}
-                  className="spin"
-                  style={{
-                    color: "var(--accent-cyan, #06b6d4)",
-                    animation: "spin 0.75s linear infinite",
-                  }}
-                />
-              </div>
-            ) : (
+                {isListening ? <MicOff size={13} /> : <Mic size={13} />}
+              </button>
               <button
                 type="submit"
                 style={{
@@ -3406,408 +3394,147 @@ export default function VirtualPdfReader({
                   border: "none",
                   cursor: "pointer",
                   color: nightMode ? "var(--accent-cyan)" : "#0284c7",
+                  padding: "2px",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  padding: "2px",
                 }}
-                title="Search text in document (Enter)"
+                title="Search"
               >
                 <Search size={14} />
               </button>
-            )}
-          </div>
+            </div>
+          </form>
 
           {searchMatches.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "4px",
-                fontSize: "0.75rem",
-                background: nightMode ? "rgba(255, 255, 255, 0.1)" : "#ffffff",
-                padding: "3px 6px",
-                borderRadius: "6px",
-                border: nightMode ? "1px solid rgba(255, 255, 255, 0.2)" : "1px solid rgba(0, 0, 0, 0.22)",
-                boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.1)",
-              }}
-            >
-              <span
-                style={{
-                  color: nightMode ? "var(--accent-cyan)" : "#0284c7",
-                  fontWeight: 700,
-                  fontSize: "0.78rem",
-                  padding: "0 4px",
-                  userSelect: "none",
-                }}
-              >
+            <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.75rem" }}>
+              <span style={{ color: "#38bdf8", fontWeight: 700 }}>
                 {currentMatchIndex + 1}/{searchMatches.length}
               </span>
-              <button
-                type="button"
-                onClick={prevMatch}
-                title="Previous Match (↑)"
-                style={{
-                  padding: "4px 8px",
-                  background: nightMode ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.08)",
-                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.25)" : "1px solid rgba(0, 0, 0, 0.18)",
-                  borderRadius: "4px",
-                  color: nightMode ? "#f8fafc" : "#0f172a",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: "0.82rem",
-                  lineHeight: 1,
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <ChevronUp size={14} strokeWidth={2.5} color={nightMode ? "#f8fafc" : "#0f172a"} />
-              </button>
-              <button
-                type="button"
-                onClick={nextMatch}
-                title="Next Match (↓)"
-                style={{
-                  padding: "4px 8px",
-                  background: nightMode ? "rgba(255, 255, 255, 0.16)" : "rgba(0, 0, 0, 0.08)",
-                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.25)" : "1px solid rgba(0, 0, 0, 0.18)",
-                  borderRadius: "4px",
-                  color: nightMode ? "#f8fafc" : "#0f172a",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: "0.82rem",
-                  lineHeight: 1,
-                  transition: "all 0.15s ease",
-                }}
-              >
-                <ChevronDown size={14} strokeWidth={2.5} color={nightMode ? "#f8fafc" : "#0f172a"} />
-              </button>
+              <button type="button" onClick={prevMatch} style={{ padding: "3px 6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#fff", cursor: "pointer" }}>↑</button>
+              <button type="button" onClick={nextMatch} style={{ padding: "3px 6px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "#fff", cursor: "pointer" }}>↓</button>
             </div>
           )}
 
-          {searchQuery.trim() && searchMatches.length === 0 && !isSearching && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ fontSize: "0.74rem", color: "#f87171", fontWeight: 600 }}>0 matches</span>
-              {ragIndexRef.current?.isScannedOnly && (
-                <span
-                  style={{
-                    fontSize: "0.72rem",
-                    color: "#fbbf24",
-                    background: "rgba(245, 158, 11, 0.15)",
-                    padding: "2px 6px",
-                    borderRadius: "4px",
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                    fontWeight: 600,
-                  }}
-                >
-                  ✍️ Handwritten scan: Click [🔍 OCR Page] to index!
-                </span>
-              )}
-            </div>
-          )}
-        </form>
-
-        {/* Modern Zero-Load Features: OCR, Audio Reader, P2P Study Room, On-Device AI */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={handleOcrCurrentPage}
-            disabled={isOcrScanning}
-            style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: isOcrScanning ? "rgba(245, 158, 11, 0.25)" : "rgba(255, 255, 255, 0.08)",
-              color: isOcrScanning ? "#fbbf24" : (nightMode ? "#e2e8f0" : "#1e293b"),
-              border: isOcrScanning ? "1px solid rgba(245, 158, 11, 0.5)" : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-              borderRadius: "6px",
-              cursor: isOcrScanning ? "wait" : "pointer",
-            }}
-            title="Scan handwritten text on current page with Tesseract OCR"
+            onClick={() => setShowSearchInline(false)}
+            style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px" }}
+            title="Close Search"
           >
-            <span>🔍 OCR Page</span>
+            <X size={15} />
           </button>
+        </div>
+      )}
 
-          {/* Audio Reader with Voice Engine Selector */}
-          <div style={{ position: "relative", display: "inline-flex", alignItems: "center" }} ref={voiceMenuRef}>
-            <button
-              type="button"
-              onClick={handleToggleSpeech}
-              style={{
-                padding: "5px 9px",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                background: isSpeaking ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)",
-                color: isSpeaking ? "#34d399" : (nightMode ? "#e2e8f0" : "#1e293b"),
-                border: isSpeaking ? "1px solid rgba(16, 185, 129, 0.5)" : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-                borderTopRightRadius: 0,
-                borderBottomRightRadius: 0,
-                borderRight: "none",
-                borderRadius: "6px 0 0 6px",
-                cursor: "pointer",
-                transition: "all 0.15s ease",
-              }}
-              title={isSpeaking ? "Pause Audio Reader" : "Listen to Notes with Natural Speech"}
-            >
-              {isSpeaking ? <VolumeX size={14} /> : <Volume2 size={14} />}
-              <span>{isSpeaking ? "Pause" : "🎧 Listen"}</span>
-            </button>
-
-            {/* Voice Profile Quick Pill */}
-            <button
-              type="button"
-              onClick={() => setShowVoiceMenu((prev) => !prev)}
-              style={{
-                padding: "5px 7px",
-                fontSize: "0.72rem",
-                fontWeight: 600,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "3px",
-                background: showVoiceMenu
-                  ? "rgba(6, 182, 212, 0.25)"
-                  : (nightMode ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.06)"),
-                color: showVoiceMenu
-                  ? "var(--accent-cyan, #06b6d4)"
-                  : (nightMode ? "#cbd5e1" : "#475569"),
-                border: showVoiceMenu
-                  ? "1px solid var(--accent-cyan, #06b6d4)"
-                  : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-                borderRadius: "0 6px 6px 0",
-                cursor: "pointer",
-                userSelect: "none",
-                transition: "all 0.15s ease",
-              }}
-              title="Voice Settings: Indian English / Hindi • Men / Female"
-            >
-              <span>{voiceLang === "hi-IN" ? "🇮🇳 Hindi" : "🇮🇳 Ind-En"}</span>
-              <span style={{ opacity: 0.6 }}>•</span>
-              <span>{voiceGender === "female" ? "👩 Women" : "👨 Men"}</span>
-              <ChevronDown size={11} style={{ transform: showVoiceMenu ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-            </button>
-
-            {/* Floating Voice Settings Popover */}
-            {showVoiceMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "calc(100% + 6px)",
-                  left: 0,
-                  zIndex: 9999,
-                  width: "270px",
-                  background: nightMode ? "#0f172a" : "#ffffff",
-                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid rgba(0, 0, 0, 0.14)",
-                  borderRadius: "10px",
-                  boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.2)",
-                  padding: "12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                  backdropFilter: "blur(12px)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)", paddingBottom: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", fontWeight: 700, color: nightMode ? "#f8fafc" : "#0f172a" }}>
-                    <span>🎙️ Voice Reader Settings</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowVoiceMenu(false)}
-                    style={{ background: "transparent", border: "none", cursor: "pointer", color: nightMode ? "#94a3b8" : "#64748b", padding: "2px" }}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                {/* Language Option */}
-                <div>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: nightMode ? "#94a3b8" : "#64748b", marginBottom: "6px" }}>
-                    Language (भाषा)
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoiceLang("en-IN");
-                        try { localStorage.setItem("doc_voice_lang", "en-IN"); } catch (_) {}
-                        if (isSpeaking) { stopSpeech(); }
-                      }}
-                      style={{
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: voiceLang === "en-IN" ? 700 : 500,
-                        border: voiceLang === "en-IN" ? "1.5px solid var(--accent-cyan, #06b6d4)" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)"),
-                        background: voiceLang === "en-IN" ? "rgba(6, 182, 212, 0.18)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-                        color: voiceLang === "en-IN" ? "var(--accent-cyan, #06b6d4)" : (nightMode ? "#e2e8f0" : "#334155"),
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                        textAlign: "center",
-                      }}
-                    >
-                      <span>🇮🇳 Indian English</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoiceLang("hi-IN");
-                        try { localStorage.setItem("doc_voice_lang", "hi-IN"); } catch (_) {}
-                        if (isSpeaking) { stopSpeech(); }
-                      }}
-                      style={{
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: voiceLang === "hi-IN" ? 700 : 500,
-                        border: voiceLang === "hi-IN" ? "1.5px solid var(--accent-cyan, #06b6d4)" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)"),
-                        background: voiceLang === "hi-IN" ? "rgba(6, 182, 212, 0.18)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-                        color: voiceLang === "hi-IN" ? "var(--accent-cyan, #06b6d4)" : (nightMode ? "#e2e8f0" : "#334155"),
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                        textAlign: "center",
-                      }}
-                    >
-                      <span>🇮🇳 Hindi (हिन्दी)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Voice Gender Option (Men / Female) */}
-                <div>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: nightMode ? "#94a3b8" : "#64748b", marginBottom: "6px" }}>
-                    Voice Tone (आवाज़)
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoiceGender("female");
-                        try { localStorage.setItem("doc_voice_gender", "female"); } catch (_) {}
-                        if (isSpeaking) { stopSpeech(); }
-                      }}
-                      style={{
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: voiceGender === "female" ? 700 : 500,
-                        border: voiceGender === "female" ? "1.5px solid #ec4899" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)"),
-                        background: voiceGender === "female" ? "rgba(236, 72, 153, 0.18)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-                        color: voiceGender === "female" ? "#f472b6" : (nightMode ? "#e2e8f0" : "#334155"),
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <span>👩 Female (Women)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setVoiceGender("male");
-                        try { localStorage.setItem("doc_voice_gender", "male"); } catch (_) {}
-                        if (isSpeaking) { stopSpeech(); }
-                      }}
-                      style={{
-                        padding: "6px 8px",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: voiceGender === "male" ? 700 : 500,
-                        border: voiceGender === "male" ? "1.5px solid #3b82f6" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)"),
-                        background: voiceGender === "male" ? "rgba(59, 130, 246, 0.18)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-                        color: voiceGender === "male" ? "#60a5fa" : (nightMode ? "#e2e8f0" : "#334155"),
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <span>👨 Male (Men)</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Speed Option */}
-                <div>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: nightMode ? "#94a3b8" : "#64748b", marginBottom: "6px" }}>
-                    Speech Speed (गति)
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
-                    {[0.8, 1.0, 1.25, 1.5].map((spd) => (
-                      <button
-                        key={spd}
-                        type="button"
-                        onClick={() => {
-                          setVoiceSpeed(spd);
-                          try { localStorage.setItem("doc_voice_speed", spd.toString()); } catch (_) {}
-                          if (isSpeaking) { stopSpeech(); }
-                        }}
-                        style={{
-                          padding: "4px 6px",
-                          borderRadius: "4px",
-                          fontSize: "0.72rem",
-                          fontWeight: voiceSpeed === spd ? 700 : 500,
-                          border: voiceSpeed === spd ? "1px solid var(--accent-cyan, #06b6d4)" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)"),
-                          background: voiceSpeed === spd ? "rgba(6, 182, 212, 0.2)" : "transparent",
-                          color: voiceSpeed === spd ? "var(--accent-cyan, #06b6d4)" : (nightMode ? "#cbd5e1" : "#475569"),
-                          cursor: "pointer",
-                          textAlign: "center",
-                        }}
-                      >
-                        {spd}x
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div style={{ fontSize: "0.68rem", color: nightMode ? "#64748b" : "#94a3b8", lineHeight: 1.3, marginTop: "2px", borderTop: nightMode ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.06)", paddingTop: "6px" }}>
-                  💡 Auto-reads scanned handwritten notes with pitch-enhanced Indian pronunciation.
-                </div>
-              </div>
-            )}
-          </div>
-
+      {/* 🚀 Collapsible Study & AI Ribbon (Row 2B - Shown when Study Tools is toggled) */}
+      {showToolsDrawer && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "6px 14px",
+            background: nightMode ? "rgba(10, 15, 29, 0.98)" : "rgba(241, 245, 249, 0.98)",
+            borderBottom: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.08)",
+            overflowX: "auto",
+            zIndex: 38,
+            flexShrink: 0,
+          }}
+        >
+          {/* Flashcards & Summary */}
           <button
             type="button"
-            onClick={handleToggleStudyRoom}
+            onClick={() => setAiStudyPodOpen(true)}
             style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: isStudyRoomOpen ? "rgba(99, 102, 241, 0.3)" : "rgba(255, 255, 255, 0.08)",
-              color: isStudyRoomOpen ? "#a5b4fc" : (nightMode ? "#e2e8f0" : "#1e293b"),
-              border: isStudyRoomOpen ? "1px solid rgba(99, 102, 241, 0.6)" : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
               borderRadius: "6px",
+              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              color: "#fff",
+              border: "none",
               cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
             }}
-            title="Peer-to-Peer Study Room"
           >
-            <Users size={14} />
-            <span>👥 Room ({peerCount})</span>
+            <Layers size={13} />
+            <span>✨ Flashcards & Summary</span>
           </button>
 
+          {/* AI Query */}
+          <button
+            type="button"
+            onClick={handleGenerateAi}
+            disabled={isGeneratingAi}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
+              borderRadius: "6px",
+              background: isOnDeviceAiOpen ? "rgba(139, 92, 246, 0.3)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isOnDeviceAiOpen ? "#c084fc" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isOnDeviceAiOpen ? "1px solid #a855f7" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Bot size={13} color="#a855f7" />
+            <span>🤖 AI Query</span>
+          </button>
+
+          {/* Circle to Search */}
+          <button
+            type="button"
+            onClick={handleToggleCircleSearch}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              borderRadius: "6px",
+              background: isCircleSearchMode ? "linear-gradient(135deg, #0284c7, #6366f1)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isCircleSearchMode ? "#fff" : "#38bdf8",
+              border: isCircleSearchMode ? "1px solid #38bdf8" : "1px solid rgba(56, 189, 248, 0.3)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Sparkles size={13} />
+            <span>{isCircleSearchMode ? "Cancel Circle" : "⭕ Circle"}</span>
+          </button>
+
+          {/* Formula Clipper */}
+          <button
+            type="button"
+            onClick={toggleClipperMode}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
+              borderRadius: "6px",
+              background: isClipperMode ? "rgba(6, 182, 212, 0.3)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isClipperMode ? "#06b6d4" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isClipperMode ? "1px solid #06b6d4" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Scissors size={13} />
+            <span>{isClipperMode ? "Cancel Clip" : "✂️ Clip"}</span>
+          </button>
+
+          {/* Live Pod Canvas */}
           <button
             type="button"
             onClick={() => {
@@ -3821,293 +3548,159 @@ export default function VirtualPdfReader({
               );
             }}
             style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
+              padding: "4px 10px",
+              fontSize: "0.74rem",
               fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
+              borderRadius: "6px",
               background: "rgba(16, 185, 129, 0.15)",
               color: "#34d399",
               border: "1px solid rgba(16, 185, 129, 0.4)",
-              borderRadius: "6px",
               cursor: "pointer",
-            }}
-            title="Launch Collaborative Live Study Pod with Real-time Canvas (0% Server Load)"
-          >
-            <Sparkles size={14} />
-            <span>🚀 Live Pod Canvas</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={handleGenerateAi}
-            disabled={isGeneratingAi}
-            style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              background: isOnDeviceAiOpen
-                ? "linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(6, 182, 212, 0.35))"
-                : (nightMode ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9"),
-              color: isOnDeviceAiOpen
-                ? "#c084fc"
-                : (nightMode ? "#cbd5e1" : "#334155"),
-              border: isOnDeviceAiOpen
-                ? "1px solid rgba(139, 92, 246, 0.7)"
-                : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-              borderRadius: "6px",
-              cursor: "pointer",
-              boxShadow: isOnDeviceAiOpen ? "0 0 10px rgba(139, 92, 246, 0.35)" : "none",
-              transition: "all 0.2s ease",
+              whiteSpace: "nowrap",
             }}
-            title={isOnDeviceAiOpen ? "AI Assistant Active" : "Ask On-Device AI about this query"}
           >
-            <Bot size={14} style={{ color: isOnDeviceAiOpen ? "#c084fc" : (nightMode ? "#a78bfa" : "#7c3aed") }} />
-            <span>🤖 AI Query</span>
+            <Sparkles size={13} />
+            <span>🚀 Live Pod</span>
           </button>
 
-          {/* ✂️ 1-Click Formula & Diagram Clipper */}
+          {/* Peer Room */}
           <button
             type="button"
-            onClick={toggleClipperMode}
+            onClick={() => setIsStudyRoomOpen((prev) => !prev)}
             style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
+              padding: "4px 10px",
+              fontSize: "0.74rem",
               fontWeight: 600,
+              borderRadius: "6px",
+              background: isStudyRoomOpen ? "rgba(99, 102, 241, 0.3)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isStudyRoomOpen ? "#a5b4fc" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isStudyRoomOpen ? "1px solid #6366f1" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              background: isClipperMode ? "rgba(6, 182, 212, 0.35)" : "rgba(255, 255, 255, 0.08)",
-              color: isClipperMode ? "#06b6d4" : (nightMode ? "#e2e8f0" : "#1e293b"),
-              border: isClipperMode ? "1px solid #06b6d4" : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-              borderRadius: "6px",
-              cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
-            title={isClipperMode ? "Cancel clipping mode" : "✂️ 1-Click Formula / Diagram Clipper (Crop & copy to WhatsApp)"}
           >
-            <Scissors size={14} />
-            <span>{isClipperMode ? "Cancel" : "✂️ Clip"}</span>
+            <Users size={13} />
+            <span>👥 Room ({peerCount})</span>
           </button>
 
-          {/* ⭕ Circle to Search & Solve */}
-          <button
-            type="button"
-            onClick={handleToggleCircleSearch}
-            style={{
-              padding: "5px 11px",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              background: isCircleSearchMode ? "linear-gradient(135deg, #0284c7, #6366f1)" : "rgba(255, 255, 255, 0.08)",
-              color: isCircleSearchMode ? "#fff" : (nightMode ? "#38bdf8" : "#0284c7"),
-              border: isCircleSearchMode ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(2, 132, 199, 0.3)"),
-              borderRadius: "6px",
-              cursor: "pointer",
-              boxShadow: isCircleSearchMode ? "0 0 14px rgba(56, 189, 248, 0.6)" : "none",
-              transition: "all 0.2s ease",
-            }}
-            title={isCircleSearchMode ? "Cancel Circle to Search" : "⭕ Circle to Search: Draw on any formula, diagram, or question to search & solve"}
-          >
-            <Sparkles size={14} />
-            <span>{isCircleSearchMode ? "Cancel Circle" : "⭕ Circle"}</span>
-          </button>
-
-          {/* ✨ AI Study Pod (3D Flashcards, Summary & Filter) */}
-          <button
-            type="button"
-            onClick={() => setAiStudyPodOpen(true)}
-            style={{
-              padding: "5px 12px",
-              fontSize: "0.75rem",
-              fontWeight: 700,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
-              color: "#fff",
-              border: "1px solid rgba(139, 92, 246, 0.4)",
-              borderRadius: "6px",
-              cursor: "pointer",
-              boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
-              transition: "all 0.2s ease",
-            }}
-            title="✨ AI Study Pod: Instant 3D Flashcards, Executive Summary & Notes Filter (0ms Turso Cache)"
-          >
-            <Layers size={14} />
-            <span>✨ Flashcards & Summary</span>
-          </button>
-
-          {/* 📱 Screen Wake Lock Toggle */}
-          <button
-            type="button"
-            onClick={toggleWakeLock}
-            style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
-              fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: wakeLockActive ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)",
-              color: wakeLockActive ? "#34d399" : (nightMode ? "#e2e8f0" : "#1e293b"),
-              border: wakeLockActive ? "1px solid rgba(16, 185, 129, 0.5)" : (nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.15)"),
-              borderRadius: "6px",
-              cursor: "pointer",
-            }}
-            title={wakeLockActive ? "Screen Wake Lock is ON (Screen won't sleep while studying)" : "Click to keep screen awake while studying"}
-          >
-            <Smartphone size={14} />
-            <span>{wakeLockActive ? "Awake ON" : "Awake"}</span>
-          </button>
-
-          {/* ⚡ 1-Tap Campus AirDrop & QR Mesh */}
+          {/* Campus AirDrop */}
           <button
             type="button"
             onClick={() => setIsAirdropModalOpen(true)}
             style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
+              padding: "4px 10px",
+              fontSize: "0.74rem",
               fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: "rgba(168, 85, 247, 0.18)",
+              borderRadius: "6px",
+              background: "rgba(168, 85, 247, 0.16)",
               color: "#c084fc",
               border: "1px solid rgba(168, 85, 247, 0.4)",
-              borderRadius: "6px",
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
             }}
-            title="⚡ Campus AirDrop: Offline device-to-device note transfer via 1-Tap QR Mesh (0 KB internet)"
           >
-            <Zap size={14} />
+            <Zap size={13} />
             <span>⚡ AirDrop</span>
           </button>
-        </div>
 
-        {/* Center: Page Jumpers */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Screen Wake Lock */}
           <button
-            className="btn-secondary"
-            onClick={() => changePage(currentPage - 1)}
-            disabled={currentPage <= 1 || loading}
+            type="button"
+            onClick={toggleWakeLock}
             style={{
-              padding: "5px 12px",
-              fontSize: "0.78rem",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
-              color: nightMode ? "#f8fafc" : "#0f172a",
-              border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
-              cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-              opacity: currentPage <= 1 ? 0.5 : 1,
-            }}
-            title="Previous Page"
-          >
-            <ChevronLeft size={14} strokeWidth={2.2} /> Prev
-          </button>
-
-          <div
-            style={{
-              padding: "5px 14px",
-              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
               borderRadius: "6px",
-              border: nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(0, 0, 0, 0.2)",
-              fontSize: "0.82rem",
-              fontWeight: 700,
-              fontFamily: "var(--font-mono)",
-              color: nightMode ? "#fff" : "#0f172a",
-              boxShadow: nightMode ? "none" : "0 1px 3px rgba(0,0,0,0.08)",
-            }}
-          >
-            Page {currentPage} of {numPages || "..."}
-          </div>
-
-          <button
-            className="btn-secondary"
-            onClick={() => changePage(currentPage + 1)}
-            disabled={currentPage >= numPages || loading}
-            style={{
-              padding: "5px 12px",
-              fontSize: "0.78rem",
+              background: wakeLockActive ? "rgba(16, 185, 129, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: wakeLockActive ? "#34d399" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: wakeLockActive ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
-              background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#ffffff",
-              color: nightMode ? "#f8fafc" : "#0f172a",
-              border: nightMode ? "1px solid rgba(255, 255, 255, 0.18)" : "1px solid rgba(0, 0, 0, 0.22)",
-              cursor: currentPage >= numPages ? "not-allowed" : "pointer",
-              opacity: currentPage >= numPages ? 0.5 : 1,
+              whiteSpace: "nowrap",
             }}
-            title="Next Page"
           >
-            Next <ChevronRight size={14} strokeWidth={2.2} />
+            <Smartphone size={13} />
+            <span>{wakeLockActive ? "Awake ON" : "Awake"}</span>
           </button>
-        </div>
 
-        {/* Right: Zoom, Night Mode, Fullscreen */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          {/* Zoom */}
-          <div style={{ display: "flex", alignItems: "center", gap: "4px", background: "rgba(255, 255, 255, 0.04)", borderRadius: "6px", padding: "2px 6px" }}>
-            <button
-              className="btn-icon"
-              onClick={() => setScale((s) => Math.max(0.6, s - 0.2))}
-              style={{ width: "26px", height: "26px", background: "transparent" }}
-              title="Zoom Out"
-            >
-              <ZoomOut size={14} />
-            </button>
-            <span style={{ fontSize: "0.74rem", fontFamily: "var(--font-mono)", color: "var(--text-dim)", minWidth: "38px", textAlign: "center" }}>
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              className="btn-icon"
-              onClick={() => setScale((s) => Math.min(2.5, s + 0.2))}
-              style={{ width: "26px", height: "26px", background: "transparent" }}
-              title="Zoom In"
-            >
-              <ZoomIn size={14} />
-            </button>
-          </div>
-
-          {/* Night Mode */}
+          {/* Listen (TTS) */}
           <button
-            className="btn-secondary"
-            onClick={() => setNightMode((prev) => !prev)}
+            type="button"
+            onClick={handleTtsSpeak}
             style={{
-              padding: "5px 10px",
-              fontSize: "0.75rem",
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
+              borderRadius: "6px",
+              background: isSpeakingTts ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isSpeakingTts ? "#f87171" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isSpeakingTts ? "1px solid #ef4444" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "5px",
-              background: nightMode ? "rgba(99, 102, 241, 0.15)" : "rgba(251, 191, 36, 0.15)",
-              color: nightMode ? "#818cf8" : "#d97706",
-              border: `1px solid ${nightMode ? "rgba(99, 102, 241, 0.3)" : "rgba(251, 191, 36, 0.3)"}`,
+              gap: "4px",
+              whiteSpace: "nowrap",
             }}
-            title={nightMode ? "Switch to Day Mode" : "Switch to Eye-Care Night Mode"}
           >
-            {nightMode ? <Moon size={14} /> : <Sun size={14} />}
-            <span>{nightMode ? "Night" : "Day"}</span>
+            {isSpeakingTts ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            <span>{isSpeakingTts ? "Stop Audio" : "🔊 Listen"}</span>
           </button>
 
-          {/* Fullscreen */}
+          {/* OCR Page */}
           <button
-            className="btn-icon"
-            onClick={toggleFullscreen}
-            style={{ width: "30px", height: "30px", background: "rgba(255,255,255,0.05)" }}
-            title="Toggle Fullscreen"
+            type="button"
+            onClick={handleOcrCurrentPage}
+            disabled={isOcrRunning}
+            style={{
+              padding: "4px 10px",
+              fontSize: "0.74rem",
+              fontWeight: 600,
+              borderRadius: "6px",
+              background: isOcrRunning ? "rgba(6, 182, 212, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isOcrRunning ? "#06b6d4" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isOcrRunning ? "1px solid #06b6d4" : "1px solid rgba(255, 255, 255, 0.12)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              whiteSpace: "nowrap",
+            }}
           >
-            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+            <FileText size={13} />
+            <span>{isOcrRunning ? "Scanning..." : "📄 OCR"}</span>
           </button>
+
+          {/* Engine: Streamer vs Native */}
+          <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#fff", padding: "2px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.12)", marginLeft: "auto" }}>
+            <button
+              type="button"
+              onClick={() => { setError(null); setUseNativeViewer(false); }}
+              style={{ padding: "3px 8px", fontSize: "0.7rem", fontWeight: !useNativeViewer ? 700 : 500, border: "none", borderRadius: "4px", background: !useNativeViewer ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer" }}
+            >
+              🚀 Streamer
+            </button>
+            <button
+              type="button"
+              onClick={handleSwitchToNative}
+              style={{ padding: "3px 8px", fontSize: "0.7rem", fontWeight: useNativeViewer ? 700 : 500, border: "none", borderRadius: "4px", background: useNativeViewer ? "#2563eb" : "transparent", color: "#fff", cursor: "pointer" }}
+            >
+              📖 Web Reader
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* RAG Search Smart Passages Bar */}
       {ragPassages.length > 0 && (
@@ -5214,127 +4807,85 @@ export default function VirtualPdfReader({
           </div>
           )
         )}
-
-        {/* 🌟 Unified Floating Action Bar (AI Pod + Smart Page Discussion Bridge - Zero Overlap) */}
-        {!loading && !error && !isAuthGated && (
-          <div
-            style={{
-              position: "fixed",
-              bottom: "26px",
-              right: "20px",
-              zIndex: 9999,
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
-              backdropFilter: "blur(14px)",
-              padding: "5px 10px 5px 12px",
-              borderRadius: "999px",
-              border: nightMode ? "1px solid rgba(139, 92, 246, 0.45)" : "1px solid rgba(139, 92, 246, 0.35)",
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(139, 92, 246, 0.2)",
-              pointerEvents: "auto",
-            }}
-          >
-            {/* 🚀 AI Study Pod Capsule */}
-            <button
-              type="button"
-              onClick={() => setAiStudyPodOpen(true)}
-              style={{
-                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "999px",
-                padding: "6px 14px",
-                fontSize: "0.76rem",
-                fontWeight: 800,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                boxShadow: "0 2px 10px rgba(139, 92, 246, 0.4)",
-                transition: "all 0.15s ease",
-              }}
-              title="✨ AI Study Pod: 3D Flashcards & Executive Summary for this note"
-            >
-              <Sparkles size={13} />
-              <span>✨ AI Pod</span>
-            </button>
-
-            {enableDiscussionBridge && (
-              <>
-                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 2px" }} />
-
-                <button
-                  type="button"
-                  onClick={handleOpenPageDiscussion}
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: nightMode ? "#38bdf8" : "#0284c7",
-                    fontSize: "0.76rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    padding: "4px 8px",
-                  }}
-                  title={`Open Live Study Pod discussion for Page ${currentPage}`}
-                >
-                  <MessageSquare size={13} color="#06b6d4" />
-                  <span>Stuck on Pg {currentPage}? Discuss</span>
-                </button>
-
-                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.15)", margin: "0 2px" }} />
-
-                <button
-                  type="button"
-                  onClick={handleOpenPageQr}
-                  style={{
-                    background: "rgba(6, 182, 212, 0.15)",
-                    border: "1px solid rgba(6, 182, 212, 0.4)",
-                    color: nightMode ? "#67e8f9" : "#0891b2",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    borderRadius: "999px",
-                    padding: "3px 8px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                  title="Scan QR to open this page and chat directly on mobile"
-                >
-                  <QrCode size={12} />
-                  <span>QR</span>
-                </button>
-              </>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Footer Info Strip */}
+      {/* Footer Info Strip (Docked at Bottom - Zero Canvas Overlap) */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "6px 16px",
+          padding: "5px 14px",
           background: nightMode ? "rgba(9, 13, 22, 0.95)" : "#f8fafc",
-          borderTop: nightMode ? "1px solid rgba(255, 255, 255, 0.05)" : "1px solid rgba(0, 0, 0, 0.05)",
+          borderTop: nightMode ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.06)",
           fontSize: "0.72rem",
           color: "var(--text-dim)",
+          flexShrink: 0,
+          zIndex: 30,
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Sparkles size={12} style={{ color: "var(--accent-cyan)" }} />
-          <span>Virtual Engine • On-demand 64KB Byte Streaming</span>
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "5px", color: "#38bdf8", fontWeight: 600 }}>
+            <Sparkles size={12} style={{ color: "var(--accent-cyan)" }} />
+            <span>Virtual Engine • On-demand 64KB Byte Streaming</span>
+          </span>
+        </div>
 
-        <span>
-          Page {currentPage} of {numPages} • Night Mode {nightMode ? "Active 🌙" : "Off ☀️"}
-        </span>
+        {/* Docked AI Study Pod & Discussion Capsule (Cleanly outside canvas, zero blocking of notes!) */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={() => setAiStudyPodOpen(true)}
+            style={{
+              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "999px",
+              padding: "4px 12px",
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              boxShadow: "0 2px 8px rgba(139, 92, 246, 0.35)",
+            }}
+            title="✨ Open AI Study Pod (3D Flashcards & Summary)"
+          >
+            <Sparkles size={12} />
+            <span>✨ AI Pod</span>
+          </button>
+
+          {enableDiscussionBridge && (
+            <button
+              type="button"
+              onClick={handleOpenPageDiscussion}
+              style={{
+                background: "rgba(6, 182, 212, 0.15)",
+                border: "1px solid rgba(6, 182, 212, 0.35)",
+                color: nightMode ? "#38bdf8" : "#0284c7",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                borderRadius: "999px",
+                padding: "3px 10px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+              title={'Open Live Study Pod discussion for Page ' + currentPage}
+            >
+              <MessageSquare size={12} color="#06b6d4" />
+              <span>Stuck on Pg {currentPage}? Discuss</span>
+            </button>
+          )}
+
+          <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+
+          <span>
+            Page {currentPage} of {numPages} • Night Mode {nightMode ? "Active 🌙" : "Off ☀️"}
+          </span>
+        </div>
       </div>
 
       {/* 📥 Real-Time CDN Download Progress HUD */}
