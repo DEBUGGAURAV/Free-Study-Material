@@ -78,6 +78,99 @@ export default {
       });
     }
 
+    // 2.5. 🤖 Zero-Server-CPU Academic AI Edge Proxy: /api/ai/ask
+    if (url.pathname === '/api/ai/ask' && request.method === 'POST') {
+      const groqKey = env.GROQ_API_KEY || '';
+      const geminiKey = env.GEMINI_API_KEY || '';
+
+      if (groqKey || geminiKey) {
+        try {
+          const body = await request.json();
+          const { query, context } = body;
+          if (!query || !query.trim()) {
+            return new Response(JSON.stringify({ success: false, message: 'Query prompt required' }), {
+              status: 400,
+              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+            });
+          }
+
+          let answer = '';
+          let provider = 'groq';
+          let failover = false;
+
+          if (groqKey) {
+            try {
+              const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + groqKey,
+                },
+                body: JSON.stringify({
+                  model: 'llama-3.1-8b-instant',
+                  messages: [
+                    { role: 'system', content: 'You are an expert academic tutor for college students. Answer clearly and concisely using the provided lecture notes.' },
+                    { role: 'user', content: context ? '[Notes Context]:\n' + context.slice(0, 3500) + '\n\n[Question]:\n' + query : query }
+                  ],
+                  temperature: 0.3,
+                  max_tokens: 500,
+                })
+              });
+              if (groqRes.ok) {
+                const groqData = await groqRes.json();
+                answer = groqData.choices && groqData.choices[0] && groqData.choices[0].message && groqData.choices[0].message.content ? groqData.choices[0].message.content : '';
+              } else {
+                failover = true;
+              }
+            } catch (_) {
+              failover = true;
+            }
+          } else {
+            failover = true;
+          }
+
+          if (!answer && geminiKey) {
+            try {
+              const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + geminiKey;
+              const geminiRes = await fetch(geminiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: "Answer this student's question based on their notes:\n\n" + (context ? '[Context]: ' + context.slice(0, 3500) + '\n\n' : '') + '[Question]: ' + query }] }],
+                  generationConfig: { temperature: 0.3, maxOutputTokens: 500 }
+                })
+              });
+              if (geminiRes.ok) {
+                const geminiData = await geminiRes.json();
+                answer = geminiData.candidates && geminiData.candidates[0] && geminiData.candidates[0].content && geminiData.candidates[0].content.parts && geminiData.candidates[0].content.parts[0] ? geminiData.candidates[0].content.parts[0].text : '';
+                provider = 'gemini';
+              }
+            } catch (_) {}
+          }
+
+          if (answer) {
+            const resHeaders = new Headers({
+              'Content-Type': 'application/json',
+              'Access-Control-Allow-Origin': '*',
+              'X-AI-Engine': provider,
+              'X-Edge-Location': edgeColo,
+              'X-Server-Hits': '0',
+            });
+            applyCors(resHeaders, request);
+            return new Response(JSON.stringify({
+              success: true,
+              answer: answer,
+              provider: provider,
+              model: provider === 'groq' ? 'llama-3.1-8b-instant' : 'gemini-2.0-flash',
+              failover: failover,
+              edgeLocation: edgeColo,
+              cached: false
+            }), { status: 200, headers: resHeaders });
+          }
+        } catch (_) {}
+      }
+    }
+
     // 3. Notes Stream Endpoint: /api/notes/:id/stream, /api/notes/:id/stream.pdf, etc.
     const isNoteStream = url.pathname.includes('/api/notes/') && (
       url.pathname.endsWith('/stream') ||

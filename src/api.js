@@ -1252,4 +1252,18 @@ export const api = {
   // 🛡️ Zero-Trust Security & IP Jail Appeal
   getSecurityStatus: () => request("/security/status"),
   submitJailAppeal: (payload) => request("/security/jail-appeal", { method: "POST", body: JSON.stringify(payload) }),
+
+  // 🤖 Dual Groq LPU + Gemini AI Engine & Edge Proxy Controls
+  getAiTelemetry: () => request("/ai/admin/telemetry"),
+  updateAiToggle: (provider, enabled) =>
+    request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) }),
+  updateAiKeys: (keys) =>
+    request("/ai/admin/keys", { method: "POST", body: JSON.stringify(keys) }),
+  resetAiCounters: () =>
+    request("/ai/admin/reset", { method: "POST" }),
+  testAiConnection: (provider) =>
+    request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
+  askAiQuestion: (query, context = "", noteId = null) =>
+    request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId }) }),
+  getAiStatus: () => request("/ai/status"),
 };

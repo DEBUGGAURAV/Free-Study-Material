@@ -81,6 +81,7 @@ import TabActivities from "./tabs/TabActivities";
 import TabHelpDesk from "./tabs/TabHelpDesk";
 import TabWebSecurity from "./tabs/TabWebSecurity";
 import TabNotices from "./tabs/TabNotices";
+import TabAiEngine from "./tabs/TabAiEngine";
 
 
 export default function AdminModal({
@@ -127,6 +128,7 @@ export default function AdminModal({
     { id: "help_desk", num: 13, label: "13. 🎫 Support Desk", title: "Help & Support Tickets Desk" },
     { id: "web_security", num: 14, label: "14. 🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
     { id: "notices_board", num: 15, label: "15. 📢 Notice Board & Alerts", title: "Notice Board & Global Broadcast Studio" },
+    { id: "ai_engine", num: 16, label: "16. 🤖 AI Studio (Groq / Gemini)", title: "AI Studio (Groq LPU + Gemini 2.0 Failover)" },
   ];
 
   const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
@@ -2916,6 +2918,7 @@ export default function AdminModal({
           {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
           {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
           {activeTab === "notices_board" && <TabNotices {...tabProps} currentUser={currentUser} />}
+          {activeTab === "ai_engine" && <TabAiEngine {...tabProps} currentUser={currentUser} />}
           {activeTab === "activities" && (
             selectedStudentForActivity ? (
               <TabActivities {...tabProps} />
