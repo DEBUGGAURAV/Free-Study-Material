@@ -168,7 +168,6 @@ function ContinuousPage({
         (entries) => {
           const entry = entries[0];
           if (entry && entry.isIntersecting) {
-            if (onInView) onInView(pageNum);
             if (!renderedRef.current && !renderingRef.current) {
               renderPage();
             }
@@ -711,7 +710,54 @@ export default function VirtualPdfReader({
 
 
 
-  // Search inside PDF
+  // 📜 Real-Time Active Page Detection during Vertical Scrolling (Continuous Scroll Mode)
+  useEffect(() => {
+    if (scrollMode !== "continuous" || useNativeViewer) return;
+    const container = mainScrollRef.current;
+    if (!container) return;
+
+    let rafId = null;
+    const updateActivePage = () => {
+      const containerRect = container.getBoundingClientRect();
+      // Reading eye level: 30% from top of reader viewport
+      const targetY = containerRect.top + Math.min(240, containerRect.height * 0.35);
+
+      let closestPage = null;
+      let minDistance = Infinity;
+
+      for (let p = 1; p <= (numPages || 1); p++) {
+        const el = document.getElementById(`continuous-page-${p}`);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        if (rect.top <= targetY && rect.bottom >= targetY) {
+          closestPage = p;
+          break;
+        }
+        const dist = Math.abs(rect.top - targetY);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestPage = p;
+        }
+      }
+
+      if (closestPage && closestPage !== currentPage) {
+        setCurrentPage(closestPage);
+      }
+    };
+
+    const handleScroll = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(updateActivePage);
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    updateActivePage();
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [scrollMode, numPages, useNativeViewer, currentPage]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatches, setSearchMatches] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -5257,7 +5303,7 @@ export default function VirtualPdfReader({
               title={'Open Live Study Pod discussion for Page ' + currentPage}
             >
               <MessageSquare size={12} color="#06b6d4" />
-              <span>Stuck on Pg {currentPage}? Discuss</span>
+              <span>💬 Pg {currentPage} Discussion</span>
             </button>
           )}
 
@@ -5606,75 +5652,6 @@ export default function VirtualPdfReader({
           </button>
         </div>
       )}
-
-      {/* 🚀 Floating Side Actions inside PDF Reader (AI Study Pod & Circle to Search for Page N) */}
-      <div
-        style={{
-          position: "fixed",
-          right: "20px",
-          bottom: "68px",
-          zIndex: 48,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: "8px",
-          pointerEvents: "auto",
-        }}
-      >
-        {/* ✨ AI Study Pod Floating Capsule */}
-        <button
-          type="button"
-          onClick={() => setAiStudyPodOpen(true)}
-          style={{
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
-            color: "#ffffff",
-            border: "1.5px solid rgba(255, 255, 255, 0.3)",
-            borderRadius: "999px",
-            padding: "8px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "0 8px 24px rgba(99, 102, 241, 0.45)",
-            cursor: "pointer",
-            fontWeight: 800,
-            fontSize: "0.78rem",
-            backdropFilter: "blur(10px)",
-            transition: "all 0.15s ease",
-          }}
-          title="Open AI Study Pod & 3D Flashcards for this Document"
-        >
-          <Sparkles size={14} color="#ffffff" />
-          <span>AI Pod</span>
-        </button>
-
-        {/* ⭕ Circle to Search Toggle Capsule */}
-        <button
-          type="button"
-          onClick={handleToggleCircleSearch}
-          style={{
-            background: isCircleSearchMode
-              ? "linear-gradient(135deg, #0284c7, #6366f1)"
-              : "linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.95))",
-            color: "#ffffff",
-            border: isCircleSearchMode ? "2px solid #38bdf8" : "1.5px solid rgba(255, 255, 255, 0.3)",
-            borderRadius: "999px",
-            padding: "8px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "0 8px 24px rgba(2, 132, 199, 0.45)",
-            cursor: "pointer",
-            fontWeight: 800,
-            fontSize: "0.78rem",
-            backdropFilter: "blur(10px)",
-            transition: "all 0.15s ease",
-          }}
-          title={isCircleSearchMode ? "Cancel Circle Selection" : "Circle to Search: Draw a circle around any formula or diagram on this page"}
-        >
-          <span style={{ fontSize: "0.95rem", lineHeight: 1 }}>⭕</span>
-          <span>{isCircleSearchMode ? "Cancel Circle" : "Circle Search"}</span>
-        </button>
-      </div>
     </div>
   );
 }
