@@ -299,7 +299,7 @@ export async function acquireNoteDocument(noteId, {
   const authToken =
     token ||
     (typeof window !== "undefined"
-      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || ""
+      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || ""
       : "");
 
   let cleanName = (fileName || note?.title || `Document_${cleanId}`)
@@ -383,6 +383,7 @@ export async function acquireNoteDocument(noteId, {
       const workerRes = await fetch(workerUrl, {
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         signal: workerController.signal,
+        credentials: "include",
       });
       clearTimeout(workerTimeout);
 
@@ -527,7 +528,10 @@ export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPrev
   if (CF_WORKER && isCdnCached) {
     base = CF_WORKER;
   }
-  const token = typeof window !== "undefined" ? localStorage.getItem("vault_token") || "" : "";
+  const token =
+    typeof window !== "undefined"
+      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || ""
+      : "";
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
   const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";

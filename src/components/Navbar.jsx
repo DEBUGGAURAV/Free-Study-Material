@@ -31,6 +31,7 @@ export default function Navbar({
   onOpenStudyPod,
   onOpenAirDrop,
   onOpenAiStudyPod,
+  onOpenCircleSearch,
   currentUser,
   onLogout,
   noticeCount = 0,
@@ -283,7 +284,31 @@ export default function Navbar({
                 {isListening ? <MicOff size={14} /> : <Mic size={14} />}
               </button>
 
-              {/* ✨ AI Search & Notes Filter Button */}
+              {/* ⭕ Circle to Search Button */}
+              <button
+                type="button"
+                onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
+                style={{
+                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(99, 102, 241, 0.28))",
+                  border: "1px solid rgba(56, 189, 248, 0.45)",
+                  color: "#38bdf8",
+                  borderRadius: "6px",
+                  padding: "2px 7px",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  marginLeft: "2px",
+                }}
+                title="⭕ Circle to Search: Circle any question or diagram to solve with AI"
+              >
+                <span style={{ fontSize: "0.75rem", lineHeight: 1 }}>⭕</span>
+                <span>Circle</span>
+              </button>
+
+              {/* ✨ AI Study Pod Popup Button */}
               <button
                 type="button"
                 onClick={onOpenAiStudyPod}
@@ -301,7 +326,7 @@ export default function Navbar({
                   gap: "3px",
                   marginLeft: "2px",
                 }}
-                title="✨ AI Study Pod: Search & Filter Notes with Flashcards & Summary"
+                title="✨ AI Study Pod Popup: Flashcards, Summary & Smart Note Filter"
               >
                 <Sparkles size={11} color="#a78bfa" />
                 <span>AI</span>
@@ -381,7 +406,7 @@ export default function Navbar({
         {/* DECK 2: SUSPENDED HOLOGRAPHIC FEATURE LAUNCHPAD (Desktop & Tablet)
             Every feature shows BOTH Icon + Explicit Label — super easy to find! */}
         <nav className="nav-feature-launchpad" aria-label="Academic Tools & Live Features">
-          {/* ✨ AI Study Pod & Smart Filter */}
+          {/* ✨ AI Study Pod & Smart Filter (Opens Popup) */}
           <button
             type="button"
             className="launchpad-pill pill-ai-studypod"
@@ -392,11 +417,28 @@ export default function Navbar({
               color: "#c4b5fd",
               boxShadow: "0 0 12px rgba(139, 92, 246, 0.25)",
             }}
-            title="✨ AI Study Pod: Search & Filter Notes with Instant Flashcards & Summary"
+            title="✨ AI Study Pod: Search & Filter Notes with Instant Flashcards & Summary (Opens Popup)"
           >
             <Sparkles size={14} color="#a78bfa" />
             <span>AI Study Pod</span>
             <span className="live-pill" style={{ background: "linear-gradient(135deg, #8b5cf6, #06b6d4)", color: "#fff" }}>AI</span>
+          </button>
+
+          {/* ⭕ Circle to Search & Solve */}
+          <button
+            type="button"
+            className="launchpad-pill pill-circle-search"
+            onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
+            style={{
+              background: "linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(99, 102, 241, 0.22))",
+              border: "1.5px solid rgba(56, 189, 248, 0.5)",
+              color: "#38bdf8",
+              boxShadow: "0 0 12px rgba(56, 189, 248, 0.2)",
+            }}
+            title="⭕ Circle to Search: Draw a circle or ask any math/diagram question to solve"
+          >
+            <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>⭕</span>
+            <span>Circle Search</span>
           </button>
 
           <span className="launchpad-divider" aria-hidden="true" />
@@ -479,6 +521,30 @@ export default function Navbar({
           MOBILE FLOATING BOTTOM DOCK (1-Tap Thumb Reach with Clear Labels)
           ══════════════════════════════════════════════════════════════════════ */}
       <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Tools">
+        {/* ✨ AI Study Pod Popup */}
+        <button
+          type="button"
+          className="dock-item dock-ai"
+          onClick={onOpenAiStudyPod}
+          style={{ color: "#c4b5fd" }}
+          title="AI Study Pod Popup (Flashcards, Summary, Notes Filter)"
+        >
+          <Sparkles size={17} color="#a78bfa" />
+          <span>AI Pod</span>
+        </button>
+
+        {/* ⭕ Circle to Search & Solve */}
+        <button
+          type="button"
+          className="dock-item dock-circle"
+          onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
+          style={{ color: "#38bdf8" }}
+          title="Circle to Search: Ask Question or Diagram"
+        >
+          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>⭕</span>
+          <span>Circle</span>
+        </button>
+
         <button
           type="button"
           className="dock-item dock-airdrop"

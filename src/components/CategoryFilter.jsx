@@ -26,6 +26,7 @@ export default function CategoryFilter({
   totalCount,
   viewMode = "grid",
   setViewMode,
+  onOpenCircleSearch,
 }) {
   const branchList = ["All", ...(branches.length > 0 ? branches : ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"])];
 
@@ -136,6 +137,31 @@ export default function CategoryFilter({
                 <List size={15} />
               </button>
             </div>
+          )}
+
+          {onOpenCircleSearch && (
+            <button
+              type="button"
+              onClick={onOpenCircleSearch}
+              style={{
+                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(99, 102, 241, 0.22))",
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                color: "#38bdf8",
+                borderRadius: "var(--radius-sm)",
+                padding: "4px 10px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}
+              title="⭕ Circle to Search: Ask question or upload diagram to solve"
+            >
+              <span>⭕ Circle Search</span>
+            </button>
           )}
 
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", fontWeight: 600 }}>

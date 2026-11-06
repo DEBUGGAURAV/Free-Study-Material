@@ -134,7 +134,8 @@ function checkMaintenanceMode(req, res, next) {
     req.path === "/api/admin/tech-flags" ||
     req.path === "/api/admin/maintenance/status" ||
     req.path.startsWith("/api/help") ||
-    req.path.startsWith("/api/security")
+    req.path.startsWith("/api/security") ||
+    (req.path.startsWith("/api/notes/") && (req.path.includes("/stream") || req.path.endsWith(".pdf")))
   ) {
     return next();
   }

@@ -171,14 +171,26 @@ export async function extractTextFromCroppedCanvas(croppedCanvas, onProgress) {
 /**
  * 4. Step 3: Multi-Tier AI Solution with IndexedDB & Turso Cache
  */
-export async function solveCircleQuery({ query, context = "", noteId = "", subject = "", onProgress }) {
-  if (!query || !query.trim()) throw new Error("No query text provided");
+export async function solveCircleQuery({
+  query = "",
+  context = "",
+  noteId = "",
+  subject = "",
+  imageBase64 = null,
+  imageMimeType = "image/png",
+  onProgress,
+}) {
+  const cleanQuery = typeof query === "string" ? query.trim() : "";
+  if (!cleanQuery && !imageBase64) {
+    throw new Error("Please enter a question or upload an image/formula to solve.");
+  }
 
-  const cleanQuery = query.trim();
-  const cacheKey = `circle_ai_${cleanQuery.toLowerCase().replace(/[^\w]/g, "_").slice(0, 80)}`;
+  const cacheKey = cleanQuery
+    ? `circle_ai_${cleanQuery.toLowerCase().replace(/[^\w]/g, "_").slice(0, 80)}`
+    : `circle_img_${String(imageBase64).slice(0, 32).replace(/[^\w]/g, "_")}`;
 
-  // 1. Check Memory Cache (0ms)
-  if (memorySessionCache.has(cacheKey)) {
+  // 1. Check Memory Cache (0ms) - only if text query (images bypass RAM key)
+  if (cleanQuery && memorySessionCache.has(cacheKey)) {
     if (onProgress) onProgress("⚡ Instant Memory Cache Hit (0ms)");
     return {
       ...memorySessionCache.get(cacheKey),
@@ -187,19 +199,21 @@ export async function solveCircleQuery({ query, context = "", noteId = "", subje
     };
   }
 
-  // 2. Check IndexedDB (L0 Offline Storage)
-  try {
-    const localHit = await getIndexedDbCircleCache(cacheKey);
-    if (localHit) {
-      memorySessionCache.set(cacheKey, localHit);
-      if (onProgress) onProgress("⚡ Instant IndexedDB Cache Hit (0ms)");
-      return {
-        ...localHit,
-        cached: true,
-        cacheTier: "IndexedDB L0",
-      };
-    }
-  } catch (_) {}
+  // 2. Check IndexedDB (L0 Offline Storage) - only if text query
+  if (cleanQuery) {
+    try {
+      const localHit = await getIndexedDbCircleCache(cacheKey);
+      if (localHit) {
+        memorySessionCache.set(cacheKey, localHit);
+        if (onProgress) onProgress("⚡ Instant IndexedDB Cache Hit (0ms)");
+        return {
+          ...localHit,
+          cached: true,
+          cacheTier: "IndexedDB L0",
+        };
+      }
+    } catch (_) {}
+  }
 
   if (onProgress) onProgress("🔍 Searching Turso AI Cache & Cloud Tutoring...");
 
@@ -215,6 +229,8 @@ export async function solveCircleQuery({ query, context = "", noteId = "", subje
       context,
       noteId,
       subject,
+      imageBase64: imageBase64 || undefined,
+      imageMimeType: imageBase64 ? imageMimeType : undefined,
     }),
   });
 

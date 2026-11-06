@@ -41,6 +41,7 @@ export default function AiStudyPodModal({
   isInsidePdf = false,
   isHomePage = false,
   initialTab = null,
+  onOpenCircleSearch,
 }) {
   const [activeTab, setActiveTab] = useState(
     initialTab || (isInsidePdf ? "flashcards" : (noteId ? "flashcards" : "search_notes"))
@@ -561,6 +562,35 @@ export default function AiStudyPodModal({
             <Clock size={14} />
             <span>🕒 Session History ({sessionHistory.length})</span>
           </button>
+
+          {/* ⭕ Circle to Search & Visual AI Quick Launch */}
+          {onOpenCircleSearch && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenCircleSearch();
+              }}
+              style={{
+                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(99, 102, 241, 0.22))",
+                color: "#38bdf8",
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                borderRadius: "10px",
+                padding: "7px 14px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+              }}
+              title="Open Circle to Search: Ask Question or Diagram"
+            >
+              <span>⭕ Circle to Search</span>
+            </button>
+          )}
         </div>
 
         {/* ============================================================== */}

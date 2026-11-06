@@ -61,6 +61,7 @@ const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdropModal"));
 const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
 const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal"));
+const CircleSearchModal = lazyWithRetry(() => import("./components/CircleSearchModal"));
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -163,6 +164,10 @@ export default function App() {
   const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
   const [homeAiPodNote, setHomeAiPodNote] = useState(null);
   const [homeAiPodInitialTab, setHomeAiPodInitialTab] = useState("search_notes");
+
+  // ⭕ Home Page Circle to Search & Visual AI State
+  const [isCircleSearchOpen, setIsCircleSearchOpen] = useState(false);
+  const [circleSearchData, setCircleSearchData] = useState(null);
 
   useEffect(() => {
     try {
@@ -1307,6 +1312,10 @@ export default function App() {
           setHomeAiPodInitialTab(targetTab || "search_notes");
           setIsHomeAiPodOpen(true);
         }}
+        onOpenCircleSearch={(data = null) => {
+          setCircleSearchData(data);
+          setIsCircleSearchOpen(true);
+        }}
         currentUser={currentUser}
         onLogout={handleLogout}
         noticeCount={notices.length}
@@ -1881,6 +1890,10 @@ export default function App() {
               totalCount={notes.length}
               viewMode={viewMode}
               setViewMode={setViewMode}
+              onOpenCircleSearch={() => {
+                setCircleSearchData(null);
+                setIsCircleSearchOpen(true);
+              }}
             />
 
             {/* Notes View (Grid or Compact List) */}
@@ -2262,9 +2275,37 @@ export default function App() {
               allNotes={notes}
               isHomePage={true}
               initialTab={homeAiPodInitialTab}
+              onOpenCircleSearch={() => {
+                setIsHomeAiPodOpen(false);
+                setIsCircleSearchOpen(true);
+              }}
               onOpenNote={(note) => {
                 setIsHomeAiPodOpen(false);
                 setPreviewNote(note);
+              }}
+            />
+          </ModalErrorBoundary>
+        )}
+
+        {/* ⭕ Circle to Search & Visual AI Modal (Interactive Question & Diagram Solver) */}
+        {isCircleSearchOpen && (
+          <ModalErrorBoundary
+            onClose={() => {
+              setIsCircleSearchOpen(false);
+              setCircleSearchData(null);
+            }}
+          >
+            <CircleSearchModal
+              isOpen={isCircleSearchOpen}
+              onClose={() => {
+                setIsCircleSearchOpen(false);
+                setCircleSearchData(null);
+              }}
+              circleData={circleSearchData}
+              allNotes={notes}
+              onOpenNote={(targetNote) => {
+                setIsCircleSearchOpen(false);
+                setPreviewNote(targetNote);
               }}
             />
           </ModalErrorBoundary>
