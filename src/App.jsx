@@ -6,7 +6,7 @@ import NoteCard from "./components/NoteCard";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint, Search } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
@@ -2351,6 +2351,82 @@ export default function App() {
         <HelpCircle size={18} />
         <span>Need Help?</span>
       </button>
+
+      {/* 🚀 Persistent Floating Side Action Dock (AI Study Pod & Circle to Search) */}
+      <div
+        className="floating-side-action-dock"
+        style={{
+          position: "fixed",
+          right: "20px",
+          bottom: activeJob ? "142px" : "84px",
+          zIndex: 140,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "10px",
+          pointerEvents: "auto",
+        }}
+      >
+        {/* ✨ AI Study Pod Floating Capsule */}
+        <button
+          type="button"
+          onClick={() => {
+            setHomeAiPodNote(null);
+            setIsHomeAiPodOpen(true);
+          }}
+          className="floating-ai-pod-trigger"
+          title="Open AI Study Pod: 3D Flashcards, Structured Summary & Study Filters"
+          style={{
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
+            color: "#ffffff",
+            border: "1.5px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "999px",
+            padding: "9px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "7px",
+            boxShadow: "0 8px 25px rgba(99, 102, 241, 0.45), 0 0 15px rgba(168, 85, 247, 0.25)",
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.82rem",
+            backdropFilter: "blur(12px)",
+            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }} />
+          <span className="floating-action-text">AI Study Pod</span>
+        </button>
+
+        {/* ⭕ Circle to Search Floating Capsule */}
+        <button
+          type="button"
+          onClick={() => {
+            setCircleSearchData(null);
+            setIsCircleSearchOpen(true);
+          }}
+          className="floating-circle-trigger"
+          title="Google-Style Circle to Search: Draw, Paste or Ask Any Academic Formula / Diagram"
+          style={{
+            background: "linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.95))",
+            color: "#ffffff",
+            border: "1.5px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "999px",
+            padding: "9px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "7px",
+            boxShadow: "0 8px 25px rgba(2, 132, 199, 0.45), 0 0 15px rgba(56, 189, 248, 0.25)",
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.82rem",
+            backdropFilter: "blur(12px)",
+            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <span style={{ fontSize: "1rem", lineHeight: 1, filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }}>⭕</span>
+          <span className="floating-action-text">Circle Search</span>
+        </button>
+      </div>
 
       {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
       {!isChatOpen && (

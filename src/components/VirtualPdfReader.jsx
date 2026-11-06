@@ -92,6 +92,7 @@ function ContinuousPage({
   const isContinuousDraggingRef = useRef(false);
   const [continuousCircleStart, setContinuousCircleStart] = useState(null);
   const [continuousCircleCurrent, setContinuousCircleCurrent] = useState(null);
+  const [activeCirclePill, setActiveCirclePill] = useState(null);
 
   const renderedRef = useRef(false);
   const renderingRef = useRef(false);
@@ -290,13 +291,67 @@ function ContinuousPage({
             const h = y2 - y1;
             setContinuousCircleStart(null);
             setContinuousCircleCurrent(null);
-            if (w >= 15 && h >= 15 && onCircleCompleted && canvasRef.current) {
-              onCircleCompleted({
-                canvas: canvasRef.current,
-                bounds: { x: x1, y: y1, width: w, height: h },
-                pageNum,
-                containerDimensions: pageDimensions,
+
+            if (w >= 15 && h >= 15 && canvasRef.current) {
+              const selBounds = { x: x1, y: y1, width: w, height: h };
+              setActiveCirclePill({
+                bounds: selBounds,
+                extracting: true,
+                extractedText: "",
+                cropDataUrl: null,
+                copied: false,
               });
+
+              // Asynchronously extract text via text layer and WASM OCR in client
+              (async () => {
+                try {
+                  const targetCanvas = canvasRef.current;
+                  if (!targetCanvas) return;
+                  const contWidth = pageDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+                  const dprRatio = targetCanvas.width / (contWidth || 1);
+                  const rawBounds = {
+                    x: Math.round(x1 * dprRatio),
+                    y: Math.round(y1 * dprRatio),
+                    width: Math.round(w * dprRatio),
+                    height: Math.round(h * dprRatio),
+                  };
+
+                  const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+                  let text = "";
+
+                  if (pdfDoc) {
+                    try {
+                      const pageObj = await pdfDoc.getPage(pageNum);
+                      const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+                      const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+                      if (textRes?.text && textRes.text.length >= 3) {
+                        text = textRes.text;
+                      }
+                    } catch (_) {}
+                  }
+
+                  if (!text && cropRes?.canvas) {
+                    try {
+                      const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
+                      if (ocrRes?.text) text = ocrRes.text;
+                    } catch (_) {}
+                  }
+
+                  if (!text) {
+                    text = `Question / Formula from Page ${pageNum}`;
+                  }
+
+                  setActiveCirclePill((prev) => (prev ? {
+                    ...prev,
+                    extracting: false,
+                    extractedText: text,
+                    cropDataUrl: cropRes?.dataUrl || null,
+                  } : null));
+                } catch (err) {
+                  console.warn("[ContinuousPage] Circle extraction error:", err);
+                  setActiveCirclePill((prev) => (prev ? { ...prev, extracting: false } : null));
+                }
+              })();
             }
           }}
           onPointerCancel={() => {
@@ -333,6 +388,140 @@ function ContinuousPage({
               }}
             />
           )}
+        </div>
+      )}
+
+      {/* ⭕ Google-Style Active Circled Selection & Action Pill */}
+      {activeCirclePill && (
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 48 }}>
+          {/* Glowing Google Selection Ring */}
+          <div
+            style={{
+              position: "absolute",
+              left: `${activeCirclePill.bounds.x}px`,
+              top: `${activeCirclePill.bounds.y}px`,
+              width: `${activeCirclePill.bounds.width}px`,
+              height: `${activeCirclePill.bounds.height}px`,
+              border: "3px solid #38bdf8",
+              borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
+              boxShadow: "0 0 25px rgba(56, 189, 248, 0.95), inset 0 0 16px rgba(99, 102, 241, 0.5)",
+              animation: "googleGlowPulse 2s infinite ease-in-out",
+              pointerEvents: "none",
+            }}
+          />
+
+          {/* Floating Google Action Pill */}
+          <div
+            style={{
+              position: "absolute",
+              left: `${Math.max(130, Math.min((pageDimensions?.width || 400) - 130, activeCirclePill.bounds.x + activeCirclePill.bounds.width / 2))}px`,
+              top: `${activeCirclePill.bounds.y > 55 ? activeCirclePill.bounds.y - 48 : activeCirclePill.bounds.y + activeCirclePill.bounds.height + 10}px`,
+              transform: "translateX(-50%)",
+              pointerEvents: "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "rgba(15, 23, 42, 0.96)",
+              backdropFilter: "blur(14px)",
+              border: "1.5px solid #38bdf8",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.4)",
+              borderRadius: "28px",
+              padding: "5px 10px",
+              animation: "fadeIn 0.2s ease-out",
+              userSelect: "none",
+            }}
+          >
+            {/* 📋 Copy Text Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (activeCirclePill.extractedText) {
+                  navigator.clipboard.writeText(activeCirclePill.extractedText);
+                  setActiveCirclePill((p) => (p ? { ...p, copied: true } : null));
+                  setTimeout(() => setActiveCirclePill(null), 1400);
+                }
+              }}
+              disabled={activeCirclePill.extracting}
+              style={{
+                background: activeCirclePill.copied ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)",
+                border: activeCirclePill.copied ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.2)",
+                color: activeCirclePill.copied ? "#34d399" : "#ffffff",
+                borderRadius: "20px",
+                padding: "5px 12px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                transition: "all 0.15s ease",
+              }}
+              title="Copy extracted text directly to clipboard"
+            >
+              {activeCirclePill.copied ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+              <span>{activeCirclePill.copied ? "Copied!" : (activeCirclePill.extracting ? "Extracting..." : "📋 Copy Text")}</span>
+            </button>
+
+            {/* 🔍 Search & Solve Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onCircleCompleted) {
+                  onCircleCompleted({
+                    canvas: canvasRef.current,
+                    bounds: activeCirclePill.bounds,
+                    pageNum,
+                    containerDimensions: pageDimensions,
+                    preExtractedText: activeCirclePill.extractedText,
+                    preCroppedImage: activeCirclePill.cropDataUrl,
+                  });
+                }
+                setActiveCirclePill(null);
+              }}
+              style={{
+                background: "linear-gradient(135deg, #0284c7, #6366f1)",
+                border: "none",
+                color: "#ffffff",
+                borderRadius: "20px",
+                padding: "5px 14px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+                transition: "all 0.15s ease",
+              }}
+              title="Solve question / diagram with Gemini AI & Groq"
+            >
+              <Sparkles size={13} />
+              <span>🔍 Search &amp; Solve</span>
+            </button>
+
+            {/* Cancel Button */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveCirclePill(null);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#94a3b8",
+                borderRadius: "50%",
+                padding: "3px",
+                cursor: "pointer",
+                display: "flex",
+              }}
+            >
+              <X size={13} />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -750,6 +939,7 @@ export default function VirtualPdfReader({
   const isCircleDragRef = useRef(false);
   const [circleStart, setCircleStart] = useState(null);
   const [circleCurrent, setCircleCurrent] = useState(null);
+  const [singlePageCirclePill, setSinglePageCirclePill] = useState(null);
 
   // 9. Adaptive Battery Saver & Network Mode (Decoupled & Independent)
   const [isEcoMode, setIsEcoMode] = useState(false); // ALWAYS OFF by default!
@@ -2526,7 +2716,14 @@ export default function VirtualPdfReader({
     }
   };
 
-  const processCircledRegion = async ({ canvas, bounds, pageNum, containerDimensions }) => {
+  const processCircledRegion = async ({
+    canvas,
+    bounds,
+    pageNum,
+    containerDimensions,
+    preExtractedText = null,
+    preCroppedImage = null,
+  }) => {
     try {
       setOcrStatusText("⭕ Analyzing circled selection...");
       const targetCanvas = canvas || canvasRef.current;
@@ -2543,14 +2740,14 @@ export default function VirtualPdfReader({
       };
 
       // 1. Crop canvas region for thumbnail and fallback OCR
-      const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+      const cropRes = preCroppedImage ? { dataUrl: preCroppedImage } : cropCanvasRegion(targetCanvas, rawBounds);
 
-      let extractedText = "";
-      let source = "text-layer";
+      let extractedText = preExtractedText || "";
+      let source = preExtractedText ? "pre-extracted" : "text-layer";
       const targetPageNum = pageNum || currentPage;
 
       // 2. Step 1: Text-Layer First Check (0ms, 0 RAM, 0 Server Load)
-      if (pdfDoc) {
+      if (!extractedText && pdfDoc) {
         try {
           const pageObj = await pdfDoc.getPage(targetPageNum);
           const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
@@ -2583,7 +2780,7 @@ export default function VirtualPdfReader({
       setCircleSearchData({
         text: extractedText,
         source,
-        croppedImage: cropRes?.dataUrl || null,
+        croppedImage: cropRes?.dataUrl || preCroppedImage || null,
         noteId: noteId || note?.id,
         subject: subject || note?.subject || "",
         context: `From ${title || "Notes"} (Page ${targetPageNum}): ${extractedText}`,
@@ -2597,6 +2794,9 @@ export default function VirtualPdfReader({
       setIsCircleSearchMode(false);
     }
   };
+
+  // Safe alias for backward compatibility
+  const processCircledSelection = processCircledRegion;
 
   const handleStartCircleSearch = (e) => {
     if (!isCircleSearchMode || !canvasRef.current) return;
@@ -2645,12 +2845,61 @@ export default function VirtualPdfReader({
       return;
     }
 
-    await processCircledSelection({
-      canvas: canvasRef.current,
-      bounds: { x: x1, y: y1, width: w, height: h },
-      pageNum: currentPage,
-      containerDimensions: canvasDimensions,
+    const selBounds = { x: x1, y: y1, width: w, height: h };
+    setSinglePageCirclePill({
+      bounds: selBounds,
+      extracting: true,
+      extractedText: "",
+      cropDataUrl: null,
+      copied: false,
     });
+
+    try {
+      const targetCanvas = canvasRef.current;
+      const contWidth = canvasDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+      const dprRatio = targetCanvas.width / (contWidth || 1);
+      const rawBounds = {
+        x: Math.round(x1 * dprRatio),
+        y: Math.round(y1 * dprRatio),
+        width: Math.round(w * dprRatio),
+        height: Math.round(h * dprRatio),
+      };
+
+      const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+      let text = "";
+
+      if (pdfDoc) {
+        try {
+          const pageObj = await pdfDoc.getPage(currentPage);
+          const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+          const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+          if (textRes && textRes.text && textRes.text.length >= 3) {
+            text = textRes.text;
+          }
+        } catch (_) {}
+      }
+
+      if (!text && cropRes?.canvas) {
+        try {
+          const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
+          if (ocrRes?.text) text = ocrRes.text;
+        } catch (_) {}
+      }
+
+      if (!text) {
+        text = `Question / Diagram from Page ${currentPage} (${subject || title || "Study Notes"})`;
+      }
+
+      setSinglePageCirclePill((prev) => (prev ? {
+        ...prev,
+        extracting: false,
+        extractedText: text,
+        cropDataUrl: cropRes?.dataUrl || null,
+      } : null));
+    } catch (err) {
+      console.warn("[SinglePage] Circle extraction error:", err);
+      setSinglePageCirclePill((prev) => (prev ? { ...prev, extracting: false } : null));
+    }
   };
 
   // 8. Yjs + WebRTC Peer-to-Peer Study Room
@@ -4761,6 +5010,138 @@ export default function VirtualPdfReader({
               </div>
             )}
 
+            {/* ⭕ Google-Style Active Circled Selection & Action Pill (Single Page Mode) */}
+            {singlePageCirclePill && (
+              <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 48 }}>
+                {/* Glowing Google Selection Ring */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${singlePageCirclePill.bounds.x}px`,
+                    top: `${singlePageCirclePill.bounds.y}px`,
+                    width: `${singlePageCirclePill.bounds.width}px`,
+                    height: `${singlePageCirclePill.bounds.height}px`,
+                    border: "3px solid #38bdf8",
+                    borderRadius: "50%",
+                    background: "radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
+                    boxShadow: "0 0 25px rgba(56, 189, 248, 0.95), inset 0 0 16px rgba(99, 102, 241, 0.5)",
+                    animation: "googleGlowPulse 2s infinite ease-in-out",
+                    pointerEvents: "none",
+                  }}
+                />
+
+                {/* Floating Google Action Pill */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: `${Math.max(130, Math.min((canvasDimensions?.width || 400) - 130, singlePageCirclePill.bounds.x + singlePageCirclePill.bounds.width / 2))}px`,
+                    top: `${singlePageCirclePill.bounds.y > 55 ? singlePageCirclePill.bounds.y - 48 : singlePageCirclePill.bounds.y + singlePageCirclePill.bounds.height + 10}px`,
+                    transform: "translateX(-50%)",
+                    pointerEvents: "auto",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "rgba(15, 23, 42, 0.96)",
+                    backdropFilter: "blur(14px)",
+                    border: "1.5px solid #38bdf8",
+                    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.4)",
+                    borderRadius: "28px",
+                    padding: "5px 10px",
+                    animation: "fadeIn 0.2s ease-out",
+                    userSelect: "none",
+                  }}
+                >
+                  {/* 📋 Copy Text Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (singlePageCirclePill.extractedText) {
+                        navigator.clipboard.writeText(singlePageCirclePill.extractedText);
+                        setSinglePageCirclePill((p) => (p ? { ...p, copied: true } : null));
+                        setTimeout(() => setSinglePageCirclePill(null), 1400);
+                      }
+                    }}
+                    disabled={singlePageCirclePill.extracting}
+                    style={{
+                      background: singlePageCirclePill.copied ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)",
+                      border: singlePageCirclePill.copied ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.2)",
+                      color: singlePageCirclePill.copied ? "#34d399" : "#ffffff",
+                      borderRadius: "20px",
+                      padding: "5px 12px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Copy extracted text directly to clipboard"
+                  >
+                    {singlePageCirclePill.copied ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+                    <span>{singlePageCirclePill.copied ? "Copied!" : (singlePageCirclePill.extracting ? "Extracting..." : "📋 Copy Text")}</span>
+                  </button>
+
+                  {/* 🔍 Search & Solve Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      processCircledRegion({
+                        canvas: canvasRef.current,
+                        bounds: singlePageCirclePill.bounds,
+                        pageNum: currentPage,
+                        containerDimensions: canvasDimensions,
+                        preExtractedText: singlePageCirclePill.extractedText,
+                        preCroppedImage: singlePageCirclePill.cropDataUrl,
+                      });
+                      setSinglePageCirclePill(null);
+                    }}
+                    style={{
+                      background: "linear-gradient(135deg, #0284c7, #6366f1)",
+                      border: "none",
+                      color: "#ffffff",
+                      borderRadius: "20px",
+                      padding: "5px 14px",
+                      fontSize: "0.76rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      boxShadow: "0 2px 10px rgba(2, 132, 199, 0.4)",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Solve question / diagram with Gemini AI & Groq"
+                  >
+                    <Sparkles size={13} />
+                    <span>🔍 Search &amp; Solve</span>
+                  </button>
+
+                  {/* Cancel Button */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSinglePageCirclePill(null);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "#94a3b8",
+                      borderRadius: "50%",
+                      padding: "3px",
+                      cursor: "pointer",
+                      display: "flex",
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Glowing Search Highlight Overlay Boxes */}
             {canvasDimensions.width > 0 && pageHighlights.length > 0 && (
               <div
@@ -5225,6 +5606,75 @@ export default function VirtualPdfReader({
           </button>
         </div>
       )}
+
+      {/* 🚀 Floating Side Actions inside PDF Reader (AI Study Pod & Circle to Search for Page N) */}
+      <div
+        style={{
+          position: "fixed",
+          right: "20px",
+          bottom: "68px",
+          zIndex: 48,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: "8px",
+          pointerEvents: "auto",
+        }}
+      >
+        {/* ✨ AI Study Pod Floating Capsule */}
+        <button
+          type="button"
+          onClick={() => setAiStudyPodOpen(true)}
+          style={{
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
+            color: "#ffffff",
+            border: "1.5px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "999px",
+            padding: "8px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 8px 24px rgba(99, 102, 241, 0.45)",
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.78rem",
+            backdropFilter: "blur(10px)",
+            transition: "all 0.15s ease",
+          }}
+          title="Open AI Study Pod & 3D Flashcards for this Document"
+        >
+          <Sparkles size={14} color="#ffffff" />
+          <span>AI Pod</span>
+        </button>
+
+        {/* ⭕ Circle to Search Toggle Capsule */}
+        <button
+          type="button"
+          onClick={handleToggleCircleSearch}
+          style={{
+            background: isCircleSearchMode
+              ? "linear-gradient(135deg, #0284c7, #6366f1)"
+              : "linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.95))",
+            color: "#ffffff",
+            border: isCircleSearchMode ? "2px solid #38bdf8" : "1.5px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "999px",
+            padding: "8px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 8px 24px rgba(2, 132, 199, 0.45)",
+            cursor: "pointer",
+            fontWeight: 800,
+            fontSize: "0.78rem",
+            backdropFilter: "blur(10px)",
+            transition: "all 0.15s ease",
+          }}
+          title={isCircleSearchMode ? "Cancel Circle Selection" : "Circle to Search: Draw a circle around any formula or diagram on this page"}
+        >
+          <span style={{ fontSize: "0.95rem", lineHeight: 1 }}>⭕</span>
+          <span>{isCircleSearchMode ? "Cancel Circle" : "Circle Search"}</span>
+        </button>
+      </div>
     </div>
   );
 }

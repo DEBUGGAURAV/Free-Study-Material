@@ -2312,3 +2312,63 @@ select option,
   }
 }
 
+/* ---------------- Floating Side Action Dock (Circle to Search & AI Study Pod) ---------------- */
+.floating-side-action-dock {
+  user-select: none;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.floating-ai-pod-trigger:hover,
+.floating-circle-trigger:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.floating-ai-pod-trigger:hover {
+  box-shadow: 0 12px 30px rgba(99, 102, 241, 0.6), 0 0 20px rgba(168, 85, 247, 0.4) !important;
+}
+
+.floating-circle-trigger:hover {
+  box-shadow: 0 12px 30px rgba(2, 132, 199, 0.6), 0 0 20px rgba(56, 189, 248, 0.4) !important;
+}
+
+.floating-ai-pod-trigger:active,
+.floating-circle-trigger:active {
+  transform: scale(0.96);
+}
+
+@media (max-width: 640px) {
+  .floating-side-action-dock {
+    right: 16px !important;
+    bottom: 74px !important;
+    gap: 8px !important;
+  }
+  .floating-side-action-dock .floating-action-text {
+    display: none;
+  }
+  .floating-ai-pod-trigger,
+  .floating-circle-trigger {
+    padding: 11px !important;
+    border-radius: 50% !important;
+    width: 42px !important;
+    height: 42px !important;
+    justify-content: center !important;
+  }
+}
+
+/* Google-Style Circle to Search Shimmer Glow Pulse */
+@keyframes googleGlowPulse {
+  0% {
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.85), inset 0 0 12px rgba(99, 102, 241, 0.45);
+    border-color: #38bdf8;
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(99, 102, 241, 0.95), inset 0 0 20px rgba(56, 189, 248, 0.65);
+    border-color: #818cf8;
+  }
+  100% {
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.85), inset 0 0 12px rgba(99, 102, 241, 0.45);
+    border-color: #38bdf8;
+  }
+}
+
+

@@ -30,6 +30,9 @@ export default function CircleSearchModal({
   const [solveStatus, setSolveStatus] = useState("");
   const [solution, setSolution] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [copiedQuery, setCopiedQuery] = useState(false);
+  const [isOcrCopying, setIsOcrCopying] = useState(false);
+  const [copiedOcr, setCopiedOcr] = useState(false);
   const [matchingNotes, setMatchingNotes] = useState([]);
   const [isEditingQuery, setIsEditingQuery] = useState(false);
 
@@ -167,6 +170,58 @@ export default function CircleSearchModal({
     navigator.clipboard.writeText(solution.answer);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyCroppedText = async () => {
+    if (!uploadedImageSrc) return;
+    setIsOcrCopying(true);
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = async () => {
+        try {
+          if (!imageContainerRef.current) return;
+          const rect = imageContainerRef.current.getBoundingClientRect();
+          const scaleX = img.naturalWidth / (rect.width || 1);
+          const scaleY = img.naturalHeight / (rect.height || 1);
+
+          const cropCanvas = document.createElement("canvas");
+          const hasCrop = cropBox && cropBox.width > 15 && cropBox.height > 15;
+          const cropW = hasCrop ? Math.max(1, Math.round(cropBox.width * scaleX)) : img.naturalWidth;
+          const cropH = hasCrop ? Math.max(1, Math.round(cropBox.height * scaleY)) : img.naturalHeight;
+          cropCanvas.width = cropW;
+          cropCanvas.height = cropH;
+
+          const ctx = cropCanvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(
+              img,
+              hasCrop ? Math.round(cropBox.x * scaleX) : 0,
+              hasCrop ? Math.round(cropBox.y * scaleY) : 0,
+              cropW,
+              cropH,
+              0,
+              0,
+              cropW,
+              cropH
+            );
+            const { extractTextFromCroppedCanvas } = await import("../utils/circleSearchEngine");
+            const ocrRes = await extractTextFromCroppedCanvas(cropCanvas);
+            const textToCopy = (ocrRes?.text || queryText || "Diagram / Formula").trim();
+            navigator.clipboard.writeText(textToCopy);
+            setCopiedOcr(true);
+            setTimeout(() => setCopiedOcr(false), 2200);
+          }
+        } catch (e) {
+          console.warn("OCR copy error:", e);
+        } finally {
+          setIsOcrCopying(false);
+        }
+      };
+      img.src = uploadedImageSrc;
+    } catch (_) {
+      setIsOcrCopying(false);
+    }
   };
 
   // Handle Image File Upload from Computer / Mobile Camera
@@ -405,6 +460,82 @@ export default function CircleSearchModal({
 
           {activeInputMode === "text" ? (
             <div>
+              {/* Google-Style Circled Text Quick Action Ribbon */}
+              {queryText && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    background: "rgba(56, 189, 248, 0.08)",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    borderRadius: "12px",
+                    marginBottom: "10px",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
+                    <span style={{ fontSize: "1.05rem" }}>⭕</span>
+                    <div style={{ fontSize: "0.78rem", color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <strong style={{ color: "#38bdf8" }}>Circled Question: </strong>
+                      {queryText}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                    {/* 📋 Copy Extracted Text Chip */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(queryText);
+                        setCopiedQuery(true);
+                        setTimeout(() => setCopiedQuery(false), 2000);
+                      }}
+                      style={{
+                        background: copiedQuery ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)",
+                        border: copiedQuery ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.2)",
+                        color: copiedQuery ? "#34d399" : "#f1f5f9",
+                        borderRadius: "16px",
+                        padding: "4px 10px",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        transition: "all 0.15s ease",
+                      }}
+                      title="Copy extracted text directly to clipboard"
+                    >
+                      {copiedQuery ? <Check size={12} color="#34d399" /> : <Copy size={12} />}
+                      <span>{copiedQuery ? "Copied!" : "📋 Copy Text"}</span>
+                    </button>
+
+                    {/* 🔍 Search in Notes Chip */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab("notes")}
+                      style={{
+                        background: activeTab === "notes" ? "rgba(99, 102, 241, 0.25)" : "rgba(255, 255, 255, 0.06)",
+                        border: "1px solid rgba(99, 102, 241, 0.3)",
+                        color: "#a5b4fc",
+                        borderRadius: "16px",
+                        padding: "4px 10px",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Search size={12} />
+                      <span>Search Notes</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "flex", gap: "8px" }}>
                 <input
                   type="text"
@@ -598,25 +729,53 @@ export default function CircleSearchModal({
                     <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
                       {cropBox && cropBox.width > 15 ? `⭕ Circled: ${cropBox.width}×${cropBox.height}px` : "No crop selected (will analyze full image)"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleSolveCroppedRegion}
-                      disabled={isSolving}
-                      className="btn-primary"
-                      style={{
-                        padding: "6px 16px",
-                        borderRadius: "8px",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <Sparkles size={13} />
-                      <span>{isSolving ? "Analyzing..." : "⭕ Solve Circled Region"}</span>
-                    </button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      {/* 📋 Google-style Quick Copy Text (OCR) */}
+                      <button
+                        type="button"
+                        onClick={handleCopyCroppedText}
+                        disabled={isOcrCopying}
+                        style={{
+                          background: copiedOcr ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)",
+                          border: copiedOcr ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.18)",
+                          color: copiedOcr ? "#34d399" : "#e2e8f0",
+                          borderRadius: "8px",
+                          padding: "6px 14px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Recognize and copy text from diagram / crop to clipboard"
+                      >
+                        {copiedOcr ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+                        <span>{copiedOcr ? "Copied!" : (isOcrCopying ? "Recognizing..." : "📋 Copy Text")}</span>
+                      </button>
+
+                      {/* 🔍 Google-style AI Solve */}
+                      <button
+                        type="button"
+                        onClick={handleSolveCroppedRegion}
+                        disabled={isSolving}
+                        className="btn-primary"
+                        style={{
+                          padding: "6px 16px",
+                          borderRadius: "8px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <Sparkles size={13} />
+                        <span>{isSolving ? "Analyzing..." : "⭕ Solve Circled Region"}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
