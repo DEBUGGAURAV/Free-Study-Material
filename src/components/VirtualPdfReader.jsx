@@ -5283,30 +5283,6 @@ export default function VirtualPdfReader({
             <span>✨ AI Pod</span>
           </button>
 
-          {enableDiscussionBridge && (
-            <button
-              type="button"
-              onClick={handleOpenPageDiscussion}
-              style={{
-                background: "rgba(6, 182, 212, 0.15)",
-                border: "1px solid rgba(6, 182, 212, 0.35)",
-                color: nightMode ? "#38bdf8" : "#0284c7",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                borderRadius: "999px",
-                padding: "3px 10px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-              title={'Open Live Study Pod discussion for Page ' + currentPage}
-            >
-              <MessageSquare size={12} color="#06b6d4" />
-              <span>💬 Pg {currentPage} Discussion</span>
-            </button>
-          )}
-
           <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
 
           <span>
