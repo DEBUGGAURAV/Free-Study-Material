@@ -10,6 +10,7 @@
 
 import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
 import { cacheNoteBuffer } from "./p2pMesh";
+import { loadAuthSession } from "./authIndexedDb";
 
 const isLocalHost =
   typeof window !== "undefined" &&
@@ -317,7 +318,15 @@ export async function acquireNoteDocument(noteId, {
   onProgress = () => {},
 } = {}) {
   const cleanId = String(noteId).trim();
-  const authToken = resolveClientAuthToken(token);
+  let authToken = resolveClientAuthToken(token);
+  if (!authToken) {
+    try {
+      const restored = await loadAuthSession();
+      if (restored?.token) {
+        authToken = restored.token;
+      }
+    } catch {}
+  }
 
   let cleanName = (fileName || note?.title || `Document_${cleanId}`)
     .replace(/[/\\?%*:|"<>]/g, "_")

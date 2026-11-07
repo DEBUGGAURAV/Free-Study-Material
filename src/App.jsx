@@ -170,6 +170,49 @@ export default function App() {
   const [isCircleSearchOpen, setIsCircleSearchOpen] = useState(false);
   const [circleSearchData, setCircleSearchData] = useState(null);
 
+  // User & Notices
+  const [currentUser, setCurrentUser] = useState(getCurrentUser());
+  const [notices, setNotices] = useState([]);
+  const [hideSecurityBanner, setHideSecurityBanner] = useState(false);
+
+  // Inactivity Auto-Logout State (30 Minutes = 1,800,000 ms)
+  const [autoLogoutNotice, setAutoLogoutNotice] = useState(null);
+  const currentUserRef = useRef(currentUser);
+  const lastActivityRef = useRef(Date.now());
+  const lastStorageSyncRef = useRef(Date.now());
+
+  // Active Background Upload Job
+  const [activeJob, setActiveJob] = useState(null);
+
+  // 📴 PWA & Village/2G Resilience Offline State
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+
+  // 🛠️ Platform Maintenance Mode State (Live Host Pause)
+  const [maintenanceState, setMaintenanceState] = useState({
+    active: false,
+    title: "",
+    message: "",
+    estimatedEnd: "",
+  });
+
+  // 📥 Student Notes Download Master Control Flag
+  const [allowNotesDownload, setAllowNotesDownload] = useState(true);
+  const [downloadDisabledReason, setDownloadDisabledReason] = useState("");
+  const [tableDownloads, setTableDownloads] = useState({});
+
+  // 🔑 Non-blocking Post-Registration Passkey Consent Prompt (Never blocks Notes page!)
+  const [passkeyPromptUser, setPasskeyPromptUser] = useState(null);
+  const [passkeyPromptLoading, setPasskeyPromptLoading] = useState(false);
+  const [passkeyPromptSuccess, setPasskeyPromptSuccess] = useState(false);
+
+  // 🛡️ Zero-Trust Security Quarantine Shield State (Strict Full-Page Lockdown Mode)
+  const [securityDetention, setSecurityDetention] = useState(null);
+
+  const openAuth = useCallback((tab = "signin") => {
+    setAuthInitialTab(tab);
+    setIsAuthOpen(true);
+  }, []);
+
   // 🛡️ Strict Login-Gating Guard for AI Study & Circle to Search
   useEffect(() => {
     if ((isHomeAiPodOpen || isCircleSearchOpen) && !currentUser) {
@@ -177,7 +220,18 @@ export default function App() {
       setIsCircleSearchOpen(false);
       openAuth("signin");
     }
-  }, [isHomeAiPodOpen, isCircleSearchOpen, currentUser]);
+  }, [isHomeAiPodOpen, isCircleSearchOpen, currentUser, openAuth]);
+
+  // 🔄 Hydrate session from IndexedDB if not found in memory/localStorage (Prevents false login prompts)
+  useEffect(() => {
+    restoreAuthSessionFromStorage()
+      .then((session) => {
+        if (session?.user && !currentUserRef.current) {
+          setCurrentUser(session.user);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -273,44 +327,6 @@ export default function App() {
       window.removeEventListener("open_auth_modal", handleOpenAuthModal);
     };
   }, []);
-
-  // User & Notices
-  const [currentUser, setCurrentUser] = useState(getCurrentUser());
-  const [notices, setNotices] = useState([]);
-  const [hideSecurityBanner, setHideSecurityBanner] = useState(false);
-
-  // Inactivity Auto-Logout State (30 Minutes = 1,800,000 ms)
-  const [autoLogoutNotice, setAutoLogoutNotice] = useState(null);
-  const currentUserRef = useRef(currentUser);
-  const lastActivityRef = useRef(Date.now());
-  const lastStorageSyncRef = useRef(Date.now());
-
-  // Active Background Upload Job
-  const [activeJob, setActiveJob] = useState(null);
-
-  // 📴 PWA & Village/2G Resilience Offline State
-  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
-
-  // 🛠️ Platform Maintenance Mode State (Live Host Pause)
-  const [maintenanceState, setMaintenanceState] = useState({
-    active: false,
-    title: "",
-    message: "",
-    estimatedEnd: "",
-  });
-
-  // 📥 Student Notes Download Master Control Flag
-  const [allowNotesDownload, setAllowNotesDownload] = useState(true);
-  const [downloadDisabledReason, setDownloadDisabledReason] = useState("");
-  const [tableDownloads, setTableDownloads] = useState({});
-
-  // 🔑 Non-blocking Post-Registration Passkey Consent Prompt (Never blocks Notes page!)
-  const [passkeyPromptUser, setPasskeyPromptUser] = useState(null);
-  const [passkeyPromptLoading, setPasskeyPromptLoading] = useState(false);
-  const [passkeyPromptSuccess, setPasskeyPromptSuccess] = useState(false);
-
-  // 🛡️ Zero-Trust Security Quarantine Shield State (Strict Full-Page Lockdown Mode)
-  const [securityDetention, setSecurityDetention] = useState(null);
 
   useEffect(() => {
     try {
@@ -605,11 +621,6 @@ export default function App() {
       }
     };
   }, []);
-
-  const openAuth = (tab = "signin") => {
-    setAuthInitialTab(tab);
-    setIsAuthOpen(true);
-  };
 
   // Keep ref updated to avoid stale state in async timers
   useEffect(() => {

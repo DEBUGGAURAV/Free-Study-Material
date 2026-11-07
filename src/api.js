@@ -17,6 +17,10 @@ let inMemoryUser = null;
 
 export function getAuthToken() {
   if (inMemoryToken) return inMemoryToken;
+  if (typeof window !== "undefined" && window.__FSM_AUTH_TOKEN__) {
+    inMemoryToken = window.__FSM_AUTH_TOKEN__;
+    return inMemoryToken;
+  }
   if (typeof localStorage !== "undefined") {
     const t = localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token");
     if (t) {
