@@ -290,6 +290,10 @@ function resolveClientAuthToken(explicitToken) {
   if (explicitToken) return explicitToken;
   if (typeof window === "undefined") return "";
   try {
+    const memToken =
+      window.__FSM_AUTH_TOKEN__ ||
+      (window.__FSM_AUTH_SESSION__ && window.__FSM_AUTH_SESSION__.token);
+    if (memToken) return memToken;
     return (
       localStorage.getItem("vault_token") ||
       localStorage.getItem("token") ||
@@ -451,16 +455,52 @@ export async function acquireNoteDocument(noteId, {
 
   const originUrl = `/api/notes/${cleanId}/stream.pdf?${
     mode === "download" ? "download=1" : "preview=1"
-  }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
+  }&direct=1${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
 
-  const serverRes = await fetch(originUrl, {
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    signal,
-    credentials: "include",
-  });
+  let serverRes = null;
+  try {
+    serverRes = await fetch(originUrl, {
+      headers: {
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        "X-Direct-Origin": "1",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      signal,
+      credentials: "include",
+    });
+  } catch (netErr) {
+    console.warn("[WATERFALL] Tier 3 fetch network notice:", netErr.message);
+  }
 
-  if (!serverRes.ok) {
-    let errMsg = `Document unavailable (${serverRes.status})`;
+  // 🛡️ Auto-Retry for 503 Storage Warm-ups (gives background MTProto pull 2.5s to finish SSD caching)
+  if (!serverRes || serverRes.status === 503) {
+    onProgress({
+      tier: 3,
+      tierLabel: "Tier 3: Connecting Academic Vault...",
+      percent: 30,
+      speed: "Warming cloud vault stream (2.5s)...",
+      loadedMB: "0",
+      totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+      timeRemaining: "Retrying...",
+      source: "disk",
+      icon: "⏳",
+    });
+    await new Promise((r) => setTimeout(r, 2500));
+    try {
+      serverRes = await fetch(originUrl, {
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          "X-Direct-Origin": "1",
+          "X-Requested-With": "XMLHttpRequest",
+        },
+        signal,
+        credentials: "include",
+      });
+    } catch (_) {}
+  }
+
+  if (!serverRes || !serverRes.ok) {
+    let errMsg = `Document unavailable (${serverRes?.status || "network"})`;
     try {
       const errJson = await serverRes.json();
       if (errJson?.message) errMsg = errJson.message;

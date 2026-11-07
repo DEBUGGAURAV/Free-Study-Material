@@ -243,20 +243,25 @@ export default function NoteCard({
         return;
       }
       console.warn("[DOWNLOAD] Download stream error:", err.message);
+      const isAuthed = Boolean(
+        currentUser ||
+        (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
+        (typeof getAuthToken === "function" ? getAuthToken() : null)
+      );
       if (
         err.message.includes("401") ||
         err.message.includes("Restricted") ||
         err.message.includes("exclusively for registered")
       ) {
-        if (!currentUser && onRequireAuth) {
+        if (!isAuthed && onRequireAuth) {
           onRequireAuth("signin");
         } else {
-          // Student is already authenticated: never lock behind login modal; fallback directly to secure stream URL
-          window.open(api.getDownloadUrl(note.id, fileName), "_blank");
+          // Student is authenticated: fallback directly to origin stream URL with direct=1 (bypasses 302 loops)
+          window.open(api.getDownloadUrl(note.id, fileName, true), "_blank");
         }
       } else {
-        // Fallback to direct url
-        window.open(api.getDownloadUrl(note.id, fileName), "_blank");
+        // Resilient fallback to direct url
+        window.open(api.getDownloadUrl(note.id, fileName, true), "_blank");
       }
     } finally {
       setTimeout(() => {
@@ -268,7 +273,12 @@ export default function NoteCard({
   const handleDocumentPreviewClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!currentUser) {
+    const isAuthed = Boolean(
+      currentUser ||
+      (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
+      (typeof getAuthToken === "function" ? getAuthToken() : null)
+    );
+    if (!isAuthed) {
       if (onRequireAuth) onRequireAuth("signin");
       return;
     }

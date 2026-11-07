@@ -36,6 +36,9 @@ export function getAuthToken() {
 
 export function setAuthToken(token) {
   inMemoryToken = token || null;
+  if (typeof window !== "undefined") {
+    window.__FSM_AUTH_TOKEN__ = token || null;
+  }
   if (token) {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("vault_token", token);
@@ -61,6 +64,10 @@ export function setAuthToken(token) {
 
 export function getCurrentUser() {
   if (inMemoryUser) return inMemoryUser;
+  if (typeof window !== "undefined" && window.__FSM_CURRENT_USER__) {
+    inMemoryUser = window.__FSM_CURRENT_USER__;
+    return inMemoryUser;
+  }
   try {
     if (typeof localStorage !== "undefined") {
       const userStr = localStorage.getItem("vault_user");
@@ -77,6 +84,9 @@ export function getCurrentUser() {
 
 export function setCurrentUser(user) {
   inMemoryUser = user || null;
+  if (typeof window !== "undefined") {
+    window.__FSM_CURRENT_USER__ = user || null;
+  }
   if (user) {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("vault_user", JSON.stringify(user));
@@ -644,14 +654,15 @@ export const api = {
 
   getNoteById: (id) => request(`/notes/${id}`),
 
-  getDownloadUrl: (id, fileName = null) => {
+  getDownloadUrl: (id, fileName = null, direct = false) => {
     const token = getAuthToken();
     const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
     const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
     const nameParam = cleanName ? `&filename=${encodeURIComponent(cleanName)}` : "";
-    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}download=1${nameParam}`;
+    const directParam = direct ? "&direct=1" : "";
+    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}download=1${nameParam}${directParam}`;
   },
 
   getStreamUrl: (id, fileName = null) => {
@@ -754,9 +765,11 @@ export const api = {
    * Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
    */
   downloadNoteWithProgress: async (id, fileName, onProgress, signal = null, fileHandle = null) => {
+    const token = getAuthToken();
     const result = await acquireNoteDocument(id, {
       mode: "download",
       fileName,
+      token,
       onProgress,
       signal,
       fileHandle,

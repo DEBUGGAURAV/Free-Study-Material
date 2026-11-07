@@ -259,11 +259,13 @@ export default {
       // Edge Cache Miss: Fetch full document from Origin Server (Render Node where RAM/Disk/Telegram lives)
       try {
         const originReqUrl = new URL(url.pathname + url.search, originBase);
+        originReqUrl.searchParams.set('direct', '1'); // Force Render origin to stream directly without 302 redirect loops
         const forwardHeaders = new Headers(request.headers);
         forwardHeaders.set('Origin', originBase); // Ensure Render server CORS always accepts the worker's proxy request
         forwardHeaders.set('X-Forwarded-Host', url.host);
         forwardHeaders.set('X-Via-Worker', 'true');
         forwardHeaders.set('CF-Worker', 'true');
+        forwardHeaders.set('X-Direct-Origin', '1');
         if (env.CF_WORKER_SECRET) {
           forwardHeaders.set('X-Worker-Signature', env.CF_WORKER_SECRET);
         }
@@ -339,6 +341,19 @@ export default {
               status: 206,
               headers: rangeHeaders,
             });
+          }
+
+          // If client requested download, ensure attachment disposition
+          if (url.searchParams.get('download') === '1') {
+            const reqFilename = url.searchParams.get('filename') || url.searchParams.get('name');
+            if (reqFilename) {
+              responseHeaders.set('Content-Disposition', `attachment; filename="${encodeURIComponent(reqFilename)}"; filename*=UTF-8''${encodeURIComponent(reqFilename)}`);
+            } else {
+              const curDisp = responseHeaders.get('Content-Disposition') || '';
+              if (curDisp.startsWith('inline')) {
+                responseHeaders.set('Content-Disposition', curDisp.replace(/^inline/, 'attachment'));
+              }
+            }
           }
 
           // Client requested full file:

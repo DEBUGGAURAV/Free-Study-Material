@@ -41,7 +41,7 @@ export default function PreviewModal({
     try {
       await api.downloadNoteWithProgress(note.id, finalFileName);
     } catch (err) {
-      window.open(api.getDownloadUrl(note.id, finalFileName), "_blank");
+      window.open(api.getDownloadUrl(note.id, finalFileName, true), "_blank");
     }
   };
 

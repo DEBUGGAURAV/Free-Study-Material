@@ -43,6 +43,14 @@ function openDb() {
 
 /** Save JWT token and optional student user profile to IndexedDB */
 export async function saveAuthSession(token, user = null) {
+  if (typeof window !== "undefined") {
+    if (token) window.__FSM_AUTH_TOKEN__ = token;
+    if (user) window.__FSM_CURRENT_USER__ = user;
+    window.__FSM_AUTH_SESSION__ = {
+      token: token || window.__FSM_AUTH_TOKEN__ || null,
+      user: user || window.__FSM_CURRENT_USER__ || null,
+    };
+  }
   try {
     const db = await openDb();
     if (!db) return false;
@@ -84,12 +92,21 @@ export async function loadAuthSession() {
 
       reqToken.onsuccess = () => {
         token = reqToken.result || null;
+        if (token && typeof window !== "undefined") {
+          window.__FSM_AUTH_TOKEN__ = token;
+        }
       };
       reqUser.onsuccess = () => {
         user = reqUser.result || null;
+        if (user && typeof window !== "undefined") {
+          window.__FSM_CURRENT_USER__ = user;
+        }
       };
 
       tx.oncomplete = () => {
+        if (typeof window !== "undefined") {
+          window.__FSM_AUTH_SESSION__ = { token, user };
+        }
         resolve({ token, user });
       };
       tx.onerror = () => {

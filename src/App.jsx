@@ -2011,7 +2011,12 @@ export default function App() {
                                   className="btn-card-preview"
                                   style={{ width: "32px", height: "32px" }}
                                   onClick={() => {
-                                    if (!currentUser) {
+                                    const isAuthed = Boolean(
+                                      currentUser ||
+                                      (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
+                                      getAuthToken()
+                                    );
+                                    if (!isAuthed) {
                                       openAuth("signin");
                                       return;
                                     }

@@ -1674,11 +1674,20 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       const isOriginWorkerDev = Boolean(
         (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev")) ||
         (req.headers["referer"] && req.headers["referer"].includes("workers.dev")) ||
-        (req.headers["origin"] && req.headers["origin"].includes("workers.dev"))
+        (req.headers["origin"] && req.headers["origin"].includes("workers.dev")) ||
+        req.headers["cf-worker"] === "true" ||
+        req.headers["x-via-worker"] === "true" ||
+        req.headers["cf-worker"] ||
+        req.headers["x-via-worker"]
       );
       const isWorkerProxy = Boolean(
+        req.headers["cf-worker"] === "true" ||
+        req.headers["x-via-worker"] === "true" ||
+        req.headers["cf-worker"] ||
+        req.headers["x-via-worker"] ||
         (workerSecret && clientWorkerSig === workerSecret) ||
-        (req.headers["cf-ray"] && isOriginWorkerDev)
+        (req.headers["cf-ray"] && isOriginWorkerDev) ||
+        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
       );
 
       // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure
@@ -1767,15 +1776,26 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const isActualDownload = Boolean(isDownload);
 
     // ⚡ Zero-Render Bandwidth Offloader:
-    // When downloading a PDF, redirect directly to Cloudflare Edge Worker CDN unless the request came from the worker itself.
+    // When downloading a PDF, redirect top-level browser downloads to Cloudflare Edge Worker CDN unless the request came from the worker itself,
+    // or is an explicit direct request (e.g. Tier 3 fallback), or an internal API fetch request.
     // Cloudflare Edge serves the multi-megabyte PDF for free with 0 bytes of Render bandwidth!
     const cfWorkerUrl = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev").trim();
     const isDirectFromWorker = Boolean(
+      req.headers["cf-worker"] === "true" ||
+      req.headers["x-via-worker"] === "true" ||
       req.headers["cf-worker"] ||
       req.headers["x-via-worker"] ||
+      req.headers["x-worker-signature"] ||
       (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
     );
-    if (cfWorkerUrl && !isDirectFromWorker && isActualDownload) {
+    const isExplicitDirect = req.query.direct === "1" || req.headers["x-direct-origin"] === "1";
+    const isFetchOrApi = Boolean(
+      req.headers["x-requested-with"] ||
+      req.headers["sec-fetch-dest"] === "empty" ||
+      req.headers["x-direct-stream"] === "1"
+    );
+
+    if (cfWorkerUrl && !isDirectFromWorker && !isExplicitDirect && !isFetchOrApi && isActualDownload) {
       const authHdr = req.headers["authorization"] ? req.headers["authorization"].replace(/^Bearer\s+/i, "").trim() : "";
       let qToken = req.query.token || authHdr || (req.cookies && (req.cookies.fsm_token || req.cookies.vault_token || req.cookies.token)) || "";
       if (!qToken && requestingUser && requestingUser.id) {
@@ -2162,12 +2182,24 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     // Direct MTProto streaming fallback (Bypasses buffer assembly and streams chunks directly)
     if (note.telegramMessageId && !res.headersSent) {
       try {
-        const { streamTelegramDocument } = require("../telegram/mtproto");
-        if (typeof streamTelegramDocument === "function") {
-          return await streamTelegramDocument(note.telegramMessageId, res, req);
+        if (typeof streamDocumentFromChannel === "function") {
+          return await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
         }
       } catch (streamFallbackErr) {
         console.warn(`[STREAM-DIRECT] Direct MTProto stream fallback notice for ${id}:`, streamFallbackErr.message);
+      }
+      try {
+        if (typeof getDocumentBufferFromChannel === "function") {
+          const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
+          if (docData && docData.buffer) {
+            saveCdnBuffer(id, docData.buffer, docData.mimeType);
+            res.setHeader("Content-Type", docData.mimeType || "application/pdf");
+            res.setHeader("Content-Length", docData.buffer.length);
+            return res.status(200).end(docData.buffer);
+          }
+        }
+      } catch (docBufErr) {
+        console.warn(`[STREAM-DIRECT] Direct MTProto buffer fetch notice for ${id}:`, docBufErr.message);
       }
     }
 

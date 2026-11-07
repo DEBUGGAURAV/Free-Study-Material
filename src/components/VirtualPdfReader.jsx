@@ -1173,6 +1173,12 @@ export default function VirtualPdfReader({
         // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
         // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
         const token = getActiveReaderToken();
+        const activeId = noteId || note?.id;
+        const cleanName = getNotePdfFileName(note || { id: activeId, title });
+        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+        const directUrl = `/api/notes/${activeId}/${pathSegment}?preview=1&direct=1${token ? `&token=${encodeURIComponent(token)}` : ""}`;
+        if (!nativeSrc) setNativeSrc(directUrl);
+
         const result = await acquireNoteDocument(noteId, {
           mode: "read",
           note,
@@ -1272,12 +1278,8 @@ export default function VirtualPdfReader({
 
         setLocalPdfBuffer(safeArrayBuffer);
 
-        // Compute direct origin stream URL for native Web Reader fallback
-        const activeId = noteId || note?.id;
-        const cleanName = getNotePdfFileName(note || { id: activeId, title });
-        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-        const directUrl = `/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`;
-        setNativeSrc(directUrl);
+        // Ensure nativeSrc is set for native Web Reader fallback
+        if (!nativeSrc) setNativeSrc(directUrl);
 
         // Update progress state: buffer ready, now decompressing and building pages
         setPreviewProgress((prev) => ({
@@ -1391,7 +1393,12 @@ export default function VirtualPdfReader({
           let errMsg = err.message || "Failed to load document";
           const activeUser = getActiveReaderUser();
           const activeToken = getActiveReaderToken();
-          const isAuthenticated = Boolean(activeUser || activeToken);
+          const isAuthenticated = Boolean(
+            activeUser ||
+            activeToken ||
+            currentUser ||
+            (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__))
+          );
 
           if (!isAuthenticated && (errMsg.includes("401") || errMsg.includes("Restricted") || errMsg.includes("exclusively for registered"))) {
             setIsAuthGated(true);
@@ -1427,15 +1434,16 @@ export default function VirtualPdfReader({
             errMsg.includes("Failed to fetch") ||
             errMsg.includes("network");
 
-          if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 2) {
+          if (isTransientStreamGlitch && !isDeletedNote && streamRetryCountRef.current < 3) {
             streamRetryCountRef.current += 1;
-            console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
-            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/2)...`);
+            const retryDelay = streamRetryCountRef.current === 1 ? 2500 : 3500;
+            console.log(`[PDF.js] Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/3 in ${retryDelay}ms)...`);
+            setOcrStatusText(`⚡ Academic vault warming up... Auto-reconnecting (Attempt ${streamRetryCountRef.current}/3)...`);
             setTimeout(() => {
               if (!isCancelled && loadGenerationRef.current === currentGeneration) {
                 setReloadTrigger((v) => v + 1);
               }
-            }, 1800);
+            }, retryDelay);
             return;
           }
 
