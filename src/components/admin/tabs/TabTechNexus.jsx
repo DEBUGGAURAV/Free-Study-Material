@@ -1049,7 +1049,7 @@ export default function TabTechNexus(props) {
                             </span>
                           </div>
                           <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
-                            Shows interactive "Stuck on this page? Discuss in Study Pod" pill &amp; scannable mobile QR on each page in Virtual PDF Reader.
+                            Shows interactive "Pg X? Discuss" pill &amp; scannable mobile QR on each page in Virtual PDF Reader.
                           </span>
                         </div>
                       </div>
