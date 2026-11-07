@@ -220,8 +220,14 @@ app.use(
 );
 
 // Body & Cookie Parsers
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+// 🛡️ Global JSON limit is 2MB to prevent Heap Exhaustion. /api/ai is granted 15MB for base64 canvas crops.
+app.use((req, res, next) => {
+  if (req.originalUrl && req.originalUrl.startsWith("/api/ai")) {
+    return next();
+  }
+  return express.json({ limit: "2mb" })(req, res, next);
+});
+app.use(express.urlencoded({ extended: true, limit: "2mb" }));
 app.use(cookieParser());
 
 // 🛡️ Pillar 2: Global Input Sanitizer & Prototype Pollution Guard
@@ -290,7 +296,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/help", helpRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/exam", examRoutes);
-app.use("/api/ai", aiRoutes);
+app.use("/api/ai", express.json({ limit: "15mb" }), aiRoutes);
 
 // Serve Client Web Application (Vite Dist) & Public Assets with proper PWA Cache-Control
 const distPath = path.join(__dirname, "../dist");
@@ -395,7 +401,7 @@ const server = http.createServer(app);
 // 🛡️ Traffic Spike & Reverse Proxy Keep-Alive Hardening (Prevents 502 Bad Gateway under sudden bursts)
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
-server.requestTimeout = 30000; // 30s connection timeout prevents hanging sockets under heavy bursts
+server.requestTimeout = 300000; // 300s (5 minutes) prevents cutting off slow mobile uploads and long PDF streams
 if (server.maxRequestsPerSocket !== undefined) {
   server.maxRequestsPerSocket = 1000;
 }

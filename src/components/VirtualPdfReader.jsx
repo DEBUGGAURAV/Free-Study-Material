@@ -303,6 +303,24 @@ function ContinuousPage({
             if (!renderedRef.current && !renderingRef.current) {
               renderPage();
             }
+          } else if (entry && !entry.isIntersecting) {
+            // Cancel any ongoing render task on this page
+            if (renderTaskRef.current) {
+              try {
+                renderTaskRef.current.cancel();
+              } catch (_) {}
+              renderTaskRef.current = null;
+              renderingRef.current = false;
+            }
+            // 🛡️ Free GPU/RAM on Mobile & Retina: Unload canvas bitmap when page is far out of view
+            // Container keeps its exact pageDimensions (minHeight & width) so the scroll position never jumps!
+            // Don't unload if student is actively drawing on this page
+            if (renderedRef.current && canvasRef.current && continuousStrokesRef.current.length === 0 && !activeCirclePill) {
+              canvasRef.current.width = 0;
+              canvasRef.current.height = 0;
+              renderedRef.current = false;
+              setRendered(false);
+            }
           }
         },
         { root: rootEl, rootMargin: "900px 0px" }

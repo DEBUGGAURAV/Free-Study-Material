@@ -161,7 +161,7 @@ export default function CategoryFilter({
               }}
               title="Circle to Search: Ask question or upload diagram to solve with Gemini AI"
             >
-              <GeminiIcon size={14} withRing />
+              <GeminiIcon size={14} withRing ringColor="#38bdf8" color="#38bdf8" />
               <span>Circle Search</span>
             </button>
           )}

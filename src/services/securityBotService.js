@@ -858,6 +858,12 @@ async function startSecurityBotPoller() {
         continue;
       }
 
+      if (res.status === 409) {
+        console.warn("[SECURITY BOT] 🛡️ Telegram 409 Conflict: Redeploy container polling overlap. Backing off 10s...");
+        await new Promise((r) => setTimeout(r, 10000));
+        continue;
+      }
+
       if (!res.ok) {
         await new Promise((r) => setTimeout(r, 2000));
         continue;

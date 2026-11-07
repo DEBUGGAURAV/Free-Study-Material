@@ -53,11 +53,11 @@ export default function GeminiIcon({
             cy="12"
             r="10.2"
             stroke={ringColor || "#ffffff"}
-            strokeWidth="2"
+            strokeWidth="2.2"
             strokeDasharray="2.8 2"
             opacity="1"
             style={{
-              filter: "drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.9))",
+              filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45))",
             }}
           />
           {/* Centered Large 4-Pointed Gemini Astroid Star (Crisp High-Visibility White Core) */}
@@ -65,7 +65,7 @@ export default function GeminiIcon({
             d="M 12 4.2 Q 12 12 4.2 12 Q 12 12 12 19.8 Q 12 12 19.8 12 Q 12 12 12 4.2 Z"
             fill={color || "#ffffff"}
             style={{
-              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 5px rgba(56, 189, 248, 0.8))",
+              filter: "drop-shadow(0 1px 2.5px rgba(0, 0, 0, 0.45))",
             }}
           />
           {/* 💎 Luminous White Diamond Center Core */}

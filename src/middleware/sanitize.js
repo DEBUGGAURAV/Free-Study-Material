@@ -17,8 +17,15 @@ try {
   threatReporter = require("./ipJail").incrementScrubbedCount;
 } catch (_) {}
 
-function scrubValue(val, clientIp = "unknown") {
+function scrubValue(val, clientIp = "unknown", depth = 0) {
+  if (depth > 10) return val; // 🛡️ Prevent Call Stack Overflow / ReDoS from deeply nested JSON
+
   if (typeof val === "string") {
+    // 🛡️ Fast-path for large base64 image strings (canvas crop/OCR) to prevent huge V8 string allocations
+    if (val.length > 100000 && val.startsWith("data:image/")) {
+      return val;
+    }
+
     let scrubbed = false;
     // Strip script blocks and dangerous event handlers
     const cleaned = val
@@ -37,13 +44,13 @@ function scrubValue(val, clientIp = "unknown") {
     return cleaned;
   }
   if (Array.isArray(val)) {
-    return val.map((v) => scrubValue(v, clientIp));
+    return val.map((v) => scrubValue(v, clientIp, depth + 1));
   }
   if (val !== null && typeof val === "object") {
     const cleanObj = {};
     for (const key of Object.keys(val)) {
       if (!DANGEROUS_KEYS.has(key)) {
-        cleanObj[key] = scrubValue(val[key], clientIp);
+        cleanObj[key] = scrubValue(val[key], clientIp, depth + 1);
       } else {
         if (typeof threatReporter === "function") {
           threatReporter(1, clientIp, `Prototype Pollution: "${key}"`);

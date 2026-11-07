@@ -1269,6 +1269,11 @@ function startHelpBotPoller() {
         const url = `https://api.telegram.org/bot${botToken}/getUpdates?offset=${helpPollerOffset}&timeout=25&allowed_updates=["message","callback_query"]`;
         const res = await fetch(url, { signal: AbortSignal.timeout(32000) }).catch(() => null);
         if (!res || !res.ok) {
+          if (res && res.status === 409) {
+            console.warn("[HELP TICKET BOT] 🛡️ Telegram 409 Conflict: Redeploy overlap. Backing off 10s...");
+            await new Promise((r) => setTimeout(r, 10000));
+            continue;
+          }
           consecutiveFailures++;
           const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
           const jitter = Math.floor(Math.random() * 800);

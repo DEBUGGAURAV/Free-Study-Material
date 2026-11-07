@@ -609,6 +609,13 @@ async function startBotPoller() {
         continue;
       }
 
+      // Handle Telegram HTTP 409 Conflict (Redeploy container overlap or local+prod conflict)
+      if (res.status === 409) {
+        console.warn("[BOT POLLER-GUARD] 🛡️ Telegram 409 Conflict: Another instance or redeploy container is currently polling. Backing off 10s...");
+        await new Promise((r) => setTimeout(r, 10000));
+        continue;
+      }
+
       if (!res.ok) {
         throw new Error(`Telegram API responded with HTTP ${res.status} ${res.statusText}`);
       }

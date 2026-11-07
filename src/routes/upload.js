@@ -85,6 +85,9 @@ router.post(
   authenticateToken,
   requireAuth,
   (req, res, next) => {
+    // 🛡️ Ensure socket timeout does not cut off slow 4G uploads or large 100MB+ files (10 minutes)
+    if (req.setTimeout) req.setTimeout(600000);
+    if (res.setTimeout) res.setTimeout(600000);
     upload.single("file")(req, res, (err) => {
       if (err) {
         return res.status(400).json({ success: false, message: err.message });

@@ -1794,6 +1794,11 @@ async function startChatAuditBotPoller() {
             pollerRunning = false;
             break;
           }
+          if (res.error_code === 409 || desc.includes("conflict")) {
+            console.warn("[CHAT-AUDIT-BOT] 🛡️ Telegram 409 Conflict: Redeploy overlap. Backing off 10s...");
+            await new Promise((r) => setTimeout(r, 10000));
+            continue;
+          }
           consecutiveFailures++;
           const baseDelay = Math.min(30000, Math.pow(2, Math.min(consecutiveFailures, 4)) * 1000);
           const jitter = Math.floor(Math.random() * 800);
