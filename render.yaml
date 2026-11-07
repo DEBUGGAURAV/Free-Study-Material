@@ -17,6 +17,10 @@ services:
         value: production
       - key: CLIENT_URL
         value: https://freestudymaterial.onrender.com
+      - key: DISABLE_KEEP_ALIVE
+        value: "false"
+      - key: KEEP_ALIVE_INTERVAL_MINUTES
+        value: "8"
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD
