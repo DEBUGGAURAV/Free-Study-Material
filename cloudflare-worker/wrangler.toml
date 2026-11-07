@@ -6,6 +6,10 @@ compatibility_date = "2024-11-01"
 [ai]
 binding = "AI"
 
+# 💓 24/7 Anti-Sleep Cron Trigger (Auto-pings Render every 10 minutes from Cloudflare Edge)
+[triggers]
+crons = ["*/10 * * * *"]
+
 [vars]
 ORIGIN_URL = "https://freestudymaterial.onrender.com"
 GROQ_MODEL = "openai/gpt-oss-20b"

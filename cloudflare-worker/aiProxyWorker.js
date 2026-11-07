@@ -626,4 +626,18 @@ export default {
       return new Response("Service unavailable", { status: 503 });
     }
   },
+
+  // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
+  async scheduled(event, env, ctx) {
+    const originBase = (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+    try {
+      await fetch(`${originBase}/health?cron=cf&t=${Date.now()}`, {
+        method: "GET",
+        headers: {
+          "User-Agent": "Cloudflare-Cron-AntiSleep/2.0",
+          "Cache-Control": "no-cache, no-store",
+        },
+      });
+    } catch (_) {}
+  },
 };
