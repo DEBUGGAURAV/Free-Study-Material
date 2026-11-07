@@ -19,6 +19,7 @@ import {
   togglePinCircleNote,
   clearAllStoredCircleNotes,
 } from "../utils/circleSearchEngine";
+import GeminiIcon from "./GeminiIcon";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -1634,7 +1635,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   lineHeight: 1.4,
                 }}
               >
-                <span>⭕ <strong>Circle to Search:</strong> AI answers saved offline</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  <GeminiIcon size={14} withRing />
+                  <span><strong>Circle to Search:</strong> AI answers saved offline</span>
+                </span>
                 <span>🕒 <strong>48h Auto-Expire:</strong> Active by default (Pin to Keep Forever)</span>
               </div>
 
@@ -1655,7 +1659,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     lineHeight: 1.5,
                   }}
                 >
-                  <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>⭕</div>
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "6px" }}>
+                    <GeminiIcon size={26} withRing />
+                  </div>
                   <div style={{ color: "#f8fafc", fontWeight: 600, marginBottom: "2px" }}>No Circled AI Notes Saved</div>
                   <div>Circle any question, diagram, or formula in the Virtual PDF Reader to solve it and save answers offline here.</div>
                 </div>

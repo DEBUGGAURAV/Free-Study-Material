@@ -498,8 +498,8 @@ function ContinuousPage({
               }}
               title="Solve question / diagram with Gemini AI & Groq"
             >
-              <Sparkles size={13} />
-              <span>🔍 Search &amp; Solve</span>
+              <GeminiIcon size={14} />
+              <span>Search &amp; Solve</span>
             </button>
 
             {/* Cancel Button */}
@@ -3858,8 +3858,8 @@ export default function VirtualPdfReader({
               whiteSpace: "nowrap",
             }}
           >
-            <Sparkles size={13} />
-            <span>{isCircleSearchMode ? "Cancel Circle" : "⭕ Circle"}</span>
+            <GeminiIcon size={14} withRing={!isCircleSearchMode} />
+            <span>{isCircleSearchMode ? "Cancel Circle" : "Circle to Search"}</span>
           </button>
 
           {/* Formula Clipper */}
@@ -5217,8 +5217,8 @@ export default function VirtualPdfReader({
                     }}
                     title="Solve question / diagram with Gemini AI & Groq"
                   >
-                    <Sparkles size={13} />
-                    <span>🔍 Search &amp; Solve</span>
+                    <GeminiIcon size={14} />
+                    <span>Search &amp; Solve</span>
                   </button>
 
                   {/* Cancel Button */}
@@ -5338,6 +5338,30 @@ export default function VirtualPdfReader({
             <Sparkles size={12} />
             <span>✨ AI Pod</span>
           </button>
+
+          {enableDiscussionBridge && (
+            <button
+              type="button"
+              onClick={handleOpenPageDiscussion}
+              style={{
+                background: "rgba(6, 182, 212, 0.15)",
+                border: "1px solid rgba(6, 182, 212, 0.35)",
+                color: nightMode ? "#38bdf8" : "#0284c7",
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                borderRadius: "999px",
+                padding: "3px 10px",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+              title={'Open Live Study Pod discussion for Page ' + currentPage}
+            >
+              <MessageSquare size={12} color="#06b6d4" />
+              <span>Pg {currentPage}? Discuss</span>
+            </button>
+          )}
 
           <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
 
@@ -5662,8 +5686,8 @@ export default function VirtualPdfReader({
             animation: "fadeIn 0.2s ease-out",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{ fontSize: "1.2rem", filter: "drop-shadow(0 0 6px #38bdf8)" }}>⭕</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <GeminiIcon size={18} withRing />
             <span><strong>Circle to Search Active:</strong> Click & drag a circle around any formula or question</span>
           </div>
           <button

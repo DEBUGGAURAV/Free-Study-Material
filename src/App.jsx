@@ -16,6 +16,7 @@ import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./con
 import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
 import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
 import { clearStudySessionHistory } from "./utils/studentSessionHistory";
+import GeminiIcon from "./components/GeminiIcon";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
 // AdminModal is dynamically lazy-loaded below
@@ -2423,7 +2424,7 @@ export default function App() {
             transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
-          <span style={{ fontSize: "1rem", lineHeight: 1, filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }}>⭕</span>
+          <GeminiIcon size={16} withRing />
           <span className="floating-action-text">Circle Search</span>
         </button>
       </div>
