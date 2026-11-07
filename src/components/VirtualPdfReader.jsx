@@ -749,7 +749,7 @@ export default function VirtualPdfReader({
 
     let rafId = null;
     const updateActivePage = () => {
-      const c = mainScrollRef.current;
+      const c = mainScrollRef.current || container;
       if (!c) return;
 
       // At or near the very top of document: immediately snap to page 1
@@ -811,11 +811,11 @@ export default function VirtualPdfReader({
       rafId = requestAnimationFrame(updateActivePage);
     };
 
-    c.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("scroll", handleScroll, { passive: true });
     updateActivePage();
 
     return () => {
-      c.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("scroll", handleScroll);
       if (rafId) cancelAnimationFrame(rafId);
     };
   }, [scrollMode, numPages, useNativeViewer]);
@@ -2816,8 +2816,24 @@ export default function VirtualPdfReader({
     }
   };
 
+  const handleOpenAiStudy = () => {
+    if (!currentUser) {
+      if (typeof onOpenAuth === "function") {
+        onOpenAuth("signin");
+      }
+      return;
+    }
+    setAiStudyPodOpen(true);
+  };
+
   // ⭕ Circle to Search & Solve Handlers
   const handleToggleCircleSearch = () => {
+    if (!currentUser) {
+      if (typeof onOpenAuth === "function") {
+        onOpenAuth("signin");
+      }
+      return;
+    }
     if (isCircleSearchMode) {
       setIsCircleSearchMode(false);
       setCircleStart(null);
@@ -2842,6 +2858,12 @@ export default function VirtualPdfReader({
     preExtractedText = null,
     preCroppedImage = null,
   }) => {
+    if (!currentUser) {
+      if (typeof onOpenAuth === "function") {
+        onOpenAuth("signin");
+      }
+      return;
+    }
     try {
       setOcrStatusText("⭕ Analyzing circled selection...");
       const targetCanvas = canvas || canvasRef.current;
@@ -3811,7 +3833,7 @@ export default function VirtualPdfReader({
           {/* Flashcards & Summary */}
           <button
             type="button"
-            onClick={() => setAiStudyPodOpen(true)}
+            onClick={handleOpenAiStudy}
             style={{
               padding: "4px 10px",
               fontSize: "0.74rem",
@@ -5334,7 +5356,7 @@ export default function VirtualPdfReader({
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <button
             type="button"
-            onClick={() => setAiStudyPodOpen(true)}
+            onClick={handleOpenAiStudy}
             style={{
               background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
               color: "#fff",
@@ -5349,10 +5371,10 @@ export default function VirtualPdfReader({
               gap: "4px",
               boxShadow: "0 2px 8px rgba(139, 92, 246, 0.35)",
             }}
-            title="✨ Open AI Study Pod (3D Flashcards & Summary)"
+            title="✨ Open AI Study (3D Flashcards & Summary)"
           >
             <Sparkles size={12} />
-            <span>✨ AI Pod</span>
+            <span>✨ AI Study</span>
           </button>
 
           {enableDiscussionBridge && (
@@ -5649,7 +5671,7 @@ export default function VirtualPdfReader({
       )}
 
       {/* ⭕ Circle to Search & Solve Modal */}
-      {circleModalOpen && (
+      {circleModalOpen && currentUser && (
         <CircleSearchModal
           isOpen={circleModalOpen}
           onClose={() => setCircleModalOpen(false)}
@@ -5657,8 +5679,8 @@ export default function VirtualPdfReader({
         />
       )}
 
-      {/* ✨ AI Study Pod Modal (Instant 3D Flashcards & Summary for this Note) */}
-      {aiStudyPodOpen && (
+      {/* ✨ AI Study Modal (Instant 3D Flashcards & Summary for this Note) */}
+      {aiStudyPodOpen && currentUser && (
         <AiStudyPodModal
           isOpen={aiStudyPodOpen}
           onClose={() => setAiStudyPodOpen(false)}

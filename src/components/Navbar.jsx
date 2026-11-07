@@ -356,7 +356,7 @@ export default function Navbar({
                   gap: "3px",
                   marginLeft: "2px",
                 }}
-                title="✨ AI Study Pod Popup: Flashcards, Summary & Smart Note Filter"
+                title="✨ AI Study: Flashcards, Summary & Smart Note Filter"
               >
                 <Sparkles size={11} color="#a78bfa" />
                 <span>AI</span>
@@ -514,16 +514,16 @@ export default function Navbar({
           MOBILE FLOATING BOTTOM DOCK (1-Tap Thumb Reach with Clear Labels)
           ══════════════════════════════════════════════════════════════════════ */}
       <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Tools">
-        {/* ✨ AI Study Pod Popup */}
+        {/* ✨ AI Study Popup */}
         <button
           type="button"
           className="dock-item dock-ai"
           onClick={onOpenAiStudyPod}
           style={{ color: "#c4b5fd" }}
-          title="AI Study Pod Popup (Flashcards, Summary, Notes Filter)"
+          title="AI Study (Flashcards, Summary, Notes Filter)"
         >
           <Sparkles size={17} color="#a78bfa" />
-          <span>AI Pod</span>
+          <span>AI Study</span>
         </button>
 
         {/* ♊ Circle to Search & Solve */}

@@ -10,6 +10,7 @@
  */
 
 import { recognizeCanvasText } from "./clientOcr";
+import { getCurrentUser } from "../api";
 
 // In-Memory L0 Session Cache
 const memorySessionCache = new Map();
@@ -183,6 +184,15 @@ export async function solveCircleQuery({
   const cleanQuery = typeof query === "string" ? query.trim() : "";
   if (!cleanQuery && !imageBase64) {
     throw new Error("Please enter a question or upload an image/formula to solve.");
+  }
+
+  // 🛡️ Strict Authentication Requirement for AI Solver
+  const user = getCurrentUser();
+  if (!user) {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("open_auth_modal", { detail: { mode: "signin" } }));
+    }
+    throw new Error("Authentication Required: Please sign in with your student account to use Circle to Search & AI Solver.");
   }
 
   const cacheKey = cleanQuery

@@ -638,7 +638,7 @@ export default function NoteCard({
             <span>Campus AirDrop (1-Tap QR)</span>
           </button>
 
-          {/* 🌟 Quaternary Row: AI Study Pod (3D Flashcards & Executive Summary) */}
+          {/* 🌟 Quaternary Row: AI Study (3D Flashcards & Executive Summary) */}
           <button
             type="button"
             className="btn-mesh-pill"
@@ -655,13 +655,19 @@ export default function NoteCard({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
+              if (!currentUser) {
+                if (typeof onRequireAuth === "function") {
+                  onRequireAuth("signin");
+                }
+                return;
+              }
               window.dispatchEvent(
                 new CustomEvent("open_ai_study_pod", {
                   detail: { note, tab: "flashcards" },
                 })
               );
             }}
-            title="✨ AI Study Pod: Instant 3D Flashcards & Structured Summary for this note"
+            title="✨ AI Study: Instant 3D Flashcards & Structured Summary for this note"
           >
             <Sparkles size={14} color="#a855f7" />
             <span>✨ AI Flashcards & Summary</span>

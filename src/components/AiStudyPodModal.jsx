@@ -401,7 +401,7 @@ export default function AiStudyPodModal({
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.2px" }}>
-                  AI Study Pod
+                  AI Study
                 </h3>
                 <span
                   style={{

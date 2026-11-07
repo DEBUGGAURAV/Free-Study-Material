@@ -170,6 +170,15 @@ export default function App() {
   const [isCircleSearchOpen, setIsCircleSearchOpen] = useState(false);
   const [circleSearchData, setCircleSearchData] = useState(null);
 
+  // 🛡️ Strict Login-Gating Guard for AI Study & Circle to Search
+  useEffect(() => {
+    if ((isHomeAiPodOpen || isCircleSearchOpen) && !currentUser) {
+      setIsHomeAiPodOpen(false);
+      setIsCircleSearchOpen(false);
+      openAuth("signin");
+    }
+  }, [isHomeAiPodOpen, isCircleSearchOpen, currentUser]);
+
   useEffect(() => {
     try {
       document.title = `${SITE_NAME} — ${SITE_TAGLINE}`;
@@ -187,16 +196,33 @@ export default function App() {
       setIsAirdropOpen(true);
     };
     const handleOpenAiPod = (e) => {
+      if (!currentUserRef.current) {
+        openAuth("signin");
+        return;
+      }
       const detail = e?.detail || {};
       setHomeAiPodNote(detail.note || null);
       setHomeAiPodInitialTab(detail.tab || (detail.note ? "flashcards" : "search_notes"));
       setIsHomeAiPodOpen(true);
+    };
+    const handleOpenCircleSearchEvent = (e) => {
+      if (!currentUserRef.current) {
+        openAuth("signin");
+        return;
+      }
+      setCircleSearchData(e?.detail || null);
+      setIsCircleSearchOpen(true);
+    };
+    const handleOpenAuthModal = (e) => {
+      openAuth(e?.detail?.mode || "signin");
     };
     window.addEventListener("open_student_chat", handleOpenChat);
     window.addEventListener("open_help_desk", handleOpenHelp);
     window.addEventListener("open_study_pod", handleOpenPod);
     window.addEventListener("open_campus_airdrop", handleOpenAirdrop);
     window.addEventListener("open_ai_study_pod", handleOpenAiPod);
+    window.addEventListener("open_circle_search", handleOpenCircleSearchEvent);
+    window.addEventListener("open_auth_modal", handleOpenAuthModal);
 
     // Auto-open chat, help, study pod, or specific note page if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
@@ -243,6 +269,8 @@ export default function App() {
       window.removeEventListener("open_study_pod", handleOpenPod);
       window.removeEventListener("open_campus_airdrop", handleOpenAirdrop);
       window.removeEventListener("open_ai_study_pod", handleOpenAiPod);
+      window.removeEventListener("open_circle_search", handleOpenCircleSearchEvent);
+      window.removeEventListener("open_auth_modal", handleOpenAuthModal);
     };
   }, []);
 
@@ -1315,11 +1343,19 @@ export default function App() {
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenAiStudyPod={(targetTab = "search_notes", note = null) => {
+          if (!currentUser) {
+            openAuth("signin");
+            return;
+          }
           setHomeAiPodNote(note);
           setHomeAiPodInitialTab(targetTab || "search_notes");
           setIsHomeAiPodOpen(true);
         }}
         onOpenCircleSearch={(data = null) => {
+          if (!currentUser) {
+            openAuth("signin");
+            return;
+          }
           setCircleSearchData(data);
           setIsCircleSearchOpen(true);
         }}
@@ -1898,6 +1934,10 @@ export default function App() {
               viewMode={viewMode}
               setViewMode={setViewMode}
               onOpenCircleSearch={() => {
+                if (!currentUser) {
+                  openAuth("signin");
+                  return;
+                }
                 setCircleSearchData(null);
                 setIsCircleSearchOpen(true);
               }}
@@ -2266,8 +2306,8 @@ export default function App() {
           </ModalErrorBoundary>
         )}
 
-        {/* 🌟 AI Study Pod Modal (Instant 3D Flashcards, Structured Summary & Global Note Filter) */}
-        {isHomeAiPodOpen && (
+        {/* 🌟 AI Study Modal (Instant 3D Flashcards, Structured Summary & Global Note Filter) */}
+        {isHomeAiPodOpen && currentUser && (
           <ModalErrorBoundary
             onClose={() => {
               setIsHomeAiPodOpen(false);
@@ -2300,7 +2340,7 @@ export default function App() {
         )}
 
         {/* ⭕ Circle to Search & Visual AI Modal (Interactive Question & Diagram Solver) */}
-        {isCircleSearchOpen && (
+        {isCircleSearchOpen && currentUser && (
           <ModalErrorBoundary
             onClose={() => {
               setIsCircleSearchOpen(false);
@@ -2379,15 +2419,19 @@ export default function App() {
           pointerEvents: "auto",
         }}
       >
-        {/* ✨ AI Study Pod Floating Capsule */}
+        {/* ✨ AI Study Floating Capsule */}
         <button
           type="button"
           onClick={() => {
+            if (!currentUser) {
+              openAuth("signin");
+              return;
+            }
             setHomeAiPodNote(null);
             setIsHomeAiPodOpen(true);
           }}
           className="floating-ai-pod-trigger"
-          title="Open AI Study Pod: 3D Flashcards, Structured Summary & Study Filters"
+          title="Open AI Study: 3D Flashcards, Structured Summary & Study Filters"
           style={{
             background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
             color: "#ffffff",
@@ -2406,13 +2450,17 @@ export default function App() {
           }}
         >
           <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }} />
-          <span className="floating-action-text">AI Study Pod</span>
+          <span className="floating-action-text">AI Study</span>
         </button>
 
         {/* ⭕ Circle to Search Floating Capsule */}
         <button
           type="button"
           onClick={() => {
+            if (!currentUser) {
+              openAuth("signin");
+              return;
+            }
             setCircleSearchData(null);
             setIsCircleSearchOpen(true);
           }}
