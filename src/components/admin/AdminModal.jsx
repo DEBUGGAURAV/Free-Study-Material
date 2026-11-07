@@ -2587,7 +2587,7 @@ export default function AdminModal({
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
       <div
-        className="modal-content"
+        className="modal-content admin-modal-container"
         style={{
           maxWidth: "1180px",
           width: "96vw",
@@ -2604,6 +2604,7 @@ export default function AdminModal({
       >
         {/* Top Executive Header */}
         <div
+          className="admin-modal-header"
           style={{
             padding: "16px 24px",
             background: "rgba(15, 23, 42, 0.8)",
@@ -2701,6 +2702,7 @@ export default function AdminModal({
 
         {/* Global KPIs Bar */}
         <div
+          className="admin-kpis-strip"
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
@@ -2750,6 +2752,7 @@ export default function AdminModal({
 
         {/* Tab Navigation Strip with Clean Slide Controls */}
         <div
+          className="admin-tab-nav-strip"
           style={{
             display: "flex",
             alignItems: "center",
@@ -2763,6 +2766,7 @@ export default function AdminModal({
         >
           {/* All Dashboard Tabs (Filtered by permissions for Sub-Admins) */}
           <div
+            className="admin-tab-buttons-scroll"
             style={{
               display: "flex",
               gap: "6px",
@@ -2924,7 +2928,7 @@ export default function AdminModal({
         </div>
 
         {/* Dynamic Tab Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px", position: "relative" }}>
+        <div className="admin-tab-body" style={{ flex: 1, overflowY: "auto", padding: "20px 28px", position: "relative" }}>
           {activeTab === "notes" && <TabNotes {...tabProps} />}
           {activeTab === "students" && <TabStudents {...tabProps} />}
           {activeTab === "hardware" && <TabHardware {...tabProps} />}

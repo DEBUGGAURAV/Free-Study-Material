@@ -203,8 +203,35 @@ export default function Navbar({
               </div>
             </div>
 
-            {/* Mobile Compact Right Cluster (Upload + Profile + Logout / Sign In) */}
+            {/* Mobile Compact Right Cluster (Admin + Upload + Profile + Logout / Sign In) */}
             <div className="mobile-header-actions">
+              {isAdminOrManager && (
+                <button
+                  type="button"
+                  className="btn-admin-mobile-header"
+                  onClick={onOpenAdmin}
+                  style={{
+                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.35))",
+                    border: "1.5px solid rgba(56, 189, 248, 0.6)",
+                    color: "#38bdf8",
+                    borderRadius: "999px",
+                    padding: "4px 9px",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
+                    flexShrink: 0,
+                  }}
+                  title="Admin Studio Control Panel"
+                >
+                  <Shield size={13} color="#38bdf8" />
+                  <span>Admin</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 className="btn-upload-mobile-compact"
@@ -288,6 +315,7 @@ export default function Navbar({
               {/* ♊ Circle to Search Button */}
               <button
                 type="button"
+                className="search-circle-btn"
                 onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
                 style={{
                   background: "linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(99, 102, 241, 0.28))",
@@ -312,6 +340,7 @@ export default function Navbar({
               {/* ✨ AI Study Pod Popup Button */}
               <button
                 type="button"
+                className="search-ai-btn"
                 onClick={onOpenAiStudyPod}
                 style={{
                   background: "linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(6, 182, 212, 0.28))",
@@ -509,6 +538,24 @@ export default function Navbar({
           <span>Circle</span>
         </button>
 
+        {isAdminOrManager && (
+          <button
+            type="button"
+            className="dock-item dock-admin"
+            onClick={onOpenAdmin}
+            style={{
+              color: "#38bdf8",
+              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.22))",
+              border: "1px solid rgba(56, 189, 248, 0.45)",
+              borderRadius: "12px",
+            }}
+            title="Admin Studio Control Panel"
+          >
+            <Shield size={17} color="#38bdf8" />
+            <span style={{ color: "#38bdf8", fontWeight: 800 }}>Admin</span>
+          </button>
+        )}
+
         <button
           type="button"
           className="dock-item dock-airdrop"
@@ -558,17 +605,6 @@ export default function Navbar({
           <HelpCircle size={17} />
           <span>Help</span>
         </button>
-
-        {isAdminOrManager && (
-          <button
-            type="button"
-            className="dock-item dock-admin"
-            onClick={onOpenAdmin}
-          >
-            <Shield size={17} />
-            <span>Admin</span>
-          </button>
-        )}
 
         {!isInstalled && (
           <button
