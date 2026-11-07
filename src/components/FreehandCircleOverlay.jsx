@@ -87,7 +87,7 @@ export default function FreehandCircleOverlay({
       const sketch = renderFreehandStrokesToCanvas(targetStrokes, {
         background: "#ffffff",
         strokeColor: "#0f172a",
-        lineWidth: 4.5,
+        lineWidth: 2.8,
       });
 
       if (padMode) {
@@ -227,7 +227,7 @@ export default function FreehandCircleOverlay({
           const sketch = renderFreehandStrokesToCanvas(strokesRef.current, {
             background: "#ffffff",
             strokeColor: "#0f172a",
-            lineWidth: 4.5,
+            lineWidth: 2.8,
           });
           if (sketch?.canvas) {
             const sketchOcr = await extractTextFromCroppedCanvas(sketch.canvas);
@@ -539,8 +539,8 @@ export default function FreehandCircleOverlay({
                 d={d}
                 fill="none"
                 stroke={inkColor}
-                strokeOpacity="0.34"
-                strokeWidth="10"
+                strokeOpacity="0.25"
+                strokeWidth="5.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
@@ -548,7 +548,7 @@ export default function FreehandCircleOverlay({
                 d={d}
                 fill="none"
                 stroke={padMode ? inkColor : "#ffffff"}
-                strokeWidth="3.5"
+                strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />

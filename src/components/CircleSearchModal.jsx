@@ -506,7 +506,7 @@ export default function CircleSearchModal({
         const rendered = renderFreehandStrokesToCanvas(padStrokes, {
           background: "#ffffff",
           strokeColor: "#0f172a",
-          lineWidth: 4.5,
+          lineWidth: 2.8,
         });
         if (!rendered?.canvas) return "";
         const ocrRes = await extractTextFromCroppedCanvas(rendered.canvas);
@@ -532,7 +532,7 @@ export default function CircleSearchModal({
     const rendered = renderFreehandStrokesToCanvas(padStrokes, {
       background: "#ffffff",
       strokeColor: "#0f172a",
-      lineWidth: 4.5,
+      lineWidth: 2.8,
     });
     if (!rendered?.dataUrl) return;
     const customPrompt =
@@ -1010,7 +1010,7 @@ export default function CircleSearchModal({
                           d={d}
                           fill="none"
                           stroke="#38bdf8"
-                          strokeWidth="3.5"
+                          strokeWidth="2.2"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -1217,7 +1217,7 @@ export default function CircleSearchModal({
                               d={d}
                               fill="none"
                               stroke="#38bdf8"
-                              strokeWidth="3.5"
+                              strokeWidth="2.2"
                               strokeLinecap="round"
                               strokeLinejoin="round"
                             />

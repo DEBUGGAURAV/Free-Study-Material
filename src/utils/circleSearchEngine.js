@@ -614,14 +614,14 @@ export async function clearAllStoredCircleNotes() {
 // ============================================================================
 
 const PENCIL_SVG = encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">` +
-    `<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" fill="#0f172a" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<path d="m15 5 4 4" stroke="#a855f7" stroke-width="2" stroke-linecap="round"/>` +
-    `<circle cx="2.5" cy="21.5" r="1.6" fill="#38bdf8"/>` +
+  `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">` +
+    `<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<path d="m15 5 4 4" stroke="#c084fc" stroke-width="1.8" stroke-linecap="round"/>` +
+    `<circle cx="2.2" cy="21.8" r="1.3" fill="#38bdf8"/>` +
   `</svg>`
 );
 
-export const PENCIL_CURSOR_STYLE = `url("data:image/svg+xml,${PENCIL_SVG}") 3 25, crosshair`;
+export const PENCIL_CURSOR_STYLE = `url("data:image/svg+xml,${PENCIL_SVG}") 2 18, crosshair`;
 
 /**
  * Converts an array of { x, y } points into a smooth quadratic-bezier SVG path string
@@ -738,14 +738,14 @@ export function renderFreehandStrokesToCanvas(strokes = [], options = {}) {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   ctx.strokeStyle = options.strokeColor || "#0f172a";
-  ctx.lineWidth = options.lineWidth || 4;
+  ctx.lineWidth = options.lineWidth || 2.8;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
   for (const stroke of validStrokes) {
     if (stroke.length === 1) {
       ctx.beginPath();
-      ctx.arc(stroke[0].x + offsetX, stroke[0].y + offsetY, 2.5, 0, Math.PI * 2);
+      ctx.arc(stroke[0].x + offsetX, stroke[0].y + offsetY, 1.8, 0, Math.PI * 2);
       ctx.fillStyle = options.strokeColor || "#0f172a";
       ctx.fill();
       continue;

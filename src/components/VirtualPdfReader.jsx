@@ -457,8 +457,8 @@ function ContinuousPage({
               const d = strokePointsToSvgPath(st);
               return d ? (
                 <g key={idx}>
-                  <path d={d} fill="none" stroke="#38bdf8" strokeOpacity="0.4" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d={d} fill="none" stroke="#0284c7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={d} fill="none" stroke="#38bdf8" strokeOpacity="0.25" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={d} fill="none" stroke="#0284c7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               ) : null;
             })}
@@ -5405,16 +5405,16 @@ export default function VirtualPdfReader({
                             d={d}
                             fill="none"
                             stroke="#38bdf8"
-                            strokeWidth="8"
+                            strokeWidth="5"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            opacity="0.26"
+                            opacity="0.2"
                           />
                           <path
                             d={d}
                             fill="none"
                             stroke="#38bdf8"
-                            strokeWidth="3.5"
+                            strokeWidth="2.2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
                           />
