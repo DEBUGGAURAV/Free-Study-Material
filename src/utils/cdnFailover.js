@@ -286,6 +286,23 @@ async function streamResponseBody(response, { onProgress, tier, tierLabel, icon,
  *
  * Used by BOTH "Read / Preview" and "Download"
  */
+function resolveClientAuthToken(explicitToken) {
+  if (explicitToken) return explicitToken;
+  if (typeof window === "undefined") return "";
+  try {
+    return (
+      localStorage.getItem("vault_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("fsm_token") ||
+      sessionStorage.getItem("vault_token") ||
+      sessionStorage.getItem("fsm_token") ||
+      ""
+    );
+  } catch {
+    return "";
+  }
+}
+
 export async function acquireNoteDocument(noteId, {
   mode = "download", // "download" | "read"
   fileName = "",
@@ -296,11 +313,7 @@ export async function acquireNoteDocument(noteId, {
   onProgress = () => {},
 } = {}) {
   const cleanId = String(noteId).trim();
-  const authToken =
-    token ||
-    (typeof window !== "undefined"
-      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || ""
-      : "");
+  const authToken = resolveClientAuthToken(token);
 
   let cleanName = (fileName || note?.title || `Document_${cleanId}`)
     .replace(/[/\\?%*:|"<>]/g, "_")
@@ -528,10 +541,7 @@ export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPrev
   if (CF_WORKER && isCdnCached) {
     base = CF_WORKER;
   }
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || ""
-      : "";
+  const token = resolveClientAuthToken(null);
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
   const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";

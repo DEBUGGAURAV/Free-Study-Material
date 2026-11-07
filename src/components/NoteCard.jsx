@@ -14,7 +14,7 @@ import {
   ArrowUpRight,
   Sparkles,
 } from "lucide-react";
-import { api } from "../api";
+import { api, getAuthToken } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
 import { downloadFromPeerMesh, getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
@@ -223,10 +223,12 @@ export default function NoteCard({
     });
 
     try {
+      const activeToken = getAuthToken() || "";
       await acquireNoteDocument(note.id, {
         mode: "download",
         fileName,
         note,
+        token: activeToken,
         signal: abortControllerRef.current.signal,
         onProgress: (metrics) => {
           setDownloadProgress(metrics);
@@ -246,7 +248,12 @@ export default function NoteCard({
         err.message.includes("Restricted") ||
         err.message.includes("exclusively for registered")
       ) {
-        if (onRequireAuth) onRequireAuth("signin");
+        if (!currentUser && onRequireAuth) {
+          onRequireAuth("signin");
+        } else {
+          // Student is already authenticated: never lock behind login modal; fallback directly to secure stream URL
+          window.open(api.getDownloadUrl(note.id, fileName), "_blank");
+        }
       } else {
         // Fallback to direct url
         window.open(api.getDownloadUrl(note.id, fileName), "_blank");

@@ -64,6 +64,7 @@ const securityRoutes = require("./routes/security");
 const examRoutes = require("./routes/exam");
 const aiRoutes = require("./routes/ai");
 const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
+const { startAntiSleepService, getAntiSleepTelemetry } = require("./services/antiSleepService");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -253,6 +254,8 @@ app.all(["/health", "/api/health"], (req, res) => {
     }
   } catch (_) {}
 
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
   res.set("x-fsm-cache-epoch", String(epoch));
   if (wipeRequired) {
     res.set("x-fsm-wipe-cache", "1");
@@ -263,6 +266,7 @@ app.all(["/health", "/api/health"], (req, res) => {
     service: "freestudymaterial",
     epoch,
     wipeRequired,
+    antiSleep: getAntiSleepTelemetry(),
     timestamp: new Date().toISOString(),
   });
 });
@@ -525,41 +529,10 @@ function startServer(portToTry, attempt = 1) {
     }
 
     // 🛡️ 24/7 Anti-Sleep Immortality Engine (Prevents Render Free Tier 15-Minute Sleep)
-    if (process.env.DISABLE_KEEP_ALIVE !== "true") {
-      const KEEP_ALIVE_URL = (process.env.KEEP_ALIVE_URL || process.env.RENDER_EXTERNAL_URL || getSiteUrl()).replace(/\/+$/, "");
-      const intervalMinutes = Number(process.env.KEEP_ALIVE_INTERVAL_MINUTES) || 12;
-      const KEEP_ALIVE_INTERVAL = intervalMinutes * 60 * 1000; // 12 minutes (Render sleeps at 15m, 12m guarantees 100% continuous uptime)
-
-      const pingSelf = async (retryCount = 0) => {
-        try {
-          const pingEndpoint = `${KEEP_ALIVE_URL}/health`;
-          const res = await fetch(pingEndpoint, {
-            headers: {
-              "User-Agent": "AcademicCloud-KeepAlive/2.0",
-              "Cache-Control": "no-cache, no-store",
-              "Pragma": "no-cache",
-            },
-            signal: AbortSignal.timeout(12000),
-          });
-          if (res.ok) {
-            console.log(`[ANTI-SLEEP] 💓 24/7 Keep-Alive Ping successful: ${pingEndpoint} (Status: ${res.status}) - Platform stays ACTIVE 24/7 (${intervalMinutes}m pulse)`);
-          } else {
-            console.warn(`[ANTI-SLEEP] ⚠️ Ping returned status ${res.status} from ${pingEndpoint}. Retrying in 25s...`);
-            if (retryCount < 3) {
-              setTimeout(() => pingSelf(retryCount + 1), 25000);
-            }
-          }
-        } catch (e) {
-          console.warn(`[ANTI-SLEEP] ⚠️ Keep-Alive Ping notice: ${e.message}. Retrying in 25s...`);
-          if (retryCount < 3) {
-            setTimeout(() => pingSelf(retryCount + 1), 25000);
-          }
-        }
-      };
-
-      // Initial ping after 30 seconds of boot, then recurring every 12 minutes
-      setTimeout(() => pingSelf(0), 30 * 1000);
-      setInterval(() => pingSelf(0), KEEP_ALIVE_INTERVAL);
+    try {
+      startAntiSleepService(initialPort);
+    } catch (antiSleepErr) {
+      console.warn("[ANTI-SLEEP] Init warning:", antiSleepErr.message);
     }
   });
 }

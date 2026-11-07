@@ -8,44 +8,119 @@ const API_BASE = "/api";
 // Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
 export const STREAM_BASE = "/api";
 import { fetchWithCdnFailover, parseSourceFromHeaders, acquireNoteDocument } from "./utils/cdnFailover";
-import { saveAuthToken } from "./utils/authIndexedDb";
+import { saveAuthSession, loadAuthSession, clearAuthSession, saveAuthToken } from "./utils/authIndexedDb";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
 import { getAnyCachedNoteBuffer } from "./utils/offlineQueue";
 
+let inMemoryToken = null;
+let inMemoryUser = null;
 
 export function getAuthToken() {
+  if (inMemoryToken) return inMemoryToken;
   if (typeof localStorage !== "undefined") {
-    return localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token") || null;
+    const t = localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token");
+    if (t) {
+      inMemoryToken = t;
+      return t;
+    }
+  }
+  if (typeof sessionStorage !== "undefined") {
+    const st = sessionStorage.getItem("vault_token") || sessionStorage.getItem("fsm_token");
+    if (st) {
+      inMemoryToken = st;
+      return st;
+    }
   }
   return null;
 }
 
 export function setAuthToken(token) {
+  inMemoryToken = token || null;
   if (token) {
-    localStorage.setItem("vault_token", token);
-  } else {
-    localStorage.removeItem("vault_token");
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("vault_token", token);
+    }
     if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem("vault_token", token);
+    }
+    saveAuthSession(token, inMemoryUser || getCurrentUser()).catch(() => {});
+  } else {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("vault_token");
+      localStorage.removeItem("token");
+      localStorage.removeItem("fsm_token");
+    }
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.removeItem("vault_token");
+      sessionStorage.removeItem("fsm_token");
       sessionStorage.removeItem("fsm_student_study_session_v1");
     }
+    clearAuthSession().catch(() => {});
   }
 }
 
 export function getCurrentUser() {
+  if (inMemoryUser) return inMemoryUser;
   try {
-    const userStr = localStorage.getItem("vault_user");
-    return userStr ? JSON.parse(userStr) : null;
+    if (typeof localStorage !== "undefined") {
+      const userStr = localStorage.getItem("vault_user");
+      if (userStr) {
+        inMemoryUser = JSON.parse(userStr);
+        return inMemoryUser;
+      }
+    }
   } catch {
     return null;
   }
+  return null;
 }
 
 export function setCurrentUser(user) {
+  inMemoryUser = user || null;
   if (user) {
-    localStorage.setItem("vault_user", JSON.stringify(user));
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("vault_user", JSON.stringify(user));
+    }
+    saveAuthSession(inMemoryToken || getAuthToken(), user).catch(() => {});
   } else {
-    localStorage.removeItem("vault_user");
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("vault_user");
+    }
+    clearAuthSession().catch(() => {});
   }
+}
+
+/**
+ * Asynchronously restores authentication session from IndexedDB if localStorage was cleared
+ * or uninitialized. Guarantees 0 false login prompts for students.
+ */
+export async function restoreAuthSessionFromStorage() {
+  try {
+    const existingToken = getAuthToken();
+    const existingUser = getCurrentUser();
+    if (existingToken && existingUser) {
+      // Background sync to ensure IndexedDB has the latest
+      saveAuthSession(existingToken, existingUser).catch(() => {});
+      return { token: existingToken, user: existingUser };
+    }
+
+    const idbSession = await loadAuthSession();
+    if (idbSession && (idbSession.token || idbSession.user)) {
+      if (idbSession.token && !existingToken) {
+        setAuthToken(idbSession.token);
+      }
+      if (idbSession.user && !existingUser) {
+        setCurrentUser(idbSession.user);
+      }
+      return {
+        token: idbSession.token || existingToken,
+        user: idbSession.user || existingUser,
+      };
+    }
+  } catch (err) {
+    console.debug("[API] restoreAuthSessionFromStorage notice:", err);
+  }
+  return { token: getAuthToken(), user: getCurrentUser() };
 }
 
 // Client Stale-While-Revalidate Memory Cache for 0ms Reload Performance
@@ -571,7 +646,7 @@ export const api = {
 
   getDownloadUrl: (id, fileName = null) => {
     const token = getAuthToken();
-    const tokenParam = token ? `token=${token}&` : "";
+    const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
     const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
@@ -581,7 +656,7 @@ export const api = {
 
   getStreamUrl: (id, fileName = null) => {
     const token = getAuthToken();
-    const tokenParam = token ? `token=${token}&` : "";
+    const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
     const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
@@ -885,6 +960,7 @@ export const api = {
   getHardwareSpecs: () => request("/admin/system/hardware"),
   getSoftwareSpecs: () => request("/admin/system/software"),
   getSoftwareInfo: () => request("/admin/system/software"),
+  triggerAntiSleepPulse: () => request("/admin/anti-sleep-pulse", { method: "POST" }),
   getLiveEngineSpeeds: () => request("/admin/system/speeds"),
   getUploadPipelines: () => request("/admin/upload-pipeline"),
   cleanupSystem: () => request("/admin/system/cleanup", { method: "POST" }),

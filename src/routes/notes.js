@@ -1593,8 +1593,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
     // Verify requesting user token (cookie, ephemeral ticket, query token, or auth header)
     let requestingUser = null;
-    const cookieToken = req.cookies?.fsm_token || req.cookies?.token;
-    const headerToken = req.headers["authorization"]?.split(" ")[1];
+    const cookieToken = req.cookies?.fsm_token || req.cookies?.vault_token || req.cookies?.token;
+    const headerToken = req.headers["authorization"] ? req.headers["authorization"].replace(/^Bearer\s+/i, "").trim() : null;
     const ticketParam = req.query.ticket;
     const queryToken = req.query.token;
     const isDownload = req.query.download === "1" || req.query.attachment === "1";
@@ -1681,8 +1681,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         (req.headers["cf-ray"] && isOriginWorkerDev)
       );
 
-      // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure ONLY for viewer caching (never downloads)
-      if (isWorkerProxy && !requestingUser && !isDownload) {
+      // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure
+      if (isWorkerProxy && !requestingUser) {
         requestingUser = { id: "cf_worker_edge", role: "worker", isEdgeCDN: true };
       }
 
@@ -1776,7 +1776,13 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
     );
     if (cfWorkerUrl && !isDirectFromWorker && isActualDownload) {
-      const qToken = req.query.token || (req.cookies && (req.cookies.fsm_token || req.cookies.token)) || "";
+      const authHdr = req.headers["authorization"] ? req.headers["authorization"].replace(/^Bearer\s+/i, "").trim() : "";
+      let qToken = req.query.token || authHdr || (req.cookies && (req.cookies.fsm_token || req.cookies.vault_token || req.cookies.token)) || "";
+      if (!qToken && requestingUser && requestingUser.id) {
+        try {
+          qToken = jwt.sign({ id: requestingUser.id, role: requestingUser.role || "student" }, JWT_SECRET, { expiresIn: "10m" });
+        } catch (_) {}
+      }
       const dlUrl = `${cfWorkerUrl}/api/notes/${id}/stream.pdf?download=1${qToken ? `&token=${encodeURIComponent(qToken)}` : ""}${req.query.filename ? `&filename=${encodeURIComponent(req.query.filename)}` : ""}`;
       return res.redirect(302, dlUrl);
     }

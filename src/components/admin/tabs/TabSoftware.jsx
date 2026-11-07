@@ -39,6 +39,29 @@ export default function TabSoftware(props) {
   const [cleaningAiTurso, setCleaningAiTurso] = useState(false);
   const [aiTursoCleanMsg, setAiTursoCleanMsg] = useState(null);
   const [studentTursoCleanMsg, setStudentTursoCleanMsg] = useState(null);
+  const [pulsingAntiSleep, setPulsingAntiSleep] = useState(false);
+  const [antiSleepPulseMsg, setAntiSleepPulseMsg] = useState(null);
+
+  const handleTriggerAntiSleep = async () => {
+    setPulsingAntiSleep(true);
+    setAntiSleepPulseMsg(null);
+    try {
+      const res = await api.triggerAntiSleepPulse();
+      if (res?.success) {
+        setAntiSleepPulseMsg({
+          type: "success",
+          text: `Pulse sent! Status: ${res.telemetry?.lastPingStatus || 200} (${res.telemetry?.lastPingLatencyMs || 0}ms)`,
+        });
+        if (typeof loadSoftwareInfo === "function") loadSoftwareInfo();
+      } else {
+        setAntiSleepPulseMsg({ type: "error", text: res?.message || "Pulse failed" });
+      }
+    } catch (err) {
+      setAntiSleepPulseMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setPulsingAntiSleep(false);
+    }
+  };
 
   const handleCleanStudentTurso = async () => {
     if (!window.confirm("Clean stale revoked sessions and old telemetry records from Turso Student Vault?")) return;
@@ -1252,9 +1275,48 @@ export default function TabSoftware(props) {
                       <span style={{ color: "var(--text-dim)" }}>Smart GC (Render 512MB):</span>
                       <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>380 MB Proactive Memory Guard</span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-                      <span style={{ color: "var(--text-dim)" }}>Render Anti-Sleep Engine:</span>
-                      <span style={{ color: "#34d399", fontWeight: 700 }}>12-Min Autonomous Pulse (24/7 Online)</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ color: "var(--text-dim)" }}>Render Anti-Sleep Engine:</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>
+                            {softwareInfo?.antiSleep?.intervalMinutes || 8}-Min Autonomous Pulse (24/7 Awake)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleTriggerAntiSleep}
+                            disabled={pulsingAntiSleep}
+                            style={{
+                              background: "rgba(16, 185, 129, 0.15)",
+                              border: "1px solid rgba(16, 185, 129, 0.4)",
+                              color: "#34d399",
+                              borderRadius: "4px",
+                              padding: "2px 7px",
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              cursor: pulsingAntiSleep ? "not-allowed" : "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "3px",
+                            }}
+                            title="Trigger an immediate Keep-Alive pulse (Direct + Cloudflare Relay)"
+                          >
+                            <Zap size={10} />
+                            <span>{pulsingAntiSleep ? "Pulsing..." : "Pulse Now"}</span>
+                          </button>
+                        </div>
+                      </div>
+                      {softwareInfo?.antiSleep?.lastPingTime && (
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          <span>Last Pulse: <strong style={{ color: "#38bdf8" }}>{new Date(softwareInfo.antiSleep.lastPingTime).toLocaleTimeString()}</strong> ({softwareInfo.antiSleep.lastPingLatencyMs || 0}ms • HTTP {softwareInfo.antiSleep.lastPingStatus || 200})</span>
+                          <span>Total Sent: <strong style={{ color: "#34d399" }}>{softwareInfo.antiSleep.totalPingsSent || 0}</strong></span>
+                        </div>
+                      )}
+                      {antiSleepPulseMsg && (
+                        <div style={{ fontSize: "0.72rem", color: antiSleepPulseMsg.type === "success" ? "#34d399" : "#f43f5e" }}>
+                          {antiSleepPulseMsg.text}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Event Loop Lag:</span>

@@ -49,7 +49,7 @@ import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
-import { api } from "../api";
+import { api, getAuthToken, getCurrentUser } from "../api";
 import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
 import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
@@ -535,6 +535,8 @@ export default function VirtualPdfReader({
   subject,
   noteId,
   note,
+  currentUser = null,
+  token: explicitToken = null,
   onClose,
   onDownload,
   onOpenAuth,
@@ -542,6 +544,9 @@ export default function VirtualPdfReader({
   downloadDisabledReason = "",
   initialPage = 1,
 }) {
+  const getActiveReaderToken = () => explicitToken || getAuthToken() || "";
+  const getActiveReaderUser = () => currentUser || getCurrentUser();
+
   const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
   const isBlocked = Boolean(isDownloadBlocked || isSingleNoteDisabled);
   const effectiveReason = downloadDisabledReason || note?.downloadDisabledReason || (isSingleNoteDisabled ? "Downloads and printing are disabled for this specific note by the administrator. Online reading is active." : "Downloads and printing are temporarily paused by the administrator. Online reading is active.");
@@ -1086,7 +1091,7 @@ export default function VirtualPdfReader({
       if (activeId) {
         const cleanName = getNotePdfFileName(note || { id: activeId, title });
         const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+        const token = getActiveReaderToken();
         setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
       } else if (url) {
         setNativeSrc(url);
@@ -1167,7 +1172,7 @@ export default function VirtualPdfReader({
 
         // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
         // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
-        const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+        const token = getActiveReaderToken();
         const result = await acquireNoteDocument(noteId, {
           mode: "read",
           note,
@@ -1384,8 +1389,11 @@ export default function VirtualPdfReader({
         if (!isCancelled && loadGenerationRef.current === currentGeneration) {
           console.error("[PDF.js Reader] Stream error:", err);
           let errMsg = err.message || "Failed to load document";
-          const hasToken = Boolean(localStorage.getItem("vault_token") || localStorage.getItem("vault_user"));
-          if (!hasToken || errMsg.includes("401") || errMsg.includes("Restricted") || errMsg.includes("exclusively for registered")) {
+          const activeUser = getActiveReaderUser();
+          const activeToken = getActiveReaderToken();
+          const isAuthenticated = Boolean(activeUser || activeToken);
+
+          if (!isAuthenticated && (errMsg.includes("401") || errMsg.includes("Restricted") || errMsg.includes("exclusively for registered"))) {
             setIsAuthGated(true);
             setLoading(false);
             setNativeLoading(false);
@@ -1605,7 +1613,7 @@ export default function VirtualPdfReader({
 
       const autoCacheToCdn = async () => {
         try {
-          const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+          const token = getActiveReaderToken();
           const res = await fetch(`/api/notes/${noteId}/cache-to-cdn`, {
             method: "POST",
             headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1677,7 +1685,7 @@ export default function VirtualPdfReader({
     }, 100);
 
     try {
-      const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+      const token = getActiveReaderToken();
       const res = await fetch(`/api/notes/${noteId}/cache-to-cdn`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1721,7 +1729,7 @@ export default function VirtualPdfReader({
         let cachedBuf = await getCachedNoteBuffer(noteId);
         if (!cachedBuf) {
           try {
-            const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+            const token = getActiveReaderToken();
             const r = await fetch(`/api/notes/${noteId}/stream.pdf`, {
               headers: token ? { Authorization: `Bearer ${token}` } : {},
               credentials: "include"
@@ -3217,7 +3225,7 @@ export default function VirtualPdfReader({
     if (activeId) {
       const cleanName = getNotePdfFileName(note || { id: activeId, title });
       const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-      const token = typeof window !== "undefined" ? (localStorage.getItem("vault_token") || "") : "";
+      const token = getActiveReaderToken();
       setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
     }
   };

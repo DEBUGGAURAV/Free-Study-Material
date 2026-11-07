@@ -44,6 +44,14 @@ try {
   pendingPasswordResets = secBot.pendingPasswordResets;
 } catch {}
 
+let getAntiSleepTelemetry = null;
+let triggerManualPulse = null;
+try {
+  const antiSleep = require("../services/antiSleepService");
+  getAntiSleepTelemetry = antiSleep.getAntiSleepTelemetry;
+  triggerManualPulse = antiSleep.triggerManualPulse;
+} catch {}
+
 const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
 
 let getCacheWarmerStatus = null;
@@ -2579,6 +2587,8 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
     const breakerStats = telegramCircuitBreaker ? telegramCircuitBreaker.getStatus() : { state: "CLOSED", consecutiveFailures: 0 };
     const watchdogStats = getWatchdogStats ? getWatchdogStats() : {};
 
+    const antiSleepTel = getAntiSleepTelemetry ? getAntiSleepTelemetry() : null;
+
     const resilience = {
       status: "ACTIVE • ZERO-DOWNTIME SHIELD",
       circuitBreaker: {
@@ -2596,8 +2606,9 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       ramWatchdog: {
         memoryThreshold: "380 MB Proactive GC Sweep",
         eventLoopLag: watchdogStats.eventLoopLagMs ? `${watchdogStats.eventLoopLagMs}ms` : "< 5ms (Nominal)",
-        antiSleepHeartbeat: "12-Min Autonomous Pulse (24/7 Awake)",
+        antiSleepHeartbeat: `${(antiSleepTel && antiSleepTel.intervalMinutes) || 8}-Min Autonomous Pulse (24/7 Awake)`,
       },
+      antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 8 },
     };
 
     // 12. Dual Turso LibSQL Edge Databases Telemetry
@@ -2688,10 +2699,31 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
         securityShield,
         speedBooster,
         resilience,
+        antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 8 },
         cacheWarmer: warmerStats,
         circuitBreaker: breakerStats,
         timestamp: new Date().toISOString(),
       },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/anti-sleep-pulse
+ * Triggers an immediate 24/7 Keep-Alive heartbeat pulse (Direct + Cloudflare Edge Relay)
+ */
+router.post("/anti-sleep-pulse", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
+  try {
+    if (!triggerManualPulse) {
+      return res.status(500).json({ success: false, message: "Anti-sleep service not initialized" });
+    }
+    const tel = await triggerManualPulse();
+    return res.json({
+      success: true,
+      message: "Anti-sleep keep-alive pulse dispatched successfully",
+      telemetry: tel,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

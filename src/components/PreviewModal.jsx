@@ -71,6 +71,7 @@ export default function PreviewModal({
           subject={note.subject}
           noteId={note.id}
           note={note}
+          currentUser={currentUser}
           onClose={onClose}
           onDownload={isBlocked ? null : handleDownload}
           isDownloadBlocked={isBlocked}

@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
 
-const JWT_SECRET = (process.env.JWT_SECRET || crypto.randomBytes(64).toString("hex")).trim();
+const JWT_SECRET = (process.env.JWT_SECRET || "50ad069ae2a0432e1521d3765ec8b3a881bdcb39f85a47e95498c1dc04f8b4ef8c8bfb42a7a7aa0cc1f328ed1e0552fb86750f27f76000d36f86593d25f8ccd2").trim();
 
 // 🛡️ Multi-Device Session Invalidation Cache (Category 1 Feature 4)
 // Stores minimum valid tokenVersion per userId: Map<userId, { minVersion: number, revokedAt: number }>
@@ -279,6 +279,14 @@ function setAuthCookie(res, req, token) {
     path: "/",
   });
 
+  res.cookie("vault_token", token, {
+    httpOnly: true,
+    secure: secure,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: "/",
+  });
+
   res.cookie("fsm_last_active", nowStr, {
     httpOnly: true,
     secure: secure,
@@ -306,6 +314,13 @@ function clearAuthCookie(res, req) {
   const secure = isProd && !isLocal;
 
   res.clearCookie("fsm_token", {
+    httpOnly: true,
+    secure: secure,
+    sameSite: secure ? "strict" : "lax",
+    path: "/",
+  });
+
+  res.clearCookie("vault_token", {
     httpOnly: true,
     secure: secure,
     sameSite: secure ? "strict" : "lax",

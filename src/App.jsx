@@ -5,7 +5,7 @@ import CategoryFilter from "./components/CategoryFilter";
 import NoteCard from "./components/NoteCard";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
-import { api, getCurrentUser } from "./api";
+import { api, getCurrentUser, getAuthToken, restoreAuthSessionFromStorage } from "./api";
 import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Server, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint, Search } from "lucide-react";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
@@ -733,8 +733,14 @@ export default function App() {
       openAuth(authAction === "signup" ? "signup" : "signin");
     }
 
-    // Verify session cookie via httpOnly cookie
-    api.getMe().then((res) => {
+    // 🛡️ Zero-Downtime Session Re-hydration: Restore from IndexedDB & Cookie
+    restoreAuthSessionFromStorage().then((session) => {
+      if (session && session.user && !currentUserRef.current) {
+        setCurrentUser(session.user);
+      }
+      // Verify session cookie via httpOnly cookie
+      return api.getMe();
+    }).then((res) => {
       if (res && res.user) {
         // Check if session has exceeded 30-min inactivity from previous visit
         const storedLast = parseInt(safeStorage.getItem("vault_last_active") || "0", 10);

@@ -20,24 +20,24 @@ export default function TabPipeline(props) {
     pipelineSummary,
     setPreviewNoteInAdmin,
     softwareInfo,
-    uploadPipelines,
+    uploadPipelines = [],
   } = props;
 
-  
+  const safePipelines = Array.isArray(uploadPipelines) ? uploadPipelines : [];
 
-            const activePipelines = uploadPipelines.filter((p) => {
-              if (p.status === "completed" || p.status === "ready") return false;
-              if (typeof p.currentStage === "string") {
-                const cs = p.currentStage.toLowerCase();
-                if (cs.includes("completed") || cs.includes("ready") || cs.includes("all stages completed")) return false;
-              }
-              if (p.telegramReached && p.status !== "processing") return false;
-              return p.status === "processing" || p.status === "queued" || p.status === "pending";
-            });
+  const activePipelines = safePipelines.filter((p) => {
+    if (p.status === "completed" || p.status === "ready") return false;
+    if (typeof p.currentStage === "string") {
+      const cs = p.currentStage.toLowerCase();
+      if (cs.includes("completed") || cs.includes("ready") || cs.includes("all stages completed")) return false;
+    }
+    if (p.telegramReached && p.status !== "processing") return false;
+    return p.status === "processing" || p.status === "queued" || p.status === "pending";
+  });
 
-            const completedCount = uploadPipelines.filter(
-              (p) => p.status === "completed" || p.status === "ready" || (typeof p.currentStage === "string" && p.currentStage.toLowerCase().includes("completed"))
-            ).length;
+  const completedCount = safePipelines.filter(
+    (p) => p.status === "completed" || p.status === "ready" || (typeof p.currentStage === "string" && p.currentStage.toLowerCase().includes("completed"))
+  ).length;
 
             return (
               <div>
@@ -82,7 +82,7 @@ export default function TabPipeline(props) {
                   <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "10px", padding: "12px 14px" }}>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Total Processed</div>
                     <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-                      {pipelineSummary?.totalTracked || uploadPipelines.length}
+                      {pipelineSummary?.totalTracked || safePipelines.length}
                     </div>
                   </div>
 

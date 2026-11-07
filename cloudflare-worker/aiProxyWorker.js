@@ -420,6 +420,34 @@ export default {
       );
     }
 
+    // 🛡️ 24/7 Anti-Sleep Relay Endpoint (Bypasses container NAT loopback, pings origin from external Cloudflare IP)
+    if (url.pathname === "/api/anti-sleep-relay" || url.pathname === "/api/keepalive") {
+      const target = url.searchParams.get("target") || env.ORIGIN_URL || "https://freestudymaterial.onrender.com";
+      const cleanTarget = target.replace(/\/+$/, "") + "/health?relay=cf&t=" + Date.now();
+      try {
+        const pingRes = await fetch(cleanTarget, {
+          method: "GET",
+          headers: {
+            "User-Agent": "Cloudflare-Worker-AntiSleep-Relay/2.0",
+            "Cache-Control": "no-cache, no-store",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        const relayHeaders = new Headers({ "Content-Type": "application/json" });
+        applyCors(relayHeaders, request);
+        return new Response(JSON.stringify({
+          success: pingRes.ok,
+          status: pingRes.status,
+          target: cleanTarget,
+          timestamp: new Date().toISOString(),
+        }), { status: 200, headers: relayHeaders });
+      } catch (err) {
+        const errHeaders = new Headers({ "Content-Type": "application/json" });
+        applyCors(errHeaders, request);
+        return new Response(JSON.stringify({ success: false, error: err.message }), { status: 502, headers: errHeaders });
+      }
+    }
+
     // Intercept AI endpoints: /api/ai/ask & /api/ai/circle-search
     const isAiEndpoint =
       (url.pathname === "/api/ai/ask" || url.pathname === "/api/ai/circle-search") &&
