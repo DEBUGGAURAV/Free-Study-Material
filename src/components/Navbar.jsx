@@ -305,7 +305,7 @@ export default function Navbar({
                 }}
                 title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
               >
-                <GeminiIcon size={13} withRing />
+                <GeminiIcon size={14} withRing />
                 <span>Circle</span>
               </button>
 

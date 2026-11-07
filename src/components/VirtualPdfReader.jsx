@@ -3866,7 +3866,7 @@ export default function VirtualPdfReader({
               whiteSpace: "nowrap",
             }}
           >
-            <GeminiIcon size={14} withRing={!isCircleSearchMode} />
+            <GeminiIcon size={15} withRing={!isCircleSearchMode} />
             <span>{isCircleSearchMode ? "Cancel Circle" : "Circle to Search"}</span>
           </button>
 

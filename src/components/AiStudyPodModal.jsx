@@ -589,7 +589,7 @@ export default function AiStudyPodModal({
               }}
               title="Open Circle to Search: Ask Question or Diagram with Gemini AI"
             >
-              <GeminiIcon size={14} withRing />
+              <GeminiIcon size={15} withRing />
               <span>Circle to Search</span>
             </button>
           )}

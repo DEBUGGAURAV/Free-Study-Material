@@ -2,10 +2,18 @@ import React from "react";
 
 /**
  * ✨ GeminiIcon: Official Google Gemini 4-Pointed Sparkle & Astroid Star
- * Features the signature multi-tone cyan-indigo-purple gradient.
- * If withRing=true, renders a sleek Circle-to-Search outer ring.
+ * Features the signature Google multi-color gradient (Electric Cyan, Luminous Indigo, Magenta & Warm Gold)
+ * with a radiant white center core for ultra-high contrast on any dark, blue, or vibrant background.
+ * If withRing=true, renders a crisp, high-visibility Circle-to-Search viewfinder ring.
  */
-export default function GeminiIcon({ size = 16, style = {}, className = "", withRing = false }) {
+export default function GeminiIcon({
+  size = 16,
+  style = {},
+  className = "",
+  withRing = false,
+  color = null,
+  ringColor = null,
+}) {
   const gradId = React.useId
     ? `gemini_grad_${React.useId().replace(/[^a-zA-Z0-9]/g, "_")}`
     : `gemini_grad_${size}`;
@@ -27,48 +35,63 @@ export default function GeminiIcon({ size = 16, style = {}, className = "", with
       aria-hidden="true"
     >
       <defs>
+        {/* Vibrant High-Contrast Google Gemini Multi-Tone Gradient */}
         <linearGradient id={gradId} x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#38bdf8" />
-          <stop offset="45%" stopColor="#818cf8" />
-          <stop offset="85%" stopColor="#c084fc" />
-          <stop offset="100%" stopColor="#f472b6" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="22%" stopColor="#67e8f9" />
+          <stop offset="50%" stopColor="#a78bfa" />
+          <stop offset="78%" stopColor="#f43f5e" />
+          <stop offset="100%" stopColor="#fbbf24" />
         </linearGradient>
       </defs>
 
       {withRing ? (
         <>
-          {/* Circular Search Accent Ring */}
+          {/* ⭕ Crisp High-Visibility Circle-to-Search Viewfinder Ring */}
           <circle
             cx="12"
             cy="12"
-            r="10.5"
-            stroke={`url(#${gradId})`}
-            strokeWidth="1.6"
-            strokeDasharray="3 2"
-            opacity="0.85"
+            r="10.2"
+            stroke={ringColor || "#ffffff"}
+            strokeWidth="1.8"
+            strokeDasharray="2.8 2"
+            opacity="0.95"
+            style={{
+              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.6))",
+            }}
           />
-          {/* Centered Gemini Star */}
+          {/* Centered Large 4-Pointed Gemini Astroid Star */}
           <path
-            d="M 12 5.5 Q 12 12 5.5 12 Q 12 12 12 18.5 Q 12 12 18.5 12 Q 12 12 12 5.5 Z"
-            fill={`url(#${gradId})`}
+            d="M 12 4.2 Q 12 12 4.2 12 Q 12 12 12 19.8 Q 12 12 19.8 12 Q 12 12 12 4.2 Z"
+            fill={color || `url(#${gradId})`}
+            style={{
+              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px rgba(56, 189, 248, 0.7))",
+            }}
           />
+          {/* 💎 Luminous White Diamond Center Core */}
+          <circle cx="12" cy="12" r="1.6" fill="#ffffff" opacity="0.95" />
         </>
       ) : (
         <>
           {/* Primary 4-pointed Gemini Astroid Star */}
           <path
             d="M 12 2 Q 12 12 2 12 Q 12 12 12 22 Q 12 12 22 12 Q 12 12 12 2 Z"
-            fill={`url(#${gradId})`}
+            fill={color || `url(#${gradId})`}
+            style={{
+              filter: "drop-shadow(0 0 3px rgba(255, 255, 255, 0.7)) drop-shadow(0 0 6px rgba(56, 189, 248, 0.6))",
+            }}
           />
+          {/* 💎 Luminous White Diamond Center Core */}
+          <circle cx="12" cy="12" r="2.2" fill="#ffffff" opacity="0.95" />
           {/* Secondary Companion Accent Sparkle */}
           <path
-            d="M 19 2 Q 19 5.2 16 5.2 Q 19 5.2 19 8.4 Q 19 5.2 22 5.2 Q 19 5.2 19 2 Z"
-            fill={`url(#${gradId})`}
-            opacity="0.9"
+            d="M 19 2 Q 19 5.2 15.8 5.2 Q 19 5.2 19 8.4 Q 19 5.2 22.2 5.2 Q 19 5.2 19 2 Z"
+            fill={color || `url(#${gradId})`}
+            opacity="0.95"
           />
+          <circle cx="19" cy="5.2" r="0.9" fill="#ffffff" opacity="0.95" />
         </>
       )}
     </svg>
   );
 }
-
