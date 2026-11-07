@@ -2480,4 +2480,45 @@ select option,
   }
 }
 
+/* 🗂️ Clean AI Study Card: Completely remove scrollbars from AI Study Flashcard Only */
+.ai-study-tabs-scroll {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.ai-study-tabs-scroll::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.ai-study-flashcard,
+.ai-study-card-content {
+  overflow-x: hidden !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.ai-study-flashcard::-webkit-scrollbar,
+.ai-study-card-content::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.ai-study-card-content .katex-block-wrapper,
+.ai-study-card-content .katex-display {
+  overflow-x: hidden !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.ai-study-card-content .katex-block-wrapper::-webkit-scrollbar,
+.ai-study-card-content .katex-display::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+
 

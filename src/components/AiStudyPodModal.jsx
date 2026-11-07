@@ -590,6 +590,7 @@ export default function AiStudyPodModal({
         {/* Navigation Tabs Pill Bar                                       */}
         {/* ============================================================== */}
         <div
+          className="ai-study-tabs-scroll"
           style={{
             padding: "10px 20px",
             background: "rgba(15, 23, 42, 0.7)",
@@ -597,6 +598,8 @@ export default function AiStudyPodModal({
             display: "flex",
             gap: "8px",
             overflowX: "auto",
+            scrollbarWidth: "none",
+            msOverflowStyle: "none",
           }}
         >
           {/* 💬 TAB 0 (DEFAULT FIRST): AI Conversation Chatbox */}
@@ -756,6 +759,7 @@ export default function AiStudyPodModal({
           style={{
             flex: 1,
             overflowY: activeTab === "chat" ? "hidden" : "auto",
+            overflowX: "hidden",
             padding: activeTab === "chat" ? "0" : "20px",
             display: "flex",
             flexDirection: "column",
@@ -1206,7 +1210,7 @@ export default function AiStudyPodModal({
           {/* TAB 1: 🗂️ REVISION FLASHCARDS                                  */}
           {/* ============================================================ */}
           {activeTab === "flashcards" && (
-            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "16px" }}>
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "16px", overflowX: "hidden" }}>
               {/* Card Header Sub-Bar */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -1379,6 +1383,7 @@ export default function AiStudyPodModal({
                 ) : (
                   <div
                     onClick={() => setIsFlipped(!isFlipped)}
+                    className="ai-study-flashcard"
                     style={{
                       flex: 1,
                       borderRadius: "20px",
@@ -1388,6 +1393,7 @@ export default function AiStudyPodModal({
                       flexDirection: "column",
                       justifyContent: "space-between",
                       position: "relative",
+                      overflow: "hidden",
                       transition: "transform 0.25s ease, box-shadow 0.25s ease",
                       background: isFlipped
                         ? "linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))"
@@ -1438,13 +1444,26 @@ export default function AiStudyPodModal({
                       </button>
                     </div>
 
-                    <div style={{ margin: "auto 0", padding: "16px 0", maxHeight: "300px", overflowY: "auto" }}>
+                    <div
+                      className="ai-study-card-content"
+                      style={{
+                        margin: "auto 0",
+                        padding: "16px 0",
+                        maxHeight: "340px",
+                        overflowY: "auto",
+                        overflowX: "hidden",
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                      }}
+                    >
                       <div
                         style={{
                           fontSize: isFlipped ? "1.05rem" : "1.15rem",
                           fontWeight: isFlipped ? 500 : 700,
                           lineHeight: 1.6,
                           color: isFlipped ? "#f1f5f9" : "#fff",
+                          wordBreak: "break-word",
+                          overflowWrap: "anywhere",
                         }}
                       >
                         <MathMarkdown content={isFlipped ? currentCard?.answer : currentCard?.question} />

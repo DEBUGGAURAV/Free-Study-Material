@@ -97,6 +97,8 @@ export default function CircleSearchModal({
   const padContainerRef = useRef(null);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
+  const latestAiMessageRef = useRef(null);
+  const chatScrollContainerRef = useRef(null);
 
   // Prevent iOS/iPadOS Safari scroll hijacking & pointercancel on Pencil Pad & Photo selection
   useSafariNonPassiveTouchLock(
@@ -124,10 +126,25 @@ export default function CircleSearchModal({
     "❓ Isse related 3 viva questions batao",
   ];
 
-  // Auto-scroll chat thread when messages update
+  // Smart-scroll: When AI answer arrives, smoothly scroll to the START/TOP of the answer
+  // so the student can immediately read the full solution from line 1!
   useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg.role === "assistant") {
+        const timer = setTimeout(() => {
+          if (latestAiMessageRef.current) {
+            latestAiMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+          } else if (chatScrollContainerRef.current) {
+            chatScrollContainerRef.current.scrollTop = 0;
+          }
+        }, 60);
+        return () => clearTimeout(timer);
+      } else {
+        if (chatEndRef.current) {
+          chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }
     }
   }, [messages, isSolving]);
 
@@ -249,6 +266,9 @@ export default function CircleSearchModal({
   }) => {
     const cleanPrompt = (promptText || "").trim();
     if (!cleanPrompt && !imageToSolve) return;
+
+    // Immediately hide top studio so the answer has 100% full vertical height to display!
+    setShowTopInputPanel(false);
 
     const userBubble = {
       id: `u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -406,6 +426,7 @@ export default function CircleSearchModal({
   const handleSendFollowUp = (customQuestion = null) => {
     const q = (typeof customQuestion === "string" ? customQuestion : followUpInput).trim();
     if (!q || isSolving) return;
+    setShowTopInputPanel(false);
     setFollowUpInput("");
     runSolveTurn({
       promptText: q,
@@ -592,9 +613,9 @@ export default function CircleSearchModal({
     if (!uploadedImageSrc) return;
     const rect = imageContainerRef.current?.getBoundingClientRect();
     const cropBounds = rect ? computeFreehandBounds(imageStrokes, rect.width, rect.height) : null;
+    setShowTopInputPanel(false);
 
     if (!cropBounds) {
-      setShowTopInputPanel(false);
       const effectivePrompt =
         queryText.trim() ||
         (liveExtractedText
@@ -609,13 +630,12 @@ export default function CircleSearchModal({
       return;
     }
 
+    const savedRect = rect;
     const img = new Image();
-    img.crossOrigin = "anonymous";
     img.onload = () => {
-      if (!imageContainerRef.current) return;
-      const r = imageContainerRef.current.getBoundingClientRect();
-      const scaleX = img.naturalWidth / (r.width || 1);
-      const scaleY = img.naturalHeight / (r.height || 1);
+      const r = savedRect;
+      const scaleX = img.naturalWidth / ((r && r.width) || 1);
+      const scaleY = img.naturalHeight / ((r && r.height) || 1);
 
       const cropCanvas = document.createElement("canvas");
       const cropW = Math.max(1, Math.round(cropBounds.width * scaleX));
@@ -640,7 +660,6 @@ export default function CircleSearchModal({
         );
         const prepared = prepareCanvasForVision(cropCanvas, 1360);
         const croppedDataUrl = prepared?.dataUrl || cropCanvas.toDataURL("image/jpeg", 0.88);
-        setShowTopInputPanel(false);
         runSolveTurn({
           promptText:
             queryText.trim() ||
@@ -652,6 +671,14 @@ export default function CircleSearchModal({
           isInitial: messages.length === 0,
         });
       }
+    };
+    img.onerror = () => {
+      runSolveTurn({
+        promptText: queryText.trim() || "Analyze and solve this image step-by-step",
+        displayUserText: queryText.trim() || "📸 Handwritten Notes",
+        imageToSolve: uploadedImageSrc,
+        isInitial: messages.length === 0,
+      });
     };
     img.src = uploadedImageSrc;
   };
@@ -681,9 +708,9 @@ export default function CircleSearchModal({
       <div
         style={{
           width: "100%",
-          maxWidth: "780px",
-          height: "min(90vh, calc(100dvh - 24px))",
-          maxHeight: "840px",
+          maxWidth: "800px",
+          height: "min(92vh, calc(100dvh - 20px))",
+          maxHeight: "880px",
           background: "linear-gradient(180deg, #0f172a 0%, #090d16 100%)",
           border: "1.5px solid rgba(56, 189, 248, 0.42)",
           borderRadius: "22px",
@@ -1183,7 +1210,7 @@ export default function CircleSearchModal({
                       onPointerCancel={handleImgPointerUp}
                       style={{
                         position: "relative",
-                        maxHeight: "190px",
+                        maxHeight: "155px",
                         overflow: "hidden",
                         borderRadius: "10px",
                         border: "1.5px solid rgba(56, 189, 248, 0.35)",
@@ -1203,7 +1230,7 @@ export default function CircleSearchModal({
                         alt="Uploaded Crop"
                         style={{
                           maxWidth: "100%",
-                          maxHeight: "190px",
+                          maxHeight: "155px",
                           objectFit: "contain",
                           pointerEvents: "none",
                         }}
@@ -1471,7 +1498,7 @@ export default function CircleSearchModal({
         </div>
 
         {/* Main Scrollable Thread / Notes Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "16px 18px" }}>
+        <div ref={chatScrollContainerRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 18px" }}>
           {activeTab === "ai" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {messages.length === 0 && !isSolving && (
@@ -1488,7 +1515,7 @@ export default function CircleSearchModal({
                 </div>
               )}
 
-              {messages.map((msg) =>
+              {messages.map((msg, idx) =>
                 msg.role === "user" ? (
                   <div key={msg.id} style={{ display: "flex", justifyContent: "flex-end" }}>
                     <div
@@ -1503,19 +1530,21 @@ export default function CircleSearchModal({
                       }}
                     >
                       {msg.image && (
-                        <img
-                          src={msg.image}
-                          alt="Selected structure"
-                          style={{
-                            maxWidth: "210px",
-                            maxHeight: "110px",
-                            borderRadius: "8px",
-                            display: "block",
-                            marginBottom: "6px",
-                            border: "1px solid rgba(255,255,255,0.18)",
-                            background: "#fff",
-                          }}
-                        />
+                        <div style={{ marginBottom: "6px" }}>
+                          <img
+                            src={msg.image}
+                            alt="Selected structure"
+                            style={{
+                              maxWidth: "160px",
+                              maxHeight: "75px",
+                              objectFit: "contain",
+                              borderRadius: "6px",
+                              display: "block",
+                              border: "1px solid rgba(255,255,255,0.22)",
+                              background: "#020617",
+                            }}
+                          />
+                        </div>
                       )}
                       <div>{msg.text}</div>
                     </div>
@@ -1523,6 +1552,7 @@ export default function CircleSearchModal({
                 ) : (
                   <div
                     key={msg.id}
+                    ref={idx === messages.length - 1 ? latestAiMessageRef : null}
                     style={{
                       background: "rgba(0, 0, 0, 0.34)",
                       border: "1px solid rgba(255, 255, 255, 0.09)",
