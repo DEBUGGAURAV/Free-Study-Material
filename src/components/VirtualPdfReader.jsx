@@ -2453,6 +2453,11 @@ export default function VirtualPdfReader({
     }
   };
 
+  // Safe aliases to prevent ReferenceErrors in toolbar
+  const handleTtsSpeak = handleToggleSpeech;
+  const isSpeakingTts = isSpeaking;
+  const isOcrRunning = isOcrScanning;
+
   // 4. Voice Search (Microphone Speech Recognition)
   const handleVoiceSearch = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -4027,15 +4032,15 @@ export default function VirtualPdfReader({
           {/* Listen (TTS) */}
           <button
             type="button"
-            onClick={handleTtsSpeak}
+            onClick={handleToggleSpeech}
             style={{
               padding: "4px 10px",
               fontSize: "0.74rem",
               fontWeight: 600,
               borderRadius: "6px",
-              background: isSpeakingTts ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
-              color: isSpeakingTts ? "#f87171" : (nightMode ? "#cbd5e1" : "#334155"),
-              border: isSpeakingTts ? "1px solid #ef4444" : "1px solid rgba(255, 255, 255, 0.12)",
+              background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isSpeaking ? "#f87171" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isSpeaking ? "1px solid #ef4444" : "1px solid rgba(255, 255, 255, 0.12)",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
@@ -4043,23 +4048,23 @@ export default function VirtualPdfReader({
               whiteSpace: "nowrap",
             }}
           >
-            {isSpeakingTts ? <VolumeX size={13} /> : <Volume2 size={13} />}
-            <span>{isSpeakingTts ? "Stop Audio" : "🔊 Listen"}</span>
+            {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            <span>{isSpeaking ? "Stop Audio" : "🔊 Listen"}</span>
           </button>
 
           {/* OCR Page */}
           <button
             type="button"
             onClick={handleOcrCurrentPage}
-            disabled={isOcrRunning}
+            disabled={isOcrScanning}
             style={{
               padding: "4px 10px",
               fontSize: "0.74rem",
               fontWeight: 600,
               borderRadius: "6px",
-              background: isOcrRunning ? "rgba(6, 182, 212, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
-              color: isOcrRunning ? "#06b6d4" : (nightMode ? "#cbd5e1" : "#334155"),
-              border: isOcrRunning ? "1px solid #06b6d4" : "1px solid rgba(255, 255, 255, 0.12)",
+              background: isOcrScanning ? "rgba(6, 182, 212, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              color: isOcrScanning ? "#06b6d4" : (nightMode ? "#cbd5e1" : "#334155"),
+              border: isOcrScanning ? "1px solid #06b6d4" : "1px solid rgba(255, 255, 255, 0.12)",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
@@ -4068,7 +4073,7 @@ export default function VirtualPdfReader({
             }}
           >
             <FileText size={13} />
-            <span>{isOcrRunning ? "Scanning..." : "📄 OCR"}</span>
+            <span>{isOcrScanning ? "Scanning..." : "📄 OCR"}</span>
           </button>
 
           {/* Engine: Streamer vs Native */}
