@@ -38,6 +38,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "disable-devtool": "^0.3.9",
+    "disposable-email-domains": "^1.0.62",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",

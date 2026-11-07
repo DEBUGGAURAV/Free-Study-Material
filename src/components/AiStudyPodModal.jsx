@@ -27,6 +27,7 @@ import {
   addStudySessionItem,
 } from "../utils/studentSessionHistory";
 import MathMarkdown from "./MathMarkdown";
+import GeminiIcon from "./GeminiIcon";
 
 export default function AiStudyPodModal({
   isOpen,
@@ -586,9 +587,10 @@ export default function AiStudyPodModal({
                 whiteSpace: "nowrap",
                 transition: "all 0.2s ease",
               }}
-              title="Open Circle to Search: Ask Question or Diagram"
+              title="Open Circle to Search: Ask Question or Diagram with Gemini AI"
             >
-              <span>⭕ Circle to Search</span>
+              <GeminiIcon size={14} withRing />
+              <span>Circle to Search</span>
             </button>
           )}
         </div>

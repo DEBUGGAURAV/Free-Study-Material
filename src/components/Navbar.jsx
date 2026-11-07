@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
+import GeminiIcon from "./GeminiIcon";
 
 export default function Navbar({
   searchTerm,
@@ -284,7 +285,7 @@ export default function Navbar({
                 {isListening ? <MicOff size={14} /> : <Mic size={14} />}
               </button>
 
-              {/* ⭕ Circle to Search Button */}
+              {/* ♊ Circle to Search Button */}
               <button
                 type="button"
                 onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
@@ -299,12 +300,12 @@ export default function Navbar({
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "3px",
+                  gap: "4px",
                   marginLeft: "2px",
                 }}
-                title="⭕ Circle to Search: Circle any question or diagram to solve with AI"
+                title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
               >
-                <span style={{ fontSize: "0.75rem", lineHeight: 1 }}>⭕</span>
+                <GeminiIcon size={13} withRing />
                 <span>Circle</span>
               </button>
 
@@ -424,7 +425,7 @@ export default function Navbar({
             <span className="live-pill" style={{ background: "linear-gradient(135deg, #8b5cf6, #06b6d4)", color: "#fff" }}>AI</span>
           </button>
 
-          {/* ⭕ Circle to Search & Solve */}
+          {/* ♊ Circle to Search & Solve */}
           <button
             type="button"
             className="launchpad-pill pill-circle-search"
@@ -435,9 +436,9 @@ export default function Navbar({
               color: "#38bdf8",
               boxShadow: "0 0 12px rgba(56, 189, 248, 0.2)",
             }}
-            title="⭕ Circle to Search: Draw a circle or ask any math/diagram question to solve"
+            title="Circle to Search: Draw a circle or ask any math/diagram question to solve with Gemini AI"
           >
-            <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>⭕</span>
+            <GeminiIcon size={15} withRing />
             <span>Circle Search</span>
           </button>
 
@@ -533,15 +534,15 @@ export default function Navbar({
           <span>AI Pod</span>
         </button>
 
-        {/* ⭕ Circle to Search & Solve */}
+        {/* ♊ Circle to Search & Solve */}
         <button
           type="button"
           className="dock-item dock-circle"
           onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
           style={{ color: "#38bdf8" }}
-          title="Circle to Search: Ask Question or Diagram"
+          title="Circle to Search: Ask Question or Diagram with Gemini AI"
         >
-          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>⭕</span>
+          <GeminiIcon size={17} withRing />
           <span>Circle</span>
         </button>
 

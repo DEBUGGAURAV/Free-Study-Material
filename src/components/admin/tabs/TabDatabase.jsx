@@ -29,6 +29,8 @@ export default function TabDatabase(props) {
     handleRunInactivityPurge,
     handleTelegramSync,
     handleTursoPruneAudits,
+    handleUpdateGlobalInactivityDays,
+    handleUpdateRetention,
     isHalfAdmin,
     lastSyncInfo,
     loadCollectionItems,

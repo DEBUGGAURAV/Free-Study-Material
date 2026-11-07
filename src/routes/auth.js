@@ -1530,6 +1530,23 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
+    if (userRecord && userRecord.role !== "admin" && userRecord.email && isDisposableEmail(userRecord.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Login Access Denied: Disposable/temporary email accounts are prohibited on Free Study Material.",
+      });
+    }
+
+    // 🛡️ ZERO-TOLERANCE DISPOSABLE / TEMPMAIL BLOCKER ON LOGIN
+    // Even if an account was registered previously via mobile, strictly deny login if email is disposable!
+    if (userRecord && userRecord.role !== "admin" && userRecord.email && isDisposableEmail(userRecord.email)) {
+      console.warn(`[SECURITY] Blocked login attempt by disposable/tempmail user: ${userRecord.email} (${userRecord.name || "Anonymous"})`);
+      return res.status(403).json({
+        success: false,
+        message: "Login Access Denied: Your account is associated with a temporary/disposable email address (e.g. tempmail, 10minutemail, burner domain). Disposable emails are strictly prohibited on Free Study Material. Please register using an authentic Gmail, Outlook, Yahoo, or verified college email.",
+      });
+    }
+
     // MAINTENANCE MODE ENFORCEMENT: ONLY ALL ADMINS ARE ALLOWED
     if (isMaintenanceActive()) {
       const isAdminRole = isMainAdminAlias || (userRecord && (userRecord.role === "admin" || userRecord.role === "half_admin" || userRecord.email === MAIN_ADMIN_EMAIL));
@@ -1778,6 +1795,13 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: "Your account has been blocked by administrator. Please contact support.",
+      });
+    }
+
+    if (userRecord && userRecord.role !== "admin" && userRecord.email && isDisposableEmail(userRecord.email)) {
+      return res.status(403).json({
+        success: false,
+        message: "Login Access Denied: Disposable/temporary email accounts are prohibited on Free Study Material.",
       });
     }
 

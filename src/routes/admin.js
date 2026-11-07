@@ -420,6 +420,10 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         mobile: userMobile,
         college: d.college || "N/A",
         year: d.year || "N/A",
+        branch: d.branch || d.department || "",
+        rollNumber: d.rollNumber || d.rollNo || "",
+        semester: d.semester || "",
+        deviceSpecs: d.deviceSpecs || null,
         role: isMain ? "admin" : (d.role || "student"),
         isBlocked: isMain ? false : Boolean(d.isBlocked),
         permissions: permsArray,
@@ -724,6 +728,9 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     }
     if (college !== undefined) updateData.college = college.trim();
     if (year !== undefined) updateData.year = year.trim();
+    if (req.body.branch !== undefined) updateData.branch = String(req.body.branch).trim();
+    if (req.body.rollNumber !== undefined) updateData.rollNumber = String(req.body.rollNumber).trim();
+    if (req.body.semester !== undefined) updateData.semester = String(req.body.semester).trim();
 
     // Only allow role / permission updates if target is NOT main admin
     if (targetUser.email?.toLowerCase() !== MAIN_ADMIN_EMAIL) {
@@ -4563,7 +4570,7 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
 
     const webSecurityShields = {
       turnstile: { name: "Cloudflare Turnstile", status: "ACTIVE", type: "Anti-Bot Smart Challenge", icon: "🛡️" },
-      disposableEmail: { name: "Disposable Email Blocker", status: "ACTIVE", type: "500+ Burner Domains Prohibited", icon: "📧" },
+      disposableEmail: { name: "Disposable Email Blocker", status: "ACTIVE", type: "121,500+ Burner Domains & Academic Enforcement", icon: "📧" },
       accountLockout: { name: "Per-Account Brute Force Lockout", status: "ACTIVE", type: "5 Attempts / 20-Min Lockout", icon: "🔒" },
       dualKeyShield: { name: "Adaptive Dual-Key Shield", status: "ACTIVE", type: "Campus Wi-Fi Device Hash Isolation", icon: "📱" },
       appealDeskTopic750: { name: "Security Appeals Desk", status: "ACTIVE", type: "Topic 750 Strict Supergroup Dispatch", icon: "💬" },

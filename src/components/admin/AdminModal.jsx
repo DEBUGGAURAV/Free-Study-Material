@@ -453,6 +453,9 @@ export default function AdminModal({
       } else if (activeTab === "database") {
         loadDatabaseOverview();
         loadCollectionItems(selectedCollection);
+        api.getInactivitySettings().then((r) => {
+          if (r?.defaultInactivityDays) setDbRetentionDays(r.defaultInactivityDays);
+        }).catch(() => {});
       } else if (activeTab === "recycle_bin") {
         loadRecycleBinItems();
       } else if (activeTab === "security_bot") {
@@ -1680,6 +1683,9 @@ export default function AdminModal({
         mobile: editingStudent.mobile,
         college: editingStudent.college,
         year: editingStudent.year,
+        branch: editingStudent.branch,
+        rollNumber: editingStudent.rollNumber,
+        semester: editingStudent.semester,
         role: editingStudent.role,
         permissions: editingStudent.permissions,
         customInactivityDays: editingStudent.customInactivityDays,
@@ -1691,6 +1697,19 @@ export default function AdminModal({
       loadStudents();
     } catch (err) {
       alert("Failed to update student: " + err.message);
+    }
+  };
+
+  const handleUpdateGlobalInactivityDays = async (newDays) => {
+    const cleanDays = Math.max(1, Math.min(3650, parseInt(newDays, 10) || 90));
+    try {
+      const res = await api.updateInactivitySettings(cleanDays);
+      setDbRetentionDays(cleanDays);
+      alert(`✅ ${res?.message || `Global inactivity purge limit set to ${cleanDays} days.`}`);
+      loadStudents();
+      loadStats();
+    } catch (err) {
+      alert("Failed to update global inactivity limit: " + err.message);
     }
   };
 
@@ -2442,6 +2461,8 @@ export default function AdminModal({
     handleTursoPruneMessages,
     handleTursoRefreshCache,
     handleTursoSync,
+    handleUpdateGlobalInactivityDays,
+    handleUpdateRetention: handleSaveRetention,
     handleUpdateTechValue,
     hardwareInfo,
     hardwareLoading,
@@ -2455,6 +2476,7 @@ export default function AdminModal({
     loadSecurityBotSettings,
     loadSoftwareInfo,
     loadStudentActivities,
+    loadStudents,
     loadTechNexus,
     loadTursoAudits,
     loadTursoData,
@@ -3154,6 +3176,20 @@ export default function AdminModal({
 
               <form onSubmit={handleSaveStudentEdit} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
                 <div className="form-group">
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <label className="form-label" style={{ margin: 0 }}>Student Account Email</label>
+                    <span style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", fontWeight: 700 }}>🔒 Primary Account Key</span>
+                  </div>
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={editingStudent.email || ""}
+                    disabled
+                    style={{ opacity: 0.85, cursor: "not-allowed", background: "rgba(255, 255, 255, 0.03)" }}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Full Name</label>
                   <input
                     type="text"
@@ -3164,15 +3200,28 @@ export default function AdminModal({
                   />
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Mobile Number</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={editingStudent.mobile && !editingStudent.mobile.startsWith("enc_gcm:") ? editingStudent.mobile : ""}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, mobile: e.target.value })}
-                    placeholder="Enter 10-digit mobile number"
-                  />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label className="form-label">Mobile Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.mobile && !editingStudent.mobile.startsWith("enc_gcm:") && editingStudent.mobile !== "N/A" ? editingStudent.mobile : ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, mobile: e.target.value })}
+                      placeholder="10-digit mobile number"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">University Roll Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.rollNumber || ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, rollNumber: e.target.value })}
+                      placeholder="e.g. 210123010"
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -3183,9 +3232,23 @@ export default function AdminModal({
                       className="form-input"
                       value={editingStudent.college || ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, college: e.target.value })}
+                      placeholder="College or University"
                     />
                   </div>
 
+                  <div className="form-group">
+                    <label className="form-label">Branch / Department</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.branch || ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, branch: e.target.value })}
+                      placeholder="e.g. CSE, IT, ME, EE"
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                   <div className="form-group">
                     <label className="form-label">Academic Year</label>
                     <input
@@ -3193,6 +3256,18 @@ export default function AdminModal({
                       className="form-input"
                       value={editingStudent.year || ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
+                      placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Semester</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.semester || ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, semester: e.target.value })}
+                      placeholder="e.g. Semester 5"
                     />
                   </div>
                 </div>

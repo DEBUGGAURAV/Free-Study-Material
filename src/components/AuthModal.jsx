@@ -599,13 +599,35 @@ export default function AuthModal({
   const isGmail = (str) => {
     if (!str || typeof str !== "string") return false;
     const clean = str.trim().toLowerCase();
-    // Allow any standard academic, corporate, or personal email domain
     const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
     if (!emailRegex.test(clean)) return false;
-    // Block disposable email domains
-    const disposable = ["10minutemail", "tempmail", "temp-mail", "guerrillamail", "mailinator", "yopmail", "throwawaymail", "sharklasers", "dispostable", "trashmail", "fakeinbox"];
-    const domain = clean.split("@")[1] || "";
-    return !disposable.some((d) => domain.includes(d));
+
+    const parts = clean.split("@");
+    if (parts.length !== 2) return false;
+    const domain = parts[1].trim();
+
+    // 1. Prohibited Burner Keywords & Domains (instant client rejection)
+    const disposableKeywords = /(?:temp[-_.]?mail|disposable|throwaway|10minute|fake[-_.]?mail|burner|guerrilla|trash[-_.]?mail|yopmail|mailinator|dropmail|inboxkitten|vtmpj|sharklasers|dispostable|mohmal|getnada|emailondeck|generator\.email|disbox|mytemp|speedpost|luxusmail|fakemail)/i;
+    if (disposableKeywords.test(domain)) return false;
+
+    // 2. Allowed Trusted Public Mail Providers (instant 0ms approval)
+    const trustedProviders = new Set([
+      "gmail.com", "googlemail.com",
+      "outlook.com", "outlook.in", "hotmail.com", "live.com", "msn.com", "hotmail.co.uk", "hotmail.fr", "live.in",
+      "yahoo.com", "yahoo.co.in", "yahoo.in", "ymail.com", "rocketmail.com", "yahoo.co.uk", "yahoo.ca",
+      "icloud.com", "me.com", "mac.com",
+      "proton.me", "protonmail.com",
+      "zoho.com", "zohomail.in", "zoho.in",
+      "aol.com", "rediffmail.com", "gmx.com", "gmx.net", "mail.com"
+    ]);
+    if (trustedProviders.has(domain)) return true;
+
+    // 3. Allowed Academic & University Domains (.edu, .ac.in, .org.in, .res.in, .edu.*, etc.)
+    const academicDomainRegex = /(?:\.edu(?:\.[a-z]{2})?|\.ac\.[a-z]{2,}|\.org\.in|\.res\.in|\.ernet\.in|\.gov\.in)$/i;
+    if (academicDomainRegex.test(domain)) return true;
+
+    // Reject all other unverified custom/burner domains
+    return false;
   };
 
   // Google Auth Core Processor
@@ -862,7 +884,7 @@ export default function AuthModal({
 
     if (cleanInput.includes("@") && !isGmail(cleanInput)) {
       setLoading(false);
-      return setFormError("Please enter a valid academic or personal email address.", "signInIdentifier");
+      return setFormError("Please enter a valid personal or college email address (disposable/temporary emails are prohibited).", "signInIdentifier");
     }
 
     try {
@@ -1128,7 +1150,7 @@ export default function AuthModal({
     }
     if (!email.trim() || !isGmail(email)) {
       setLoading(false);
-      return setFormError("Please enter a valid academic or personal email address.", "email");
+      return setFormError("Please enter a valid personal or college email address (disposable/temporary emails are prohibited).", "email");
     }
     if (!college.trim()) {
       setLoading(false);

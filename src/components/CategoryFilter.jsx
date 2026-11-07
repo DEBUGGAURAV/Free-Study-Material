@@ -1,5 +1,6 @@
 import React from "react";
 import { LayoutGrid, List, Sparkles, GraduationCap, Calendar, Layers } from "lucide-react";
+import GeminiIcon from "./GeminiIcon";
 
 const COURSES = [
   "All Courses",
@@ -158,9 +159,10 @@ export default function CategoryFilter({
                 whiteSpace: "nowrap",
                 transition: "all 0.2s ease",
               }}
-              title="⭕ Circle to Search: Ask question or upload diagram to solve"
+              title="Circle to Search: Ask question or upload diagram to solve with Gemini AI"
             >
-              <span>⭕ Circle Search</span>
+              <GeminiIcon size={14} withRing />
+              <span>Circle Search</span>
             </button>
           )}
 

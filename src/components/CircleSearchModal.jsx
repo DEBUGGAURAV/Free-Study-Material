@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { solveCircleQuery } from "../utils/circleSearchEngine";
 import MathMarkdown from "./MathMarkdown";
+import GeminiIcon from "./GeminiIcon";
 
 export default function CircleSearchModal({
   isOpen,
@@ -361,15 +362,15 @@ export default function CircleSearchModal({
                 width: "38px",
                 height: "38px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, #0284c7, #6366f1)",
+                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(99, 102, 241, 0.35))",
+                border: "1.5px solid rgba(56, 189, 248, 0.5)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 boxShadow: "0 2px 12px rgba(2, 132, 199, 0.45)",
-                fontSize: "1.1rem",
               }}
             >
-              ⭕
+              <GeminiIcon size={22} withRing />
             </div>
             <div>
               <div style={{ fontWeight: 800, fontSize: "1.08rem", color: "#f8fafc", letterSpacing: "-0.2px" }}>
@@ -476,7 +477,7 @@ export default function CircleSearchModal({
                   }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
-                    <span style={{ fontSize: "1.05rem" }}>⭕</span>
+                    <GeminiIcon size={16} withRing />
                     <div style={{ fontSize: "0.78rem", color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       <strong style={{ color: "#38bdf8" }}>Circled Question: </strong>
                       {queryText}
@@ -647,8 +648,9 @@ export default function CircleSearchModal({
               ) : (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ fontSize: "0.75rem", color: "#38bdf8", fontWeight: 600 }}>
-                      ⭕ Click &amp; drag mouse or finger over the diagram/formula to circle it:
+                    <span style={{ fontSize: "0.75rem", color: "#38bdf8", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <GeminiIcon size={14} withRing />
+                      Click &amp; drag mouse or finger over the diagram/formula to circle it:
                     </span>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button
@@ -726,8 +728,15 @@ export default function CircleSearchModal({
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
-                    <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
-                      {cropBox && cropBox.width > 15 ? `⭕ Circled: ${cropBox.width}×${cropBox.height}px` : "No crop selected (will analyze full image)"}
+                    <span style={{ fontSize: "0.72rem", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      {cropBox && cropBox.width > 15 ? (
+                        <>
+                          <GeminiIcon size={12} withRing />
+                          <span>Circled: {cropBox.width}×{cropBox.height}px</span>
+                        </>
+                      ) : (
+                        "No crop selected (will analyze full image)"
+                      )}
                     </span>
                     <div style={{ display: "flex", gap: "8px" }}>
                       {/* 📋 Google-style Quick Copy Text (OCR) */}
@@ -772,8 +781,8 @@ export default function CircleSearchModal({
                           gap: "6px",
                         }}
                       >
-                        <Sparkles size={13} />
-                        <span>{isSolving ? "Analyzing..." : "⭕ Solve Circled Region"}</span>
+                        <GeminiIcon size={14} />
+                        <span>{isSolving ? "Analyzing..." : "Solve Circled Region"}</span>
                       </button>
                     </div>
                   </div>
@@ -948,7 +957,9 @@ export default function CircleSearchModal({
                 </div>
               ) : (
                 <div style={{ textAlign: "center", padding: "36px 20px", color: "#94a3b8" }}>
-                  <div style={{ fontSize: "2rem", marginBottom: "8px" }}>⭕</div>
+                  <div style={{ marginBottom: "12px" }}>
+                    <GeminiIcon size={40} withRing />
+                  </div>
                   <div style={{ fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
                     Type a math question above, or upload a photo to circle any formula or diagram!
                   </div>
@@ -1020,7 +1031,10 @@ export default function CircleSearchModal({
             color: "#64748b",
           }}
         >
-          <span>⭕ Circle to Search • Free Academic Cloud AI</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+            <GeminiIcon size={14} withRing />
+            Circle to Search • Free Academic Cloud AI
+          </span>
           <button
             onClick={onClose}
             style={{

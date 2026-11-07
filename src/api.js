@@ -8,6 +8,7 @@ const API_BASE = "/api";
 // Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
 export const STREAM_BASE = "/api";
 import { fetchWithCdnFailover, parseSourceFromHeaders, acquireNoteDocument } from "./utils/cdnFailover";
+import { saveAuthToken } from "./utils/authIndexedDb";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
 import { getAnyCachedNoteBuffer } from "./utils/offlineQueue";
 
@@ -165,6 +166,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -185,6 +188,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -245,6 +250,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -281,6 +288,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -295,6 +304,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -309,6 +320,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
@@ -1191,6 +1204,8 @@ export const api = {
     }
     if (data.token) {
       setAuthToken(data.token);
+      // Persist token for future sessions
+      saveAuthToken(data.token);
     }
     return data;
   },
