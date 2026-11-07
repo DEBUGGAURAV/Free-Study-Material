@@ -21,4 +21,5 @@ scripts/
 generate_icons.js
 nodemon.json
 .vscode/
+scratch/
 

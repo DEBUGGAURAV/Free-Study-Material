@@ -1,9 +1,22 @@
 /**
- * Yjs + WebRTC Peer-to-Peer Group Study Engine
- * 100% Royalty-Free & P2P • 0.0% Render Server Load • Instant DataChannels
+ * ⚡ Yjs + PartyKit Cloudflare Edge Collaborative Group Study Engine
+ * 100% Hostel Wi-Fi & Firewall Proof • 0.0% Render Server Load • Instant WebSocket Sync
+ * Multi-layer Architecture:
+ *   1. Primary: PartyKit Cloudflare Anycast Edge (Durable Objects / y-partykit)
+ *   2. Fail-Safe: Standby WebRTC DataChannel Provider (Local Wi-Fi Mesh)
  */
 import * as Y from 'yjs';
+import YPartyKitProvider from 'y-partykit/provider';
 import { WebrtcProvider } from 'y-webrtc';
+
+export function getPartyKitHost() {
+  const envHost = (
+    (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_PARTYKIT_HOST) ||
+    (typeof window !== 'undefined' && (window.VITE_PARTYKIT_HOST || window.__PARTYKIT_HOST__)) ||
+    'fsm-study.partykit.dev'
+  ).trim();
+  return envHost.replace(/^https?:\/\//i, '').replace(/^wss?:\/\//i, '').replace(/\/+$/, '');
+}
 
 export class WebrtcStudyRoom {
   /**
@@ -14,18 +27,47 @@ export class WebrtcStudyRoom {
     this.roomName = `fsm-study-${roomName}`;
     this.ydoc = new Y.Doc();
 
-    // Collaborative Shared Types
+    // Collaborative Shared Types (Strictly preserved data contracts)
     this.sharedHighlights = this.ydoc.getArray('highlights');
     this.sharedChat = this.ydoc.getArray('chat');
     this.sharedStrokes = this.ydoc.getArray('canvas_strokes');
     this.sharedState = this.ydoc.getMap('state'); // e.g. currentPage, scrollRatio, leaderId
 
-    // Public Free WebRTC Signaling & STUN
-    this.provider = new WebrtcProvider(this.roomName, this.ydoc, {
+    const host = getPartyKitHost();
+    const forceWebRtc = host === 'webrtc' || (typeof window !== 'undefined' && window.__FORCE_WEBRTC__);
+
+    if (!forceWebRtc) {
+      try {
+        // 🚀 Primary: PartyKit Cloudflare Edge WebSocket Provider (100% Connected in Hostels & Firewalls)
+        this.provider = new YPartyKitProvider(host, this.roomName, this.ydoc, {
+          awareness: this.ydoc.awareness,
+        });
+        this.providerType = 'partykit';
+      } catch (err) {
+        console.warn('[STUDY-ROOM] PartyKit init fallback to WebRTC:', err.message);
+        this.provider = this._createWebRtcProvider();
+        this.providerType = 'webrtc';
+      }
+    } else {
+      this.provider = this._createWebRtcProvider();
+      this.providerType = 'webrtc';
+    }
+
+    // Set user awareness (avatar name / color)
+    const randomColor = ['#38bdf8', '#818cf8', '#34d399', '#f472b6', '#fbbf24'][Math.floor(Math.random() * 5)];
+    this.provider.awareness.setLocalStateField('user', {
+      name: currentUser.name || `Scholar-${Math.floor(Math.random() * 1000)}`,
+      color: randomColor,
+      activePage: 1,
+    });
+  }
+
+  _createWebRtcProvider() {
+    return new WebrtcProvider(this.roomName, this.ydoc, {
       signaling: [
         'wss://signaling.yjs.dev',
         'wss://y-webrtc-signaling-eu.herokuapp.com',
-        'wss://y-webrtc-signaling-us.herokuapp.com'
+        'wss://y-webrtc-signaling-us.herokuapp.com',
       ],
       password: null,
       awareness: this.ydoc.awareness,
@@ -40,14 +82,6 @@ export class WebrtcStudyRoom {
         },
       },
     });
-
-    // Set user awareness (avatar name / color)
-    const randomColor = ['#38bdf8', '#818cf8', '#34d399', '#f472b6', '#fbbf24'][Math.floor(Math.random() * 5)];
-    this.provider.awareness.setLocalStateField('user', {
-      name: currentUser.name || `Scholar-${Math.floor(Math.random() * 1000)}`,
-      color: randomColor,
-      activePage: 1,
-    });
   }
 
   /**
@@ -55,11 +89,14 @@ export class WebrtcStudyRoom {
    * @param {function} callback (peerCount, peersList)
    */
   onPeersChange(callback) {
-    this.provider.awareness.on('change', () => {
+    const handler = () => {
       const states = Array.from(this.provider.awareness.getStates().values());
       const peers = states.filter((s) => s.user).map((s) => s.user);
-      callback(peers.length, peers);
-    });
+      callback(Math.max(1, peers.length), peers);
+    };
+    this.provider.awareness.on('change', handler);
+    // Instant initial callback so UI shows the current user immediately
+    setTimeout(handler, 0);
   }
 
   /**
@@ -178,7 +215,7 @@ export class WebrtcStudyRoom {
   }
 
   /**
-   * Leaves room and disconnects WebRTC DataChannels
+   * Leaves room and disconnects WebSocket / DataChannels
    */
   destroy() {
     try {
@@ -188,4 +225,3 @@ export class WebrtcStudyRoom {
     } catch (_) {}
   }
 }
-

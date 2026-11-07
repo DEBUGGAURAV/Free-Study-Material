@@ -126,23 +126,29 @@ export default function CircleSearchModal({
     "❓ Isse related 3 viva questions batao",
   ];
 
-  // Smart-scroll: When AI answer arrives, smoothly scroll to the START/TOP of the answer
-  // so the student can immediately read the full solution from line 1!
+  // Smart-scroll: When AI answer arrives, smoothly scroll directly to the START/TOP of the AI answer
+  // so the student can immediately read the full solution from Line 1!
   useEffect(() => {
     if (messages.length > 0) {
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === "assistant") {
-        const timer = setTimeout(() => {
-          if (chatScrollContainerRef.current) {
-            if (messages.length <= 2) {
-              chatScrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
-            } else if (latestAiMessageRef.current) {
-              const targetTop = Math.max(0, latestAiMessageRef.current.offsetTop - 14);
-              chatScrollContainerRef.current.scrollTo({ top: targetTop, behavior: "smooth" });
-            }
+        const scrollToAiAnswer = () => {
+          if (!chatScrollContainerRef.current) return;
+          if (latestAiMessageRef.current) {
+            const targetTop = Math.max(0, latestAiMessageRef.current.offsetTop - 10);
+            chatScrollContainerRef.current.scrollTo({ top: targetTop, behavior: "smooth" });
+          } else {
+            chatScrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
           }
-        }, 75);
-        return () => clearTimeout(timer);
+        };
+
+        scrollToAiAnswer();
+        const t1 = setTimeout(scrollToAiAnswer, 70);
+        const t2 = setTimeout(scrollToAiAnswer, 220);
+        return () => {
+          clearTimeout(t1);
+          clearTimeout(t2);
+        };
       } else {
         if (chatScrollContainerRef.current) {
           chatScrollContainerRef.current.scrollTo({
@@ -367,7 +373,7 @@ export default function CircleSearchModal({
         const displayLabel = circleData.isPureSketch
           ? "✏️ Drawn Structure / Handwritten Formula"
           : hasRealText
-            ? rawIncomingText
+            ? (rawIncomingText.length > 95 ? `${rawIncomingText.slice(0, 95).trim()}...` : rawIncomingText)
             : "📝 Handwritten / Visual Selection";
         const effectivePrompt = hasRealText
           ? rawIncomingText
@@ -622,6 +628,11 @@ export default function CircleSearchModal({
     setShowTopInputPanel(false);
 
     if (!cropBounds) {
+      const displayLabel = queryText.trim()
+        ? queryText.trim()
+        : liveExtractedText
+          ? `📸 ${liveExtractedText.slice(0, 95).trim()}${liveExtractedText.length > 95 ? "..." : ""}`
+          : "📸 Handwritten Notes / Image Analysis";
       const effectivePrompt =
         queryText.trim() ||
         (liveExtractedText
@@ -629,7 +640,7 @@ export default function CircleSearchModal({
           : "Transcribe any handwritten text/formulas accurately and solve/explain this image step-by-step.");
       runSolveTurn({
         promptText: effectivePrompt,
-        displayUserText: queryText.trim() || liveExtractedText || "📸 Handwritten Notes / Image Analysis",
+        displayUserText: displayLabel,
         imageToSolve: uploadedImageSrc,
         isInitial: messages.length === 0,
       });
@@ -666,13 +677,18 @@ export default function CircleSearchModal({
         );
         const prepared = prepareCanvasForVision(cropCanvas, 1360);
         const croppedDataUrl = prepared?.dataUrl || cropCanvas.toDataURL("image/jpeg", 0.88);
+        const displayLabel = queryText.trim()
+          ? queryText.trim()
+          : liveExtractedText
+            ? `✏️ ${liveExtractedText.slice(0, 95).trim()}${liveExtractedText.length > 95 ? "..." : ""}`
+            : "✏️ Pencil-Selected Handwritten Region";
         runSolveTurn({
           promptText:
             queryText.trim() ||
             (liveExtractedText
               ? `Handwritten selection: "${liveExtractedText}". Verify against the cropped image and solve step-by-step.`
               : "Transcribe any handwritten text/equation in this pencil-selected region and solve step-by-step."),
-          displayUserText: queryText.trim() || liveExtractedText || "✏️ Pencil-Selected Handwritten Region",
+          displayUserText: displayLabel,
           imageToSolve: croppedDataUrl,
           isInitial: messages.length === 0,
         });
@@ -715,9 +731,9 @@ export default function CircleSearchModal({
         style={{
           width: "100%",
           maxWidth: "800px",
-          height: "min(92vh, calc(100dvh - 20px))",
-          minHeight: "520px",
-          maxHeight: "880px",
+          height: "min(92vh, 880px)",
+          maxHeight: "calc(100dvh - 16px)",
+          minHeight: "min(480px, calc(100dvh - 16px))",
           background: "linear-gradient(180deg, #0f172a 0%, #090d16 100%)",
           border: "1.5px solid rgba(56, 189, 248, 0.42)",
           borderRadius: "22px",
@@ -738,6 +754,7 @@ export default function CircleSearchModal({
             alignItems: "center",
             justifyContent: "space-between",
             gap: "10px",
+            flexShrink: 0,
             background: "linear-gradient(135deg, rgba(2, 132, 199, 0.18), rgba(99, 102, 241, 0.18))",
           }}
         >
@@ -849,6 +866,7 @@ export default function CircleSearchModal({
               background: "rgba(56, 189, 248, 0.08)",
               borderBottom: "1px solid rgba(56, 189, 248, 0.2)",
               gap: "8px",
+              flexShrink: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
@@ -916,6 +934,7 @@ export default function CircleSearchModal({
               padding: "10px 18px",
               background: "rgba(15, 23, 42, 0.72)",
               borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+              flexShrink: 0,
             }}
           >
             <div style={{ display: "flex", gap: "8px", marginBottom: "10px", flexWrap: "wrap" }}>
@@ -1458,6 +1477,7 @@ export default function CircleSearchModal({
             display: "flex",
             borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             background: "rgba(10, 15, 30, 0.5)",
+            flexShrink: 0,
           }}
         >
           <button
@@ -1505,7 +1525,7 @@ export default function CircleSearchModal({
         </div>
 
         {/* Main Scrollable Thread / Notes Body */}
-        <div ref={chatScrollContainerRef} style={{ flex: 1, minHeight: "280px", overflowY: "auto", padding: "16px 18px", WebkitOverflowScrolling: "touch" }}>
+        <div ref={chatScrollContainerRef} style={{ flex: "1 1 auto", minHeight: "180px", overflowY: "auto", padding: "16px 18px", WebkitOverflowScrolling: "touch" }}>
           {activeTab === "ai" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {messages.length === 0 && !isSolving && (
@@ -1528,6 +1548,8 @@ export default function CircleSearchModal({
                     <div
                       style={{
                         maxWidth: "85%",
+                        maxHeight: "140px",
+                        overflowY: "auto",
                         background: "linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(99, 102, 241, 0.28))",
                         border: "1px solid rgba(56, 189, 248, 0.38)",
                         borderRadius: "16px 16px 4px 16px",
@@ -1542,8 +1564,8 @@ export default function CircleSearchModal({
                             src={msg.image}
                             alt="Selected structure"
                             style={{
-                              maxWidth: "160px",
-                              maxHeight: "75px",
+                              maxWidth: "140px",
+                              maxHeight: "65px",
                               objectFit: "contain",
                               borderRadius: "6px",
                               display: "block",
@@ -1711,6 +1733,7 @@ export default function CircleSearchModal({
             padding: "10px 16px 12px",
             borderTop: "1px solid rgba(255, 255, 255, 0.1)",
             background: "rgba(10, 15, 30, 0.92)",
+            flexShrink: 0,
           }}
         >
           {messages.length > 0 && (

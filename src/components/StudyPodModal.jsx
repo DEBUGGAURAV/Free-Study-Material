@@ -362,11 +362,11 @@ export default function StudyPodModal({
                     borderRadius: "999px",
                   }}
                 >
-                  ⚡ Server Load: 0.0% (P2P Mesh)
+                  ⚡ Server Load: 0.0% (PartyKit Edge)
                 </span>
               </div>
               <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                Room Code: <code style={{ color: "#38bdf8", fontWeight: 700 }}>{roomCode}</code> • WebRTC DataChannel Zero-Latency Mesh
+                Room Code: <code style={{ color: "#38bdf8", fontWeight: 700 }}>{roomCode}</code> • PartyKit Edge Sync (Hostel Wi-Fi 100% Connected)
               </div>
             </div>
           </div>

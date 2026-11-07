@@ -444,6 +444,88 @@ async function sendTelegramAttachment(botToken, chatId, threadId, attachment, ca
 }
 
 /**
+ * Escape text for Telegram HTML parse_mode (&, <, >, ")
+ */
+function escapeTelegramHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Resilient Telegram sendMessage wrapper:
+ * 1. Automatically falls back to plain text if HTML entity parsing fails (400 Bad Request)
+ * 2. Automatically falls back to main chat if topic thread fails
+ */
+async function sendTelegramMessageSafe(botToken, payload) {
+  try {
+    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    let data = await res.json().catch(() => null);
+    if (data && data.ok) return data;
+
+    // Resilient fallback 1: If entity parsing failed (400 Bad Request), strip tags and retry plain text
+    if (data && data.description && /can't parse entities/i.test(data.description) && payload.parse_mode) {
+      const plainPayload = { ...payload };
+      delete plainPayload.parse_mode;
+      plainPayload.text = (payload.text || "")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"');
+      res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(plainPayload),
+      });
+      data = await res.json().catch(() => null);
+      if (data && data.ok) return data;
+    }
+
+    // Resilient fallback 2: If topic thread failed, retry to main supergroup chat
+    if (payload.message_thread_id) {
+      const directPayload = { ...payload };
+      delete directPayload.message_thread_id;
+      res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(directPayload),
+      });
+      data = await res.json().catch(() => null);
+      if (data && data.ok) return data;
+
+      if (data && data.description && /can't parse entities/i.test(data.description)) {
+        delete directPayload.parse_mode;
+        directPayload.text = (payload.text || "")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"');
+        res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(directPayload),
+        });
+        data = await res.json().catch(() => null);
+      }
+    }
+
+    return data;
+  } catch (err) {
+    console.warn("[HELP-BOT] Telegram dispatch exception:", err.message);
+    return null;
+  }
+}
+
+/**
  * Dispatch Telegram Alert to Supergroup Active Topic (NEVER sent to Bot DM!)
  */
 async function dispatchTelegramHelpNotice(ticket) {
@@ -505,9 +587,12 @@ async function dispatchTelegramHelpNotice(ticket) {
   }
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Registered Student" : "👤 Guest Visitor";
-  const userDisplay = `${ticket.user_name || "Guest"} (${roleLabel})`;
-  const emailDisplay = ticket.user_email || "Not Provided";
-  const mobileDisplay = ticket.user_mobile || "Not Provided";
+  const userDisplay = `${escapeTelegramHtml(ticket.user_name || "Guest")} (${roleLabel})`;
+  const emailDisplay = escapeTelegramHtml(ticket.user_email || "Not Provided");
+  const mobileDisplay = escapeTelegramHtml(ticket.user_mobile || "Not Provided");
+  const categoryDisplay = escapeTelegramHtml(ticket.category || "General Support");
+  const subjectDisplay = ticket.subject ? escapeTelegramHtml(ticket.subject) : null;
+  const questionEscaped = escapeTelegramHtml(ticket.question || "");
 
   const rawAttachments = ticket.attachments;
   const attachments = Array.isArray(rawAttachments)
@@ -522,7 +607,9 @@ async function dispatchTelegramHelpNotice(ticket) {
     const list = attachments
       .map((att, idx) => {
         const fullUrl = att.url?.startsWith("http") ? att.url : `${appBaseUrl}${att.url}`;
-        return `  ${idx + 1}. <a href="${fullUrl}">${att.name || "Attachment"}</a> (${att.type?.split("/")[0] || "File"})`;
+        const attName = escapeTelegramHtml(att.name || "Attachment");
+        const attType = escapeTelegramHtml(att.type?.split("/")[0] || "File");
+        return `  ${idx + 1}. <a href="${fullUrl}">${attName}</a> (${attType})`;
       })
       .join("\n");
     attachmentNotice = `📎 <b>Attached Files (${attachments.length}):</b>\n${list}`;
@@ -534,10 +621,10 @@ async function dispatchTelegramHelpNotice(ticket) {
     `👤 <b>Student:</b> ${userDisplay}`,
     `📧 <b>Email:</b> <code>${emailDisplay}</code>`,
     `📱 <b>Mobile:</b> <code>${mobileDisplay}</code>`,
-    `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
-    ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
+    `🏷️ <b>Category:</b> ${categoryDisplay}`,
+    subjectDisplay ? `📚 <b>Subject:</b> ${subjectDisplay}` : null,
     `❓ <b>Question:</b>`,
-    `<i>${ticket.question.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+    `<i>${questionEscaped}</i>`,
     attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
@@ -568,42 +655,17 @@ async function dispatchTelegramHelpNotice(ticket) {
       payload.message_thread_id = activeTopicId;
     }
 
-    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let data = await res.json();
-    let sentMsgId = data.ok && data.result?.message_id ? String(data.result.message_id) : null;
-
-    // Resilient Topic Fallback: If forum topic thread does not exist or fails, retry to direct chat
-    if (!sentMsgId && payload.message_thread_id) {
-      console.warn(`[HELP-BOT] Topic ${payload.message_thread_id} send failed (${data.description}), retrying to chat without thread ID...`);
-      delete payload.message_thread_id;
-      res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      data = await res.json();
-      if (data.ok && data.result?.message_id) {
-        sentMsgId = String(data.result.message_id);
-      }
-    }
+    const res = await sendTelegramMessageSafe(botToken, payload);
+    let sentMsgId = res && res.ok && res.result?.message_id ? String(res.result.message_id) : null;
 
     // Also dispatch notification to Admin DM so Admin can reply directly via Bot DM as well!
     const adminChatId = getHelpAdminChatId();
     if (adminChatId && adminChatId !== chatId) {
-      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: adminChatId,
-          text,
-          parse_mode: "HTML",
-          reply_markup: inlineKeyboard,
-        }),
+      sendTelegramMessageSafe(botToken, {
+        chat_id: adminChatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: inlineKeyboard,
       }).catch(() => {});
     }
 
@@ -647,9 +709,14 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator", re
   if (!botToken || !chatId) return;
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Registered Student" : "👤 Guest Visitor";
+  const userEscaped = escapeTelegramHtml(ticket.user_name || "Guest");
+  const subjectEscaped = ticket.subject ? escapeTelegramHtml(ticket.subject) : null;
+  const questionEscaped = escapeTelegramHtml(ticket.question || "");
+  const categoryEscaped = escapeTelegramHtml(ticket.category || "General Support");
+  const closedByEscaped = escapeTelegramHtml(closedBy || "Administrator");
   const replySummary = ticket.admin_reply
-    ? `<i>${ticket.admin_reply.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`
-    : `<i>Ticket resolved and archived directly by ${closedBy}.</i>`;
+    ? `<i>${escapeTelegramHtml(ticket.admin_reply)}</i>`
+    : `<i>Ticket resolved and archived directly by ${closedByEscaped}.</i>`;
 
   const retentionStatus =
     retentionDays === 0
@@ -661,18 +728,18 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator", re
   const text = [
     `🔒 <b>TICKET RESOLUTION AUDIT REPORT #${ticket.ticket_code}</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `👤 <b>Student:</b> ${ticket.user_name || "Guest"} (${roleLabel})`,
-    `📧 <b>Email:</b> <code>${ticket.user_email || "Not Provided"}</code>`,
-    `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "Not Provided"}</code>`,
-    `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
-    ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
+    `👤 <b>Student:</b> ${userEscaped} (${roleLabel})`,
+    `📧 <b>Email:</b> <code>${escapeTelegramHtml(ticket.user_email || "Not Provided")}</code>`,
+    `📱 <b>Mobile:</b> <code>${escapeTelegramHtml(ticket.user_mobile || "Not Provided")}</code>`,
+    `🏷️ <b>Category:</b> ${categoryEscaped}`,
+    subjectEscaped ? `📚 <b>Subject:</b> ${subjectEscaped}` : null,
     `❓ <b>Original Inquiry:</b>`,
-    `<i>${(ticket.question || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`,
+    `<i>${questionEscaped}</i>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `✅ <b>Admin Resolution / Answer:</b>`,
     replySummary,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `👨‍💻 <b>Closed By:</b> ${closedBy}`,
+    `👨‍💻 <b>Closed By:</b> ${closedByEscaped}`,
     `🕒 <b>Closed At:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`,
     retentionStatus,
   ]
@@ -700,34 +767,16 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator", re
       payload.message_thread_id = closedTopicId;
     }
 
-    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    let data = await res.json().catch(() => null);
-    if (!data || (!data.ok && payload.message_thread_id)) {
-      delete payload.message_thread_id;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-    }
+    await sendTelegramMessageSafe(botToken, payload);
 
     // Also notify Admin DM
     const adminChatId = getHelpAdminChatId();
     if (adminChatId && adminChatId !== chatId) {
-      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chat_id: adminChatId,
-          text,
-          parse_mode: "HTML",
-          reply_markup: closedKeyboard,
-        }),
+      sendTelegramMessageSafe(botToken, {
+        chat_id: adminChatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: closedKeyboard,
       }).catch(() => {});
     }
   } catch (err) {
@@ -1392,15 +1441,21 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
 }
 
 /**
- * Dispatch student reply notification strictly to Admin Bot DM (Topic 6 NOT spammed)
+ * Dispatch student reply notification to Active Topic 6 AND Admin Bot DM (with HTML entity escaping & resilient fallback)
  */
 async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   const botToken = getHelpBotToken();
+  const chatId = getHelpChatId();
   const adminChatId = getHelpAdminChatId();
-  if (!botToken || !adminChatId) return;
+  if (!botToken || (!chatId && !adminChatId)) return;
 
   const roleLabel = ticket.user_role === "student" ? "🎓 Student" : "👤 Guest";
-  const userDisplay = `${ticket.user_name || "Student"} (${roleLabel})`;
+  const userDisplay = `${escapeTelegramHtml(ticket.user_name || "Student")} (${roleLabel})`;
+  const emailDisplay = escapeTelegramHtml(ticket.user_email || "N/A");
+  const mobileDisplay = escapeTelegramHtml(ticket.user_mobile || "N/A");
+  const categoryDisplay = escapeTelegramHtml(ticket.category || "General Support");
+  const subjectDisplay = ticket.subject ? escapeTelegramHtml(ticket.subject) : null;
+  const replyEscaped = escapeTelegramHtml(replyText || "");
 
   const appBaseUrl = process.env.APP_URL || "https://freestudymaterial.onrender.com";
   let attachmentNotice = null;
@@ -1408,7 +1463,9 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
     const list = attachments
       .map((att, idx) => {
         const fullUrl = att.url?.startsWith("http") ? att.url : `${appBaseUrl}${att.url}`;
-        return `  ${idx + 1}. <a href="${fullUrl}">${att.name || "Attachment"}</a> (${att.type?.split("/")[0] || "File"})`;
+        const attName = escapeTelegramHtml(att.name || "Attachment");
+        const attType = escapeTelegramHtml(att.type?.split("/")[0] || "File");
+        return `  ${idx + 1}. <a href="${fullUrl}">${attName}</a> (${attType})`;
       })
       .join("\n");
     attachmentNotice = `📎 <b>Attached Files (${attachments.length}):</b>\n${list}`;
@@ -1418,15 +1475,15 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
     `💬 <b>STUDENT FOLLOW-UP REPLY #${ticket.ticket_code}</b>`,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👤 <b>Student:</b> ${userDisplay}`,
-    `📧 <b>Email:</b> <code>${ticket.user_email || "N/A"}</code>`,
-    `📱 <b>Mobile:</b> <code>${ticket.user_mobile || "N/A"}</code>`,
-    `🏷️ <b>Category:</b> ${ticket.category || "General Support"}`,
-    ticket.subject ? `📚 <b>Subject:</b> ${ticket.subject}` : null,
-    replyText ? `💬 <b>Follow-up Message:</b>\n<i>${replyText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>` : null,
+    `📧 <b>Email:</b> <code>${emailDisplay}</code>`,
+    `📱 <b>Mobile:</b> <code>${mobileDisplay}</code>`,
+    `🏷️ <b>Category:</b> ${categoryDisplay}`,
+    subjectDisplay ? `📚 <b>Subject:</b> ${subjectDisplay}` : null,
+    replyEscaped ? `💬 <b>Follow-up Message:</b>\n<i>${replyEscaped}</i>` : null,
     attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
-    `• Reply directly here in bot DM to answer student`,
+    `• Reply in Topic 6 / Bot DM to answer student`,
     `• Single-click below to close ticket:`,
   ]
     .filter(Boolean)
@@ -1441,28 +1498,50 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   };
 
   try {
-    // Only sent to Admin Bot DM
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    // 1. Dual-dispatch to Supergroup Topic 6 (Active Support Forum) so forum admins see student replies!
+    if (chatId) {
+      const activeTopicId = getHelpActiveTopicId();
+      const groupPayload = {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        reply_markup: inlineKeyboard,
+      };
+      if (activeTopicId) groupPayload.message_thread_id = activeTopicId;
+      await sendTelegramMessageSafe(botToken, groupPayload);
+
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments.slice(0, 3)) {
+          sendTelegramAttachment(
+            botToken,
+            chatId,
+            activeTopicId,
+            att,
+            `📎 <b>Reply Attachment for #${ticket.ticket_code}</b>: ${escapeTelegramHtml(att.name || "")}`
+          ).catch(() => {});
+        }
+      }
+    }
+
+    // 2. Dual-dispatch to Admin Private Bot DM (if configured)
+    if (adminChatId && adminChatId !== chatId) {
+      await sendTelegramMessageSafe(botToken, {
         chat_id: adminChatId,
         text,
         parse_mode: "HTML",
         reply_markup: inlineKeyboard,
-      }),
-    });
+      });
 
-    // Also send direct file attachment to Telegram DM if available
-    if (Array.isArray(attachments) && attachments.length > 0) {
-      for (const att of attachments.slice(0, 3)) {
-        sendTelegramAttachment(
-          botToken,
-          adminChatId,
-          null,
-          att,
-          `📎 <b>Reply Attachment for #${ticket.ticket_code}</b>: ${att.name || ""}`
-        ).catch(() => {});
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const att of attachments.slice(0, 3)) {
+          sendTelegramAttachment(
+            botToken,
+            adminChatId,
+            null,
+            att,
+            `📎 <b>Reply Attachment for #${ticket.ticket_code}</b>: ${escapeTelegramHtml(att.name || "")}`
+          ).catch(() => {});
+        }
       }
     }
   } catch (err) {
@@ -1890,20 +1969,7 @@ async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null
     if (replyToMessageId) body.reply_to_message_id = replyToMessageId;
     if (isGroup && threadId) body.message_thread_id = threadId;
 
-    let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    let data = await res.json().catch(() => null);
-    if (data && !data.ok && body.message_thread_id) {
-      delete body.message_thread_id;
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    }
+    await sendTelegramMessageSafe(botToken, body);
   } catch (_) {}
 }
 
