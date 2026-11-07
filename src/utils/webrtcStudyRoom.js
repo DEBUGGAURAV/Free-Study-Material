@@ -13,7 +13,7 @@ export function getPartyKitHost() {
   const envHost = (
     (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_PARTYKIT_HOST) ||
     (typeof window !== 'undefined' && (window.VITE_PARTYKIT_HOST || window.__PARTYKIT_HOST__)) ||
-    'fsm-study.partykit.dev'
+    'webrtc'
   ).trim();
   return envHost.replace(/^https?:\/\//i, '').replace(/^wss?:\/\//i, '').replace(/\/+$/, '');
 }
@@ -34,21 +34,23 @@ export class WebrtcStudyRoom {
     this.sharedState = this.ydoc.getMap('state'); // e.g. currentPage, scrollRatio, leaderId
 
     const host = getPartyKitHost();
-    const forceWebRtc = host === 'webrtc' || (typeof window !== 'undefined' && window.__FORCE_WEBRTC__);
+    const isSunsetPartyKitCloud = host.includes('partykit.dev');
+    const forceWebRtc = host === 'webrtc' || isSunsetPartyKitCloud || (typeof window !== 'undefined' && window.__FORCE_WEBRTC__);
 
     if (!forceWebRtc) {
       try {
-        // 🚀 Primary: PartyKit Cloudflare Edge WebSocket Provider (100% Connected in Hostels & Firewalls)
+        // PartyServer / Custom WebSocket Host
         this.provider = new YPartyKitProvider(host, this.roomName, this.ydoc, {
           awareness: this.ydoc.awareness,
         });
         this.providerType = 'partykit';
       } catch (err) {
-        console.warn('[STUDY-ROOM] PartyKit init fallback to WebRTC:', err.message);
+        console.warn('[STUDY-ROOM] Provider fallback to WebRTC:', err.message);
         this.provider = this._createWebRtcProvider();
         this.providerType = 'webrtc';
       }
     } else {
+      // 🚀 Zero-Setup WebRTC P2P DataChannel Mesh (100% Free, No Third-Party Login or Host Needed)
       this.provider = this._createWebRtcProvider();
       this.providerType = 'webrtc';
     }
