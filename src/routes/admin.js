@@ -2606,9 +2606,9 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       ramWatchdog: {
         memoryThreshold: "380 MB Proactive GC Sweep",
         eventLoopLag: watchdogStats.eventLoopLagMs ? `${watchdogStats.eventLoopLagMs}ms` : "< 5ms (Nominal)",
-        antiSleepHeartbeat: `${(antiSleepTel && antiSleepTel.intervalMinutes) || 8}-Min Autonomous Pulse (24/7 Awake)`,
+        antiSleepHeartbeat: `${(antiSleepTel && antiSleepTel.intervalMinutes) || 9}-Min Autonomous Pulse (24/7 Awake)`,
       },
-      antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 8 },
+      antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 9 },
     };
 
     // 12. Dual Turso LibSQL Edge Databases Telemetry
@@ -2699,7 +2699,7 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
         securityShield,
         speedBooster,
         resilience,
-        antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 8 },
+        antiSleep: antiSleepTel || { isActive: true, intervalMinutes: 9 },
         cacheWarmer: warmerStats,
         circuitBreaker: breakerStats,
         timestamp: new Date().toISOString(),

@@ -104,6 +104,18 @@ function getHelpClosedTopicId() {
   return !isNaN(parsed) && parsed > 0 ? parsed : 7;
 }
 
+let tableInitPromise = null;
+
+function ensureHelpTable() {
+  if (!tableInitPromise) {
+    tableInitPromise = initHelpTable().catch((err) => {
+      console.warn("[HELP-TURSO] ensureHelpTable failed:", err.message);
+      tableInitPromise = null;
+    });
+  }
+  return tableInitPromise;
+}
+
 /**
  * Initialize dedicated Turso table for help tickets & settings
  */
@@ -161,13 +173,17 @@ async function initHelpTable() {
       args: [],
     }).catch(() => {});
 
-    // Purge ONLY expired closed tickets whose retention period has passed!
-    await purgeExpiredClosedTickets().catch(() => {});
     console.log("[HELP-TURSO] ✅ Support help_tickets table ready (5-day closed ticket retention active).");
   } catch (err) {
     console.warn("[HELP-TURSO] Table init warning:", err.message);
   }
 }
+
+// Initial table setup (fires once safely in background)
+ensureHelpTable().then(() => {
+  // Purge any expired closed tickets after table is guaranteed ready
+  purgeExpiredClosedTickets().catch(() => {});
+}).catch(() => {});
 
 let cachedGlobalRetentionDays = 5;
 
@@ -371,16 +387,6 @@ async function getHelpRetentionStats() {
     expiredTickets,
   };
 }
-
-let tableInitPromise = null;
-function ensureHelpTable() {
-  if (!tableInitPromise) {
-    tableInitPromise = initHelpTable();
-  }
-  return tableInitPromise;
-}
-
-ensureHelpTable().catch(() => {});
 
 function generateTicketCode() {
   const rand = Math.floor(1000 + Math.random() * 9000);
@@ -1473,6 +1479,7 @@ async function getAllHelpTickets({ status = null, limit = 50, offset = 0 } = {})
   }
 
   try {
+    await ensureHelpTable();
     let sql = `SELECT * FROM help_tickets`;
     const args = [];
     if (status) {

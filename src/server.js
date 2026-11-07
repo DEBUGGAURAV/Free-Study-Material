@@ -234,7 +234,11 @@ app.use(cookieParser());
 app.use(globalSanitizer);
 
 // Real-Time Health & Keep-Alive Endpoint (Zero Database Quota Used - Zero-Cost Cache Epoch Sync)
-app.all(["/health", "/api/health"], (req, res) => {
+app.all(["/health", "/api/health", "/api/anti-sleep-relay", "/api/keepalive", "/api/anti-sleep-pulse"], (req, res) => {
+  if (req.method === "HEAD") {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.status(200).end();
+  }
   let epoch = 1;
   let wipeRequired = false;
   try {
@@ -431,32 +435,39 @@ function startServer(portToTry, attempt = 1) {
     console.log(`☁️ Cloudflare CDN LRU Headers: ACTIVE`);
     console.log(`=======================================================`);
 
-    // Asynchronously connect Telegram MTProto client
+    // 🛡️ 1. 24/7 Anti-Sleep Immortality Engine (STARTS IMMEDIATELY to guarantee Render stays 100% awake)
     try {
-      await getClient();
-    } catch (e) {
-      console.warn("[MTProto] Telegram connect deferred:", e.message);
+      startAntiSleepService(portToTry);
+    } catch (antiSleepErr) {
+      console.warn("[ANTI-SLEEP] Init warning:", antiSleepErr.message);
     }
 
-    // Start Realtime Bot API Long-Polling (DM + Group + Subgroup ingest + receipts)
+    // 2. Asynchronously connect Telegram MTProto client (Non-blocking background connection)
+    (async () => {
+      try {
+        await getClient();
+      } catch (e) {
+        console.warn("[MTProto] Telegram connect deferred:", e.message);
+      }
+    })();
+
+    // 3. Start Realtime Bot API Long-Polling (DM + Group + Subgroup ingest + receipts)
     try {
       startBotPoller();
     } catch (e) {
       console.warn("[BOT POLLER] Poller start deferred:", e.message);
     }
 
-    // Start 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync
+    // 4. Start 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync
     try {
       startAutoSyncWorker(30 * 60 * 1000);
     } catch (e) {
       console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
     }
 
-    // Load Security Bot Single-Document Settings
-    try {
-      if (loadBotSettings) await loadBotSettings();
-    } catch (e) {
-      console.warn("[SECURITY BOT] Settings load notice:", e.message);
+    // 5. Load Security Bot Single-Document Settings (Non-blocking)
+    if (loadBotSettings) {
+      loadBotSettings().catch((e) => console.warn("[SECURITY BOT] Settings load notice:", e.message));
     }
 
     // Start Dedicated Security OTP Bot Poller (@fsm_security_otp_bot)
@@ -532,13 +543,6 @@ function startServer(portToTry, attempt = 1) {
       }, 4000);
     } catch (warmerErr) {
       console.warn("[CACHE-WARMER] Init warning:", warmerErr.message);
-    }
-
-    // 🛡️ 24/7 Anti-Sleep Immortality Engine (Prevents Render Free Tier 15-Minute Sleep)
-    try {
-      startAntiSleepService(initialPort);
-    } catch (antiSleepErr) {
-      console.warn("[ANTI-SLEEP] Init warning:", antiSleepErr.message);
     }
   });
 }

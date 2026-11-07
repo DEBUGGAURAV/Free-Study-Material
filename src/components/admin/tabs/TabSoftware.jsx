@@ -1280,7 +1280,7 @@ export default function TabSoftware(props) {
                         <span style={{ color: "var(--text-dim)" }}>Render Anti-Sleep Engine:</span>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span style={{ color: "#34d399", fontWeight: 700 }}>
-                            {softwareInfo?.antiSleep?.intervalMinutes || 8}-Min Autonomous Pulse (24/7 Awake)
+                            {softwareInfo?.antiSleep?.intervalMinutes || 9}-Min Autonomous Pulse (24/7 Awake)
                           </span>
                           <button
                             type="button"
