@@ -63,6 +63,7 @@ const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdro
 const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
 const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal"));
 const CircleSearchModal = lazyWithRetry(() => import("./components/CircleSearchModal"));
+import FreehandCircleOverlay from "./components/FreehandCircleOverlay";
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -161,12 +162,13 @@ export default function App() {
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
   const [airdropInitialMode, setAirdropInitialMode] = useState("qr");
 
-  // 🌟 Home Page AI Study Pod State (Instant Flashcards, Structured Summary & Global Note Filter)
+  // 🌟 Home Page AI Study Pod State (Conversational Chatbox First + Flashcards & Summary)
   const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
   const [homeAiPodNote, setHomeAiPodNote] = useState(null);
-  const [homeAiPodInitialTab, setHomeAiPodInitialTab] = useState("search_notes");
+  const [homeAiPodInitialTab, setHomeAiPodInitialTab] = useState("chat");
 
-  // ⭕ Home Page Circle to Search & Visual AI State
+  // ⭕ Home Page Live Screen Pencil & Circle to Search State
+  const [isScreenPencilActive, setIsScreenPencilActive] = useState(false);
   const [isCircleSearchOpen, setIsCircleSearchOpen] = useState(false);
   const [circleSearchData, setCircleSearchData] = useState(null);
 
@@ -215,12 +217,13 @@ export default function App() {
 
   // 🛡️ Strict Login-Gating Guard for AI Study & Circle to Search
   useEffect(() => {
-    if ((isHomeAiPodOpen || isCircleSearchOpen) && !currentUser) {
+    if ((isHomeAiPodOpen || isCircleSearchOpen || isScreenPencilActive) && !currentUser) {
       setIsHomeAiPodOpen(false);
       setIsCircleSearchOpen(false);
+      setIsScreenPencilActive(false);
       openAuth("signin");
     }
-  }, [isHomeAiPodOpen, isCircleSearchOpen, currentUser, openAuth]);
+  }, [isHomeAiPodOpen, isCircleSearchOpen, isScreenPencilActive, currentUser, openAuth]);
 
   // 🔄 Hydrate session from IndexedDB if not found in memory/localStorage (Prevents false login prompts)
   useEffect(() => {
@@ -241,7 +244,10 @@ export default function App() {
     const handleOpenHelp = () => setIsHelpOpen(true);
     const handleOpenPod = (e) => {
       if (e?.detail?.roomCode) setStudyPodRoomCode(e.detail.roomCode);
-      if (e?.detail?.note) setStudyPodNote(e.detail.note);
+      if (e?.detail?.note) {
+        const pageNum = e?.detail?.page || e.detail.note?._page || "";
+        setStudyPodNote(pageNum ? { ...e.detail.note, _page: pageNum } : e.detail.note);
+      }
       setIsStudyPodOpen(true);
     };
     const handleOpenAirdrop = (e) => {
@@ -256,7 +262,7 @@ export default function App() {
       }
       const detail = e?.detail || {};
       setHomeAiPodNote(detail.note || null);
-      setHomeAiPodInitialTab(detail.tab || (detail.note ? "flashcards" : "search_notes"));
+      setHomeAiPodInitialTab(typeof detail.tab === "string" ? detail.tab : "chat");
       setIsHomeAiPodOpen(true);
     };
     const handleOpenCircleSearchEvent = (e) => {
@@ -264,8 +270,13 @@ export default function App() {
         openAuth("signin");
         return;
       }
-      setCircleSearchData(e?.detail || null);
-      setIsCircleSearchOpen(true);
+      const payload = e?.detail;
+      if (payload && (payload.text || payload.croppedImage)) {
+        setCircleSearchData(payload);
+        setIsCircleSearchOpen(true);
+      } else {
+        setIsScreenPencilActive(true);
+      }
     };
     const handleOpenAuthModal = (e) => {
       openAuth(e?.detail?.mode || "signin");
@@ -292,26 +303,39 @@ export default function App() {
       setIsStudyPodOpen(true);
     }
 
-    // Smart Page QR Code / Direct Note Link Handler (Opens note directly on specified page)
+    // Smart Page QR Code / Direct Note Link Handler (Opens note directly on specified page + joins Page Study Pod if QR scanned)
     const urlNoteId = params.get("noteId") || params.get("note");
     const urlPage = parseInt(params.get("page") || "1", 10);
     if (urlNoteId) {
       if (urlPage > 0) setPreviewInitialPage(urlPage);
+      const applyScannedNote = (foundNote) => {
+        if (!foundNote) return;
+        setPreviewNote({ ...foundNote, _initialPage: urlPage });
+        if (podParam) {
+          if (podParam === "true") {
+            const slug = (foundNote.subject || foundNote.title || "study")
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "")
+              .slice(0, 10);
+            const idTail = String(foundNote.id || urlNoteId).slice(-4) || "live";
+            setStudyPodRoomCode(`pod-${slug}-${idTail}-p${urlPage}`);
+          }
+          setStudyPodNote({ ...foundNote, _page: urlPage });
+          setIsStudyPodOpen(true);
+        }
+      };
+
       api.getNoteById(urlNoteId)
         .then((res) => {
-          if (res?.note) {
-            setPreviewNote({ ...res.note, _initialPage: urlPage });
-          }
+          if (res?.note) applyScannedNote(res.note);
         })
         .catch(() => {
           try {
-            const cachedNotes = safeStorage.getItem("all_raw_notes");
+            const cachedNotes = safeStorage.getItem("all_raw_notes") || safeStorage.getItem("fsm_cached_notes");
             if (cachedNotes) {
               const list = JSON.parse(cachedNotes);
               const found = list.find((n) => n.id === urlNoteId);
-              if (found) {
-                setPreviewNote({ ...found, _initialPage: urlPage });
-              }
+              if (found) applyScannedNote(found);
             }
           } catch (_) {}
         });
@@ -1353,13 +1377,13 @@ export default function App() {
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={() => openAuth("signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
-        onOpenAiStudyPod={(targetTab = "search_notes", note = null) => {
+        onOpenAiStudyPod={(targetTab = "chat", note = null) => {
           if (!currentUser) {
             openAuth("signin");
             return;
           }
-          setHomeAiPodNote(note);
-          setHomeAiPodInitialTab(targetTab || "search_notes");
+          setHomeAiPodNote(note && note.id ? note : null);
+          setHomeAiPodInitialTab(typeof targetTab === "string" ? targetTab : "chat");
           setIsHomeAiPodOpen(true);
         }}
         onOpenCircleSearch={(data = null) => {
@@ -1367,8 +1391,12 @@ export default function App() {
             openAuth("signin");
             return;
           }
-          setCircleSearchData(data);
-          setIsCircleSearchOpen(true);
+          if (data && typeof data === "object" && (data.text || data.croppedImage)) {
+            setCircleSearchData(data);
+            setIsCircleSearchOpen(true);
+          } else {
+            setIsScreenPencilActive(true);
+          }
         }}
         currentUser={currentUser}
         onLogout={handleLogout}
@@ -1949,8 +1977,7 @@ export default function App() {
                   openAuth("signin");
                   return;
                 }
-                setCircleSearchData(null);
-                setIsCircleSearchOpen(true);
+                setIsScreenPencilActive(true);
               }}
             />
 
@@ -2340,7 +2367,7 @@ export default function App() {
               initialTab={homeAiPodInitialTab}
               onOpenCircleSearch={() => {
                 setIsHomeAiPodOpen(false);
-                setIsCircleSearchOpen(true);
+                setIsScreenPencilActive(true);
               }}
               onOpenNote={(note) => {
                 setIsHomeAiPodOpen(false);
@@ -2366,6 +2393,10 @@ export default function App() {
               }}
               circleData={circleSearchData}
               allNotes={notes}
+              onRedrawWithPencil={() => {
+                setIsCircleSearchOpen(false);
+                setIsScreenPencilActive(true);
+              }}
               onOpenNote={(targetNote) => {
                 setIsCircleSearchOpen(false);
                 setPreviewNote(targetNote);
@@ -2439,10 +2470,11 @@ export default function App() {
               return;
             }
             setHomeAiPodNote(null);
+            setHomeAiPodInitialTab("chat");
             setIsHomeAiPodOpen(true);
           }}
           className="floating-ai-pod-trigger"
-          title="Open AI Study: 3D Flashcards, Structured Summary & Study Filters"
+          title="Open AI Study Chatbox, 3D Flashcards & Summary"
           style={{
             background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
             color: "#ffffff",
@@ -2464,7 +2496,7 @@ export default function App() {
           <span className="floating-action-text">AI Study</span>
         </button>
 
-        {/* ⭕ Circle to Search Floating Capsule */}
+        {/* ⭕ Circle to Search Floating Capsule (Instant Freehand Pencil!) */}
         <button
           type="button"
           onClick={() => {
@@ -2472,11 +2504,10 @@ export default function App() {
               openAuth("signin");
               return;
             }
-            setCircleSearchData(null);
-            setIsCircleSearchOpen(true);
+            setIsScreenPencilActive(true);
           }}
           className="floating-circle-trigger"
-          title="Google-Style Circle to Search: Draw, Paste or Ask Any Academic Formula / Diagram"
+          title="Pencil & Circle Search: Click to draw any shape/structure with Pencil and get instant AI result"
           style={{
             background: "linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.95))",
             color: "#ffffff",
@@ -2498,6 +2529,23 @@ export default function App() {
           <span className="floating-action-text">Circle Search</span>
         </button>
       </div>
+
+      {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
+      <FreehandCircleOverlay
+        isActive={isScreenPencilActive && Boolean(currentUser)}
+        allNotes={notes}
+        onCancel={() => setIsScreenPencilActive(false)}
+        onOpenDirectModal={() => {
+          setIsScreenPencilActive(false);
+          setCircleSearchData(null);
+          setIsCircleSearchOpen(true);
+        }}
+        onComplete={(data) => {
+          setIsScreenPencilActive(false);
+          setCircleSearchData(data);
+          setIsCircleSearchOpen(true);
+        }}
+      />
 
       {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
       {!isChatOpen && (

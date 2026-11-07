@@ -7,6 +7,7 @@ const { db } = require("../firebase");
 router.use(authenticateToken);
 const {
   generateAcademicAnswer,
+  extractHandwritingVision,
   getAiTelemetry,
   updateAiSettings,
   resetDailyCounters,
@@ -75,7 +76,7 @@ function studentAiLimiter(req, res, next) {
 router.post("/ask", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
+    const { query, context, noteId, subject, imageBase64, imageMimeType, skipCache } = req.body;
     if ((!query || !String(query).trim()) && !imageBase64) {
       return res.status(400).json({ success: false, message: "Query text or image is required" });
     }
@@ -86,10 +87,14 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
 
     const cleanQuery = typeof query === "string" ? query.trim().slice(0, 5000) : "";
     const cleanContext = typeof context === "string" ? context.slice(0, 15000) : "";
-    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? String(imageBase64).slice(0, 100) : "empty"));
+    const isConversationalTurn = Boolean(skipCache) || cleanContext.includes("[CONVERSATION_CONTEXT]");
+    const hashSeed = isConversationalTurn
+      ? `${cleanQuery}__ctx__${cleanContext.slice(-600)}`
+      : cleanQuery || (imageBase64 ? String(imageBase64).slice(0, 100) : "empty");
+    const queryHash = computeQueryHash(hashSeed);
 
     // 1. Check L1 RAM & L2 Turso Cloud Cache (0ms response, 0 API quota)
-    const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
+    const cachedSolution = !imageBase64 && !skipCache ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
       dispatchAiSearchTelegramAudit({
         user: req.user,
@@ -189,10 +194,17 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
 
     const cleanQuery = typeof query === "string" ? query.trim().slice(0, 5000) : "";
     const cleanContext = typeof context === "string" ? context.slice(0, 15000) : "";
-    const queryHash = computeQueryHash(cleanQuery || (imageBase64 ? String(imageBase64).slice(0, 100) : "empty"));
+    const skipCache = Boolean(req.body?.skipCache);
+    const isConversationalTurn = skipCache || cleanContext.includes("[CONVERSATION_CONTEXT]");
+    const hashSeed = isConversationalTurn
+      ? `${cleanQuery}__ctx__${cleanContext.slice(-600)}`
+      : imageBase64
+        ? `${cleanQuery}__img__${String(imageBase64).slice(0, 24000)}`
+        : (cleanQuery || "empty");
+    const queryHash = computeQueryHash(hashSeed);
 
     // 1. Check L1 RAM & L2 Turso Cache First (0ms / sub-5ms - 0 API cost!)
-    const cachedSolution = !imageBase64 ? await getCachedCircleSolution(queryHash) : null;
+    const cachedSolution = !skipCache ? await getCachedCircleSolution(queryHash) : null;
     if (cachedSolution) {
       dispatchAiSearchTelegramAudit({
         user: req.user,
@@ -251,6 +263,49 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: err.message || "Failed to solve circled query",
+    });
+  }
+});
+
+/**
+ * ✍️ POST /api/ai/ocr-handwriting
+ * Ultra-fast (~0.45s) Multimodal Vision Handwriting & Math Extractor for Circle to Search
+ * Uses separate burst limiter key so circling & immediately clicking "Solve" never triggers 429!
+ */
+router.post("/ocr-handwriting", async (req, res) => {
+  try {
+    const isAdmin = req.user?.role === "admin" || req.user?.role === "half_admin" || req.user?.isMainAdmin;
+    if (!isAdmin) {
+      const ocrKey = req.user?.id ? `ocr_user_${req.user.id}` : `ocr_ip_${req.ip || "127.0.0.1"}`;
+      const now = Date.now();
+      const last = studentRateLimitMap.get(ocrKey) || 0;
+      if (now - last < 350) {
+        return res.status(429).json({ success: false, message: "Scanning too fast, please wait a moment." });
+      }
+      studentRateLimitMap.set(ocrKey, now);
+    }
+
+    const { imageBase64, imageMimeType } = req.body || {};
+    if (!imageBase64 || typeof imageBase64 !== "string") {
+      return res.status(400).json({ success: false, message: "imageBase64 is required" });
+    }
+    if (imageBase64.length > 5 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: "Image payload exceeds 5MB limit" });
+    }
+
+    const result = await extractHandwritingVision(imageBase64, imageMimeType || "image/jpeg");
+    return res.json({
+      success: true,
+      text: result.text,
+      provider: result.provider,
+      model: result.model,
+      cached: result.cached,
+      latencyMs: result.latencyMs,
+    });
+  } catch (err) {
+    return res.status(422).json({
+      success: false,
+      message: err.message || "Could not extract handwritten text",
     });
   }
 });

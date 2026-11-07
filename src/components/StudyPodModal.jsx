@@ -16,7 +16,9 @@ import {
   Maximize2,
   FileText,
   Volume2,
+  QrCode,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 
 export default function StudyPodModal({
@@ -31,6 +33,8 @@ export default function StudyPodModal({
   const [peerCount, setPeerCount] = useState(1);
   const [peersList, setPeersList] = useState([]);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showPodQr, setShowPodQr] = useState(false);
+  const [podQrDataUrl, setPodQrDataUrl] = useState("");
 
   // Canvas drawing state
   const canvasRef = useRef(null);
@@ -49,9 +53,14 @@ export default function StudyPodModal({
   // Webrtc instance ref
   const roomInstanceRef = useRef(null);
 
-  // Auto-generate room code if empty
+  // Sync roomCode when initialRoomCode changes (e.g., switching from Pg 2 to Pg 3) or auto-generate if empty
   useEffect(() => {
-    if (isOpen && !roomCode) {
+    if (!isOpen) return;
+    if (initialRoomCode) {
+      setRoomCode(initialRoomCode);
+      return;
+    }
+    if (!roomCode) {
       const generated = note
         ? `${note.branch || "cse"}-${note.subject || "core"}-${Math.floor(1000 + Math.random() * 9000)}`
             .toLowerCase()
@@ -59,7 +68,7 @@ export default function StudyPodModal({
         : `pod-${Math.floor(100000 + Math.random() * 900000)}`;
       setRoomCode(generated);
     }
-  }, [isOpen, note]);
+  }, [isOpen, initialRoomCode, note]);
 
   // Connect to P2P Mesh when room is joined
   useEffect(() => {
@@ -224,7 +233,29 @@ export default function StudyPodModal({
 
   const getInviteUrl = () => {
     if (typeof window === "undefined") return "";
+    const targetNoteId = note?.id || note?.noteId || "";
+    const targetPage = note?._page || note?._initialPage || "";
+    if (targetNoteId) {
+      const pageParam = targetPage ? `&page=${encodeURIComponent(targetPage)}` : "";
+      return `${window.location.origin}/?noteId=${encodeURIComponent(targetNoteId)}${pageParam}&pod=${encodeURIComponent(roomCode)}`;
+    }
     return `${window.location.origin}/?pod=${encodeURIComponent(roomCode)}`;
+  };
+
+  const handleOpenPodQr = async () => {
+    try {
+      const url = getInviteUrl();
+      if (!url) return;
+      const qr = await QRCode.toDataURL(url, {
+        width: 240,
+        margin: 2,
+        color: { dark: "#0f172a", light: "#ffffff" },
+      });
+      setPodQrDataUrl(qr);
+      setShowPodQr(true);
+    } catch (err) {
+      console.warn("[STUDY-POD] QR generation failed:", err);
+    }
   };
 
   const handleCopyLink = () => {
@@ -341,6 +372,25 @@ export default function StudyPodModal({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={handleOpenPodQr}
+              className="btn-secondary"
+              style={{
+                fontSize: "0.78rem",
+                padding: "6px 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                borderColor: "rgba(6, 182, 212, 0.45)",
+                color: "#67e8f9",
+              }}
+              title="Show QR code so your friend can scan & join this exact page discussion"
+            >
+              <QrCode size={14} />
+              <span>{note?._page ? `Pg ${note._page} QR` : "Page QR"}</span>
+            </button>
+
             <button
               onClick={handleCopyLink}
               className="btn-secondary"
@@ -646,6 +696,86 @@ export default function StudyPodModal({
           )}
         </div>
       </div>
+
+      {showPodQr && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowPodQr(false);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1400,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0, 0, 0, 0.78)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "350px",
+              width: "90%",
+              background: "#0f172a",
+              border: "1px solid rgba(6, 182, 212, 0.45)",
+              borderRadius: "16px",
+              padding: "22px 20px",
+              textAlign: "center",
+              boxShadow: "0 20px 50px rgba(0,0,0,0.6), 0 0 30px rgba(6, 182, 212, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "12px",
+              position: "relative",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPodQr(false)}
+              style={{
+                position: "absolute",
+                top: "12px",
+                right: "12px",
+                background: "transparent",
+                border: "none",
+                color: "var(--text-dim)",
+                cursor: "pointer",
+              }}
+            >
+              <X size={18} />
+            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-cyan)", fontWeight: 800, fontSize: "0.95rem" }}>
+              <QrCode size={18} />
+              <span>{note?._page ? `Page ${note._page} Discussion QR` : "Study Pod Discussion QR"}</span>
+            </div>
+            <div style={{ fontSize: "0.77rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+              Ask your friend to scan this QR to open {note?._page ? <strong>Page {note._page}</strong> : "this note"} and join your live discussion room!
+            </div>
+            {podQrDataUrl && (
+              <div style={{ padding: "10px", background: "#ffffff", borderRadius: "12px" }}>
+                <img src={podQrDataUrl} alt="Page Discussion QR" style={{ width: "200px", height: "200px", display: "block" }} />
+              </div>
+            )}
+            {note?.title && (
+              <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#e2e8f0", background: "rgba(255,255,255,0.06)", padding: "4px 12px", borderRadius: "20px" }}>
+                📄 {note.title} {note?._page ? `• Pg ${note._page}` : ""}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="btn-secondary"
+              style={{ width: "100%", padding: "8px", fontSize: "0.78rem", justifyContent: "center", display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              {copiedLink ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
+              <span>{copiedLink ? "Link Copied!" : "Copy Page Discussion Link"}</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

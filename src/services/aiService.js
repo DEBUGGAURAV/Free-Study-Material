@@ -7,6 +7,7 @@
  * Combined Free Daily Quota: 15,900 Requests / Day!
  */
 
+const crypto = require("crypto");
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
 const { logAiSearchToTurso, getAiSearchLogsFromTurso } = require("./tursoService");
@@ -228,7 +229,108 @@ Formatting rules:
 }
 
 /**
- * Query Google Gemini 2.0 Flash API (Text + Multimodal Image / Handwritten Notes)
+ * ⚡ Query Groq Cloud LPU Multimodal Vision API (Llama 4 Scout / Maverick Vision • ~600 tok/sec)
+ * Sub-second (~0.45s) handwritten cursive notes, mathematical derivations & diagram solver!
+ */
+async function queryGroqVision(query, context, imageBase64, imageMimeType = "image/jpeg", options = {}) {
+  const apiKey = getApiKey("groq");
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY_MISSING");
+  }
+
+  if (!checkAndEnforceMinuteLimit("groq")) {
+    throw new Error("GROQ_RPM_LIMIT");
+  }
+
+  const cleanB64 = String(imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+  if (!cleanB64) {
+    throw new Error("EMPTY_VISION_IMAGE");
+  }
+  const safeMime = (imageMimeType && imageMimeType.startsWith("image/")) ? imageMimeType : "image/jpeg";
+
+  const promptText = options.rawPrompt
+    ? options.rawPrompt
+    : `You are an elite Academic Handwriting & Formula Solver for engineering, science, and college students.
+Carefully decipher ALL handwritten strokes in the image (including cursive, slanted, messy ballpoint/pencil notes, mathematical integrals, matrices, subscripts/superscripts, circuit diagrams, and Hinglish/English notes).
+1. First, write **📝 Extracted Text / Formula:** followed by the exact cleaned transcription (using LaTeX \\( ... \\) for math).
+2. Next, provide a clear, step-by-step academic solution or explanation.
+3. End with a 1-line "💡 Exam Takeaway".
+${context ? `\n[Notes Context]:\n${context.slice(0, 3000)}\n` : ""}
+${query ? `\n[Student Prompt / Hint]:\n${query}` : ""}`;
+
+  const visionModels = [
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "meta-llama/llama-4-maverick-17b-128e-instruct",
+  ];
+
+  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 750;
+  const temperature = typeof options.temperature === "number" ? options.temperature : 0.2;
+  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 9500;
+  let lastErr = null;
+
+  for (const vModel of visionModels) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: vModel,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: promptText },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${safeMime};base64,${cleanB64}`,
+                  },
+                },
+              ],
+            },
+          ],
+          temperature,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const errText = await response.text();
+        if (response.status === 429) {
+          throw new Error(`GROQ_RATE_LIMIT_429: ${errText}`);
+        }
+        lastErr = new Error(`Groq Vision (${vModel}) Error ${response.status}: ${errText}`);
+        continue;
+      }
+
+      const data = await response.json();
+      const answer = (data.choices?.[0]?.message?.content || "").trim();
+      if (!answer) {
+        lastErr = new Error("Empty Groq Vision response");
+        continue;
+      }
+      return { answer, model: vModel };
+    } catch (err) {
+      clearTimeout(timeout);
+      lastErr = err;
+      if (err.message && err.message.includes("GROQ_RATE_LIMIT_429")) {
+        break;
+      }
+    }
+  }
+
+  throw lastErr || new Error("Groq Vision failed");
+}
+
+/**
+ * Query Google Gemini Flash API (Text + High-Precision Multimodal Handwritten Notes & Diagrams)
  */
 async function queryGemini(query, context, imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
   const apiKey = getApiKey("gemini");
@@ -240,37 +342,52 @@ async function queryGemini(query, context, imageBase64 = null, imageMimeType = "
     throw new Error("GEMINI_RPM_LIMIT");
   }
 
-  const systemInstruction = `You are a brilliant, friendly academic tutor for college students studying engineering, science, and higher education.
-Answer clearly and accurately based on the provided notes context or diagram/handwritten image.
+  const systemInstruction = imageBase64
+    ? `You are a brilliant academic handwriting & diagram specialist for college students studying engineering, science, and higher education.
+Carefully decipher ALL handwritten strokes (including messy cursive, slanted student handwriting, faint pencil/blue pen, integrals, fractions, matrices, subscripts/superscripts, and circuit/physics diagrams).
+- First state **📝 Extracted Text / Formula:** with the exact transcribed problem or text in clean LaTeX \\(x = \\pm 2\\).
+- Then provide a clear, complete step-by-step solution or explanation using bullet points.
+- If page numbers or excerpts exist in context, cite them (e.g. "📌 [From Page X]").
+- Add a 1-line "💡 Exam Takeaway" at the end.`
+    : `You are a brilliant, friendly academic tutor for college students studying engineering, science, and higher education.
+Answer clearly and accurately based on the provided notes context.
 - If page numbers or excerpts exist in the context, cite them prominently (e.g. "📌 [From Page X]").
 - Highlight key definitions and formulas in **bold** or LaTeX format \\(x = \\pm 2\\).
 - Use clean bullet points for steps or derivations.
 - Keep the explanation high-yield, structured, and complete.
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
-  const promptText = `${systemInstruction}\n\n${context ? `[Study Notes Context & Citations]:\n${context.slice(0, 4500)}\n\n` : ""}[Student Question]:\n${query || "Analyze and solve the problem/diagram shown in this study note."}\n\nProvide an authoritative, student-friendly answer.`;
+  const promptText = options.rawPrompt
+    ? options.rawPrompt
+    : `${systemInstruction}\n\n${context ? `[Study Notes Context & Citations]:\n${context.slice(0, 4500)}\n\n` : ""}[Student Question]:\n${query || "Transcribe any handwritten text/formula and solve the problem/diagram shown in this study note."}\n\nProvide an authoritative, student-friendly answer.`;
 
   const parts = [{ text: promptText }];
   if (imageBase64) {
-    const cleanB64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    const cleanB64 = String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+    const safeMime = (imageMimeType && imageMimeType.startsWith("image/")) ? imageMimeType : "image/jpeg";
     parts.push({
       inline_data: {
-        mime_type: imageMimeType || "image/jpeg",
+        mime_type: safeMime,
         data: cleanB64,
       },
     });
   }
 
   const primaryModel = currentAiSettings.geminiModel || "gemini-flash-lite-latest";
-  const fallbackModel = primaryModel === "gemini-3.5-flash-lite" ? "gemini-flash-lite-latest" : "gemini-3.5-flash-lite";
-  const modelsToTry = [primaryModel, fallbackModel];
+  const modelsToTry = Array.from(
+    new Set([primaryModel, "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.0-flash"])
+  );
 
   let lastError = null;
-  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 700;
+  const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 750;
+  const temperature = typeof options.temperature === "number" ? options.temperature : 0.25;
+  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 11000;
 
-  for (const model of modelsToTry) {
+  for (let idx = 0; idx < modelsToTry.length; idx++) {
+    const model = modelsToTry[idx];
+    const isLast = idx === modelsToTry.length - 1;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -284,7 +401,7 @@ Answer clearly and accurately based on the provided notes context or diagram/han
             },
           ],
           generationConfig: {
-            temperature: 0.3,
+            temperature,
             maxOutputTokens: maxTokens,
           },
         }),
@@ -297,9 +414,8 @@ Answer clearly and accurately based on the provided notes context or diagram/han
         if (response.status === 429) {
           throw new Error(`GEMINI_RATE_LIMIT_429: ${errText}`);
         }
-        // If 503 (high demand) or 404 (model unavailable), try fallback model
-        if ((response.status === 503 || response.status === 404) && model !== fallbackModel) {
-          console.warn(`[AI-ENGINE] Gemini ${model} returned ${response.status}. Attempting resilient fallback to ${fallbackModel}...`);
+        if (!isLast) {
+          console.warn(`[AI-ENGINE] Gemini ${model} returned ${response.status}. Shifting to fallback model...`);
           lastError = new Error(`Gemini API Error (${response.status}): ${errText}`);
           continue;
         }
@@ -313,8 +429,7 @@ Answer clearly and accurately based on the provided notes context or diagram/han
     } catch (err) {
       clearTimeout(timeout);
       lastError = err;
-      if (model !== fallbackModel && !err.message.includes("GEMINI_RATE_LIMIT_429")) {
-        console.warn(`[AI-ENGINE] Retrying Gemini with fallback model ${fallbackModel} after error:`, err.message);
+      if (!isLast && !String(err.message || "").includes("GEMINI_RATE_LIMIT_429")) {
         continue;
       }
       throw err;
@@ -322,6 +437,113 @@ Answer clearly and accurately based on the provided notes context or diagram/han
   }
 
   throw lastError || new Error("All Gemini models failed");
+}
+
+/**
+ * ✍️ Ultra-Fast Dedicated Handwritten & Formula Vision OCR (~350ms - 650ms)
+ * Uses Groq LPU Vision (Llama 4 Scout) + Gemini Flash-Lite Vision failover with SHA-1 RAM caching
+ */
+async function extractHandwritingVision(imageBase64, imageMimeType = "image/jpeg") {
+  checkDailyReset();
+  const cleanB64 = String(imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+  if (!cleanB64) {
+    throw new Error("Image payload is required for handwriting extraction");
+  }
+
+  const imgSha = crypto.createHash("sha1").update(cleanB64).digest("hex").slice(0, 28);
+  const cacheKey = `ocr_hw_v2_${imgSha}`;
+  const cachedText = ramCache.get(cacheKey);
+  if (cachedText) {
+    return {
+      text: cachedText,
+      provider: "cache",
+      model: "RAM Vision OCR Cache (0ms)",
+      cached: true,
+      latencyMs: 0,
+    };
+  }
+
+  const startTime = Date.now();
+  const ocrPrompt = `You are a high-speed, 99.9% accurate Academic Handwriting & Mathematical OCR engine.
+Transcribe ALL handwritten and printed text, mathematical equations, fractions, integrals, subscripts, superscripts, matrices, chemical formulas, and diagram labels visible in this image.
+Strict Rules:
+- Accurately decode messy cursive, slanted handwriting, abbreviations, blue/black/pencil strokes, and engineering/science notation using context.
+- Write mathematical formulas cleanly (e.g. integral_0^infty e^(-st) sin(wt) dt or clean LaTeX/symbols).
+- Ignore notebook ruled lines, page shadows, or scanner watermarks.
+- Output ONLY the exact transcribed text/formula. Do NOT wrap in quotes, markdown code fences, or add commentary like "Here is the text:". If completely blank, output EMPTY.`;
+
+  const canUseGroq =
+    currentAiSettings.groqEnabled &&
+    currentAiSettings.groqUsedToday < currentAiSettings.groqLimit &&
+    Boolean(getApiKey("groq"));
+
+  const canUseGemini =
+    currentAiSettings.geminiEnabled &&
+    currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit &&
+    Boolean(getApiKey("gemini"));
+
+  let extracted = "";
+  let provider = "";
+  let model = "";
+
+  // Tier 1: Blazing-fast Groq LPU Vision (~0.4s)
+  if (canUseGroq) {
+    try {
+      const gRes = await queryGroqVision("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 6500,
+      });
+      extracted = (gRes.answer || "").trim();
+      provider = "groq_vision";
+      model = gRes.model;
+      currentAiSettings.groqUsedToday += 1;
+    } catch (gErr) {
+      console.warn("[HANDWRITING-OCR] Groq Vision notice, failing over to Gemini Vision:", gErr.message);
+    }
+  }
+
+  // Tier 2: Google Gemini Flash Vision Failover
+  if (!extracted && canUseGemini) {
+    try {
+      const gemText = await queryGemini("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 7500,
+      });
+      extracted = (gemText || "").trim();
+      provider = "gemini_vision";
+      model = currentAiSettings.geminiModel || "gemini-flash-lite-latest";
+      currentAiSettings.geminiUsedToday += 1;
+    } catch (gemErr) {
+      console.warn("[HANDWRITING-OCR] Gemini Vision notice:", gemErr.message);
+    }
+  }
+
+  if (!extracted || extracted === "EMPTY") {
+    throw new Error("Could not detect readable handwriting in selection");
+  }
+
+  // Strip accidental surrounding quotes or markdown fences
+  extracted = extracted
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/\n?```$/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+
+  if (extracted) {
+    ramCache.set(cacheKey, extracted, 14400); // Cache 4 hours
+  }
+
+  return {
+    text: extracted,
+    provider,
+    model,
+    cached: false,
+    latencyMs: Date.now() - startTime,
+  };
 }
 
 /**
@@ -334,10 +556,13 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     throw new Error("Question prompt or diagram image is required");
   }
 
-  // 1. Check In-Memory Cache (RAM cache prevents duplicate quota burns)
-  const effectiveKeyStr = cleanQuery || (options.imageBase64 ? `img_${String(options.imageBase64).slice(0, 60)}` : "");
+  // 1. Check In-Memory Cache (Always include image SHA-1 when imageBase64 is present so distinct crops never collide!)
+  const imgHashPart = options.imageBase64
+    ? `_img_${crypto.createHash("sha1").update(String(options.imageBase64).slice(0, 24000)).digest("hex").slice(0, 20)}`
+    : "";
+  const effectiveKeyStr = `${cleanQuery.toLowerCase()}${imgHashPart}`;
   const cacheKey = effectiveKeyStr
-    ? `ai_ans_${Buffer.from(effectiveKeyStr.toLowerCase()).toString("base64").slice(0, 40)}`
+    ? `ai_ans_${crypto.createHash("sha1").update(effectiveKeyStr).digest("hex").slice(0, 32)}`
     : null;
   const cachedAnswer = cacheKey ? ramCache.get(cacheKey) : null;
   const user = options.user || null;
@@ -398,11 +623,33 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   const imageMimeType = options.imageMimeType || "image/jpeg";
 
   // 🎯 SMART INTENT ROUTER:
-  // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Route directly to GEMINI FLASH!
+  // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Dual Multimodal Vision Waterfall!
+  // Tier 1A: Groq LPU Vision (Llama 4 Scout ~0.5s speed & 14,400 RPD quota) -> Tier 1B: Gemini Flash Vision!
   if (isImageOrDiagram) {
-    const canUseGemini = currentAiSettings.geminiEnabled && 
-                         currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
-                         Boolean(getApiKey("gemini"));
+    const canUseGroqVision =
+      currentAiSettings.groqEnabled &&
+      currentAiSettings.groqUsedToday < currentAiSettings.groqLimit &&
+      Boolean(getApiKey("groq"));
+
+    if (canUseGroqVision) {
+      try {
+        const gvRes = await queryGroqVision(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = gvRes.answer;
+        currentAiSettings.groqUsedToday += 1;
+        finalProvider = "groq_vision";
+        finalModel = gvRes.model;
+      } catch (gvErr) {
+        console.warn("[AI-ENGINE] ⚠️ Groq Vision notice:", gvErr.message, "-> Shifting to Gemini Vision...");
+        failoverOccurred = true;
+      }
+    }
+
+    const canUseGemini =
+      !finalAnswer &&
+      currentAiSettings.geminiEnabled &&
+      currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit &&
+      Boolean(getApiKey("gemini"));
+
     if (canUseGemini) {
       try {
         finalAnswer = await queryGemini(cleanQuery, context, imageBase64, imageMimeType, options);
@@ -410,8 +657,24 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalProvider = "gemini";
         finalModel = currentAiSettings.geminiModel;
       } catch (geminiErr) {
-        console.warn("[AI-ENGINE] ⚠️ Gemini image analysis notice:", geminiErr.message, "-> Falling back to Groq text OCR...");
+        console.warn("[AI-ENGINE] ⚠️ Gemini image analysis notice:", geminiErr.message);
         failoverOccurred = true;
+      }
+    }
+
+    // Tier 1C: If both vision models had an issue AND we already have pre-extracted query text, solve via Groq text LPU!
+    if (!finalAnswer && cleanQuery && cleanQuery.length > 5 && !cleanQuery.startsWith("Question / Diagram from Page")) {
+      const canUseGroqText =
+        currentAiSettings.groqEnabled &&
+        currentAiSettings.groqUsedToday < currentAiSettings.groqLimit &&
+        Boolean(getApiKey("groq"));
+      if (canUseGroqText) {
+        try {
+          finalAnswer = await queryGroq(cleanQuery, context, options);
+          currentAiSettings.groqUsedToday += 1;
+          finalProvider = "groq";
+          finalModel = currentAiSettings.groqModel;
+        } catch (_) {}
       }
     }
   }
@@ -1025,6 +1288,7 @@ loadAiSettings().catch(() => {});
 
 module.exports = {
   generateAcademicAnswer,
+  extractHandwritingVision,
   getAiTelemetry,
   updateAiSettings,
   resetDailyCounters,

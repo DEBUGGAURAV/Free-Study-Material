@@ -247,29 +247,69 @@ Formatting rules:
 }
 
 /**
- * 🌐 Vision Engine: Google Gemini (Multimodal Images & Handwritten OCR)
+ * ⚡ Vision Engine Tier 1: Groq LPU Multimodal Vision (Llama 4 Scout • ~600 tok/sec)
  */
-async function queryGeminiVision(env, query, context, imageBase64, imageMimeType) {
+async function queryGroqVisionEdge(env, promptText, imageBase64, imageMimeType = "image/jpeg", maxTokens = 650) {
+  const apiKey = (env.GROQ_API_KEY || "").trim();
+  if (!apiKey) throw new Error("GROQ_API_KEY_MISSING");
+  const cleanB64 = String(imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+
+  const models = ["meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
+  for (const model of models) {
+    try {
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: promptText },
+                { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+              ],
+            },
+          ],
+          temperature: 0.15,
+          max_tokens: maxTokens,
+        }),
+      });
+      if (!res.ok) continue;
+      const data = await res.json();
+      const answer = (data.choices?.[0]?.message?.content || "").trim();
+      if (answer) return { answer, model };
+    } catch (_) {}
+  }
+  throw new Error("GROQ_VISION_EXHAUSTED");
+}
+
+/**
+ * 🌐 Vision Engine Tier 2: Google Gemini (Multimodal Images & Handwritten OCR)
+ */
+async function queryGeminiVision(env, query, context, imageBase64, imageMimeType, customPrompt = null) {
   const apiKey = (env.GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("GEMINI_API_KEY_MISSING");
 
   const primaryModel = env.GEMINI_MODEL || "gemini-flash-lite-latest";
-  const fallbackModel = primaryModel === "gemini-3.5-flash-lite" ? "gemini-flash-lite-latest" : "gemini-3.5-flash-lite";
-  const modelsToTry = [primaryModel, fallbackModel];
+  const modelsToTry = Array.from(new Set([primaryModel, "gemini-2.5-flash-lite", "gemini-flash-latest"]));
 
-  const promptText = `You are a brilliant academic tutor for college engineering and science students.
-Answer clearly and authoritatively based on the provided notes context or handwritten diagram crop.
-Highlight formulas in LaTeX (e.g. \\(V = IR\\)).
+  const promptText = customPrompt || `You are a brilliant academic handwriting & diagram specialist for college engineering and science students.
+First write **📝 Extracted Text / Formula:** with the exact deciphered handwritten text/math in LaTeX (e.g. \\(V = IR\\)), then solve step-by-step.
 Add 1-line "💡 Exam Takeaway" at the end.
 
-${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${query || "Analyze and solve the problem/diagram shown in this study note."}`;
+${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${query || "Transcribe any handwritten notes/formulas and solve the problem/diagram shown."}`;
 
   const parts = [{ text: promptText }];
   if (imageBase64) {
-    const cleanB64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, "");
+    const cleanB64 = String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
     parts.push({
       inline_data: {
-        mime_type: imageMimeType || "image/jpeg",
+        mime_type: (imageMimeType && imageMimeType.startsWith("image/")) ? imageMimeType : "image/jpeg",
         data: cleanB64,
       },
     });
@@ -277,7 +317,8 @@ ${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${quer
 
   let lastError = null;
 
-  for (const model of modelsToTry) {
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const model = modelsToTry[i];
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const res = await fetch(url, {
@@ -285,14 +326,12 @@ ${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${quer
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 600 },
+          generationConfig: { temperature: 0.2, maxOutputTokens: 700 },
         }),
       });
 
       if (!res.ok) {
-        if ((res.status === 503 || res.status === 404) && model !== fallbackModel) {
-          continue; // Auto-shift to fallback model on 503 spikes
-        }
+        if (i < modelsToTry.length - 1) continue;
         throw new Error(`Gemini Error (${res.status})`);
       }
 
@@ -448,6 +487,49 @@ export default {
       }
     }
 
+    // Fast Edge Handwritten OCR endpoint: /api/ai/ocr-handwriting
+    if (url.pathname === "/api/ai/ocr-handwriting" && request.method === "POST") {
+      try {
+        const cloned = request.clone();
+        const body = await cloned.json();
+        if (body?.imageBase64) {
+          const ocrPrompt = `You are a precision Academic Handwriting & Mathematical OCR engine. Transcribe ALL handwritten and printed text, equations, fractions, integrals, subscripts, and symbols visible in this image accurately. Ignore ruled lines or shadows. Output ONLY the raw transcribed text/formula without commentary or quotes.`;
+          let ocrText = "";
+          let ocrProvider = "";
+          let ocrModel = "";
+          try {
+            const gv = await queryGroqVisionEdge(env, ocrPrompt, body.imageBase64, body.imageMimeType, 400);
+            ocrText = gv.answer;
+            ocrProvider = "groq_vision_edge";
+            ocrModel = gv.model;
+          } catch (_) {
+            try {
+              const gem = await queryGeminiVision(env, "", "", body.imageBase64, body.imageMimeType, ocrPrompt);
+              ocrText = gem.answer;
+              ocrProvider = "gemini_vision_edge";
+              ocrModel = gem.model;
+            } catch (_) {}
+          }
+          if (ocrText && ocrText !== "EMPTY") {
+            const h = new Headers({ "Content-Type": "application/json" });
+            applyCors(h, request);
+            return new Response(
+              JSON.stringify({
+                success: true,
+                text: ocrText.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim(),
+                provider: ocrProvider,
+                model: ocrModel,
+                latencyMs: Date.now() - startTime,
+              }),
+              { status: 200, headers: h }
+            );
+          }
+        }
+      } catch (_) {
+        // Fall through to Render origin if edge keys missing
+      }
+    }
+
     // Intercept AI endpoints: /api/ai/ask & /api/ai/circle-search
     const isAiEndpoint =
       (url.pathname === "/api/ai/ask" || url.pathname === "/api/ai/circle-search") &&
@@ -455,7 +537,8 @@ export default {
 
     if (isAiEndpoint) {
       try {
-        const body = await request.json();
+        const clonedAiReq = request.clone();
+        const body = await clonedAiReq.json();
         const { query, context, imageBase64, imageMimeType, noteId, subject } = body;
 
         const cleanQuery = (query || "").trim();
@@ -470,50 +553,52 @@ export default {
           });
         }
 
-        const queryHash = await computeSha256(cleanQuery || (imageBase64 ? imageBase64.slice(0, 80) : "empty"));
+        const queryHash = await computeSha256(
+          isImageOrDiagram
+            ? `${cleanQuery}__img__${String(imageBase64).slice(0, 20000)}`
+            : (cleanQuery || "empty")
+        );
 
         // ====================================================================
         // STEP 1: CHECK TURSO EDGE CACHE (Sub-5ms, 0 Tokens Burned!)
         // ====================================================================
-        if (!isImageOrDiagram) {
-          const cached = await checkTursoCache(env, queryHash);
-          if (cached && cached.answer) {
-            const cacheHeaders = new Headers({
-              "Content-Type": "application/json",
-              "X-AI-Engine": "turso_cache",
-              "X-Edge-Cache": "HIT",
-              "X-Edge-Location": edgeColo,
-              "X-Server-Hits": "0",
-              "X-Response-Time": `${Date.now() - startTime}ms`,
-            });
-            applyCors(cacheHeaders, request);
+        const cached = await checkTursoCache(env, queryHash);
+        if (cached && cached.answer) {
+          const cacheHeaders = new Headers({
+            "Content-Type": "application/json",
+            "X-AI-Engine": "turso_cache",
+            "X-Edge-Cache": "HIT",
+            "X-Edge-Location": edgeColo,
+            "X-Server-Hits": "0",
+            "X-Response-Time": `${Date.now() - startTime}ms`,
+          });
+          applyCors(cacheHeaders, request);
 
-            ctx.waitUntil(
-              dispatchTelegramAiNotification(
-                env,
-                cleanQuery,
-                "turso_cache",
-                "Turso Edge Cache (0ms)",
-                true,
-                Date.now() - startTime,
-                url.pathname.includes("circle")
-              )
-            );
+          ctx.waitUntil(
+            dispatchTelegramAiNotification(
+              env,
+              cleanQuery,
+              "turso_cache",
+              "Turso Edge Cache (0ms)",
+              true,
+              Date.now() - startTime,
+              url.pathname.includes("circle")
+            )
+          );
 
-            return new Response(
-              JSON.stringify({
-                success: true,
-                answer: cached.answer,
-                provider: "turso_cache",
-                model: "Turso Edge Cache (0ms)",
-                cached: true,
-                cacheSource: "Turso Edge Cache (0ms • 0 Tokens)",
-                edgeLocation: edgeColo,
-                latencyMs: Date.now() - startTime,
-              }),
-              { status: 200, headers: cacheHeaders }
-            );
-          }
+          return new Response(
+            JSON.stringify({
+              success: true,
+              answer: cached.answer,
+              provider: "turso_cache",
+              model: "Turso Edge Cache (0ms)",
+              cached: true,
+              cacheSource: "Turso Edge Cache (0ms • 0 Tokens)",
+              edgeLocation: edgeColo,
+              latencyMs: Date.now() - startTime,
+            }),
+            { status: 200, headers: cacheHeaders }
+          );
         }
 
         // ====================================================================
@@ -524,13 +609,21 @@ export default {
         let model = "";
 
         if (isImageOrDiagram) {
-          // Branch A: Image / Diagram / Handwritten Note Crop -> Google Gemini Vision
+          // Branch A: Image / Diagram / Handwritten Note Crop -> Groq LPU Vision (~0.45s) -> Gemini Vision
+          const visionSolvePrompt = `You are an elite Academic Handwriting & Formula Solver. First write **📝 Extracted Text / Formula:** with the exact deciphered handwritten text/math in LaTeX \\( ... \\), then provide a step-by-step academic solution and 1-line "💡 Exam Takeaway".${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${cleanQuery ? `\n[Question]:\n${cleanQuery}` : ""}`;
           try {
-            const vRes = await queryGeminiVision(env, cleanQuery, context, imageBase64, imageMimeType);
-            answer = vRes.answer;
-            provider = "gemini_vision";
-            model = vRes.model;
-          } catch (_) {}
+            const gvRes = await queryGroqVisionEdge(env, visionSolvePrompt, imageBase64, imageMimeType, 750);
+            answer = gvRes.answer;
+            provider = "groq_vision";
+            model = gvRes.model;
+          } catch (_) {
+            try {
+              const vRes = await queryGeminiVision(env, cleanQuery, context, imageBase64, imageMimeType);
+              answer = vRes.answer;
+              provider = "gemini_vision";
+              model = vRes.model;
+            } catch (_) {}
+          }
         } else {
           // Branch B: Normal Text / Code Query
           // Tier 1: Groq LPU (~800 tok/sec, 0.3s sub-second latency)
@@ -558,12 +651,9 @@ export default {
           }
         }
 
-        // Tier 4: Offline Resilient Guard if all external APIs exhausted
+        // Tier 4: If Edge Worker lacks keys or all edge APIs missed, delegate seamlessly to Render Origin!
         if (!answer) {
-          const hRes = queryHeuristicGuard(cleanQuery, context);
-          answer = hRes.answer;
-          provider = "heuristic_guard";
-          model = hRes.model;
+          throw new Error("DELEGATE_TO_ORIGIN");
         }
 
         // ====================================================================

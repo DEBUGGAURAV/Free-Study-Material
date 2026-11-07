@@ -1379,8 +1379,11 @@ export const api = {
     request("/ai/admin/reset", { method: "POST" }),
   testAiConnection: (provider) =>
     request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
-  askAiQuestion: (query, context = "", noteId = null, subject = "") =>
-    request("/ai/ask", { method: "POST", body: JSON.stringify({ query, context, noteId, subject }) }),
+  askAiQuestion: (query, context = "", noteId = null, subject = "", extra = {}) =>
+    request("/ai/ask", {
+      method: "POST",
+      body: JSON.stringify({ query, context, noteId, subject, ...(extra || {}) }),
+    }),
   getNoteFlashcards: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>
     request("/ai/flashcards", { method: "POST", body: JSON.stringify({ noteId, title, context, subject, forceFresh }) }),
   getNoteSummary: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>

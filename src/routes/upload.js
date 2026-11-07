@@ -7,7 +7,12 @@ const crypto = require("crypto");
 const { db } = require("../firebase");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
 const { sameOriginGuard } = require("../middleware/csrfGuard");
-const { verifyFileMagicBytes, sanitizeAndScanPdf, inspectZipBombSafety } = require("../utils/fileSecurityInspector");
+const {
+  verifyFileMagicBytes,
+  sanitizeAndScanPdf,
+  inspectZipBombSafety,
+  DIRECT_MTPROTO_SIZE_BYTES,
+} = require("../utils/fileSecurityInspector");
 const { verifyTurnstileToken } = require("../utils/turnstileGuard");
 const { uploadLimiter } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
@@ -120,9 +125,16 @@ router.post(
 
       // 🛡️ Category 2 Feature 2: Malicious PDF Script Stripper
       if (ext === ".pdf") {
-        const pdfScan = await sanitizeAndScanPdf(req.file.path);
-        if (pdfScan.strippedCount > 0) {
-          console.log(`[UPLOAD-SECURITY] Neutralized ${pdfScan.strippedCount} dangerous script/action tag(s) from "${req.file.originalname}".`);
+        const isOver100MB = req.file.size >= (DIRECT_MTPROTO_SIZE_BYTES || 100 * 1024 * 1024);
+        if (isOver100MB) {
+          console.log(
+            `[UPLOAD] 🚀 File "${req.file.originalname}" is ${(req.file.size / (1024 * 1024)).toFixed(1)}MB (>= 100MB). Bypassing heavy in-memory scan, routing direct to Telegram via MTProto.`
+          );
+        } else {
+          const pdfScan = await sanitizeAndScanPdf(req.file.path);
+          if (pdfScan.strippedCount > 0) {
+            console.log(`[UPLOAD-SECURITY] Neutralized ${pdfScan.strippedCount} dangerous script/action tag(s) from "${req.file.originalname}".`);
+          }
         }
       }
 
@@ -200,10 +212,15 @@ router.post(
           }
         } catch (_) {}
 
-        // 🧠 Smart Caching: Under 50MB cached in RAM for 0ms latency; >50MB bypasses RAM cache to protect 512MB limit
+        const isOver100MB = file.size >= (DIRECT_MTPROTO_SIZE_BYTES || 100 * 1024 * 1024);
+        const isLargeFile = file.size > 50 * 1024 * 1024;
+
+        // 🧠 Smart Caching: Under 50MB cached in RAM for 0ms latency; >=50MB bypasses RAM cache to protect 512MB limit
         if (file.size <= 50 * 1024 * 1024) {
           ramCache.set(`note_${noteId}`, noteData, 1800);
           console.log(`[UPLOAD] 🧠 Note ${noteId} (${formatRealSize(file.size)}) cached in RAM Cache (Under 50MB Tier).`);
+        } else if (isOver100MB) {
+          console.log(`[UPLOAD] 🚀 Note ${noteId} (${formatRealSize(file.size)}) >= 100MB: Bypassing RAM cache completely, streaming direct async via MTProto to Telegram.`);
         } else {
           console.log(`[UPLOAD] ⚡ Note ${noteId} (${formatRealSize(file.size)}) > 50MB: Bypassing RAM Cache, streaming direct async to Telegram.`);
         }
@@ -243,12 +260,15 @@ router.post(
             originalName: file.originalname,
             filePath: file.path,
           },
-          method: file.size > 50 * 1024 * 1024 ? "Direct Async MTProto (>50MB)" : "Student Web Portal Upload",
+          method: isOver100MB
+            ? "Direct MTProto High-Speed Stream (>=100MB Zero-RAM)"
+            : (isLargeFile ? "Direct Async MTProto (>50MB)" : "Student Web Portal Upload"),
         }).catch((err) => console.warn("[UPLOAD-TELEGRAM-NOTICE] Dispatch error:", err.message));
       } else {
         noteId = `note-${Date.now()}`;
       }
 
+      const isOver100MB = file.size >= (DIRECT_MTPROTO_SIZE_BYTES || 100 * 1024 * 1024);
       const isLargeFile = file.size > 50 * 1024 * 1024; // Files >50MB bypass memory cache and stream directly via async MTProto
 
       // Initialize Realtime Pipeline Tracking
@@ -266,7 +286,7 @@ router.post(
         uploaderEmail: req.user?.email || "student@freestudymaterial.com",
         uploaderName: req.user?.name || "Student Contributor",
         uploaderIp: req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1",
-        clientSpeed: req.body.clientSpeed || (isLargeFile ? "Async MTProto Direct Stream (>50MB)" : "High Speed Direct Transfer"),
+        clientSpeed: req.body.clientSpeed || (isOver100MB ? "Direct MTProto Stream (>=100MB Zero-RAM)" : (isLargeFile ? "Async MTProto Direct Stream (>50MB)" : "High Speed Direct Transfer")),
         clientElapsed: req.body.clientElapsed || "1.2s",
       });
 
@@ -277,6 +297,8 @@ router.post(
         originalName: file.originalname,
         mimeType: file.mimetype,
         isLargeFile,
+        isDirectMtproto: isOver100MB,
+        fileSize: file.size,
         clientCompressed: req.body?.clientCompressed === "true",
         meta: {
           title: noteTitle,
@@ -284,6 +306,7 @@ router.post(
           branch: finalBranch,
           course: finalCourse,
           year: noteYear,
+          isDirectMtproto: isOver100MB,
           clientCompressed: req.body?.clientCompressed === "true",
         },
       });

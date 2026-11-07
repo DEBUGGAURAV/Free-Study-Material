@@ -13,6 +13,28 @@ const { shouldYieldForWebTraffic } = require("../utils/selfHealingWatchdog");
 const jobStatusMap = new Map();
 const pipelineTrackerMap = new Map();
 const activeUploadFiles = new Set();
+const uploadWorkerQueue = [];
+let activeUploadJobCount = 0;
+const MAX_CONCURRENT_UPLOAD_JOBS = 1; // Strict single-worker concurrency prevents parallel worker OOM in 512MB RAM
+
+// Periodic Pruning: Auto-clean completed upload records older than 20 minutes to prevent memory leaks (Point 9)
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, stat] of jobStatusMap.entries()) {
+    if (stat.timestamp && now - stat.timestamp > 20 * 60 * 1000) {
+      jobStatusMap.delete(id);
+    }
+  }
+  if (pipelineTrackerMap.size > 80) {
+    const sorted = Array.from(pipelineTrackerMap.entries()).sort(
+      (a, b) => new Date(a[1].updatedAt || 0).getTime() - new Date(b[1].updatedAt || 0).getTime()
+    );
+    while (pipelineTrackerMap.size > 50) {
+      const oldest = sorted.shift();
+      if (oldest) pipelineTrackerMap.delete(oldest[0]);
+    }
+  }
+}, 10 * 60 * 1000);
 
 /**
  * 🛡️ Active Upload Immunity Guard:
@@ -185,7 +207,7 @@ async function getPipelineList() {
 
 
 /**
- * Enqueues an upload job and processes it asynchronously
+ * Enqueues an upload job and processes it asynchronously via concurrency gate
  * @param {object} task 
  */
 function enqueueUpload(task) {
@@ -196,27 +218,46 @@ function enqueueUpload(task) {
     activeUploadFiles.add(path.resolve(tempFilePath));
   }
 
+  const isQueued = activeUploadJobCount >= MAX_CONCURRENT_UPLOAD_JOBS;
   jobStatusMap.set(noteId, {
     noteId,
-    status: "processing",
-    stage: "Calculating SHA-256 Checksum",
-    progress: 15,
+    status: isQueued ? "queued" : "processing",
+    stage: isQueued ? "Queued for Cloud Processing" : "Calculating SHA-256 Checksum",
+    progress: isQueued ? 10 : 15,
     timestamp: Date.now(),
   });
 
-  // Run asynchronously without blocking HTTP response
-  setImmediate(async () => {
-    try {
-      console.log(`[QUEUE] Starting async job for Note: ${noteId} (${originalName})`);
-      const originalSize = fs.existsSync(tempFilePath) ? fs.statSync(tempFilePath).size : 0;
+  uploadWorkerQueue.push(task);
+  setImmediate(dispatchNextUploadJob);
+}
 
-      // Stage 1: SHA-256 Deduplication check
-      jobStatusMap.set(noteId, {
-        noteId,
-        status: "processing",
-        stage: "Checking SHA-256 Deduplication",
-        progress: 30,
-      });
+function dispatchNextUploadJob() {
+  if (activeUploadJobCount >= MAX_CONCURRENT_UPLOAD_JOBS) return;
+  if (uploadWorkerQueue.length === 0) return;
+
+  const task = uploadWorkerQueue.shift();
+  activeUploadJobCount++;
+
+  runUploadTask(task).finally(() => {
+    activeUploadJobCount = Math.max(0, activeUploadJobCount - 1);
+    setImmediate(dispatchNextUploadJob);
+  });
+}
+
+async function runUploadTask(task) {
+  const { noteId, tempFilePath, originalName, mimeType, meta } = task;
+  try {
+    console.log(`[QUEUE] Starting async job for Note: ${noteId} (${originalName})`);
+    const originalSize = fs.existsSync(tempFilePath) ? fs.statSync(tempFilePath).size : 0;
+
+    // Stage 1: SHA-256 Deduplication check
+    jobStatusMap.set(noteId, {
+      noteId,
+      status: "processing",
+      stage: "Checking SHA-256 Deduplication",
+      progress: 30,
+      timestamp: Date.now(),
+    });
 
       const fileHash = await calculateFileHash(tempFilePath);
       console.log(`[QUEUE] SHA-256 Hash: ${fileHash}`);
@@ -293,6 +334,10 @@ function enqueueUpload(task) {
         });
 
         invalidateAllCache();
+        setTimeout(() => {
+          jobStatusMap.delete(noteId);
+          pipelineTrackerMap.delete(noteId);
+        }, 15 * 60 * 1000);
         return;
       }
 
@@ -332,11 +377,22 @@ function enqueueUpload(task) {
           currentStage: "Syncing to Cloud Storage (Primary Vault)",
         });
       } else {
+        const isOver100MB = originalSize >= 100 * 1024 * 1024;
         const isLarge = originalSize > 50 * 1024 * 1024;
-        updatePipelineStage(noteId, 3, "completed", isLarge ? "Large File (>50MB): Direct Async Cloud Transfer (Zero RAM Cache)" : "Stream verified • Direct binary pass-through", {
-          progress: 55,
-          currentStage: isLarge ? "Direct Async Cloud Transfer (>50MB)" : "Syncing to Cloud Storage (Primary Vault)",
-        });
+        updatePipelineStage(
+          noteId,
+          3,
+          "completed",
+          isOver100MB
+            ? "Large File (>=100MB): Direct MTProto Stream to Telegram (0% Server RAM/Disk Cache)"
+            : (isLarge ? "Large File (>50MB): Direct Async Cloud Transfer (Zero RAM Cache)" : "Stream verified • Direct binary pass-through"),
+          {
+            progress: 55,
+            currentStage: isOver100MB
+              ? "Direct MTProto Telegram Stream (>=100MB)"
+              : (isLarge ? "Direct Async Cloud Transfer (>50MB)" : "Syncing to Cloud Storage (Primary Vault)"),
+          }
+        );
       }
 
       // Stage 3: WebP Thumbnail Generation (Sharp)
@@ -369,10 +425,19 @@ function enqueueUpload(task) {
         progress: 85,
       });
 
-      updatePipelineStage(noteId, 5, "processing", "Dispatching via High-Speed Pipeline to Cloud Storage...", {
-        progress: 75,
-        currentStage: "Cloud Storage Push",
-      });
+      const isOver100MB = originalSize >= 100 * 1024 * 1024;
+      updatePipelineStage(
+        noteId,
+        5,
+        "processing",
+        isOver100MB
+          ? "Streaming direct to Telegram via MTProto (>=100MB Zero-RAM)..."
+          : "Dispatching via High-Speed Pipeline to Cloud Storage...",
+        {
+          progress: 75,
+          currentStage: isOver100MB ? "Telegram MTProto Direct Stream" : "Cloud Storage Push",
+        }
+      );
 
       const caption = `Title: ${meta.title || originalName}\nSubject: ${meta.subject || "General"}\nCourse: ${meta.course || "All"}\nBranch: ${meta.branch || "General"}\nYear: ${meta.year || "All"}`;
       const uploadResult = await uploadToStorageChannel(tempFilePath, caption, originalName, (mtMetrics) => {
@@ -450,27 +515,32 @@ function enqueueUpload(task) {
       }
 
       // 💽 Pre-seed Server NVMe SSD Disk Cache so newly uploaded note streams instantly (Tier 3)
-      try {
-        const cdnCacheDir = path.join(process.cwd(), "cache", "cdn");
-        if (!fs.existsSync(cdnCacheDir)) fs.mkdirSync(cdnCacheDir, { recursive: true });
-        const targetBin = path.join(cdnCacheDir, `${noteId}.bin`);
-        const targetMeta = path.join(cdnCacheDir, `${noteId}.meta.json`);
-        if (fs.existsSync(tempFilePath)) {
-          await fs.promises.copyFile(tempFilePath, targetBin);
-          await fs.promises.writeFile(targetMeta, JSON.stringify({
-            id: noteId,
-            title: meta?.title || originalName || noteId,
-            mimeType: mimeType || "application/pdf",
-            totalSize: compressedSize || originalSize,
-            cachedAt: new Date().toISOString(),
-          }), "utf8");
-          console.log(`[QUEUE] 💽 Pre-seeded newly uploaded note ${noteId} directly to Server SSD Disk Cache!`);
-          if (db) {
-            db.collection("notes").doc(noteId).update({ isCdnCached: true }).catch(() => {});
+      // Strictly for files <= 50MB: Large files (>50MB or >=100MB) bypass disk copy to prevent ENOSPC disk exhaustion
+      if (originalSize <= 50 * 1024 * 1024) {
+        try {
+          const cdnCacheDir = path.join(process.cwd(), "cache", "cdn");
+          if (!fs.existsSync(cdnCacheDir)) fs.mkdirSync(cdnCacheDir, { recursive: true });
+          const targetBin = path.join(cdnCacheDir, `${noteId}.bin`);
+          const targetMeta = path.join(cdnCacheDir, `${noteId}.meta.json`);
+          if (fs.existsSync(tempFilePath)) {
+            await fs.promises.copyFile(tempFilePath, targetBin);
+            await fs.promises.writeFile(targetMeta, JSON.stringify({
+              id: noteId,
+              title: meta?.title || originalName || noteId,
+              mimeType: mimeType || "application/pdf",
+              totalSize: compressedSize || originalSize,
+              cachedAt: new Date().toISOString(),
+            }), "utf8");
+            console.log(`[QUEUE] 💽 Pre-seeded newly uploaded note ${noteId} directly to Server SSD Disk Cache!`);
+            if (db) {
+              db.collection("notes").doc(noteId).update({ isCdnCached: true }).catch(() => {});
+            }
           }
+        } catch (ssdErr) {
+          console.warn("[QUEUE] Pre-seed Server SSD disk cache notice:", ssdErr.message);
         }
-      } catch (ssdErr) {
-        console.warn("[QUEUE] Pre-seed Server SSD disk cache notice:", ssdErr.message);
+      } else {
+        console.log(`[QUEUE] ⚡ Note ${noteId} (${formatRealSize(originalSize)}) > 50MB: Bypassing local disk pre-seed to conserve server storage quota. Stored 100% in Telegram Vault.`);
       }
 
       // Clean up server temp file (100% Zero Persistent Server Disk Usage)
@@ -495,6 +565,10 @@ function enqueueUpload(task) {
 
       invalidateAllCache();
       console.log(`[QUEUE] Job finished successfully for Note: ${noteId}`);
+      setTimeout(() => {
+        jobStatusMap.delete(noteId);
+        pipelineTrackerMap.delete(noteId);
+      }, 15 * 60 * 1000);
     } catch (err) {
       console.error(`[QUEUE] Error processing job for Note ${noteId}:`, err);
       
@@ -523,12 +597,16 @@ function enqueueUpload(task) {
       if (fs.existsSync(tempFilePath)) {
         await fs.promises.unlink(tempFilePath).catch(() => {});
       }
+
+      setTimeout(() => {
+        jobStatusMap.delete(noteId);
+        pipelineTrackerMap.delete(noteId);
+      }, 15 * 60 * 1000);
     } finally {
       if (tempFilePath) {
         activeUploadFiles.delete(path.resolve(tempFilePath));
       }
     }
-  });
 }
 
 function getJobStatus(noteId) {

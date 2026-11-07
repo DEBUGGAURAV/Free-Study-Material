@@ -1072,11 +1072,14 @@ async function uploadToStorageChannel(filePath, caption = "", fileName = null, o
     });
   };
 
-  // GramJS uploadFile with 16 parallel worker threads and RAM custom buffer
+  const isDirectLarge = stats.size >= 100 * 1024 * 1024;
+
+  // GramJS uploadFile with streaming CustomFile from disk.
+  // maxBufferSize set to 4MB forces GramJS to stream via filePath instead of buffering 100MB+ in V8 heap!
   const fileResult = await c.uploadFile({
     file: customFile,
-    workers: 16,
-    maxBufferSize: 120 * 1024 * 1024,
+    workers: isDirectLarge ? 4 : 8,
+    maxBufferSize: 4 * 1024 * 1024,
     fileSize: stats.size,
     progressCallback: handleProgress,
     onProgress: handleProgress,
@@ -1246,6 +1249,15 @@ async function getDocumentBufferFromChannel(messageId) {
   const docMime = (doc.mimeType || "").toLowerCase();
   const isPdf = !docMime || docMime === "application/octet-stream" || docMime.includes("pdf");
   const finalMime = isPdf ? "application/pdf" : (doc.mimeType || "application/pdf");
+
+  // 🛡️ OOM Guard: Never assemble multi-megabyte buffers (>45MB) in RAM to prevent container SIGKILL!
+  const MAX_SAFE_BUFFER_SIZE = 45 * 1024 * 1024;
+  if (totalSize > MAX_SAFE_BUFFER_SIZE) {
+    const err = new Error(`Document size (${(totalSize / (1024 * 1024)).toFixed(1)}MB) exceeds 45MB safe memory buffer ceiling. Direct chunked streaming must be used.`);
+    err.code = "FILE_TOO_LARGE_FOR_RAM_BUFFER";
+    err.fileSize = totalSize;
+    throw err;
+  }
 
   // Strategy 1: GramJS downloadMedia (Fast parallel worker pipeline with 12s timeout)
   const downloadPromise = (async () => {

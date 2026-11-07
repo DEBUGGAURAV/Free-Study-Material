@@ -1,3 +1,6 @@
+// 🧭 Safari / WebKit Polyfills (Promise.withResolvers & URL.parse for PDF.js v6 + Circle Search)
+import "./utils/safariCompat";
+
 // 🛡️ Initialize Client-Side Anti-Tamper & Zero-Trust Defense Engine FIRST before other modules
 import { initAntiTamperDefense } from "./utils/antiTamperDefense";
 initAntiTamperDefense();

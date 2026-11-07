@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import {
   X,
   Moon,
@@ -60,14 +60,20 @@ import {
   extractTextFromPageBounds,
   cropCanvasRegion,
   extractTextFromCroppedCanvas,
+  PENCIL_CURSOR_STYLE,
+  strokePointsToSvgPath,
+  computeFreehandBounds,
+  renderFreehandStrokesToCanvas,
+  isCanvasBlankOrUniform,
 } from "../utils/circleSearchEngine";
+import { useSafariNonPassiveTouchLock, copyTextSafariSafe } from "../utils/safariCompat";
 const CampusAirdropModal = React.lazy(() => import("./CampusAirdropModal"));
 
-// Setup PDF.js worker
+// Setup PDF.js worker (using legacy/build so Safari WebKit workers include Map.getOrInsertComputed / Promise.withResolvers / URL.parse polyfills)
 if (typeof window !== "undefined") {
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     pdfWorker ||
-    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || "6.4.299"}/build/pdf.worker.min.mjs`;
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || "6.4.299"}/legacy/build/pdf.worker.min.mjs`;
 }
 
 /**
@@ -90,10 +96,135 @@ function ContinuousPage({
   const [rendered, setRendered] = useState(false);
   const [pageDimensions, setPageDimensions] = useState(null);
 
+  const continuousOverlayRef = useRef(null);
   const isContinuousDraggingRef = useRef(false);
-  const [continuousCircleStart, setContinuousCircleStart] = useState(null);
-  const [continuousCircleCurrent, setContinuousCircleCurrent] = useState(null);
+  const continuousAutoTimerRef = useRef(null);
+  const continuousStrokesRef = useRef([]);
+  const [continuousStrokes, setContinuousStrokes] = useState([]);
+  const [continuousCurrentStroke, setContinuousCurrentStroke] = useState(null);
   const [activeCirclePill, setActiveCirclePill] = useState(null);
+
+  useSafariNonPassiveTouchLock(
+    continuousOverlayRef,
+    Boolean(isCircleSearchMode && rendered),
+    "[data-circle-pill='true'], button"
+  );
+
+  useEffect(() => {
+    if (!isCircleSearchMode) {
+      if (continuousAutoTimerRef.current) clearTimeout(continuousAutoTimerRef.current);
+      continuousStrokesRef.current = [];
+      setContinuousStrokes([]);
+      setContinuousCurrentStroke(null);
+    }
+  }, [isCircleSearchMode]);
+
+  const finishContinuousStroke = (e) => {
+    if (!isContinuousDraggingRef.current) return;
+    isContinuousDraggingRef.current = false;
+    try {
+      if (e?.currentTarget && e?.pointerId !== undefined) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch (_) {}
+
+    setContinuousCurrentStroke((finishedStroke) => {
+      if (!finishedStroke || finishedStroke.length === 0) return null;
+      const nextStrokes = [...continuousStrokesRef.current, finishedStroke];
+      continuousStrokesRef.current = nextStrokes;
+      setContinuousStrokes(nextStrokes);
+
+      const rectW = pageDimensions?.width || containerRef.current?.offsetWidth || 800;
+      const rectH = pageDimensions?.height || containerRef.current?.offsetHeight || 1100;
+      const geom = computeFreehandBounds(nextStrokes, rectW, rectH);
+      if (geom && canvasRef.current) {
+        const selBounds = { x: geom.x, y: geom.y, width: geom.width, height: geom.height };
+        setActiveCirclePill({
+          bounds: selBounds,
+          extracting: false,
+          extractedText: "",
+          cropDataUrl: null,
+          copied: false,
+        });
+
+        // Snappy 450ms multi-stroke grace timer -> then auto-deliver result!
+        if (continuousAutoTimerRef.current) clearTimeout(continuousAutoTimerRef.current);
+        continuousAutoTimerRef.current = setTimeout(async () => {
+          try {
+            const finalStrokes = continuousStrokesRef.current;
+            const finalGeom = computeFreehandBounds(finalStrokes, rectW, rectH) || geom;
+            const targetCanvas = canvasRef.current;
+            if (!targetCanvas) return;
+
+            const contWidth = pageDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+            const dprRatio = targetCanvas.width / (contWidth || 1);
+            const rawBounds = {
+              x: Math.round(finalGeom.x * dprRatio),
+              y: Math.round(finalGeom.y * dprRatio),
+              width: Math.round(finalGeom.width * dprRatio),
+              height: Math.round(finalGeom.height * dprRatio),
+            };
+
+            const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+            let text = "";
+
+            if (pdfDoc) {
+              try {
+                const pageObj = await pdfDoc.getPage(pageNum);
+                const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+                const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+                if (textRes?.text && textRes.text.length >= 2) {
+                  text = textRes.text;
+                }
+              } catch (_) {}
+            }
+
+            if (!text && cropRes?.canvas) {
+              try {
+                const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas, undefined, {
+                  timeoutMs: 2200,
+                });
+                if (ocrRes?.text) text = ocrRes.text;
+              } catch (_) {}
+            }
+
+            let finalImage = cropRes?.dataUrl || null;
+            let isPureSketch = false;
+            if (!text) {
+              const blankUnderlying = isCanvasBlankOrUniform(cropRes?.canvas);
+              if (blankUnderlying || !finalImage) {
+                const drawn = renderFreehandStrokesToCanvas(finalStrokes);
+                if (drawn?.dataUrl) {
+                  finalImage = drawn.dataUrl;
+                  isPureSketch = true;
+                }
+              }
+            }
+
+            continuousStrokesRef.current = [];
+            setContinuousStrokes([]);
+            setActiveCirclePill(null);
+
+            if (onCircleCompleted) {
+              onCircleCompleted({
+                canvas: targetCanvas,
+                bounds: { x: finalGeom.x, y: finalGeom.y, width: finalGeom.width, height: finalGeom.height },
+                pageNum,
+                containerDimensions: pageDimensions,
+                preExtractedText: text || null,
+                preCroppedImage: finalImage,
+                isPureSketch,
+              });
+            }
+          } catch (err) {
+            console.warn("[ContinuousPage] Pencil extraction error:", err);
+            setActiveCirclePill(null);
+          }
+        }, 450);
+      }
+      return null;
+    });
+  };
 
   const renderedRef = useRef(false);
   const renderingRef = useRef(false);
@@ -253,141 +384,67 @@ function ContinuousPage({
         {pageNum} / {pdfDoc?.numPages || ""}
       </div>
 
-      {/* ⭕ Continuous Page Circle to Search Overlay */}
+      {/* ✏️ Continuous Page Freehand Pencil-to-Search Overlay */}
       {isCircleSearchMode && rendered && (
         <div
+          ref={continuousOverlayRef}
           onPointerDown={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (continuousAutoTimerRef.current) {
+              clearTimeout(continuousAutoTimerRef.current);
+              continuousAutoTimerRef.current = null;
+            }
             try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
             const rect = e.currentTarget.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            setContinuousCircleStart({ x, y });
-            setContinuousCircleCurrent({ x, y });
+            const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+            setActiveCirclePill(null);
+            setContinuousCurrentStroke([{ x, y }]);
             isContinuousDraggingRef.current = true;
           }}
           onPointerMove={(e) => {
-            if (!isContinuousDraggingRef.current || !continuousCircleStart) return;
+            if (!isContinuousDraggingRef.current) return;
             e.preventDefault();
             e.stopPropagation();
             const rect = e.currentTarget.getBoundingClientRect();
             const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
             const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-            setContinuousCircleCurrent({ x, y });
+            setContinuousCurrentStroke((prev) => {
+              if (!prev || prev.length === 0) return [{ x, y }];
+              const last = prev[prev.length - 1];
+              if (Math.hypot(x - last.x, y - last.y) < 2) return prev;
+              return [...prev, { x, y }];
+            });
           }}
-          onPointerUp={(e) => {
-            if (!isContinuousDraggingRef.current || !continuousCircleStart || !continuousCircleCurrent) {
-              isContinuousDraggingRef.current = false;
-              return;
-            }
-            isContinuousDraggingRef.current = false;
-            try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
-            const x1 = Math.min(continuousCircleStart.x, continuousCircleCurrent.x);
-            const y1 = Math.min(continuousCircleStart.y, continuousCircleCurrent.y);
-            const x2 = Math.max(continuousCircleStart.x, continuousCircleCurrent.x);
-            const y2 = Math.max(continuousCircleStart.y, continuousCircleCurrent.y);
-            const w = x2 - x1;
-            const h = y2 - y1;
-            setContinuousCircleStart(null);
-            setContinuousCircleCurrent(null);
-
-            if (w >= 15 && h >= 15 && canvasRef.current) {
-              const selBounds = { x: x1, y: y1, width: w, height: h };
-              setActiveCirclePill({
-                bounds: selBounds,
-                extracting: true,
-                extractedText: "",
-                cropDataUrl: null,
-                copied: false,
-              });
-
-              // Asynchronously extract text via text layer and WASM OCR in client
-              (async () => {
-                try {
-                  const targetCanvas = canvasRef.current;
-                  if (!targetCanvas) return;
-                  const contWidth = pageDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
-                  const dprRatio = targetCanvas.width / (contWidth || 1);
-                  const rawBounds = {
-                    x: Math.round(x1 * dprRatio),
-                    y: Math.round(y1 * dprRatio),
-                    width: Math.round(w * dprRatio),
-                    height: Math.round(h * dprRatio),
-                  };
-
-                  const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
-                  let text = "";
-
-                  if (pdfDoc) {
-                    try {
-                      const pageObj = await pdfDoc.getPage(pageNum);
-                      const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
-                      const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
-                      if (textRes?.text && textRes.text.length >= 3) {
-                        text = textRes.text;
-                      }
-                    } catch (_) {}
-                  }
-
-                  if (!text && cropRes?.canvas) {
-                    try {
-                      const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
-                      if (ocrRes?.text) text = ocrRes.text;
-                    } catch (_) {}
-                  }
-
-                  if (!text) {
-                    text = `Question / Formula from Page ${pageNum}`;
-                  }
-
-                  setActiveCirclePill((prev) => (prev ? {
-                    ...prev,
-                    extracting: false,
-                    extractedText: text,
-                    cropDataUrl: cropRes?.dataUrl || null,
-                  } : null));
-                } catch (err) {
-                  console.warn("[ContinuousPage] Circle extraction error:", err);
-                  setActiveCirclePill((prev) => (prev ? { ...prev, extracting: false } : null));
-                }
-              })();
-            }
-          }}
-          onPointerCancel={() => {
-            isContinuousDraggingRef.current = false;
-            setContinuousCircleStart(null);
-            setContinuousCircleCurrent(null);
-          }}
+          onPointerUp={finishContinuousStroke}
+          onPointerCancel={finishContinuousStroke}
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             width: "100%",
             height: "100%",
-            cursor: "crosshair",
+            cursor: PENCIL_CURSOR_STYLE,
             zIndex: 45,
             userSelect: "none",
+            WebkitUserSelect: "none",
+            WebkitTouchCallout: "none",
             touchAction: "none",
-            background: "rgba(56, 189, 248, 0.04)",
+            background: "rgba(56, 189, 248, 0.03)",
           }}
         >
-          {continuousCircleStart && continuousCircleCurrent && (
-            <div
-              style={{
-                position: "absolute",
-                left: `${Math.min(continuousCircleStart.x, continuousCircleCurrent.x)}px`,
-                top: `${Math.min(continuousCircleStart.y, continuousCircleCurrent.y)}px`,
-                width: `${Math.abs(continuousCircleCurrent.x - continuousCircleStart.x)}px`,
-                height: `${Math.abs(continuousCircleCurrent.y - continuousCircleStart.y)}px`,
-                border: "3px solid #38bdf8",
-                borderRadius: "50%",
-                background: "radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
-                boxShadow: "0 0 24px rgba(56, 189, 248, 0.9), inset 0 0 16px rgba(99, 102, 241, 0.5)",
-                pointerEvents: "none",
-              }}
-            />
-          )}
+          <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "visible" }}>
+            {(continuousCurrentStroke ? [...continuousStrokes, continuousCurrentStroke] : continuousStrokes).map((st, idx) => {
+              const d = strokePointsToSvgPath(st);
+              return d ? (
+                <g key={idx}>
+                  <path d={d} fill="none" stroke="#38bdf8" strokeOpacity="0.4" strokeWidth="9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d={d} fill="none" stroke="#0284c7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              ) : null;
+            })}
+          </svg>
         </div>
       )}
 
@@ -413,6 +470,7 @@ function ContinuousPage({
 
           {/* Floating Google Action Pill */}
           <div
+            data-circle-pill="true"
             style={{
               position: "absolute",
               left: `${Math.max(130, Math.min((pageDimensions?.width || 400) - 130, activeCirclePill.bounds.x + activeCirclePill.bounds.width / 2))}px`,
@@ -424,23 +482,81 @@ function ContinuousPage({
               gap: "6px",
               background: "rgba(15, 23, 42, 0.96)",
               backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
               border: "1.5px solid #38bdf8",
               boxShadow: "0 10px 30px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.4)",
               borderRadius: "28px",
               padding: "5px 10px",
               animation: "fadeIn 0.2s ease-out",
               userSelect: "none",
+              WebkitUserSelect: "none",
             }}
           >
             {/* 📋 Copy Text Button */}
             <button
               type="button"
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
+                if (continuousAutoTimerRef.current) {
+                  clearTimeout(continuousAutoTimerRef.current);
+                  continuousAutoTimerRef.current = null;
+                }
+                if (activeCirclePill.extracting) return;
                 if (activeCirclePill.extractedText) {
-                  navigator.clipboard.writeText(activeCirclePill.extractedText);
+                  await copyTextSafariSafe(activeCirclePill.extractedText);
                   setActiveCirclePill((p) => (p ? { ...p, copied: true } : null));
-                  setTimeout(() => setActiveCirclePill(null), 1400);
+                  setTimeout(() => {
+                    continuousStrokesRef.current = [];
+                    setContinuousStrokes([]);
+                    setActiveCirclePill(null);
+                  }, 1200);
+                  return;
+                }
+                const pillBounds = activeCirclePill.bounds;
+                setActiveCirclePill((p) => (p ? { ...p, extracting: true } : null));
+                try {
+                  const text = await copyTextSafariSafe(async () => {
+                    const targetCanvas = canvasRef.current;
+                    let found = "";
+                    if (targetCanvas) {
+                      const contWidth = pageDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+                      const dprRatio = targetCanvas.width / (contWidth || 1);
+                      const rawBounds = {
+                        x: Math.round(pillBounds.x * dprRatio),
+                        y: Math.round(pillBounds.y * dprRatio),
+                        width: Math.round(pillBounds.width * dprRatio),
+                        height: Math.round(pillBounds.height * dprRatio),
+                      };
+                      if (pdfDoc) {
+                        try {
+                          const pageObj = await pdfDoc.getPage(pageNum);
+                          const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+                          const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+                          if (textRes?.text) found = textRes.text;
+                        } catch (_) {}
+                      }
+                      if (!found) {
+                        const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+                        if (cropRes?.canvas) {
+                          const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
+                          if (ocrRes?.text) found = ocrRes.text;
+                        }
+                      }
+                    }
+                    return found;
+                  });
+                  if (text) {
+                    setActiveCirclePill((p) => (p ? { ...p, extracting: false, extractedText: text, copied: true } : null));
+                    setTimeout(() => {
+                      continuousStrokesRef.current = [];
+                      setContinuousStrokes([]);
+                      setActiveCirclePill(null);
+                    }, 1200);
+                  } else {
+                    setActiveCirclePill((p) => (p ? { ...p, extracting: false } : null));
+                  }
+                } catch (_) {
+                  setActiveCirclePill((p) => (p ? { ...p, extracting: false } : null));
                 }
               }}
               disabled={activeCirclePill.extracting}
@@ -452,16 +568,16 @@ function ContinuousPage({
                 padding: "5px 12px",
                 fontSize: "0.76rem",
                 fontWeight: 700,
-                cursor: "pointer",
+                cursor: activeCirclePill.extracting ? "wait" : "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "5px",
                 transition: "all 0.15s ease",
               }}
-              title="Copy extracted text directly to clipboard"
+              title="Extract & copy handwritten or PDF text directly to clipboard"
             >
               {activeCirclePill.copied ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
-              <span>{activeCirclePill.copied ? "Copied!" : (activeCirclePill.extracting ? "Extracting..." : "📋 Copy Text")}</span>
+              <span>{activeCirclePill.copied ? "Copied!" : (activeCirclePill.extracting ? "⚡ Reading..." : "📋 Copy Text")}</span>
             </button>
 
             {/* 🔍 Search & Solve Button */}
@@ -469,14 +585,20 @@ function ContinuousPage({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                if (continuousAutoTimerRef.current) {
+                  clearTimeout(continuousAutoTimerRef.current);
+                  continuousAutoTimerRef.current = null;
+                }
+                continuousStrokesRef.current = [];
+                setContinuousStrokes([]);
                 if (onCircleCompleted) {
                   onCircleCompleted({
                     canvas: canvasRef.current,
                     bounds: activeCirclePill.bounds,
                     pageNum,
                     containerDimensions: pageDimensions,
-                    preExtractedText: activeCirclePill.extractedText,
-                    preCroppedImage: activeCirclePill.cropDataUrl,
+                    preExtractedText: activeCirclePill.extractedText || null,
+                    preCroppedImage: activeCirclePill.cropDataUrl || null,
                   });
                 }
                 setActiveCirclePill(null);
@@ -673,8 +795,11 @@ export default function VirtualPdfReader({
   const touchStartXRef = useRef(0);
   const touchStartYRef = useRef(0);
   const touchDistanceRef = useRef(0);
+  const isDrawingOverlayActiveRef = useRef(false);
+  const singlePageOverlayRef = useRef(null);
 
   const handleTouchStart = (e) => {
+    if (isDrawingOverlayActiveRef.current) return;
     if (e.touches.length === 1) {
       touchStartXRef.current = e.touches[0].clientX;
       touchStartYRef.current = e.touches[0].clientY;
@@ -687,6 +812,7 @@ export default function VirtualPdfReader({
   };
 
   const handleTouchMove = (e) => {
+    if (isDrawingOverlayActiveRef.current) return;
     if (e.touches.length === 2 && touchDistanceRef.current > 0) {
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -701,6 +827,7 @@ export default function VirtualPdfReader({
   };
 
   const handleTouchEnd = (e) => {
+    if (isDrawingOverlayActiveRef.current) return;
     if (scrollMode === "single" && e.changedTouches.length === 1) {
       const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
       const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
@@ -992,13 +1119,30 @@ export default function VirtualPdfReader({
       .catch(() => {});
   }, []);
 
+  const getPageDiscussionRoomCode = (targetPage = currentPage) => {
+    const slug = (note?.subject || title || "study")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 10);
+    const rawId = noteId || note?.id || "";
+    const idTail = rawId ? String(rawId).slice(-4) : "live";
+    return `pod-${slug}-${idTail}-p${targetPage}`;
+  };
+
+  const getPageDiscussionShareUrl = (targetPage = currentPage) => {
+    const targetNoteId = noteId || note?.id || "";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
+    const roomCode = getPageDiscussionRoomCode(targetPage);
+    return `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${targetPage}&pod=${encodeURIComponent(roomCode)}`;
+  };
+
   const handleOpenPageDiscussion = () => {
-    const roomCode = `pod-${(note?.subject || title || "study").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 10)}-${noteId ? String(noteId).slice(-4) : "live"}`;
+    const roomCode = getPageDiscussionRoomCode(currentPage);
     window.dispatchEvent(
       new CustomEvent("open_study_pod", {
         detail: {
           roomCode,
-          note,
+          note: note ? { ...note, _page: currentPage } : { id: noteId, title, subject, _page: currentPage },
           page: currentPage,
           subject: note?.subject || title || "General Study",
           prefillMsg: `📌 [Page ${currentPage} Doubt]: Hey classmates, I have a doubt regarding the theorem/problem on Page ${currentPage} of ${note?.title || title || "this note"}. Can someone explain this?`,
@@ -1009,9 +1153,7 @@ export default function VirtualPdfReader({
 
   const handleOpenPageQr = async () => {
     try {
-      const targetNoteId = noteId || note?.id || "";
-      const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
-      const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}`;
+      const shareUrl = getPageDiscussionShareUrl(currentPage);
 
       const qrData = await QRCode.toDataURL(shareUrl, {
         width: 260,
@@ -1038,15 +1180,33 @@ export default function VirtualPdfReader({
   const [clipCurrent, setClipCurrent] = useState(null);
   const isClippingDragRef = useRef(false);
 
-  // 8.5. ⭕ Circle to Search & Solve (Text-Layer -> Tesseract WASM -> Turso Cache)
+  // 8.5. ✏️ Freehand Pencil / Circle to Search & Solve (Text-Layer -> Tesseract WASM -> Vision AI)
   const [isCircleSearchMode, setIsCircleSearchMode] = useState(false);
   const [circleModalOpen, setCircleModalOpen] = useState(false);
   const [circleSearchData, setCircleSearchData] = useState(null);
   const [aiStudyPodOpen, setAiStudyPodOpen] = useState(false);
   const isCircleDragRef = useRef(false);
-  const [circleStart, setCircleStart] = useState(null);
-  const [circleCurrent, setCircleCurrent] = useState(null);
+  const [singlePageStrokes, setSinglePageStrokes] = useState([]);
+  const [singlePageCurrentStroke, setSinglePageCurrentStroke] = useState(null);
+  const singlePageStrokesRef = useRef([]);
+  const singlePageAutoTimerRef = useRef(null);
   const [singlePageCirclePill, setSinglePageCirclePill] = useState(null);
+
+  useEffect(() => {
+    isDrawingOverlayActiveRef.current = Boolean(isCircleSearchMode || isClipperMode);
+  }, [isCircleSearchMode, isClipperMode]);
+
+  // 🧭 Safari / iPadOS WebKit Non-Passive Touch Lock so finger & Apple Pencil strokes NEVER trigger rubber-band scroll
+  useSafariNonPassiveTouchLock(
+    singlePageOverlayRef,
+    Boolean(isCircleSearchMode && scrollMode !== "continuous"),
+    "[data-circle-pill='true'], button"
+  );
+  useSafariNonPassiveTouchLock(
+    mainScrollRef,
+    Boolean(isCircleSearchMode),
+    "[data-circle-pill='true'], button"
+  );
 
   // 9. Adaptive Battery Saver & Network Mode (Decoupled & Independent)
   const [isEcoMode, setIsEcoMode] = useState(false); // ALWAYS OFF by default!
@@ -2822,7 +2982,8 @@ export default function VirtualPdfReader({
   };
 
   const handleOpenAiStudy = () => {
-    if (!currentUser) {
+    const activeUser = getActiveReaderUser();
+    if (!activeUser) {
       if (typeof onOpenAuth === "function") {
         onOpenAuth("signin");
       }
@@ -2831,27 +2992,53 @@ export default function VirtualPdfReader({
     setAiStudyPodOpen(true);
   };
 
-  // ⭕ Circle to Search & Solve Handlers
+  // ✏️ Freehand Pencil / Circle to Search & Solve Handlers
   const handleToggleCircleSearch = () => {
-    if (!currentUser) {
+    const activeUser = getActiveReaderUser();
+    if (!activeUser) {
       if (typeof onOpenAuth === "function") {
         onOpenAuth("signin");
       }
       return;
     }
     if (isCircleSearchMode) {
+      if (singlePageAutoTimerRef.current) {
+        clearTimeout(singlePageAutoTimerRef.current);
+        singlePageAutoTimerRef.current = null;
+      }
       setIsCircleSearchMode(false);
-      setCircleStart(null);
-      setCircleCurrent(null);
+      singlePageStrokesRef.current = [];
+      setSinglePageStrokes([]);
+      setSinglePageCurrentStroke(null);
+      setSinglePageCirclePill(null);
       isCircleDragRef.current = false;
       setOcrStatusText("");
     } else {
+      const isExternalDriveOnly = Boolean(
+        note?.driveLink &&
+        !note?.telegramMessageId &&
+        !note?.telegramBotFileId &&
+        !note?.telegramFileId &&
+        !note?.isCdnCached &&
+        !file
+      );
       if (useNativeViewer) {
+        if (isExternalDriveOnly && !pdfDoc) {
+          // Pure external Google Drive embed has no cross-origin <canvas> — open freehand/upload CircleSearchModal directly!
+          warmupClientOcr();
+          setCircleSearchData(null);
+          setCircleModalOpen(true);
+          return;
+        }
         setUseNativeViewer(false);
+        if (!pdfDoc) {
+          setReloadTrigger((v) => v + 1);
+        }
       }
+      warmupClientOcr();
       setIsCircleSearchMode(true);
       setIsClipperMode(false);
-      setOcrStatusText("⭕ Circle to Search Active: Click & drag a circle around any formula or question.");
+      setOcrStatusText("✏️ Pencil Search Active: Draw any shape, line, or circle over handwritten notes — release for instant result!");
     }
   };
 
@@ -2862,6 +3049,7 @@ export default function VirtualPdfReader({
     containerDimensions,
     preExtractedText = null,
     preCroppedImage = null,
+    isPureSketch = false,
   }) => {
     if (!currentUser) {
       if (typeof onOpenAuth === "function") {
@@ -2870,7 +3058,7 @@ export default function VirtualPdfReader({
       return;
     }
     try {
-      setOcrStatusText("⭕ Analyzing circled selection...");
+      setOcrStatusText("⚡ Analyzing selection & reading handwriting...");
       const targetCanvas = canvas || canvasRef.current;
       if (!targetCanvas) return;
 
@@ -2884,39 +3072,54 @@ export default function VirtualPdfReader({
         height: Math.round(bounds.height * dprRatio),
       };
 
-      // 1. Crop canvas region for thumbnail and fallback OCR
-      const cropRes = preCroppedImage ? { dataUrl: preCroppedImage } : cropCanvasRegion(targetCanvas, rawBounds);
+      // 1. Crop canvas region for thumbnail and hybrid handwriting OCR
+      const freshCrop = (!preCroppedImage || (!preExtractedText && !isPureSketch))
+        ? cropCanvasRegion(targetCanvas, rawBounds)
+        : null;
+      const cropRes = preCroppedImage
+        ? { dataUrl: preCroppedImage, canvas: freshCrop?.canvas || null }
+        : freshCrop;
 
       let extractedText = preExtractedText || "";
-      let source = preExtractedText ? "pre-extracted" : "text-layer";
+      let source = isPureSketch ? "pencil-structure" : (preExtractedText ? "pre-extracted" : "text-layer");
       const targetPageNum = pageNum || currentPage;
 
       // 2. Step 1: Text-Layer First Check (0ms, 0 RAM, 0 Server Load)
-      if (!extractedText && pdfDoc) {
+      if (!isPureSketch && !extractedText && pdfDoc) {
         try {
           const pageObj = await pdfDoc.getPage(targetPageNum);
           const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
           const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
-          if (textRes && textRes.text && textRes.text.length >= 4) {
+          if (textRes && textRes.text && textRes.text.length >= 2) {
             extractedText = textRes.text;
             source = "text-layer";
           }
         } catch (_) {}
       }
 
-      // 3. Step 2: Client-Side Tesseract WASM Fallback (Handwritten Notes / Formulas)
-      if (!extractedText && cropRes && cropRes.canvas) {
-        setOcrStatusText("🔍 Recognizing handwritten formula via Tesseract WASM (Client)...");
-        const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas, (p, st) => setOcrStatusText(st));
+      // 3. Step 2: Hybrid AI Vision + Local Adaptive WASM Handwriting Engine (~420ms)
+      if (!isPureSketch && !extractedText && cropRes && cropRes.canvas) {
+        setOcrStatusText("⚡ Reading handwritten notes & math via AI Vision...");
+        const ocrRes = await extractTextFromCroppedCanvas(
+          cropRes.canvas,
+          (p, st) => setOcrStatusText(st),
+          { timeoutMs: 2400 }
+        );
         if (ocrRes && ocrRes.text) {
           extractedText = ocrRes.text;
-          source = "client-ocr-wasm";
+          source = ocrRes.source || "ai-vision-ocr";
         }
       }
 
+      const contextText = extractedText
+        ? `From ${title || "Notes"} (Page ${targetPageNum}): ${extractedText}`
+        : `From ${title || "Notes"} (Page ${targetPageNum}, Subject: ${subject || title || "Study Notes"})`;
+
       if (!extractedText) {
-        extractedText = `Question / Diagram from Page ${targetPageNum} (${subject || title || "Study Notes"})`;
-        source = "diagram-visual";
+        extractedText = isPureSketch
+          ? `Identify, explain, and solve this drawn structure / diagram / formula step-by-step (Subject: ${subject || title || "Study Notes"})`
+          : `Analyze, identify, and solve this selected diagram / question from Page ${targetPageNum} (${subject || title || "Study Notes"}) step-by-step`;
+        if (!isPureSketch) source = "diagram-visual";
       }
 
       setOcrStatusText("");
@@ -2924,17 +3127,18 @@ export default function VirtualPdfReader({
       // 4. Open Circle Search Modal with extracted data
       setCircleSearchData({
         text: extractedText,
+        isPureSketch: Boolean(isPureSketch),
         source,
         croppedImage: cropRes?.dataUrl || preCroppedImage || null,
         noteId: noteId || note?.id,
         subject: subject || note?.subject || "",
-        context: `From ${title || "Notes"} (Page ${targetPageNum}): ${extractedText}`,
+        context: contextText,
       });
       setCircleModalOpen(true);
       setIsCircleSearchMode(false);
     } catch (err) {
       console.warn("[CIRCLE-SEARCH] Analysis error:", err);
-      setOcrStatusText("⚠️ Circle analysis error: " + err.message);
+      setOcrStatusText("⚠️ Pencil analysis error: " + err.message);
       setTimeout(() => setOcrStatusText(""), 4000);
       setIsCircleSearchMode(false);
     }
@@ -2947,104 +3151,142 @@ export default function VirtualPdfReader({
     if (!isCircleSearchMode || !canvasRef.current) return;
     e.preventDefault();
     e.stopPropagation();
+    if (singlePageAutoTimerRef.current) {
+      clearTimeout(singlePageAutoTimerRef.current);
+      singlePageAutoTimerRef.current = null;
+    }
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setCircleStart({ x, y });
-    setCircleCurrent({ x, y });
+    const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+    const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    setSinglePageCirclePill(null);
+    setSinglePageCurrentStroke([{ x, y }]);
     isCircleDragRef.current = true;
   };
 
   const handleMoveCircleSearch = (e) => {
-    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart) return;
+    if (!isCircleSearchMode || !isCircleDragRef.current) return;
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-    setCircleCurrent({ x, y });
+    setSinglePageCurrentStroke((prev) => {
+      if (!prev || prev.length === 0) return [{ x, y }];
+      const last = prev[prev.length - 1];
+      if (Math.hypot(x - last.x, y - last.y) < 2) return prev;
+      return [...prev, { x, y }];
+    });
   };
 
-  const handleEndCircleSearch = async (e) => {
-    if (!isCircleSearchMode || !isCircleDragRef.current || !circleStart || !circleCurrent || !canvasRef.current) {
+  const handleEndCircleSearch = (e) => {
+    if (!isCircleSearchMode || !isCircleDragRef.current || !canvasRef.current) {
       isCircleDragRef.current = false;
       return;
     }
     isCircleDragRef.current = false;
     try { if (e?.currentTarget && e?.pointerId !== undefined) e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
 
-    const x1 = Math.min(circleStart.x, circleCurrent.x);
-    const y1 = Math.min(circleStart.y, circleCurrent.y);
-    const x2 = Math.max(circleStart.x, circleCurrent.x);
-    const y2 = Math.max(circleStart.y, circleCurrent.y);
-    const w = x2 - x1;
-    const h = y2 - y1;
+    const rect = e?.currentTarget?.getBoundingClientRect?.();
+    const rectW = rect?.width || canvasDimensions?.width || canvasRef.current?.offsetWidth || 800;
+    const rectH = rect?.height || canvasDimensions?.height || canvasRef.current?.offsetHeight || 1100;
 
-    setCircleStart(null);
-    setCircleCurrent(null);
+    setSinglePageCurrentStroke((finishedStroke) => {
+      if (!finishedStroke || finishedStroke.length === 0) return null;
+      const nextStrokes = [...singlePageStrokesRef.current, finishedStroke];
+      singlePageStrokesRef.current = nextStrokes;
+      setSinglePageStrokes(nextStrokes);
 
-    if (w < 15 || h < 15) {
-      setOcrStatusText("⭕ Circle selection too small. Please circle a larger area.");
-      setTimeout(() => setOcrStatusText(""), 3000);
-      return;
-    }
-
-    const selBounds = { x: x1, y: y1, width: w, height: h };
-    setSinglePageCirclePill({
-      bounds: selBounds,
-      extracting: true,
-      extractedText: "",
-      cropDataUrl: null,
-      copied: false,
-    });
-
-    try {
-      const targetCanvas = canvasRef.current;
-      const contWidth = canvasDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
-      const dprRatio = targetCanvas.width / (contWidth || 1);
-      const rawBounds = {
-        x: Math.round(x1 * dprRatio),
-        y: Math.round(y1 * dprRatio),
-        width: Math.round(w * dprRatio),
-        height: Math.round(h * dprRatio),
-      };
-
-      const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
-      let text = "";
-
-      if (pdfDoc) {
-        try {
-          const pageObj = await pdfDoc.getPage(currentPage);
-          const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
-          const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
-          if (textRes && textRes.text && textRes.text.length >= 3) {
-            text = textRes.text;
-          }
-        } catch (_) {}
+      const geom = computeFreehandBounds(nextStrokes, rectW, rectH);
+      if (!geom) {
+        setOcrStatusText("✏️ Selection too small — draw any line, circle, or structure to get instant result.");
+        setTimeout(() => setOcrStatusText(""), 2500);
+        return null;
       }
 
-      if (!text && cropRes?.canvas) {
-        try {
-          const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
-          if (ocrRes?.text) text = ocrRes.text;
-        } catch (_) {}
-      }
-
-      if (!text) {
-        text = `Question / Diagram from Page ${currentPage} (${subject || title || "Study Notes"})`;
-      }
-
-      setSinglePageCirclePill((prev) => (prev ? {
-        ...prev,
+      const selBounds = { x: geom.x, y: geom.y, width: geom.width, height: geom.height };
+      setSinglePageCirclePill({
+        bounds: selBounds,
         extracting: false,
-        extractedText: text,
-        cropDataUrl: cropRes?.dataUrl || null,
-      } : null));
-    } catch (err) {
-      console.warn("[SinglePage] Circle extraction error:", err);
-      setSinglePageCirclePill((prev) => (prev ? { ...prev, extracting: false } : null));
-    }
+        extractedText: "",
+        cropDataUrl: null,
+        copied: false,
+      });
+
+      if (singlePageAutoTimerRef.current) clearTimeout(singlePageAutoTimerRef.current);
+      singlePageAutoTimerRef.current = setTimeout(async () => {
+        try {
+          const finalStrokes = singlePageStrokesRef.current;
+          const finalGeom = computeFreehandBounds(finalStrokes, rectW, rectH) || geom;
+          const targetCanvas = canvasRef.current;
+          if (!targetCanvas) return;
+
+          const contWidth = canvasDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+          const dprRatio = targetCanvas.width / (contWidth || 1);
+          const rawBounds = {
+            x: Math.round(finalGeom.x * dprRatio),
+            y: Math.round(finalGeom.y * dprRatio),
+            width: Math.round(finalGeom.width * dprRatio),
+            height: Math.round(finalGeom.height * dprRatio),
+          };
+
+          const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+          let text = "";
+
+          if (pdfDoc) {
+            try {
+              const pageObj = await pdfDoc.getPage(currentPage);
+              const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+              const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+              if (textRes && textRes.text && textRes.text.length >= 2) {
+                text = textRes.text;
+              }
+            } catch (_) {}
+          }
+
+          if (!text && cropRes?.canvas) {
+            try {
+              const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas, undefined, {
+                timeoutMs: 2200,
+              });
+              if (ocrRes?.text) text = ocrRes.text;
+            } catch (_) {}
+          }
+
+          let finalImage = cropRes?.dataUrl || null;
+          let isPureSketch = false;
+          if (!text) {
+            const blankUnderlying = isCanvasBlankOrUniform(cropRes?.canvas);
+            if (blankUnderlying || !finalImage) {
+              const drawn = renderFreehandStrokesToCanvas(finalStrokes);
+              if (drawn?.dataUrl) {
+                finalImage = drawn.dataUrl;
+                isPureSketch = true;
+              }
+            }
+          }
+
+          singlePageStrokesRef.current = [];
+          setSinglePageStrokes([]);
+          setSinglePageCirclePill(null);
+
+          processCircledRegion({
+            canvas: targetCanvas,
+            bounds: { x: finalGeom.x, y: finalGeom.y, width: finalGeom.width, height: finalGeom.height },
+            pageNum: currentPage,
+            containerDimensions: canvasDimensions,
+            preExtractedText: text || null,
+            preCroppedImage: finalImage,
+            isPureSketch,
+          });
+        } catch (err) {
+          console.warn("[SinglePage] Pencil extraction error:", err);
+          setSinglePageCirclePill(null);
+        }
+      }, 450);
+
+      return null;
+    });
   };
 
   // 8. Yjs + WebRTC Peer-to-Peer Study Room
@@ -5112,53 +5354,63 @@ export default function VirtualPdfReader({
               </div>
             )}
 
-            {/* ⭕ Circle to Search Overlay Layer */}
+            {/* ✏️ Freehand Pencil-to-Search Overlay Layer (Single Page Mode) */}
             {isCircleSearchMode && (
               <div
+                ref={singlePageOverlayRef}
                 onPointerDown={handleStartCircleSearch}
                 onPointerMove={handleMoveCircleSearch}
                 onPointerUp={handleEndCircleSearch}
-                onPointerCancel={() => {
-                  isCircleDragRef.current = false;
-                  setCircleStart(null);
-                  setCircleCurrent(null);
-                }}
+                onPointerCancel={handleEndCircleSearch}
                 style={{
                   position: "absolute",
                   top: 0,
                   left: 0,
                   width: "100%",
                   height: "100%",
-                  cursor: "crosshair",
+                  cursor: PENCIL_CURSOR_STYLE,
                   zIndex: 45,
                   userSelect: "none",
+                  WebkitUserSelect: "none",
+                  WebkitTouchCallout: "none",
                   touchAction: "none",
-                  background: "rgba(56, 189, 248, 0.05)",
+                  background: "rgba(56, 189, 248, 0.04)",
                 }}
               >
-                {circleStart && circleCurrent && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: `${Math.min(circleStart.x, circleCurrent.x)}px`,
-                      top: `${Math.min(circleStart.y, circleCurrent.y)}px`,
-                      width: `${Math.abs(circleCurrent.x - circleStart.x)}px`,
-                      height: `${Math.abs(circleCurrent.y - circleStart.y)}px`,
-                      border: "3px solid #38bdf8",
-                      borderRadius: "50%",
-                      background: "radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
-                      boxShadow: "0 0 24px rgba(56, 189, 248, 0.9), inset 0 0 16px rgba(99, 102, 241, 0.5)",
-                      pointerEvents: "none",
-                    }}
-                  />
-                )}
+                <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+                  {(singlePageCurrentStroke ? [...singlePageStrokes, singlePageCurrentStroke] : singlePageStrokes).map(
+                    (st, idx) => {
+                      const d = strokePointsToSvgPath(st);
+                      return d ? (
+                        <g key={idx}>
+                          <path
+                            d={d}
+                            fill="none"
+                            stroke="#38bdf8"
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            opacity="0.26"
+                          />
+                          <path
+                            d={d}
+                            fill="none"
+                            stroke="#38bdf8"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </g>
+                      ) : null;
+                    }
+                  )}
+                </svg>
               </div>
             )}
 
-            {/* ⭕ Google-Style Active Circled Selection & Action Pill (Single Page Mode) */}
+            {/* ✏️ Active Pencil Selection Highlight & Action Pill (Single Page Mode) */}
             {singlePageCirclePill && (
               <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 48 }}>
-                {/* Glowing Google Selection Ring */}
                 <div
                   style={{
                     position: "absolute",
@@ -5166,10 +5418,10 @@ export default function VirtualPdfReader({
                     top: `${singlePageCirclePill.bounds.y}px`,
                     width: `${singlePageCirclePill.bounds.width}px`,
                     height: `${singlePageCirclePill.bounds.height}px`,
-                    border: "3px solid #38bdf8",
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, rgba(99, 102, 241, 0.15) 70%, transparent 100%)",
-                    boxShadow: "0 0 25px rgba(56, 189, 248, 0.95), inset 0 0 16px rgba(99, 102, 241, 0.5)",
+                    border: "2.5px dashed #38bdf8",
+                    borderRadius: "12px",
+                    background: "rgba(56, 189, 248, 0.14)",
+                    boxShadow: "0 0 24px rgba(56, 189, 248, 0.75)",
                     animation: "googleGlowPulse 2s infinite ease-in-out",
                     pointerEvents: "none",
                   }}
@@ -5177,6 +5429,7 @@ export default function VirtualPdfReader({
 
                 {/* Floating Google Action Pill */}
                 <div
+                  data-circle-pill="true"
                   style={{
                     position: "absolute",
                     left: `${Math.max(130, Math.min((canvasDimensions?.width || 400) - 130, singlePageCirclePill.bounds.x + singlePageCirclePill.bounds.width / 2))}px`,
@@ -5188,23 +5441,81 @@ export default function VirtualPdfReader({
                     gap: "6px",
                     background: "rgba(15, 23, 42, 0.96)",
                     backdropFilter: "blur(14px)",
+                    WebkitBackdropFilter: "blur(14px)",
                     border: "1.5px solid #38bdf8",
                     boxShadow: "0 10px 30px rgba(0, 0, 0, 0.75), 0 0 20px rgba(56, 189, 248, 0.4)",
                     borderRadius: "28px",
                     padding: "5px 10px",
                     animation: "fadeIn 0.2s ease-out",
                     userSelect: "none",
+                    WebkitUserSelect: "none",
                   }}
                 >
                   {/* 📋 Copy Text Button */}
                   <button
                     type="button"
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
+                      if (singlePageAutoTimerRef.current) {
+                        clearTimeout(singlePageAutoTimerRef.current);
+                        singlePageAutoTimerRef.current = null;
+                      }
+                      if (singlePageCirclePill.extracting) return;
                       if (singlePageCirclePill.extractedText) {
-                        navigator.clipboard.writeText(singlePageCirclePill.extractedText);
+                        await copyTextSafariSafe(singlePageCirclePill.extractedText);
                         setSinglePageCirclePill((p) => (p ? { ...p, copied: true } : null));
-                        setTimeout(() => setSinglePageCirclePill(null), 1400);
+                        setTimeout(() => {
+                          singlePageStrokesRef.current = [];
+                          setSinglePageStrokes([]);
+                          setSinglePageCirclePill(null);
+                        }, 1200);
+                        return;
+                      }
+                      const pillBounds = singlePageCirclePill.bounds;
+                      setSinglePageCirclePill((p) => (p ? { ...p, extracting: true } : null));
+                      try {
+                        const text = await copyTextSafariSafe(async () => {
+                          const targetCanvas = canvasRef.current;
+                          let found = "";
+                          if (targetCanvas) {
+                            const contWidth = canvasDimensions?.width || targetCanvas.offsetWidth || targetCanvas.width;
+                            const dprRatio = targetCanvas.width / (contWidth || 1);
+                            const rawBounds = {
+                              x: Math.round(pillBounds.x * dprRatio),
+                              y: Math.round(pillBounds.y * dprRatio),
+                              width: Math.round(pillBounds.width * dprRatio),
+                              height: Math.round(pillBounds.height * dprRatio),
+                            };
+                            if (pdfDoc) {
+                              try {
+                                const pageObj = await pdfDoc.getPage(currentPage);
+                                const viewport = pageObj.getViewport({ scale: scale * (window.devicePixelRatio || 1) });
+                                const textRes = await extractTextFromPageBounds(pageObj, rawBounds, viewport);
+                                if (textRes?.text) found = textRes.text;
+                              } catch (_) {}
+                            }
+                            if (!found) {
+                              const cropRes = cropCanvasRegion(targetCanvas, rawBounds);
+                              if (cropRes?.canvas) {
+                                const ocrRes = await extractTextFromCroppedCanvas(cropRes.canvas);
+                                if (ocrRes?.text) found = ocrRes.text;
+                              }
+                            }
+                          }
+                          return found;
+                        });
+                        if (text) {
+                          setSinglePageCirclePill((p) => (p ? { ...p, extracting: false, extractedText: text, copied: true } : null));
+                          setTimeout(() => {
+                            singlePageStrokesRef.current = [];
+                            setSinglePageStrokes([]);
+                            setSinglePageCirclePill(null);
+                          }, 1200);
+                        } else {
+                          setSinglePageCirclePill((p) => (p ? { ...p, extracting: false } : null));
+                        }
+                      } catch (_) {
+                        setSinglePageCirclePill((p) => (p ? { ...p, extracting: false } : null));
                       }
                     }}
                     disabled={singlePageCirclePill.extracting}
@@ -5216,16 +5527,16 @@ export default function VirtualPdfReader({
                       padding: "5px 12px",
                       fontSize: "0.76rem",
                       fontWeight: 700,
-                      cursor: "pointer",
+                      cursor: singlePageCirclePill.extracting ? "wait" : "pointer",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "5px",
                       transition: "all 0.15s ease",
                     }}
-                    title="Copy extracted text directly to clipboard"
+                    title="Extract & copy handwritten or PDF text directly to clipboard"
                   >
                     {singlePageCirclePill.copied ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
-                    <span>{singlePageCirclePill.copied ? "Copied!" : (singlePageCirclePill.extracting ? "Extracting..." : "📋 Copy Text")}</span>
+                    <span>{singlePageCirclePill.copied ? "Copied!" : (singlePageCirclePill.extracting ? "⚡ Reading..." : "📋 Copy Text")}</span>
                   </button>
 
                   {/* 🔍 Search & Solve Button */}
@@ -5233,13 +5544,19 @@ export default function VirtualPdfReader({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (singlePageAutoTimerRef.current) {
+                        clearTimeout(singlePageAutoTimerRef.current);
+                        singlePageAutoTimerRef.current = null;
+                      }
+                      singlePageStrokesRef.current = [];
+                      setSinglePageStrokes([]);
                       processCircledRegion({
                         canvas: canvasRef.current,
                         bounds: singlePageCirclePill.bounds,
                         pageNum: currentPage,
                         containerDimensions: canvasDimensions,
-                        preExtractedText: singlePageCirclePill.extractedText,
-                        preCroppedImage: singlePageCirclePill.cropDataUrl,
+                        preExtractedText: singlePageCirclePill.extractedText || null,
+                        preCroppedImage: singlePageCirclePill.cropDataUrl || null,
                       });
                       setSinglePageCirclePill(null);
                     }}
@@ -5383,27 +5700,68 @@ export default function VirtualPdfReader({
           </button>
 
           {enableDiscussionBridge && (
-            <button
-              type="button"
-              onClick={handleOpenPageDiscussion}
+            <div
               style={{
-                background: "rgba(6, 182, 212, 0.15)",
-                border: "1px solid rgba(6, 182, 212, 0.35)",
-                color: nightMode ? "#38bdf8" : "#0284c7",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                borderRadius: "999px",
-                padding: "3px 10px",
-                cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
+                background: "rgba(6, 182, 212, 0.14)",
+                border: "1px solid rgba(6, 182, 212, 0.38)",
+                borderRadius: "999px",
+                padding: "2px 4px 2px 10px",
               }}
-              title={'Open Live Study Pod discussion for Page ' + currentPage}
             >
-              <MessageSquare size={12} color="#06b6d4" />
-              <span>Pg {currentPage} • Discuss</span>
-            </button>
+              <button
+                type="button"
+                onClick={handleOpenPageDiscussion}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: nightMode ? "#38bdf8" : "#0284c7",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  padding: "1px 4px 1px 0",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+                title={'Open Live Study Pod discussion for Page ' + currentPage}
+              >
+                <MessageSquare size={12} color="#06b6d4" />
+                <span>Pg {currentPage} • Discuss</span>
+              </button>
+
+              <div
+                style={{
+                  width: "1px",
+                  height: "13px",
+                  background: nightMode ? "rgba(56, 189, 248, 0.3)" : "rgba(2, 132, 199, 0.25)",
+                }}
+              />
+
+              <button
+                type="button"
+                onClick={handleOpenPageQr}
+                style={{
+                  background: "rgba(6, 182, 212, 0.22)",
+                  border: "1px solid rgba(6, 182, 212, 0.45)",
+                  color: nightMode ? "#67e8f9" : "#0891b2",
+                  fontSize: "0.7rem",
+                  fontWeight: 800,
+                  borderRadius: "999px",
+                  padding: "2px 8px",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+                title={'Show Page ' + currentPage + ' QR code so friends can scan & discuss this exact page'}
+              >
+                <QrCode size={12} />
+                <span>QR</span>
+              </button>
+            </div>
           )}
 
           <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
@@ -5625,9 +5983,7 @@ export default function VirtualPdfReader({
               <button
                 type="button"
                 onClick={() => {
-                  const targetNoteId = noteId || note?.id || "";
-                  const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.com";
-                  const shareUrl = `${origin}/?noteId=${encodeURIComponent(targetNoteId)}&page=${currentPage}`;
+                  const shareUrl = getPageDiscussionShareUrl(currentPage);
                   navigator.clipboard.writeText(shareUrl).then(() => {
                     setQrCopied(true);
                     setTimeout(() => setQrCopied(false), 2500);
@@ -5675,17 +6031,21 @@ export default function VirtualPdfReader({
         </div>
       )}
 
-      {/* ⭕ Circle to Search & Solve Modal */}
-      {circleModalOpen && currentUser && (
+      {/* ✏️ Pencil / Circle to Search & Solve Modal */}
+      {circleModalOpen && Boolean(getActiveReaderUser()) && (
         <CircleSearchModal
           isOpen={circleModalOpen}
           onClose={() => setCircleModalOpen(false)}
           circleData={circleSearchData}
+          onRedrawWithPencil={() => {
+            setCircleModalOpen(false);
+            setIsCircleSearchMode(true);
+          }}
         />
       )}
 
-      {/* ✨ AI Study Modal (Instant 3D Flashcards & Summary for this Note) */}
-      {aiStudyPodOpen && currentUser && (
+      {/* ✨ AI Study Modal (Conversational Chatbox First + Instant 3D Flashcards & Summary) */}
+      {aiStudyPodOpen && Boolean(getActiveReaderUser()) && (
         <AiStudyPodModal
           isOpen={aiStudyPodOpen}
           onClose={() => setAiStudyPodOpen(false)}
@@ -5698,15 +6058,21 @@ export default function VirtualPdfReader({
               : (note?.ocrText || ocrStatusText || "")
           }
           isInsidePdf={true}
+          initialTab="chat"
+          onOpenCircleSearch={() => {
+            setAiStudyPodOpen(false);
+            setIsCircleSearchMode(true);
+          }}
           allNotes={[]}
         />
       )}
 
 
 
-      {/* ⭕ Floating Banner when Circle to Search Mode is Active */}
+      {/* ✏️ Floating Banner when Pencil / Circle to Search Mode is Active */}
       {isCircleSearchMode && (
         <div
+          data-circle-pill="true"
           style={{
             position: "fixed",
             top: "65px",
@@ -5715,6 +6081,7 @@ export default function VirtualPdfReader({
             zIndex: 99999,
             background: "rgba(15, 23, 42, 0.95)",
             backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
             border: "1.5px solid #38bdf8",
             boxShadow: "0 10px 35px rgba(56, 189, 248, 0.45), 0 0 20px rgba(99, 102, 241, 0.3)",
             borderRadius: "32px",
@@ -5731,7 +6098,7 @@ export default function VirtualPdfReader({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />
-            <span><strong>Circle to Search Active:</strong> Click & drag a circle around any formula or question</span>
+            <span><strong>✏️ Pencil Search Active:</strong> Draw any shape, line, or structure anywhere on the page</span>
           </div>
           <button
             type="button"

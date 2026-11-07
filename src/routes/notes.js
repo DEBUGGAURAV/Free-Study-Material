@@ -105,8 +105,8 @@ function saveCdnBuffer(id, buffer, mimeType) {
   const safeId = sanitizeCacheId(id);
   if (!safeId || !buffer) return;
 
-  // Asynchronously write to disk so the Node.js event loop thread remains 100% responsive
   const binFile = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
+  const tmpBinFile = path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`);
   const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
   const metaContent = JSON.stringify({
     mimeType: mimeType || "application/pdf",
@@ -114,12 +114,16 @@ function saveCdnBuffer(id, buffer, mimeType) {
     cachedAt: Date.now(),
   });
 
-  Promise.all([
-    fs.promises.writeFile(binFile, buffer),
-    fs.promises.writeFile(metaFile, metaContent, "utf8"),
-  ]).catch((err) => {
-    console.warn("[CDN-DISK] Write error:", err.message);
-  });
+  (async () => {
+    try {
+      await fs.promises.writeFile(tmpBinFile, buffer);
+      await fs.promises.rename(tmpBinFile, binFile);
+      await fs.promises.writeFile(metaFile, metaContent, "utf8");
+    } catch (err) {
+      try { if (fs.existsSync(tmpBinFile)) await fs.promises.unlink(tmpBinFile); } catch (_) {}
+      console.warn("[CDN-DISK] Write error:", err.message);
+    }
+  })();
 }
 
 function getCdnBuffer(id) {
@@ -128,17 +132,23 @@ function getCdnBuffer(id) {
 
   const binPath = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
   const metaPath = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
-  if (fs.existsSync(binPath)) {
+  if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
     try {
-      let meta = { mimeType: "application/pdf" };
-      if (fs.existsSync(metaPath)) {
-        try {
-          meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-        } catch (_) {}
+      const stat = fs.statSync(binPath);
+      if (stat.size <= 0) {
+        try { fs.unlinkSync(binPath); fs.unlinkSync(metaPath); } catch (_) {}
+        return null;
       }
-      let totalSize = meta.totalSize || 0;
-      if (!totalSize) {
-        try { totalSize = fs.statSync(binPath).size; } catch (_) {}
+      let meta = { mimeType: "application/pdf" };
+      try {
+        meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+      } catch (_) {}
+      const totalSize = meta.totalSize || stat.size;
+      // If file on disk is smaller than expected totalSize, it was interrupted/corrupted!
+      if (meta.totalSize && stat.size < meta.totalSize) {
+        console.warn(`[CDN-DISK] ⚠️ Corrupt/partial cache detected for ${safeId} (${stat.size} < ${meta.totalSize}). Purging.`);
+        try { fs.unlinkSync(binPath); fs.unlinkSync(metaPath); } catch (_) {}
+        return null;
       }
       // Zero-RAM Mode: Returns file metadata & path without loading multi-megabyte buffer into Node.js heap!
       return {
@@ -377,11 +387,12 @@ function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expect
 
             const safeId = sanitizeCacheId(noteId);
             const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
+            const tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
             let diskStream = null;
             let bytesWritten = 0;
             try {
-              if (binPath && fs.existsSync(CDN_CACHE_DIR)) {
-                diskStream = fs.createWriteStream(binPath);
+              if (tmpPath && fs.existsSync(CDN_CACHE_DIR)) {
+                diskStream = fs.createWriteStream(tmpPath);
               }
             } catch (_) {}
 
@@ -393,28 +404,39 @@ function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expect
               }
             });
 
-            fileRes.on("end", () => {
+            fileRes.on("end", async () => {
               if (!res.writableEnded) res.end();
               if (diskStream) {
                 diskStream.end();
-                if (safeId) {
-                  const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
-                  fs.promises.writeFile(
-                    metaFile,
-                    JSON.stringify({
-                      mimeType: "application/pdf",
-                      totalSize: bytesWritten || total,
-                      cachedAt: Date.now(),
-                    }),
-                    "utf8"
-                  ).catch(() => {});
+                if (safeId && tmpPath && binPath) {
+                  try {
+                    // Only promote to real cache if stream finished with all expected bytes
+                    if (!total || bytesWritten >= total) {
+                      await fs.promises.rename(tmpPath, binPath);
+                      const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
+                      await fs.promises.writeFile(
+                        metaFile,
+                        JSON.stringify({
+                          mimeType: "application/pdf",
+                          totalSize: bytesWritten || total,
+                          cachedAt: Date.now(),
+                        }),
+                        "utf8"
+                      );
+                    } else {
+                      if (fs.existsSync(tmpPath)) await fs.promises.unlink(tmpPath);
+                    }
+                  } catch (_) {}
                 }
               }
               resolve(true);
             });
 
             fileRes.on("error", (err) => {
-              if (diskStream) diskStream.destroy();
+              if (diskStream) {
+                diskStream.destroy();
+                try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+              }
               reject(err);
             });
           });
@@ -502,7 +524,13 @@ async function fetchAndCacheNoteBuffer(id, note) {
       }
 
       // Tier 2: MTProto Document buffer fallback
+      // 🛡️ High-Memory Protection: If note is >50MB, do NOT buffer full file in RAM.
+      // Large files are streamed directly on-demand via streamDocumentFromChannel() in 512KB slices!
       if (!docData && note.telegramMessageId) {
+        if (note.fileSize && note.fileSize > 50 * 1024 * 1024) {
+          console.log(`[INGEST] Note ${id} is >50MB (${(note.fileSize / (1024 * 1024)).toFixed(1)}MB). Bypassing full-buffer fetch to protect server RAM; live stream active.`);
+          return null;
+        }
         try {
           docData = await getDocumentBufferFromChannel(note.telegramMessageId);
         } catch (mtErr) {

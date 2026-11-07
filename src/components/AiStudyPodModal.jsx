@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Sparkles,
   Layers,
@@ -20,6 +20,11 @@ import {
   ShieldCheck,
   HelpCircle,
   Eye,
+  MessageSquare,
+  Send,
+  Trash2,
+  Pencil,
+  Image as ImageIcon,
 } from "lucide-react";
 import { api } from "../api";
 import {
@@ -44,31 +49,163 @@ export default function AiStudyPodModal({
   initialTab = null,
   onOpenCircleSearch,
 }) {
-  const [activeTab, setActiveTab] = useState(
-    initialTab || (isInsidePdf ? "flashcards" : (noteId ? "flashcards" : "search_notes"))
-  );
+  const VALID_TABS = ["chat", "search_notes", "flashcards", "summary", "session_history"];
+  const resolveDefaultTab = (tabProp) =>
+    typeof tabProp === "string" && VALID_TABS.includes(tabProp) ? tabProp : "chat";
+
+  const [activeTab, setActiveTab] = useState(() => resolveDefaultTab(initialTab));
 
   // Current Active Note State (can be switched via search)
   const [currentNoteId, setCurrentNoteId] = useState(noteId);
   const [currentTitle, setCurrentTitle] = useState(noteTitle);
   const [currentSubject, setCurrentSubject] = useState(subject);
 
+  // 💬 AI Conversation Chatbox State (Opens FIRST by default!)
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatImage, setChatImage] = useState(null);
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [copiedChatId, setCopiedChatId] = useState(null);
+  const chatEndRef = useRef(null);
+  const chatFileInputRef = useRef(null);
+
   // Summary user-friendly filter states
   const [summarySectionFilter, setSummarySectionFilter] = useState("all");
   const [summaryKeywordSearch, setSummaryKeywordSearch] = useState("");
 
-  // Sync initial tab and mode
+  // Notes Search & Filter state (Declared early to avoid any TDZ in handlers/effects)
+  const [noteSearchQuery, setNoteSearchQuery] = useState("");
+  const [fetchedNotes, setFetchedNotes] = useState(allNotes || []);
+
+  // Session History (Scoped to active online login session)
+  const [sessionHistory, setSessionHistory] = useState([]);
+
+  // Sync initial tab and mode (Chatbox opens FIRST unless an explicit valid tab is requested)
   useEffect(() => {
-    if (initialTab) {
-      setActiveTab(initialTab);
-    } else if (isInsidePdf) {
-      setActiveTab("flashcards");
-    } else if (noteId) {
-      setActiveTab("flashcards");
-    } else {
-      setActiveTab("search_notes");
+    if (isOpen) {
+      setActiveTab(resolveDefaultTab(initialTab));
     }
-  }, [isOpen, initialTab, isInsidePdf, noteId]);
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (activeTab === "chat" && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, isSendingChat, activeTab]);
+
+  // Support Ctrl+V image paste inside AI Chat tab
+  useEffect(() => {
+    if (!isOpen || activeTab !== "chat") return;
+    const onPaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (ev) => setChatImage(ev.target.result);
+            reader.readAsDataURL(file);
+          }
+          break;
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [isOpen, activeTab]);
+
+  const handleSendChatMessage = async (presetText = null) => {
+    const cleanText = (typeof presetText === "string" ? presetText : chatInput).trim();
+    if ((!cleanText && !chatImage) || isSendingChat) return;
+
+    const attachedImage = chatImage;
+    const userMsg = {
+      id: `u_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      role: "user",
+      content: cleanText || "📷 Explain & solve this attached image step-by-step",
+      image: attachedImage || null,
+      timestamp: Date.now(),
+    };
+
+    const historyBefore = chatMessages;
+    setChatMessages((prev) => [...prev, userMsg]);
+    if (typeof presetText !== "string") setChatInput("");
+    setChatImage(null);
+    setIsSendingChat(true);
+
+    try {
+      const selectedNoteObj = currentNoteId
+        ? fetchedNotes.find((n) => (n.id || n.noteId) === currentNoteId)
+        : null;
+      const noteCtx = context || selectedNoteObj?.ocrText || "";
+      const recentTurns = historyBefore
+        .slice(-8)
+        .map((m) => `${m.role === "user" ? "Student" : "AI Tutor"}: ${String(m.content || "").slice(0, 900)}`)
+        .join("\n");
+
+      let combinedContext = "";
+      if (currentNoteId) {
+        combinedContext += `Active Note: ${currentTitle}${currentSubject ? ` (${currentSubject})` : ""}\n${String(noteCtx).slice(0, 9000)}\n\n`;
+      }
+      if (recentTurns) {
+        combinedContext += `[CONVERSATION_CONTEXT]\nRecent Conversation:\n${recentTurns}`;
+      }
+
+      const res = await api.askAiQuestion(
+        cleanText || "Analyze, explain, and solve this image step-by-step.",
+        combinedContext,
+        currentNoteId || null,
+        currentSubject || "",
+        {
+          skipCache: historyBefore.length > 0,
+          ...(attachedImage
+            ? {
+                imageBase64: attachedImage.replace(/^data:image\/\w+;base64,/, ""),
+                imageMimeType: attachedImage.includes("image/jpeg") ? "image/jpeg" : "image/png",
+              }
+            : {}),
+        }
+      );
+
+      const aiAnswer = res?.answer || "No answer returned.";
+      const aiMsg = {
+        id: `a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        role: "assistant",
+        content: aiAnswer,
+        cached: Boolean(res?.cached),
+        provider: res?.provider || "AI Tutor",
+        latencyMs: res?.latencyMs || 0,
+        timestamp: Date.now(),
+      };
+      setChatMessages((prev) => [...prev, aiMsg]);
+
+      const updatedHist = addStudySessionItem({
+        type: "chat",
+        title: currentNoteId ? currentTitle : "AI Study Chat",
+        noteId: currentNoteId || "",
+        query: cleanText.slice(0, 90) || "Image Question",
+        data: [...historyBefore, userMsg, aiMsg],
+        provider: res?.provider,
+        model: res?.model,
+        cached: res?.cached,
+      });
+      setSessionHistory(updatedHist);
+    } catch (err) {
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: `err_${Date.now()}`,
+          role: "assistant",
+          content: `⚠️ Could not process your message: ${err.message || "Please try again."}`,
+          provider: "error",
+          timestamp: Date.now(),
+        },
+      ]);
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
 
   // Flashcards state
   const [flashcards, setFlashcards] = useState([]);
@@ -121,68 +258,6 @@ export default function AiStudyPodModal({
 
     return content;
   }, [summary, summarySectionFilter, summaryKeywordSearch]);
-
-  // Notes Search & Filter state
-  const [noteSearchQuery, setNoteSearchQuery] = useState("");
-  const [fetchedNotes, setFetchedNotes] = useState(allNotes || []);
-
-  // Session History (Scoped to active online login session)
-  const [sessionHistory, setSessionHistory] = useState([]);
-
-  // Sync props when note changes
-  useEffect(() => {
-    if (noteId) setCurrentNoteId(noteId);
-    if (noteTitle) setCurrentTitle(noteTitle);
-    if (subject) setCurrentSubject(subject);
-  }, [noteId, noteTitle, subject]);
-
-  // Load session history on mount & tab switch
-  useEffect(() => {
-    setSessionHistory(getStudySessionHistory());
-  }, [isOpen, activeTab]);
-
-  // Fetch all notes if not provided
-  useEffect(() => {
-    if (!allNotes || allNotes.length === 0) {
-      api.getNotes?.()
-        .then((res) => {
-          if (Array.isArray(res)) setFetchedNotes(res);
-          else if (res?.notes && Array.isArray(res.notes)) setFetchedNotes(res.notes);
-        })
-        .catch(() => {});
-    } else {
-      setFetchedNotes(allNotes);
-    }
-  }, [allNotes]);
-
-  // Keyboard navigation for flashcards
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        onClose();
-      } else if (activeTab === "flashcards" && flashcards.length > 0) {
-        if (e.key === "ArrowRight") handleNextCard();
-        if (e.key === "ArrowLeft") handlePrevCard();
-        if (e.key === " " && e.target.tagName !== "INPUT") {
-          e.preventDefault();
-          setIsFlipped((f) => !f);
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, activeTab, flashcards.length]);
-
-  // Auto-load flashcards when tab opens if not loaded
-  useEffect(() => {
-    if (isOpen && activeTab === "flashcards" && flashcards.length === 0 && !loadingCards) {
-      handleGenerateFlashcards();
-    }
-    if (isOpen && activeTab === "summary" && !summary && !loadingSummary) {
-      handleGenerateSummary();
-    }
-  }, [isOpen, activeTab, currentNoteId]);
 
   // Generate / Fetch Flashcards
   const handleGenerateFlashcards = async (forceFresh = false) => {
@@ -277,6 +352,61 @@ export default function AiStudyPodModal({
     setIsFlipped(false);
     setCurrentCardIndex((i) => (i - 1 + flashcards.length) % flashcards.length);
   };
+
+  // Sync props when note changes
+  useEffect(() => {
+    if (noteId) setCurrentNoteId(noteId);
+    if (noteTitle) setCurrentTitle(noteTitle);
+    if (subject) setCurrentSubject(subject);
+  }, [noteId, noteTitle, subject]);
+
+  // Load session history on mount & tab switch
+  useEffect(() => {
+    setSessionHistory(getStudySessionHistory());
+  }, [isOpen, activeTab]);
+
+  // Fetch all notes if not provided
+  useEffect(() => {
+    if (!allNotes || allNotes.length === 0) {
+      api.getNotes?.()
+        .then((res) => {
+          if (Array.isArray(res)) setFetchedNotes(res);
+          else if (res?.notes && Array.isArray(res.notes)) setFetchedNotes(res.notes);
+        })
+        .catch(() => {});
+    } else {
+      setFetchedNotes(allNotes);
+    }
+  }, [allNotes]);
+
+  // Keyboard navigation for flashcards
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose();
+      } else if (activeTab === "flashcards" && flashcards.length > 0) {
+        if (e.key === "ArrowRight") handleNextCard();
+        if (e.key === "ArrowLeft") handlePrevCard();
+        if (e.key === " " && e.target.tagName !== "INPUT") {
+          e.preventDefault();
+          setIsFlipped((f) => !f);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, activeTab, flashcards.length]);
+
+  // Auto-load flashcards when tab opens if not loaded
+  useEffect(() => {
+    if (isOpen && activeTab === "flashcards" && flashcards.length === 0 && !loadingCards) {
+      handleGenerateFlashcards();
+    }
+    if (isOpen && activeTab === "summary" && !summary && !loadingSummary) {
+      handleGenerateSummary();
+    }
+  }, [isOpen, activeTab, currentNoteId]);
 
   const handleShuffleCards = () => {
     if (flashcards.length <= 1) return;
@@ -469,6 +599,30 @@ export default function AiStudyPodModal({
             overflowX: "auto",
           }}
         >
+          {/* 💬 TAB 0 (DEFAULT FIRST): AI Conversation Chatbox */}
+          <button
+            type="button"
+            onClick={() => setActiveTab("chat")}
+            style={{
+              background: activeTab === "chat" ? "linear-gradient(135deg, #6366f1, #06b6d4)" : "rgba(255, 255, 255, 0.05)",
+              color: activeTab === "chat" ? "#fff" : "var(--text-dim)",
+              border: "none",
+              borderRadius: "10px",
+              padding: "7px 14px",
+              fontSize: "0.78rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              whiteSpace: "nowrap",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <MessageSquare size={14} />
+            <span>💬 AI Chat</span>
+          </button>
+
           {/* 🔍 Search & Filter Notes Tab (Shown on Home Page, Hidden inside PDF Reader) */}
           {!isInsidePdf && (
             <button
@@ -598,7 +752,456 @@ export default function AiStudyPodModal({
         {/* ============================================================== */}
         {/* Tab Content Body                                               */}
         {/* ============================================================== */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px" }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: activeTab === "chat" ? "hidden" : "auto",
+            padding: activeTab === "chat" ? "0" : "20px",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* ============================================================ */}
+          {/* TAB 0 (DEFAULT FIRST): 💬 AI STUDY CONVERSATION CHATBOX       */}
+          {/* ============================================================ */}
+          {activeTab === "chat" && (
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+              {/* Context & Quick Actions Sub-Bar */}
+              <div
+                style={{
+                  padding: "8px 18px",
+                  background: "rgba(15, 23, 42, 0.55)",
+                  borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "8px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                  <span
+                    style={{
+                      fontSize: "0.73rem",
+                      color: currentNoteId ? "#a5b4fc" : "#94a3b8",
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      maxWidth: "360px",
+                    }}
+                  >
+                    {currentNoteId
+                      ? `📚 Context: ${currentTitle}${currentSubject ? ` (${currentSubject})` : ""}`
+                      : "🌐 General Academic AI Tutor (Ask anything or pick a note)"}
+                  </span>
+                  {currentNoteId && !isInsidePdf && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentNoteId(null);
+                        setCurrentTitle("General Study Chat");
+                        setCurrentSubject("");
+                      }}
+                      style={{
+                        background: "rgba(255,255,255,0.08)",
+                        border: "none",
+                        color: "#cbd5e1",
+                        borderRadius: "6px",
+                        padding: "2px 7px",
+                        fontSize: "0.68rem",
+                        cursor: "pointer",
+                      }}
+                      title="Switch to general academic chat without note restriction"
+                    >
+                      ✕ Clear Note
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  {onOpenCircleSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenCircleSearch();
+                      }}
+                      style={{
+                        background: "rgba(56, 189, 248, 0.15)",
+                        border: "1px solid rgba(56, 189, 248, 0.4)",
+                        color: "#38bdf8",
+                        borderRadius: "8px",
+                        padding: "4px 10px",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                      title="Draw any structure or select on screen with Pencil"
+                    >
+                      <Pencil size={12} />
+                      <span>✏️ Pencil Search</span>
+                    </button>
+                  )}
+                  {chatMessages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setChatMessages([])}
+                      style={{
+                        background: "rgba(244, 63, 94, 0.14)",
+                        border: "1px solid rgba(244, 63, 94, 0.3)",
+                        color: "#fda4af",
+                        borderRadius: "8px",
+                        padding: "4px 9px",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <Trash2 size={12} />
+                      <span>New Chat</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Scrollable Messages Area */}
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: "18px 20px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <div
+                    style={{
+                      margin: "auto 0",
+                      textAlign: "center",
+                      padding: "24px 16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "12px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "52px",
+                        height: "52px",
+                        borderRadius: "16px",
+                        background: "linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.25))",
+                        border: "1.5px solid rgba(139, 92, 246, 0.45)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Sparkles size={26} color="#a5b4fc" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#f8fafc" }}>
+                        Start Your AI Study Conversation
+                      </div>
+                      <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: "4px auto 0", maxWidth: "460px" }}>
+                        Ask doubts in English or Hinglish, solve numericals step-by-step, paste diagrams, or have a continuous study discussion!
+                      </p>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        justifyContent: "center",
+                        gap: "8px",
+                        maxWidth: "560px",
+                        marginTop: "6px",
+                      }}
+                    >
+                      {[
+                        currentNoteId
+                          ? `Explain key topics of ${currentTitle} in simple Hinglish`
+                          : "Explain Banker's Algorithm with a solved example",
+                        currentNoteId
+                          ? `Top 5 semester exam questions from ${currentTitle}`
+                          : "Derive Laplace transform of sin(at) step-by-step",
+                        "Difference between TCP and UDP for viva",
+                        "Normalize a database table up to 3NF & BCNF",
+                      ].map((prompt, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleSendChatMessage(prompt)}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.04)",
+                            border: "1px solid rgba(139, 92, 246, 0.3)",
+                            borderRadius: "12px",
+                            padding: "7px 12px",
+                            fontSize: "0.75rem",
+                            color: "#cbd5e1",
+                            cursor: "pointer",
+                            textAlign: "left",
+                          }}
+                        >
+                          ✨ {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  chatMessages.map((msg) =>
+                    msg.role === "user" ? (
+                      <div key={msg.id} style={{ display: "flex", justifyContent: "flex-end" }}>
+                        <div
+                          style={{
+                            maxWidth: "84%",
+                            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.32), rgba(6, 182, 212, 0.26))",
+                            border: "1px solid rgba(139, 92, 246, 0.45)",
+                            borderRadius: "16px 16px 4px 16px",
+                            padding: "10px 14px",
+                            color: "#f8fafc",
+                            fontSize: "0.85rem",
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {msg.image && (
+                            <img
+                              src={msg.image}
+                              alt="Attached"
+                              style={{
+                                maxWidth: "200px",
+                                maxHeight: "120px",
+                                borderRadius: "8px",
+                                display: "block",
+                                marginBottom: "6px",
+                                border: "1px solid rgba(255,255,255,0.2)",
+                              }}
+                            />
+                          )}
+                          <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        key={msg.id}
+                        style={{
+                          background: "rgba(15, 23, 42, 0.72)",
+                          border: "1px solid rgba(255, 255, 255, 0.1)",
+                          borderRadius: "16px 16px 16px 4px",
+                          padding: "14px 16px",
+                          fontSize: "0.87rem",
+                          lineHeight: 1.65,
+                          color: "#f1f5f9",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "8px",
+                            gap: "6px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize: "0.69rem",
+                              padding: "2px 8px",
+                              borderRadius: "999px",
+                              background: msg.cached ? "rgba(16, 185, 129, 0.15)" : "rgba(139, 92, 246, 0.18)",
+                              color: msg.cached ? "#34d399" : "#c4b5fd",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {msg.cached
+                              ? "⚡ 0ms Cache Hit"
+                              : `✨ AI Tutor (${msg.provider || "Cloud AI"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(msg.content);
+                              setCopiedChatId(msg.id);
+                              setTimeout(() => setCopiedChatId(null), 1800);
+                            }}
+                            style={{
+                              background: "rgba(255, 255, 255, 0.07)",
+                              border: "1px solid rgba(255, 255, 255, 0.14)",
+                              color: copiedChatId === msg.id ? "#34d399" : "#cbd5e1",
+                              borderRadius: "7px",
+                              padding: "3px 8px",
+                              fontSize: "0.71rem",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            {copiedChatId === msg.id ? <Check size={11} /> : <Copy size={11} />}
+                            <span>{copiedChatId === msg.id ? "Copied" : "Copy"}</span>
+                          </button>
+                        </div>
+
+                        <MathMarkdown content={msg.content} />
+                      </div>
+                    )
+                  )
+                )}
+
+                {isSendingChat && (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "10px 14px",
+                      background: "rgba(139, 92, 246, 0.12)",
+                      border: "1px solid rgba(139, 92, 246, 0.3)",
+                      borderRadius: "14px",
+                      fontSize: "0.8rem",
+                      color: "#ddd6fe",
+                      alignSelf: "flex-start",
+                    }}
+                  >
+                    <RotateCw size={15} className="animate-spin" color="#a78bfa" />
+                    <span>AI Study Tutor is thinking...</span>
+                  </div>
+                )}
+
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Pinned Chat Input Composer */}
+              <div
+                style={{
+                  padding: "12px 18px",
+                  borderTop: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: "rgba(11, 15, 25, 0.96)",
+                }}
+              >
+                {chatImage && (
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      borderRadius: "10px",
+                      padding: "5px 10px",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    <img src={chatImage} alt="Preview" style={{ height: "38px", borderRadius: "6px" }} />
+                    <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Image attached</span>
+                    <button
+                      type="button"
+                      onClick={() => setChatImage(null)}
+                      style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer" }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+
+                <input
+                  ref={chatFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => setChatImage(ev.target.result);
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }}
+                />
+
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => chatFileInputRef.current?.click()}
+                    style={{
+                      background: "rgba(255, 255, 255, 0.07)",
+                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      color: "#cbd5e1",
+                      borderRadius: "11px",
+                      width: "40px",
+                      height: "40px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                    title="Attach diagram or question image (or paste with Ctrl+V)"
+                  >
+                    <ImageIcon size={17} />
+                  </button>
+
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendChatMessage();
+                      }
+                    }}
+                    placeholder="Ask any question, follow-up doubt, derivation, or paste image..."
+                    style={{
+                      flex: 1,
+                      background: "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(139, 92, 246, 0.4)",
+                      borderRadius: "12px",
+                      padding: "10px 14px",
+                      color: "#fff",
+                      fontSize: "0.86rem",
+                      outline: "none",
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendChatMessage()}
+                    disabled={isSendingChat || (!chatInput.trim() && !chatImage)}
+                    style={{
+                      background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                      border: "none",
+                      color: "#fff",
+                      borderRadius: "12px",
+                      padding: "10px 18px",
+                      fontSize: "0.84rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      opacity: isSendingChat || (!chatInput.trim() && !chatImage) ? 0.55 : 1,
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Send size={15} />
+                    <span>Send</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ============================================================ */}
           {/* TAB 1: 🗂️ REVISION FLASHCARDS                                  */}
           {/* ============================================================ */}
@@ -1372,7 +1975,10 @@ export default function AiStudyPodModal({
                       <button
                         type="button"
                         onClick={() => {
-                          if (item.type === "flashcard" && Array.isArray(item.data)) {
+                          if (item.type === "chat" && Array.isArray(item.data)) {
+                            setChatMessages(item.data);
+                            setActiveTab("chat");
+                          } else if (item.type === "flashcard" && Array.isArray(item.data)) {
                             setFlashcards(item.data);
                             setCurrentCardIndex(0);
                             setCurrentTitle(item.title);
