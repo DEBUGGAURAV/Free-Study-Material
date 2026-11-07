@@ -32,6 +32,18 @@ function getSystemMemoryCeilingMb() {
     return Number(envLimit);
   }
 
+  // 1.5 Render Platform detection (Render Free Tier web services are strictly 512MB)
+  const isRender = Boolean(
+    process.env.RENDER ||
+    process.env.RENDER_SERVICE_ID ||
+    process.env.RENDER_EXTERNAL_URL ||
+    process.env.IS_RENDER ||
+    (process.env.CLIENT_URL && process.env.CLIENT_URL.includes("onrender.com"))
+  );
+  if (isRender) {
+    return 480;
+  }
+
   // 2. Linux cgroup v2 container limit (Modern Docker & Render Linux container runtime)
   try {
     if (fs.existsSync("/sys/fs/cgroup/memory.max")) {
@@ -63,12 +75,12 @@ function getSystemMemoryCeilingMb() {
 function getMemoryThresholds(manualCeilingMb = null) {
   const ceilingMb = manualCeilingMb || getSystemMemoryCeilingMb();
   
-  // For constrained environments (e.g. Render Free Tier 512MB), enforce lower triggers (310MB / 385MB)
+  // For constrained environments (e.g. Render Free Tier 512MB), enforce lower triggers (260MB / 320MB)
   // so the container auto-purges RAM well before Render's 512MB limit triggers an alert email or OOM kill.
   // For future hosts (VPS / Railway with 1GB, 2GB, 4GB, 8GB+), dynamically scale to full hardware capacity.
   const isConstrained512 = ceilingMb <= 512;
-  const warningMb = isConstrained512 ? 310 : Math.round(ceilingMb * 0.75);
-  const criticalMb = isConstrained512 ? 385 : Math.round(ceilingMb * 0.88);
+  const warningMb = isConstrained512 ? 260 : Math.round(ceilingMb * 0.75);
+  const criticalMb = isConstrained512 ? 320 : Math.round(ceilingMb * 0.88);
 
   return {
     ceilingMb,
@@ -291,10 +303,29 @@ function startRamBufferGuard(tempDir, manualThresholdMb = null) {
     }
   };
 
-  // Inspect RAM every 30 seconds for rapid, responsive auto-purge
-  setInterval(checkMemory, 30 * 1000);
+  // Inspect RAM every 15 seconds for rapid, responsive auto-purge
+  setInterval(checkMemory, 15 * 1000);
   // Initial check 5s after server boot
   setTimeout(checkMemory, 5000);
+}
+
+function runEmergencyMemorySweep() {
+  try {
+    const nr = getNotesRouterSafe();
+    if (nr && nr.noteBufferCache) {
+      if (typeof nr.purgeMemoryCache === "function") {
+        nr.purgeMemoryCache();
+      } else {
+        nr.noteBufferCache.clear();
+      }
+    }
+    if (ramCache && typeof ramCache.clearExpired === "function") {
+      ramCache.clearExpired();
+    }
+    if (global.gc) {
+      try { global.gc(); } catch (_) {}
+    }
+  } catch (_) {}
 }
 
 function getMemoryGuardStats() {
@@ -659,5 +690,6 @@ module.exports = {
   getSystemMemoryCeilingMb,
   getMemoryThresholds,
   getMemoryGuardStats,
+  runEmergencyMemorySweep,
 };
 

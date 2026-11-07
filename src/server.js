@@ -202,12 +202,14 @@ app.use(
 // High-Efficiency Smart Compression Middleware (bypasses binary download streams)
 app.use(
   compression({
+    level: 6,
+    threshold: 1024,
     filter: (req, res) => {
+      // Don't re-compress binary PDF streams
       if (
         req.path.includes("/stream") ||
         req.path.endsWith(".pdf") ||
-        req.originalUrl?.includes("/api/notes/") ||
-        req.path.startsWith("/api/notes/")
+        (res.getHeader && res.getHeader("content-type") && String(res.getHeader("content-type")).includes("application/pdf"))
       ) {
         return false;
       }
@@ -302,14 +304,19 @@ app.use(
 
 app.use(
   express.static(distPath, {
+    maxAge: "1d",
+    etag: true,
     setHeaders: (res, filePath) => {
       if (filePath.endsWith("sw.js") || filePath.endsWith("index.html") || filePath.endsWith("manifest.json")) {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       } else if (filePath.includes("tesseract")) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      } else if (/[\\/]assets[\\/].*-[a-zA-Z0-9_-]{8,}\.(js|css|woff2?|ttf|mjs|svg|png|jpg|webp)$/i.test(filePath)) {
+        // Hashed assets: 100% Immutable 1-Year Disk Cache (0 Render bandwidth on repeat visits!)
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       } else if (/[\\/]assets[\\/]/.test(filePath)) {
-        // Non-hashed assets: Revalidate with ETag so updated chunks after new builds load instantly!
-        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+        // Unhashed or worker chunks: Cache for 7 days with stale-while-revalidate
+        res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=86400");
       }
     },
   })

@@ -547,7 +547,21 @@ async function fetchAndCacheNoteBuffer(id, note) {
 }
 
 function triggerBackgroundCdnCache(id, note) {
-  fetchAndCacheNoteBuffer(id, note).catch(() => {});
+  // 🛡️ High-Memory Protection: Skip background pre-buffering if Node.js RSS > 240 MB or under memory pressure
+  try {
+    const mem = process.memoryUsage();
+    const rssMb = Math.round(mem.rss / (1024 * 1024));
+    if (rssMb > 240) {
+      return; // Conserve memory for live active requests
+    }
+  } catch (_) {}
+  fetchAndCacheNoteBuffer(id, note)
+    .then(() => {
+      if (global.gc) {
+        try { global.gc(); } catch (_) {}
+      }
+    })
+    .catch(() => {});
 }
 
 function purgeCdnDiskBuffer(noteId) {
@@ -1751,6 +1765,21 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     const isActualDownload = Boolean(isDownload);
+
+    // ⚡ Zero-Render Bandwidth Offloader:
+    // When downloading a PDF, redirect directly to Cloudflare Edge Worker CDN unless the request came from the worker itself.
+    // Cloudflare Edge serves the multi-megabyte PDF for free with 0 bytes of Render bandwidth!
+    const cfWorkerUrl = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev").trim();
+    const isDirectFromWorker = Boolean(
+      req.headers["cf-worker"] ||
+      req.headers["x-via-worker"] ||
+      (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+    );
+    if (cfWorkerUrl && !isDirectFromWorker && isActualDownload) {
+      const qToken = req.query.token || (req.cookies && (req.cookies.fsm_token || req.cookies.token)) || "";
+      const dlUrl = `${cfWorkerUrl}/api/notes/${id}/stream.pdf?download=1${qToken ? `&token=${encodeURIComponent(qToken)}` : ""}${req.query.filename ? `&filename=${encodeURIComponent(req.query.filename)}` : ""}`;
+      return res.redirect(302, dlUrl);
+    }
     const isExplicitPreview = req.query.preview === "1" || req.query.view === "1";
     // Preview is only initial load (not subsequent reader chunks)
     const isInitialPreview = (isExplicitPreview || !isSubsequentRangeChunk) && !isActualDownload;

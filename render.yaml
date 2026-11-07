@@ -5,8 +5,10 @@ services:
     region: singapore
     plan: free
     buildCommand: npm install && npm run build
-    startCommand: node --expose-gc --max-old-space-size=280 src/server.js
+    startCommand: node --expose-gc --max-old-space-size=240 src/server.js
     envVars:
+      - key: RAM_LIMIT_MB
+        value: "450"
       - key: NODE_VERSION
         value: 20.18.0
       - key: PORT
@@ -74,9 +76,9 @@ services:
       - key: TURSO_CACHE_AUTH_TOKEN
         sync: false
       - key: CF_WORKER_URL
-        sync: false
+        value: https://fsm-edge.jnplotus.workers.dev
       - key: VITE_CF_WORKER_URL
-        sync: false
+        value: https://fsm-edge.jnplotus.workers.dev
       - key: BREVO_SMTP_HOST
         value: smtp-relay.brevo.com
       - key: BREVO_SMTP_PORT

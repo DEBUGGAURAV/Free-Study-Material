@@ -711,6 +711,31 @@ export default function VirtualPdfReader({
 
 
 
+  // Keep currentPageRef in sync with currentPage state
+  const currentPageRef = useRef(currentPage);
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  // Sync currentPage whenever noteId, url, or initialPage prop changes
+  useEffect(() => {
+    const target = initialPage && Number(initialPage) > 0 ? Number(initialPage) : 1;
+    setCurrentPage(target);
+  }, [noteId, url, initialPage]);
+
+  // Auto-scroll to initialPage if initialPage > 1 in continuous scroll mode
+  useEffect(() => {
+    if (initialPage && Number(initialPage) > 1 && scrollMode === "continuous" && !useNativeViewer && pdfDoc) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`continuous-page-${initialPage}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [initialPage, pdfDoc, scrollMode, useNativeViewer]);
+
   // 📜 Real-Time Active Page Detection during Vertical Scrolling (Continuous Scroll Mode)
   useEffect(() => {
     if (scrollMode !== "continuous" || useNativeViewer) return;
@@ -719,30 +744,60 @@ export default function VirtualPdfReader({
 
     let rafId = null;
     const updateActivePage = () => {
-      const containerRect = container.getBoundingClientRect();
+      const c = mainScrollRef.current;
+      if (!c) return;
+
+      // At or near the very top of document: immediately snap to page 1
+      if (c.scrollTop <= 25) {
+        if (currentPageRef.current !== 1) {
+          setCurrentPage(1);
+        }
+        return;
+      }
+
+      const containerRect = c.getBoundingClientRect();
       // Reading eye level: 30% from top of reader viewport
       const targetY = containerRect.top + Math.min(240, containerRect.height * 0.35);
 
-      let closestPage = null;
-      let minDistance = Infinity;
+      const total = numPages || 1;
+      let activePage = null;
 
-      for (let p = 1; p <= (numPages || 1); p++) {
+      // Fast check: inspect pages right around the current page first
+      const cur = currentPageRef.current || 1;
+      const startP = Math.max(1, cur - 2);
+      const endP = Math.min(total, cur + 2);
+
+      for (let p = startP; p <= endP; p++) {
         const el = document.getElementById(`continuous-page-${p}`);
         if (!el) continue;
         const rect = el.getBoundingClientRect();
         if (rect.top <= targetY && rect.bottom >= targetY) {
-          closestPage = p;
+          activePage = p;
           break;
-        }
-        const dist = Math.abs(rect.top - targetY);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestPage = p;
         }
       }
 
-      if (closestPage && closestPage !== currentPage) {
-        setCurrentPage(closestPage);
+      // If not in local window (large jump or fast scroll), scan full range
+      if (!activePage) {
+        let minDistance = Infinity;
+        for (let p = 1; p <= total; p++) {
+          const el = document.getElementById(`continuous-page-${p}`);
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          if (rect.top <= targetY && rect.bottom >= targetY) {
+            activePage = p;
+            break;
+          }
+          const dist = Math.abs(rect.top - targetY);
+          if (dist < minDistance) {
+            minDistance = dist;
+            activePage = p;
+          }
+        }
+      }
+
+      if (activePage && activePage !== currentPageRef.current) {
+        setCurrentPage(activePage);
       }
     };
 
@@ -751,14 +806,14 @@ export default function VirtualPdfReader({
       rafId = requestAnimationFrame(updateActivePage);
     };
 
-    container.addEventListener("scroll", handleScroll, { passive: true });
+    c.addEventListener("scroll", handleScroll, { passive: true });
     updateActivePage();
 
     return () => {
-      container.removeEventListener("scroll", handleScroll);
+      c.removeEventListener("scroll", handleScroll);
       if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [scrollMode, numPages, useNativeViewer, currentPage]);
+  }, [scrollMode, numPages, useNativeViewer]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatches, setSearchMatches] = useState([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -5283,30 +5338,6 @@ export default function VirtualPdfReader({
             <Sparkles size={12} />
             <span>✨ AI Pod</span>
           </button>
-
-          {enableDiscussionBridge && (
-            <button
-              type="button"
-              onClick={handleOpenPageDiscussion}
-              style={{
-                background: "rgba(6, 182, 212, 0.15)",
-                border: "1px solid rgba(6, 182, 212, 0.35)",
-                color: nightMode ? "#38bdf8" : "#0284c7",
-                fontSize: "0.72rem",
-                fontWeight: 700,
-                borderRadius: "999px",
-                padding: "3px 10px",
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "4px",
-              }}
-              title={'Open Live Study Pod discussion for Page ' + currentPage}
-            >
-              <MessageSquare size={12} color="#06b6d4" />
-              <span>Pg {currentPage}? Discuss</span>
-            </button>
-          )}
 
           <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
 
