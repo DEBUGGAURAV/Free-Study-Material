@@ -11,7 +11,7 @@ const { checkAccountLockout, recordFailedAttempt, clearFailedAttempts } = requir
 const { processLoginDevice } = require("../services/deviceSecurityService");
 const { verifyTurnstileToken } = require("../utils/turnstileGuard");
 const { getSiteName, getVaultName } = require("../config/siteConfig");
-const { authLimiter } = require("../middleware/rateLimit");
+const { authLimiter, getClientIp } = require("../middleware/rateLimit");
 const { sendLoginOtpEmail, sendForgotPasswordOtpEmail, sendSignupOtpEmail, sendProfileMobileOtpEmail, sendTelegramAuthNotice } = require("../services/emailService");
 const {
   createPendingRegistration,
@@ -56,18 +56,7 @@ setInterval(() => {
   }
 }, 60000);
 
-function getClientIp(req) {
-  if (!req) return "127.0.0.1";
-  const forwarded = req.headers ? req.headers["x-forwarded-for"] : null;
-  if (forwarded) {
-    const list = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-    return String(list).split(",")[0].trim().replace(/^::ffff:/, "");
-  }
-  const realIp = req.headers ? req.headers["x-real-ip"] : null;
-  if (realIp) return String(realIp).trim().replace(/^::ffff:/, "");
-  const remote = req.socket?.remoteAddress || req.ip || "127.0.0.1";
-  return String(remote).trim().replace(/^::ffff:/, "");
-}
+// (getClientIp imported from rateLimit with proxy-safe spoofing prevention)
 
 function saveOtp(type, email, otp, extra = {}, req = null) {
   const clientIp = extra.ip || (req ? getClientIp(req) : "");

@@ -200,21 +200,73 @@ export default function TabHelpDesk() {
     }
   };
 
-  // Close ticket and delete from database
-  const handleCloseTicket = async (ticket) => {
+  // Close ticket with 5-day retention (or custom override)
+  const handleCloseTicket = async (ticket, customRetention = null) => {
     if (!ticket) return;
     try {
       const res = await api.adminCloseHelpTicket(
         ticket.ticket_code,
         replyText.trim() || ticket.admin_reply || "Resolved by Administrator via Web Console",
-        true
+        false, // Do NOT auto-delete immediately! 5-day grace period is active
+        customRetention
       );
       if (res && res.success) {
-        showNotification(`🔴 Ticket #${ticket.ticket_code} closed & permanently deleted from database!`);
-        setSelectedTicket(null);
+        showNotification(`🔴 Ticket #${ticket.ticket_code} closed! Retained for ${res.retentionDays || 5} days before auto-purge.`);
         loadTickets();
+        if (selectedTicket?.ticket_code === ticket.ticket_code) {
+          setSelectedTicket((prev) => ({
+            ...prev,
+            status: "closed",
+            purge_at: res.purgeAt,
+            custom_retention_days: res.retentionDays,
+          }));
+        }
       } else {
         showNotification(res?.message || "Failed to close ticket", true);
+      }
+    } catch (err) {
+      showNotification(err.message, true);
+    }
+  };
+
+  // ⚡ Instant Purge single ticket immediately
+  const handleInstantPurgeTicket = async (ticketCode) => {
+    if (!window.confirm(`⚡ INSTANT PURGE: Are you sure you want to permanently delete ticket #${ticketCode} right now?`)) return;
+    try {
+      const res = await api.adminDeleteHelpTicket(ticketCode);
+      if (res && res.success) {
+        showNotification(`⚡ Ticket #${ticketCode} instantly purged from database!`);
+        if (selectedTicket?.ticket_code === ticketCode) setSelectedTicket(null);
+        loadTickets();
+      } else {
+        showNotification(res?.message || "Instant purge failed", true);
+      }
+    } catch (err) {
+      showNotification(err.message, true);
+    }
+  };
+
+  // ⏳ Adjust individual ticket retention days (or 0 for instant purge)
+  const handleUpdateTicketRetention = async (ticketCode, days) => {
+    try {
+      const res = await api.updateTicketRetention(ticketCode, days);
+      if (res && res.success) {
+        if (days === 0 || res.purged) {
+          showNotification(`⚡ Ticket #${ticketCode} instantly purged from database!`);
+          if (selectedTicket?.ticket_code === ticketCode) setSelectedTicket(null);
+        } else {
+          showNotification(`⏳ Ticket #${ticketCode} retention set to ${days < 0 ? "NEVER" : `${days} day(s)`}!`);
+          if (selectedTicket?.ticket_code === ticketCode) {
+            setSelectedTicket((prev) => ({
+              ...prev,
+              custom_retention_days: res.retentionDays,
+              purge_at: res.purgeAt,
+            }));
+          }
+        }
+        loadTickets();
+      } else {
+        showNotification(res?.message || "Failed to update retention", true);
       }
     } catch (err) {
       showNotification(err.message, true);
@@ -229,7 +281,7 @@ export default function TabHelpDesk() {
       if (res && res.success) {
         showNotification(`🟢 Ticket #${ticket.ticket_code} marked Active!`);
         if (selectedTicket?.ticket_code === ticket.ticket_code) {
-          setSelectedTicket({ ...selectedTicket, status: "active" });
+          setSelectedTicket({ ...selectedTicket, status: "active", purge_at: null });
         }
         loadTickets();
       } else {
@@ -242,7 +294,7 @@ export default function TabHelpDesk() {
 
   // Physically delete single ticket
   const handleDeleteTicket = async (ticketCode) => {
-    if (!window.confirm(`Are you sure you want to physically delete ticket #${ticketCode} from the database?`)) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ticket #${ticketCode} from the database?`)) return;
     try {
       const res = await api.adminDeleteHelpTicket(ticketCode);
       if (res && res.success) {
@@ -697,6 +749,7 @@ export default function TabHelpDesk() {
                         <td style={{ padding: "12px 14px", verticalAlign: "top" }}>
                           <span
                             style={{
+                              display: "inline-block",
                               fontSize: "0.68rem",
                               fontWeight: 800,
                               padding: "2px 8px",
@@ -709,31 +762,102 @@ export default function TabHelpDesk() {
                           >
                             {t.status || "active"}
                           </span>
+
+                          {isClosed && (
+                            <div style={{ marginTop: "4px", fontSize: "0.68rem" }}>
+                              {t.purge_at ? (
+                                <span style={{ color: "#fca5a5", display: "inline-flex", alignItems: "center", gap: "3px" }} title={`Purge date: ${t.purge_at}`}>
+                                  <Clock size={10} />
+                                  <span>Purges: {new Date(t.purge_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</span>
+                                </span>
+                              ) : (
+                                <span style={{ color: "#34d399" }}>♾️ Never</span>
+                              )}
+                            </div>
+                          )}
                         </td>
 
                         <td style={{ padding: "12px 14px", verticalAlign: "top", textAlign: "right" }}>
-                          <div style={{ display: "inline-flex", gap: "6px" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px", flexWrap: "wrap", justifyContent: "flex-end" }}>
                             {isClosed ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSetActiveTicket(t);
-                                }}
-                                title="Re-open & Mark Active"
-                                style={{
-                                  padding: "4px 8px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700,
-                                  background: "rgba(16, 185, 129, 0.15)",
-                                  color: "#34d399",
-                                  border: "1px solid rgba(16, 185, 129, 0.3)",
-                                  borderRadius: "4px",
-                                  cursor: "pointer",
-                                }}
-                              >
-                                Active
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSetActiveTicket(t);
+                                  }}
+                                  title="Re-open & Mark Active"
+                                  style={{
+                                    padding: "4px 8px",
+                                    fontSize: "0.7rem",
+                                    fontWeight: 700,
+                                    background: "rgba(16, 185, 129, 0.15)",
+                                    color: "#34d399",
+                                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  Active
+                                </button>
+
+                                {/* Stepper for closed ticket retention */}
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    background: "rgba(255, 255, 255, 0.04)",
+                                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                                    borderRadius: "4px",
+                                    padding: "1px 2px",
+                                  }}
+                                  title="Increase / decrease retention days for this ticket"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = t.custom_retention_days ?? 5;
+                                      const next = Math.max(1, cur - 1);
+                                      handleUpdateTicketRetention(t.ticket_code, next);
+                                    }}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: "#94a3b8",
+                                      cursor: "pointer",
+                                      padding: "1px 4px",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    -
+                                  </button>
+                                  <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#38bdf8", padding: "0 2px" }}>
+                                    {t.custom_retention_days ? `${t.custom_retention_days}d` : "5d"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = t.custom_retention_days ?? 5;
+                                      const next = Math.min(365, cur + 1);
+                                      handleUpdateTicketRetention(t.ticket_code, next);
+                                    }}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: "#94a3b8",
+                                      cursor: "pointer",
+                                      padding: "1px 4px",
+                                      fontSize: "0.7rem",
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </>
                             ) : (
                               <button
                                 type="button"
@@ -741,7 +865,7 @@ export default function TabHelpDesk() {
                                   e.stopPropagation();
                                   handleCloseTicket(t);
                                 }}
-                                title="Close Ticket & Send Topic 2 Report"
+                                title="Close Ticket & Retain for 5 Days"
                                 style={{
                                   padding: "4px 8px",
                                   fontSize: "0.7rem",
@@ -756,23 +880,31 @@ export default function TabHelpDesk() {
                                 Close
                               </button>
                             )}
+
+                            {/* ⚡ Instant Purge Button */}
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteTicket(t.ticket_code);
+                                handleInstantPurgeTicket(t.ticket_code);
                               }}
-                              title="Delete from Database"
+                              title="⚡ Instant Purge: Immediately delete right now"
                               style={{
                                 padding: "4px 8px",
-                                background: "rgba(255,255,255,0.06)",
-                                color: "#f87171",
-                                border: "1px solid rgba(255,255,255,0.1)",
+                                background: "rgba(239, 68, 68, 0.2)",
+                                color: "#fca5a5",
+                                border: "1px solid rgba(239, 68, 68, 0.4)",
                                 borderRadius: "4px",
                                 cursor: "pointer",
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "3px",
                               }}
                             >
-                              <Trash2 size={12} />
+                              <Zap size={11} />
+                              <span>Purge</span>
                             </button>
                           </div>
                         </td>
@@ -1036,24 +1168,91 @@ export default function TabHelpDesk() {
                 gap: "8px",
               }}
             >
-              <div style={{ display: "flex", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                 {selectedTicket.status === "closed" ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSetActiveTicket(selectedTicket)}
-                    style={{
-                      padding: "7px 14px",
-                      background: "rgba(16, 185, 129, 0.2)",
-                      color: "#34d399",
-                      border: "1px solid rgba(16, 185, 129, 0.4)",
-                      borderRadius: "6px",
-                      fontWeight: 700,
-                      fontSize: "0.78rem",
-                      cursor: "pointer",
-                    }}
-                  >
-                    🟢 Mark Active
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleSetActiveTicket(selectedTicket)}
+                      style={{
+                        padding: "7px 14px",
+                        background: "rgba(16, 185, 129, 0.2)",
+                        color: "#34d399",
+                        border: "1px solid rgba(16, 185, 129, 0.4)",
+                        borderRadius: "6px",
+                        fontWeight: 700,
+                        fontSize: "0.78rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      🟢 Mark Active
+                    </button>
+
+                    {/* Retention stepper for this ticket */}
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
+                      }}
+                    >
+                      <Clock size={13} color="#a5b4fc" />
+                      <span style={{ fontSize: "0.74rem", color: "#e2e8f0" }}>
+                        {selectedTicket.purge_at
+                          ? `Purges: ${new Date(selectedTicket.purge_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`
+                          : "Never Purge"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cur = selectedTicket.custom_retention_days ?? 5;
+                          const next = Math.max(1, cur - 1);
+                          handleUpdateTicketRetention(selectedTicket.ticket_code, next);
+                        }}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.1)",
+                          border: "none",
+                          color: "#fff",
+                          cursor: "pointer",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                        }}
+                        title="Reduce retention by 1 day"
+                      >
+                        -
+                      </button>
+                      <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#38bdf8" }}>
+                        {selectedTicket.custom_retention_days ? `${selectedTicket.custom_retention_days}d` : "5d"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const cur = selectedTicket.custom_retention_days ?? 5;
+                          const next = Math.min(365, cur + 1);
+                          handleUpdateTicketRetention(selectedTicket.ticket_code, next);
+                        }}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.1)",
+                          border: "none",
+                          color: "#fff",
+                          cursor: "pointer",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                          fontSize: "0.72rem",
+                          fontWeight: 800,
+                        }}
+                        title="Increase retention by 1 day"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </>
                 ) : (
                   <button
                     type="button"
@@ -1069,31 +1268,56 @@ export default function TabHelpDesk() {
                       cursor: "pointer",
                     }}
                   >
-                    🔴 Close Ticket & Send Topic 2 Report
+                    🔴 Close Ticket (5-Day Retention)
                   </button>
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={() => handleDeleteTicket(selectedTicket.ticket_code)}
-                style={{
-                  padding: "7px 12px",
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#f87171",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  borderRadius: "6px",
-                  fontWeight: 600,
-                  fontSize: "0.76rem",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <Trash2 size={13} />
-                <span>Delete Row</span>
-              </button>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                {/* ⚡ Instant Purge Button */}
+                <button
+                  type="button"
+                  onClick={() => handleInstantPurgeTicket(selectedTicket.ticket_code)}
+                  style={{
+                    padding: "7px 14px",
+                    background: "rgba(239, 68, 68, 0.25)",
+                    color: "#fca5a5",
+                    border: "1px solid rgba(239, 68, 68, 0.5)",
+                    borderRadius: "6px",
+                    fontWeight: 700,
+                    fontSize: "0.76rem",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                  title="Permanently wipe this ticket right now from Turso database"
+                >
+                  <Zap size={13} />
+                  <span>⚡ Instant Purge</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteTicket(selectedTicket.ticket_code)}
+                  style={{
+                    padding: "7px 12px",
+                    background: "rgba(255,255,255,0.06)",
+                    color: "#f87171",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    borderRadius: "6px",
+                    fontWeight: 600,
+                    fontSize: "0.76rem",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Trash2 size={13} />
+                  <span>Delete Row</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

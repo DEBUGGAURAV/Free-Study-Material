@@ -8,6 +8,11 @@
  * ============================================================================
  */
 
+const dns = require("node:dns");
+if (dns && typeof dns.setDefaultResultOrder === "function") {
+  try { dns.setDefaultResultOrder("ipv4first"); } catch (_) {}
+}
+
 const express = require("express");
 const router = express.Router();
 const path = require("path");
@@ -15,6 +20,33 @@ const fs = require("fs");
 const multer = require("multer");
 const { helpLimiter } = require("../middleware/rateLimit");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
+
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+
+function isHelpAdmin(user) {
+  if (!user) return false;
+  return Boolean(
+    user.role === "admin" ||
+    user.role === "half_admin" ||
+    user.isMainAdmin ||
+    user.isMasterAdmin ||
+    user.id === "admin-root" ||
+    (ADMIN_EMAIL && user.email && user.email.toLowerCase().trim() === ADMIN_EMAIL) ||
+    (Array.isArray(user.permissions) && (user.permissions.includes("all") || user.permissions.includes("manage_users") || user.permissions.includes("manage_notes")))
+  );
+}
+
+function isFullAdmin(user) {
+  if (!user) return false;
+  return Boolean(
+    user.role === "admin" ||
+    user.isMainAdmin ||
+    user.isMasterAdmin ||
+    user.id === "admin-root" ||
+    (ADMIN_EMAIL && user.email && user.email.toLowerCase().trim() === ADMIN_EMAIL) ||
+    (Array.isArray(user.permissions) && user.permissions.includes("all"))
+  );
+}
 
 // Ensure Help Attachments directory exists
 const HELP_ATTACHMENTS_DIR = path.join(process.cwd(), "cache", "help_attachments");
@@ -75,6 +107,11 @@ const {
   getAllHelpTickets,
   getHelpTursoTelemetry,
   getHelpBotTelemetry,
+  getGlobalHelpRetentionDays,
+  setGlobalHelpRetentionDays,
+  updateTicketRetention,
+  purgeExpiredClosedTickets,
+  getHelpRetentionStats,
 } = require("../services/helpTicketService");
 
 // Curated Instant Solutions & FAQs (Standard Professional English Language)
@@ -487,7 +524,7 @@ router.post("/my-tickets", authenticateToken, async (req, res) => {
  */
 router.post("/admin/reply", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+    if (!isHelpAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Unauthorized. Administrator access required." });
     }
 
@@ -522,7 +559,7 @@ router.post("/admin/reply", authenticateToken, async (req, res) => {
  */
 router.get("/admin/tickets", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+    if (!isHelpAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
@@ -544,15 +581,15 @@ router.get("/admin/tickets", authenticateToken, async (req, res) => {
 
 /**
  * POST /api/help/admin/close
- * Admin close ticket, dispatches Topic 2 report, with optional auto-delete
+ * Admin close ticket, dispatches Topic 7 report, retains for 5 days (or custom/global)
  */
 router.post("/admin/close", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+    if (!isHelpAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
-    const { ticketCode, reason } = req.body;
+    const { ticketCode, reason, autoDelete, retentionDays } = req.body;
     if (!ticketCode) {
       return res.status(400).json({ success: false, message: "Ticket code required." });
     }
@@ -561,10 +598,82 @@ router.post("/admin/close", authenticateToken, async (req, res) => {
       ticketCode,
       closedBy: req.user.name || "Academic Administrator",
       reason: reason || "Resolved by Administrator via Web Console",
-      autoDelete: true,
+      autoDelete: Boolean(autoDelete),
+      retentionDays: retentionDays !== undefined ? retentionDays : null,
     });
 
     return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/help/admin/retention
+ * Get ticket retention config and metrics for Tab 12
+ */
+router.get("/admin/retention", authenticateToken, async (req, res) => {
+  try {
+    if (!isHelpAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const stats = await getHelpRetentionStats();
+    return res.json(stats);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/retention
+ * Update global ticket retention policy from Tab 12
+ */
+router.post("/admin/retention", authenticateToken, async (req, res) => {
+  try {
+    if (!isHelpAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { retentionDays } = req.body;
+    const result = await setGlobalHelpRetentionDays(retentionDays);
+    const stats = await getHelpRetentionStats();
+    return res.json({ ...result, stats });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/ticket-retention
+ * Set retention or execute instant purge for a specific ticket (Tab 13)
+ */
+router.post("/admin/ticket-retention", authenticateToken, async (req, res) => {
+  try {
+    if (!isHelpAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const { ticketCode, days } = req.body;
+    if (!ticketCode) {
+      return res.status(400).json({ success: false, message: "Ticket code required." });
+    }
+    const result = await updateTicketRetention(ticketCode, days);
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/help/admin/purge-expired
+ * Purge all expired closed tickets whose retention period ended
+ */
+router.post("/admin/purge-expired", authenticateToken, async (req, res) => {
+  try {
+    if (!isHelpAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: "Unauthorized." });
+    }
+    const result = await purgeExpiredClosedTickets();
+    const stats = await getHelpRetentionStats();
+    return res.json({ ...result, stats });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -576,7 +685,7 @@ router.post("/admin/close", authenticateToken, async (req, res) => {
  */
 router.post("/admin/active", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+    if (!isHelpAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
@@ -602,7 +711,7 @@ router.post("/admin/active", authenticateToken, async (req, res) => {
  */
 router.delete("/admin/ticket/:code", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || (req.user.role !== "admin" && req.user.role !== "half_admin")) {
+    if (!isHelpAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Unauthorized." });
     }
 
@@ -620,7 +729,7 @@ router.delete("/admin/ticket/:code", authenticateToken, async (req, res) => {
  */
 router.delete("/admin/purge", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
+    if (!isFullAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Only Master Admin can purge database." });
     }
 
@@ -638,7 +747,7 @@ router.delete("/admin/purge", authenticateToken, async (req, res) => {
  */
 router.post("/admin/create-topics", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
+    if (!isFullAdmin(req.user)) {
       return res.status(403).json({ success: false, message: "Admin authorization required." });
     }
 

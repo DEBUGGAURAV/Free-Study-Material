@@ -133,16 +133,22 @@ export default function CircleSearchModal({
       const lastMsg = messages[messages.length - 1];
       if (lastMsg.role === "assistant") {
         const timer = setTimeout(() => {
-          if (latestAiMessageRef.current) {
-            latestAiMessageRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-          } else if (chatScrollContainerRef.current) {
-            chatScrollContainerRef.current.scrollTop = 0;
+          if (chatScrollContainerRef.current) {
+            if (messages.length <= 2) {
+              chatScrollContainerRef.current.scrollTo({ top: 0, behavior: "smooth" });
+            } else if (latestAiMessageRef.current) {
+              const targetTop = Math.max(0, latestAiMessageRef.current.offsetTop - 14);
+              chatScrollContainerRef.current.scrollTo({ top: targetTop, behavior: "smooth" });
+            }
           }
-        }, 60);
+        }, 75);
         return () => clearTimeout(timer);
       } else {
-        if (chatEndRef.current) {
-          chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+        if (chatScrollContainerRef.current) {
+          chatScrollContainerRef.current.scrollTo({
+            top: chatScrollContainerRef.current.scrollHeight,
+            behavior: "smooth",
+          });
         }
       }
     }
@@ -710,6 +716,7 @@ export default function CircleSearchModal({
           width: "100%",
           maxWidth: "800px",
           height: "min(92vh, calc(100dvh - 20px))",
+          minHeight: "520px",
           maxHeight: "880px",
           background: "linear-gradient(180deg, #0f172a 0%, #090d16 100%)",
           border: "1.5px solid rgba(56, 189, 248, 0.42)",
@@ -1498,7 +1505,7 @@ export default function CircleSearchModal({
         </div>
 
         {/* Main Scrollable Thread / Notes Body */}
-        <div ref={chatScrollContainerRef} style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "16px 18px" }}>
+        <div ref={chatScrollContainerRef} style={{ flex: 1, minHeight: "280px", overflowY: "auto", padding: "16px 18px", WebkitOverflowScrolling: "touch" }}>
           {activeTab === "ai" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {messages.length === 0 && !isSolving && (

@@ -22,17 +22,12 @@ function getClientIp(req) {
       }
     }
 
-    // 2. X-Forwarded-For (First IP is the client origin hop)
-    const xff = headers["x-forwarded-for"];
-    if (xff) {
-      const rawXff = Array.isArray(xff) ? xff[0] : xff;
-      if (typeof rawXff === "string" && rawXff.trim()) {
-        const firstIp = rawXff.split(",")[0].trim();
-        if (firstIp) return firstIp.replace(/^::ffff:/, "");
-      }
+    // 2. Express proxy-verified client IP (Respects app.set("trust proxy", 1) to prevent spoofing)
+    if (req.ip && typeof req.ip === "string" && req.ip.trim()) {
+      return req.ip.trim().replace(/^::ffff:/, "");
     }
 
-    // 3. X-Real-IP
+    // 3. X-Real-IP (Trusted single proxy header)
     const realIp = headers["x-real-ip"];
     if (realIp) {
       const val = Array.isArray(realIp) ? realIp[0] : realIp;
@@ -41,9 +36,8 @@ function getClientIp(req) {
       }
     }
 
-    // 4. Express req.ip or socket remote address fallback
+    // 4. Socket remote address fallback
     const directIp =
-      req.ip ||
       req.connection?.remoteAddress ||
       req.socket?.remoteAddress ||
       "127.0.0.1";

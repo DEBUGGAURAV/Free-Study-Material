@@ -1350,14 +1350,21 @@ export const api = {
     });
   },
   adminReplyHelpTicket: (ticketCode, replyText) => request("/help/admin/reply", { method: "POST", body: JSON.stringify({ ticketCode, replyText }) }),
-  adminCloseHelpTicket: (ticketCode, reason = "", autoDelete = false) =>
-    request("/help/admin/close", { method: "POST", body: JSON.stringify({ ticketCode, reason, autoDelete }) }),
+  adminCloseHelpTicket: (ticketCode, reason = "", autoDelete = false, retentionDays = null) =>
+    request("/help/admin/close", { method: "POST", body: JSON.stringify({ ticketCode, reason, autoDelete, retentionDays }) }),
   adminActiveHelpTicket: (ticketCode) =>
     request("/help/admin/active", { method: "POST", body: JSON.stringify({ ticketCode }) }),
   adminDeleteHelpTicket: (ticketCode) =>
     request(`/help/admin/ticket/${encodeURIComponent(ticketCode)}`, { method: "DELETE" }),
   adminPurgeHelpTickets: (onlyClosed = true) =>
     request(`/help/admin/purge${onlyClosed ? "" : "?all=true"}`, { method: "DELETE" }),
+  getHelpRetentionConfig: () => request("/help/admin/retention"),
+  updateHelpRetentionConfig: (retentionDays) =>
+    request("/help/admin/retention", { method: "POST", body: JSON.stringify({ retentionDays }) }),
+  updateTicketRetention: (ticketCode, days) =>
+    request("/help/admin/ticket-retention", { method: "POST", body: JSON.stringify({ ticketCode, days }) }),
+  adminPurgeExpiredTickets: () =>
+    request("/help/admin/purge-expired", { method: "POST" }),
   adminCreateHelpTopics: (chatId = null) =>
     request("/help/admin/create-topics", { method: "POST", body: JSON.stringify({ chatId }) }),
   getHelpTelemetry: () => request("/help/admin/telemetry"),

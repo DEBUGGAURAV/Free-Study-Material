@@ -11,6 +11,11 @@
  * ============================================================================
  */
 
+const dns = require("node:dns");
+if (dns && typeof dns.setDefaultResultOrder === "function") {
+  try { dns.setDefaultResultOrder("ipv4first"); } catch (_) {}
+}
+
 const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
@@ -100,7 +105,7 @@ function getHelpClosedTopicId() {
 }
 
 /**
- * Initialize dedicated Turso table for help tickets
+ * Initialize dedicated Turso table for help tickets & settings
  */
 async function initHelpTable() {
   if (!helpTursoClient) return;
@@ -123,6 +128,8 @@ async function initHelpTable() {
         replied_at TEXT,
         closed_at TEXT,
         closed_by TEXT,
+        custom_retention_days INTEGER DEFAULT NULL,
+        purge_at TEXT DEFAULT NULL,
         ip_address TEXT,
         telegram_message_id TEXT,
         conversation TEXT,
@@ -131,18 +138,238 @@ async function initHelpTable() {
         updated_at TEXT NOT NULL
       );
     `);
+    await helpTursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS help_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_code ON help_tickets(ticket_code);`).catch(() => {});
     await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_status ON help_tickets(status);`).catch(() => {});
+    await helpTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_help_purge_at ON help_tickets(purge_at);`).catch(() => {});
     // Safe hot-migrations for existing databases
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN user_mobile TEXT;`).catch(() => {});
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN conversation TEXT;`).catch(() => {});
     await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN attachments TEXT;`).catch(() => {});
-    // Purge any closed tickets so database is 100% clean
-    await helpTursoClient.execute(`DELETE FROM help_tickets WHERE status = 'closed';`).catch(() => {});
-    console.log("[HELP-TURSO] ✅ Support help_tickets table ready (closed tickets auto-purged).");
+    await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN custom_retention_days INTEGER DEFAULT NULL;`).catch(() => {});
+    await helpTursoClient.execute(`ALTER TABLE help_tickets ADD COLUMN purge_at TEXT DEFAULT NULL;`).catch(() => {});
+
+    // Ensure default 5 days retention is configured in help_settings
+    await helpTursoClient.execute({
+      sql: `INSERT OR IGNORE INTO help_settings (key, value, updated_at) VALUES ('help_ticket_retention_days', '5', datetime('now'))`,
+      args: [],
+    }).catch(() => {});
+
+    // Purge ONLY expired closed tickets whose retention period has passed!
+    await purgeExpiredClosedTickets().catch(() => {});
+    console.log("[HELP-TURSO] ✅ Support help_tickets table ready (5-day closed ticket retention active).");
   } catch (err) {
     console.warn("[HELP-TURSO] Table init warning:", err.message);
   }
+}
+
+let cachedGlobalRetentionDays = 5;
+
+/**
+ * Get global default retention days for closed tickets (default: 5 days)
+ */
+async function getGlobalHelpRetentionDays() {
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      const res = await helpTursoClient.execute({
+        sql: `SELECT value FROM help_settings WHERE key = 'help_ticket_retention_days' LIMIT 1`,
+        args: [],
+      });
+      if (res.rows && res.rows.length > 0) {
+        const val = parseInt(res.rows[0].value, 10);
+        if (!isNaN(val)) {
+          cachedGlobalRetentionDays = val;
+          return val;
+        }
+      }
+    } catch (_) {}
+  }
+  return cachedGlobalRetentionDays;
+}
+
+/**
+ * Update global default retention days for closed tickets (Admin Tab 12 control)
+ * @param {number|string} days - E.g. 1, 3, 5, 7, 14, 30, or -1 for Never
+ */
+async function setGlobalHelpRetentionDays(days) {
+  const parsed = parseInt(days, 10);
+  const targetDays = isNaN(parsed) ? 5 : parsed;
+  cachedGlobalRetentionDays = targetDays;
+
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      await helpTursoClient.execute({
+        sql: `INSERT INTO help_settings (key, value, updated_at) VALUES ('help_ticket_retention_days', ?, datetime('now'))
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+        args: [String(targetDays)],
+      });
+
+      // Recalculate purge_at for closed tickets that do NOT have a custom override
+      if (targetDays < 0) {
+        // Never purge
+        await helpTursoClient.execute({
+          sql: `UPDATE help_tickets SET purge_at = NULL WHERE status = 'closed' AND custom_retention_days IS NULL`,
+          args: [],
+        });
+      } else {
+        await helpTursoClient.execute({
+          sql: `UPDATE help_tickets SET purge_at = datetime(closed_at, '+' || ? || ' days') WHERE status = 'closed' AND custom_retention_days IS NULL AND closed_at IS NOT NULL`,
+          args: [targetDays],
+        });
+      }
+    } catch (err) {
+      console.warn("[HELP-TURSO] Failed to set retention days:", err.message);
+    }
+  }
+  return { success: true, retentionDays: targetDays };
+}
+
+/**
+ * Update individual ticket retention duration or execute instant purge (Admin Tab 13 control)
+ * @param {string} ticketCode
+ * @param {number|string} days - 0 for instant purge, >0 for custom days, -1 for Never
+ */
+async function updateTicketRetention(ticketCode, days) {
+  if (!ticketCode) return { success: false, message: "Ticket code required." };
+  const cleanCode = ticketCode.trim().toUpperCase();
+  const parsedDays = parseInt(days, 10);
+
+  // If days === 0: Instant Purge right now!
+  if (parsedDays === 0) {
+    const delRes = await deleteHelpTicket(cleanCode);
+    return { success: true, purged: true, message: `Ticket #${cleanCode} instantly purged from database.` };
+  }
+
+  let purgeAt = null;
+  if (parsedDays > 0) {
+    purgeAt = new Date(Date.now() + parsedDays * 86400 * 1000).toISOString();
+  } // If parsedDays < 0: never purge (purgeAt remains null)
+
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      await helpTursoClient.execute({
+        sql: `UPDATE help_tickets SET
+                custom_retention_days = ?,
+                purge_at = ?,
+                updated_at = datetime('now')
+              WHERE ticket_code = ?`,
+        args: [parsedDays, purgeAt, cleanCode],
+      });
+    } catch (err) {
+      console.warn("[HELP-TURSO] Update ticket retention error:", err.message);
+      return { success: false, message: err.message };
+    }
+  }
+
+  const inMem = memoryTickets.get(cleanCode);
+  if (inMem) {
+    inMem.custom_retention_days = parsedDays;
+    inMem.purge_at = purgeAt;
+    inMem.updated_at = new Date().toISOString();
+  }
+
+  return { success: true, ticketCode: cleanCode, retentionDays: parsedDays, purgeAt };
+}
+
+/**
+ * Purge ONLY expired closed tickets whose retention period has passed
+ */
+async function purgeExpiredClosedTickets() {
+  const nowIso = new Date().toISOString();
+  let purgedCount = 0;
+
+  // Prune memory tickets
+  for (const [code, t] of memoryTickets.entries()) {
+    if (t.status === "closed" && t.purge_at && new Date(t.purge_at) <= new Date()) {
+      memoryTickets.delete(code);
+      purgedCount++;
+    }
+  }
+
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      const res = await helpTursoClient.execute({
+        sql: `DELETE FROM help_tickets WHERE status = 'closed' AND purge_at IS NOT NULL AND purge_at <= ?`,
+        args: [nowIso],
+      });
+      purgedCount = Math.max(purgedCount, res.rowsAffected || 0);
+      if (purgedCount > 0) {
+        console.log(`[HELP-TURSO] 🧹 Auto-purged ${purgedCount} expired closed ticket(s).`);
+      }
+    } catch (err) {
+      console.warn("[HELP-TURSO] Purge expired tickets error:", err.message);
+    }
+  }
+
+  return { success: true, purgedCount };
+}
+
+// Background auto-purge runner: runs every 30 minutes
+setInterval(() => {
+  purgeExpiredClosedTickets().catch(() => {});
+}, 30 * 60 * 1000);
+
+/**
+ * Telemetry and Stats for Tab 12 Turso Studio
+ */
+async function getHelpRetentionStats() {
+  const retentionDays = await getGlobalHelpRetentionDays();
+  const nowIso = new Date().toISOString();
+
+  let totalTickets = memoryTickets.size;
+  let activeTickets = 0;
+  let closedTickets = 0;
+  let expiredTickets = 0;
+
+  for (const t of memoryTickets.values()) {
+    if (t.status === "closed") {
+      closedTickets++;
+      if (t.purge_at && new Date(t.purge_at) <= new Date()) expiredTickets++;
+    } else {
+      activeTickets++;
+    }
+  }
+
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      const [totRes, actRes, cloRes, expRes] = await Promise.all([
+        helpTursoClient.execute(`SELECT COUNT(*) AS c FROM help_tickets`),
+        helpTursoClient.execute(`SELECT COUNT(*) AS c FROM help_tickets WHERE status != 'closed'`),
+        helpTursoClient.execute(`SELECT COUNT(*) AS c FROM help_tickets WHERE status = 'closed'`),
+        helpTursoClient.execute({
+          sql: `SELECT COUNT(*) AS c FROM help_tickets WHERE status = 'closed' AND purge_at IS NOT NULL AND purge_at <= ?`,
+          args: [nowIso],
+        }),
+      ]);
+
+      totalTickets = Number(totRes.rows?.[0]?.c ?? totalTickets);
+      activeTickets = Number(actRes.rows?.[0]?.c ?? activeTickets);
+      closedTickets = Number(cloRes.rows?.[0]?.c ?? closedTickets);
+      expiredTickets = Number(expRes.rows?.[0]?.c ?? expiredTickets);
+    } catch (err) {
+      console.warn("[HELP-TURSO] Retention stats error:", err.message);
+    }
+  }
+
+  return {
+    success: true,
+    retentionDays,
+    totalTickets,
+    activeTickets,
+    closedTickets,
+    expiredTickets,
+  };
 }
 
 let tableInitPromise = null;
@@ -407,7 +634,7 @@ async function dispatchTelegramHelpNotice(ticket) {
 /**
  * Dispatches Closed Ticket Resolution Dossier Report to Supergroup Closed Topic (Topic 7)
  */
-async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
+async function dispatchClosedTicketReport(ticket, closedBy = "Administrator", retentionDays = 5) {
   const botToken = getHelpBotToken();
   const chatId = getHelpChatId();
   const closedTopicId = getHelpClosedTopicId();
@@ -417,6 +644,13 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
   const replySummary = ticket.admin_reply
     ? `<i>${ticket.admin_reply.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</i>`
     : `<i>Ticket resolved and archived directly by ${closedBy}.</i>`;
+
+  const retentionStatus =
+    retentionDays === 0
+      ? "🗑️ <b>Status:</b> Instantly Purged from Database"
+      : retentionDays < 0
+      ? "♾️ <b>Retention:</b> Kept indefinitely in database"
+      : `⏳ <b>Retention Period:</b> ${retentionDays} Days (Auto-purges on ${ticket.purge_at ? new Date(ticket.purge_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : `${retentionDays}d after closure`})`;
 
   const text = [
     `🔒 <b>TICKET RESOLUTION AUDIT REPORT #${ticket.ticket_code}</b>`,
@@ -434,7 +668,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `👨‍💻 <b>Closed By:</b> ${closedBy}`,
     `🕒 <b>Closed At:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`,
-    `🗑️ <b>Database Status:</b> Permanently Deleted from Database (Auto-Purged)`,
+    retentionStatus,
   ]
     .filter(Boolean)
     .join("\n");
@@ -443,6 +677,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
     inline_keyboard: [
       [
         { text: "🟢 Re-Activate Ticket", callback_data: `ticket:reactivate:${ticket.ticket_code}` },
+        { text: "⚡ Purge Now", callback_data: `ticket:purge:${ticket.ticket_code}` },
       ],
     ],
   };
@@ -473,6 +708,21 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator") {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+    }
+
+    // Also notify Admin DM
+    const adminChatId = getHelpAdminChatId();
+    if (adminChatId && adminChatId !== chatId) {
+      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text,
+          parse_mode: "HTML",
+          reply_markup: closedKeyboard,
+        }),
+      }).catch(() => {});
     }
   } catch (err) {
     console.warn("[HELP-BOT] Closed report dispatch error:", err.message);
@@ -723,9 +973,15 @@ async function getTicketsByCodes(ticketCodes = [], userId = null, userEmail = nu
 }
 
 /**
- * Close a ticket, dispatch report to Topic 7, and physically delete from database
+ * Close a ticket, dispatch report to Topic 7, and retain for 5 days (or custom days) before auto-purging
  */
-async function closeHelpTicket({ ticketCode, closedBy = "Admin", reason = "", autoDelete = true }) {
+async function closeHelpTicket({
+  ticketCode,
+  closedBy = "Admin",
+  reason = "",
+  autoDelete = false,
+  retentionDays = null,
+}) {
   if (!ticketCode) return { success: false, message: "Ticket code required." };
   const cleanCode = ticketCode.trim().toUpperCase();
   const now = new Date().toISOString();
@@ -753,14 +1009,67 @@ async function closeHelpTicket({ ticketCode, closedBy = "Admin", reason = "", au
     recentlyClosedTickets.delete(oldestKey);
   }
 
-  // Dispatch full closed dossier report to Topic 7 & Admin DM
-  await dispatchClosedTicketReport(ticket, closedBy);
+  // Instant Purge condition: if autoDelete is explicitly requested or retention is 0 days
+  if (autoDelete === true || retentionDays === 0) {
+    await dispatchClosedTicketReport(ticket, closedBy, 0);
+    await deleteHelpTicket(cleanCode);
+    ticket.auto_deleted = true;
+    return { success: true, ticket, purged: true, message: `Ticket #${cleanCode} closed & instantly purged.` };
+  }
 
-  // 🗑️ Physically delete ticket from Turso Database & active memory immediately!
-  await deleteHelpTicket(cleanCode);
-  ticket.auto_deleted = true;
+  // Grace Period Retention calculation:
+  // Use passed custom retentionDays, or existing ticket custom override, or global setting (default: 5 days)
+  const globalDays = await getGlobalHelpRetentionDays();
+  const effectiveDays = (retentionDays !== null && !isNaN(retentionDays))
+    ? Number(retentionDays)
+    : (ticket.custom_retention_days !== null && ticket.custom_retention_days !== undefined
+        ? Number(ticket.custom_retention_days)
+        : globalDays);
 
-  return { success: true, ticket };
+  let purgeAt = null;
+  if (effectiveDays >= 0) {
+    const purgeDate = new Date(Date.now() + effectiveDays * 86400 * 1000);
+    purgeAt = purgeDate.toISOString();
+  }
+
+  ticket.custom_retention_days = (retentionDays !== null && !isNaN(retentionDays)) ? effectiveDays : null;
+  ticket.purge_at = purgeAt;
+
+  // Persist closed status and purge timestamp into Turso
+  if (helpTursoClient) {
+    try {
+      await ensureHelpTable();
+      await helpTursoClient.execute({
+        sql: `UPDATE help_tickets SET
+                status = 'closed',
+                closed_at = ?,
+                closed_by = ?,
+                admin_reply = COALESCE(admin_reply, ?),
+                custom_retention_days = ?,
+                purge_at = ?,
+                updated_at = ?
+              WHERE ticket_code = ?`,
+        args: [
+          now,
+          closedBy,
+          reason || null,
+          ticket.custom_retention_days,
+          purgeAt,
+          now,
+          cleanCode,
+        ],
+      });
+    } catch (err) {
+      console.warn("[HELP-TURSO] Close ticket update error:", err.message);
+    }
+  }
+
+  memoryTickets.set(cleanCode, ticket);
+
+  // Dispatch full closed dossier report to Topic 7 & Admin DM with retention info
+  await dispatchClosedTicketReport(ticket, closedBy, effectiveDays);
+
+  return { success: true, ticket, retentionDays: effectiveDays, purgeAt };
 }
 
 /**
@@ -1309,15 +1618,16 @@ function startHelpBotPoller() {
 
           if (cbData.startsWith("ticket:close:")) {
             const ticketCode = cbData.replace("ticket:close:", "").trim().toUpperCase();
-            await closeHelpTicket({ ticketCode, closedBy: fromAdmin, reason: "Resolved via Telegram quick action." });
+            const closeRes = await closeHelpTicket({ ticketCode, closedBy: fromAdmin, reason: "Resolved via Telegram quick action." });
 
+            const retentionDays = closeRes.retentionDays ?? 5;
             // Acknowledge callback alert
             await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 callback_query_id: cb.id,
-                text: `✅ Ticket #${ticketCode} closed & deleted from database!`,
+                text: `🔒 Ticket #${ticketCode} closed! Retained for ${retentionDays}d before auto-purge.`,
                 show_alert: false,
               }),
             }).catch(() => {});
@@ -1332,7 +1642,41 @@ function startHelpBotPoller() {
                   message_id: cb.message.message_id,
                   reply_markup: {
                     inline_keyboard: [
-                      [{ text: `🔒 Ticket #${ticketCode} CLOSED & DELETED by ${fromAdmin}`, callback_data: "ticket_closed_noop" }],
+                      [{ text: `🔒 CLOSED by ${fromAdmin} (Purges in ${retentionDays}d)`, callback_data: "ticket_closed_noop" }],
+                    ],
+                  },
+                }),
+              }).catch(() => {});
+            }
+            continue;
+          }
+
+          if (cbData.startsWith("ticket:purge:")) {
+            const ticketCode = cbData.replace("ticket:purge:", "").trim().toUpperCase();
+            await deleteHelpTicket(ticketCode);
+
+            // Acknowledge callback alert
+            await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                callback_query_id: cb.id,
+                text: `🗑️ Ticket #${ticketCode} permanently purged from database!`,
+                show_alert: false,
+              }),
+            }).catch(() => {});
+
+            // Update original message to show purged badge
+            if (cb.message) {
+              await fetch(`https://api.telegram.org/bot${botToken}/editMessageReplyMarkup`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  chat_id: cb.message.chat.id,
+                  message_id: cb.message.message_id,
+                  reply_markup: {
+                    inline_keyboard: [
+                      [{ text: `🗑️ PERMANENTLY PURGED by ${fromAdmin}`, callback_data: "ticket_purged_noop" }],
                     ],
                   },
                 }),
@@ -1579,4 +1923,9 @@ module.exports = {
   dispatchClosedTicketReport,
   studentReplyHelpTicket,
   dispatchStudentReplyNotice,
+  getGlobalHelpRetentionDays,
+  setGlobalHelpRetentionDays,
+  updateTicketRetention,
+  purgeExpiredClosedTickets,
+  getHelpRetentionStats,
 };

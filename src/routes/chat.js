@@ -7,6 +7,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { authenticateToken, requireAuth, JWT_SECRET, setAuthCookie } = require("../middleware/auth");
+const { getClientIp } = require("../middleware/rateLimit");
 const { getSiteUrl } = require("../config/siteConfig");
 const {
   savePrivateRoomAudit,
@@ -58,10 +59,7 @@ try {
   console.warn("[CHAT-MEDIA] Directory notice:", e.message);
 }
 
-function getClientIp(req) {
-  const forwarded = req.headers?.["x-forwarded-for"] || req.headers?.["x-real-ip"] || req.socket?.remoteAddress || req.ip || "127.0.0.1";
-  return String(forwarded).split(",")[0].trim().replace(/^::ffff:/, "");
-}
+// (getClientIp imported from rateLimit with proxy-safe spoofing prevention)
 
 // Multer storage for Chat Attachments
 const chatStorage = multer.diskStorage({

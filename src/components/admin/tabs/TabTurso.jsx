@@ -55,6 +55,83 @@ export default function TabTurso(props) {
   const [aiSearchFilter, setAiSearchFilter] = useState("");
   const [showAiLogsTable, setShowAiLogsTable] = useState(false);
 
+  // 🎫 Dedicated Support Desk Tickets Retention & Auto-Purge State (help_tickets)
+  const [helpRetentionDays, setHelpRetentionDays] = useState("5");
+  const [helpStats, setHelpStats] = useState({
+    retentionDays: 5,
+    totalTickets: 0,
+    activeTickets: 0,
+    closedTickets: 0,
+    expiredTickets: 0,
+  });
+  const [isHelpUpdating, setIsHelpUpdating] = useState(false);
+  const [helpActionMsg, setHelpActionMsg] = useState(null);
+
+  const loadHelpRetention = async () => {
+    try {
+      const res = await api.getHelpRetentionConfig();
+      if (res?.success) {
+        setHelpStats(res);
+        setHelpRetentionDays(res.retentionDays < 0 ? "never" : String(res.retentionDays));
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    loadHelpRetention();
+  }, []);
+
+  const handleUpdateHelpRetention = async (daysOverride) => {
+    let targetDays;
+    if (daysOverride !== undefined) {
+      targetDays = daysOverride;
+    } else if (helpRetentionDays === "never") {
+      targetDays = -1;
+    } else {
+      targetDays = parseInt(helpRetentionDays, 10);
+    }
+
+    setIsHelpUpdating(true);
+    setHelpActionMsg(null);
+    try {
+      const res = await api.updateHelpRetentionConfig(targetDays);
+      if (res?.success) {
+        if (res.stats) setHelpStats(res.stats);
+        setHelpRetentionDays(targetDays < 0 ? "never" : String(targetDays));
+        setHelpActionMsg({
+          type: "success",
+          text: targetDays < 0
+            ? "♾️ Support Desk Retention set to NEVER (Tickets kept indefinitely)."
+            : `⏳ Support Desk Retention updated to ${targetDays} day(s). Closed tickets auto-purge after ${targetDays}d.`,
+        });
+      }
+    } catch (err) {
+      setHelpActionMsg({ type: "error", text: err.message || "Failed to update retention policy" });
+    } finally {
+      setIsHelpUpdating(false);
+    }
+  };
+
+  const handlePurgeExpiredHelpTickets = async () => {
+    if (!window.confirm("Purge all expired closed support tickets whose retention period has ended?")) return;
+    setIsHelpUpdating(true);
+    setHelpActionMsg(null);
+    try {
+      const res = await api.adminPurgeExpiredTickets();
+      if (res?.success) {
+        if (res.stats) setHelpStats(res.stats);
+        setHelpActionMsg({
+          type: "success",
+          text: `🧹 Purge complete: ${res.purgedCount || 0} expired ticket(s) permanently removed.`,
+        });
+      }
+    } catch (err) {
+      setHelpActionMsg({ type: "error", text: err.message || "Failed to purge expired tickets" });
+    } finally {
+      setIsHelpUpdating(false);
+    }
+  };
+
   const loadAiLogs = async () => {
     setAiLogsLoading(true);
     try {
@@ -1227,6 +1304,280 @@ export default function TabTurso(props) {
                         )}
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 🎫 Support Desk Ticket Retention & Auto-Purge (help_tickets) */}
+              <div
+                style={{
+                  background: "rgba(15, 23, 42, 0.5)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "18px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "14px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px", flexWrap: "wrap", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.18)", color: "#818cf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <MessageSquare size={16} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>
+                        Support Help Desk Ticket Retention &amp; Auto-Purge (help_tickets)
+                      </div>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                        Closed tickets remain visible for 5 days before auto-purging. Increase/decrease retention globally or per user in Tab 13.
+                      </div>
+                    </div>
+                  </div>
+
+                  <span
+                    style={{
+                      fontSize: "0.72rem",
+                      padding: "3px 9px",
+                      borderRadius: "999px",
+                      background: helpRetentionDays === "never" ? "rgba(16, 185, 129, 0.15)" : "rgba(99, 102, 241, 0.15)",
+                      color: helpRetentionDays === "never" ? "#34d399" : "#a5b4fc",
+                      border: helpRetentionDays === "never" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(99, 102, 241, 0.35)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {helpRetentionDays === "never" ? "♾️ Retention: NEVER" : `⏳ Retention: ${helpRetentionDays}d`}
+                  </span>
+                </div>
+
+                {/* Live Stats Row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px" }}>
+                  <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "8px", padding: "8px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Total Tickets</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff" }}>{helpStats.totalTickets}</div>
+                  </div>
+                  <div style={{ background: "rgba(56, 189, 248, 0.05)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "8px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "#38bdf8", textTransform: "uppercase" }}>🟢 Active Tickets</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#38bdf8" }}>{helpStats.activeTickets}</div>
+                  </div>
+                  <div style={{ background: "rgba(99, 102, 241, 0.05)", border: "1px solid rgba(99, 102, 241, 0.2)", borderRadius: "8px", padding: "8px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "#a5b4fc", textTransform: "uppercase" }}>🔒 Closed (Grace Period)</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#c7d2fe" }}>{helpStats.closedTickets}</div>
+                  </div>
+                  <div style={{ background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.25)", borderRadius: "8px", padding: "8px 12px" }}>
+                    <div style={{ fontSize: "0.68rem", color: "#f87171", textTransform: "uppercase" }}>⚠️ Expired (Purgeable)</div>
+                    <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fca5a5" }}>{helpStats.expiredTickets}</div>
+                  </div>
+                </div>
+
+                {/* Presets & Controls */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ color: "var(--text-dim)", fontSize: "0.76rem", fontWeight: 600 }}>Presets:</span>
+                  {[1, 3, 5, 7, 14, 30].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => handleUpdateHelpRetention(d)}
+                      disabled={isHelpUpdating}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: helpRetentionDays === String(d) ? "rgba(99, 102, 241, 0.3)" : "rgba(255, 255, 255, 0.04)",
+                        border: helpRetentionDays === String(d) ? "1px solid #818cf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                        color: helpRetentionDays === String(d) ? "#fff" : "var(--text-muted)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {d}d{d === 5 ? " (Default)" : ""}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateHelpRetention("never")}
+                    disabled={isHelpUpdating}
+                    style={{
+                      padding: "3px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.74rem",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      background: helpRetentionDays === "never" ? "rgba(16, 185, 129, 0.3)" : "rgba(16, 185, 129, 0.1)",
+                      border: helpRetentionDays === "never" ? "1px solid #10b981" : "1px solid rgba(16, 185, 129, 0.3)",
+                      color: helpRetentionDays === "never" ? "#fff" : "#34d399",
+                      transition: "all 0.15s ease",
+                    }}
+                    title="Keep closed tickets forever"
+                  >
+                    ♾️ Never (Keep Forever)
+                  </button>
+                </div>
+
+                {/* Custom Stepper & Purge Actions */}
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "2px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = helpRetentionDays === "never" ? 5 : parseInt(helpRetentionDays, 10);
+                        const next = Math.max(1, cur - 1);
+                        handleUpdateHelpRetention(next);
+                      }}
+                      disabled={isHelpUpdating || helpRetentionDays === "never"}
+                      style={{
+                        padding: "5px 10px",
+                        borderRadius: "6px",
+                        background: "rgba(255, 255, 255, 0.07)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "#fff",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                      title="Decrease retention days"
+                    >
+                      -
+                    </button>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        value={helpRetentionDays === "never" ? "" : helpRetentionDays}
+                        placeholder={helpRetentionDays === "never" ? "∞" : "5"}
+                        onChange={(e) => setHelpRetentionDays(e.target.value)}
+                        disabled={helpRetentionDays === "never" || isHelpUpdating}
+                        style={{
+                          width: "56px",
+                          textAlign: "center",
+                          padding: "5px 4px",
+                          borderRadius: "6px",
+                          background: "rgba(0, 0, 0, 0.4)",
+                          border: "1px solid rgba(99, 102, 241, 0.4)",
+                          color: "#fff",
+                          fontWeight: 700,
+                          fontSize: "0.85rem",
+                          outline: "none",
+                        }}
+                      />
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.76rem" }}>days</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cur = helpRetentionDays === "never" ? 5 : parseInt(helpRetentionDays, 10);
+                        const next = Math.min(365, cur + 1);
+                        handleUpdateHelpRetention(next);
+                      }}
+                      disabled={isHelpUpdating || helpRetentionDays === "never"}
+                      style={{
+                        padding: "5px 10px",
+                        borderRadius: "6px",
+                        background: "rgba(255, 255, 255, 0.07)",
+                        border: "1px solid rgba(255, 255, 255, 0.15)",
+                        color: "#fff",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                      title="Increase retention days"
+                    >
+                      +
+                    </button>
+
+                    {helpRetentionDays !== "never" && (
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateHelpRetention(helpRetentionDays)}
+                        disabled={isHelpUpdating}
+                        className="btn-primary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "5px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        <Save size={12} />
+                        <span>Save Policy</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
+                    <button
+                      type="button"
+                      onClick={handlePurgeExpiredHelpTickets}
+                      disabled={isHelpUpdating || helpStats.expiredTickets === 0}
+                      style={{
+                        fontSize: "0.74rem",
+                        padding: "6px 12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        background: helpStats.expiredTickets > 0 ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.04)",
+                        border: helpStats.expiredTickets > 0 ? "1px solid rgba(239, 68, 68, 0.5)" : "1px solid rgba(255, 255, 255, 0.08)",
+                        color: helpStats.expiredTickets > 0 ? "#fca5a5" : "var(--text-muted)",
+                        borderRadius: "6px",
+                        cursor: helpStats.expiredTickets > 0 ? "pointer" : "not-allowed",
+                        fontWeight: 700,
+                      }}
+                      title="Purge expired tickets now"
+                    >
+                      <Trash2 size={12} />
+                      <span>Purge Expired Closed Tickets Now ({helpStats.expiredTickets})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={loadHelpRetention}
+                      disabled={isHelpUpdating}
+                      className="btn-secondary"
+                      style={{ fontSize: "0.74rem", padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      title="Refresh metrics"
+                    >
+                      <RefreshCw size={12} className={isHelpUpdating ? "spin" : ""} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Action Feedback Message */}
+                {helpActionMsg && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      fontSize: "0.76rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: helpActionMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      border: helpActionMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)",
+                      color: helpActionMsg.type === "success" ? "#34d399" : "#fca5a5",
+                    }}
+                  >
+                    <span>{helpActionMsg.text}</span>
+                    <button
+                      onClick={() => setHelpActionMsg(null)}
+                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 4px" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+
+                {/* 5-Day Auto-Purge Lifecycle Notice */}
+                <div style={{ background: "rgba(99, 102, 241, 0.04)", border: "1px solid rgba(99, 102, 241, 0.15)", borderRadius: "6px", padding: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#a5b4fc", fontSize: "0.75rem", fontWeight: 700, marginBottom: "4px" }}>
+                    <Clock size={14} />
+                    <span>Autonomous 5-Day Closed Ticket Lifecycle</span>
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+                    When a ticket is closed, it remains visible for exactly <strong>{helpRetentionDays === "never" ? "indefinitely" : `${helpRetentionDays} days`}</strong> in Turso and Student Portals. Admin can adjust individual ticket retention or trigger <strong>Instant Purge</strong> in <strong>Tab 13 (Support Desk)</strong> at any time.
                   </div>
                 </div>
               </div>

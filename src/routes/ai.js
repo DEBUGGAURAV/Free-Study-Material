@@ -32,6 +32,15 @@ const {
 
 // Student Rate Limiter (Prevent single student spamming AI endpoints, with Admin immunity)
 const studentRateLimitMap = new Map();
+
+// 🛡️ Periodic Memory Leak Shield: Prune stale rate-limit timestamps every 60s
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, time] of studentRateLimitMap.entries()) {
+    if (now - time > 60000) studentRateLimitMap.delete(key);
+  }
+}, 60000);
+
 function studentAiLimiter(req, res, next) {
   // 🛡️ Admin Immunity: Administrators and half-admins are never rate limited
   if (req.user?.role === "admin" || req.user?.role === "half_admin" || req.user?.isMainAdmin) {

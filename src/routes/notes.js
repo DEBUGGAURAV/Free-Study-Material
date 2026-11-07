@@ -1699,27 +1699,19 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
       const workerSecret = (process.env.CF_WORKER_SECRET || process.env.WORKER_SECRET || "").trim();
       const clientWorkerSig = (req.headers["x-worker-signature"] || req.headers["x-worker-secret"] || "").trim();
+      const hasValidWorkerSig = Boolean(workerSecret && clientWorkerSig && clientWorkerSig === workerSecret);
       const isOriginWorkerDev = Boolean(
         (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev")) ||
         (req.headers["referer"] && req.headers["referer"].includes("workers.dev")) ||
-        (req.headers["origin"] && req.headers["origin"].includes("workers.dev")) ||
-        req.headers["cf-worker"] === "true" ||
-        req.headers["x-via-worker"] === "true" ||
-        req.headers["cf-worker"] ||
-        req.headers["x-via-worker"]
+        (req.headers["origin"] && req.headers["origin"].includes("workers.dev"))
       );
       const isWorkerProxy = Boolean(
-        req.headers["cf-worker"] === "true" ||
-        req.headers["x-via-worker"] === "true" ||
-        req.headers["cf-worker"] ||
-        req.headers["x-via-worker"] ||
-        (workerSecret && clientWorkerSig === workerSecret) ||
-        (req.headers["cf-ray"] && isOriginWorkerDev) ||
-        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+        hasValidWorkerSig ||
+        (req.headers["cf-ray"] && isOriginWorkerDev)
       );
 
-      // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure
-      if (isWorkerProxy && !requestingUser) {
+      // Cloudflare Edge Worker caching is recognized as trusted CDN infrastructure for reading streams (never for bypassing student download gating)
+      if (isWorkerProxy && !requestingUser && !isDownload) {
         requestingUser = { id: "cf_worker_edge", role: "worker", isEdgeCDN: true };
       }
 
