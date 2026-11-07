@@ -60,11 +60,49 @@ function getTargetPublicDeletedTopic() {
   return auditTopics.deletedMessages || "35";
 }
 
-// Bidirectional message mapping: Telegram Message ID <-> Web Public Chat Message ID (Capped at 2,000 entries)
+// Bidirectional message mapping: Telegram Message ID <-> Web Chat Message ID & Sender Metadata (Capped at 2,000 entries)
 const telegramToWebMsgMap = new Map();
 const webToTelegramMsgMap = new Map();
+const telegramMsgMetaMap = new Map();
+const webToTelegramTargetsMap = new Map();
+const callbackDataStore = new Map();
+let callbackSeq = 1;
 
-function trackTelegramWebMsg(teleId, webId) {
+function makeSafeCallbackData(prefix, rawValue) {
+  const val = String(rawValue || "").trim();
+  const direct = `${prefix}${val}`;
+  if (Buffer.byteLength(direct, "utf8") <= 64) {
+    return direct;
+  }
+  const shortKey = `k${(callbackSeq++ % 50000)}`;
+  if (callbackDataStore.size >= 2000) {
+    const oldest = callbackDataStore.keys().next().value;
+    callbackDataStore.delete(oldest);
+  }
+  callbackDataStore.set(shortKey, val);
+  return `${prefix}${shortKey}`;
+}
+
+function resolveCallbackValue(rawKey) {
+  const k = String(rawKey || "").trim();
+  return callbackDataStore.get(k) || k;
+}
+
+function buildModerationInlineKeyboard({ msgId, senderId, isAdminSender = false }) {
+  if (!msgId || isAdminSender || senderId === "sys_admin_official" || senderId === "system") {
+    return null;
+  }
+  const row = [
+    { text: "🗑️ Del Msg", callback_data: makeSafeCallbackData("delmsg_", msgId) },
+  ];
+  if (senderId) {
+    row.push({ text: "🧹 Del All", callback_data: makeSafeCallbackData("delall_", senderId) });
+    row.push({ text: "🚫 Block", callback_data: makeSafeCallbackData("block_", senderId) });
+  }
+  return { inline_keyboard: [row] };
+}
+
+function trackTelegramWebMsg(teleId, webId, extra = {}) {
   if (teleId && webId) {
     if (telegramToWebMsgMap.size >= 2000) {
       const oldest = telegramToWebMsgMap.keys().next().value;
@@ -74,9 +112,88 @@ function trackTelegramWebMsg(teleId, webId) {
       const oldest = webToTelegramMsgMap.keys().next().value;
       webToTelegramMsgMap.delete(oldest);
     }
-    telegramToWebMsgMap.set(String(teleId), webId);
+    telegramToWebMsgMap.set(String(teleId), String(webId));
     webToTelegramMsgMap.set(String(webId), teleId);
+
+    const meta = {
+      webMsgId: String(webId),
+      roomId: extra.roomId || "public",
+      senderId: extra.senderId || "",
+      senderName: extra.senderName || "Student",
+      senderEmail: extra.senderEmail || "",
+      senderMobile: extra.senderMobile || "",
+    };
+    if (telegramMsgMetaMap.size >= 4000) {
+      const oldest = telegramMsgMetaMap.keys().next().value;
+      telegramMsgMetaMap.delete(oldest);
+    }
+    if (extra.chatId) {
+      telegramMsgMetaMap.set(`${extra.chatId}:${teleId}`, meta);
+    }
+    telegramMsgMetaMap.set(String(teleId), meta);
+
+    if (extra.chatId) {
+      if (webToTelegramTargetsMap.size >= 2000) {
+        const oldest = webToTelegramTargetsMap.keys().next().value;
+        webToTelegramTargetsMap.delete(oldest);
+      }
+      const list = webToTelegramTargetsMap.get(String(webId)) || [];
+      if (!list.some((t) => String(t.chatId) === String(extra.chatId) && String(t.messageId) === String(teleId))) {
+        list.push({ chatId: extra.chatId, messageId: teleId });
+        webToTelegramTargetsMap.set(String(webId), list);
+      }
+    }
   }
+}
+
+function getTelegramMsgMeta(chatId, teleMsgId) {
+  if (!teleMsgId) return null;
+  return (
+    (chatId ? telegramMsgMetaMap.get(`${chatId}:${teleMsgId}`) : null) ||
+    telegramMsgMetaMap.get(String(teleMsgId)) ||
+    null
+  );
+}
+
+function extractReplyTargetInfo(chatId, replyMsg) {
+  if (!replyMsg) return { webMsgId: null, userQuery: "", meta: null };
+  const meta = getTelegramMsgMeta(chatId, replyMsg.message_id);
+  const raw = String(replyMsg.text || replyMsg.caption || "");
+  const msgIdMatch =
+    raw.match(/🆔\s*(?:Message ID:\s*)?([A-Za-z0-9_.-]+)/u) ||
+    raw.match(/\b(msg_[A-Za-z0-9_.-]+)\b/);
+  const emailMatch = raw.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+  const mobileMatch = raw.match(/📱\s*(?:Mobile:\s*)?(\+?\d[\d\s-]{8,14}\d)/u);
+
+  const webMsgId = meta?.webMsgId || (msgIdMatch ? msgIdMatch[1] : null);
+  const userQuery =
+    meta?.senderId ||
+    (meta?.senderEmail && meta.senderEmail !== "N/A" ? meta.senderEmail : "") ||
+    (meta?.senderMobile && meta.senderMobile !== "N/A" ? meta.senderMobile : "") ||
+    (emailMatch ? emailMatch[0] : "") ||
+    (mobileMatch ? mobileMatch[1].replace(/\D/g, "") : "");
+
+  return { webMsgId, userQuery, meta };
+}
+
+async function deleteMirroredTelegramMessages(webMsgIds = []) {
+  if (!Array.isArray(webMsgIds) || webMsgIds.length === 0) return 0;
+  let removed = 0;
+  for (const wid of webMsgIds) {
+    const targets = webToTelegramTargetsMap.get(String(wid)) || [];
+    for (const t of targets) {
+      try {
+        const r = await callTelegram("deleteMessage", {
+          chat_id: t.chatId,
+          message_id: t.messageId,
+        });
+        if (r && r.ok) removed++;
+      } catch (_) {}
+    }
+    webToTelegramTargetsMap.delete(String(wid));
+    webToTelegramMsgMap.delete(String(wid));
+  }
+  return removed;
 }
 
 // Periodic cleanup every 15 minutes
@@ -88,6 +205,14 @@ setInterval(() => {
   while (webToTelegramMsgMap.size > 2000) {
     const oldest = webToTelegramMsgMap.keys().next().value;
     webToTelegramMsgMap.delete(oldest);
+  }
+  while (telegramMsgMetaMap.size > 4000) {
+    const oldest = telegramMsgMetaMap.keys().next().value;
+    telegramMsgMetaMap.delete(oldest);
+  }
+  while (webToTelegramTargetsMap.size > 2000) {
+    const oldest = webToTelegramTargetsMap.keys().next().value;
+    webToTelegramTargetsMap.delete(oldest);
   }
 }, 15 * 60 * 1000);
 
@@ -129,6 +254,7 @@ let chatHandlers = {
   injectIncomingPublicMessage: null,
   editPublicMessage: null,
   deletePublicMessage: null,
+  deleteAllUserMessages: null,
   getActiveUsers: null,
   blockUser: null,
   unblockUser: null,
@@ -480,10 +606,10 @@ async function processUpdate(update) {
           });
         } else {
           const lines = blocked.map((u, i) =>
-            `${i + 1}. <b>${escapeHtml(u.name || "Student")}</b> (<code>${escapeHtml(u.email || u.id)}</code>)`
+            `${i + 1}. <b>${escapeHtml(u.name || "Student")}</b> — 📱 <code>${escapeHtml(u.mobile || "N/A")}</code> | 📧 <code>${escapeHtml(u.email || u.id)}</code>`
           ).join("\n");
           const inlineKb = blocked.slice(0, 8).map((u) => [
-            { text: `✅ Unblock ${u.name || u.email}`, callback_data: `unblock_${u.id}` }
+            { text: `✅ Unblock ${u.name || u.email}`, callback_data: makeSafeCallbackData("unblock_", u.id) }
           ]);
           await callTelegram("sendMessage", {
             chat_id: chatId,
@@ -572,24 +698,117 @@ async function processUpdate(update) {
         return;
       }
 
+      if (data.startsWith("delmsg_")) {
+        const cbThreadId = cb.message?.message_thread_id ? String(cb.message.message_thread_id) : undefined;
+        const targetMsgId = resolveCallbackValue(data.slice(7));
+        let res = null;
+        if (typeof chatHandlers.deletePublicMessage === "function") {
+          res = await chatHandlers.deletePublicMessage(targetMsgId);
+        }
+        const resolvedWebId = res?.messageId || targetMsgId;
+        await deleteMirroredTelegramMessages([resolvedWebId]);
+        if (cb.message?.message_id) {
+          await callTelegram("deleteMessage", {
+            chat_id: chatId,
+            message_id: cb.message.message_id,
+          }).catch(() => {});
+        }
+        const sendPayload = {
+          chat_id: chatId,
+          text: res?.success
+            ? `🗑️ <b>Single Message Deleted:</b>\n🆔 <code>${escapeHtml(resolvedWebId)}</code>` +
+              (res.sender?.name ? `\n👤 <b>User:</b> ${escapeHtml(res.sender.name)}` : "")
+            : `🗑️ <b>Telegram Message Removed</b> (ID: <code>${escapeHtml(resolvedWebId)}</code>)`,
+          parse_mode: "HTML",
+        };
+        if (cbThreadId) sendPayload.message_thread_id = cbThreadId;
+        await callTelegram("sendMessage", sendPayload);
+        return;
+      }
+
+      if (data.startsWith("delall_")) {
+        const cbThreadId = cb.message?.message_thread_id ? String(cb.message.message_thread_id) : undefined;
+        const targetUserKey = resolveCallbackValue(data.slice(7));
+        if (typeof chatHandlers.deleteAllUserMessages === "function") {
+          const res = await chatHandlers.deleteAllUserMessages(targetUserKey, {
+            name: cb.from?.first_name || "Admin (Bot)",
+            ip: "Telegram Bot",
+          });
+          if (res?.deletedMessageIds?.length) {
+            await deleteMirroredTelegramMessages(res.deletedMessageIds);
+          }
+          if (cb.message?.message_id) {
+            await callTelegram("deleteMessage", {
+              chat_id: chatId,
+              message_id: cb.message.message_id,
+            }).catch(() => {});
+          }
+          const sendPayload = {
+            chat_id: chatId,
+            text: res?.success
+              ? `🧹 <b>All Messages Deleted for Student:</b>\n\n` +
+                `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
+                `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
+                `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
+                `🗑️ <b>Messages Purged:</b> <code>${res.deletedCount || 0}</code>`
+              : `⚠️ <b>Delete All Failed:</b> ${escapeHtml(res?.message || "Student not found.")}`,
+            parse_mode: "HTML",
+          };
+          if (cbThreadId) sendPayload.message_thread_id = cbThreadId;
+          await callTelegram("sendMessage", sendPayload);
+        }
+        return;
+      }
+
       if (data.startsWith("toggle_block_") || data.startsWith("block_") || data.startsWith("unblock_")) {
+        const cbThreadId = cb.message?.message_thread_id ? String(cb.message.message_thread_id) : undefined;
         const isUnblock = data.startsWith("unblock_");
-        const targetId = data.replace(/^(toggle_block_|block_|unblock_)/, "");
+        const rawTarget = data.replace(/^(toggle_block_|block_|unblock_)/, "");
+        const targetId = resolveCallbackValue(rawTarget);
         if (isUnblock) {
           if (typeof chatHandlers.unblockUser === "function") {
             const res = await chatHandlers.unblockUser(targetId, { name: cb.from?.first_name || "Admin (Bot DM)", ip: "Telegram Bot" });
-            await callTelegram("sendMessage", {
+            const sendPayload = {
               chat_id: chatId,
-              text: res.success ? `✅ Student unblocked successfully.` : `⚠️ ${res.message || "Failed to unblock."}`,
-            });
+              text: res.success
+                ? `✅ <b>Student Unblocked Successfully:</b>\n\n` +
+                  `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
+                  `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
+                  `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>`
+                : `⚠️ ${escapeHtml(res.message || "Failed to unblock.")}`,
+              parse_mode: "HTML",
+            };
+            if (cbThreadId) sendPayload.message_thread_id = cbThreadId;
+            if (res.success && res.targetUser?.id) {
+              sendPayload.reply_markup = {
+                inline_keyboard: [[{ text: "🚫 Block Again", callback_data: makeSafeCallbackData("block_", res.targetUser.id) }]],
+              };
+            }
+            await callTelegram("sendMessage", sendPayload);
           }
         } else {
           if (typeof chatHandlers.blockUser === "function") {
             const res = await chatHandlers.blockUser(targetId, { name: cb.from?.first_name || "Admin (Bot DM)", ip: "Telegram Bot" });
-            await callTelegram("sendMessage", {
+            const sendPayload = {
               chat_id: chatId,
-              text: res.success ? `🚫 Student restricted from chat successfully.` : `⚠️ ${res.message || "Failed to block."}`,
-            });
+              text: res.success
+                ? `🚫 <b>Student Restricted from Chat Successfully:</b>\n\n` +
+                  `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
+                  `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
+                  `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>`
+                : `⚠️ ${escapeHtml(res.message || "Failed to block.")}`,
+              parse_mode: "HTML",
+            };
+            if (cbThreadId) sendPayload.message_thread_id = cbThreadId;
+            if (res.success && res.targetUser?.id) {
+              sendPayload.reply_markup = {
+                inline_keyboard: [[
+                  { text: "✅ Unblock", callback_data: makeSafeCallbackData("unblock_", res.targetUser.id) },
+                  { text: "🧹 Delete All Msgs", callback_data: makeSafeCallbackData("delall_", res.targetUser.id) },
+                ]],
+              };
+            }
+            await callTelegram("sendMessage", sendPayload);
           }
         }
         return;
@@ -632,7 +851,9 @@ async function processUpdate(update) {
 
     const chatId = message.chat?.id;
     const chatType = message.chat?.type;
-    const text = (message.text || "").trim();
+    const rawText = (message.text || "").trim();
+    // Strip optional @bot_username suffix from slash commands in supergroups
+    const text = rawText.replace(/^(\/[a-zA-Z0-9_]+)@[a-zA-Z0-9_]+/, "$1");
     const caption = (message.caption || "").trim();
     const threadId = message.message_thread_id ? String(message.message_thread_id) : null;
     const fromId = String(message.from?.id || "");
@@ -647,7 +868,7 @@ async function processUpdate(update) {
 
       if (isPublicChatTopic || isDirectChat) {
         const teleMsgId = message.message_id;
-        const newContent = text || caption || "";
+        const newContent = rawText || caption || "";
         if (typeof chatHandlers.editPublicMessage === "function") {
           const edited = chatHandlers.editPublicMessage(teleMsgId, newContent);
           if (edited) {
@@ -658,48 +879,147 @@ async function processUpdate(update) {
       return;
     }
 
-    // 🗑️ B. DELETE MESSAGE FROM TELEGRAM AND WEB (/del or /delete)
-    if (text === "/del" || text === "/delete" || text.startsWith("/del ") || text.startsWith("/delete ")) {
-      let targetTeleMsgId = null;
-      if (message.reply_to_message && message.reply_to_message.message_id) {
-        targetTeleMsgId = message.reply_to_message.message_id;
-      } else {
-        const query = text.replace(/^\/(del|delete)\s*/i, "").trim();
-        if (query) targetTeleMsgId = query;
-      }
+    // 🗑️ B1. SINGLE MESSAGE DELETE (/del, /delete, /delmsg <msg_id> or reply)
+    if (
+      text === "/del" ||
+      text === "/delete" ||
+      text === "/delmsg" ||
+      text.startsWith("/del ") ||
+      text.startsWith("/delete ") ||
+      text.startsWith("/delmsg ")
+    ) {
+      const argQuery = text.replace(/^\/(delmsg|delete|del)\s*/i, "").trim();
+      const replyInfo = extractReplyTargetInfo(chatId, message.reply_to_message);
+      const replyTeleMsgId = message.reply_to_message?.message_id || null;
+      const targetId = argQuery || replyInfo.webMsgId || replyTeleMsgId;
 
-      if (!targetTeleMsgId) {
+      if (!targetId) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
           message_thread_id: threadId,
-          text: "ℹ️ <b>Usage:</b> Reply to any message with <code>/del</code> to delete it from both Telegram and Web Public Chat.",
+          text:
+            "ℹ️ <b>Delete Single Message Usage:</b>\n" +
+            "• Reply to any message with <code>/del</code>\n" +
+            "• Or use Message ID: <code>/delmsg msg_...</code>\n" +
+            "• Or tap the <b>🗑️ Del Msg</b> button under the message",
           parse_mode: "HTML",
         });
         return;
       }
 
-      // Delete message from Telegram
-      await callTelegram("deleteMessage", {
-        chat_id: chatId,
-        message_id: targetTeleMsgId,
-      });
+      // Delete replied Telegram message immediately if replying
+      if (replyTeleMsgId) {
+        await callTelegram("deleteMessage", {
+          chat_id: chatId,
+          message_id: replyTeleMsgId,
+        }).catch(() => {});
+      }
 
-      // Delete the /del command message itself
-      await callTelegram("deleteMessage", {
-        chat_id: chatId,
-        message_id: message.message_id,
-      });
+      // Delete the /del command message itself in groups/topics to keep chat clean
+      if (chatType !== "private") {
+        await callTelegram("deleteMessage", {
+          chat_id: chatId,
+          message_id: message.message_id,
+        }).catch(() => {});
+      }
 
-      // Delete from Web Public Chat in real-time
+      let res = null;
       if (typeof chatHandlers.deletePublicMessage === "function") {
-        chatHandlers.deletePublicMessage(targetTeleMsgId);
-        console.log(`[CHAT-SYNC] 🗑️ Deleted message (#${targetTeleMsgId}) in Web Public Chat via Telegram /del command.`);
+        res = await chatHandlers.deletePublicMessage(targetId);
+      }
+
+      const resolvedWebId = res?.messageId || replyInfo.webMsgId || (String(targetId).startsWith("msg_") ? targetId : null);
+      if (resolvedWebId) {
+        await deleteMirroredTelegramMessages([resolvedWebId]);
+      }
+
+      if (argQuery || chatType === "private") {
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: res?.success
+            ? `🗑️ <b>Single Message Deleted:</b>\n🆔 <code>${escapeHtml(res.messageId || targetId)}</code>` +
+              (res.sender?.name ? `\n👤 <b>Student:</b> ${escapeHtml(res.sender.name)}` : "")
+            : replyTeleMsgId
+              ? `🗑️ <b>Message Deleted from Chat.</b>`
+              : `⚠️ <b>Message Not Found:</b> <code>${escapeHtml(String(targetId))}</code>`,
+          parse_mode: "HTML",
+        });
+      }
+      return;
+    }
+
+    // 🧹 B2. DELETE ALL MESSAGES OF A STUDENT (/delall, /deluser, /clearuser, /purgeuser <mobile | email | id> or reply)
+    if (
+      text === "/delall" ||
+      text === "/deluser" ||
+      text === "/clearuser" ||
+      text === "/purgeuser" ||
+      text.startsWith("/delall ") ||
+      text.startsWith("/deluser ") ||
+      text.startsWith("/clearuser ") ||
+      text.startsWith("/purgeuser ")
+    ) {
+      const argQuery = text.replace(/^\/(delall|deluser|clearuser|purgeuser)\s*/i, "").trim();
+      const replyInfo = extractReplyTargetInfo(chatId, message.reply_to_message);
+      const query = argQuery || replyInfo.userQuery;
+
+      if (!query) {
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text:
+            "ℹ️ <b>Delete All Messages of a Student:</b>\n" +
+            "• <code>/delall 9876543210</code> (by Mobile Number)\n" +
+            "• <code>/delall student@gmail.com</code> (by Email)\n" +
+            "• Or reply <code>/delall</code> to any message of that student\n" +
+            "• Or tap the <b>🧹 Del All</b> button under their message",
+          parse_mode: "HTML",
+        });
+        return;
+      }
+
+      if (typeof chatHandlers.deleteAllUserMessages === "function") {
+        const res = await chatHandlers.deleteAllUserMessages(query, {
+          name: "Administrator",
+          ip: "Telegram Bot Direct",
+        });
+        if (res?.deletedMessageIds?.length) {
+          await deleteMirroredTelegramMessages(res.deletedMessageIds);
+        }
+        if (message.reply_to_message?.message_id) {
+          await callTelegram("deleteMessage", {
+            chat_id: chatId,
+            message_id: message.reply_to_message.message_id,
+          }).catch(() => {});
+        }
+        await callTelegram("sendMessage", {
+          chat_id: chatId,
+          message_thread_id: threadId,
+          text: res?.success
+            ? `🧹 <b>All Messages Deleted for Student:</b>\n\n` +
+              `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
+              `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
+              `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
+              `🗑️ <b>Messages Purged:</b> <code>${res.deletedCount || 0}</code>`
+            : `⚠️ <b>Delete All Failed:</b> ${escapeHtml(res?.message || "Student not found.")}`,
+          parse_mode: "HTML",
+          ...(res?.success && res.targetUser?.id
+            ? {
+                reply_markup: {
+                  inline_keyboard: [[
+                    { text: "🚫 Block Student", callback_data: makeSafeCallbackData("block_", res.targetUser.id) },
+                  ]],
+                },
+              }
+            : {}),
+        });
       }
       return;
     }
 
     // 🤖 C. CLEAN COMMANDS MANUAL (/start and /help)
-    if (text === "/start" || text.startsWith("/start") || text === "/help" || text === "/commands") {
+    if (text === "/start" || text.startsWith("/start ") || text === "/help" || text === "/commands") {
       if (chatType === "private") {
         activeAdminId = String(chatId);
         chatBotSettings.adminId = String(chatId);
@@ -717,13 +1037,15 @@ async function processUpdate(update) {
           `• <code>/set_topic &lt;id&gt;</code> - Bind to specific topic ID (or <code>/set_topic off</code>)\n` +
           `• <code>/topic</code> - Check current bound topic & status\n` +
           `• <code>/active</code> - Live active online students\n` +
-          `• <code>/block &lt;email or id&gt;</code> - Restrict a student\n` +
-          `• <code>/unblock &lt;email or id&gt;</code> - Restore a student\n` +
+          `• <code>/block &lt;mobile or email&gt;</code> - Restrict a student (or reply <code>/block</code>)\n` +
+          `• <code>/unblock &lt;mobile or email&gt;</code> - Restore a student (or reply <code>/unblock</code>)\n` +
+          `• <code>/delmsg &lt;msg_id&gt;</code> - Delete single message (or reply <code>/del</code>)\n` +
+          `• <code>/delall &lt;mobile or email&gt;</code> - Delete ALL messages of a student (or reply <code>/delall</code>)\n` +
           `• <code>/blocked</code> - List restricted students\n` +
           `• <code>/clearchat</code> - Purge public chat hall\n` +
           `• <code>/resetcache &lt;email&gt;</code> - Remotely wipe a student's phone cache (0 DB cost)\n` +
           `• <code>/resetallcache</code> - Global fleet storage wipe (0 DB cost)\n\n` +
-          `💬 <i>Type any message, photo, or PDF in the bound topic to broadcast directly to Public Hall with your official Admin badge! Reply to any message with <code>/del</code> to delete it.</i>\n\n` +
+          `💬 <i>Every incoming message shows the student's <b>Mobile</b>, <b>Email</b>, and <b>Msg ID</b> plus 1-tap buttons (🗑️ Del Msg, 🧹 Del All, 🚫 Block)!</i>\n\n` +
           `⏱️ <i>Purge Days Control: <code>/purgedays &lt;email&gt; &lt;+days|-days&gt;</code></i>`,
         parse_mode: "HTML",
         reply_markup: {
@@ -775,14 +1097,20 @@ async function processUpdate(update) {
       return;
     }
 
-    // Direct Admin Command: /block <query>
+    // Direct Admin Command: /block <mobile | email | id> (or reply /block)
     if (text.startsWith("/block ") || text === "/block") {
-      const query = text.replace(/^\/block\s*/, "").trim();
+      const argQuery = text.replace(/^\/block\s*/i, "").trim();
+      const replyInfo = extractReplyTargetInfo(chatId, message.reply_to_message);
+      const query = argQuery || replyInfo.userQuery;
       if (!query) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
           message_thread_id: threadId,
-          text: "ℹ️ <b>Usage:</b> <code>/block student_email_or_id</code>\n\nExample: <code>/block student@gmail.com</code>",
+          text:
+            "ℹ️ <b>Block Student Usage:</b>\n" +
+            "• <code>/block 9876543210</code> (by Mobile Number)\n" +
+            "• <code>/block student@gmail.com</code> (by Email)\n" +
+            "• Or reply <code>/block</code> directly to the student's message",
           parse_mode: "HTML",
         });
         return;
@@ -795,10 +1123,20 @@ async function processUpdate(update) {
             message_thread_id: threadId,
             text: `🚫 <b>Student Restricted from Chat Successfully:</b>\n\n` +
               `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
-              `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
               `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
+              `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
               `👥 <b>Live Active Students Online:</b> ${res.activeCount || 0}`,
             parse_mode: "HTML",
+            ...(res.targetUser?.id
+              ? {
+                  reply_markup: {
+                    inline_keyboard: [[
+                      { text: "✅ Unblock", callback_data: makeSafeCallbackData("unblock_", res.targetUser.id) },
+                      { text: "🧹 Delete All Msgs", callback_data: makeSafeCallbackData("delall_", res.targetUser.id) },
+                    ]],
+                  },
+                }
+              : {}),
           });
         } else {
           await callTelegram("sendMessage", {
@@ -812,14 +1150,20 @@ async function processUpdate(update) {
       return;
     }
 
-    // Direct Admin Command: /unblock <query>
+    // Direct Admin Command: /unblock <mobile | email | id> (or reply /unblock)
     if (text.startsWith("/unblock ") || text === "/unblock") {
-      const query = text.replace(/^\/unblock\s*/, "").trim();
+      const argQuery = text.replace(/^\/unblock\s*/i, "").trim();
+      const replyInfo = extractReplyTargetInfo(chatId, message.reply_to_message);
+      const query = argQuery || replyInfo.userQuery;
       if (!query) {
         await callTelegram("sendMessage", {
           chat_id: chatId,
           message_thread_id: threadId,
-          text: "ℹ️ <b>Usage:</b> <code>/unblock student_email_or_id</code>\n\nExample: <code>/unblock student@gmail.com</code>",
+          text:
+            "ℹ️ <b>Unblock Student Usage:</b>\n" +
+            "• <code>/unblock 9876543210</code> (by Mobile Number)\n" +
+            "• <code>/unblock student@gmail.com</code> (by Email)\n" +
+            "• Or reply <code>/unblock</code> directly to the student's message",
           parse_mode: "HTML",
         });
         return;
@@ -832,6 +1176,7 @@ async function processUpdate(update) {
             message_thread_id: threadId,
             text: `✅ <b>Student Unblocked Successfully:</b>\n\n` +
               `👤 <b>Name:</b> ${escapeHtml(res.targetUser?.name || "Student")}\n` +
+              `📱 <b>Mobile:</b> <code>${escapeHtml(res.targetUser?.mobile || "N/A")}</code>\n` +
               `📧 <b>Email:</b> <code>${escapeHtml(res.targetUser?.email || "N/A")}</code>\n` +
               `Chat participation permissions have been restored.`,
             parse_mode: "HTML",
@@ -860,15 +1205,15 @@ async function processUpdate(update) {
         });
       } else {
         const lines = blocked.map((u, i) =>
-          `${i + 1}. <b>${escapeHtml(u.name || "Student")}</b> (<code>${escapeHtml(u.email || u.id)}</code>)`
+          `${i + 1}. <b>${escapeHtml(u.name || "Student")}</b> — 📱 <code>${escapeHtml(u.mobile || "N/A")}</code> | 📧 <code>${escapeHtml(u.email || u.id)}</code>`
         ).join("\n");
         const inlineKb = blocked.slice(0, 8).map((u) => [
-          { text: `✅ Unblock ${u.name || u.email}`, callback_data: `unblock_${u.id}` }
+          { text: `✅ Unblock ${u.name || u.email}`, callback_data: makeSafeCallbackData("unblock_", u.id) }
         ]);
         await callTelegram("sendMessage", {
           chat_id: chatId,
           message_thread_id: threadId,
-          text: `🚫 <b>RESTRICTED / BLOCKED STUDENTS (${blocked.length}):</b>\n\n${lines}\n\n<i>Tap button below or use /unblock &lt;email&gt;</i>`,
+          text: `🚫 <b>RESTRICTED / BLOCKED STUDENTS (${blocked.length}):</b>\n\n${lines}\n\n<i>Tap button below or use /unblock &lt;mobile or email&gt;</i>`,
           parse_mode: "HTML",
           reply_markup: { inline_keyboard: inlineKb },
         });
@@ -1230,8 +1575,12 @@ async function processUpdate(update) {
 
         // Record bidirectional mapping for real-time edits & deletes
         if (teleMsgId) {
-          telegramToWebMsgMap.set(String(teleMsgId), msgId);
-          webToTelegramMsgMap.set(String(msgId), teleMsgId);
+          trackTelegramWebMsg(teleMsgId, msgId, {
+            chatId,
+            roomId: "public",
+            senderId: senderObj.id,
+            senderName: senderObj.name,
+          });
         }
 
         // Case A: Image / Photo sent from Telegram
@@ -1414,12 +1763,14 @@ async function startChatAuditBotPoller() {
 
   try {
     await callTelegram("deleteWebhook", { drop_pending_updates: false });
-    // Register the strict 5-command menu requested on Telegram
+    // Register moderation & chat commands menu on Telegram
     await callTelegram("setMyCommands", {
       commands: [
         { command: "active", description: "Live active online students" },
-        { command: "block", description: "Restrict a student (<email or id>)" },
-        { command: "unblock", description: "Restore a student (<email or id>)" },
+        { command: "block", description: "Block student (<mobile or email> or reply)" },
+        { command: "unblock", description: "Unblock student (<mobile or email> or reply)" },
+        { command: "delmsg", description: "Delete single message (<msg_id> or reply /del)" },
+        { command: "delall", description: "Delete ALL messages of a student (<mobile/email> or reply)" },
         { command: "blocked", description: "List restricted students" },
         { command: "clearchat", description: "Purge public chat hall" },
       ],
@@ -1482,7 +1833,7 @@ async function startChatAuditBotPoller() {
 /**
  * Dispatches a new Public Chat Hall message (Text, Image, PDF) to @fsm_chat_bot
  */
-async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
+async function dispatchPublicChatMessageToTelegram({ message, senderMeta, chatMediaDir }) {
   if (!chatBotSettings.enablePublicChatSync && !chatBotSettings.enableChatAudit) return false;
 
   const targetChats = [];
@@ -1510,9 +1861,25 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
 
   const senderName = message.sender?.name || "Student";
   const senderBranch = message.sender?.branch || "General";
+  const senderEmail = senderMeta?.email || message.sender?.email || "N/A";
+  const senderMobile = senderMeta?.mobile || message.sender?.mobile || "N/A";
+  const senderId =
+    message.sender?.id ||
+    (senderEmail !== "N/A" ? senderEmail : "") ||
+    (senderMobile !== "N/A" ? senderMobile : "");
+  const msgId = message.id || "";
   const senderIp = message.sender?.ip || message.ip || null;
   const ipBadge = senderIp ? ` • 🌐 <code>${escapeHtml(senderIp)}</code>` : "";
+  const identityLine =
+    `📱 <code>${escapeHtml(senderMobile)}</code> | 📧 <code>${escapeHtml(senderEmail)}</code>${ipBadge}` +
+    (msgId ? `\n🆔 <code>${escapeHtml(msgId)}</code>` : "");
   const text = message.text || "";
+  const safeCaptionText = text.length > 700 ? `${text.slice(0, 700)}…` : text;
+  const modKeyboard = buildModerationInlineKeyboard({
+    msgId,
+    senderId,
+    isAdminSender: Boolean(message.sender?.isAdmin),
+  });
 
   for (const { chatId, threadId } of targetChats) {
     try {
@@ -1527,7 +1894,10 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           }
         }
 
-        const caption = `🖼️ <b>[PUBLIC CHAT]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`;
+        const caption =
+          `🖼️ <b>[PUBLIC CHAT]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+          `${identityLine}` +
+          (safeCaptionText ? `\n${escapeHtml(safeCaptionText)}` : "");
 
         if (fileBuffer && fileBuffer.length <= 10 * 1024 * 1024) {
           const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
@@ -1535,6 +1905,9 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          if (modKeyboard) {
+            formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+          }
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
 
           const payload = Buffer.concat([
@@ -1558,6 +1931,9 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
               let retryHeader = `--${retryBoundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+              if (modKeyboard) {
+                retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+              }
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
               const retryPayload = Buffer.concat([
                 Buffer.from(retryHeader),
@@ -1576,8 +1952,14 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           if (photoRes.ok && photoRes.result?.message_id) {
             const teleMsgId = photoRes.result.message_id;
             message.telegramMsgId = teleMsgId;
-            telegramToWebMsgMap.set(String(teleMsgId), message.id);
-            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+            trackTelegramWebMsg(teleMsgId, message.id, {
+              chatId,
+              roomId: "public",
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
           }
           continue;
         } else {
@@ -1591,12 +1973,19 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
+          if (modKeyboard) body.reply_markup = modKeyboard;
           const photoRes = await callTelegram("sendPhoto", body);
           if (photoRes.ok && photoRes.result?.message_id) {
             const teleMsgId = photoRes.result.message_id;
             message.telegramMsgId = teleMsgId;
-            telegramToWebMsgMap.set(String(teleMsgId), message.id);
-            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+            trackTelegramWebMsg(teleMsgId, message.id, {
+              chatId,
+              roomId: "public",
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
           }
           continue;
         }
@@ -1614,7 +2003,10 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
         }
 
         const originalName = message.fileName || (message.type === "pdf" ? "Document.pdf" : "File");
-        const caption = `📕 <b>[PUBLIC CHAT]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}) shared <code>${escapeHtml(originalName)}</code>\n${escapeHtml(text)}`;
+        const caption =
+          `📕 <b>[PUBLIC CHAT]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>) shared <code>${escapeHtml(originalName)}</code>\n` +
+          `${identityLine}` +
+          (safeCaptionText ? `\n${escapeHtml(safeCaptionText)}` : "");
 
         if (fileBuffer && fileBuffer.length <= 50 * 1024 * 1024) {
           const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
@@ -1622,6 +2014,9 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          if (modKeyboard) {
+            formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+          }
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
 
           const payload = Buffer.concat([
@@ -1645,6 +2040,9 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
               let retryHeader = `--${retryBoundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+              if (modKeyboard) {
+                retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+              }
               retryHeader += `--${retryBoundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
               const retryPayload = Buffer.concat([
                 Buffer.from(retryHeader),
@@ -1663,8 +2061,14 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
           if (docRes.ok && docRes.result?.message_id) {
             const teleMsgId = docRes.result.message_id;
             message.telegramMsgId = teleMsgId;
-            telegramToWebMsgMap.set(String(teleMsgId), message.id);
-            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+            trackTelegramWebMsg(teleMsgId, message.id, {
+              chatId,
+              roomId: "public",
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
           }
           continue;
         } else {
@@ -1678,12 +2082,19 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
+          if (modKeyboard) body.reply_markup = modKeyboard;
           const docRes = await callTelegram("sendDocument", body);
           if (docRes.ok && docRes.result?.message_id) {
             const teleMsgId = docRes.result.message_id;
             message.telegramMsgId = teleMsgId;
-            telegramToWebMsgMap.set(String(teleMsgId), message.id);
-            webToTelegramMsgMap.set(String(message.id), teleMsgId);
+            trackTelegramWebMsg(teleMsgId, message.id, {
+              chatId,
+              roomId: "public",
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
           }
           continue;
         }
@@ -1692,17 +2103,27 @@ async function dispatchPublicChatMessageToTelegram({ message, chatMediaDir }) {
       // 3. Regular Text Message
       const body = {
         chat_id: chatId,
-        text: `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`,
+        text:
+          `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+          `${identityLine}\n` +
+          `${escapeHtml(text)}`,
         parse_mode: "HTML",
         disable_web_page_preview: false,
       };
       if (threadId) body.message_thread_id = threadId;
+      if (modKeyboard) body.reply_markup = modKeyboard;
       const res = await callTelegram("sendMessage", body);
       if (res.ok && res.result?.message_id) {
         const teleMsgId = res.result.message_id;
         message.telegramMsgId = teleMsgId;
-        telegramToWebMsgMap.set(String(teleMsgId), message.id);
-        webToTelegramMsgMap.set(String(message.id), teleMsgId);
+        trackTelegramWebMsg(teleMsgId, message.id, {
+          chatId,
+          roomId: "public",
+          senderId,
+          senderName,
+          senderEmail,
+          senderMobile,
+        });
       }
     } catch (err) {
       console.warn(`[CHAT-AUDIT-BOT] Error sending public msg to chat ${chatId}:`, err.message);
@@ -1719,21 +2140,59 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
   if (!chatBotSettings.enablePublicChatSync && !chatBotSettings.enableDeletedMessageAlerts) return false;
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
+  const senderName = sender?.name || "Student";
+  const senderBranch = sender?.branch || "General";
+  const senderEmail = sender?.email || "N/A";
+  const senderMobile = sender?.mobile || "N/A";
+  const senderId =
+    sender?.id ||
+    (senderEmail !== "N/A" ? senderEmail : "") ||
+    (senderMobile !== "N/A" ? senderMobile : "");
+  const senderIp = sender?.ip ? ` • 🌐 <code>${escapeHtml(sender.ip)}</code>` : "";
+  const identityLine =
+    `📱 <code>${escapeHtml(senderMobile)}</code> | 📧 <code>${escapeHtml(senderEmail)}</code>${senderIp}` +
+    (messageId ? `\n🆔 <code>${escapeHtml(messageId)}</code>` : "");
+  const modKeyboard = buildModerationInlineKeyboard({
+    msgId: messageId,
+    senderId,
+    isAdminSender: Boolean(sender?.isAdmin),
+  });
 
-  // 1. Edit the mirrored message in Telegram Topic 1 in-place
-  const teleMsgId = webToTelegramMsgMap.get(String(messageId));
-  if (teleMsgId && currentSupergroupId) {
-    try {
-      const senderName = sender?.name || "Student";
-      const senderBranch = sender?.branch || "General";
-      const senderIp = sender?.ip ? ` • 🌐 <code>${escapeHtml(sender.ip)}</code>` : "";
-      await callTelegram("editMessageText", {
-        chat_id: currentSupergroupId,
-        message_id: teleMsgId,
-        text: `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${senderIp}):\n${escapeHtml(newText)} <i>(edited)</i>`,
-        parse_mode: "HTML",
-      });
-    } catch (_) {}
+  // 1. Edit all mirrored copies (Supergroup + Admin DM) in-place
+  const mirroredTargets = webToTelegramTargetsMap.get(String(messageId)) || [];
+  if (mirroredTargets.length > 0) {
+    for (const target of mirroredTargets) {
+      try {
+        const editBody = {
+          chat_id: target.chatId,
+          message_id: target.messageId,
+          text:
+            `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+            `${identityLine}\n` +
+            `${escapeHtml(newText)} <i>(edited)</i>`,
+          parse_mode: "HTML",
+        };
+        if (modKeyboard) editBody.reply_markup = modKeyboard;
+        await callTelegram("editMessageText", editBody);
+      } catch (_) {}
+    }
+  } else {
+    const teleMsgId = webToTelegramMsgMap.get(String(messageId));
+    if (teleMsgId && currentSupergroupId) {
+      try {
+        const editBody = {
+          chat_id: currentSupergroupId,
+          message_id: teleMsgId,
+          text:
+            `💬 <b>[GENERAL HALL]</b> <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+            `${identityLine}\n` +
+            `${escapeHtml(newText)} <i>(edited)</i>`,
+          parse_mode: "HTML",
+        };
+        if (modKeyboard) editBody.reply_markup = modKeyboard;
+        await callTelegram("editMessageText", editBody);
+      } catch (_) {}
+    }
   }
 
   // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
@@ -1748,11 +2207,11 @@ async function dispatchPublicChatEditToTelegram({ messageId, oldText, newText, s
 
   if (targetChats.length === 0) return false;
 
-  const senderIp = sender?.ip || null;
-  const ipBadge = senderIp ? ` | 🌐 <code>${escapeHtml(senderIp)}</code>` : "";
+  const ipBadge = sender?.ip ? ` | 🌐 <code>${escapeHtml(sender.ip)}</code>` : "";
 
   const textHtml = `✏️ <b>[TAMPER ALERT - MESSAGE EDITED]</b>\n\n` +
-    `👤 <b>Student:</b> ${escapeHtml(sender?.name || "Student")} (<code>${escapeHtml(sender?.email || "N/A")}</code>${ipBadge})\n` +
+    `👤 <b>Student:</b> ${escapeHtml(senderName)}\n` +
+    `📱 <b>Mobile:</b> <code>${escapeHtml(senderMobile)}</code> | 📧 <b>Email:</b> <code>${escapeHtml(senderEmail)}</code>${ipBadge}\n` +
     `🆔 <b>Message ID:</b> <code>${escapeHtml(messageId)}</code>\n` +
     `⏮️ <b>Original Untampered Text:</b>\n"${escapeHtml(oldText)}"\n\n` +
     `⏭️ <b>Modified / Edited Text:</b>\n"<b>${escapeHtml(newText)}</b>"\n\n` +
@@ -1787,15 +2246,20 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
 
-  // 1. Delete or clear the mirrored message in Telegram Topic 1
-  const teleMsgId = webToTelegramMsgMap.get(String(messageId));
-  if (teleMsgId && currentSupergroupId) {
-    try {
-      await callTelegram("deleteMessage", {
-        chat_id: currentSupergroupId,
-        message_id: teleMsgId,
-      });
-    } catch (_) {}
+  // 1. Delete all mirrored copies on Telegram (Supergroup + Admin DM)
+  const mirroredTargets = webToTelegramTargetsMap.get(String(messageId)) || [];
+  if (mirroredTargets.length > 0) {
+    await deleteMirroredTelegramMessages([messageId]);
+  } else {
+    const teleMsgId = webToTelegramMsgMap.get(String(messageId));
+    if (teleMsgId && currentSupergroupId) {
+      try {
+        await callTelegram("deleteMessage", {
+          chat_id: currentSupergroupId,
+          message_id: teleMsgId,
+        });
+      } catch (_) {}
+    }
   }
 
   // 2. Strict Audit Log: Send Tamper Alert to Dedicated Topic (Topic 1 if Topic 1 mode, or Topic 35)
@@ -1814,7 +2278,8 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
   const delIpBadge = delSenderIp ? ` | 🌐 <code>${escapeHtml(delSenderIp)}</code>` : "";
 
   const textHtml = `🗑️ <b>[TAMPER ALERT - MESSAGE DELETED]</b>\n\n` +
-    `👤 <b>Deleted by:</b> ${escapeHtml(sender?.name || "Student")} (<code>${escapeHtml(sender?.email || "N/A")}</code>${delIpBadge})\n` +
+    `👤 <b>Deleted by:</b> ${escapeHtml(sender?.name || "Student")}\n` +
+    `📱 <b>Mobile:</b> <code>${escapeHtml(sender?.mobile || "N/A")}</code> | 📧 <b>Email:</b> <code>${escapeHtml(sender?.email || "N/A")}</code>${delIpBadge}\n` +
     `🆔 <b>Message ID:</b> <code>${escapeHtml(messageId)}</code>\n` +
     `🔒 <b>Original Untampered Content:</b>\n"${escapeHtml(originalText || "(Media Attachment)")}"` +
     (fileName ? `\n📎 <b>Attached File:</b> <code>${escapeHtml(fileName)}</code>` : "") +
@@ -1844,7 +2309,7 @@ async function dispatchPublicChatDeleteToTelegram({ messageId, originalText, fil
 /**
  * 🔒 Dispatches Real-Time Messages from Private Study Groups/Pods to Telegram (@fsm_chat_bot & Topic 31)
  */
-async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDir }) {
+async function dispatchPrivateChatMessageToTelegram({ message, room, senderMeta, chatMediaDir }) {
   if (!chatBotSettings.enableChatAudit) return false;
 
   const currentSupergroupId = supergroupId || process.env.TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID || "";
@@ -1872,13 +2337,30 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
 
   if (targetChats.length === 0) return false;
 
+  const roomId = room?.id || message.roomId || "private";
   const roomName = room?.name || "Private Study Group";
   const secretCode = room?.secretCode || "N/A";
   const senderName = message.sender?.name || "Student";
   const senderBranch = message.sender?.branch || "General";
+  const senderEmail = senderMeta?.email || message.sender?.email || "N/A";
+  const senderMobile = senderMeta?.mobile || message.sender?.mobile || "N/A";
+  const senderId =
+    message.sender?.id ||
+    (senderEmail !== "N/A" ? senderEmail : "") ||
+    (senderMobile !== "N/A" ? senderMobile : "");
+  const msgId = message.id || "";
   const senderIp = message.sender?.ip || message.ip || null;
   const ipBadge = senderIp ? ` • 🌐 <code>${escapeHtml(senderIp)}</code>` : "";
+  const identityLine =
+    `📱 <code>${escapeHtml(senderMobile)}</code> | 📧 <code>${escapeHtml(senderEmail)}</code>${ipBadge}` +
+    (msgId ? `\n🆔 <code>${escapeHtml(msgId)}</code>` : "");
   const text = message.text || "";
+  const safeCaptionText = text.length > 680 ? `${text.slice(0, 680)}…` : text;
+  const modKeyboard = buildModerationInlineKeyboard({
+    msgId,
+    senderId,
+    isAdminSender: Boolean(message.sender?.isAdmin),
+  });
 
   for (const { chatId, threadId } of targetChats) {
     try {
@@ -1895,8 +2377,9 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
 
         const caption =
           `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 Code: <code>${escapeHtml(secretCode)}</code>)\n` +
-          `👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n` +
-          `${escapeHtml(text)}`;
+          `👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+          `${identityLine}` +
+          (safeCaptionText ? `\n${escapeHtml(safeCaptionText)}` : "");
 
         if (fileBuffer && fileBuffer.length <= 10 * 1024 * 1024) {
           const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
@@ -1904,6 +2387,9 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
           if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          if (modKeyboard) {
+            formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+          }
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="photo.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`;
 
           const payload = Buffer.concat([
@@ -1912,11 +2398,22 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
+          const photoRes = await resp.json().catch(() => ({}));
+          if (photoRes.ok && photoRes.result?.message_id) {
+            trackTelegramWebMsg(photoRes.result.message_id, message.id, {
+              chatId,
+              roomId,
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
+          }
           continue;
         } else {
           const clientUrl = getSiteUrl();
@@ -1928,7 +2425,18 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
-          await callTelegram("sendPhoto", body);
+          if (modKeyboard) body.reply_markup = modKeyboard;
+          const photoRes = await callTelegram("sendPhoto", body);
+          if (photoRes.ok && photoRes.result?.message_id) {
+            trackTelegramWebMsg(photoRes.result.message_id, message.id, {
+              chatId,
+              roomId,
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
+          }
           continue;
         }
       }
@@ -1948,7 +2456,8 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
         const caption =
           `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 Code: <code>${escapeHtml(secretCode)}</code>)\n` +
           `👤 <b>${escapeHtml(senderName)}</b> shared <code>${escapeHtml(originalName)}</code>\n` +
-          `${escapeHtml(text)}`;
+          `${identityLine}` +
+          (safeCaptionText ? `\n${escapeHtml(safeCaptionText)}` : "");
 
         if (fileBuffer && fileBuffer.length <= 50 * 1024 * 1024) {
           const boundary = "----WebKitFormBoundary" + Math.random().toString(36).substring(2);
@@ -1956,6 +2465,9 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
           if (threadId) formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="message_thread_id"\r\n\r\n${threadId}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
+          if (modKeyboard) {
+            formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="reply_markup"\r\n\r\n${JSON.stringify(modKeyboard)}\r\n`;
+          }
           formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
 
           const payload = Buffer.concat([
@@ -1964,11 +2476,22 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
             Buffer.from(`\r\n--${boundary}--\r\n`),
           ]);
 
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+          const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
             method: "POST",
             headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
             body: payload,
           });
+          const docRes = await resp.json().catch(() => ({}));
+          if (docRes.ok && docRes.result?.message_id) {
+            trackTelegramWebMsg(docRes.result.message_id, message.id, {
+              chatId,
+              roomId,
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
+          }
           continue;
         } else {
           const clientUrl = getSiteUrl();
@@ -1980,7 +2503,18 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
             parse_mode: "HTML",
           };
           if (threadId) body.message_thread_id = threadId;
-          await callTelegram("sendDocument", body);
+          if (modKeyboard) body.reply_markup = modKeyboard;
+          const docRes = await callTelegram("sendDocument", body);
+          if (docRes.ok && docRes.result?.message_id) {
+            trackTelegramWebMsg(docRes.result.message_id, message.id, {
+              chatId,
+              roomId,
+              senderId,
+              senderName,
+              senderEmail,
+              senderMobile,
+            });
+          }
           continue;
         }
       }
@@ -1988,12 +2522,27 @@ async function dispatchPrivateChatMessageToTelegram({ message, room, chatMediaDi
       // 3. Regular Text Message
       const body = {
         chat_id: chatId,
-        text: `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 <code>${escapeHtml(secretCode)}</code>)\n👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>${ipBadge}):\n${escapeHtml(text)}`,
+        text:
+          `🔒 <b>[PRIVATE POD: "${escapeHtml(roomName)}"]</b> (🔑 <code>${escapeHtml(secretCode)}</code>)\n` +
+          `👤 <b>${escapeHtml(senderName)}</b> (<i>${escapeHtml(senderBranch)}</i>):\n` +
+          `${identityLine}\n` +
+          `${escapeHtml(text)}`,
         parse_mode: "HTML",
         disable_web_page_preview: false,
       };
       if (threadId) body.message_thread_id = threadId;
-      await callTelegram("sendMessage", body);
+      if (modKeyboard) body.reply_markup = modKeyboard;
+      const res = await callTelegram("sendMessage", body);
+      if (res.ok && res.result?.message_id) {
+        trackTelegramWebMsg(res.result.message_id, message.id, {
+          chatId,
+          roomId,
+          senderId,
+          senderName,
+          senderEmail,
+          senderMobile,
+        });
+      }
     } catch (err) {
       console.warn(`[CHAT-AUDIT-BOT] Error sending private pod msg to chat ${chatId}:`, err.message);
     }

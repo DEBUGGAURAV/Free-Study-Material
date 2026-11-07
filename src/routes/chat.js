@@ -285,39 +285,122 @@ function editPublicMessageFromTelegram(telegramMsgId, newText) {
 }
 
 /**
- * 🗑️ Inbound Telegram Delete Syncer
- * Marks message as deleted in memory, broadcasts message_deleted via WebSocket, updates Firestore.
+ * 🗑️ Inbound Telegram Single-Message Delete Syncer
+ * Finds message by Web Message ID or Telegram Message ID across Public & Private rooms,
+ * marks as deleted in memory, broadcasts message_deleted via WebSocket, and updates Firestore & Turso.
  */
-function deletePublicMessageFromTelegram(telegramMsgId) {
-  if (!activeMessages.has(PUBLIC_ROOM_ID)) return false;
-  const msgs = activeMessages.get(PUBLIC_ROOM_ID);
-  const msg = msgs.find((m) => String(m.telegramMsgId) === String(telegramMsgId) || m.id === String(telegramMsgId));
-  if (!msg) return false;
+async function deletePublicMessageFromTelegram(msgIdentifier) {
+  if (!msgIdentifier) return { success: false, message: "No message ID provided." };
+  const cleanTarget = String(msgIdentifier).trim();
 
-  msg.isDeleted = true;
-  msg.text = "🗑️ This message was deleted";
-  msg.fileUrl = null;
+  let foundMsg = null;
+  let foundRoomId = null;
 
-  broadcastToRoom(PUBLIC_ROOM_ID, {
-    type: "message_deleted",
-    messageId: msg.id,
-    text: msg.text,
-  });
-
-  if (db) {
-    db.collection("chat_messages").doc(msg.id).update({
-      text: msg.text,
-      isDeleted: true,
-      deletedAt: new Date().toISOString(),
-    }).catch(() => {});
+  for (const [rId, msgs] of activeMessages.entries()) {
+    if (!Array.isArray(msgs)) continue;
+    const match = msgs.find(
+      (m) => String(m.id) === cleanTarget || (m.telegramMsgId && String(m.telegramMsgId) === cleanTarget)
+    );
+    if (match) {
+      foundMsg = match;
+      foundRoomId = rId;
+      break;
+    }
   }
-  return true;
+
+  if (foundMsg && foundRoomId) {
+    foundMsg.isDeleted = true;
+    foundMsg.text = "🗑️ This message was deleted";
+    foundMsg.fileUrl = null;
+
+    broadcastToRoom(foundRoomId, {
+      type: "message_deleted",
+      messageId: foundMsg.id,
+      text: foundMsg.text,
+    });
+
+    if (db) {
+      db.collection("chat_messages").doc(foundMsg.id).update({
+        text: foundMsg.text,
+        fileUrl: null,
+        isDeleted: true,
+        deletedAt: new Date().toISOString(),
+      }).catch(() => {});
+    }
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: "DELETE FROM chat_messages WHERE id = ?",
+        args: [String(foundMsg.id)],
+      }).catch(() => {});
+    }
+
+    return {
+      success: true,
+      messageId: foundMsg.id,
+      roomId: foundRoomId,
+      sender: foundMsg.sender || null,
+    };
+  }
+
+  // Fallback if message scrolled out of 200-msg RAM cache: check Firestore / Turso directly by message ID
+  let dbFoundRoom = PUBLIC_ROOM_ID;
+  let dbSender = null;
+  let deletedFromStorage = false;
+
+  if (db && cleanTarget.startsWith("msg_")) {
+    try {
+      const docRef = db.collection("chat_messages").doc(cleanTarget);
+      const snap = await docRef.get();
+      if (snap.exists) {
+        const d = snap.data() || {};
+        dbFoundRoom = d.roomId || PUBLIC_ROOM_ID;
+        dbSender = d.sender || null;
+        await docRef.update({
+          text: "🗑️ This message was deleted",
+          fileUrl: null,
+          isDeleted: true,
+          deletedAt: new Date().toISOString(),
+        });
+        deletedFromStorage = true;
+      }
+    } catch (_) {}
+  }
+
+  if (tursoClient && cleanTarget.startsWith("msg_")) {
+    try {
+      const tRes = await tursoClient.execute({
+        sql: "DELETE FROM chat_messages WHERE id = ?",
+        args: [cleanTarget],
+      });
+      if (tRes && Number(tRes.rowsAffected || 0) > 0) {
+        deletedFromStorage = true;
+      }
+    } catch (_) {}
+  }
+
+  if (deletedFromStorage) {
+    broadcastToRoom(dbFoundRoom, {
+      type: "message_deleted",
+      messageId: cleanTarget,
+      text: "🗑️ This message was deleted",
+    });
+    return {
+      success: true,
+      messageId: cleanTarget,
+      roomId: dbFoundRoom,
+      sender: dbSender,
+    };
+  }
+
+  return { success: false, message: `Message "${cleanTarget}" not found.` };
 }
 
 setChatHandlers({
   injectIncomingPublicMessage,
   editPublicMessage: editPublicMessageFromTelegram,
   deletePublicMessage: deletePublicMessageFromTelegram,
+  deleteAllUserMessages: handleDeleteAllUserMessagesFromTelegram,
   getActiveUsers: getActiveUsersList,
   blockUser: handleBlockUserFromTelegram,
   unblockUser: handleUnblockUserFromTelegram,
@@ -1249,6 +1332,7 @@ function initChatWebSocket(server) {
             college: user.college,
             role: user.role,
           });
+          ws.enrichedUser = enrichedUser;
 
           // Only add to visible participantsMap if NOT in ghost mode
           if (!isStealthAdmin) {
@@ -1345,6 +1429,16 @@ function initChatWebSocket(server) {
 
           const currentRoom = activeRooms.get(roomId);
           const pInfo = currentRoom?.participantsMap?.get(user.id) || {};
+          let resolvedEmail = pInfo.email || ws.enrichedUser?.email || user.email || "";
+          let resolvedMobile = pInfo.mobile || ws.enrichedUser?.mobile || (user.mobile ? decrypt(user.mobile) : "") || "";
+          if (!resolvedEmail || !resolvedMobile || resolvedMobile === "N/A") {
+            try {
+              const freshlyEnriched = await enrichParticipantDetails(user.id, user);
+              ws.enrichedUser = freshlyEnriched;
+              if (!resolvedEmail) resolvedEmail = freshlyEnriched.email || "";
+              if (!resolvedMobile || resolvedMobile === "N/A") resolvedMobile = freshlyEnriched.mobile || "";
+            } catch (_) {}
+          }
 
           const newMsg = {
             id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -1365,7 +1459,7 @@ function initChatWebSocket(server) {
               name: user.name || "Scholar",
               username: pInfo.username || user.username || "",
               photoUrl: pInfo.photoUrl || user.photoUrl || user.avatar || "",
-              email: user.email || "",
+              email: resolvedEmail || user.email || "",
               branch: user.branch || "CSE",
               year: user.year || "B.Tech",
               college: user.college || "Campus",
@@ -1392,8 +1486,8 @@ function initChatWebSocket(server) {
               roomId,
               senderId: user.id,
               senderName: user.name || "Scholar",
-              senderEmail: pInfo.email || user.email || "",
-              senderMobile: pInfo.mobile || user.mobile || "N/A",
+              senderEmail: resolvedEmail || user.email || "",
+              senderMobile: resolvedMobile || "N/A",
               senderBranch: user.branch || "CSE",
               senderYear: user.year || "B.Tech",
               senderRole: user.role || "student",
@@ -1423,10 +1517,16 @@ function initChatWebSocket(server) {
             message: newMsg,
           });
 
+          const senderMeta = {
+            email: resolvedEmail || "N/A",
+            mobile: resolvedMobile || "N/A",
+          };
+
           // 💬 Direct Two-Way Sync with @fsm_chat_bot for Public Hall
           if (roomId === PUBLIC_ROOM_ID) {
             dispatchPublicChatMessageToTelegram({
               message: newMsg,
+              senderMeta,
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public send dispatch notice:", err.message));
           } else {
@@ -1434,6 +1534,7 @@ function initChatWebSocket(server) {
             dispatchPrivateChatMessageToTelegram({
               message: newMsg,
               room: currentRoom,
+              senderMeta,
               chatMediaDir: CHAT_MEDIA_DIR,
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private pod message dispatch notice:", err.message));
 
@@ -1443,7 +1544,7 @@ function initChatWebSocket(server) {
                 message: newMsg,
                 room: currentRoom,
                 chatMediaDir: CHAT_MEDIA_DIR,
-                sender: { ...user, ip: ws.userIp },
+                sender: { ...user, email: resolvedEmail || user.email, mobile: resolvedMobile || "N/A", ip: ws.userIp },
               }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Private media vault dispatch notice:", err.message));
             }
           }
@@ -1480,6 +1581,7 @@ function initChatWebSocket(server) {
             return ws.send(JSON.stringify({ type: "error", message: "Cannot edit another user's message." }));
           }
 
+          const previousText = msg.text;
           const sanitizedNewText = (newText || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
 
           // Track edit history in room's auditMessages
@@ -1510,11 +1612,17 @@ function initChatWebSocket(server) {
 
           // 💬 Dispatch edit to @fsm_chat_bot for Public Hall
           if (roomId === PUBLIC_ROOM_ID) {
+            const editPInfo = currentRoom?.participantsMap?.get(user.id) || ws.enrichedUser || {};
             dispatchPublicChatEditToTelegram({
               messageId,
-              oldText: (auditMsg?.oldText || auditMsg?.text || msg.text),
+              oldText: previousText,
               newText: sanitizedNewText,
-              sender: { ...user, ip: ws.userIp },
+              sender: {
+                ...user,
+                email: editPInfo.email || user.email || "N/A",
+                mobile: editPInfo.mobile || (user.mobile ? decrypt(user.mobile) : "") || "N/A",
+                ip: ws.userIp,
+              },
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public edit dispatch notice:", err.message));
           }
 
@@ -1558,7 +1666,7 @@ function initChatWebSocket(server) {
                 name: user.name || (isUserAdmin(user) ? "Administrator" : "Student"),
                 role: user.role || (user.isMainAdmin ? "admin" : "student"),
                 email: user.email || "",
-                mobile: currentRoom.participantsMap?.get(user.id)?.mobile || user.mobile || "N/A",
+                mobile: currentRoom.participantsMap?.get(user.id)?.mobile || ws.enrichedUser?.mobile || (user.mobile ? decrypt(user.mobile) : "") || "N/A",
                 ip: ws.userIp || "127.0.0.1",
               };
               deletedSnapshot = auditMsg;
@@ -1581,11 +1689,17 @@ function initChatWebSocket(server) {
 
           // 💬 Dispatch deleted message alert to @fsm_chat_bot for Public Hall
           if (roomId === PUBLIC_ROOM_ID) {
+            const delPInfo = currentRoom?.participantsMap?.get(user.id) || ws.enrichedUser || {};
             dispatchPublicChatDeleteToTelegram({
               messageId,
               originalText: originalUntamperedText,
               fileName: originalUntamperedFileName,
-              sender: { ...user, ip: ws.userIp },
+              sender: {
+                ...user,
+                email: delPInfo.email || user.email || "N/A",
+                mobile: delPInfo.mobile || (user.mobile ? decrypt(user.mobile) : "") || "N/A",
+                ip: ws.userIp,
+              },
             }).catch((err) => console.warn("[CHAT-AUDIT-BOT] Public delete dispatch notice:", err.message));
           }
 
@@ -3812,11 +3926,13 @@ function getActiveUsersList() {
         if (!usersMap.has(ws.user.id)) {
           const roomObj = activeRooms.get(ws.currentRoomId || "public");
           const roomLabel = roomObj ? roomObj.name : (ws.currentRoomId === "public" ? "🏛️ General Student Hall" : (ws.currentRoomId || "General"));
+          const pInfo = ws.enrichedUser || roomObj?.participantsMap?.get(ws.user.id) || {};
+          const resolvedMobile = pInfo.mobile || (ws.user.mobile ? decrypt(ws.user.mobile) : "") || "N/A";
           usersMap.set(ws.user.id, {
             id: ws.user.id,
-            name: ws.user.name || "Student",
-            email: ws.user.email || "N/A",
-            mobile: ws.user.mobile || "N/A",
+            name: pInfo.name || ws.user.name || "Student",
+            email: pInfo.email || ws.user.email || "N/A",
+            mobile: resolvedMobile,
             role: ws.user.role || "student",
             roomId: ws.currentRoomId || "public",
             roomName: roomLabel,
@@ -3832,49 +3948,211 @@ function getActiveUsersList() {
 }
 
 /**
- * 🚫 Helper: Blocks a user directly via Telegram Chat Bot command
+ * 🔍 Helper: Normalizes phone numbers to comparable digits (handles +91, 0-prefix, spaces, hyphens)
  */
-async function handleBlockUserFromTelegram(query, adminInfo = {}) {
-  if (!query || !query.trim()) return { success: false, message: "Please specify student email or ID." };
-  const cleanQuery = query.trim().toLowerCase();
+function matchesPhoneQuery(candidateMobile, rawQuery) {
+  if (!candidateMobile || candidateMobile === "N/A" || !rawQuery) return false;
+  const qDigits = String(rawQuery).replace(/\D/g, "");
+  if (qDigits.length < 8) return false;
+  const cDigits = String(candidateMobile).replace(/\D/g, "");
+  if (!cDigits) return false;
+  if (cDigits === qDigits) return true;
+  if (cDigits.length >= 10 && qDigits.length >= 10 && cDigits.slice(-10) === qDigits.slice(-10)) {
+    return true;
+  }
+  return false;
+}
 
-  let targetUserId = null;
-  let targetDetails = null;
+/**
+ * 🔍 Helper: Resolves a student by Mobile Number, Email, or User ID across active sockets,
+ * recent chat logs, Turso LibSQL, and Firestore (including encrypted mobile fields).
+ */
+async function resolveChatUserByQuery(query) {
+  if (!query || !String(query).trim()) return null;
+  const trimmed = String(query).trim();
+  const cleanQuery = trimmed.toLowerCase();
+  const queryDigits = trimmed.replace(/\D/g, "");
+  const isPhoneLike = queryDigits.length >= 8 && !trimmed.includes("@");
 
-  // Check active sockets first
+  // 1. Check active WebSocket users first
   const activeList = getActiveUsersList();
   const matchedActive = activeList.find((u) =>
-    (u.id && u.id.toLowerCase() === cleanQuery) ||
-    (u.email && u.email.toLowerCase() === cleanQuery) ||
-    (u.mobile && u.mobile.replace(/\D/g, "").includes(cleanQuery.replace(/\D/g, ""))) ||
-    (u.name && u.name.toLowerCase().includes(cleanQuery))
+    (u.id && String(u.id).toLowerCase() === cleanQuery) ||
+    (u.email && String(u.email).toLowerCase() === cleanQuery) ||
+    (isPhoneLike && matchesPhoneQuery(u.mobile, trimmed))
   );
-
   if (matchedActive) {
-    targetUserId = matchedActive.id;
-    targetDetails = matchedActive;
-  } else if (db) {
+    return {
+      id: matchedActive.id,
+      name: matchedActive.name || "Student",
+      email: matchedActive.email || "N/A",
+      mobile: matchedActive.mobile || "N/A",
+      ip: matchedActive.ip || "N/A",
+    };
+  }
+
+  // 2. Check recent room participants & auditMessages in RAM (0ms instant hit for chat senders)
+  for (const room of activeRooms.values()) {
+    if (room.participantsMap) {
+      for (const [uid, p] of room.participantsMap.entries()) {
+        if (
+          String(uid).toLowerCase() === cleanQuery ||
+          (p.email && String(p.email).toLowerCase() === cleanQuery) ||
+          (isPhoneLike && matchesPhoneQuery(p.mobile, trimmed))
+        ) {
+          return {
+            id: uid,
+            name: p.name || "Student",
+            email: p.email || "N/A",
+            mobile: p.mobile || "N/A",
+            ip: p.ip || "N/A",
+          };
+        }
+      }
+    }
+    if (Array.isArray(room.auditMessages)) {
+      for (let i = room.auditMessages.length - 1; i >= 0; i--) {
+        const am = room.auditMessages[i];
+        if (
+          (am.senderId && String(am.senderId).toLowerCase() === cleanQuery) ||
+          (am.senderEmail && String(am.senderEmail).toLowerCase() === cleanQuery) ||
+          (isPhoneLike && matchesPhoneQuery(am.senderMobile, trimmed))
+        ) {
+          return {
+            id: am.senderId,
+            name: am.senderName || "Student",
+            email: am.senderEmail || "N/A",
+            mobile: am.senderMobile || "N/A",
+            ip: am.senderIp || "N/A",
+          };
+        }
+      }
+    }
+  }
+
+  // 3. Check activeMessages in RAM
+  for (const msgs of activeMessages.values()) {
+    if (!Array.isArray(msgs)) continue;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const s = msgs[i]?.sender;
+      if (!s || !s.id || s.id === "system") continue;
+      if (
+        String(s.id).toLowerCase() === cleanQuery ||
+        (s.email && String(s.email).toLowerCase() === cleanQuery)
+      ) {
+        const enriched = await enrichParticipantDetails(s.id, s);
+        return {
+          id: s.id,
+          name: enriched.name || s.name || "Student",
+          email: enriched.email || s.email || "N/A",
+          mobile: enriched.mobile || "N/A",
+          ip: s.ip || "N/A",
+        };
+      }
+    }
+  }
+
+  // 4. Check Turso LibSQL users table (by ID, Email, or Mobile)
+  if (tursoClient) {
     try {
-      const byId = await db.collection("users").doc(query.trim()).get();
-      if (byId.exists) {
-        targetUserId = byId.id;
-        const d = byId.data();
-        targetDetails = { id: byId.id, name: d.name || "Student", email: d.email || "N/A", mobile: d.mobile || "N/A", ip: d.lastLoginIp || "N/A" };
-      } else {
-        const byEmail = await db.collection("users").where("email", "==", cleanQuery).limit(1).get();
-        if (!byEmail.empty) {
-          const doc = byEmail.docs[0];
-          targetUserId = doc.id;
-          const d = doc.data();
-          targetDetails = { id: doc.id, name: d.name || "Student", email: d.email || "N/A", mobile: d.mobile || "N/A", ip: d.lastLoginIp || "N/A" };
+      const exactRes = await tursoClient.execute({
+        sql: "SELECT id, name, email, mobile FROM users WHERE LOWER(id) = ? OR LOWER(email) = ? OR mobile = ? LIMIT 1",
+        args: [cleanQuery, cleanQuery, trimmed],
+      });
+      if (exactRes.rows && exactRes.rows.length > 0) {
+        const r = exactRes.rows[0];
+        return {
+          id: String(r.id),
+          name: r.name || "Student",
+          email: r.email || "N/A",
+          mobile: r.mobile ? decrypt(r.mobile) : "N/A",
+          ip: "N/A",
+        };
+      }
+      if (isPhoneLike) {
+        const allMobilesRes = await tursoClient.execute({
+          sql: "SELECT id, name, email, mobile FROM users WHERE mobile IS NOT NULL AND mobile != ''",
+          args: [],
+        });
+        if (allMobilesRes.rows) {
+          for (const r of allMobilesRes.rows) {
+            const decMob = r.mobile ? decrypt(r.mobile) : "";
+            if (matchesPhoneQuery(decMob, trimmed)) {
+              return {
+                id: String(r.id),
+                name: r.name || "Student",
+                email: r.email || "N/A",
+                mobile: decMob || "N/A",
+                ip: "N/A",
+              };
+            }
+          }
         }
       }
     } catch (_) {}
   }
 
-  if (!targetUserId) {
+  // 5. Check Firestore users collection (by Doc ID, Email, or Encrypted/Plain Mobile)
+  if (db) {
+    try {
+      const byId = await db.collection("users").doc(trimmed).get();
+      if (byId.exists) {
+        const d = byId.data() || {};
+        return {
+          id: byId.id,
+          name: d.name || "Student",
+          email: d.email || "N/A",
+          mobile: d.mobile ? decrypt(d.mobile) : "N/A",
+          ip: d.lastLoginIp || "N/A",
+        };
+      }
+      const byEmail = await db.collection("users").where("email", "==", cleanQuery).limit(1).get();
+      if (!byEmail.empty) {
+        const doc = byEmail.docs[0];
+        const d = doc.data() || {};
+        return {
+          id: doc.id,
+          name: d.name || "Student",
+          email: d.email || "N/A",
+          mobile: d.mobile ? decrypt(d.mobile) : "N/A",
+          ip: d.lastLoginIp || "N/A",
+        };
+      }
+      if (isPhoneLike) {
+        const uSnap = await db.collection("users").get();
+        for (const doc of uSnap.docs) {
+          const d = doc.data() || {};
+          const decMob = d.mobile ? decrypt(d.mobile) : "";
+          if (matchesPhoneQuery(decMob, trimmed) || matchesPhoneQuery(d.mobile, trimmed)) {
+            return {
+              id: doc.id,
+              name: d.name || "Student",
+              email: d.email || "N/A",
+              mobile: decMob || d.mobile || "N/A",
+              ip: d.lastLoginIp || "N/A",
+            };
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+/**
+ * 🚫 Helper: Blocks a user directly via Telegram Chat Bot command (by Mobile, Email, or ID)
+ */
+async function handleBlockUserFromTelegram(query, adminInfo = {}) {
+  if (!query || !String(query).trim()) {
+    return { success: false, message: "Please specify student mobile number, email, or ID." };
+  }
+
+  const targetDetails = await resolveChatUserByQuery(query);
+  if (!targetDetails || !targetDetails.id) {
     return { success: false, message: `No student found matching "${query}".` };
   }
+  const targetUserId = targetDetails.id;
 
   if (targetDetails.email && targetDetails.email.toLowerCase() === MAIN_ADMIN_EMAIL) {
     return { success: false, message: "Cannot block Master Administrator." };
@@ -3928,35 +4206,28 @@ async function handleBlockUserFromTelegram(query, adminInfo = {}) {
 }
 
 /**
- * ✅ Helper: Unblocks a user directly via Telegram Chat Bot command
+ * ✅ Helper: Unblocks a user directly via Telegram Chat Bot command (by Mobile, Email, or ID)
  */
 async function handleUnblockUserFromTelegram(query, adminInfo = {}) {
-  if (!query || !query.trim()) return { success: false, message: "Please specify student email or ID." };
-  const cleanQuery = query.trim().toLowerCase();
+  if (!query || !String(query).trim()) {
+    return { success: false, message: "Please specify student mobile number, email, or ID." };
+  }
+  const cleanQuery = String(query).trim().toLowerCase();
 
-  let targetUserId = null;
-  let targetDetails = null;
+  let targetDetails = await resolveChatUserByQuery(query);
+  let targetUserId = targetDetails?.id || null;
 
-  for (const bId of blockedUsers) {
-    if (bId.toLowerCase() === cleanQuery) {
-      targetUserId = bId;
-      break;
+  if (!targetUserId) {
+    for (const bId of blockedUsers) {
+      if (bId.toLowerCase() === cleanQuery) {
+        targetUserId = bId;
+        break;
+      }
     }
   }
 
-  if (!targetUserId && db) {
-    try {
-      const byEmail = await db.collection("users").where("email", "==", cleanQuery).limit(1).get();
-      if (!byEmail.empty) {
-        targetUserId = byEmail.docs[0].id;
-        const d = byEmail.docs[0].data();
-        targetDetails = { id: targetUserId, name: d.name || "Student", email: d.email || "N/A", mobile: d.mobile || "N/A" };
-      }
-    } catch (_) {}
-  }
-
   if (!targetUserId) {
-    targetUserId = query.trim();
+    targetUserId = String(query).trim();
   }
 
   blockedUsers.delete(targetUserId);
@@ -3971,8 +4242,13 @@ async function handleUnblockUserFromTelegram(query, adminInfo = {}) {
       try {
         const uSnap = await db.collection("users").doc(targetUserId).get();
         if (uSnap.exists) {
-          const d = uSnap.data();
-          targetDetails = { id: targetUserId, name: d.name || "Student", email: d.email || "N/A", mobile: d.mobile || "N/A" };
+          const d = uSnap.data() || {};
+          targetDetails = {
+            id: targetUserId,
+            name: d.name || "Student",
+            email: d.email || "N/A",
+            mobile: d.mobile ? decrypt(d.mobile) : "N/A",
+          };
         }
       } catch (_) {}
     }
@@ -4021,6 +4297,134 @@ async function handleUnblockUserFromTelegram(query, adminInfo = {}) {
 }
 
 /**
+ * 🧹 Helper: Deletes ALL messages sent by a specific student across chat (via Telegram Bot)
+ * Accepts student Mobile Number, Email, or User ID.
+ */
+async function handleDeleteAllUserMessagesFromTelegram(query, adminInfo = {}) {
+  if (!query || !String(query).trim()) {
+    return { success: false, message: "Please specify student mobile number, email, or ID." };
+  }
+
+  const resolvedUser = await resolveChatUserByQuery(query);
+  const targetUserId = resolvedUser?.id || String(query).trim();
+  const targetEmailLower = resolvedUser?.email && resolvedUser.email !== "N/A"
+    ? String(resolvedUser.email).toLowerCase()
+    : (String(query).includes("@") ? String(query).trim().toLowerCase() : "");
+
+  const deletedMessageIds = new Set();
+  let ramDeletedCount = 0;
+
+  // 1. Purge from all active in-memory rooms & broadcast immediate removal to connected clients
+  for (const [rId, msgs] of activeMessages.entries()) {
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    const remaining = [];
+    let roomDeleted = 0;
+    for (const m of msgs) {
+      const sId = m.sender?.id ? String(m.sender.id) : "";
+      const sEmail = m.sender?.email ? String(m.sender.email).toLowerCase() : "";
+      if (sId === String(targetUserId) || (targetEmailLower && sEmail === targetEmailLower)) {
+        deletedMessageIds.add(String(m.id));
+        roomDeleted++;
+      } else {
+        remaining.push(m);
+      }
+    }
+    if (roomDeleted > 0) {
+      activeMessages.set(rId, remaining);
+      ramDeletedCount += roomDeleted;
+      broadcastToRoom(rId, {
+        type: "user_messages_purged",
+        roomId: rId,
+        targetUserId: String(targetUserId),
+        deletedCount: roomDeleted,
+        purgedBy: { id: "admin", name: adminInfo.name || "Telegram Bot Admin" },
+      });
+    }
+  }
+
+  // Always broadcast to public hall even if scrolled out of RAM so any client holding older messages purges them
+  if (ramDeletedCount === 0) {
+    broadcastToRoom(PUBLIC_ROOM_ID, {
+      type: "user_messages_purged",
+      roomId: PUBLIC_ROOM_ID,
+      targetUserId: String(targetUserId),
+      deletedCount: 0,
+      purgedBy: { id: "admin", name: adminInfo.name || "Telegram Bot Admin" },
+    });
+  }
+
+  // 2. Delete from Firestore chat_messages
+  let firestoreDeletedCount = 0;
+  if (db) {
+    try {
+      const snapById = await db.collection("chat_messages").where("sender.id", "==", String(targetUserId)).get();
+      const docsToDelete = new Map();
+      snapById.forEach((d) => docsToDelete.set(d.id, d.ref));
+
+      if (targetEmailLower) {
+        const snapByEmail = await db.collection("chat_messages").where("sender.email", "==", targetEmailLower).get();
+        snapByEmail.forEach((d) => docsToDelete.set(d.id, d.ref));
+      }
+
+      if (docsToDelete.size > 0) {
+        const allEntries = Array.from(docsToDelete.entries());
+        for (const [docId] of allEntries) {
+          deletedMessageIds.add(String(docId));
+        }
+        firestoreDeletedCount = allEntries.length;
+        for (let i = 0; i < allEntries.length; i += 450) {
+          const batch = db.batch();
+          allEntries.slice(i, i + 450).forEach(([, ref]) => batch.delete(ref));
+          await batch.commit();
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Delete from Turso LibSQL chat_messages
+  let tursoDeletedCount = 0;
+  if (tursoClient) {
+    try {
+      const tRes = await tursoClient.execute({
+        sql: "DELETE FROM chat_messages WHERE sender_id = ?",
+        args: [String(targetUserId)],
+      });
+      tursoDeletedCount = Number(tRes?.rowsAffected || 0);
+    } catch (_) {}
+  }
+
+  const totalDeleted = Math.max(deletedMessageIds.size, ramDeletedCount, firestoreDeletedCount, tursoDeletedCount);
+
+  if (!resolvedUser && totalDeleted === 0) {
+    return {
+      success: false,
+      message: `No student or messages found matching "${query}".`,
+    };
+  }
+
+  const targetDetails = resolvedUser || {
+    id: String(targetUserId),
+    name: "Student",
+    email: targetEmailLower || "N/A",
+    mobile: "N/A",
+  };
+
+  dispatchChatPurgeAlertToTelegram({
+    roomId: PUBLIC_ROOM_ID,
+    roomName: "💬 Public & Study Rooms",
+    admin: { name: adminInfo.name || "Telegram Bot Admin", ip: adminInfo.ip || "Telegram API" },
+    details: `All ${totalDeleted} messages by ${targetDetails.name} (${targetDetails.email} | ${targetDetails.mobile}) were deleted via Telegram Bot.`,
+  }).catch(() => {});
+
+  return {
+    success: true,
+    targetUser: targetDetails,
+    deletedCount: totalDeleted,
+    deletedMessageIds: Array.from(deletedMessageIds),
+  };
+}
+
+/**
  * 📋 Helper: Returns all blocked students with profile details
  */
 async function getBlockedUsersList() {
@@ -4036,7 +4440,7 @@ async function getBlockedUsersList() {
             id: uid,
             name: d.name || "Student",
             email: d.email || "N/A",
-            mobile: d.mobile || "N/A",
+            mobile: d.mobile ? decrypt(d.mobile) : "N/A",
             ip: d.lastLoginIp || "N/A",
           };
         }
