@@ -20,7 +20,10 @@ export default class GlobalErrorBoundary extends Component {
         errStr.includes("failed to fetch dynamically imported module") ||
         errStr.includes("loading chunk") ||
         errStr.includes("dynamically imported module") ||
-        errStr.includes("error loading dynamic script");
+        errStr.includes("error loading dynamic script") ||
+        errStr.includes("usecallback is not defined") ||
+        errStr.includes("is not defined") ||
+        errStr.includes("referenceerror");
 
       if (isChunkOrImportError && typeof window !== "undefined") {
         const reloadKey = "fsm_boundary_auto_recovered";

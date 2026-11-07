@@ -53,23 +53,23 @@ export default function GeminiIcon({
             cy="12"
             r="10.2"
             stroke={ringColor || "#ffffff"}
-            strokeWidth="1.8"
+            strokeWidth="2"
             strokeDasharray="2.8 2"
-            opacity="0.95"
+            opacity="1"
             style={{
-              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.6))",
+              filter: "drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.9))",
             }}
           />
-          {/* Centered Large 4-Pointed Gemini Astroid Star */}
+          {/* Centered Large 4-Pointed Gemini Astroid Star (Crisp High-Visibility White Core) */}
           <path
             d="M 12 4.2 Q 12 12 4.2 12 Q 12 12 12 19.8 Q 12 12 19.8 12 Q 12 12 12 4.2 Z"
-            fill={color || `url(#${gradId})`}
+            fill={color || "#ffffff"}
             style={{
-              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.8)) drop-shadow(0 0 4px rgba(56, 189, 248, 0.7))",
+              filter: "drop-shadow(0 0 2px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 5px rgba(56, 189, 248, 0.8))",
             }}
           />
           {/* 💎 Luminous White Diamond Center Core */}
-          <circle cx="12" cy="12" r="1.6" fill="#ffffff" opacity="0.95" />
+          <circle cx="12" cy="12" r="1.8" fill="#ffffff" opacity="1" />
         </>
       ) : (
         <>

@@ -5397,7 +5397,7 @@ export default function VirtualPdfReader({
               title={'Open Live Study Pod discussion for Page ' + currentPage}
             >
               <MessageSquare size={12} color="#06b6d4" />
-              <span>Pg {currentPage}? Discuss</span>
+              <span>Pg {currentPage} • Discuss</span>
             </button>
           )}
 
@@ -5725,7 +5725,7 @@ export default function VirtualPdfReader({
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <GeminiIcon size={18} withRing />
+            <GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />
             <span><strong>Circle to Search Active:</strong> Click & drag a circle around any formula or question</span>
           </div>
           <button
