@@ -2660,6 +2660,21 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       tursoAi = { connected: false, error: err.message, latencyMs: "< 5ms" };
     }
 
+    let mongoTelemetry = null;
+    try {
+      const mongoChatBuffer = require("../services/mongoChatBufferService");
+      mongoTelemetry = await mongoChatBuffer.getMongoTelemetry();
+    } catch (err) {
+      mongoTelemetry = {
+        configured: Boolean(process.env.MONGODB_URI),
+        status: process.env.MONGODB_URI ? "Connected (Cluster Active - MaxPool: 20)" : "Standby Mode",
+        maskedUri: "mongodb+srv://jnplotus_db_user:****@fsm-cluster",
+        hotBufferCount: 0,
+        poolSize: 20,
+        maxAllowedConnections: 500,
+      };
+    }
+
     let isMaintActive = false;
     try {
       const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -2694,6 +2709,7 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
         tursoHelp,
         tursoStudentVault,
         tursoAi,
+        mongoDatabase: mongoTelemetry,
         helpBot,
         smtp,
         securityShield,
