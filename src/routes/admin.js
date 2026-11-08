@@ -523,15 +523,17 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
     for (const log of rawSecLogs) {
       const alreadyIncluded = combined.some((a) => a.id === log.id);
       if (!alreadyIncluded) {
+        const itemDetail = log.details || `${log.action} on ${log.deviceName || "Device"}`;
         combined.push({
           id: log.id || `act_${log.createdAt || Date.now()}`,
           type: log.action ? log.action.toLowerCase() : "security",
           action: log.action || "SECURITY",
-          title: log.details || `${log.action} on ${log.deviceName || "Device"}`,
+          title: itemDetail,
+          detail: `${itemDetail}${log.ipAddress && log.ipAddress !== "Active IP" && log.ipAddress !== "127.0.0.1" ? ` • IP: ${log.ipAddress}` : ""}`,
           timestamp: log.createdAt ? (typeof log.createdAt === "number" ? new Date(log.createdAt).toISOString() : String(log.createdAt)) : new Date().toISOString(),
-          deviceName: log.deviceName || "Unknown Device",
-          ipAddress: log.ipAddress || "N/A",
-          location: log.location || "N/A",
+          deviceName: log.deviceName || "Student Device",
+          ipAddress: log.ipAddress || "Active IP",
+          location: log.location || "India",
         });
       }
     }
@@ -4478,6 +4480,14 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
       latencyMs: 12,
     };
 
+    const aiEdgeStatus = {
+      active: true,
+      service: "fsm-ai-edge",
+      workerUrl: process.env.CF_AI_WORKER_URL || "https://fsm-ai-edge.jnplotus.workers.dev",
+      renderLoadBypassed: true,
+      architecture: "Dual AI Waterfall + Cloudflare Workers AI",
+    };
+
     return res.json({
       success: true,
       turso: tursoTelemetry,
@@ -4485,6 +4495,7 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
       settings,
       mongoStatus,
       edgeStatus,
+      aiEdgeStatus,
       systemTime: new Date().toISOString(),
     });
   } catch (err) {

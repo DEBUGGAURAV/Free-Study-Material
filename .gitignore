@@ -17,6 +17,8 @@ cache/
 *.sqlite
 serviceAccountKey*.json
 .env*.production
+*.env
+.dev.vars
 scripts/
 generate_icons.js
 nodemon.json
