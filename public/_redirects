@@ -1,0 +1,4 @@
+# Cloudflare Pages Single-Page Application (SPA) & Backend Proxy Rules
+/api/*  https://freestudymaterial.onrender.com/api/:splat  200
+/ws/*   https://freestudymaterial.onrender.com/ws/:splat   200
+/*      /index.html                                         200
