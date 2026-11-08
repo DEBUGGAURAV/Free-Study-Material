@@ -827,8 +827,31 @@ export default {
 
     // 🛡️ 24/7 Anti-Sleep Relay Endpoint (Bypasses container NAT loopback, pings origin from external Cloudflare IP)
     if (url.pathname === "/api/anti-sleep-relay" || url.pathname === "/api/keepalive") {
-      const target = url.searchParams.get("target") || env.ORIGIN_URL || "https://freestudymaterial.onrender.com";
-      const cleanTarget = target.replace(/\/+$/, "") + "/health?relay=cf&t=" + Date.now();
+      const targetParam = url.searchParams.get("target") || env.ORIGIN_URL || "https://freestudymaterial.onrender.com";
+      let cleanTarget;
+      try {
+        const parsed = new URL(targetParam);
+        const host = parsed.hostname.toLowerCase();
+        const originHost = env.ORIGIN_URL ? new URL(env.ORIGIN_URL).hostname.toLowerCase() : "";
+        const isAllowed =
+          host === "freestudymaterial.onrender.com" ||
+          host.endsWith(".onrender.com") ||
+          host === "studyvault.in" ||
+          host.endsWith(".studyvault.in") ||
+          host === "localhost" ||
+          host === "127.0.0.1" ||
+          (originHost && host === originHost);
+        if (!isAllowed) {
+          const deniedHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(deniedHeaders, request);
+          return new Response(JSON.stringify({ success: false, error: "Target host not permitted for relay" }), { status: 403, headers: deniedHeaders });
+        }
+        cleanTarget = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}/health?relay=cf&t=${Date.now()}`;
+      } catch {
+        const badHeaders = new Headers({ "Content-Type": "application/json" });
+        applyCors(badHeaders, request);
+        return new Response(JSON.stringify({ success: false, error: "Invalid target URL" }), { status: 400, headers: badHeaders });
+      }
       try {
         const pingRes = await fetch(cleanTarget, {
           method: "GET",

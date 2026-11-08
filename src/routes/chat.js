@@ -79,11 +79,15 @@ const uploadChatMedia = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB max limit for student PDF notes & media
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || "").toLowerCase();
+    if (ext === ".svg" || mime === "image/svg+xml" || ext === ".html" || mime === "text/html") {
+      return cb(new Error("SVG and HTML script files are not permitted in chat for security reasons."));
+    }
     const allowed = [
       ".pdf", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".txt", ".doc", ".docx",
       ".webm", ".mp3", ".wav", ".ogg", ".m4a", ".aac"
     ];
-    if (allowed.includes(ext) || file.mimetype.startsWith("audio/") || file.mimetype.startsWith("image/")) {
+    if (allowed.includes(ext) || file.mimetype.startsWith("audio/") || (file.mimetype.startsWith("image/") && mime !== "image/svg+xml")) {
       cb(null, true);
     } else {
       cb(new Error("File format not supported in chat. Please share PDF, image, audio, or text documents."));
@@ -3314,6 +3318,7 @@ router.get("/media/:filename", (req, res) => {
       res.setHeader("Content-Type", mimeMap[ext]);
     }
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     return res.sendFile(filePath);
   } catch (err) {
     return res.status(500).send("Error reading media file.");

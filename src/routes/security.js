@@ -13,6 +13,7 @@ const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET, authenticateToken, requireAdmin } = require("../middleware/auth");
+const { apiLimiter } = require("../middleware/rateLimit");
 const { db } = require("../firebase");
 const { tursoClient } = require("../services/tursoService");
 const {
@@ -32,6 +33,7 @@ const { decryptUserObject } = require("../utils/cryptoVault");
 // Memory cache to track strikes per IP & user (TTL 24 hours)
 const tamperStrikes = new Map(); // key -> { count: number, violations: Array, lastAt: number }
 const recentAppeals = new Map(); // key -> timestamp (rate limit appeals)
+const telegramAlertCooldown = new Map(); // key -> timestamp (prevents Telegram Topic 6 flooding)
 
 setInterval(() => {
   const now = Date.now();
@@ -39,6 +41,9 @@ setInterval(() => {
     if (now - val.lastAt > 24 * 60 * 60 * 1000) {
       tamperStrikes.delete(key);
     }
+  }
+  for (const [k, time] of telegramAlertCooldown.entries()) {
+    if (now - time > 60 * 1000) telegramAlertCooldown.delete(k);
   }
 }, 60 * 60 * 1000);
 
@@ -161,6 +166,14 @@ async function dispatchTamperTelegramAlert({
     .filter(Boolean)
     .join("\n");
 
+  // 🛡️ Alert Throttling: Prevent Telegram Topic 6 flooding from automated scripts
+  const cooldownKey = `${user?.id || ip || "guest"}_tamper`;
+  const now = Date.now();
+  if (now - (telegramAlertCooldown.get(cooldownKey) || 0) < 15000 && strikeCount < 3) {
+    return; // Coalesce intermediate alerts within 15s window, but allow final block strike
+  }
+  telegramAlertCooldown.set(cooldownKey, now);
+
   // Dispatch strictly to Security Supergroup Topic 6 (@fsm_security_otp_bot)
   try {
     await sendTelegramAuthNotice({
@@ -185,9 +198,9 @@ async function dispatchTamperTelegramAlert({
 
 /**
  * POST /api/security/tamper-alert
- * Receives tamper beacon from client-side sensor
+ * Receives tamper beacon from client-side sensor with rate limiting
  */
-router.post("/tamper-alert", async (req, res) => {
+router.post("/tamper-alert", apiLimiter, async (req, res) => {
   try {
     const clientIp = getClientIp(req);
     const { detail, context, clientStrikes, deviceInfo, pageUrl, user: clientUser, forensics } = req.body || {};

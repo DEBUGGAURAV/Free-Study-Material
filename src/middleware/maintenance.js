@@ -7,7 +7,7 @@ let maintenanceConfig = {
   title: "Scheduled System Upgrade in Progress",
   message: "We are currently performing scheduled platform upgrades to optimize performance, cloud CDN caching, and security. Free Study Material will be back online shortly!",
   estimatedEnd: "",
-  bypassKey: "fsm_admin_override",
+  bypassKey: (process.env.MAINTENANCE_BYPASS_KEY || process.env.ADMIN_BYPASS_KEY || "").trim(),
   expiresAt: null,
 };
 

@@ -18,25 +18,48 @@ function getClientIp(req) {
     if (cfIp) {
       const val = Array.isArray(cfIp) ? cfIp[0] : cfIp;
       if (typeof val === "string" && val.trim()) {
-        return val.trim().replace(/^::ffff:/, "");
+        const clean = val.trim().replace(/^::ffff:/, "");
+        if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
       }
     }
 
-    // 2. Express proxy-verified client IP (Respects app.set("trust proxy", 1) to prevent spoofing)
-    if (req.ip && typeof req.ip === "string" && req.ip.trim()) {
-      return req.ip.trim().replace(/^::ffff:/, "");
-    }
-
-    // 3. X-Real-IP (Trusted single proxy header)
-    const realIp = headers["x-real-ip"];
+    // 2. Real-IP / True-Client-IP headers (Reverse Proxies & CDNs)
+    const realIp = headers["x-real-ip"] || headers["true-client-ip"] || headers["x-client-ip"];
     if (realIp) {
       const val = Array.isArray(realIp) ? realIp[0] : realIp;
       if (typeof val === "string" && val.trim()) {
-        return val.trim().replace(/^::ffff:/, "");
+        const clean = val.trim().replace(/^::ffff:/, "");
+        if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
       }
     }
 
-    // 4. Socket remote address fallback
+    // 3. X-Forwarded-For header (handles array or comma-separated string)
+    const fwd = headers["x-forwarded-for"];
+    if (fwd) {
+      const fwdStr = Array.isArray(fwd) ? fwd.join(",") : String(fwd);
+      const ips = fwdStr
+        .split(",")
+        .map((s) => s.trim().replace(/^::ffff:/, "").split(":")[0])
+        .filter(Boolean);
+
+      // Prefer the first public, non-private IP
+      const publicIp = ips.find((ip) => {
+        if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") return false;
+        if (ip.startsWith("10.") || ip.startsWith("192.168.")) return false;
+        if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)) return false;
+        return true;
+      });
+      if (publicIp) return publicIp;
+      if (ips[0]) return ips[0];
+    }
+
+    // 4. Express proxy-verified client IP (Respects app.set("trust proxy", true))
+    if (req.ip && typeof req.ip === "string" && req.ip.trim()) {
+      const clean = req.ip.trim().replace(/^::ffff:/, "");
+      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
+    }
+
+    // 5. Socket remote address fallback
     const directIp =
       req.connection?.remoteAddress ||
       req.socket?.remoteAddress ||
@@ -110,19 +133,21 @@ function isImmune(req) {
     const query = req.query || {};
     const headers = req.headers || {};
 
-    const bypassKey = process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "fsm_admin_override";
+    const bypassKey = (process.env.ADMIN_BYPASS_KEY || process.env.MAINTENANCE_BYPASS_KEY || "").trim();
     if (
-      query.admin_bypass === bypassKey ||
-      query.bypass === bypassKey ||
-      headers["x-admin-bypass"] === bypassKey
+      bypassKey &&
+      (query.admin_bypass === bypassKey ||
+        query.bypass === bypassKey ||
+        headers["x-admin-bypass"] === bypassKey)
     ) {
       if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || isUserAdmin(req)) {
         return true;
       }
     }
 
-    const host = typeof headers["host"] === "string" ? headers["host"] : "";
-    if (headers["x-worker-origin"] || host.includes("workers.dev")) {
+    // 🛡️ Edge worker verification: Only trust worker origin if configured edge secret matches
+    const edgeSecret = (process.env.CF_WORKER_SECRET || bypassKey || "").trim();
+    if (edgeSecret && headers["x-worker-origin"] === edgeSecret) {
       return true;
     }
 

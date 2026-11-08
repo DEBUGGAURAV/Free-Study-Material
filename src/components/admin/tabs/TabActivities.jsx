@@ -528,13 +528,19 @@ export default function TabActivities(props) {
                     gap: "8px",
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" }}>
                     <span style={{ padding: "2px 7px", borderRadius: "4px", background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: "0.68rem", flexShrink: 0 }}>
                       {log.action}
                     </span>
                     <span style={{ color: "#e2e8f0", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                       {log.details || log.deviceName}
                     </span>
+                    {log.ipAddress && log.ipAddress !== "Active IP" && log.ipAddress !== "127.0.0.1" && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "0.68rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "1px 6px", borderRadius: "4px", flexShrink: 0 }}>
+                        <Globe size={10} />
+                        <span>{log.ipAddress}</span>
+                      </span>
+                    )}
                   </div>
                   <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: "0.7rem" }}>
                     {timeStr}

@@ -13,8 +13,12 @@
 require("dotenv").config();
 const crypto = require("crypto");
 
-// Master Encryption Key derived from JWT_SECRET or SERVER_KEY
-const RAW_KEY = process.env.JWT_SECRET || process.env.ADMIN_PASSWORD || crypto.randomBytes(32).toString("hex");
+// Master Encryption Key derived from JWT_SECRET, CRYPTO_MASTER_KEY, or ADMIN_PASSWORD (Deterministic across server restarts)
+const RAW_KEY =
+  process.env.CRYPTO_MASTER_KEY ||
+  process.env.JWT_SECRET ||
+  process.env.ADMIN_PASSWORD ||
+  "fsm_enterprise_vault_aes_gcm_master_2026";
 const MASTER_KEY_BUFFER = crypto.createHash("sha256").update(RAW_KEY).digest();
 const HMAC_KEY_BUFFER = crypto.createHash("sha256").update("hmac_salt_" + RAW_KEY).digest();
 
@@ -102,9 +106,9 @@ function encryptUserObject(user) {
   const clone = { ...user };
 
   if (clone.mobile) {
-    clone.plainMobile = String(clone.mobile);
     clone.mobileHash = blindIndex(clone.mobile);
     clone.mobile = encrypt(clone.mobile);
+    delete clone.plainMobile;
   }
 
   if (clone.telegramDetails && typeof clone.telegramDetails === "object") {

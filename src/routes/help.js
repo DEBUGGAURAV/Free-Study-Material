@@ -75,6 +75,13 @@ const uploadHelpAttachment = multer({
   limits: { fileSize: 35 * 1024 * 1024 }, // 35 MB max
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
+    const mime = (file.mimetype || "").toLowerCase();
+
+    // 🛡️ Strict Stored-XSS Shield: Prohibit SVG and HTML executable markup
+    if (ext === ".svg" || mime === "image/svg+xml" || ext === ".html" || mime === "text/html" || mime === "application/javascript") {
+      return cb(new Error("SVG and HTML script files are strictly prohibited for security reasons."));
+    }
+
     const allowedExts = [
       ".png", ".jpg", ".jpeg", ".webp", ".gif",
       ".pdf", ".txt", ".doc", ".docx",
@@ -83,7 +90,7 @@ const uploadHelpAttachment = multer({
     ];
     if (
       allowedExts.includes(ext) ||
-      file.mimetype.startsWith("image/") ||
+      (file.mimetype.startsWith("image/") && mime !== "image/svg+xml") ||
       file.mimetype.startsWith("video/") ||
       file.mimetype.startsWith("audio/")
     ) {
@@ -220,6 +227,8 @@ router.get("/attachment/:filename", (req, res) => {
       return res.status(404).json({ success: false, message: "Attachment not found." });
     }
     res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
     return res.sendFile(filePath);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -69,8 +69,8 @@ const { startAntiSleepService, getAntiSleepTelemetry } = require("./services/ant
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Trust reverse proxy (Cloudflare / Render)
-app.set("trust proxy", 1);
+// Trust reverse proxy (Cloudflare / Render - full chain resolution)
+app.set("trust proxy", true);
 
 // Record server activity for idle flusher
 app.use((req, res, next) => {

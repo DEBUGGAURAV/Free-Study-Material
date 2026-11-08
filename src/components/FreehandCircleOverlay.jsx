@@ -31,6 +31,7 @@ export default function FreehandCircleOverlay({
   const isDrawingRef = useRef(false);
   const autoSolveTimerRef = useRef(null);
   const strokesRef = useRef([]);
+  const lastFinalizeTimeRef = useRef(0);
 
   // Prevent iOS/iPadOS Safari from hijacking touch drags into page scrolling or pointercancel
   useSafariNonPassiveTouchLock(overlayRef, isActive, "[data-pencil-toolbar='true'], button");
@@ -76,6 +77,10 @@ export default function FreehandCircleOverlay({
   const finalizeSelection = useCallback(
     async (inputStrokes) => {
       clearAutoTimer();
+      const now = Date.now();
+      if (now - lastFinalizeTimeRef.current < 900) return;
+      lastFinalizeTimeRef.current = now;
+
       const targetStrokes = inputStrokes || strokesRef.current;
       if (!targetStrokes || targetStrokes.length === 0) return;
 

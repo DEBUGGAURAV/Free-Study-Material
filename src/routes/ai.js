@@ -715,6 +715,13 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     else if (provider === "cloudflare" || provider === "cf" || provider === "cloudflare-ai") update.cloudflareAiEnabled = Boolean(enabled);
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);
     else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
+    else if (provider === "cerebras") update.cerebrasEnabled = Boolean(enabled);
+    else if (provider === "sambanova") update.sambanovaEnabled = Boolean(enabled);
+    else if (provider === "mistral") update.mistralEnabled = Boolean(enabled);
+    else if (provider === "github" || provider === "github-models" || provider === "github_models") update.githubModelsEnabled = Boolean(enabled);
+    else if (provider === "huggingface" || provider === "hf") update.huggingFaceEnabled = Boolean(enabled);
+    else if (provider === "openrouter") update.openRouterEnabled = Boolean(enabled);
+    else if (provider === "cohere") update.cohereEnabled = Boolean(enabled);
     else {
       return res.status(400).json({ success: false, message: "Invalid provider specified" });
     }

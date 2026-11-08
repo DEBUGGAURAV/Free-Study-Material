@@ -56,8 +56,18 @@ async function processLoginDevice(user, req, clientFingerprint = "") {
   }
 
   const userAgent = req.headers["user-agent"] || "Unknown";
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || req.connection?.remoteAddress || "Unknown";
-  const { summary: deviceSummary, browser, os } = parseUserAgent(userAgent);
+  let ip = "Unknown";
+  try {
+    const { extractClientIp } = require("./studentSessionService");
+    ip = extractClientIp(req);
+  } catch (_) {
+    ip = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split?.(",")[0]?.trim() || req.ip || "Unknown";
+  }
+
+  const { summary: defaultSummary, browser, os } = parseUserAgent(userAgent);
+  const deviceSummary = (req.body?.deviceSpecs?.deviceName && typeof req.body.deviceSpecs.deviceName === "string")
+    ? req.body.deviceSpecs.deviceName.trim().slice(0, 100)
+    : defaultSummary;
 
   const deviceHash = computeDeviceHash(user.id, clientFingerprint, userAgent);
   const now = new Date().toISOString();

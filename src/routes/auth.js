@@ -45,14 +45,32 @@ setInterval(() => {
   for (const [key, val] of pendingProfileMobileOtps.entries()) {
     if (val.expiresAt && val.expiresAt < now) pendingProfileMobileOtps.delete(key);
   }
-  // Evict oldest if exceeding 1,000 entries (anti-DoS memory cap)
-  while (otpStore.size > 1000) {
-    const oldest = otpStore.keys().next().value;
-    otpStore.delete(oldest);
+  // 🛡️ Intelligent Anti-DoS Eviction: Prune expired or exhausted attempts first to protect legitimate pending OTPs
+  if (otpStore.size > 1000) {
+    for (const [key, val] of otpStore.entries()) {
+      if (!val || (val.expiresAt && val.expiresAt < now) || (val.attempts && val.attempts >= 3)) {
+        otpStore.delete(key);
+        if (otpStore.size <= 800) break;
+      }
+    }
+    while (otpStore.size > 1000) {
+      const oldest = otpStore.keys().next().value;
+      if (!oldest) break;
+      otpStore.delete(oldest);
+    }
   }
-  while (pendingProfileMobileOtps.size > 1000) {
-    const oldest = pendingProfileMobileOtps.keys().next().value;
-    pendingProfileMobileOtps.delete(oldest);
+  if (pendingProfileMobileOtps.size > 1000) {
+    for (const [key, val] of pendingProfileMobileOtps.entries()) {
+      if (!val || (val.expiresAt && val.expiresAt < now)) {
+        pendingProfileMobileOtps.delete(key);
+        if (pendingProfileMobileOtps.size <= 800) break;
+      }
+    }
+    while (pendingProfileMobileOtps.size > 1000) {
+      const oldest = pendingProfileMobileOtps.keys().next().value;
+      if (!oldest) break;
+      pendingProfileMobileOtps.delete(oldest);
+    }
   }
 }, 60000);
 
@@ -948,8 +966,11 @@ router.post("/register", authLimiter, async (req, res) => {
       password: hashedPassword,
     });
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+
     const payload = {
       id: userId,
+      sid: sessionId,
       email: newUser.email,
       name: newUser.name,
       role: newUser.role,
@@ -957,10 +978,23 @@ router.post("/register", authLimiter, async (req, res) => {
       mobile: newUser.mobile,
       year: newUser.year,
       permissions: newUser.permissions,
+      v: 1,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Firestore
+    try {
+      const { recordActiveSession } = require("../services/studentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId,
+        req,
+        tokenVersion: 1,
+        deviceSpecs: req.body?.deviceSpecs,
+      }).catch(() => {});
+    } catch (_) {}
 
     // Send Real-time Telegram Security Notice to Security Bot
     sendTelegramAuthNotice({
@@ -1294,8 +1328,11 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       }).catch(() => {});
     });
 
+    const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+
     const payload = {
       id: userId,
+      sid: sessionId,
       email: newUser.email,
       name: newUser.name,
       role: newUser.role,
@@ -1303,10 +1340,23 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       mobile: newUser.mobile,
       year: newUser.year,
       permissions: newUser.permissions,
+      v: 1,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
+
+    // 🚀 Track Active Device Session in Firestore
+    try {
+      const { recordActiveSession } = require("../services/studentSessionService");
+      recordActiveSession({
+        sessionId,
+        userId,
+        req,
+        tokenVersion: 1,
+        deviceSpecs: req.body?.deviceSpecs,
+      }).catch(() => {});
+    } catch (_) {}
 
     return res.status(201).json({
       success: true,

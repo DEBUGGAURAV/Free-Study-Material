@@ -92,6 +92,8 @@ export default function CircleSearchModal({
 
   const isDrawingImgRef = useRef(false);
   const isDrawingPadRef = useRef(false);
+  const isSolvingRef = useRef(false);
+  const lastProcessedCircleFingerprintRef = useRef(null);
   const imgOcrDebounceRef = useRef(null);
   const imageContainerRef = useRef(null);
   const padContainerRef = useRef(null);
@@ -278,6 +280,8 @@ export default function CircleSearchModal({
   }) => {
     const cleanPrompt = (promptText || "").trim();
     if (!cleanPrompt && !imageToSolve) return;
+    if (isSolvingRef.current) return;
+    isSolvingRef.current = true;
 
     // Immediately hide top studio so the answer has 100% full vertical height to display!
     setShowTopInputPanel(false);
@@ -346,19 +350,29 @@ export default function CircleSearchModal({
       ]);
     } finally {
       setIsSolving(false);
+      isSolvingRef.current = false;
       setSolveStatus("");
     }
   };
 
   // Sync when circleData changes (from Read PDF Pencil OR Home Screen Pencil)
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      lastProcessedCircleFingerprintRef.current = null;
+      return;
+    }
     warmupClientOcr();
 
     if (circleData) {
       const rawIncomingText = (circleData.text || "").trim();
       const hasRealText = !circleData.isPureSketch && !isGenericPlaceholderText(rawIncomingText);
       const incomingImg = circleData.croppedImage || null;
+      const circleFingerprint = `${rawIncomingText}__${incomingImg ? incomingImg.slice(0, 120) : ""}__${circleData.noteId || ""}`;
+
+      if (lastProcessedCircleFingerprintRef.current === circleFingerprint) {
+        return;
+      }
+      lastProcessedCircleFingerprintRef.current = circleFingerprint;
 
       setQueryText(hasRealText ? rawIncomingText : "");
       setLiveExtractedText(hasRealText ? rawIncomingText : "");
@@ -394,6 +408,7 @@ export default function CircleSearchModal({
         }
       }
     } else {
+      lastProcessedCircleFingerprintRef.current = null;
       setQueryText("");
       setLiveExtractedText("");
       setMessages([]);

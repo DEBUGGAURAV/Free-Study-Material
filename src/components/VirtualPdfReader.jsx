@@ -1208,6 +1208,7 @@ export default function VirtualPdfReader({
   const [singlePageCurrentStroke, setSinglePageCurrentStroke] = useState(null);
   const singlePageStrokesRef = useRef([]);
   const singlePageAutoTimerRef = useRef(null);
+  const lastProcessedCircleTimeRef = useRef(0);
   const [singlePageCirclePill, setSinglePageCirclePill] = useState(null);
 
   useEffect(() => {
@@ -3069,6 +3070,11 @@ export default function VirtualPdfReader({
     preCroppedImage = null,
     isPureSketch = false,
   }) => {
+    // 🛡️ Guard against duplicate Safari/WebKit synthetic pointer events or rapid double triggers (900ms)
+    const now = Date.now();
+    if (now - lastProcessedCircleTimeRef.current < 900) return;
+    lastProcessedCircleTimeRef.current = now;
+
     if (!currentUser) {
       if (typeof onOpenAuth === "function") {
         onOpenAuth("signin");

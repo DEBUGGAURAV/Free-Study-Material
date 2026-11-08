@@ -38,12 +38,16 @@ export default function TabAiEngine() {
   const [telemetry, setTelemetry] = useState(null);
   const [feedback, setFeedback] = useState("");
   const [feedbackType, setFeedbackType] = useState("info"); // 'info' | 'success' | 'error'
+  const [engineFilter, setEngineFilter] = useState("all"); // 'all' | 'primary' | 'edge' | 'zero_card'
 
   // Testing AI
   const [testingGroq, setTestingGroq] = useState(false);
   const [testingGemini, setTestingGemini] = useState(false);
   const [testingCloudflare, setTestingCloudflare] = useState(false);
   const [testingTurso, setTestingTurso] = useState(false);
+  const [testingGitHub, setTestingGitHub] = useState(false);
+  const [testingHuggingFace, setTestingHuggingFace] = useState(false);
+  const [testingOpenRouter, setTestingOpenRouter] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
   // Student Query Playground
@@ -282,6 +286,9 @@ export default function TabAiEngine() {
       if (provider === "gemini") setTestingGemini(true);
       if (provider === "cloudflare") setTestingCloudflare(true);
       if (provider === "turso") setTestingTurso(true);
+      if (provider === "github") setTestingGitHub(true);
+      if (provider === "huggingface" || provider === "hf") setTestingHuggingFace(true);
+      if (provider === "openrouter") setTestingOpenRouter(true);
       setTestResult(null);
 
       const res = await api.testAiConnection(provider);
@@ -296,6 +303,9 @@ export default function TabAiEngine() {
       setTestingGemini(false);
       setTestingCloudflare(false);
       setTestingTurso(false);
+      setTestingGitHub(false);
+      setTestingHuggingFace(false);
+      setTestingOpenRouter(false);
     }
   };
 
@@ -353,6 +363,12 @@ export default function TabAiEngine() {
     groqApiKeyConfigured: false,
     geminiApiKeyConfigured: false,
     cloudflareAiConfigured: false,
+    githubModelsEnabled: true,
+    githubModelsConfigured: false,
+    huggingFaceEnabled: true,
+    huggingFaceConfigured: false,
+    openRouterEnabled: true,
+    openRouterConfigured: false,
   };
 
   return (
@@ -463,26 +479,30 @@ export default function TabAiEngine() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-          gap: "14px",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "12px",
         }}
       >
         {/* Total Capacity Card */}
         <div
           style={{
-            padding: "16px",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "16px 18px",
+            background: "linear-gradient(135deg, rgba(56, 189, 248, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)",
+            border: "1px solid rgba(56, 189, 248, 0.2)",
             borderRadius: "14px",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-            <span>Total Free Capacity</span>
-            <Sparkles size={16} color="#38bdf8" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-dim)", fontSize: "0.78rem" }}>
+            <span style={{ fontWeight: 600, letterSpacing: "0.3px" }}>TOTAL DAILY CAPACITY</span>
+            <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Sparkles size={16} color="#38bdf8" />
+            </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#fff", marginTop: "6px" }}>
+          <div style={{ fontSize: "1.7rem", fontWeight: 900, color: "#fff", marginTop: "8px", letterSpacing: "-0.02em" }}>
             {(usage.totalDailyCapacity || 16900).toLocaleString()}
-            <span style={{ fontSize: "0.8rem", color: "#38bdf8", marginLeft: "4px" }}>RPD</span>
+            <span style={{ fontSize: "0.8rem", color: "#38bdf8", marginLeft: "6px", fontWeight: 700 }}>RPD</span>
           </div>
           <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
             Groq (14.4k) + Gemini (1.5k) + Cloudflare ({(settings.cloudflareAiLimit || 1000).toLocaleString()})
@@ -492,682 +512,1008 @@ export default function TabAiEngine() {
         {/* Used Today Card */}
         <div
           style={{
-            padding: "16px",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "16px 18px",
+            background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)",
+            border: "1px solid rgba(16, 185, 129, 0.2)",
             borderRadius: "14px",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-            <span>Queries Served Today</span>
-            <Activity size={16} color="#34d399" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-dim)", fontSize: "0.78rem" }}>
+            <span style={{ fontWeight: 600, letterSpacing: "0.3px" }}>QUERIES SERVED TODAY</span>
+            <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Activity size={16} color="#34d399" />
+            </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#34d399", marginTop: "6px" }}>
+          <div style={{ fontSize: "1.7rem", fontWeight: 900, color: "#34d399", marginTop: "8px", letterSpacing: "-0.02em" }}>
             {usage.totalQueriesToday}
-            <span style={{ fontSize: "0.8rem", color: "#94a3b8", marginLeft: "6px", fontWeight: 500 }}>
+            <span style={{ fontSize: "0.82rem", color: "#94a3b8", marginLeft: "6px", fontWeight: 600 }}>
               / {usage.totalDailyCapacity}
             </span>
           </div>
           <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
-            {usage.cachedHitsToday} served from 0ms cache
+            {usage.cachedHitsToday} served instantly from 0ms cache
           </div>
         </div>
 
         {/* Failover Shield Card */}
         <div
           style={{
-            padding: "16px",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "16px 18px",
+            background: "linear-gradient(135deg, rgba(167, 139, 250, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)",
+            border: "1px solid rgba(167, 139, 250, 0.2)",
             borderRadius: "14px",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-            <span>Auto-Failovers Today</span>
-            <ShieldCheck size={16} color="#a78bfa" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-dim)", fontSize: "0.78rem" }}>
+            <span style={{ fontWeight: 600, letterSpacing: "0.3px" }}>AUTO-FAILOVERS TODAY</span>
+            <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(167, 139, 250, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <ShieldCheck size={16} color="#a78bfa" />
+            </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#a78bfa", marginTop: "6px" }}>
+          <div style={{ fontSize: "1.7rem", fontWeight: 900, color: "#a78bfa", marginTop: "8px", letterSpacing: "-0.02em" }}>
             {usage.failoversToday}
           </div>
           <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
-            Groq 429 ➔ Gemini seamless shifts
+            Zero downtime • Groq 429 ➔ Gemini seamless shifts
           </div>
         </div>
 
         {/* Server Impact Card */}
         <div
           style={{
-            padding: "16px",
-            background: "rgba(255, 255, 255, 0.03)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "16px 18px",
+            background: "linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)",
+            border: "1px solid rgba(245, 158, 11, 0.2)",
             borderRadius: "14px",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)", fontSize: "0.78rem" }}>
-            <span>Server CPU Impact</span>
-            <Cpu size={16} color="#fbbf24" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "var(--text-dim)", fontSize: "0.78rem" }}>
+            <span style={{ fontWeight: 600, letterSpacing: "0.3px" }}>SERVER CPU IMPACT</span>
+            <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(245, 158, 11, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Cpu size={16} color="#fbbf24" />
+            </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#fbbf24", marginTop: "6px" }}>
+          <div style={{ fontSize: "1.7rem", fontWeight: 900, color: "#fbbf24", marginTop: "8px", letterSpacing: "-0.02em" }}>
             0.0%
           </div>
           <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
-            Inference on Cloud LPU / TPU
+            Inference completely offloaded to Cloud LPU / Edge GPU
           </div>
         </div>
       </div>
 
-      {/* Main Dual Engine Controls (Groq & Gemini Cards) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "18px" }}>
+      {/* Engine Fleet Filter Tabs & Interactive Switcher */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginTop: "2px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>⚡ Multi-Tier AI Engine Fleet</span>
+          </h4>
+          <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontWeight: 700, border: "1px solid rgba(56, 189, 248, 0.3)" }}>
+            7 Active Providers
+          </span>
+        </div>
+
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", background: "rgba(15, 23, 42, 0.7)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+          {[
+            { id: "all", label: "🌟 All Engines (7)" },
+            { id: "primary", label: "⚡ Core LPUs (Groq / Gemini)" },
+            { id: "edge", label: "🌐 Edge & Cache (Cloudflare / Turso)" },
+            { id: "zero_card", label: "🛡️ 100% Zero-Card (OpenRouter / GitHub / HF)" },
+          ].map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => setEngineFilter(f.id)}
+              style={{
+                background: engineFilter === f.id ? "linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))" : "transparent",
+                color: engineFilter === f.id ? "#fff" : "var(--text-dim)",
+                border: engineFilter === f.id ? "1px solid var(--accent-cyan)" : "none",
+                padding: "5px 12px",
+                borderRadius: "7px",
+                fontSize: "0.74rem",
+                fontWeight: engineFilter === f.id ? 800 : 600,
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Multi-Tier Engine Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "16px" }}>
         {/* ============================================================== */}
         {/* 1. Groq LPU Card (Primary) */}
         {/* ============================================================== */}
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.65)",
-            border: settings.groqEnabled ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "16px",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            position: "relative",
-            boxShadow: settings.groqEnabled ? "0 10px 30px rgba(16, 185, 129, 0.08)" : "none",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        {(engineFilter === "all" || engineFilter === "primary") && (
+          <div
+            style={{
+              background: settings.groqEnabled ? "linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.groqEnabled ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.groqEnabled ? "0 10px 30px rgba(16, 185, 129, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "1.2rem" }}>⚡</span>
-                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
-                  Groq Cloud LPU (Primary)
-                </h4>
-                <span
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2))", border: "1px solid rgba(16, 185, 129, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    ⚡
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        Groq Cloud LPU
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", fontWeight: 700 }}>
+                        Tier 1 Primary
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Model: {settings.groqModel || "llama-3.1-8b"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("groq", settings.groqEnabled)}
                   style={{
-                    fontSize: "0.68rem",
-                    padding: "2px 7px",
-                    borderRadius: "6px",
-                    background: "rgba(16, 185, 129, 0.2)",
-                    color: "#34d399",
-                    fontWeight: 700,
+                    background: settings.groqEnabled ? "linear-gradient(135deg, #10b981, #059669)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.groqEnabled ? "0 2px 10px rgba(16, 185, 129, 0.4)" : "none",
+                    flexShrink: 0,
                   }}
                 >
-                  Model: {settings.groqModel || "llama-3.1-8b"}
-                </span>
+                  <Power size={12} />
+                  <span>{settings.groqEnabled ? "ACTIVE" : "PAUSED"}</span>
+                </button>
               </div>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
-                Ultra-fast ~800 tokens/sec. 14,400 free requests per day, 30 RPM limit.
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                Ultra-fast LPU inference (~800 tokens/sec). 14,400 free requests per day, 30 RPM limit.
               </p>
             </div>
 
-            {/* Toggle Switch */}
-            <button
-              type="button"
-              onClick={() => handleToggle("groq", settings.groqEnabled)}
-              style={{
-                background: settings.groqEnabled ? "linear-gradient(135deg, #10b981, #059669)" : "rgba(255, 255, 255, 0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "999px",
-                padding: "6px 14px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                boxShadow: settings.groqEnabled ? "0 2px 10px rgba(16, 185, 129, 0.4)" : "none",
-                transition: "all 0.2s ease",
-              }}
-            >
-              <Power size={13} />
-              <span>{settings.groqEnabled ? "ACTIVE" : "PAUSED"}</span>
-            </button>
-          </div>
-
-          {/* Usage Meter */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
-              <strong style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>
-                {usage.groqUsedToday} / 14,400 ({usage.groqPercent}%)
-              </strong>
-            </div>
-            <div
-              style={{
-                width: "100%",
-                height: "8px",
-                borderRadius: "999px",
-                background: "rgba(255, 255, 255, 0.08)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, usage.groqPercent)}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #10b981, #06b6d4)",
-                  borderRadius: "999px",
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-              <span>Remaining: {usage.groqRemainingToday} requests</span>
-              <span>Speed: ~800 tps</span>
-            </div>
-          </div>
-
-          {/* Status & Key Info */}
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "rgba(255, 255, 255, 0.02)",
-              borderRadius: "10px",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "0.76rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <ShieldCheck size={14} color={settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24"} />
-              <span style={{ color: "var(--text-dim)" }}>Security: </span>
-              <strong style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24" }}>
-                {settings.groqApiKeyConfigured ? "🔒 Protected in .env (Server-side)" : "⚠️ Add GROQ_API_KEY in .env"}
-              </strong>
+            {/* Quota Progress */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", marginBottom: "5px" }}>
+                <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
+                <strong style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>
+                  {usage.groqUsedToday} / 14,400 ({usage.groqPercent}%)
+                </strong>
+              </div>
+              <div style={{ width: "100%", height: "7px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.08)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, usage.groqPercent)}%`, height: "100%", background: "linear-gradient(90deg, #10b981, #06b6d4)", borderRadius: "999px" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                <span>Remaining: {usage.groqRemainingToday} req</span>
+                <span>Speed: ~800 tps</span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleTestPing("groq")}
-              disabled={testingGroq || !settings.groqApiKeyConfigured}
-              className="btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.groqApiKeyConfigured ? 1 : 0.5 }}
-            >
-              <Zap size={11} className={testingGroq ? "animate-spin" : ""} />
-              <span>{testingGroq ? "Pinging..." : "Test Ping"}</span>
-            </button>
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24"} />
+                <span style={{ color: settings.groqApiKeyConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.groqApiKeyConfigured ? "Protected in .env" : "⚠️ Needs GROQ_API_KEY"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTestPing("groq")}
+                disabled={testingGroq || !settings.groqApiKeyConfigured}
+                className="btn-secondary"
+                style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.groqApiKeyConfigured ? 1 : 0.5 }}
+              >
+                <Zap size={11} className={testingGroq ? "animate-spin" : ""} />
+                <span>{testingGroq ? "Pinging..." : "Test Ping"}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ============================================================== */}
         {/* 2. Google Gemini 2.0 Flash Card (Secondary / Failover) */}
         {/* ============================================================== */}
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.65)",
-            border: settings.geminiEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "16px",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            position: "relative",
-            boxShadow: settings.geminiEnabled ? "0 10px 30px rgba(56, 189, 248, 0.08)" : "none",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        {(engineFilter === "all" || engineFilter === "primary") && (
+          <div
+            style={{
+              background: settings.geminiEnabled ? "linear-gradient(180deg, rgba(56, 189, 248, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.geminiEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.geminiEnabled ? "0 10px 30px rgba(56, 189, 248, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "1.2rem" }}>🌐</span>
-                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
-                  Gemini 2.0 Flash (Standby Failover)
-                </h4>
-                <span
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))", border: "1px solid rgba(56, 189, 248, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🌐
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        Gemini 2.0 Flash
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", fontWeight: 700 }}>
+                        Tier 2 Failover
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Model: {settings.geminiModel || "gemini-2.0-flash"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("gemini", settings.geminiEnabled)}
                   style={{
-                    fontSize: "0.68rem",
-                    padding: "2px 7px",
-                    borderRadius: "6px",
-                    background: "rgba(56, 189, 248, 0.2)",
-                    color: "#38bdf8",
-                    fontWeight: 700,
+                    background: settings.geminiEnabled ? "linear-gradient(135deg, #0284c7, #06b6d4)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.geminiEnabled ? "0 2px 10px rgba(2, 132, 199, 0.4)" : "none",
+                    flexShrink: 0,
                   }}
                 >
-                  Model: {settings.geminiModel || "gemini-2.0-flash"}
-                </span>
+                  <Power size={12} />
+                  <span>{settings.geminiEnabled ? "ACTIVE" : "PAUSED"}</span>
+                </button>
               </div>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
-                Deep academic reasoning. 1,500 free requests per day, 15 RPM auto-standby.
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                Deep academic reasoning. 1,500 free requests per day, 15 RPM auto-standby failover.
               </p>
             </div>
 
-            {/* Toggle Switch */}
-            <button
-              type="button"
-              onClick={() => handleToggle("gemini", settings.geminiEnabled)}
-              style={{
-                background: settings.geminiEnabled ? "linear-gradient(135deg, #0284c7, #06b6d4)" : "rgba(255, 255, 255, 0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "999px",
-                padding: "6px 14px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                boxShadow: settings.geminiEnabled ? "0 2px 10px rgba(2, 132, 199, 0.4)" : "none",
-                transition: "all 0.2s ease",
-              }}
-            >
-              <Power size={13} />
-              <span>{settings.geminiEnabled ? "ACTIVE" : "PAUSED"}</span>
-            </button>
-          </div>
-
-          {/* Usage Meter */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
-              <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>
-                {usage.geminiUsedToday} / 1,500 ({usage.geminiPercent}%)
-              </strong>
-            </div>
-            <div
-              style={{
-                width: "100%",
-                height: "8px",
-                borderRadius: "999px",
-                background: "rgba(255, 255, 255, 0.08)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.min(100, usage.geminiPercent)}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #0284c7, #8b5cf6)",
-                  borderRadius: "999px",
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-              <span>Remaining: {usage.geminiRemainingToday} requests</span>
-              <span>Role: Automatic Failover</span>
-            </div>
-          </div>
-
-          {/* Status & Key Info */}
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "rgba(255, 255, 255, 0.02)",
-              borderRadius: "10px",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "0.76rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <ShieldCheck size={14} color={settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24"} />
-              <span style={{ color: "var(--text-dim)" }}>Security: </span>
-              <strong style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24" }}>
-                {settings.geminiApiKeyConfigured ? "🔒 Protected in .env (Server-side)" : "⚠️ Add GEMINI_API_KEY in .env"}
-              </strong>
+            {/* Quota Progress */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", marginBottom: "5px" }}>
+                <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
+                <strong style={{ color: "#38bdf8", fontFamily: "var(--font-mono)" }}>
+                  {usage.geminiUsedToday} / 1,500 ({usage.geminiPercent}%)
+                </strong>
+              </div>
+              <div style={{ width: "100%", height: "7px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.08)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, usage.geminiPercent)}%`, height: "100%", background: "linear-gradient(90deg, #0284c7, #8b5cf6)", borderRadius: "999px" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                <span>Remaining: {usage.geminiRemainingToday} req</span>
+                <span>Role: Automatic Failover</span>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleTestPing("gemini")}
-              disabled={testingGemini || !settings.geminiApiKeyConfigured}
-              className="btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.geminiApiKeyConfigured ? 1 : 0.5 }}
-            >
-              <Zap size={11} className={testingGemini ? "animate-spin" : ""} />
-              <span>{testingGemini ? "Pinging..." : "Test Ping"}</span>
-            </button>
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24"} />
+                <span style={{ color: settings.geminiApiKeyConfigured ? "#38bdf8" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.geminiApiKeyConfigured ? "Protected in .env" : "⚠️ Needs GEMINI_API_KEY"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTestPing("gemini")}
+                disabled={testingGemini || !settings.geminiApiKeyConfigured}
+                className="btn-secondary"
+                style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.geminiApiKeyConfigured ? 1 : 0.5 }}
+              >
+                <Zap size={11} className={testingGemini ? "animate-spin" : ""} />
+                <span>{testingGemini ? "Pinging..." : "Test Ping"}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ============================================================== */}
         {/* 3. Cloudflare Workers AI Card (Tier 2 Native Edge GPU)          */}
         {/* ============================================================== */}
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.65)",
-            border: settings.cloudflareAiEnabled !== false ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: "16px",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            position: "relative",
-            boxShadow: settings.cloudflareAiEnabled !== false ? "0 10px 30px rgba(245, 158, 11, 0.08)" : "none",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+        {(engineFilter === "all" || engineFilter === "edge") && (
+          <div
+            style={{
+              background: settings.cloudflareAiEnabled !== false ? "linear-gradient(180deg, rgba(245, 158, 11, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.cloudflareAiEnabled !== false ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.cloudflareAiEnabled !== false ? "0 10px 30px rgba(245, 158, 11, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <span style={{ fontSize: "1.2rem" }}>🔥</span>
-                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
-                  Cloudflare Workers AI (Tier 2 Edge GPU)
-                </h4>
-                <span
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(239, 68, 68, 0.2))", border: "1px solid rgba(245, 158, 11, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🔥
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        Cloudflare Workers AI
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", fontWeight: 700 }}>
+                        Tier 2 Edge GPU
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Model: {settings.cloudflareModel || "@cf/meta/llama-3.1-8b-instruct"}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("cloudflare", settings.cloudflareAiEnabled !== false)}
                   style={{
-                    fontSize: "0.68rem",
-                    padding: "2px 7px",
-                    borderRadius: "6px",
-                    background: "rgba(245, 158, 11, 0.2)",
-                    color: "#fbbf24",
-                    fontWeight: 700,
+                    background: settings.cloudflareAiEnabled !== false ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.cloudflareAiEnabled !== false ? "0 2px 10px rgba(245, 158, 11, 0.4)" : "none",
+                    flexShrink: 0,
                   }}
                 >
-                  Model: {settings.cloudflareModel || "@cf/meta/llama-3.1-8b-instruct"}
-                </span>
+                  <Power size={12} />
+                  <span>{settings.cloudflareAiEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+                </button>
               </div>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
                 Zero-egress serverless GPU inference across 330+ global cities. 10,000 Neurons/Day FREE.
               </p>
             </div>
 
-            {/* Toggle Switch */}
-            <button
-              type="button"
-              onClick={() => handleToggle("cloudflare", settings.cloudflareAiEnabled !== false)}
+            {/* Quota Progress */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", marginBottom: "5px" }}>
+                <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
+                <strong style={{ color: "#fbbf24", fontFamily: "var(--font-mono)" }}>
+                  {usage.cloudflareAiUsedToday || 0} / {(settings.cloudflareAiLimit || 1000).toLocaleString()} ({usage.cloudflareAiPercent || 0}%)
+                </strong>
+              </div>
+              <div style={{ width: "100%", height: "7px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.08)", overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, usage.cloudflareAiPercent || 0)}%`, height: "100%", background: "linear-gradient(90deg, #f59e0b, #ef4444)", borderRadius: "999px" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                <span>Remaining: {(usage.cloudflareAiRemainingToday ?? (settings.cloudflareAiLimit || 1000)).toLocaleString()} req</span>
+                <span>Latency: ~0.3s Edge GPU</span>
+              </div>
+            </div>
+
+            {/* Inline Quota Configuration Form */}
+            <form
+              onSubmit={handleSaveCfConfig}
               style={{
-                background: settings.cloudflareAiEnabled !== false ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.1)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "999px",
-                padding: "6px 14px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
-                gap: "6px",
-                boxShadow: settings.cloudflareAiEnabled !== false ? "0 2px 10px rgba(245, 158, 11, 0.4)" : "none",
-                transition: "all 0.2s ease",
+                justifyContent: "space-between",
+                gap: "8px",
+                background: "rgba(255, 255, 255, 0.02)",
+                padding: "8px 12px",
+                borderRadius: "10px",
+                border: "1px solid rgba(245, 158, 11, 0.2)",
               }}
             >
-              <Power size={13} />
-              <span>{settings.cloudflareAiEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-            </button>
-          </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sliders size={13} color="#fbbf24" />
+                <span style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600 }}>Daily Limit:</span>
+                <input
+                  type="number"
+                  min="10"
+                  max="50000"
+                  value={cfLimitInput}
+                  onChange={(e) => setCfLimitInput(e.target.value)}
+                  style={{
+                    width: "70px",
+                    padding: "3px 6px",
+                    fontSize: "0.76rem",
+                    background: "rgba(0, 0, 0, 0.35)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: "5px",
+                    color: "#fff",
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>req/day</span>
+              </div>
 
-          {/* Usage Meter */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Today's Usage Quota:</span>
-              <strong style={{ color: "#fbbf24", fontFamily: "var(--font-mono)" }}>
-                {usage.cloudflareAiUsedToday || 0} / {(settings.cloudflareAiLimit || 1000).toLocaleString()} ({usage.cloudflareAiPercent || 0}%)
-              </strong>
-            </div>
-            <div
-              style={{
-                width: "100%",
-                height: "8px",
-                borderRadius: "999px",
-                background: "rgba(255, 255, 255, 0.08)",
-                overflow: "hidden",
-              }}
-            >
-              <div
+              <button
+                type="submit"
+                disabled={savingCfConfig}
+                className="btn-primary"
                 style={{
-                  width: `${Math.min(100, usage.cloudflareAiPercent || 0)}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #f59e0b, #ef4444)",
-                  borderRadius: "999px",
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-              <span>Remaining: {(usage.cloudflareAiRemainingToday ?? (settings.cloudflareAiLimit || 1000)).toLocaleString()} requests (~10k Neurons)</span>
-              <span>Latency: ~0.3s Native Edge GPU</span>
-            </div>
-          </div>
-
-          {/* Daily Limit Configuration Input */}
-          <form
-            onSubmit={handleSaveCfConfig}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              background: "rgba(255, 255, 255, 0.03)",
-              padding: "10px 14px",
-              borderRadius: "10px",
-              border: "1px solid rgba(245, 158, 11, 0.2)",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: "200px" }}>
-              <Sliders size={14} color="#fbbf24" />
-              <label style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontWeight: 600 }}>
-                Daily Quota Limit:
-              </label>
-              <input
-                type="number"
-                min="10"
-                max="50000"
-                value={cfLimitInput}
-                onChange={(e) => setCfLimitInput(e.target.value)}
-                style={{
-                  width: "90px",
-                  padding: "4px 8px",
-                  fontSize: "0.78rem",
-                  background: "rgba(0, 0, 0, 0.3)",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  padding: "4px 10px",
+                  fontSize: "0.72rem",
                   borderRadius: "6px",
+                  cursor: "pointer",
+                  background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                  border: "none",
                   color: "#fff",
-                  fontFamily: "var(--font-mono)",
-                  textAlign: "center",
+                  fontWeight: 700,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
-              />
-              <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>req/day</span>
+              >
+                <Save size={11} />
+                <span>{savingCfConfig ? "Saving..." : "Save"}</span>
+              </button>
+            </form>
+
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8"} />
+                <span style={{ color: settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8", fontWeight: 600 }}>
+                  {settings.cloudflareAiConfigured ? "REST API + Native Worker" : "Native Worker Binding (env.AI)"}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTestPing("cloudflare")}
+                disabled={testingCloudflare}
+                className="btn-secondary"
+                style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
+              >
+                <Zap size={11} className={testingCloudflare ? "animate-spin" : ""} />
+                <span>{testingCloudflare ? "Pinging..." : "Test Ping"}</span>
+              </button>
             </div>
-
-            <button
-              type="submit"
-              disabled={savingCfConfig}
-              className="btn-primary"
-              style={{
-                padding: "5px 12px",
-                fontSize: "0.74rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                background: "linear-gradient(135deg, #f59e0b, #d97706)",
-                border: "none",
-                color: "#fff",
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-              }}
-            >
-              <Save size={12} />
-              <span>{savingCfConfig ? "Saving..." : "Save Limit"}</span>
-            </button>
-          </form>
-
-          {/* Status & Key Info */}
-          <div
-            style={{
-              padding: "10px 14px",
-              background: "rgba(255, 255, 255, 0.02)",
-              borderRadius: "10px",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "0.76rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <ShieldCheck size={14} color={settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8"} />
-              <span style={{ color: "var(--text-dim)" }}>Routing: </span>
-              <strong style={{ color: settings.cloudflareAiConfigured ? "#34d399" : "#38bdf8" }}>
-                {settings.cloudflareAiConfigured ? "🔒 REST API + Native Worker (env.AI)" : "⚡ Native Worker Edge Binding (env.AI)"}
-              </strong>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleTestPing("cloudflare")}
-              disabled={testingCloudflare}
-              className="btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
-            >
-              <Zap size={11} className={testingCloudflare ? "animate-spin" : ""} />
-              <span>{testingCloudflare ? "Pinging..." : "Test Ping"}</span>
-            </button>
           </div>
-        </div>
+        )}
 
         {/* ============================================================== */}
         {/* 4. Turso LibSQL Edge Cache Card (Tier 0 Instant 0ms Saver)       */}
         {/* ============================================================== */}
-        <div
-          style={{
-            background: "rgba(15, 23, 42, 0.65)",
-            border: "1px solid rgba(52, 211, 153, 0.35)",
-            borderRadius: "16px",
-            padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "16px",
-            position: "relative",
-            boxShadow: "0 10px 30px rgba(52, 211, 153, 0.08)",
-          }}
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        {(engineFilter === "all" || engineFilter === "edge") && (
+          <div
+            style={{
+              background: "linear-gradient(180deg, rgba(52, 211, 153, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)",
+              border: "1px solid rgba(52, 211, 153, 0.35)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: "0 10px 30px rgba(52, 211, 153, 0.1)",
+              backdropFilter: "blur(12px)",
+            }}
+          >
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "1.2rem" }}>⚡</span>
-                <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
-                  Turso LibSQL Edge Cache (0ms Token Saver)
-                </h4>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(52, 211, 153, 0.2), rgba(6, 182, 212, 0.2))", border: "1px solid rgba(52, 211, 153, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    💾
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        Turso LibSQL Edge Cache
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(52, 211, 153, 0.2)", color: "#34d399", fontWeight: 700 }}>
+                        Tier 0 Instant 0ms
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Table: circle_search_cache
+                    </div>
+                  </div>
+                </div>
+
                 <span
                   style={{
-                    fontSize: "0.68rem",
-                    padding: "2px 7px",
-                    borderRadius: "6px",
-                    background: "rgba(52, 211, 153, 0.2)",
+                    background: "rgba(52, 211, 153, 0.15)",
                     color: "#34d399",
-                    fontWeight: 700,
+                    border: "1px solid rgba(52, 211, 153, 0.35)",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    flexShrink: 0,
                   }}
                 >
-                  Table: circle_search_cache
+                  <Database size={12} />
+                  <span>0ms ACTIVE</span>
                 </span>
               </div>
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
                 Sub-5ms instant delivery for repeat questions. 0 Tokens consumed. 9 Billion read rows/mo FREE.
               </p>
             </div>
 
-            <span
-              style={{
-                background: "rgba(52, 211, 153, 0.15)",
-                color: "#34d399",
-                border: "1px solid rgba(52, 211, 153, 0.35)",
-                borderRadius: "999px",
-                padding: "6px 14px",
-                fontSize: "0.78rem",
-                fontWeight: 700,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <Database size={13} />
-              <span>CACHE ACTIVE</span>
-            </span>
-          </div>
+            {/* Cache Hits info */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", marginBottom: "5px" }}>
+                <span style={{ color: "var(--text-dim)" }}>Today's 0ms Cache Hits:</span>
+                <strong style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>
+                  {usage.cachedHitsToday || 0} Queries Saved
+                </strong>
+              </div>
+              <div style={{ width: "100%", height: "7px", borderRadius: "999px", background: "rgba(255, 255, 255, 0.08)", overflow: "hidden" }}>
+                <div style={{ width: "100%", height: "100%", background: "linear-gradient(90deg, #10b981, #38bdf8)", borderRadius: "999px" }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-muted)", marginTop: "4px" }}>
+                <span>Latency: 0-4ms Sub-second</span>
+                <span>TTL: 48h (Auto-Eviction)</span>
+              </div>
+            </div>
 
-          {/* Cache Hits & Stats */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.76rem", marginBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Today's 0ms Cache Hits:</span>
-              <strong style={{ color: "#34d399", fontFamily: "var(--font-mono)" }}>
-                {usage.cachedHitsToday || 0} Queries Saved (0 Tokens Burned)
-              </strong>
-            </div>
-            <div
-              style={{
-                width: "100%",
-                height: "8px",
-                borderRadius: "999px",
-                background: "rgba(255, 255, 255, 0.08)",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  background: "linear-gradient(90deg, #10b981, #38bdf8)",
-                  borderRadius: "999px",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "4px" }}>
-              <span>Latency: 0-4ms Sub-second</span>
-              <span>TTL: 48h (Pin to Keep Forever)</span>
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color="#34d399" />
+                <span style={{ color: "#34d399", fontWeight: 600 }}>
+                  Dedicated Turso AP-South Edge Cloud
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleTestPing("turso")}
+                disabled={testingTurso}
+                className="btn-secondary"
+                style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
+              >
+                <Zap size={11} className={testingTurso ? "animate-spin" : ""} />
+                <span>{testingTurso ? "Pinging..." : "Test Ping"}</span>
+              </button>
             </div>
           </div>
+        )}
 
-          {/* Status & Key Info */}
+        {/* ============================================================== */}
+        {/* 5. GitHub Models (Microsoft Azure USA • GPT-4o-mini Vision)     */}
+        {/* ============================================================== */}
+        {(engineFilter === "all" || engineFilter === "zero_card") && (
           <div
             style={{
-              padding: "10px 14px",
-              background: "rgba(255, 255, 255, 0.02)",
-              borderRadius: "10px",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
+              background: settings.githubModelsEnabled !== false ? "linear-gradient(180deg, rgba(59, 130, 246, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.githubModelsEnabled !== false ? "1px solid rgba(59, 130, 246, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
               display: "flex",
+              flexDirection: "column",
               justifyContent: "space-between",
-              alignItems: "center",
-              fontSize: "0.76rem",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.githubModelsEnabled !== false ? "0 10px 30px rgba(59, 130, 246, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <ShieldCheck size={14} color="#34d399" />
-              <span style={{ color: "var(--text-dim)" }}>Security: </span>
-              <strong style={{ color: "#34d399" }}>
-                🔒 Dedicated Turso AWS-AP-South-1 Edge Cloud
-              </strong>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.2))", border: "1px solid rgba(59, 130, 246, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🐙
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        GitHub Models (Microsoft)
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(59, 130, 246, 0.2)", color: "#60a5fa", fontWeight: 700 }}>
+                        GPT-4o-mini Vision
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Host: Microsoft Azure AI USA
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("github", settings.githubModelsEnabled !== false)}
+                  style={{
+                    background: settings.githubModelsEnabled !== false ? "linear-gradient(135deg, #3b82f6, #1d4ed8)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.githubModelsEnabled !== false ? "0 2px 10px rgba(59, 130, 246, 0.4)" : "none",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Power size={12} />
+                  <span>{settings.githubModelsEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+                </button>
+              </div>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                OpenAI flagship Vision &amp; Deep Reasoning hosted on Microsoft Azure. 150 free calls/day with any personal GitHub token.
+              </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleTestPing("turso")}
-              disabled={testingTurso}
-              className="btn-secondary"
-              style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer" }}
-            >
-              <Zap size={11} className={testingTurso ? "animate-spin" : ""} />
-              <span>{testingTurso ? "Pinging..." : "Test Ping"}</span>
-            </button>
+            {/* Zero-Card Guarantee & Spec Badges */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.72rem" }}>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Zero Card Status</span>
+                <strong style={{ color: "#34d399" }}>💳 100% Free Quota</strong>
+              </div>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Daily Limit</span>
+                <strong style={{ color: "#60a5fa" }}>150 Free Calls / Day</strong>
+              </div>
+            </div>
+
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.githubModelsConfigured ? "#34d399" : "#fbbf24"} />
+                <span style={{ color: settings.githubModelsConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.githubModelsConfigured ? "Protected in .env" : "⚠️ Needs GITHUB_MODELS_TOKEN"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: "5px" }}>
+                <a
+                  href="https://github.com/marketplace/models"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "#94a3b8",
+                    padding: "3px 7px",
+                    borderRadius: "5px",
+                    textDecoration: "none",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  Portal ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleTestPing("github")}
+                  disabled={testingGitHub || !settings.githubModelsConfigured}
+                  className="btn-secondary"
+                  style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.githubModelsConfigured ? 1 : 0.5 }}
+                >
+                  <Zap size={11} className={testingGitHub ? "animate-spin" : ""} />
+                  <span>{testingGitHub ? "Pinging..." : "Test Ping"}</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 6. Hugging Face Serverless Router (USA/France • Llama 3.3 70B)  */}
+        {/* ============================================================== */}
+        {(engineFilter === "all" || engineFilter === "zero_card") && (
+          <div
+            style={{
+              background: settings.huggingFaceEnabled !== false ? "linear-gradient(180deg, rgba(234, 179, 8, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.huggingFaceEnabled !== false ? "1px solid rgba(234, 179, 8, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.huggingFaceEnabled !== false ? "0 10px 30px rgba(234, 179, 8, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.2))", border: "1px solid rgba(234, 179, 8, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🤗
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        Hugging Face Serverless
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(234, 179, 8, 0.2)", color: "#facc15", fontWeight: 700 }}>
+                        Llama-3.3-70B
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Host: USA / France Datacenters
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("huggingface", settings.huggingFaceEnabled !== false)}
+                  style={{
+                    background: settings.huggingFaceEnabled !== false ? "linear-gradient(135deg, #eab308, #ca8a04)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.huggingFaceEnabled !== false ? "0 2px 10px rgba(234, 179, 8, 0.4)" : "none",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Power size={12} />
+                  <span>{settings.huggingFaceEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+                </button>
+              </div>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                World's #1 open-source AI platform. Direct Serverless Router API for 70B reasoning &amp; OCR vision. Completely free with free account token.
+              </p>
+            </div>
+
+            {/* Zero-Card Guarantee & Spec Badges */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.72rem" }}>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Zero Card Status</span>
+                <strong style={{ color: "#34d399" }}>💳 100% Free Quota</strong>
+              </div>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Router Model</span>
+                <strong style={{ color: "#facc15" }}>meta-llama/Llama-3.3-70B</strong>
+              </div>
+            </div>
+
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.huggingFaceConfigured ? "#34d399" : "#fbbf24"} />
+                <span style={{ color: settings.huggingFaceConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.huggingFaceConfigured ? "Protected in .env" : "⚠️ Needs HUGGINGFACE_API_KEY"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: "5px" }}>
+                <a
+                  href="https://huggingface.co/settings/tokens"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "#94a3b8",
+                    padding: "3px 7px",
+                    borderRadius: "5px",
+                    textDecoration: "none",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  Tokens ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleTestPing("huggingface")}
+                  disabled={testingHuggingFace || !settings.huggingFaceConfigured}
+                  className="btn-secondary"
+                  style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.huggingFaceConfigured ? 1 : 0.5 }}
+                >
+                  <Zap size={11} className={testingHuggingFace ? "animate-spin" : ""} />
+                  <span>{testingHuggingFace ? "Pinging..." : "Test Ping"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 7. OpenRouter Free Tier (USA • Multi-Provider Free Router)      */}
+        {/* ============================================================== */}
+        {(engineFilter === "all" || engineFilter === "zero_card") && (
+          <div
+            style={{
+              background: settings.openRouterEnabled !== false ? "linear-gradient(180deg, rgba(168, 85, 247, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.openRouterEnabled !== false ? "1px solid rgba(168, 85, 247, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.openRouterEnabled !== false ? "0 10px 30px rgba(168, 85, 247, 0.1)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(236, 72, 153, 0.2))", border: "1px solid rgba(168, 85, 247, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🚀
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        OpenRouter Free Tier
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", fontWeight: 700 }}>
+                        Multi-Model Free
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Model: Nemotron / Gemma / Vision:free
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("openrouter", settings.openRouterEnabled !== false)}
+                  style={{
+                    background: settings.openRouterEnabled !== false ? "linear-gradient(135deg, #a855f7, #7e22ce)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.openRouterEnabled !== false ? "0 2px 10px rgba(168, 85, 247, 0.4)" : "none",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Power size={12} />
+                  <span>{settings.openRouterEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+                </button>
+              </div>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                Multi-datacenter unified router for completely free open-source models. Hard-capped to zero cost. Bulletproof text &amp; vision failover.
+              </p>
+            </div>
+
+            {/* Zero-Card Guarantee & Spec Badges */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.72rem" }}>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Zero Card Status</span>
+                <strong style={{ color: "#34d399" }}>💳 100% Free Quota</strong>
+              </div>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Daily Limit</span>
+                <strong style={{ color: "#c084fc" }}>200 Free Requests / Day</strong>
+              </div>
+            </div>
+
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.openRouterConfigured ? "#34d399" : "#fbbf24"} />
+                <span style={{ color: settings.openRouterConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.openRouterConfigured ? "Protected in .env" : "⚠️ Needs OPENROUTER_API_KEY"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: "5px" }}>
+                <a
+                  href="https://openrouter.ai/keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "#94a3b8",
+                    padding: "3px 7px",
+                    borderRadius: "5px",
+                    textDecoration: "none",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  Keys ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleTestPing("openrouter")}
+                  disabled={testingOpenRouter || !settings.openRouterConfigured}
+                  className="btn-secondary"
+                  style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.openRouterConfigured ? 1 : 0.5 }}
+                >
+                  <Zap size={11} className={testingOpenRouter ? "animate-spin" : ""} />
+                  <span>{testingOpenRouter ? "Pinging..." : "Test Ping"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ============================================================== */}
-      {/* 3. ⭕ Circle to Search & Solve Controls (ON / OFF & Limits)     */}
+      {/* ⭕ Circle to Search & Solve Controls (ON / OFF & Limits)        */}
       {/* ============================================================== */}
       <div
         style={{
-          background: "rgba(15, 23, 42, 0.65)",
+          background: "linear-gradient(180deg, rgba(56, 189, 248, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)",
           border: settings.circleSearchEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
           borderRadius: "16px",
-          padding: "20px",
+          padding: "20px 22px",
           display: "flex",
           flexDirection: "column",
           gap: "16px",
           position: "relative",
-          boxShadow: settings.circleSearchEnabled ? "0 10px 30px rgba(56, 189, 248, 0.08)" : "none",
+          boxShadow: settings.circleSearchEnabled ? "0 10px 30px rgba(56, 189, 248, 0.1)" : "none",
+          backdropFilter: "blur(12px)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <span style={{ fontSize: "1.2rem" }}>⭕</span>
-              <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+              <h4 style={{ fontSize: "1.02rem", fontWeight: 800, color: "#fff", margin: 0 }}>
                 Circle to Search &amp; Solve Engine (PDFs &amp; Handwritten Notes)
               </h4>
               <span
@@ -1267,64 +1613,74 @@ export default function TabAiEngine() {
         <form
           onSubmit={handleSaveCircleConfig}
           style={{
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "rgba(0, 0, 0, 0.25)",
             border: "1px solid rgba(255, 255, 255, 0.06)",
             borderRadius: "12px",
-            padding: "14px 16px",
+            padding: "14px 18px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "12px",
+            gap: "14px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap", flex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "24px", flexWrap: "wrap", flex: 1 }}>
             {/* Daily Limit Input */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600 }}>
+              <label style={{ fontSize: "0.74rem", color: "var(--text-dim)", fontWeight: 600 }}>
                 Daily Query Limit (All Students):
               </label>
-              <input
-                type="number"
-                min="10"
-                max="50000"
-                value={circleLimitInput}
-                onChange={(e) => setCircleLimitInput(e.target.value)}
-                placeholder="2000"
-                style={{
-                  width: "130px",
-                  padding: "6px 10px",
-                  fontSize: "0.8rem",
-                  background: "rgba(0, 0, 0, 0.3)",
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  borderRadius: "6px",
-                  color: "#fff",
-                }}
-              />
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="number"
+                  min="10"
+                  max="50000"
+                  value={circleLimitInput}
+                  onChange={(e) => setCircleLimitInput(e.target.value)}
+                  placeholder="2000"
+                  style={{
+                    width: "110px",
+                    padding: "6px 10px",
+                    fontSize: "0.8rem",
+                    background: "rgba(0, 0, 0, 0.35)",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    borderRadius: "6px",
+                    color: "#fff",
+                    fontFamily: "var(--font-mono)",
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>queries/day</span>
+              </div>
             </div>
 
             {/* Cooldown Sec Input */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label style={{ fontSize: "0.72rem", color: "var(--text-dim)", fontWeight: 600 }}>
-                Student Cooldown (Seconds):
+              <label style={{ fontSize: "0.74rem", color: "var(--text-dim)", fontWeight: 600 }}>
+                Student Rate Cooldown:
               </label>
-              <input
-                type="number"
-                min="0"
-                max="60"
-                value={circleCooldownInput}
-                onChange={(e) => setCircleCooldownInput(e.target.value)}
-                placeholder="3"
-                style={{
-                  width: "110px",
-                  padding: "6px 10px",
-                  fontSize: "0.8rem",
-                  background: "rgba(0, 0, 0, 0.3)",
-                  border: "1px solid rgba(56, 189, 248, 0.3)",
-                  borderRadius: "6px",
-                  color: "#fff",
-                }}
-              />
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <input
+                  type="number"
+                  min="0"
+                  max="60"
+                  value={circleCooldownInput}
+                  onChange={(e) => setCircleCooldownInput(e.target.value)}
+                  placeholder="3"
+                  style={{
+                    width: "80px",
+                    padding: "6px 10px",
+                    fontSize: "0.8rem",
+                    background: "rgba(0, 0, 0, 0.35)",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    borderRadius: "6px",
+                    color: "#fff",
+                    fontFamily: "var(--font-mono)",
+                    textAlign: "center",
+                  }}
+                />
+                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>seconds</span>
+              </div>
             </div>
           </div>
 
@@ -1333,7 +1689,7 @@ export default function TabAiEngine() {
             disabled={savingCircleConfig}
             className="btn-primary"
             style={{
-              padding: "7px 16px",
+              padding: "7px 18px",
               fontSize: "0.78rem",
               fontWeight: 700,
               cursor: "pointer",
@@ -1351,19 +1707,19 @@ export default function TabAiEngine() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: "8px",
             fontSize: "0.72rem",
             color: "var(--text-dim)",
           }}
         >
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
             ⚡ <strong>Turso L2 / RAM L1 Cache:</strong> Repeated questions solve in 0ms without hitting AI API quota.
           </div>
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
             🕒 <strong>48h TTL Auto-Eviction:</strong> Questions auto-expire in 48h unless pinned in student profile.
           </div>
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
+          <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "8px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.04)" }}>
             📱 <strong>0% Server CPU Impact:</strong> OCR runs completely inside student browser via Tesseract WASM.
           </div>
         </div>
@@ -1425,7 +1781,7 @@ export default function TabAiEngine() {
           </div>
 
           <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)" }}>
-            Router: edge-worker/aiProxyWorker.js ➔ Groq LPU ➔ Cloudflare AI ➔ Gemini ➔ Turso Cache
+            Router: Turso Cache (0ms) ➔ Groq LPU (~0.3s) ➔ Cloudflare AI Edge ➔ Gemini Flash ➔ GitHub Models ➔ Hugging Face ➔ OpenRouter
           </div>
         </div>
       </div>

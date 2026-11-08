@@ -149,8 +149,8 @@ function authenticateToken(req, res, next) {
             req.user = null;
             return next();
           }
-          // Asynchronous touch (Zero blocking latency)
-          touchSessionActive(user.id, user.sid);
+          // Asynchronous touch (Zero blocking latency, auto-refreshes true IP)
+          touchSessionActive(user.id, user.sid, req);
         } catch (_) {}
       }
     }
@@ -320,27 +320,27 @@ function clearAuthCookie(res, req) {
   res.clearCookie("fsm_token", {
     httpOnly: true,
     secure: secure,
-    sameSite: secure ? "strict" : "lax",
+    sameSite: "lax",
     path: "/",
   });
 
   res.clearCookie("vault_token", {
     httpOnly: true,
     secure: secure,
-    sameSite: secure ? "strict" : "lax",
+    sameSite: "lax",
     path: "/",
   });
 
   res.clearCookie("fsm_last_active", {
     httpOnly: true,
     secure: secure,
-    sameSite: secure ? "strict" : "lax",
+    sameSite: "lax",
     path: "/",
   });
 
   res.clearCookie("vault_last_active", {
     path: "/",
-    sameSite: secure ? "strict" : "lax",
+    sameSite: "lax",
   });
 }
 

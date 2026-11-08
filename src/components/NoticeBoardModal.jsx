@@ -77,9 +77,11 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
       return;
     }
 
-    // Open link cleanly without leaking credentials in URL
-    const targetUrl = n.link;
-    window.open(targetUrl, "_blank", "noopener,noreferrer");
+    // Open link cleanly without leaking credentials in URL (strict protocol shield)
+    const targetUrl = String(n.link || "").trim();
+    if (/^(https?:\/\/|\/)/i.test(targetUrl)) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
   };
 
   const handleSubmit = async (e) => {
