@@ -4442,14 +4442,16 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
 
     const chatStats = typeof chatRoutesRef.getActiveChatStats === "function" ? chatRoutesRef.getActiveChatStats() : {};
 
-    const mongoUri = process.env.MONGODB_URI || "";
-    const mongoStatus = {
-      configured: Boolean(mongoUri),
-      status: mongoUri ? "Connected (Cluster Active)" : "Standby (Using Turso + Memory Buffer)",
-      maskedUri: mongoUri ? mongoUri.replace(/:([^@]+)@/, ":****@") : "Standby Mode (Turso LibSQL Direct)",
-      hotBufferCount: chatStats?.activeMessagesCount || 0,
-      autoFlushThreshold: 30000,
-    };
+    const mongoChatBuffer = require("../services/mongoChatBufferService");
+    const mongoStatus = typeof mongoChatBuffer.getMongoTelemetry === "function"
+      ? await mongoChatBuffer.getMongoTelemetry()
+      : {
+          configured: Boolean(process.env.MONGODB_URI),
+          status: process.env.MONGODB_URI ? "Connected" : "Standby Mode",
+          maskedUri: "Standby Mode",
+          hotBufferCount: chatStats?.activeMessagesCount || 0,
+          autoFlushThreshold: 30000,
+        };
 
     const edgeStatus = {
       active: true,
@@ -4480,11 +4482,17 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
  */
 router.post("/chat-bot/flush-mongo", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
+    const mongoChatBuffer = require("../services/mongoChatBufferService");
+    const flushRes = typeof mongoChatBuffer.flushBufferToTurso === "function"
+      ? await mongoChatBuffer.flushBufferToTurso()
+      : { flushedCount: 0 };
     const chatStats = typeof chatRoutesRef.getActiveChatStats === "function" ? chatRoutesRef.getActiveChatStats() : {};
     return res.json({
       success: true,
-      flushedCount: chatStats?.activeMessagesCount || 0,
-      message: "MongoDB Hot Buffer synchronized to Turso LibSQL warm tier!",
+      flushedCount: flushRes?.flushedCount || chatStats?.activeMessagesCount || 0,
+      message: flushRes?.flushedCount > 0
+        ? `MongoDB Hot Buffer: Synchronized ${flushRes.flushedCount} messages to Turso LibSQL warm tier!`
+        : "MongoDB Hot Buffer synchronized to Turso LibSQL warm tier!",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

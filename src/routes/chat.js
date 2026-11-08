@@ -21,6 +21,7 @@ const {
   saveChatUserProfile,
   getAllChatProfiles,
 } = require("../services/tursoService");
+const { bufferChatMessage } = require("../services/mongoChatBufferService");
 const { decrypt } = require("../utils/cryptoVault");
 const {
   dispatchChatForensicAudit,
@@ -247,6 +248,7 @@ function injectIncomingPublicMessage(newMsg) {
 
   // Mirror to Turso LibSQL Cloud
   recordChatMessageToTurso(newMsg).catch(() => {});
+  bufferChatMessage(newMsg).catch(() => {});
   console.log(`[CHAT-SYNC] 📥 Synced Telegram message into Public Chat Hall: "${newMsg.text || newMsg.fileName}"`);
 }
 
@@ -1564,6 +1566,7 @@ function initChatWebSocket(server) {
 
           // Mirror to Turso LibSQL Cloud
           recordChatMessageToTurso(newMsg).catch(() => {});
+          bufferChatMessage(newMsg).catch(() => {});
         }
 
         // 3. EDIT MESSAGE

@@ -531,6 +531,21 @@ async function recordChatMessageToTurso(msg) {
 }
 
 /**
+ * Batch insert chat messages (used during MongoDB hot buffer flushes)
+ */
+async function batchInsertChatMessages(messages = []) {
+  if (!client || !Array.isArray(messages) || messages.length === 0) return { inserted: 0 };
+  let count = 0;
+  for (const msg of messages) {
+    if (msg && msg.id) {
+      const ok = await recordChatMessageToTurso(msg);
+      if (ok) count++;
+    }
+  }
+  return { inserted: count };
+}
+
+/**
  * Remove active room and active chat messages from Turso
  */
 async function deleteRoomFromTurso(roomId) {
@@ -1395,6 +1410,7 @@ module.exports = {
   syncFromFirestore,
   savePrivateRoomAudit,
   recordChatMessageToTurso,
+  batchInsertChatMessages,
   deleteRoomFromTurso,
   getPrivateRoomAudits,
   pruneChatMessagesOlderThan,
