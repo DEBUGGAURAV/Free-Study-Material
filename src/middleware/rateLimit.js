@@ -311,6 +311,25 @@ const p2pLimiter = rateLimit({
   ),
 });
 
+/**
+ * 7. General API & Security Beacon Limiter
+ * Permits up to 120 requests per minute per IP.
+ * Defends tamper-alert and telemetry endpoints against flooding while allowing legitimate client sensors.
+ */
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: false,
+  passOnStoreError: true,
+  keyGenerator: getClientIp,
+  skip: (req) => req.method === "OPTIONS" || isImmune(req),
+  handler: createSafeLimiterHandler(
+    "API rate limit reached. Please wait a moment before sending more requests."
+  ),
+});
+
 module.exports = {
   getClientIp,
   isImmune,
@@ -322,4 +341,5 @@ module.exports = {
   authLimiter,
   helpLimiter,
   p2pLimiter,
+  apiLimiter,
 };
