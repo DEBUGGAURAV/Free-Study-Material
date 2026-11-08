@@ -2585,20 +2585,21 @@ export default function AdminModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000 }}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000, padding: "8px" }}>
       <div
         className="modal-content admin-modal-container"
         style={{
-          maxWidth: "1180px",
-          width: "96vw",
-          height: "92vh",
+          maxWidth: "min(1480px, 98vw)",
+          width: "98vw",
+          height: "95vh",
           display: "flex",
           flexDirection: "column",
           padding: "0",
           overflow: "hidden",
-          background: "linear-gradient(180deg, #070a13 0%, #0d1322 100%)",
-          border: "1px solid rgba(99, 102, 241, 0.35)",
-          boxShadow: "0 28px 80px rgba(0, 0, 0, 0.85), 0 0 50px rgba(99, 102, 241, 0.15)",
+          borderRadius: "18px",
+          background: "radial-gradient(ellipse at 50% 0%, #0d1527 0%, #060913 100%)",
+          border: "1px solid rgba(99, 102, 241, 0.4)",
+          boxShadow: "0 32px 90px rgba(0, 0, 0, 0.9), 0 0 60px rgba(99, 102, 241, 0.2)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -2606,8 +2607,8 @@ export default function AdminModal({
         <div
           className="admin-modal-header"
           style={{
-            padding: "16px 24px",
-            background: "rgba(15, 23, 42, 0.8)",
+            padding: "14px 24px",
+            background: "rgba(15, 23, 42, 0.85)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             backdropFilter: "blur(20px)",
             display: "flex",
@@ -2620,23 +2621,24 @@ export default function AdminModal({
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div
               style={{
-                width: "44px",
-                height: "44px",
+                width: "42px",
+                height: "42px",
                 borderRadius: "12px",
                 background: "linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#fff",
-                boxShadow: "0 4px 16px rgba(99, 102, 241, 0.4)",
+                boxShadow: "0 4px 16px rgba(99, 102, 241, 0.45)",
+                flexShrink: 0,
               }}
             >
-              <Shield size={24} />
+              <Shield size={22} />
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
-                  Academic Cloud Studio & Control Center
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
+                  Academic Cloud Studio &amp; Control Center
                 </h2>
                 <span
                   style={{
@@ -2649,10 +2651,10 @@ export default function AdminModal({
                     borderRadius: "999px",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "5px",
                   }}
                 >
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981" }} />
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
                   {health?.status === "online" ? "LIVE ENGINE v3" : "ONLINE"}
                 </span>
               </div>
@@ -2685,7 +2687,7 @@ export default function AdminModal({
                 if (activeTab === "turso") { loadTursoData(); loadTursoAudits(); }
               }}
               className="btn-icon"
-              style={{ width: "36px", height: "36px", background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px" }}
+              style={{ width: "36px", height: "36px", background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)" }}
               title="Refresh Current Telemetry"
             >
               <RefreshCw size={16} />
@@ -2705,74 +2707,94 @@ export default function AdminModal({
           className="admin-kpis-strip"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
             gap: "10px",
-            padding: "12px 24px",
-            background: "rgba(10, 14, 26, 0.6)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+            padding: "10px 22px",
+            background: "rgba(8, 12, 22, 0.75)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+            backdropFilter: "blur(12px)",
           }}
         >
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#fff", marginTop: "2px" }}>
-              {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
+          <div style={{ background: "linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fff", marginTop: "1px" }}>
+                {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
+              </div>
             </div>
+            <FileText size={20} style={{ color: "rgba(99, 102, 241, 0.7)" }} />
           </div>
 
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--accent-cyan)", marginTop: "2px" }}>
-              {studentsTotal || stats?.totalStudents || 0}
+          <div style={{ background: "linear-gradient(135deg, rgba(6, 182, 212, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(6, 182, 212, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--accent-cyan)", marginTop: "1px" }}>
+                {studentsTotal || stats?.totalStudents || 0}
+              </div>
             </div>
+            <UserCheck size={20} style={{ color: "var(--accent-cyan)", opacity: 0.8 }} />
           </div>
 
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#10b981", marginTop: "2px" }}>
-              {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
-                ? stats.formattedSaved
-                : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
+          <div style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(16, 185, 129, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#10b981", marginTop: "1px" }}>
+                {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
+                  ? stats.formattedSaved
+                  : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
+              </div>
             </div>
+            <Zap size={20} style={{ color: "#10b981", opacity: 0.8 }} />
           </div>
 
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#fbbf24", marginTop: "2px" }}>
-              {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
+          <div style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(245, 158, 11, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24", marginTop: "1px" }}>
+                {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
+              </div>
             </div>
+            <Cpu size={20} style={{ color: "#fbbf24", opacity: 0.8 }} />
           </div>
 
-          <div style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "10px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</div>
-            <div style={{ fontSize: "1.35rem", fontWeight: 800, color: "#a78bfa", marginTop: "2px" }}>
-              {cdnStats?.hitRatio || "99.4%"}
+          <div style={{ background: "linear-gradient(135deg, rgba(167, 139, 250, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(167, 139, 250, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</div>
+              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#a78bfa", marginTop: "1px" }}>
+                {cdnStats?.hitRatio || "99.4%"}
+              </div>
             </div>
+            <Globe size={20} style={{ color: "#a78bfa", opacity: 0.8 }} />
           </div>
         </div>
 
-        {/* Tab Navigation Strip with Clean Slide Controls */}
+        {/* Tab Navigation Strip with Clean Single-Row Slide Controls */}
         <div
           className="admin-tab-nav-strip"
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "rgba(7, 10, 18, 0.95)",
+            background: "rgba(7, 10, 18, 0.98)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
             padding: "8px 18px",
-            gap: "10px",
-            flexWrap: "wrap",
+            gap: "12px",
+            flexWrap: "nowrap",
+            overflowX: "hidden",
           }}
         >
-          {/* All Dashboard Tabs (Filtered by permissions for Sub-Admins) */}
+          {/* All Dashboard Tabs (Clean Single-Row Horizontal Scrollable Track) */}
           <div
             className="admin-tab-buttons-scroll"
             style={{
               display: "flex",
               gap: "6px",
-              flexWrap: "wrap",
+              flexWrap: "nowrap",
+              overflowX: "auto",
               alignItems: "center",
               flex: 1,
+              scrollbarWidth: "none",
+              paddingBottom: "1px",
             }}
           >
             {VISIBLE_TABS.map((tab) => (
@@ -3217,19 +3239,6 @@ export default function AdminModal({
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">University Roll Number</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingStudent.rollNumber || ""}
-                      onChange={(e) => setEditingStudent({ ...editingStudent, rollNumber: e.target.value })}
-                      placeholder="e.g. 210123010"
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div className="form-group">
                     <label className="form-label">College / Institute</label>
                     <input
                       type="text"
@@ -3239,41 +3248,17 @@ export default function AdminModal({
                       placeholder="College or University"
                     />
                   </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Branch / Department</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingStudent.branch || ""}
-                      onChange={(e) => setEditingStudent({ ...editingStudent, branch: e.target.value })}
-                      placeholder="e.g. CSE, IT, ME, EE"
-                    />
-                  </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div className="form-group">
-                    <label className="form-label">Academic Year</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingStudent.year || ""}
-                      onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
-                      placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Semester</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingStudent.semester || ""}
-                      onChange={(e) => setEditingStudent({ ...editingStudent, semester: e.target.value })}
-                      placeholder="e.g. Semester 5"
-                    />
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Academic Year</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={editingStudent.year || ""}
+                    onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
+                    placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
+                  />
                 </div>
 
                 <div className="form-group">

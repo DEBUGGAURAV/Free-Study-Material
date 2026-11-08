@@ -416,17 +416,8 @@ export default function TabStudents(props) {
                   <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
                     <div style={{ fontWeight: 600, color: "#e2e8f0" }}>{student.college || "General University"}</div>
                     <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {student.branch && (
-                        <span style={{ color: "#38bdf8", fontWeight: 600 }}>{student.branch}</span>
-                      )}
                       <span>{student.year || "Year N/A"}</span>
-                      {student.semester && <span>• {student.semester}</span>}
                     </div>
-                    {student.rollNumber && (
-                      <div style={{ fontSize: "0.68rem", color: "#a78bfa", marginTop: "2px" }}>
-                        🆔 Roll: {student.rollNumber}
-                      </div>
-                    )}
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     <span
@@ -721,13 +712,6 @@ export default function TabStudents(props) {
             {/* Profile Information Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>University Roll Number</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff", marginTop: "2px" }}>
-                  {viewingStudent.rollNumber || "Not Provided"}
-                </div>
-              </div>
-
-              <div>
                 <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Mobile Number</div>
                 <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#38bdf8", marginTop: "2px" }}>
                   {viewingStudent.mobile && !viewingStudent.mobile.startsWith("enc_gcm:") ? viewingStudent.mobile : "Not Set"}
@@ -742,16 +726,9 @@ export default function TabStudents(props) {
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Branch / Department</div>
+                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Academic Year</div>
                 <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff", marginTop: "2px" }}>
-                  {viewingStudent.branch || "General / Not Specified"}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Academic Year &amp; Semester</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff", marginTop: "2px" }}>
-                  {viewingStudent.year || "Year N/A"} {viewingStudent.semester ? `• ${viewingStudent.semester}` : ""}
+                  {viewingStudent.year || "Year N/A"}
                 </div>
               </div>
 
