@@ -2357,6 +2357,11 @@ async function prewarmPopularNotes(limit = 10) {
 
     // 2. Fetch from high-speed MTProto Telegram DC and save to SSD disk (Zero-RAM mode)
     if (note.telegramMessageId) {
+      const sizeBytes = Number(note.fileSize || note.compressedSize || 0);
+      if (sizeBytes > 45 * 1024 * 1024) {
+        console.log(`[PREWARM] Note ${doc.id} is ${(sizeBytes / (1024 * 1024)).toFixed(1)}MB (>45MB). Bypassing RAM buffer; zero-copy live chunked stream active.`);
+        continue;
+      }
       try {
         const docData = await getDocumentBufferFromChannel(note.telegramMessageId);
         if (docData && docData.buffer) {
@@ -2368,7 +2373,11 @@ async function prewarmPopularNotes(limit = 10) {
           }
         }
       } catch (e) {
-        console.error(`Prewarm error for note ${doc.id}:`, e.message);
+        if (e.code === "FILE_TOO_LARGE_FOR_RAM_BUFFER" || e.message?.includes("exceeds 45MB")) {
+          console.log(`[PREWARM] Note ${doc.id} is >45MB. Bypassing RAM buffer; zero-copy live chunked stream active.`);
+        } else {
+          console.warn(`[PREWARM] Note ${doc.id} notice:`, e.message);
+        }
       }
     }
   }
