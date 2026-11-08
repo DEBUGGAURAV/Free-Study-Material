@@ -3250,15 +3250,28 @@ export default function AdminModal({
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Academic Year</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={editingStudent.year || ""}
-                    onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
-                    placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
-                  />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="form-group">
+                    <label className="form-label">Branch / Department</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.branch || ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, branch: e.target.value })}
+                      placeholder="e.g. CSE, IT, ME, EE"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Academic Year</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={editingStudent.year || ""}
+                      onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
+                      placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">
