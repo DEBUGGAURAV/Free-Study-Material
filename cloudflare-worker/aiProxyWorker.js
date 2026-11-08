@@ -632,7 +632,6 @@ async function queryOpenRouterEdge(env, query, context, imageBase64 = null, imag
   if (!apiKey) throw new Error("OPENROUTER_API_KEY_MISSING");
   const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
   const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
-  const model = cleanB64 ? "meta-llama/llama-3.2-11b-vision-instruct:free" : "meta-llama/llama-3.3-70b-instruct:free";
 
   let messages = [];
   if (cleanB64) {

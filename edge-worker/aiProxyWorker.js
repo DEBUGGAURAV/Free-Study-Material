@@ -347,6 +347,350 @@ ${context ? `[Context]:\n${context.slice(0, 3500)}\n\n` : ""}[Question]:\n${quer
 }
 
 /**
+ * ⚡ Cerebras Cloud Wafer-Scale LPU (USA • 2,000 tok/sec King of Speed)
+ */
+async function queryCerebrasEdge(env, query, context) {
+  const apiKey = (env.CEREBRAS_API_KEY || "").trim();
+  if (!apiKey) throw new Error("CEREBRAS_API_KEY_MISSING");
+  const model = env.CEREBRAS_MODEL || "llama-3.3-70b";
+  const userContent = context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+  const res = await fetch("https://api.cerebras.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "You are an elite academic tutor. Answer concisely with formulas and bullet points." },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 500,
+    }),
+  });
+  if (!res.ok) throw new Error(`Cerebras Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty Cerebras response");
+  return { answer, model };
+}
+
+/**
+ * 🧠 SambaNova Cloud (USA • Llama 3.3 70B & Llama 3.2 Vision on RDU)
+ */
+async function querySambaNovaEdge(env, query, context) {
+  const apiKey = (env.SAMBANOVA_API_KEY || "").trim();
+  if (!apiKey) throw new Error("SAMBANOVA_API_KEY_MISSING");
+  const model = env.SAMBANOVA_MODEL || "Meta-Llama-3.3-70B-Instruct";
+  const userContent = context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+  const res = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 550,
+    }),
+  });
+  if (!res.ok) throw new Error(`SambaNova Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty SambaNova response");
+  return { answer, model };
+}
+
+async function querySambaNovaVisionEdge(env, promptText, imageBase64, imageMimeType = "image/jpeg", maxTokens = 650) {
+  const apiKey = (env.SAMBANOVA_API_KEY || "").trim();
+  if (!apiKey) throw new Error("SAMBANOVA_API_KEY_MISSING");
+  const cleanB64 = String(imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+  const model = "Meta-Llama-3.2-11B-Vision-Instruct";
+  const res = await fetch("https://api.sambanova.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: promptText },
+            { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+          ],
+        },
+      ],
+      temperature: 0.15,
+      max_tokens: maxTokens,
+    }),
+  });
+  if (!res.ok) throw new Error(`SambaNova Vision Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty SambaNova Vision response");
+  return { answer, model };
+}
+
+/**
+ * 🇫🇷 Mistral AI (France/EU • Codestral & Pixtral 12B Math Vision)
+ */
+async function queryMistralTextEdge(env, query, context) {
+  const apiKey = (env.MISTRAL_API_KEY || "").trim();
+  if (!apiKey) throw new Error("MISTRAL_API_KEY_MISSING");
+  const model = env.MISTRAL_MODEL || "mistral-small-latest";
+  const userContent = context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
+        { role: "user", content: userContent },
+      ],
+      temperature: 0.2,
+      max_tokens: 550,
+    }),
+  });
+  if (!res.ok) throw new Error(`Mistral Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty Mistral response");
+  return { answer, model };
+}
+
+async function queryMistralVisionEdge(env, promptText, imageBase64, imageMimeType = "image/jpeg", maxTokens = 650) {
+  const apiKey = (env.MISTRAL_API_KEY || "").trim();
+  if (!apiKey) throw new Error("MISTRAL_API_KEY_MISSING");
+  const cleanB64 = String(imageBase64 || "").replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "");
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+  const model = "pixtral-12b-2409";
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: promptText },
+            { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+          ],
+        },
+      ],
+      temperature: 0.15,
+      max_tokens: maxTokens,
+    }),
+  });
+  if (!res.ok) throw new Error(`Mistral Pixtral Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty Mistral Pixtral response");
+  return { answer, model };
+}
+
+/**
+ * 🐙 GitHub Models (Microsoft Azure USA • GPT-4o-mini Text & Vision)
+ */
+async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
+  const token = (env.GITHUB_MODELS_TOKEN || env.GITHUB_TOKEN || "").trim();
+  if (!token) throw new Error("GITHUB_MODELS_TOKEN_MISSING");
+  const model = "gpt-4o-mini";
+  const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+
+  let messages = [];
+  if (cleanB64) {
+    const promptText = customPrompt || `You are an elite academic tutor. Decipher handwriting/diagrams and solve step-by-step.${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: promptText },
+          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+        ],
+      },
+    ];
+  } else {
+    const userContent = context && context.trim()
+      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+      : `[Student Question]:\n${query}`;
+    messages = [
+      { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
+      { role: "user", content: userContent },
+    ];
+  }
+
+  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: cleanB64 ? 0.15 : 0.2,
+      max_tokens: 600,
+    }),
+  });
+  if (!res.ok) throw new Error(`GitHub Models Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty GitHub Models response");
+  return { answer, model };
+}
+
+/**
+ * 🇨🇦 Cohere AI (Canada • Command R+ Citations)
+ */
+async function queryCohereEdge(env, query, context) {
+  const apiKey = (env.COHERE_API_KEY || "").trim();
+  if (!apiKey) throw new Error("COHERE_API_KEY_MISSING");
+  const model = "command-r-08-2024";
+  const userContent = context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+  const res = await fetch("https://api.cohere.com/v2/chat", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "You are an elite academic tutor. Answer clearly with citations." },
+        { role: "user", content: userContent },
+      ],
+    }),
+  });
+  if (!res.ok) throw new Error(`Cohere Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.message?.content?.[0]?.text || "").trim();
+  if (!answer) throw new Error("Empty Cohere response");
+  return { answer, model };
+}
+
+/**
+ * 🤗 Hugging Face Serverless Edge (100% Free • Zero Credit Card)
+ */
+async function queryHuggingFaceEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
+  const token = (env.HUGGINGFACE_API_KEY || env.HF_TOKEN || "").trim();
+  if (!token) throw new Error("HUGGINGFACE_API_KEY_MISSING");
+  const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+  const model = cleanB64 ? "meta-llama/Llama-3.2-11B-Vision-Instruct" : "meta-llama/Llama-3.3-70B-Instruct";
+
+  let messages = [];
+  if (cleanB64) {
+    const promptText = customPrompt || `You are an elite academic tutor. Decipher handwriting/diagrams and solve step-by-step.${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: promptText },
+          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+        ],
+      },
+    ];
+  } else {
+    const userContent = context && context.trim()
+      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+      : `[Student Question]:\n${query}`;
+    messages = [
+      { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
+      { role: "user", content: userContent },
+    ];
+  }
+
+  const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: cleanB64 ? 0.15 : 0.2,
+      max_tokens: 600,
+    }),
+  });
+  if (!res.ok) throw new Error(`HuggingFace Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty HuggingFace response");
+  return { answer, model };
+}
+
+/**
+ * 🌐 OpenRouter Free Models Edge (100% Free • Zero Credit Card • :free models)
+ */
+async function queryOpenRouterEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
+  const apiKey = (env.OPENROUTER_API_KEY || "").trim();
+  if (!apiKey) throw new Error("OPENROUTER_API_KEY_MISSING");
+  const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
+  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+
+  let messages = [];
+  if (cleanB64) {
+    const promptText = customPrompt || `You are an elite academic tutor. Decipher handwriting/diagrams and solve step-by-step.${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+    messages = [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: promptText },
+          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+        ],
+      },
+    ];
+  } else {
+    const userContent = context && context.trim()
+      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
+      : `[Student Question]:\n${query}`;
+    messages = [
+      { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
+      { role: "user", content: userContent },
+    ];
+  }
+
+  const payload = {
+    messages,
+    temperature: cleanB64 ? 0.15 : 0.2,
+    max_tokens: 600,
+    reasoning: { max_tokens: 0 },
+  };
+
+  if (cleanB64) {
+    payload.model = "nvidia/nemotron-3.5-super-vl:free";
+  } else {
+    payload.models = [
+      "nvidia/nemotron-3.5-lightning:free",
+      "google/gemma-4-31b-it:free",
+      "google/gemma-4-26b-a4b-it:free",
+    ];
+  }
+
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://freestudymaterial.onrender.com",
+      "X-Title": "Free Study Material",
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`OpenRouter Error (${res.status})`);
+  const data = await res.json();
+  const answer = (data.choices?.[0]?.message?.content || "").trim();
+  if (!answer) throw new Error("Empty OpenRouter response");
+  const model = data.model || payload.model || "openrouter-free";
+  return { answer, model };
+}
+
+/**
  * 🛡️ FSM Heuristic Cloud Guard (Offline Fallback)
  */
 function queryHeuristicGuard(query, context) {
@@ -365,7 +709,7 @@ function queryHeuristicGuard(query, context) {
 /**
  * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic from Edge Worker
  */
-async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle) {
+async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle, user = null) {
   const token = (env.HELP_BOT_TOKEN || env.TELEGRAM_HELP_BOT_TOKEN || "").trim();
   const chatId = (env.HELP_CHAT_ID || env.TELEGRAM_HELP_CHAT_ID || "").trim();
   const topicId = (env.HELP_TOPIC_ACTIVE_ID || env.HELP_TOPIC_ID || "").trim();
@@ -381,19 +725,38 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
     if (cached || p.includes("turso") || p.includes("cache")) {
       engineName = "💾 Turso LibSQL Edge Cloud Cache";
       engineTier = "🎯 Tier 0 (0ms Instant Hit • 0 Tokens Burned)";
-    } else if (p.includes("cloudflare") || p.includes("cf")) {
-      engineName = "🔥 Cloudflare Workers AI (Native Edge GPU)";
-      engineTier = "🌐 Tier 2 (Serverless Edge GPU Inference)";
+    } else if (p.includes("cerebras")) {
+      engineName = "⚡ Cerebras Wafer-Scale LPU";
+      engineTier = "🚀 Tier 1 (Ultra-Fast 2,000 tok/s Hardware LPU)";
     } else if (p.includes("groq")) {
       engineName = "⚡ Groq Cloud LPU";
-      engineTier = "🚀 Tier 1 (Ultra-Fast Hardware LPU)";
+      engineTier = "🚀 Tier 2 (Ultra-Fast Hardware LPU)";
+    } else if (p.includes("cloudflare") || p.includes("cf")) {
+      engineName = "🔥 Cloudflare Workers AI (Native Edge GPU)";
+      engineTier = "🌐 Tier 3 (Serverless Edge GPU Inference)";
     } else if (p.includes("gemini")) {
       engineName = "🌐 Google Gemini Flash";
-      engineTier = "🧠 Tier 3 (Multimodal Vision & Reasoning)";
+      engineTier = "🧠 Tier 4 (Multimodal Vision & Reasoning)";
+    } else if (p.includes("sambanova")) {
+      engineName = "🧠 SambaNova Cloud RDU";
+      engineTier = "⚡ Tier 5 (Reconfigurable Dataflow Unit • USA)";
+    } else if (p.includes("mistral") || p.includes("pixtral")) {
+      engineName = "🇫🇷 Mistral AI (Europe)";
+      engineTier = "📐 Tier 6 (European Math & LaTeX Vision)";
+    } else if (p.includes("github")) {
+      engineName = "🐙 GitHub Models (Microsoft Azure)";
+      engineTier = "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)";
+    } else if (p.includes("cohere")) {
+      engineName = "🇨🇦 Cohere AI (Canada)";
+      engineTier = "📌 Tier 8 (Command R+ Citations)";
     } else if (p.includes("heuristic")) {
       engineName = "🛡️ FSM Offline Heuristic Notes Solver";
-      engineTier = "📄 Tier 4 (Offline Extractive Fallback)";
+      engineTier = "📄 Tier 9 (Offline Extractive Fallback)";
     }
+
+    const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
+    const studentEmail = (user?.email || "anonymous@student.edu").replace(/[<>]/g, "");
+    const studentMobile = user?.mobile || user?.phone || "N/A";
 
     const text = [
       headline,
@@ -404,6 +767,9 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       `⏱️ <b>Response Time:</b> ${latencyMs}ms`,
       `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
       "━━━━━━━━━━━━━━━━━━━━",
+      `👤 <b>Student:</b> ${studentName}`,
+      `📧 <b>Email:</b> <code>${studentEmail}</code>`,
+      `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
       `❓ <b>Query / Formula:</b>\n<blockquote>${String(query || "").slice(0, 300).replace(/[<>]/g, "")}</blockquote>`,
       `🕒 <b>Timestamp:</b> ${timeStr}`,
     ].join("\n");
@@ -508,7 +874,28 @@ export default {
               ocrText = gem.answer;
               ocrProvider = "gemini_vision_edge";
               ocrModel = gem.model;
-            } catch (_) {}
+            } catch (_) {
+              try {
+                const sn = await querySambaNovaVisionEdge(env, ocrPrompt, body.imageBase64, body.imageMimeType, 400);
+                ocrText = sn.answer;
+                ocrProvider = "sambanova_vision_edge";
+                ocrModel = sn.model;
+              } catch (_) {
+                try {
+                  const mis = await queryMistralVisionEdge(env, ocrPrompt, body.imageBase64, body.imageMimeType, 400);
+                  ocrText = mis.answer;
+                  ocrProvider = "mistral_vision_edge";
+                  ocrModel = mis.model;
+                } catch (_) {
+                  try {
+                    const gh = await queryGitHubModelsEdge(env, "", "", body.imageBase64, body.imageMimeType, ocrPrompt);
+                    ocrText = gh.answer;
+                    ocrProvider = "github_vision_edge";
+                    ocrModel = gh.model;
+                  } catch (_) {}
+                }
+              }
+            }
           }
           if (ocrText && ocrText !== "EMPTY") {
             const h = new Headers({ "Content-Type": "application/json" });
@@ -540,6 +927,26 @@ export default {
         const clonedAiReq = request.clone();
         const body = await clonedAiReq.json();
         const { query, context, imageBase64, imageMimeType, noteId, subject } = body;
+
+        let user = body?.user || null;
+        if (!user) {
+          const authHeader = request.headers.get("Authorization") || "";
+          if (authHeader.startsWith("Bearer ")) {
+            try {
+              const jwtPart = authHeader.split(" ")[1]?.split(".")[1];
+              if (jwtPart) {
+                const b64 = jwtPart.replace(/-/g, "+").replace(/_/g, "/");
+                const jsonStr = atob(b64);
+                const decoded = JSON.parse(jsonStr);
+                user = {
+                  name: decoded.name || decoded.userName || "Student Scholar",
+                  email: decoded.email || "anonymous@student.edu",
+                  mobile: decoded.mobile || decoded.phone || "N/A",
+                };
+              }
+            } catch (_) {}
+          }
+        }
 
         const cleanQuery = (query || "").trim();
         const isImageOrDiagram = Boolean(imageBase64);
@@ -582,7 +989,8 @@ export default {
               "Turso Edge Cache (0ms)",
               true,
               Date.now() - startTime,
-              url.pathname.includes("circle")
+              url.pathname.includes("circle"),
+              user
             )
           );
 
@@ -609,7 +1017,7 @@ export default {
         let model = "";
 
         if (isImageOrDiagram) {
-          // Branch A: Image / Diagram / Handwritten Note Crop -> Groq LPU Vision (~0.45s) -> Gemini Vision
+          // Branch A: Image / Diagram / Handwritten Note Crop -> Groq LPU Vision (~0.45s) -> Gemini Vision -> SambaNova -> Mistral -> GitHub
           const visionSolvePrompt = `You are an elite Academic Handwriting & Formula Solver. First write **📝 Extracted Text / Formula:** with the exact deciphered handwritten text/math in LaTeX \\( ... \\), then provide a step-by-step academic solution and 1-line "💡 Exam Takeaway".${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${cleanQuery ? `\n[Question]:\n${cleanQuery}` : ""}`;
           try {
             const gvRes = await queryGroqVisionEdge(env, visionSolvePrompt, imageBase64, imageMimeType, 750);
@@ -622,31 +1030,96 @@ export default {
               answer = vRes.answer;
               provider = "gemini_vision";
               model = vRes.model;
-            } catch (_) {}
+            } catch (_) {
+              try {
+                const snRes = await querySambaNovaVisionEdge(env, visionSolvePrompt, imageBase64, imageMimeType, 750);
+                answer = snRes.answer;
+                provider = "sambanova_vision";
+                model = snRes.model;
+              } catch (_) {
+                try {
+                  const misRes = await queryMistralVisionEdge(env, visionSolvePrompt, imageBase64, imageMimeType, 750);
+                  answer = misRes.answer;
+                  provider = "mistral_vision";
+                  model = misRes.model;
+                } catch (_) {
+                  try {
+                    const ghRes = await queryGitHubModelsEdge(env, cleanQuery, context, imageBase64, imageMimeType, visionSolvePrompt);
+                    answer = ghRes.answer;
+                    provider = "github_vision";
+                    model = ghRes.model;
+                  } catch (_) {}
+                }
+              }
+            }
           }
         } else {
           // Branch B: Normal Text / Code Query
-          // Tier 1: Groq LPU (~800 tok/sec, 0.3s sub-second latency)
-          try {
-            const gRes = await queryGroq(env, cleanQuery, context);
-            answer = gRes.answer;
-            provider = "groq_lpu";
-            model = gRes.model;
-          } catch (groqErr) {
-            // Tier 2: Cloudflare Workers AI (Native Edge GPU Inference)
+          // Tier 1: Cerebras Cloud (USA • 2,000 tok/sec King of Speed)
+          if ((env.CEREBRAS_API_KEY || "").trim()) {
             try {
-              const cfRes = await queryCloudflareWorkersAi(env, cleanQuery, context);
-              answer = cfRes.answer;
-              provider = "cloudflare_workers_ai";
-              model = cfRes.model;
-            } catch (cfErr) {
-              // Tier 3: Standby Failover to Gemini
+              const cRes = await queryCerebrasEdge(env, cleanQuery, context);
+              answer = cRes.answer;
+              provider = "cerebras";
+              model = cRes.model;
+            } catch (_) {}
+          }
+
+          // Tier 2: Groq LPU (~800 tok/sec, 0.3s sub-second latency)
+          if (!answer) {
+            try {
+              const gRes = await queryGroq(env, cleanQuery, context);
+              answer = gRes.answer;
+              provider = "groq_lpu";
+              model = gRes.model;
+            } catch (groqErr) {
+              // Tier 3: Cloudflare Workers AI (Native Edge GPU Inference)
               try {
-                const gemRes = await queryGeminiVision(env, cleanQuery, context, null, null);
-                answer = gemRes.answer;
-                provider = "gemini_failover";
-                model = gemRes.model;
-              } catch (_) {}
+                const cfRes = await queryCloudflareWorkersAi(env, cleanQuery, context);
+                answer = cfRes.answer;
+                provider = "cloudflare_workers_ai";
+                model = cfRes.model;
+              } catch (cfErr) {
+                // Tier 4: Standby Failover to Gemini
+                try {
+                  const gemRes = await queryGeminiVision(env, cleanQuery, context, null, null);
+                  answer = gemRes.answer;
+                  provider = "gemini_failover";
+                  model = gemRes.model;
+                } catch (_) {
+                  // Tier 5: SambaNova Cloud (USA • RDU Hardware)
+                  try {
+                    const snRes = await querySambaNovaEdge(env, cleanQuery, context);
+                    answer = snRes.answer;
+                    provider = "sambanova";
+                    model = snRes.model;
+                  } catch (_) {
+                    // Tier 6: Mistral AI (France/EU)
+                    try {
+                      const misRes = await queryMistralTextEdge(env, cleanQuery, context);
+                      answer = misRes.answer;
+                      provider = "mistral";
+                      model = misRes.model;
+                    } catch (_) {
+                      // Tier 7: GitHub Models (Microsoft USA)
+                      try {
+                        const ghRes = await queryGitHubModelsEdge(env, cleanQuery, context);
+                        answer = ghRes.answer;
+                        provider = "github_models";
+                        model = ghRes.model;
+                      } catch (_) {
+                        // Tier 8: Cohere AI (Canada)
+                        try {
+                          const cohRes = await queryCohereEdge(env, cleanQuery, context);
+                          answer = cohRes.answer;
+                          provider = "cohere";
+                          model = cohRes.model;
+                        } catch (_) {}
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
@@ -670,7 +1143,8 @@ export default {
             model,
             false,
             Date.now() - startTime,
-            url.pathname.includes("circle")
+            url.pathname.includes("circle"),
+            user
           )
         );
 
