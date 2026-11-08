@@ -1258,6 +1258,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ days }),
     }),
+  flushMongoChatBuffer: () =>
+    request("/admin/chat-bot/flush-mongo", {
+      method: "POST",
+    }),
   testChatBotAlert: () =>
     request("/admin/chat-bot/test-alert", {
       method: "POST",

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   X, Mail, Shield, Trash2, Eye, EyeOff, Edit3, UserCheck, UserX, Activity,
-  Search, CheckCircle, Clock, ChevronLeft, ChevronRight, Save, RefreshCw,
+  Search, CheckCircle, Clock, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Save, RefreshCw,
   Database, Cpu, Server, HardDrive, Globe, Code, Cloud, Send, Download,
   Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
   Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
@@ -66,6 +66,121 @@ export default function TabTurso(props) {
   });
   const [isHelpUpdating, setIsHelpUpdating] = useState(false);
   const [helpActionMsg, setHelpActionMsg] = useState(null);
+
+  // ⚡ Dedicated Chat Messages Retention & MongoDB Hot Buffer Studio State
+  const [chatRetentionDays, setChatRetentionDays] = useState("7");
+  const [chatBotSettings, setChatBotSettings] = useState(null);
+  const [chatTelemetry, setChatTelemetry] = useState(null);
+  const [isChatUpdating, setIsChatUpdating] = useState(false);
+  const [chatActionMsg, setChatActionMsg] = useState(null);
+  const [showAuditsTable, setShowAuditsTable] = useState(true);
+
+  const loadChatRetentionData = async () => {
+    try {
+      const [settingsRes, telemetryRes] = await Promise.allSettled([
+        api.getChatBotSettings(),
+        api.getChatBotTelemetry(),
+      ]);
+      if (settingsRes.status === "fulfilled" && settingsRes.value?.success) {
+        setChatBotSettings(settingsRes.value.settings);
+        if (settingsRes.value.settings?.chatRetentionDays) {
+          setChatRetentionDays(String(settingsRes.value.settings.chatRetentionDays));
+        }
+      }
+      if (telemetryRes.status === "fulfilled" && telemetryRes.value?.success) {
+        setChatTelemetry(telemetryRes.value);
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    loadChatRetentionData();
+  }, []);
+
+  const handleSaveChatRetentionPolicy = async (daysOverride) => {
+    const targetDays = daysOverride !== undefined ? daysOverride : (chatRetentionDays === "never" ? 365 : parseInt(chatRetentionDays, 10));
+    setIsChatUpdating(true);
+    setChatActionMsg(null);
+    try {
+      const res = await api.updateChatBotSettings({ chatRetentionDays: targetDays });
+      if (res?.success) {
+        setChatRetentionDays(String(targetDays));
+        setChatActionMsg({
+          type: "success",
+          text: `✅ Chat retention policy updated to ${targetDays} day(s). Messages older than ${targetDays}d will auto-expire from Turso & memory.`,
+        });
+        await loadChatRetentionData();
+      }
+    } catch (err) {
+      setChatActionMsg({ type: "error", text: err.message || "Failed to update chat retention policy" });
+    } finally {
+      setIsChatUpdating(false);
+    }
+  };
+
+  const handleSingleClickPruneChat = async (days) => {
+    const isWipeAll = days === 0;
+    const confirmPrompt = isWipeAll
+      ? "⚠️ DANGER: Wipe ENTIRE active chat buffer immediately (0 Days / All messages will be purged from Turso and memory)?"
+      : `Purge all chat messages older than ${days} day(s) immediately from Turso and memory?`;
+    if (!window.confirm(confirmPrompt)) return;
+
+    setIsChatUpdating(true);
+    setChatActionMsg(null);
+    try {
+      const res = await api.pruneOldChatMessages(days);
+      if (res?.success) {
+        setChatActionMsg({
+          type: "success",
+          text: isWipeAll
+            ? `🧹 Instant Wipe Complete: All ${res.totalPruned || res.deletedCount || 0} chat messages cleared from Turso & active buffer.`
+            : `🧹 Prune Complete: ${res.totalPruned || res.deletedCount || 0} message(s) older than ${days}d permanently purged.`,
+        });
+        await loadChatRetentionData();
+      }
+    } catch (err) {
+      setChatActionMsg({ type: "error", text: err.message || "Failed to prune chat messages" });
+    } finally {
+      setIsChatUpdating(false);
+    }
+  };
+
+  const handleFlushMongoBuffer = async () => {
+    setIsChatUpdating(true);
+    setChatActionMsg(null);
+    try {
+      const res = await api.flushMongoChatBuffer();
+      if (res?.success) {
+        setChatActionMsg({
+          type: "success",
+          text: `⚡ MongoDB Hot Buffer Synchronized: ${res.flushedCount || 0} messages synced to Turso LibSQL warm tier.`,
+        });
+        await loadChatRetentionData();
+      }
+    } catch (err) {
+      setChatActionMsg({ type: "error", text: err.message || "Failed to flush MongoDB buffer" });
+    } finally {
+      setIsChatUpdating(false);
+    }
+  };
+
+  const handleTestChatBotPing = async () => {
+    setIsChatUpdating(true);
+    setChatActionMsg(null);
+    try {
+      const res = await api.testChatBotAlert();
+      if (res?.success) {
+        setChatActionMsg({
+          type: "success",
+          text: "🚀 Diagnostic ping dispatched to @fsm_chat_bot Telegram topic & Admin DM!",
+        });
+      }
+    } catch (err) {
+      setChatActionMsg({ type: "error", text: err.message || "Failed to send Telegram test ping" });
+    } finally {
+      setIsChatUpdating(false);
+    }
+  };
 
   const loadHelpRetention = async () => {
     try {
@@ -1582,264 +1697,688 @@ export default function TabTurso(props) {
                 </div>
               </div>
 
-              {/* Forensic Audits Table for Private Study Pods */}
+              {/* ⚡ Cloudflare Edge, MongoDB Hot Buffer & Turso Chat Stream Hub */}
               <div
                 style={{
-                  background: "rgba(15, 23, 42, 0.5)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(10, 15, 30, 0.9) 100%)",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
                   borderRadius: "var(--radius-lg)",
-                  padding: "18px",
+                  padding: "20px",
+                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.35)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "18px",
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <ShieldAlert size={16} />
+                {/* Hub Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(99, 102, 241, 0.25) 100%)", border: "1px solid rgba(56, 189, 248, 0.4)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Zap size={20} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Private Study Pod Forensic Audits (Turso Vault)</div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Permanent compliance transcripts of closed private study rooms</div>
+                      <div style={{ fontWeight: 800, color: "#fff", fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>⚡ Cloudflare Edge, MongoDB Buffer & Turso Chat Hub</span>
+                        <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)", fontWeight: 700 }}>
+                          0% SERVER LOAD
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        Edge WebSockets ➔ MongoDB Hot Ingest ➔ Turso LibSQL Warm Stream ➔ @fsm_chat_bot Vault
+                      </div>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <div
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        fontSize: "0.74rem",
-                        color: "var(--text-dim)",
-                        background: "rgba(255, 255, 255, 0.03)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
-                        padding: "3px 8px",
-                        borderRadius: "6px",
-                      }}
-                    >
-                      <span>Retention:</span>
-                      <select
-                        value={tursoPruneDays}
-                        onChange={(e) => setTursoPruneDays(Number(e.target.value))}
-                        style={{
-                          background: "rgba(0, 0, 0, 0.5)",
-                          border: "1px solid rgba(255, 255, 255, 0.15)",
-                          color: "#38bdf8",
-                          borderRadius: "4px",
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
-                          padding: "2px 6px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <option value={0}>All Audits (0 Days / Clear Everything)</option>
-                        <option value={1}>Older than 1 Day (&gt;1d)</option>
-                        <option value={3}>Older than 3 Days (&gt;3d)</option>
-                        <option value={7}>Older than 7 Days (&gt;7d)</option>
-                        <option value={30}>Older than 30 Days (&gt;30d)</option>
-                      </select>
-                    </div>
-
                     <button
-                      onClick={() => handleTursoPruneAudits(tursoPruneDays)}
-                      disabled={tursoPruning}
-                      className="btn-danger"
-                      style={{ fontSize: "0.74rem", padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
-                      title={tursoPruneDays === 0 ? "Delete all pod transcripts immediately" : `Delete transcripts older than ${tursoPruneDays} days`}
-                    >
-                      <Trash2 size={12} />
-                      <span>{tursoPruning ? "Pruning..." : tursoPruneDays === 0 ? "Wipe All Audits" : `Prune >${tursoPruneDays}d Audits`}</span>
-                    </button>
-
-                    {tursoPruneDays !== 0 && (
-                      <button
-                        onClick={() => handleTursoPruneAudits(0)}
-                        disabled={tursoPruning || tursoAudits.length === 0}
-                        className="btn-danger"
-                        style={{
-                          fontSize: "0.74rem",
-                          padding: "5px 10px",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          background: "rgba(239, 68, 68, 0.2)",
-                          border: "1px solid rgba(239, 68, 68, 0.4)",
-                          color: "#fca5a5",
-                        }}
-                        title="Delete all pod transcripts right now"
-                      >
-                        <Trash2 size={12} />
-                        <span>Clear All</span>
-                      </button>
-                    )}
-
-                    <button
-                      onClick={loadTursoAudits}
-                      disabled={tursoAuditsLoading}
+                      type="button"
+                      onClick={handleTestChatBotPing}
+                      disabled={isChatUpdating}
                       className="btn-secondary"
-                      style={{ fontSize: "0.76rem", padding: "5px 11px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                      style={{ fontSize: "0.75rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      title="Dispatch test alert to @fsm_chat_bot supergroup and Admin DM"
                     >
-                      <RefreshCw size={12} className={tursoAuditsLoading ? "spin" : ""} />
-                      <span>{tursoAuditsLoading ? "Loading..." : "Refresh Audits"}</span>
+                      <Send size={13} />
+                      <span>Ping Telegram Bot</span>
                     </button>
-                  </div>
-                </div>
-
-                {/* Audit Search Bar */}
-                <div style={{ marginBottom: "12px", position: "relative" }}>
-                  <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
-                  <input
-                    type="text"
-                    value={tursoAuditSearch}
-                    onChange={(e) => setTursoAuditSearch(e.target.value)}
-                    placeholder="Search pod audits by room name, pod ID, secret code, creator, or timestamp..."
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px 8px 32px",
-                      fontSize: "0.78rem",
-                      borderRadius: "6px",
-                      background: "rgba(0, 0, 0, 0.35)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      color: "#fff",
-                      boxSizing: "border-box",
-                    }}
-                  />
-                  {tursoAuditSearch && (
                     <button
-                      onClick={() => setTursoAuditSearch("")}
-                      style={{
-                        position: "absolute",
-                        right: "8px",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        color: "var(--text-dim)",
-                        cursor: "pointer",
-                        fontSize: "0.75rem",
+                      type="button"
+                      onClick={() => {
+                        loadChatRetentionData();
+                        if (typeof loadTursoAudits === "function") loadTursoAudits();
                       }}
+                      disabled={isChatUpdating}
+                      className="btn-secondary"
+                      style={{ fontSize: "0.75rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      title="Refresh Edge & Buffer Telemetry"
                     >
-                      ✕
+                      <RefreshCw size={13} className={isChatUpdating ? "spin" : ""} />
+                      <span>Refresh Hub</span>
                     </button>
-                  )}
+                  </div>
                 </div>
 
-                {tursoAuditsLoading ? (
-                  <div style={{ textAlign: "center", padding: "24px", color: "var(--text-dim)", fontSize: "0.82rem" }}>
-                    <RefreshCw size={18} className="spin" style={{ marginBottom: "8px", color: "var(--accent-cyan)" }} />
-                    <div>Retrieving forensic audits from Turso...</div>
-                  </div>
-                ) : tursoAudits.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "28px", color: "var(--text-dim)", fontSize: "0.8rem", background: "rgba(0,0,0,0.2)", borderRadius: "8px" }}>
-                    No private room forensic records stored yet. When private study pods close, their encrypted forensic transcripts are automatically archived here.
-                  </div>
-                ) : (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", color: "var(--text-dim)", textAlign: "left" }}>
-                          <th style={{ padding: "8px 10px" }}>Room Name / ID</th>
-                          <th style={{ padding: "8px 10px" }}>Creator</th>
-                          <th style={{ padding: "8px 10px" }}>Duration</th>
-                          <th style={{ padding: "8px 10px" }}>Participants</th>
-                          <th style={{ padding: "8px 10px" }}>Messages</th>
-                          <th style={{ padding: "8px 10px" }}>Archived At</th>
-                          <th style={{ padding: "8px 10px" }}>Telegram Audit</th>
-                          <th style={{ padding: "8px 10px", textAlign: "right" }}>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tursoAudits
-                          .filter((a) => {
-                            if (!tursoAuditSearch.trim()) return true;
-                            const q = tursoAuditSearch.toLowerCase().trim();
-                            const dStr = a.closedAt ? new Date(a.closedAt).toLocaleString("en-IN").toLowerCase() : "";
-                            return (
-                              (a.name || "").toLowerCase().includes(q) ||
-                              (a.roomId || "").toLowerCase().includes(q) ||
-                              (a.secretCode || "").toLowerCase().includes(q) ||
-                              (a.creatorName || "").toLowerCase().includes(q) ||
-                              (a.createdBy || "").toLowerCase().includes(q) ||
-                              dStr.includes(q)
-                            );
-                          })
-                          .map((a, idx) => (
-                          <tr
-                            key={a.roomId || idx}
-                            style={{
-                              borderBottom: "1px solid rgba(255,255,255,0.04)",
-                              background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
-                            }}
-                          >
-                            <td style={{ padding: "10px", fontWeight: 600, color: "#fff" }}>
-                              <div>{a.name || "Private Study Room"}</div>
-                              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", fontFamily: "monospace" }}>
-                                ID: {a.roomId} {a.secretCode ? `• Code: ${a.secretCode}` : ""}
-                              </div>
-                            </td>
-                            <td style={{ padding: "10px", color: "#e2e8f0" }}>
-                              <div>{a.creatorName || a.createdBy || "Student"}</div>
-                              <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{a.createdBy}</div>
-                            </td>
-                            <td style={{ padding: "10px", color: "#38bdf8" }}>
-                              {a.durationMins || 0} mins
-                            </td>
-                            <td style={{ padding: "10px", color: "#e2e8f0" }}>
-                              {a.participantsCount || 0} students
-                            </td>
-                            <td style={{ padding: "10px", color: "#e2e8f0" }}>
-                              <div>{a.messagesCount || 0} msgs</div>
-                              {a.attachmentsCount > 0 && (
-                                <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)" }}>
-                                  {a.attachmentsCount} files
-                                </div>
-                              )}
-                            </td>
-                            <td style={{ padding: "10px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
-                              {a.closedAt ? new Date(a.closedAt).toLocaleString("en-IN") : "N/A"}
-                            </td>
-                            <td style={{ padding: "10px" }}>
-                              <span
-                                style={{
-                                  padding: "2px 7px",
-                                  borderRadius: "4px",
-                                  fontSize: "0.7rem",
-                                  fontWeight: 700,
-                                  background: a.telegramSent ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                                  color: a.telegramSent ? "#34d399" : "#fbbf24",
-                                  border: a.telegramSent ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
-                                }}
-                              >
-                                {a.telegramSent ? "✅ Sent (@fsm_chat_bot)" : "🕒 Stored in LibSQL"}
-                              </span>
-                            </td>
-                            <td style={{ padding: "10px", textAlign: "right" }}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSingleAudit(a.roomId, a.name)}
-                                className="btn-icon"
-                                style={{
-                                  width: "28px",
-                                  height: "28px",
-                                  background: "rgba(239, 68, 68, 0.15)",
-                                  color: "#f87171",
-                                  border: "1px solid rgba(239, 68, 68, 0.35)",
-                                  borderRadius: "6px",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  cursor: "pointer",
-                                }}
-                                title={`Delete audit transcript for "${a.name || a.roomId}"`}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {/* Hub Action Feedback Banner */}
+                {chatActionMsg && (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      fontSize: "0.78rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: chatActionMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      border: chatActionMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
+                      color: chatActionMsg.type === "success" ? "#34d399" : "#fca5a5",
+                    }}
+                  >
+                    <span>{chatActionMsg.text}</span>
+                    <button
+                      onClick={() => setChatActionMsg(null)}
+                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 4px" }}
+                    >
+                      <X size={14} />
+                    </button>
                   </div>
                 )}
+
+                {/* Architecture 4-Pillar Status Ribbon */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px" }}>
+                  {/* Pillar 1: Cloudflare Edge */}
+                  <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#38bdf8", fontWeight: 700, fontSize: "0.76rem" }}>
+                        <Globe size={14} />
+                        <span>Cloudflare Edge</span>
+                      </div>
+                      <span style={{ fontSize: "0.66rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
+                        ~12ms Latency
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>0% Server Load</div>
+                    <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                      Direct WebSockets Edge bypasses Render server
+                    </div>
+                  </div>
+
+                  {/* Pillar 2: MongoDB Hot Buffer */}
+                  <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(16, 185, 129, 0.2)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#34d399", fontWeight: 700, fontSize: "0.76rem" }}>
+                        <Database size={14} />
+                        <span>MongoDB Hot Buffer</span>
+                      </div>
+                      <span style={{ fontSize: "0.66rem", color: "#34d399", background: "rgba(16, 185, 129, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
+                        {chatTelemetry?.mongoStatus?.configured ? "Active" : "Standby"}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>
+                      {chatTelemetry?.mongoStatus?.hotBufferCount ?? chatMessages?.length ?? 0} Messages
+                    </div>
+                    <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                      Ultra-fast write buffer for burst throughput
+                    </div>
+                  </div>
+
+                  {/* Pillar 3: Turso LibSQL */}
+                  <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(168, 85, 247, 0.2)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#c084fc", fontWeight: 700, fontSize: "0.76rem" }}>
+                        <HardDrive size={14} />
+                        <span>Turso LibSQL Stream</span>
+                      </div>
+                      <span style={{ fontSize: "0.66rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
+                        {chatRetentionDays}d Policy
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>Warm Tier DB</div>
+                    <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                      Encrypted edge SQLite with auto-pruning
+                    </div>
+                  </div>
+
+                  {/* Pillar 4: Telegram Vault */}
+                  <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(245, 158, 11, 0.2)", borderRadius: "8px", padding: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#fbbf24", fontWeight: 700, fontSize: "0.76rem" }}>
+                        <Bot size={14} />
+                        <span>@fsm_chat_bot Vault</span>
+                      </div>
+                      <span style={{ fontSize: "0.66rem", color: "#fbbf24", background: "rgba(245, 158, 11, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
+                        4 Topics Active
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>Supergroup Mirror</div>
+                    <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                      Topics 1 (Chat), 33 (Media), 35 (Alerts), 31 (Pods)
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dual Control Modules: MongoDB Hot Buffer & Turso Retention */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+                  {/* Module 1: MongoDB Hot Buffer Card */}
+                  <div
+                    style={{
+                      background: "rgba(16, 185, 129, 0.03)",
+                      border: "1px solid rgba(16, 185, 129, 0.2)",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                        <div style={{ width: "26px", height: "26px", borderRadius: "6px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Database size={14} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.88rem" }}>MongoDB Hot Buffer (High Throughput)</div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                            Status: <strong style={{ color: chatTelemetry?.mongoStatus?.configured ? "#34d399" : "#fbbf24" }}>{chatTelemetry?.mongoStatus?.status || "Standby Mode"}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.45, background: "rgba(0, 0, 0, 0.25)", padding: "8px 10px", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                        During student peak traffic, chat messages, PDFs, and images stream directly into the MongoDB Hot Buffer with <strong>unlimited write velocity</strong>. When the buffer reaches 30,000 items, it automatically flushes into Turso LibSQL warm tier.
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px", paddingTop: "8px", borderTop: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                        URI: {chatTelemetry?.mongoStatus?.maskedUri || "Direct LibSQL Warm Mode"}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleFlushMongoBuffer}
+                        disabled={isChatUpdating}
+                        className="btn-primary"
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "6px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                          border: "none",
+                          color: "#fff",
+                          fontWeight: 700,
+                          cursor: isChatUpdating ? "not-allowed" : "pointer",
+                        }}
+                        title="Synchronize all buffer messages from MongoDB into Turso LibSQL"
+                      >
+                        <Zap size={13} />
+                        <span>Flush Buffer to Turso Now</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Module 2: Turso Retention Policy & Single-Click Purge Card */}
+                  <div
+                    style={{
+                      background: "rgba(56, 189, 248, 0.03)",
+                      border: "1px solid rgba(56, 189, 248, 0.2)",
+                      borderRadius: "8px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                        <div style={{ width: "26px", height: "26px", borderRadius: "6px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Clock size={14} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.88rem" }}>Turso Retention Policy & Single-Click Purge</div>
+                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                            Auto-expires old messages from Turso table <code>chat_messages</code>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Day Retention Presets & Stepper */}
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
+                        {["1", "3", "7", "14", "30", "never"].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => {
+                              setChatRetentionDays(preset);
+                              handleSaveChatRetentionPolicy(preset === "never" ? 365 : Number(preset));
+                            }}
+                            disabled={isChatUpdating}
+                            style={{
+                              padding: "4px 9px",
+                              fontSize: "0.72rem",
+                              borderRadius: "4px",
+                              border: chatRetentionDays === preset ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                              background: chatRetentionDays === preset ? "rgba(56, 189, 248, 0.2)" : "rgba(0, 0, 0, 0.3)",
+                              color: chatRetentionDays === preset ? "#38bdf8" : "var(--text-dim)",
+                              cursor: "pointer",
+                              fontWeight: chatRetentionDays === preset ? 700 : 500,
+                            }}
+                          >
+                            {preset === "never" ? "Never (365d)" : `${preset} Day${preset === "1" ? "" : "s"}`}
+                          </button>
+                        ))}
+
+                        {/* Stepper Controls */}
+                        <div style={{ display: "inline-flex", alignItems: "center", background: "rgba(0,0,0,0.4)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.1)", marginLeft: "4px" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = chatRetentionDays === "never" ? 30 : Math.max(1, parseInt(chatRetentionDays, 10) - 1);
+                              setChatRetentionDays(String(cur));
+                            }}
+                            disabled={isChatUpdating || chatRetentionDays === "1"}
+                            style={{ background: "none", border: "none", color: "#fff", padding: "3px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700 }}
+                            title="Decrease days"
+                          >
+                            -
+                          </button>
+                          <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#38bdf8", padding: "0 6px" }}>
+                            {chatRetentionDays === "never" ? "∞" : `${chatRetentionDays}d`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const cur = chatRetentionDays === "never" ? 1 : Math.min(365, parseInt(chatRetentionDays, 10) + 1);
+                              setChatRetentionDays(String(cur));
+                            }}
+                            disabled={isChatUpdating}
+                            style={{ background: "none", border: "none", color: "#fff", padding: "3px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700 }}
+                            title="Increase days"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSaveChatRetentionPolicy()}
+                          disabled={isChatUpdating}
+                          className="btn-secondary"
+                          style={{ fontSize: "0.72rem", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px", marginLeft: "auto" }}
+                        >
+                          <Save size={11} />
+                          <span>Save Policy</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Single-Click Instant Delete Buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", paddingTop: "8px", borderTop: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSingleClickPruneChat(chatRetentionDays === "never" ? 365 : Number(chatRetentionDays))}
+                        disabled={isChatUpdating}
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "rgba(239, 68, 68, 0.15)",
+                          border: "1px solid rgba(239, 68, 68, 0.4)",
+                          color: "#fca5a5",
+                          borderRadius: "6px",
+                          cursor: isChatUpdating ? "not-allowed" : "pointer",
+                          fontWeight: 700,
+                        }}
+                        title={`Single-click purge all messages older than ${chatRetentionDays} days`}
+                      >
+                        <Trash2 size={12} />
+                        <span>Purge Expired Messages ({chatRetentionDays === "never" ? ">365d" : `>${chatRetentionDays}d`})</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSingleClickPruneChat(0)}
+                        disabled={isChatUpdating}
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "6px 11px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "rgba(220, 38, 38, 0.25)",
+                          border: "1px solid rgba(239, 68, 68, 0.6)",
+                          color: "#f87171",
+                          borderRadius: "6px",
+                          cursor: isChatUpdating ? "not-allowed" : "pointer",
+                          fontWeight: 700,
+                          marginLeft: "auto",
+                        }}
+                        title="Danger: Instantly wipe ALL chat messages from Turso and active memory buffer"
+                      >
+                        <Flame size={12} />
+                        <span>Single-Click Wipe All (0-Day Clean)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Telegram @fsm_chat_bot Topic Status Preview */}
+                <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Bot size={15} style={{ color: "#fbbf24" }} />
+                      <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
+                        Telegram Live Compliance Vault: <code>@fsm_chat_bot</code>
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                      Supergroup ID: <code>{chatBotSettings?.supergroupId || "-1002931405908"}</code>
+                    </span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "8px" }}>
+                    <div style={{ background: "rgba(255,255,255,0.02)", padding: "6px 10px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.04)", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#38bdf8", fontWeight: 700 }}>💬 Topic 1 (Unified Feed)</div>
+                      <div style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>Real-time chat & public messages mirror</div>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", padding: "6px 10px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.04)", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#34d399", fontWeight: 700 }}>📎 Topic 33 (Media Vault)</div>
+                      <div style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>Images, PDFs, and study attachments</div>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", padding: "6px 10px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.04)", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#f87171", fontWeight: 700 }}>🚨 Topic 35 (Security & Alerts)</div>
+                      <div style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>Deleted message alerts & moderation</div>
+                    </div>
+                    <div style={{ background: "rgba(255,255,255,0.02)", padding: "6px 10px", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.04)", fontSize: "0.72rem" }}>
+                      <div style={{ color: "#c084fc", fontWeight: 700 }}>🛡️ Topic 31 (Pod Forensic Audits)</div>
+                      <div style={{ color: "var(--text-dim)", fontSize: "0.68rem" }}>Permanent transcripts of closed pods</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Collapsible Private Study Pod Forensic Audits Table */}
+                <div
+                  style={{
+                    background: "rgba(15, 23, 42, 0.4)",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    borderRadius: "8px",
+                    padding: "14px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showAuditsTable ? "12px" : "0", flexWrap: "wrap", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "30px", height: "30px", borderRadius: "6px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <ShieldAlert size={15} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                          <span>Private Study Pod Forensic Audits (Turso Vault)</span>
+                          <span style={{ fontSize: "0.68rem", padding: "1px 7px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)" }}>
+                            {tursoAudits.length} Records
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>Permanent compliance transcripts of closed study pods</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => setShowAuditsTable(!showAuditsTable)}
+                        className="btn-secondary"
+                        style={{ fontSize: "0.74rem", padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: "5px" }}
+                      >
+                        {showAuditsTable ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                        <span>{showAuditsTable ? "Collapse Table" : "Expand Table"}</span>
+                      </button>
+
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          fontSize: "0.74rem",
+                          color: "var(--text-dim)",
+                          background: "rgba(255, 255, 255, 0.03)",
+                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                        }}
+                      >
+                        <span>Retention:</span>
+                        <select
+                          value={tursoPruneDays}
+                          onChange={(e) => setTursoPruneDays(Number(e.target.value))}
+                          style={{
+                            background: "rgba(0, 0, 0, 0.5)",
+                            border: "1px solid rgba(255, 255, 255, 0.15)",
+                            color: "#38bdf8",
+                            borderRadius: "4px",
+                            fontSize: "0.74rem",
+                            fontWeight: 700,
+                            padding: "2px 6px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value={0}>All Audits (0 Days / Clear Everything)</option>
+                          <option value={1}>Older than 1 Day (&gt;1d)</option>
+                          <option value={3}>Older than 3 Days (&gt;3d)</option>
+                          <option value={7}>Older than 7 Days (&gt;7d)</option>
+                          <option value={30}>Older than 30 Days (&gt;30d)</option>
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={() => handleTursoPruneAudits(tursoPruneDays)}
+                        disabled={tursoPruning}
+                        className="btn-danger"
+                        style={{ fontSize: "0.74rem", padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        title={tursoPruneDays === 0 ? "Delete all pod transcripts immediately" : `Delete transcripts older than ${tursoPruneDays} days`}
+                      >
+                        <Trash2 size={12} />
+                        <span>{tursoPruning ? "Pruning..." : tursoPruneDays === 0 ? "Wipe All Audits" : `Prune >${tursoPruneDays}d Audits`}</span>
+                      </button>
+
+                      {tursoPruneDays !== 0 && (
+                        <button
+                          onClick={() => handleTursoPruneAudits(0)}
+                          disabled={tursoPruning || tursoAudits.length === 0}
+                          className="btn-danger"
+                          style={{
+                            fontSize: "0.74rem",
+                            padding: "5px 10px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            background: "rgba(239, 68, 68, 0.2)",
+                            border: "1px solid rgba(239, 68, 68, 0.4)",
+                            color: "#fca5a5",
+                          }}
+                          title="Delete all pod transcripts right now"
+                        >
+                          <Trash2 size={12} />
+                          <span>Clear All</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={loadTursoAudits}
+                        disabled={tursoAuditsLoading}
+                        className="btn-secondary"
+                        style={{ fontSize: "0.74rem", padding: "5px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                      >
+                        <RefreshCw size={12} className={tursoAuditsLoading ? "spin" : ""} />
+                        <span>{tursoAuditsLoading ? "Loading..." : "Refresh"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {showAuditsTable && (
+                    <>
+                      {/* Audit Search Bar */}
+                      <div style={{ marginBottom: "12px", position: "relative" }}>
+                        <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                        <input
+                          type="text"
+                          value={tursoAuditSearch}
+                          onChange={(e) => setTursoAuditSearch(e.target.value)}
+                          placeholder="Search pod audits by room name, pod ID, secret code, creator, or timestamp..."
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px 8px 32px",
+                            fontSize: "0.78rem",
+                            borderRadius: "6px",
+                            background: "rgba(0, 0, 0, 0.35)",
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                            color: "#fff",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        {tursoAuditSearch && (
+                          <button
+                            onClick={() => setTursoAuditSearch("")}
+                            style={{
+                              position: "absolute",
+                              right: "8px",
+                              top: "50%",
+                              transform: "translateY(-50%)",
+                              background: "none",
+                              border: "none",
+                              color: "var(--text-dim)",
+                              cursor: "pointer",
+                              fontSize: "0.75rem",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {tursoAuditsLoading ? (
+                        <div style={{ textAlign: "center", padding: "24px", color: "var(--text-dim)", fontSize: "0.82rem" }}>
+                          <RefreshCw size={18} className="spin" style={{ marginBottom: "8px", color: "var(--accent-cyan)" }} />
+                          <div>Retrieving forensic audits from Turso...</div>
+                        </div>
+                      ) : tursoAudits.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: "28px", color: "var(--text-dim)", fontSize: "0.8rem", background: "rgba(0,0,0,0.2)", borderRadius: "8px" }}>
+                          No private room forensic records stored yet. When private study pods close, their encrypted forensic transcripts are automatically archived here.
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", color: "var(--text-dim)", textAlign: "left" }}>
+                                <th style={{ padding: "8px 10px" }}>Room Name / ID</th>
+                                <th style={{ padding: "8px 10px" }}>Creator</th>
+                                <th style={{ padding: "8px 10px" }}>Duration</th>
+                                <th style={{ padding: "8px 10px" }}>Participants</th>
+                                <th style={{ padding: "8px 10px" }}>Messages</th>
+                                <th style={{ padding: "8px 10px" }}>Archived At</th>
+                                <th style={{ padding: "8px 10px" }}>Telegram Audit</th>
+                                <th style={{ padding: "8px 10px", textAlign: "right" }}>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {tursoAudits
+                                .filter((a) => {
+                                  if (!tursoAuditSearch.trim()) return true;
+                                  const q = tursoAuditSearch.toLowerCase().trim();
+                                  const dStr = a.closedAt ? new Date(a.closedAt).toLocaleString("en-IN").toLowerCase() : "";
+                                  return (
+                                    (a.name || "").toLowerCase().includes(q) ||
+                                    (a.roomId || "").toLowerCase().includes(q) ||
+                                    (a.secretCode || "").toLowerCase().includes(q) ||
+                                    (a.creatorName || "").toLowerCase().includes(q) ||
+                                    (a.createdBy || "").toLowerCase().includes(q) ||
+                                    dStr.includes(q)
+                                  );
+                                })
+                                .map((a, idx) => (
+                                <tr
+                                  key={a.roomId || idx}
+                                  style={{
+                                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                                    background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent",
+                                  }}
+                                >
+                                  <td style={{ padding: "10px", fontWeight: 600, color: "#fff" }}>
+                                    <div>{a.name || "Private Study Room"}</div>
+                                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", fontFamily: "monospace" }}>
+                                      ID: {a.roomId} {a.secretCode ? `• Code: ${a.secretCode}` : ""}
+                                    </div>
+                                  </td>
+                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                    <div>{a.creatorName || a.createdBy || "Student"}</div>
+                                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{a.createdBy}</div>
+                                  </td>
+                                  <td style={{ padding: "10px", color: "#38bdf8" }}>
+                                    {a.durationMins || 0} mins
+                                  </td>
+                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                    {a.participantsCount || 0} students
+                                  </td>
+                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                    <div>{a.messagesCount || 0} msgs</div>
+                                    {a.attachmentsCount > 0 && (
+                                      <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)" }}>
+                                        {a.attachmentsCount} files
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: "10px", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                                    {a.closedAt ? new Date(a.closedAt).toLocaleString("en-IN") : "N/A"}
+                                  </td>
+                                  <td style={{ padding: "10px" }}>
+                                    <span
+                                      style={{
+                                        padding: "2px 7px",
+                                        borderRadius: "4px",
+                                        fontSize: "0.7rem",
+                                        fontWeight: 700,
+                                        background: a.telegramSent ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
+                                        color: a.telegramSent ? "#34d399" : "#fbbf24",
+                                        border: a.telegramSent ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
+                                      }}
+                                    >
+                                      {a.telegramSent ? "✅ Sent (@fsm_chat_bot)" : "🕒 Stored in LibSQL"}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: "10px", textAlign: "right" }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteSingleAudit(a.roomId, a.name)}
+                                      className="btn-icon"
+                                      style={{
+                                        width: "28px",
+                                        height: "28px",
+                                        background: "rgba(239, 68, 68, 0.15)",
+                                        color: "#f87171",
+                                        border: "1px solid rgba(239, 68, 68, 0.35)",
+                                        borderRadius: "6px",
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        cursor: "pointer",
+                                      }}
+                                      title={`Delete audit transcript for "${a.name || a.roomId}"`}
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
   );

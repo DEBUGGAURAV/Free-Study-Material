@@ -427,7 +427,9 @@ let lastPurgeStats = {
  */
 async function runRetentionPrune(customDays = null) {
   const settings = typeof getChatBotSettings === "function" ? getChatBotSettings() : {};
-  const retentionDays = Number(customDays || settings.chatRetentionDays || 7);
+  const retentionDays = (customDays !== null && customDays !== undefined && !isNaN(customDays))
+    ? Number(customDays)
+    : Number(settings.chatRetentionDays || 7);
   const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
   const cutoffIso = new Date(cutoffMs).toISOString();
 
