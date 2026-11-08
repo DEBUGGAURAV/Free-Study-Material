@@ -4457,7 +4457,7 @@ router.get("/chat-bot/telemetry", authenticateToken, checkAdminOrPermission("all
       active: true,
       protocol: "Cloudflare Edge WebSockets",
       renderLoadBypassed: true,
-      workerUrl: process.env.CF_WORKER_URL || "cloudflare-worker.edge",
+      workerUrl: process.env.CF_CHAT_WORKER_URL || process.env.CF_WORKER_URL || "cloudflare-worker.edge",
       partyKitHost: process.env.VITE_PARTYKIT_HOST || "fsm-study.partykit.dev",
       latencyMs: 12,
     };
