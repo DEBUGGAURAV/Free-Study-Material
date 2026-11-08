@@ -243,12 +243,175 @@ async function request(endpoint, options = {}) {
   return data;
 }
 
+// 🛡️ High-Entropy Client Device Specs Cache (eagerly resolved for 0ms lag on auth)
+let cachedHighEntropySpecs = null;
+if (typeof navigator !== "undefined" && navigator.userAgentData?.getHighEntropyValues) {
+  navigator.userAgentData
+    .getHighEntropyValues(["model", "platform", "platformVersion", "architecture"])
+    .then((vals) => {
+      cachedHighEntropySpecs = vals;
+    })
+    .catch(() => {});
+}
+
+/**
+ * Capture crystal-clear hardware specifications and human-readable device model
+ */
+export function getClientDeviceSpecs() {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return {
+      deviceName: "Desktop Web",
+      brand: "Desktop",
+      model: "Web",
+      os: "Web",
+      browser: "Browser",
+      cores: 4,
+      memoryGB: 4,
+      isMobile: false,
+      screen: "1920x1080",
+    };
+  }
+
+  try {
+    const ua = navigator.userAgent || "";
+    const cores = navigator.hardwareConcurrency || 4;
+    const memoryGB = navigator.deviceMemory || 4;
+    const isMobile = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
+    const dpr = window.devicePixelRatio || 1;
+    const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+
+    let os = "Unknown OS";
+    let brand = "";
+    let model = "";
+    let browser = "Browser";
+
+    // 1. Detect OS & Hardware Model
+    if (/iPhone/i.test(ua)) {
+      brand = "Apple";
+      const m = ua.match(/OS\s([0-9_]+)/i);
+      os = m ? `iOS ${m[1].replace(/_/g, ".")}` : "iOS";
+      const maxDim = Math.max(screen.width, screen.height);
+      const minDim = Math.min(screen.width, screen.height);
+      if (maxDim === 932 && minDim === 430) model = "iPhone 15/16 Pro Max";
+      else if (maxDim === 852 && minDim === 393) model = "iPhone 15/16 Pro";
+      else if (maxDim === 926 && minDim === 428) model = "iPhone 13/14 Pro Max";
+      else if (maxDim === 844 && minDim === 390) model = "iPhone 12/13/14";
+      else if (maxDim === 896 && minDim === 414) model = dpr >= 3 ? "iPhone 11 Pro Max" : "iPhone 11 / XR";
+      else if (maxDim === 812 && minDim === 375) model = "iPhone X / XS / 11 Pro";
+      else if (maxDim === 667 && minDim === 375) model = "iPhone SE / 8";
+      else model = "iPhone";
+    } else if (/iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
+      brand = "Apple";
+      os = "iPadOS";
+      model = "iPad";
+    } else if (/Android/i.test(ua) || (isMobile && /Linux/i.test(ua))) {
+      os = "Android";
+      const m = ua.match(/Android\s([0-9\.]+)/i);
+      if (m) os = `Android ${m[1]}`;
+
+      const rawModel = cachedHighEntropySpecs?.model || navigator.userAgentData?.model || "";
+      if (rawModel && rawModel.toLowerCase() !== "k" && rawModel.toLowerCase() !== "android") {
+        model = rawModel.trim();
+      } else {
+        const buildM = ua.match(/;\s([^;)]+)\sBuild\//i);
+        if (buildM && buildM[1]) model = buildM[1].trim();
+      }
+
+      const checkStr = `${ua} ${model}`;
+      if (/SM-|Samsung/i.test(checkStr)) brand = "Samsung Galaxy";
+      else if (/Redmi|MI\s|POCO|Xiaomi|2201|2109|2203|2210|2301|2312|2404|2406/i.test(checkStr)) brand = "Xiaomi / Redmi";
+      else if (/Pixel/i.test(checkStr)) brand = "Google Pixel";
+      else if (/OnePlus|CPH2/i.test(checkStr)) brand = "OnePlus";
+      else if (/Vivo|V2\d{3}|iQOO/i.test(checkStr)) brand = "Vivo";
+      else if (/Realme|RMX/i.test(checkStr)) brand = "Realme";
+      else if (/Oppo|CPH/i.test(checkStr)) brand = "Oppo";
+      else if (/Moto|XT/i.test(checkStr)) brand = "Motorola";
+      else brand = "Android Phone";
+    } else if (/Windows NT 10.0/i.test(ua) || navigator.userAgentData?.platform === "Windows") {
+      brand = "Windows PC";
+      const platVer = cachedHighEntropySpecs?.platformVersion || navigator.userAgentData?.platformVersion || "";
+      const isWin11 = platVer ? parseInt(platVer.split(".")[0], 10) >= 13 : false;
+      os = isWin11 ? "Windows 11" : "Windows 10/11";
+      model = `${cores} Cores`;
+    } else if (/Windows/i.test(ua)) {
+      brand = "Windows PC";
+      os = "Windows";
+      model = "PC";
+    } else if (/Macintosh|Mac OS X/i.test(ua)) {
+      brand = "Apple";
+      os = "macOS";
+      model = isTouch ? "iPad" : "MacBook";
+    } else if (/Linux/i.test(ua)) {
+      brand = "Linux PC";
+      os = "Linux";
+      model = "PC";
+    }
+
+    // 2. Detect Browser
+    if (/Edg\//i.test(ua)) browser = "Microsoft Edge";
+    else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+    else if (/Brave/i.test(ua)) browser = "Brave Browser";
+    else if (/Chrome\//i.test(ua)) browser = isMobile ? "Chrome Mobile" : "Google Chrome";
+    else if (/Firefox\//i.test(ua)) browser = "Firefox";
+    else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) browser = isMobile ? "Mobile Safari" : "Safari";
+    else if (/Opera|OPR\//i.test(ua)) browser = "Opera";
+
+    // 3. Assemble clear device name
+    let deviceName = "";
+    if (brand === "Apple") {
+      deviceName = `${model || "Apple Device"} (${os}) • ${browser}`;
+    } else if (brand === "Windows PC") {
+      deviceName = `${os} PC (${cores} Cores • ${memoryGB}GB RAM) • ${browser}`;
+    } else if (brand && brand !== "Android Phone") {
+      const modelPart = model ? ` (${model})` : "";
+      deviceName = `${brand}${modelPart} • ${os} • ${browser}`;
+    } else if (model) {
+      deviceName = `${model} • ${os} • ${browser}`;
+    } else {
+      deviceName = `Student Mobile (${os}) • ${browser}`;
+    }
+
+    if (screenRes && screenRes !== "0x0") {
+      deviceName += ` [${screenRes}]`;
+    }
+
+    return {
+      deviceName,
+      brand: brand || "Student Device",
+      model: model || "",
+      os,
+      browser,
+      cores,
+      memoryGB,
+      isMobile,
+      screen: screenRes,
+      pixelRatio: dpr,
+      tier: memoryGB >= 8 && cores >= 8 ? "high" : (memoryGB <= 2 || cores <= 2 ? "ultra_low" : "mid"),
+      label: deviceName,
+    };
+  } catch (_) {
+    return {
+      deviceName: "Active Student Device",
+      brand: "Student Device",
+      model: "",
+      os: "Web",
+      browser: "Browser",
+      cores: 4,
+      memoryGB: 4,
+      isMobile: false,
+      screen: "",
+    };
+  }
+}
+
 export const api = {
   // Auth
   register: async (userData) => {
+    const specs = userData?.deviceSpecs || getClientDeviceSpecs();
     const data = await request("/auth/register", {
       method: "POST",
-      body: JSON.stringify(userData),
+      body: JSON.stringify({ ...userData, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -268,9 +431,10 @@ export const api = {
     }),
 
   registerTelegramVerify: async (verifyData) => {
+    const specs = verifyData?.deviceSpecs || getClientDeviceSpecs();
     const data = await request("/auth/register-telegram-verify", {
       method: "POST",
-      body: JSON.stringify(verifyData),
+      body: JSON.stringify({ ...verifyData, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -330,9 +494,10 @@ export const api = {
     }),
 
   verifyRegisterOtp: async (email, otp) => {
+    const specs = getClientDeviceSpecs();
     const data = await request("/auth/register-verify-otp", {
       method: "POST",
-      body: JSON.stringify({ email, otp }),
+      body: JSON.stringify({ email, otp, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -346,19 +511,10 @@ export const api = {
   },
 
   login: async (identifier, password, deviceSpecs = null, turnstileToken = null) => {
-    let specs = deviceSpecs;
+    const specs = deviceSpecs || getClientDeviceSpecs();
     let fingerprint = "";
     if (typeof window !== "undefined") {
       try {
-        const cores = navigator.hardwareConcurrency || 4;
-        const memoryGB = navigator.deviceMemory || 4;
-        const isMobile = window.innerWidth < 768;
-        const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
-        const ua = navigator.userAgent || "";
-        let modelHint = "";
-        const m = ua.match(/;\s([^;)]+)\sBuild\//i);
-        if (m && m[1]) modelHint = m[1].trim();
-        specs = specs || { cores, memoryGB, isMobile, screen: screenRes, model: modelHint };
         fingerprint = `${screen.width}x${screen.height}:${Intl.DateTimeFormat().resolvedOptions().timeZone}:${navigator.language}`;
       } catch (_) {}
     }
@@ -384,9 +540,10 @@ export const api = {
   },
 
   googleLogin: async (googleData) => {
+    const specs = googleData?.deviceSpecs || getClientDeviceSpecs();
     const data = await request("/auth/google", {
       method: "POST",
-      body: JSON.stringify(googleData),
+      body: JSON.stringify({ ...googleData, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -400,9 +557,10 @@ export const api = {
   },
 
   googleCompleteProfile: async (profileData) => {
+    const specs = profileData?.deviceSpecs || getClientDeviceSpecs();
     const data = await request("/auth/google-complete-profile", {
       method: "POST",
-      body: JSON.stringify(profileData),
+      body: JSON.stringify({ ...profileData, deviceSpecs: specs }),
     });
     if (data.user) {
       setCurrentUser(data.user);
@@ -415,10 +573,11 @@ export const api = {
     return data;
   },
 
-  syncDeviceSpecs: async (deviceSpecs) => {
+  syncDeviceSpecs: async (deviceSpecs = null) => {
+    const specs = deviceSpecs || getClientDeviceSpecs();
     return request("/auth/sync-device", {
       method: "POST",
-      body: JSON.stringify({ deviceSpecs }),
+      body: JSON.stringify({ deviceSpecs: specs }),
     }).catch(() => ({ success: true }));
   },
 
@@ -488,20 +647,7 @@ export const api = {
     }),
 
   verifyLoginOtp: async (email, otp, deviceSpecs = null) => {
-    let specs = deviceSpecs;
-    if (typeof window !== "undefined") {
-      try {
-        const cores = navigator.hardwareConcurrency || 4;
-        const memoryGB = navigator.deviceMemory || 4;
-        const isMobile = window.innerWidth < 768;
-        const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
-        const ua = navigator.userAgent || "";
-        let modelHint = "";
-        const m = ua.match(/;\s([^;)]+)\sBuild\//i);
-        if (m && m[1]) modelHint = m[1].trim();
-        specs = specs || { cores, memoryGB, isMobile, screen: screenRes, model: modelHint };
-      } catch (_) {}
-    }
+    const specs = deviceSpecs || getClientDeviceSpecs();
     const data = await request("/auth/login-verify-otp", {
       method: "POST",
       body: JSON.stringify({ email, otp, deviceSpecs: specs }),
@@ -1390,11 +1536,52 @@ export const api = {
     request("/ai/admin/reset", { method: "POST" }),
   testAiConnection: (provider) =>
     request("/ai/admin/test", { method: "POST", body: JSON.stringify({ provider }) }),
-  askAiQuestion: (query, context = "", noteId = null, subject = "", extra = {}) =>
-    request("/ai/ask", {
+  askAiQuestion: async (query, context = "", noteId = null, subject = "", extra = {}) => {
+    const currentUser = getCurrentUser();
+    const payload = {
+      query,
+      context,
+      noteId,
+      subject,
+      ...(extra || {}),
+      user: currentUser ? {
+        name: currentUser.name || "Student Scholar",
+        email: currentUser.email || "student@example.com",
+        mobile: currentUser.mobile || "N/A",
+      } : null,
+    };
+
+    // Attempt Cloudflare Edge AI Worker first (0% Render Server Load)
+    const cfAiWorkerUrl = (
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_AI_WORKER_URL) ||
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_CHAT_WORKER_URL ? import.meta.env.VITE_CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "")
+    ).trim();
+
+    if (cfAiWorkerUrl) {
+      try {
+        const edgeTarget = cfAiWorkerUrl.replace(/\/+$/, "") + "/api/ai/ask";
+        const authToken = getAuthToken();
+        const edgeRes = await fetch(edgeTarget, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined,
+        });
+        if (edgeRes && edgeRes.ok) {
+          return await edgeRes.json();
+        }
+      } catch (_) {}
+    }
+
+    // Seamless Fallback to Render Node.js origin
+    return request("/ai/ask", {
       method: "POST",
-      body: JSON.stringify({ query, context, noteId, subject, ...(extra || {}) }),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
   getNoteFlashcards: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>
     request("/ai/flashcards", { method: "POST", body: JSON.stringify({ noteId, title, context, subject, forceFresh }) }),
   getNoteSummary: ({ noteId, title, context = "", subject = "", forceFresh = false }) =>

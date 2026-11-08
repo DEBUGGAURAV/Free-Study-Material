@@ -15,6 +15,27 @@ import { getCurrentUser, getAuthToken } from "../api";
 // In-Memory L0 Session Caches (0ms Repeat Hits)
 const memorySessionCache = new Map();
 const ocrSessionCache = new Map();
+// In-flight Promise deduplication (collapses Safari/WebKit duplicate triggers into 1 single backend network call)
+const inFlightCircleRequests = new Map();
+const inFlightOcrRequests = new Map();
+
+/**
+ * Cloudflare Edge AI Worker URL Resolver (0% Render Server Load with Automatic Fallback)
+ */
+function getCfAiWorkerUrl() {
+  try {
+    if (typeof window !== "undefined" && window.__CF_AI_WORKER_URL__) {
+      return String(window.__CF_AI_WORKER_URL__).trim();
+    }
+    const envUrl = (import.meta.env?.VITE_CF_AI_WORKER_URL || "").trim();
+    if (envUrl) return envUrl;
+    const chatUrl = (import.meta.env?.VITE_CF_CHAT_WORKER_URL || "").trim();
+    if (chatUrl && chatUrl.includes("workers.dev")) {
+      return chatUrl.replace("fsm-chat-edge", "fsm-ai-edge");
+    }
+  } catch (_) {}
+  return "";
+}
 
 // Common scanner watermarks that pollute PDF text layers on scanned handwritten notes
 const WATERMARK_NOISE_REGEX =
@@ -234,100 +255,147 @@ export async function extractTextFromCroppedCanvas(croppedCanvas, onProgress, op
     return ocrSessionCache.get(fingerprint);
   }
 
-  const timeoutMs = options.timeoutMs || 5400;
-  const canUseCloudVision =
-    !options.localOnly &&
-    typeof navigator !== "undefined" &&
-    navigator.onLine !== false &&
-    Boolean(getCurrentUser());
+  // Deduplicate in-flight OCR requests for the exact same canvas crop
+  if (fingerprint && inFlightOcrRequests.has(fingerprint)) {
+    return inFlightOcrRequests.get(fingerprint);
+  }
 
-  // Local SIMD WASM OCR promise (starts immediately when offline, or after 110ms head-start online)
-  let wasmTimer = null;
-  const localWasmPromise = new Promise((resolve) => {
-    const startWasm = async () => {
-      try {
-        const recognized = await recognizeCanvasText(croppedCanvas, canUseCloudVision ? undefined : onProgress);
-        const cleaned = (recognized || "").trim();
-        if (cleaned.length >= 2) {
-          resolve({
-            text: cleaned,
-            source: "client-ocr-wasm",
-            confidence: 0.88,
-          });
-          return;
+  const executeOcrPromise = (async () => {
+    const timeoutMs = options.timeoutMs || 5400;
+    const canUseCloudVision =
+      !options.localOnly &&
+      typeof navigator !== "undefined" &&
+      navigator.onLine !== false &&
+      Boolean(getCurrentUser());
+
+    // Local SIMD WASM OCR promise (starts immediately when offline, or after 110ms head-start online)
+    let wasmTimer = null;
+    const localWasmPromise = new Promise((resolve) => {
+      const startWasm = async () => {
+        try {
+          const recognized = await recognizeCanvasText(croppedCanvas, canUseCloudVision ? undefined : onProgress);
+          const cleaned = (recognized || "").trim();
+          if (cleaned.length >= 2) {
+            resolve({
+              text: cleaned,
+              source: "client-ocr-wasm",
+              confidence: 0.88,
+            });
+            return;
+          }
+        } catch (err) {
+          console.warn("[CIRCLE-SEARCH] Client WASM OCR notice:", err.message);
         }
-      } catch (err) {
-        console.warn("[CIRCLE-SEARCH] Client WASM OCR notice:", err.message);
+        resolve(null);
+      };
+
+      if (!canUseCloudVision) {
+        startWasm();
+      } else {
+        wasmTimer = setTimeout(startWasm, 110);
       }
-      resolve(null);
-    };
+    });
 
-    if (!canUseCloudVision) {
-      startWasm();
-    } else {
-      wasmTimer = setTimeout(startWasm, 110);
-    }
-  });
+    if (canUseCloudVision) {
+      if (onProgress) onProgress(30, "⚡ Reading handwriting & math via AI Vision...");
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
 
-  if (canUseCloudVision) {
-    if (onProgress) onProgress(30, "⚡ Reading handwriting & math via AI Vision...");
-    const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const prepared = prepareCanvasForVision(croppedCanvas, 1280);
-      if (prepared?.base64) {
-        const authToken = getAuthToken();
-        const res = await fetch("/api/ai/ocr-handwriting", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          },
-          credentials: "include",
-          signal: controller.signal,
-          body: JSON.stringify({
+      try {
+        const prepared = prepareCanvasForVision(croppedCanvas, 1280);
+        if (prepared?.base64) {
+          const authToken = getAuthToken();
+          const cfWorkerBase = getCfAiWorkerUrl();
+          const ocrPayload = {
             imageBase64: prepared.base64,
             imageMimeType: prepared.mimeType || "image/jpeg",
-          }),
-        });
+          };
 
-        if (res.ok) {
-          const data = await res.json();
-          const visionText = (data?.text || "").trim();
-          if (visionText.length >= 1) {
-            if (wasmTimer) clearTimeout(wasmTimer);
-            clearTimeout(abortTimer);
-            const result = {
-              text: visionText,
-              source: "ai-vision-ocr",
-              provider: data.provider || "vision",
-              confidence: 0.98,
-            };
-            if (fingerprint) ocrSessionCache.set(fingerprint, result);
-            if (onProgress) onProgress(100, "⚡ Handwriting extracted!");
-            return result;
+          let res = null;
+          // Step A: Attempt ultra-fast Edge OCR via Cloudflare Worker (0% Render CPU)
+          if (cfWorkerBase) {
+            try {
+              const edgeTarget = cfWorkerBase.replace(/\/+$/, "") + "/api/ai/ocr-handwriting";
+              const edgeRes = await fetch(edgeTarget, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+                },
+                body: JSON.stringify(ocrPayload),
+                signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : controller.signal,
+              });
+              if (edgeRes && edgeRes.ok) {
+                res = edgeRes;
+              }
+            } catch (_) {
+              res = null; // graceful fallback to origin
+            }
+          }
+
+          // Step B: Fallback to Render Node.js origin if edge worker is not deployed or errored
+          if (!res) {
+            res = await fetch("/api/ai/ocr-handwriting", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+              },
+              credentials: "include",
+              signal: controller.signal,
+              body: JSON.stringify(ocrPayload),
+            });
+          }
+
+          if (res.ok) {
+            const data = await res.json();
+            const visionText = (data?.text || "").trim();
+            if (visionText.length >= 1) {
+              if (wasmTimer) clearTimeout(wasmTimer);
+              clearTimeout(abortTimer);
+              const result = {
+                text: visionText,
+                source: "ai-vision-ocr",
+                provider: data.provider || "vision",
+                confidence: 0.98,
+              };
+              if (fingerprint) ocrSessionCache.set(fingerprint, result);
+              if (onProgress) onProgress(100, "⚡ Handwriting extracted!");
+              return result;
+            }
           }
         }
+      } catch (_) {
+        // Network timeout or offline -> seamlessly fall through to already-running localWasmPromise
+      } finally {
+        clearTimeout(abortTimer);
       }
-    } catch (_) {
-      // Network timeout or offline -> seamlessly fall through to already-running localWasmPromise
-    } finally {
-      clearTimeout(abortTimer);
+    }
+
+    // Fallback to local adaptive-threshold WASM OCR (capped so UI never hangs)
+    const fallbackCapMs = options.timeoutMs ? Math.max(900, options.timeoutMs) : 6500;
+    const localResult = await Promise.race([
+      localWasmPromise,
+      new Promise((res) => setTimeout(() => res(null), fallbackCapMs)),
+    ]);
+
+    if (localResult && fingerprint) {
+      ocrSessionCache.set(fingerprint, localResult);
+    }
+    return localResult;
+  })();
+
+  if (fingerprint) {
+    inFlightOcrRequests.set(fingerprint, executeOcrPromise);
+  }
+
+  try {
+    return await executeOcrPromise;
+  } finally {
+    if (fingerprint) {
+      inFlightOcrRequests.delete(fingerprint);
     }
   }
-
-  // Fallback to local adaptive-threshold WASM OCR (capped so UI never hangs)
-  const fallbackCapMs = options.timeoutMs ? Math.max(900, options.timeoutMs) : 6500;
-  const localResult = await Promise.race([
-    localWasmPromise,
-    new Promise((res) => setTimeout(() => res(null), fallbackCapMs)),
-  ]);
-
-  if (localResult && fingerprint) {
-    ocrSessionCache.set(fingerprint, localResult);
-  }
-  return localResult;
 }
 
 /**
@@ -397,61 +465,113 @@ export async function solveCircleQuery({
     } catch (_) {}
   }
 
-  if (onProgress) {
-    onProgress(
-      cleanImageBase64
-        ? "⚡ Reading handwriting & solving via LPU Vision AI..."
-        : "🔍 Searching Turso AI Cache & Cloud Tutoring..."
-    );
+  // Deduplicate in-flight requests for the exact same query/image cacheKey (prevents Safari double-fetch)
+  if (inFlightCircleRequests.has(cacheKey)) {
+    return inFlightCircleRequests.get(cacheKey);
   }
 
-  // 3. Call Backend /api/ai/circle-search (Checks Turso L2 -> Generates via Groq LPU Vision / Gemini)
-  const authToken = getAuthToken();
-  const res = await fetch("/api/ai/circle-search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-    credentials: "include",
-    body: JSON.stringify({
-      query: cleanQuery,
-      context,
-      noteId,
-      subject,
-      skipCache: isConversational || Boolean(skipCache),
-      imageBase64: cleanImageBase64 || undefined,
-      imageMimeType: cleanImageBase64 ? resolvedMimeType : undefined,
-    }),
-  });
+  const executeQueryPromise = (async () => {
+    try {
+      if (onProgress) {
+        onProgress(
+          cleanImageBase64
+            ? "⚡ Reading handwriting & solving via LPU Vision AI..."
+            : "🔍 Searching Turso AI Cache & Cloud Tutoring..."
+        );
+      }
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.message || `Circle search error (${res.status})`);
-  }
+      // 3. Call Cloudflare Edge AI Worker (0% Render Server Load) with Seamless Failover to Backend
+      const authToken = getAuthToken();
+      const currentUser = getCurrentUser();
+      const cfWorkerBase = getCfAiWorkerUrl();
+      const circlePayload = {
+        query: cleanQuery,
+        context,
+        noteId,
+        subject,
+        skipCache: isConversational || Boolean(skipCache),
+        imageBase64: cleanImageBase64 || undefined,
+        imageMimeType: cleanImageBase64 ? resolvedMimeType : undefined,
+        user: currentUser ? {
+          name: currentUser.name || "Student Scholar",
+          email: currentUser.email || "student@example.com",
+          mobile: currentUser.mobile || "N/A",
+        } : null,
+      };
 
-  const data = await res.json();
-  const result = {
-    key: cacheKey,
-    query: cleanQuery,
-    subject: subject || "Study Notes",
-    noteId: noteId || "",
-    answer: data.answer,
-    provider: data.provider,
-    model: data.model,
-    cached: data.cached || false,
-    cacheTier: data.cached ? (data.cacheSource || "Turso Cloud L2") : "Cloud Engine (Fresh)",
-    hits: data.hits || 1,
-    latencyMs: data.latencyMs || 0,
-    savedAt: Date.now(),
-    isPinned: false,
-  };
+      let res = null;
 
-  // Cache locally in IndexedDB & Memory
-  memorySessionCache.set(cacheKey, result);
-  saveIndexedDbCircleCache(cacheKey, result).catch(() => {});
+      // Step A: Attempt ultra-fast Edge AI Worker (Bypasses Render server, 0% CPU/RAM)
+      if (cfWorkerBase) {
+        try {
+          const edgeTarget = cfWorkerBase.replace(/\/+$/, "") + "/api/ai/circle-search";
+          const edgeController = new AbortController();
+          const edgeTimeout = setTimeout(() => edgeController.abort(), 7500); // 7.5s safety timeout
+          const edgeRes = await fetch(edgeTarget, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+            },
+            body: JSON.stringify(circlePayload),
+            signal: edgeController.signal,
+          });
+          clearTimeout(edgeTimeout);
+          if (edgeRes && edgeRes.ok) {
+            res = edgeRes;
+          }
+        } catch (_) {
+          res = null; // graceful fallback to origin
+        }
+      }
 
-  return result;
+      // Step B: Fallback to Render Node.js origin if edge worker is not deployed, offline, or errored
+      if (!res) {
+        res = await fetch("/api/ai/circle-search", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          credentials: "include",
+          body: JSON.stringify(circlePayload),
+        });
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Circle search error (${res.status})`);
+      }
+
+      const data = await res.json();
+      const result = {
+        key: cacheKey,
+        query: cleanQuery,
+        subject: subject || "Study Notes",
+        noteId: noteId || "",
+        answer: data.answer,
+        provider: data.provider,
+        model: data.model,
+        cached: data.cached || false,
+        cacheTier: data.cached ? (data.cacheSource || "Turso Cloud L2") : "Cloud Engine (Fresh)",
+        hits: data.hits || 1,
+        latencyMs: data.latencyMs || 0,
+        savedAt: Date.now(),
+        isPinned: false,
+      };
+
+      // Cache locally in IndexedDB & Memory
+      memorySessionCache.set(cacheKey, result);
+      saveIndexedDbCircleCache(cacheKey, result).catch(() => {});
+
+      return result;
+    } finally {
+      inFlightCircleRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightCircleRequests.set(cacheKey, executeQueryPromise);
+  return executeQueryPromise;
 }
 
 // ============================================================================

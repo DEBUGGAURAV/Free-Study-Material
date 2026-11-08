@@ -13,12 +13,31 @@ const { ramCache } = require("../utils/ramCache");
 const { logAiSearchToTurso, getAiSearchLogsFromTurso } = require("./tursoService");
 const { getHelpBotToken, getHelpChatId } = require("./helpTicketService");
 const { queryCloudflareWorkersAi, isCloudflareAiAvailable } = require("./cloudflareWorkersAiService");
+const {
+  queryCerebras,
+  querySambaNovaText,
+  querySambaNovaVision,
+  queryMistralText,
+  queryMistralVision,
+  queryGitHubModels,
+  queryCohere,
+  queryHuggingFace,
+  queryOpenRouter,
+  isProviderConfigured,
+} = require("./unifiedAiProviders");
 
 // Default In-Memory Telemetry State
 const DEFAULT_AI_SETTINGS = {
   groqEnabled: true,
   geminiEnabled: true,
   cloudflareAiEnabled: true,
+  githubModelsEnabled: true,
+  huggingFaceEnabled: true,
+  openRouterEnabled: true,
+  cerebrasEnabled: true,
+  sambanovaEnabled: true,
+  mistralEnabled: true,
+  cohereEnabled: true,
   edgeProxyEnabled: true,
   circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
@@ -40,6 +59,13 @@ const DEFAULT_AI_SETTINGS = {
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
   geminiApiKey: "",
+  githubToken: "",
+  huggingFaceApiKey: "",
+  openRouterApiKey: "",
+  cerebrasApiKey: "",
+  sambanovaApiKey: "",
+  mistralApiKey: "",
+  cohereApiKey: "",
   updatedAt: new Date().toISOString(),
 };
 
@@ -107,6 +133,16 @@ async function loadAiSettings() {
           // Environment variables take precedence if set
           groqApiKey: data.groqApiKey || process.env.GROQ_API_KEY || "",
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
+          cerebrasApiKey: data.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "",
+          sambanovaApiKey: data.sambanovaApiKey || process.env.SAMBANOVA_API_KEY || "",
+          mistralApiKey: data.mistralApiKey || process.env.MISTRAL_API_KEY || "",
+          githubToken: data.githubToken || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "",
+          huggingFaceApiKey: data.huggingFaceApiKey || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "",
+          openRouterApiKey: data.openRouterApiKey || process.env.OPENROUTER_API_KEY || "",
+          cerebrasApiKey: data.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "",
+          sambanovaApiKey: data.sambanovaApiKey || process.env.SAMBANOVA_API_KEY || "",
+          mistralApiKey: data.mistralApiKey || process.env.MISTRAL_API_KEY || "",
+          cohereApiKey: data.cohereApiKey || process.env.COHERE_API_KEY || "",
         };
 
         // Auto-upgrade legacy/deprecated models to active, working models
@@ -120,11 +156,25 @@ async function loadAiSettings() {
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
         currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
+        currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
+        currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
+        currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
+        currentAiSettings.cerebrasApiKey = process.env.CEREBRAS_API_KEY || "";
+        currentAiSettings.sambanovaApiKey = process.env.SAMBANOVA_API_KEY || "";
+        currentAiSettings.mistralApiKey = process.env.MISTRAL_API_KEY || "";
+        currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
         await db.collection("settings").doc("ai_engine").set(currentAiSettings, { merge: true });
       }
     } else {
       currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
       currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
+      currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
+      currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
+      currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
+      currentAiSettings.cerebrasApiKey = process.env.CEREBRAS_API_KEY || "";
+      currentAiSettings.sambanovaApiKey = process.env.SAMBANOVA_API_KEY || "";
+      currentAiSettings.mistralApiKey = process.env.MISTRAL_API_KEY || "";
+      currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
     }
     checkDailyReset();
     isSettingsLoaded = true;
@@ -157,6 +207,27 @@ function getApiKey(provider) {
   }
   if (provider === "gemini") {
     return (process.env.GEMINI_API_KEY || currentAiSettings.geminiApiKey || "").trim();
+  }
+  if (provider === "cerebras") {
+    return (process.env.CEREBRAS_API_KEY || currentAiSettings.cerebrasApiKey || "").trim();
+  }
+  if (provider === "sambanova") {
+    return (process.env.SAMBANOVA_API_KEY || currentAiSettings.sambanovaApiKey || "").trim();
+  }
+  if (provider === "mistral") {
+    return (process.env.MISTRAL_API_KEY || currentAiSettings.mistralApiKey || "").trim();
+  }
+  if (provider === "github") {
+    return (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || currentAiSettings.githubToken || "").trim();
+  }
+  if (provider === "huggingface" || provider === "hf") {
+    return (process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || currentAiSettings.huggingFaceApiKey || "").trim();
+  }
+  if (provider === "openrouter") {
+    return (process.env.OPENROUTER_API_KEY || currentAiSettings.openRouterApiKey || "").trim();
+  }
+  if (provider === "cohere") {
+    return (process.env.COHERE_API_KEY || currentAiSettings.cohereApiKey || "").trim();
   }
   return "";
 }
@@ -522,6 +593,57 @@ Strict Rules:
     }
   }
 
+  // Tier 3: SambaNova Cloud Llama 3.2 Vision Failover
+  if (!extracted && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
+    try {
+      const snRes = await querySambaNovaVision("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 8000,
+      });
+      extracted = (snRes.answer || "").trim();
+      provider = "sambanova_vision";
+      model = snRes.model;
+    } catch (snErr) {
+      console.warn("[HANDWRITING-OCR] SambaNova Vision notice:", snErr.message);
+    }
+  }
+
+  // Tier 4: Mistral Pixtral 12B Math & OCR Vision Failover (France - EU)
+  if (!extracted && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
+    try {
+      const misRes = await queryMistralVision("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 8000,
+      });
+      extracted = (misRes.answer || "").trim();
+      provider = "mistral_vision";
+      model = misRes.model;
+    } catch (misErr) {
+      console.warn("[HANDWRITING-OCR] Mistral Pixtral notice:", misErr.message);
+    }
+  }
+
+  // Tier 5: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure)
+  if (!extracted && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+    try {
+      const ghRes = await queryGitHubModels("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 8000,
+      });
+      extracted = (ghRes.answer || "").trim();
+      provider = "github_vision";
+      model = ghRes.model;
+    } catch (ghErr) {
+      console.warn("[HANDWRITING-OCR] GitHub Models Vision notice:", ghErr.message);
+    }
+  }
+
   if (!extracted || extracted === "EMPTY") {
     throw new Error("Could not detect readable handwriting in selection");
   }
@@ -662,7 +784,72 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       }
     }
 
-    // Tier 1C: If both vision models had an issue AND we already have pre-extracted query text, solve via Groq text LPU!
+    // Tier 1C: SambaNova Cloud Llama 3.2 Vision Failover
+    if (!finalAnswer && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
+      try {
+        const snRes = await querySambaNovaVision(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = snRes.answer;
+        finalProvider = "sambanova_vision";
+        finalModel = snRes.model;
+      } catch (snErr) {
+        console.warn("[AI-ENGINE] ⚠️ SambaNova Vision notice:", snErr.message);
+        failoverOccurred = true;
+      }
+    }
+
+    // Tier 1D: Mistral Pixtral 12B Math & OCR Vision Failover (France - EU)
+    if (!finalAnswer && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
+      try {
+        const misRes = await queryMistralVision(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = misRes.answer;
+        finalProvider = "mistral_vision";
+        finalModel = misRes.model;
+      } catch (misErr) {
+        console.warn("[AI-ENGINE] ⚠️ Mistral Pixtral notice:", misErr.message);
+        failoverOccurred = true;
+      }
+    }
+
+    // Tier 1E: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure • Zero Card)
+    if (!finalAnswer && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+      try {
+        const ghRes = await queryGitHubModels(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = ghRes.answer;
+        finalProvider = "github_vision";
+        finalModel = ghRes.model;
+      } catch (ghErr) {
+        console.warn("[AI-ENGINE] ⚠️ GitHub Models Vision notice:", ghErr.message);
+        failoverOccurred = true;
+      }
+    }
+
+    // Tier 1F: Hugging Face Serverless Vision (Zero Card • Llama 3.2 11B Vision)
+    if (!finalAnswer && currentAiSettings.huggingFaceEnabled !== false && isProviderConfigured("huggingface")) {
+      try {
+        const hfRes = await queryHuggingFace(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = hfRes.answer;
+        finalProvider = "huggingface_vision";
+        finalModel = hfRes.model;
+      } catch (hfErr) {
+        console.warn("[AI-ENGINE] ⚠️ Hugging Face Vision notice:", hfErr.message);
+        failoverOccurred = true;
+      }
+    }
+
+    // Tier 1G: OpenRouter Free Vision (Zero Card • Llama 3.2 Vision Free)
+    if (!finalAnswer && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+      try {
+        const orRes = await queryOpenRouter(cleanQuery, context, imageBase64, imageMimeType, options);
+        finalAnswer = orRes.answer;
+        finalProvider = "openrouter_vision";
+        finalModel = orRes.model;
+      } catch (orErr) {
+        console.warn("[AI-ENGINE] ⚠️ OpenRouter Vision notice:", orErr.message);
+        failoverOccurred = true;
+      }
+    }
+
+    // Tier 1H: If vision models had an issue AND we already have pre-extracted query text, solve via Groq text LPU!
     if (!finalAnswer && cleanQuery && cleanQuery.length > 5 && !cleanQuery.startsWith("Question / Diagram from Page")) {
       const canUseGroqText =
         currentAiSettings.groqEnabled &&
@@ -679,7 +866,25 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   }
 
-  // Intent 2: Normal Text Doubt / Query -> Route to GROQ LPU (0.3s sub-second speed champion)
+  // Intent 2: Normal Text Doubt / Query -> Unified High-Speed Waterfall Architecture
+  // Tier 1 (Text): Cerebras Cloud Wafer-Scale LPU (USA • 2,000 tok/sec King of Speed)
+  if (!finalAnswer && !isImageOrDiagram) {
+    const canUseCerebras = currentAiSettings.cerebrasEnabled !== false &&
+                           isProviderConfigured("cerebras");
+    if (canUseCerebras) {
+      try {
+        const cRes = await queryCerebras(cleanQuery, context, options);
+        finalAnswer = cRes.answer;
+        finalProvider = "cerebras";
+        finalModel = cRes.model;
+      } catch (cErr) {
+        console.warn("[AI-ENGINE] ⚠️ Cerebras notice:", cErr.message, "-> Shifting to Groq LPU...");
+        failoverOccurred = true;
+      }
+    }
+  }
+
+  // Tier 2 (Text): Groq Cloud LPU (~800 tok/sec, 0.3s sub-second speed champion)
   if (!finalAnswer && !isImageOrDiagram) {
     const canUseGroq = currentAiSettings.groqEnabled && 
                        currentAiSettings.groqUsedToday < currentAiSettings.groqLimit && 
@@ -692,7 +897,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalProvider = "groq";
         finalModel = currentAiSettings.groqModel;
       } catch (groqErr) {
-        console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Tier 2 Failover...");
+        console.warn("[AI-ENGINE] ⚠️ Groq primary notice:", groqErr.message, "-> Activating Tier 3 Failover...");
         failoverOccurred = true;
         currentAiSettings.failoversToday += 1;
       }
@@ -701,7 +906,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   }
 
-  // Tier 2: Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
+  // Tier 3 (Text): Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
   if (!finalAnswer && !isImageOrDiagram) {
     const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
                        (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
@@ -713,12 +918,12 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalProvider = "cloudflare_workers_ai";
         finalModel = "@cf/meta/llama-3.1-8b-instruct";
       } catch (cfErr) {
-        console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 3...");
+        console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 4...");
       }
     }
   }
 
-  // Fallback / Secondary for Text: If Groq & Cloudflare failed, seamlessly fallback to Gemini Flash
+  // Tier 4 (Text): Google Gemini Flash Failover
   if (!finalAnswer && !isImageOrDiagram) {
     const canUseGemini = currentAiSettings.geminiEnabled && 
                          currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
@@ -732,6 +937,84 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       } catch (geminiErr) {
         console.warn("[AI-ENGINE] ⚠️ Gemini failover notice:", geminiErr.message);
       }
+    }
+  }
+
+  // Tier 5 (Text): SambaNova Cloud (Llama 3.3 70B on RDU • USA)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
+    try {
+      const snRes = await querySambaNovaText(cleanQuery, context, options);
+      finalAnswer = snRes.answer;
+      finalProvider = "sambanova";
+      finalModel = snRes.model;
+      failoverOccurred = true;
+    } catch (snErr) {
+      console.warn("[AI-ENGINE] ⚠️ SambaNova text notice:", snErr.message);
+    }
+  }
+
+  // Tier 6 (Text): Mistral AI (Codestral / Mistral Small • France - EU)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
+    try {
+      const misRes = await queryMistralText(cleanQuery, context, options);
+      finalAnswer = misRes.answer;
+      finalProvider = "mistral";
+      finalModel = misRes.model;
+      failoverOccurred = true;
+    } catch (misErr) {
+      console.warn("[AI-ENGINE] ⚠️ Mistral text notice:", misErr.message);
+    }
+  }
+
+  // Tier 7 (Text): GitHub Models (OpenAI GPT-4o-mini • Microsoft Azure USA • Zero Card)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+    try {
+      const ghRes = await queryGitHubModels(cleanQuery, context, null, "image/jpeg", options);
+      finalAnswer = ghRes.answer;
+      finalProvider = "github_models";
+      finalModel = ghRes.model;
+      failoverOccurred = true;
+    } catch (ghErr) {
+      console.warn("[AI-ENGINE] ⚠️ GitHub Models notice:", ghErr.message);
+    }
+  }
+
+  // Tier 8 (Text): Hugging Face Serverless (Llama 3.3 70B • Zero Card)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.huggingFaceEnabled !== false && isProviderConfigured("huggingface")) {
+    try {
+      const hfRes = await queryHuggingFace(cleanQuery, context, null, "image/jpeg", options);
+      finalAnswer = hfRes.answer;
+      finalProvider = "huggingface";
+      finalModel = hfRes.model;
+      failoverOccurred = true;
+    } catch (hfErr) {
+      console.warn("[AI-ENGINE] ⚠️ Hugging Face notice:", hfErr.message);
+    }
+  }
+
+  // Tier 9 (Text): OpenRouter Free Tier (Llama 3.3 70B Free • Zero Card)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+    try {
+      const orRes = await queryOpenRouter(cleanQuery, context, null, "image/jpeg", options);
+      finalAnswer = orRes.answer;
+      finalProvider = "openrouter";
+      finalModel = orRes.model;
+      failoverOccurred = true;
+    } catch (orErr) {
+      console.warn("[AI-ENGINE] ⚠️ OpenRouter notice:", orErr.message);
+    }
+  }
+
+  // Tier 10 (Text): Cohere AI (Command R+ Citations • Canada)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.cohereEnabled !== false && isProviderConfigured("cohere")) {
+    try {
+      const cohRes = await queryCohere(cleanQuery, context, options);
+      finalAnswer = cohRes.answer;
+      finalProvider = "cohere";
+      finalModel = cohRes.model;
+      failoverOccurred = true;
+    } catch (cohErr) {
+      console.warn("[AI-ENGINE] ⚠️ Cohere notice:", cohErr.message);
     }
   }
 
@@ -820,10 +1103,25 @@ function getAiTelemetry() {
       cloudflareAiLimit: currentAiSettings.cloudflareAiLimit || 1000,
       cloudflareAiConfigured: isCloudflareAiAvailable(),
       cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
+      githubModelsEnabled: currentAiSettings.githubModelsEnabled !== false,
+      githubModelsConfigured: isProviderConfigured("github"),
+      huggingFaceEnabled: currentAiSettings.huggingFaceEnabled !== false,
+      huggingFaceConfigured: isProviderConfigured("huggingface"),
+      openRouterEnabled: currentAiSettings.openRouterEnabled !== false,
+      openRouterConfigured: isProviderConfigured("openrouter"),
+      cerebrasEnabled: currentAiSettings.cerebrasEnabled !== false,
+      cerebrasConfigured: isProviderConfigured("cerebras"),
+      sambanovaEnabled: currentAiSettings.sambanovaEnabled !== false,
+      sambanovaConfigured: isProviderConfigured("sambanova"),
+      mistralEnabled: currentAiSettings.mistralEnabled !== false,
+      mistralConfigured: isProviderConfigured("mistral"),
+      cohereEnabled: currentAiSettings.cohereEnabled !== false,
+      cohereConfigured: isProviderConfigured("cohere"),
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
       aiSearchTopicId: currentAiSettings.aiSearchTopicId || null,
       purgeAuditTopicId: currentAiSettings.purgeAuditTopicId || null,
+      cfAiWorkerUrl: process.env.CF_AI_WORKER_URL || (process.env.CF_CHAT_WORKER_URL ? process.env.CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "https://fsm-ai-edge.jnplotus.workers.dev"),
     },
     usage: {
       groqUsedToday: currentAiSettings.groqUsedToday,
@@ -870,6 +1168,23 @@ async function updateAiSettings({
   circleSearchCooldownSec,
   groqApiKey,
   geminiApiKey,
+  cerebrasApiKey,
+  sambanovaApiKey,
+  mistralApiKey,
+  githubToken,
+  huggingFaceApiKey,
+  openRouterApiKey,
+  cerebrasApiKey,
+  sambanovaApiKey,
+  mistralApiKey,
+  cohereApiKey,
+  huggingFaceEnabled,
+  openRouterEnabled,
+  cerebrasEnabled,
+  sambanovaEnabled,
+  mistralEnabled,
+  githubModelsEnabled,
+  cohereEnabled,
   groqLimit,
   geminiLimit,
   cloudflareAiLimit,
@@ -881,12 +1196,40 @@ async function updateAiSettings({
   if (typeof circleSearchEnabled === "boolean") currentAiSettings.circleSearchEnabled = circleSearchEnabled;
   if (typeof circleSearchDailyLimit === "number" && circleSearchDailyLimit > 0) currentAiSettings.circleSearchDailyLimit = circleSearchDailyLimit;
   if (typeof circleSearchCooldownSec === "number" && circleSearchCooldownSec >= 0) currentAiSettings.circleSearchCooldownSec = circleSearchCooldownSec;
+  if (typeof huggingFaceEnabled === "boolean") currentAiSettings.huggingFaceEnabled = huggingFaceEnabled;
+  if (typeof openRouterEnabled === "boolean") currentAiSettings.openRouterEnabled = openRouterEnabled;
+  if (typeof cerebrasEnabled === "boolean") currentAiSettings.cerebrasEnabled = cerebrasEnabled;
+  if (typeof sambanovaEnabled === "boolean") currentAiSettings.sambanovaEnabled = sambanovaEnabled;
+  if (typeof mistralEnabled === "boolean") currentAiSettings.mistralEnabled = mistralEnabled;
+  if (typeof githubModelsEnabled === "boolean") currentAiSettings.githubModelsEnabled = githubModelsEnabled;
+  if (typeof cohereEnabled === "boolean") currentAiSettings.cohereEnabled = cohereEnabled;
 
   if (typeof groqApiKey === "string" && groqApiKey.trim()) {
     currentAiSettings.groqApiKey = groqApiKey.trim();
   }
   if (typeof geminiApiKey === "string" && geminiApiKey.trim()) {
     currentAiSettings.geminiApiKey = geminiApiKey.trim();
+  }
+  if (typeof githubToken === "string" && githubToken.trim()) {
+    currentAiSettings.githubToken = githubToken.trim();
+  }
+  if (typeof huggingFaceApiKey === "string" && huggingFaceApiKey.trim()) {
+    currentAiSettings.huggingFaceApiKey = huggingFaceApiKey.trim();
+  }
+  if (typeof openRouterApiKey === "string" && openRouterApiKey.trim()) {
+    currentAiSettings.openRouterApiKey = openRouterApiKey.trim();
+  }
+  if (typeof cerebrasApiKey === "string" && cerebrasApiKey.trim()) {
+    currentAiSettings.cerebrasApiKey = cerebrasApiKey.trim();
+  }
+  if (typeof sambanovaApiKey === "string" && sambanovaApiKey.trim()) {
+    currentAiSettings.sambanovaApiKey = sambanovaApiKey.trim();
+  }
+  if (typeof mistralApiKey === "string" && mistralApiKey.trim()) {
+    currentAiSettings.mistralApiKey = mistralApiKey.trim();
+  }
+  if (typeof cohereApiKey === "string" && cohereApiKey.trim()) {
+    currentAiSettings.cohereApiKey = cohereApiKey.trim();
   }
 
   if (typeof groqLimit === "number" && groqLimit > 0) currentAiSettings.groqLimit = groqLimit;
@@ -939,6 +1282,27 @@ async function testAiProvider(provider) {
     const { getCachedCircleSolution, computeQueryHash } = require("./tursoCircleSearchService");
     await getCachedCircleSolution(computeQueryHash("test-ping"));
     return { provider: "turso", success: true, answer: "Turso LibSQL Edge Cloud Ready (0ms Cache Active)", latencyMs: Date.now() - start };
+  } else if (provider === "cerebras") {
+    const res = await queryCerebras("Test ping. Reply 'Cerebras LPU Ready' in 3 words.", "College test");
+    return { provider: "cerebras", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "sambanova") {
+    const res = await querySambaNovaText("Test ping. Reply 'SambaNova RDU Ready' in 3 words.", "College test");
+    return { provider: "sambanova", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "mistral") {
+    const res = await queryMistralText("Test ping. Reply 'Mistral Ready' in 3 words.", "College test");
+    return { provider: "mistral", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "github") {
+    const res = await queryGitHubModels("Test ping. Reply 'GitHub Models Ready' in 3 words.", "College test");
+    return { provider: "github", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "cohere") {
+    const res = await queryCohere("Test ping. Reply 'Cohere Ready' in 3 words.", "College test");
+    return { provider: "cohere", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "huggingface" || provider === "hf") {
+    const res = await queryHuggingFace("Test ping. Reply 'HuggingFace Ready' in 3 words.", "College test");
+    return { provider: "huggingface", success: true, answer: res.answer, latencyMs: Date.now() - start };
+  } else if (provider === "openrouter") {
+    const res = await queryOpenRouter("Test ping. Reply 'OpenRouter Ready' in 3 words.", "College test");
+    return { provider: "openrouter", success: true, answer: res.answer, latencyMs: Date.now() - start };
   }
   throw new Error("Unknown provider");
 }
@@ -1049,6 +1413,69 @@ function getAiEngineAuditDetails(provider, model, cached) {
       tier: "🧠 Tier 3 (Multimodal Vision & Deep Academic Reasoning)",
       model: model || "gemini-flash-lite-latest",
       speed: "⚡ ~0.4s Cloud TPU",
+    };
+  }
+
+  if (p.includes("cerebras")) {
+    return {
+      name: "⚡ Cerebras Wafer-Scale LPU",
+      tier: "🚀 Tier 1 (Ultra-Fast 2,000 tok/s Hardware LPU)",
+      model: model || "llama-3.3-70b",
+      speed: "⚡ ~2,000 tok/sec (0.15s)",
+    };
+  }
+
+  if (p.includes("sambanova")) {
+    return {
+      name: "🧠 SambaNova Cloud RDU",
+      tier: "⚡ Tier 5 (Reconfigurable Dataflow Unit • USA)",
+      model: model || "Meta-Llama-3.3-70B / 3.2 Vision",
+      speed: "⚡ ~300 tok/sec",
+    };
+  }
+
+  if (p.includes("mistral") || p.includes("pixtral")) {
+    return {
+      name: "🇫🇷 Mistral AI (Europe)",
+      tier: "📐 Tier 6 (European Math & LaTeX Vision)",
+      model: model || "Mistral / Pixtral 12B",
+      speed: "⚡ ~200 tok/sec",
+    };
+  }
+
+  if (p.includes("github")) {
+    return {
+      name: "🐙 GitHub Models (Microsoft Azure)",
+      tier: "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)",
+      model: model || "gpt-4o-mini",
+      speed: "⚡ Microsoft Cloud",
+    };
+  }
+
+  if (p.includes("cohere")) {
+    return {
+      name: "🇨🇦 Cohere AI (Canada)",
+      tier: "📌 Tier 8 (Command R+ Citations)",
+      model: model || "command-r-08-2024",
+      speed: "⚡ Enterprise Cloud",
+    };
+  }
+
+  if (p.includes("huggingface") || p.includes("hf")) {
+    return {
+      name: "🤗 Hugging Face Serverless",
+      tier: "🚀 Serverless Router (Llama 3.3 70B & 3.2 Vision)",
+      model: model || "meta-llama/Llama-3.3-70B-Instruct",
+      speed: "⚡ Serverless Cloud",
+    };
+  }
+
+  if (p.includes("openrouter")) {
+    return {
+      name: "🌐 OpenRouter Free Engine",
+      tier: "🚀 Free Model Router",
+      model: model || "meta-llama/llama-3.3-70b-instruct:free",
+      speed: "⚡ Cloud Router",
     };
   }
 

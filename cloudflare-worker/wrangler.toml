@@ -20,3 +20,6 @@ GEMINI_MODEL = "gemini-flash-lite-latest"
 # wrangler secret put GEMINI_API_KEY
 # wrangler secret put TURSO_CIRCLE_SEARCH_URL
 # wrangler secret put TURSO_CIRCLE_SEARCH_AUTH_TOKEN
+# wrangler secret put HELP_BOT_TOKEN
+# wrangler secret put HELP_CHAT_ID
+# wrangler secret put HELP_TOPIC_ACTIVE_ID
