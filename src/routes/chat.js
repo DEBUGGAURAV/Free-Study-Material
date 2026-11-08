@@ -446,6 +446,14 @@ async function runRetentionPrune(customDays = null) {
   // Prune Turso LibSQL table
   const tursoResult = await pruneChatMessagesOlderThan(retentionDays);
 
+  // Prune MongoDB Hot Buffer
+  let mongoPruned = 0;
+  try {
+    const { pruneBufferOlderThan } = require("../services/mongoChatBufferService");
+    const mongoRes = await pruneBufferOlderThan(retentionDays);
+    mongoPruned = mongoRes?.deletedCount || 0;
+  } catch (_) {}
+
   // Prune Firestore in batches
   let firestorePruned = 0;
   if (db) {
@@ -462,7 +470,7 @@ async function runRetentionPrune(customDays = null) {
     }
   }
 
-  const totalPruned = Math.max(tursoResult?.deletedCount || 0, memoryPruned, firestorePruned);
+  const totalPruned = Math.max(tursoResult?.deletedCount || 0, memoryPruned, firestorePruned, mongoPruned);
   lastPruneStats = {
     timestamp: new Date().toISOString(),
     prunedCount: totalPruned,

@@ -3,7 +3,8 @@ import {
   Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lock, Unlock,
   RefreshCw, Power, Globe, Server, Ban, Clock, CheckCircle,
   AlertCircle, Bug, Eye, Search, Copy, Check, Filter, Trash2, Cpu,
-  MessageSquare, Send, Smartphone, ExternalLink, Bell, Tag, UserCheck
+  MessageSquare, Send, Smartphone, ExternalLink, Bell, Tag, UserCheck,
+  Database, Zap, Flame, Save, X
 } from "lucide-react";
 import { api } from "../../../api";
 
@@ -30,6 +31,95 @@ export default function TabWebSecurity(props) {
   const [quarantineTab, setQuarantineTab] = useState("all"); // 'all' | 'ips' | 'devices'
   const [pingLoading, setPingLoading] = useState(false);
   const [lookupIncident, setLookupIncident] = useState("");
+
+  // 🍃 Dedicated MongoDB Hot Buffer Retention State for Tab 14
+  const [mongoRetentionDays, setMongoRetentionDays] = useState("7");
+  const [mongoTelemetry, setMongoTelemetry] = useState(null);
+  const [mongoUpdating, setMongoUpdating] = useState(false);
+  const [mongoActionMsg, setMongoActionMsg] = useState(null);
+
+  const loadMongoRetention = async () => {
+    try {
+      const res = await api.getChatBotTelemetry();
+      if (res?.success) {
+        if (res.mongoStatus) setMongoTelemetry(res.mongoStatus);
+        if (res.settings?.chatRetentionDays) {
+          setMongoRetentionDays(String(res.settings.chatRetentionDays));
+        }
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    loadMongoRetention();
+  }, []);
+
+  const handleSaveMongoRetention = async (daysOverride) => {
+    const targetDays = daysOverride !== undefined ? daysOverride : (mongoRetentionDays === "never" ? 365 : parseInt(mongoRetentionDays, 10));
+    setMongoUpdating(true);
+    setMongoActionMsg(null);
+    try {
+      const res = await api.updateChatBotSettings({ chatRetentionDays: targetDays });
+      if (res?.success) {
+        setMongoRetentionDays(String(targetDays));
+        setMongoActionMsg({
+          type: "success",
+          text: `✅ MongoDB Hot Buffer retention policy set to ${targetDays} day(s). Expired records will auto-purge after ${targetDays}d.`,
+        });
+        await loadMongoRetention();
+      }
+    } catch (err) {
+      setMongoActionMsg({ type: "error", text: err.message || "Failed to update retention policy" });
+    } finally {
+      setMongoUpdating(false);
+    }
+  };
+
+  const handlePruneMongoBuffer = async (days) => {
+    const isWipeAll = days === 0;
+    const confirmPrompt = isWipeAll
+      ? "⚠️ DANGER: Wipe ENTIRE MongoDB Hot Buffer immediately (0 Days / All messages will be permanently cleared)?"
+      : `Purge MongoDB buffer records older than ${days} day(s) immediately?`;
+    if (!window.confirm(confirmPrompt)) return;
+
+    setMongoUpdating(true);
+    setMongoActionMsg(null);
+    try {
+      const res = await api.pruneOldChatMessages(days);
+      if (res?.success) {
+        setMongoActionMsg({
+          type: "success",
+          text: isWipeAll
+            ? `🧹 Instant Wipe Complete: All ${res.totalPruned || res.deletedCount || 0} buffer messages cleared from MongoDB & memory.`
+            : `🧹 Prune Complete: ${res.totalPruned || res.deletedCount || 0} record(s) older than ${days}d pruned from MongoDB buffer.`,
+        });
+        await loadMongoRetention();
+      }
+    } catch (err) {
+      setMongoActionMsg({ type: "error", text: err.message || "Failed to prune MongoDB buffer" });
+    } finally {
+      setMongoUpdating(false);
+    }
+  };
+
+  const handleFlushMongoToTurso = async () => {
+    setMongoUpdating(true);
+    setMongoActionMsg(null);
+    try {
+      const res = await api.flushMongoChatBuffer();
+      if (res?.success) {
+        setMongoActionMsg({
+          type: "success",
+          text: `⚡ MongoDB Hot Buffer Synchronized: ${res.flushedCount || 0} messages pushed into Turso warm tier.`,
+        });
+        await loadMongoRetention();
+      }
+    } catch (err) {
+      setMongoActionMsg({ type: "error", text: err.message || "Failed to flush MongoDB buffer" });
+    } finally {
+      setMongoUpdating(false);
+    }
+  };
 
   const fetchThreatData = async (isManual = false) => {
     if (isManual) setScanning(true);
@@ -1588,6 +1678,226 @@ export default function TabWebSecurity(props) {
               <strong style={{ color: "#fff" }}>Flawless Production Runtime:</strong> No active code bugs, unhandled promise rejections, memory overflows, or SQL/XSS injections detected in live Node.js cluster.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* 🍃 DEDICATED MONGODB ATLAS HOT BUFFER RETENTION & PURGE CONTROLLER (TAB 14) */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.8) 100%)",
+          border: "1.5px solid rgba(16, 185, 129, 0.3)",
+          borderRadius: "14px",
+          padding: "18px 20px",
+          marginBottom: "18px",
+          boxShadow: "0 6px 24px rgba(0, 0, 0, 0.35)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Database size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span>🍃 MongoDB Hot Buffer Retention &amp; Auto-Purge Hub</span>
+                <span style={{ fontSize: "0.68rem", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.4)", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
+                  {mongoTelemetry?.status || "LIVE BUFFER ACTIVE"}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.74rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
+                Configure rolling day retention, connection pool limits (maxPoolSize: 20 / 500 max), and instant purge for MongoDB chat &amp; audit stream.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={handleFlushMongoToTurso}
+              disabled={mongoUpdating}
+              className="btn-primary"
+              style={{
+                fontSize: "0.74rem",
+                padding: "6px 12px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                border: "none",
+                color: "#fff",
+                fontWeight: 700,
+                cursor: mongoUpdating ? "not-allowed" : "pointer",
+              }}
+              title="Synchronize all MongoDB buffer records into Turso LibSQL warm tier"
+            >
+              <Zap size={13} />
+              <span>Flush Buffer to Turso</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={loadMongoRetention}
+              disabled={mongoUpdating}
+              className="btn-secondary"
+              style={{ fontSize: "0.74rem", padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              title="Refresh telemetry"
+            >
+              <RefreshCw size={13} className={mongoUpdating ? "spin" : ""} />
+            </button>
+          </div>
+        </div>
+
+        {/* Action Feedback Banner */}
+        {mongoActionMsg && (
+          <div
+            style={{
+              padding: "9px 13px",
+              borderRadius: "7px",
+              fontSize: "0.76rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "12px",
+              background: mongoActionMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+              border: mongoActionMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
+              color: mongoActionMsg.type === "success" ? "#34d399" : "#fca5a5",
+            }}
+          >
+            <span>{mongoActionMsg.text}</span>
+            <button
+              onClick={() => setMongoActionMsg(null)}
+              style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 4px" }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        {/* Retention Controls & Presets Strip */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px", background: "rgba(0, 0, 0, 0.3)", padding: "12px 14px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+          <div>
+            <div style={{ fontSize: "0.74rem", color: "var(--text-dim, #94a3b8)", marginBottom: "6px" }}>
+              Active Hot Buffer: <strong style={{ color: "#38bdf8" }}>{mongoTelemetry?.hotBufferCount || 0} Records</strong> • Pool: <strong style={{ color: "#34d399" }}>20 / 500 Max</strong>
+            </div>
+
+            {/* Presets and Stepper */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              {["1", "3", "7", "14", "30", "never"].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    setMongoRetentionDays(preset);
+                    handleSaveMongoRetention(preset === "never" ? 365 : Number(preset));
+                  }}
+                  disabled={mongoUpdating}
+                  style={{
+                    padding: "4px 8px",
+                    fontSize: "0.72rem",
+                    borderRadius: "4px",
+                    border: mongoRetentionDays === preset ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.1)",
+                    background: mongoRetentionDays === preset ? "rgba(16, 185, 129, 0.25)" : "rgba(0, 0, 0, 0.4)",
+                    color: mongoRetentionDays === preset ? "#34d399" : "var(--text-dim, #94a3b8)",
+                    cursor: "pointer",
+                    fontWeight: mongoRetentionDays === preset ? 800 : 500,
+                  }}
+                >
+                  {preset === "never" ? "Never (365d)" : `${preset}d`}
+                </button>
+              ))}
+
+              {/* Stepper */}
+              <div style={{ display: "inline-flex", alignItems: "center", background: "rgba(0,0,0,0.4)", borderRadius: "4px", border: "1px solid rgba(255,255,255,0.1)", marginLeft: "4px" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = mongoRetentionDays === "never" ? 30 : Math.max(1, parseInt(mongoRetentionDays, 10) - 1);
+                    setMongoRetentionDays(String(cur));
+                  }}
+                  disabled={mongoUpdating || mongoRetentionDays === "1"}
+                  style={{ background: "none", border: "none", color: "#fff", padding: "3px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700 }}
+                  title="Decrease days"
+                >
+                  -
+                </button>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#34d399", padding: "0 6px" }}>
+                  {mongoRetentionDays === "never" ? "∞" : `${mongoRetentionDays}d`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = mongoRetentionDays === "never" ? 1 : Math.min(365, parseInt(mongoRetentionDays, 10) + 1);
+                    setMongoRetentionDays(String(cur));
+                  }}
+                  disabled={mongoUpdating}
+                  style={{ background: "none", border: "none", color: "#fff", padding: "3px 8px", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700 }}
+                  title="Increase days"
+                >
+                  +
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleSaveMongoRetention()}
+                disabled={mongoUpdating}
+                className="btn-secondary"
+                style={{ fontSize: "0.72rem", padding: "4px 8px", display: "inline-flex", alignItems: "center", gap: "4px" }}
+              >
+                <Save size={11} />
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Single-Click Purge & Wipe Actions */}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={() => handlePruneMongoBuffer(mongoRetentionDays === "never" ? 365 : Number(mongoRetentionDays))}
+              disabled={mongoUpdating}
+              style={{
+                fontSize: "0.74rem",
+                padding: "6px 11px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "rgba(239, 68, 68, 0.15)",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                color: "#fca5a5",
+                borderRadius: "6px",
+                cursor: mongoUpdating ? "not-allowed" : "pointer",
+                fontWeight: 700,
+              }}
+              title={`Purge MongoDB buffer messages older than ${mongoRetentionDays} days`}
+            >
+              <Trash2 size={12} />
+              <span>Purge Expired ({mongoRetentionDays === "never" ? ">365d" : `>${mongoRetentionDays}d`})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePruneMongoBuffer(0)}
+              disabled={mongoUpdating}
+              style={{
+                fontSize: "0.74rem",
+                padding: "6px 11px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: "rgba(220, 38, 38, 0.25)",
+                border: "1px solid rgba(239, 68, 68, 0.6)",
+                color: "#f87171",
+                borderRadius: "6px",
+                cursor: mongoUpdating ? "not-allowed" : "pointer",
+                fontWeight: 700,
+              }}
+              title="Danger: Immediately wipe all active records from MongoDB Hot Buffer"
+            >
+              <Flame size={12} />
+              <span>Wipe Buffer (0-Day Clean)</span>
+            </button>
+          </div>
         </div>
       </div>
 
