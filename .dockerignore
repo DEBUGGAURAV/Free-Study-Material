@@ -1,0 +1,10 @@
+node_modules
+dist
+cache
+temp
+uploads
+.git
+.env
+.dev.vars
+*.bin
+*.db
