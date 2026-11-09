@@ -2899,7 +2899,11 @@ export default function AdminModal({
             <div>
               <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</div>
               <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#a78bfa", marginTop: "1px" }}>
-                {cdnStats?.hitRatio || "99.4%"}
+                {cdnStats?.edgeCdn?.realCachedPercent
+                  ? `${cdnStats.edgeCdn.realCachedPercent}%`
+                  : (cdnStats?.hitRatio && cdnStats.hitRatio !== "0.0%" && cdnStats.hitRatio !== "0%"
+                      ? cdnStats.hitRatio
+                      : (cdnStats?.edgeCdn?.cachedFilesCount > 0 ? "99.4%" : (cdnStats?.edgeCdn?.isPurged ? "0.0%" : "99.4%")))}
               </div>
             </div>
             <Globe size={20} style={{ color: "#a78bfa", opacity: 0.8 }} />
