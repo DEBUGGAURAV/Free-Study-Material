@@ -7,7 +7,6 @@
 const BACKEND_ORIGINS = [
   "https://freestudymaterial1.onrender.com",  // #1 Active Primary (0ms lag, healthy)
   "https://freestudymaterial2.onrender.com",  // #2 Active Standby (0ms lag, healthy)
-  "https://freestudymaterial.onrender.com",   // #3 Tertiary Fallback (Render quota suspended)
 ];
 
 // Circuit Breaker: Cache unhealthy origins for 60s to avoid 2-5s retry lag on dead backends
@@ -78,10 +77,13 @@ export async function onRequest(context) {
       }
 
       // If backend returns 502/503/504 (or suspended, or server down 520-526, or explicitly disabled by admin), auto-failover
+      const contentType = (response.headers.get("content-type") || "").toLowerCase();
       const isServerDown =
         (response.status >= 500 && response.status <= 504) ||
         (response.status >= 520 && response.status <= 526) ||
-        response.headers.get("x-node-disabled") === "true";
+        response.status === 402 ||
+        response.headers.get("x-node-disabled") === "true" ||
+        (contentType.includes("text/html") && url.pathname.startsWith("/api/"));
 
       if (isServerDown) {
         unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);

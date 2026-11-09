@@ -25,14 +25,81 @@ function applyCors(headers, req) {
   }
   headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS, PURGE, DELETE');
   headers.set('Access-Control-Allow-Headers', '*');
-  headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache');
+  headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache, X-Upstream-Origin, X-Cluster-Active-Nodes');
   headers.set('Access-Control-Max-Age', '86400');
+}
+
+// 🌐 In-Memory Origin Health & Auto-Cascade Cooldown Tracker across Edge executions (25s)
+const failedOriginCooldowns = new Map(); // originUrl -> failureTimestamp
+
+function getOriginCooldownRemaining(origin) {
+  const failedAt = failedOriginCooldowns.get(origin) || 0;
+  const elapsed = Date.now() - failedAt;
+  return elapsed < 25000 ? 25000 - elapsed : 0; // 25s cooldown
+}
+
+function markOriginDown(origin) {
+  failedOriginCooldowns.set(origin, Date.now());
+}
+
+function markOriginUp(origin) {
+  failedOriginCooldowns.delete(origin);
+}
+
+function hashClientIdentifier(str) {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash);
+}
+
+// Returns all 3 cluster nodes guaranteed (even if Cloudflare env vars are missing or partial)
+function getAllClusterOrigins(env) {
+  const list = [
+    (env.BACKUP_ORIGIN_URL_1 || 'https://freestudymaterial1.onrender.com').replace(/\/+$/, ''),
+    (env.BACKUP_ORIGIN_URL_2 || 'https://freestudymaterial2.onrender.com').replace(/\/+$/, ''),
+    (env.ORIGIN_URL || 'https://freestudymaterial.onrender.com').replace(/\/+$/, ''),
+  ];
+  const unique = [];
+  for (const item of list) {
+    if (item && !unique.includes(item)) unique.push(item);
+  }
+  return unique;
+}
+
+// 3 -> 2 -> 1 Cascade Auto-Failover & Consistent Sticky IP-Hash Distribution
+function getPrioritizedClusterOrigins(env, clientIp) {
+  const baseOrigins = getAllClusterOrigins(env);
+  const healthyOrigins = baseOrigins.filter((o) => getOriginCooldownRemaining(o) === 0);
+  const activePool = healthyOrigins.length > 0 ? healthyOrigins : baseOrigins;
+
+  const clientHash = hashClientIdentifier(clientIp || '127.0.0.1');
+  const startIndex = clientHash % activePool.length;
+
+  return [
+    ...activePool.slice(startIndex),
+    ...activePool.slice(0, startIndex),
+    // Append cooling-down origins at the tail for extreme disaster recovery fallback
+    ...baseOrigins.filter((o) => !activePool.includes(o)),
+  ];
 }
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const originBase = env.ORIGIN_URL || 'https://freestudymaterial.onrender.com';
+
+    const clientIp =
+      request.headers.get('cf-connecting-ip') ||
+      request.headers.get('x-real-ip') ||
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      '127.0.0.1';
+
+    // Dynamic 3 -> 2 -> 1 Cascade Load Balancer
+    const streamOrigins = getPrioritizedClusterOrigins(env, clientIp);
+    const activeHealthyCount = streamOrigins.filter((o) => getOriginCooldownRemaining(o) === 0).length || 1;
+    const originBase = streamOrigins[0] || 'https://freestudymaterial1.onrender.com';
     const edgeColo = request.cf?.colo || 'Global';
 
     // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains
@@ -63,18 +130,23 @@ export default {
 
     // 2. Health check & status endpoint
     if (url.pathname === '/' || url.pathname === '/health') {
+      const activeOrigins = streamOrigins.filter((o) => getOriginCooldownRemaining(o) === 0);
+      const resHeaders = new Headers({
+        'Content-Type': 'application/json',
+      });
+      applyCors(resHeaders, request);
+      resHeaders.set('X-Cluster-Active-Nodes', String(activeOrigins.length));
       return new Response(JSON.stringify({
         status: 'online',
-        service: 'FreeStudyMaterial Edge Stream Worker',
+        service: 'FreeStudyMaterial Edge Stream Worker & Load Balancer',
         edgeLocation: edgeColo,
-        originServer: originBase,
+        activeClusterNodes: activeOrigins.length,
+        activeOrigins,
+        userAssignedOrigin: originBase,
+        clientIp,
         timestamp: new Date().toISOString()
       }, null, 2), {
-        headers: { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Expose-Headers': '*',
-        },
+        headers: resHeaders,
       });
     }
 
@@ -284,40 +356,63 @@ export default {
         });
       }
 
-      // Edge Cache Miss: Fetch full document from Origin Server (Render Node where RAM/Disk/Telegram lives)
-      try {
-        const originReqUrl = new URL(url.pathname + url.search, originBase);
-        originReqUrl.searchParams.set('direct', '1'); // Force Render origin to stream directly without 302 redirect loops
-        const forwardHeaders = new Headers(request.headers);
-        forwardHeaders.set('Origin', originBase); // Ensure Render server CORS always accepts the worker's proxy request
-        forwardHeaders.set('X-Forwarded-Host', url.host);
-        forwardHeaders.set('X-Via-Worker', 'true');
-        forwardHeaders.set('CF-Worker', 'true');
-        forwardHeaders.set('X-Direct-Origin', '1');
-        if (env.CF_WORKER_SECRET) {
-          forwardHeaders.set('X-Worker-Signature', env.CF_WORKER_SECRET);
+      // Edge Cache Miss: Fetch full document from Origin Server with Multi-Origin Cascade Failover
+      let originRes = null;
+      let activeOriginUsed = originBase;
+
+      for (let i = 0; i < streamOrigins.length; i++) {
+        const curOrigin = streamOrigins[i];
+        try {
+          const originReqUrl = new URL(url.pathname + url.search, curOrigin);
+          originReqUrl.searchParams.set('direct', '1'); // Force Render origin to stream directly without 302 redirect loops
+          const forwardHeaders = new Headers(request.headers);
+          forwardHeaders.set('Origin', curOrigin); // Ensure Render server CORS always accepts the worker's proxy request
+          forwardHeaders.set('X-Forwarded-Host', url.host);
+          forwardHeaders.set('X-Via-Worker', 'true');
+          forwardHeaders.set('CF-Worker', 'true');
+          forwardHeaders.set('X-Direct-Origin', '1');
+          if (env.CF_WORKER_SECRET) {
+            forwardHeaders.set('X-Worker-Signature', env.CF_WORKER_SECRET);
+          }
+          forwardHeaders.delete('Sec-Fetch-Site');
+          forwardHeaders.delete('sec-fetch-site');
+
+          // 🚨 CRITICAL: Remove Range header when fetching from Origin so Origin returns the FULL file (HTTP 200)!
+          forwardHeaders.delete('Range');
+          forwardHeaders.delete('range');
+          forwardHeaders.delete('If-Range');
+          forwardHeaders.delete('if-range');
+
+          const originReq = new Request(originReqUrl.toString(), {
+            method: request.method === 'HEAD' ? 'GET' : request.method,
+            headers: forwardHeaders,
+            body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+            redirect: 'follow',
+          });
+
+          const res = await fetch(originReq);
+          const cType = (res.headers.get('content-type') || '').toLowerCase();
+          const isErrorStatus = res.status >= 500 || res.status === 502 || res.status === 503 || res.status === 504 || res.status === 402 || res.status === 403;
+          const isHtmlError = cType.includes('text/html');
+
+          if ((isErrorStatus || isHtmlError) && i < streamOrigins.length - 1) {
+            continue; // Cascade failover to next online backend node!
+          }
+
+          originRes = res;
+          activeOriginUsed = curOrigin;
+          break;
+        } catch (fetchErr) {
+          if (i < streamOrigins.length - 1) continue;
         }
-        forwardHeaders.delete('Sec-Fetch-Site');
-        forwardHeaders.delete('sec-fetch-site');
+      }
 
-        // 🚨 CRITICAL: Remove Range header when fetching from Origin so Origin returns the FULL file (HTTP 200)!
-        // Cloudflare caches.default requires a 200 OK status to cache (206 Partial Content cannot be cached).
-        // By fetching full 200 once, the Worker caches the whole document permanently in Edge CDN,
-        // and slices byte-ranges for this student and all future students in 0ms!
+      if (!originRes) {
+        return new Response('Document stream temporarily unavailable', { status: 503 });
+      }
+
+      try {
         const clientRange = request.headers.get('Range') || request.headers.get('range');
-        forwardHeaders.delete('Range');
-        forwardHeaders.delete('range');
-        forwardHeaders.delete('If-Range');
-        forwardHeaders.delete('if-range');
-
-        const originReq = new Request(originReqUrl.toString(), {
-          method: request.method === 'HEAD' ? 'GET' : request.method,
-          headers: forwardHeaders,
-          body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
-          redirect: 'follow',
-        });
-
-        const originRes = await fetch(originReq);
 
         // Build Response Headers
         const responseHeaders = new Headers(originRes.headers);
@@ -325,11 +420,33 @@ export default {
         responseHeaders.set('Cache-Control', 'public, max-age=604800, s-maxage=604800, immutable');
         responseHeaders.set('Accept-Ranges', 'bytes');
         responseHeaders.set('X-Edge-Location', edgeColo);
+        responseHeaders.set('X-Upstream-Origin', activeOriginUsed);
 
         // 1. If Origin returns 200 OK: Cache full file on Edge & return slice or full body
         if (originRes.status === 200) {
           const fullArrayBuffer = await originRes.arrayBuffer();
           const totalSize = fullArrayBuffer.byteLength;
+
+          // 🛡️ CRITICAL CHECK: Verify buffer is genuine PDF/binary data, NOT Render suspension HTML!
+          const cType = (originRes.headers.get('content-type') || '').toLowerCase();
+          let isSuspensionPage = false;
+          if (cType.includes('text/html') || totalSize < 3000) {
+            try {
+              const preview = new TextDecoder().decode(fullArrayBuffer.slice(0, Math.min(1000, totalSize)));
+              if (preview.includes('suspended by its owner') || preview.includes('service has been suspended') || preview.includes('<!DOCTYPE html')) {
+                isSuspensionPage = true;
+              }
+            } catch (_) {}
+          }
+
+          if (isSuspensionPage) {
+            ctx.waitUntil(cache.delete(cacheKey));
+            return new Response('Document storage failover in progress. Please refresh.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' },
+            });
+          }
+
           responseHeaders.set('Content-Length', totalSize.toString());
 
           // Mark headers for the cached copy
@@ -504,33 +621,46 @@ export default {
       }
     }
 
-    // 5. General proxy to origin for any other endpoints
-    try {
-      const originReqUrl = new URL(url.pathname + url.search, originBase);
-      const originRes = await fetch(new Request(originReqUrl.toString(), request));
-      const resHeaders = new Headers(originRes.headers);
-      resHeaders.set('Access-Control-Allow-Origin', '*');
-      resHeaders.set('Access-Control-Expose-Headers', '*');
-      return new Response(originRes.body, {
-        status: originRes.status,
-        headers: resHeaders,
-      });
-    } catch (err) {
-      return new Response('Not found', { status: 404 });
+    // 5. General proxy to origin with cascade failover
+    for (let i = 0; i < streamOrigins.length; i++) {
+      const origin = streamOrigins[i];
+      try {
+        const originReqUrl = new URL(url.pathname + url.search, origin);
+        const originRes = await fetch(new Request(originReqUrl.toString(), request));
+        if (originRes.status >= 502 && originRes.status <= 504 && i < streamOrigins.length - 1) {
+          continue;
+        }
+        const resHeaders = new Headers(originRes.headers);
+        resHeaders.set('Access-Control-Allow-Origin', '*');
+        resHeaders.set('Access-Control-Expose-Headers', '*');
+        resHeaders.set('X-Upstream-Origin', origin);
+        return new Response(originRes.body, {
+          status: originRes.status,
+          headers: resHeaders,
+        });
+      } catch (err) {
+        if (i < streamOrigins.length - 1) continue;
+      }
     }
+    return new Response('Not found', { status: 404 });
   },
 
   // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
   async scheduled(event, env, ctx) {
-    const originBase = (env.ORIGIN_URL || 'https://freestudymaterial.onrender.com').replace(/\/+$/, '');
-    try {
-      await fetch(`${originBase}/health?cron=cf&t=${Date.now()}`, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Cloudflare-Cron-AntiSleep/2.0',
-          'Cache-Control': 'no-cache, no-store',
-        },
-      });
-    } catch (_) {}
+    const targets = [
+      (env.ORIGIN_URL || 'https://freestudymaterial1.onrender.com').replace(/\/+$/, ''),
+      (env.BACKUP_ORIGIN_URL_1 || 'https://freestudymaterial2.onrender.com').replace(/\/+$/, ''),
+    ].filter(Boolean);
+    for (const target of targets) {
+      try {
+        await fetch(`${target}/health?cron=cf&t=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Cloudflare-Cron-AntiSleep/2.0',
+            'Cache-Control': 'no-cache, no-store',
+          },
+        });
+      } catch (_) {}
+    }
   },
 };

@@ -4,7 +4,8 @@
  * Purpose: 0% Render Load - Direct Edge WebSockets & Rapid Chat Ingestion
  */
 
-const ORIGIN_URL = "https://freestudymaterial.onrender.com";
+const ORIGIN_URL = "https://freestudymaterial1.onrender.com";
+const BACKUP_ORIGIN_URL = "https://freestudymaterial2.onrender.com";
 
 function applyCors(headers, req) {
   const origin = req.headers.get("Origin") || "*";

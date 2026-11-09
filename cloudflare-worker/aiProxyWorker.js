@@ -1224,11 +1224,10 @@ export default {
       }
     }
 
-    // 4. Multi-Origin Active User Load Balancer with Cascade Failover (3 Nodes -> 2 Nodes -> 1 Node)
+    // 4. Multi-Origin Active User Load Balancer with Cascade Failover (Exclusively Active Online Backends)
     const baseOrigins = [
-      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
-      (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
-      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
+      (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
     ].filter(Boolean);
 
     // Filter currently healthy origins (exclude origins in temporary 25s auto-cooldown)
@@ -1245,9 +1244,7 @@ export default {
     const clientHash = hashClientIdentifier(clientIp);
 
     // Active User Distribution:
-    // If 3 servers are healthy: users distributed 33% / 33% / 33%
-    // If 1 server goes down: remaining 2 servers automatically share 50% / 50%
-    // If 2 servers go down: single surviving server automatically receives 100%
+    // Evenly balances traffic across online nodes with instantaneous 0-downtime failover
     const startIndex = clientHash % activePool.length;
     const prioritizedOrigins = [
       ...activePool.slice(startIndex),
@@ -1262,14 +1259,23 @@ export default {
         const originReqUrl = new URL(url.pathname + url.search, origin);
         const originRes = await fetch(new Request(originReqUrl.toString(), request));
 
-        // If current origin returns 502, 503, 504 and next origin is available, auto-failover!
-        if (originRes.status >= 502 && originRes.status <= 504 && i < prioritizedOrigins.length - 1) {
+        const cType = (originRes.headers.get("content-type") || "").toLowerCase();
+        const isBadStatus =
+          (originRes.status >= 500 && originRes.status <= 504) ||
+          originRes.status === 402 ||
+          originRes.status === 403;
+        const isHtmlSuspension =
+          cType.includes("text/html") &&
+          (url.pathname.startsWith("/api/") || url.pathname.includes("/stream"));
+
+        // If current origin returned failure or suspension HTML, auto-failover to next online node!
+        if ((isBadStatus || isHtmlSuspension) && i < prioritizedOrigins.length - 1) {
           markOriginDown(origin);
           continue; // Cascade failover to next online node!
         }
 
-        // On successful application response (< 500), restore node to healthy status
-        if (originRes.status < 500) {
+        // On successful application response (< 500 and not suspension HTML), restore node to healthy status
+        if (originRes.status < 500 && !isHtmlSuspension) {
           markOriginUp(origin);
         }
 
@@ -1302,12 +1308,11 @@ export default {
     return new Response("Service unavailable", { status: 503 });
   },
 
-  // 💓 Scheduled Cron Trigger: Pings ALL 3 Render origins every 10 min to keep them awake!
+  // 💓 Scheduled Cron Trigger: Pings ALL active Render origins every 10 min to keep them awake!
   async scheduled(event, env, ctx) {
     const targets = [
-      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
-      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
-      (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
+      (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
     ].filter(Boolean);
     for (const target of targets) {
       try {

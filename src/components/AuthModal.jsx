@@ -799,15 +799,30 @@ export default function AuthModal({
               setLoading(true);
               setSuccessMsg("Verifying Google profile...");
               let gInfo = null;
+
+              // Fast userinfo: Try v1 query-param first (no OPTIONS preflight)
               try {
-                const uRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                  signal: AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined,
-                });
+                const uRes = await fetch(
+                  `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${encodeURIComponent(tokenResponse.access_token)}`,
+                  { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined }
+                );
                 if (uRes.ok) {
                   gInfo = await uRes.json();
                 }
               } catch (_) {}
+
+              // Fallback to v3 userinfo if needed
+              if (!gInfo?.email) {
+                try {
+                  const uRes2 = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+                    signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
+                  });
+                  if (uRes2.ok) {
+                    gInfo = await uRes2.json();
+                  }
+                } catch (_) {}
+              }
 
               await processGoogleLogin({
                 accessToken: tokenResponse.access_token,
@@ -815,7 +830,7 @@ export default function AuthModal({
                 name: gInfo?.name || gInfo?.given_name || "",
                 picture: gInfo?.picture || "",
                 sub: gInfo?.sub || "",
-                email_verified: gInfo?.email_verified || false,
+                email_verified: gInfo?.email_verified || gInfo?.verified_email || false,
               });
             } else {
               setLoading(false);

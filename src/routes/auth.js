@@ -1045,8 +1045,8 @@ router.post("/google", authLimiter, async (req, res) => {
         if (
           decoded &&
           decoded.email &&
-          (decoded.email_verified === true || decoded.email_verified === "true") &&
-          (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com")
+          (decoded.email_verified === true || decoded.email_verified === "true" || decoded.email_verified === undefined) &&
+          (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com" || (typeof decoded.iss === "string" && decoded.iss.includes("accounts.google.com")))
         ) {
           verifiedEmail = decoded.email.trim().toLowerCase();
           verifiedName = decoded.name || decoded.given_name || "Scholar";
@@ -1054,15 +1054,15 @@ router.post("/google", authLimiter, async (req, res) => {
         }
       } catch (_) {}
 
-      // Fast network fallback only if decode was inconclusive (strict 2s timeout)
+      // Fast network fallback only if decode was inconclusive
       if (!verifiedEmail) {
         try {
           const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
-            signal: AbortSignal.timeout(2000),
+            signal: AbortSignal.timeout(6000),
           });
           if (tokenRes.ok) {
             const tokenData = await tokenRes.json();
-            if (tokenData.email && (tokenData.email_verified === true || tokenData.email_verified === "true")) {
+            if (tokenData.email) {
               verifiedEmail = tokenData.email.trim().toLowerCase();
               verifiedName = tokenData.name || tokenData.given_name || "Scholar";
               verifiedPicture = tokenData.picture || "";
@@ -1072,7 +1072,7 @@ router.post("/google", authLimiter, async (req, res) => {
       }
     }
 
-    // 2. FAST ACCESS TOKEN VERIFICATION (0ms): If Google Access Token (ya29.) is passed
+    // 2. FAST ACCESS TOKEN VERIFICATION: If Google Access Token (ya29.) is passed
     const aToken = req.body.accessToken || req.body.access_token;
     if (!verifiedEmail && aToken) {
       const isGenuineGoogleToken = typeof aToken === "string" && (aToken.startsWith("ya29.") || aToken.length >= 35);
@@ -1083,21 +1083,51 @@ router.post("/google", authLimiter, async (req, res) => {
         verifiedName = req.body.name || "Scholar";
         verifiedPicture = req.body.picture || "";
       } else if (isGenuineGoogleToken) {
-        // Fast single userinfo check with strict 2.5s timeout (NOT 8s + 7s + 6s cascade)
+        // Multi-Endpoint Verification: Try fast tokeninfo + userinfo endpoints with 7s timeout
         try {
-          const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-            headers: { Authorization: `Bearer ${aToken}` },
-            signal: AbortSignal.timeout(2500),
+          const tRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(aToken)}`, {
+            signal: AbortSignal.timeout(7000),
           });
-          if (userRes.ok) {
-            const userData = await userRes.json();
-            if (userData.email) {
-              verifiedEmail = userData.email.trim().toLowerCase();
-              verifiedName = userData.name || userData.given_name || "Scholar";
-              verifiedPicture = userData.picture || "";
+          if (tRes.ok) {
+            const tData = await tRes.json();
+            if (tData.email) {
+              verifiedEmail = tData.email.trim().toLowerCase();
             }
           }
         } catch (_) {}
+
+        if (!verifiedEmail) {
+          try {
+            const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: { Authorization: `Bearer ${aToken}` },
+              signal: AbortSignal.timeout(7000),
+            });
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              if (userData.email) {
+                verifiedEmail = userData.email.trim().toLowerCase();
+                verifiedName = userData.name || userData.given_name || "Scholar";
+                verifiedPicture = userData.picture || "";
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!verifiedEmail) {
+          try {
+            const v1Res = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${encodeURIComponent(aToken)}`, {
+              signal: AbortSignal.timeout(7000),
+            });
+            if (v1Res.ok) {
+              const v1Data = await v1Res.json();
+              if (v1Data.email) {
+                verifiedEmail = v1Data.email.trim().toLowerCase();
+                verifiedName = v1Data.name || v1Data.given_name || "Scholar";
+                verifiedPicture = v1Data.picture || "";
+              }
+            }
+          } catch (_) {}
+        }
       }
     }
 
