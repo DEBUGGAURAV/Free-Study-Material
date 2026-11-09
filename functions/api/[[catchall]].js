@@ -57,6 +57,8 @@ export async function onRequest(context) {
       const resHeaders = new Headers(response.headers);
       resHeaders.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
       resHeaders.set("Access-Control-Allow-Credentials", "true");
+      resHeaders.set("X-Load-Balancer", "Cloudflare Edge Intelligent Failover");
+      resHeaders.set("X-Served-By", origin);
       return new Response(response.body, {
         status: response.status,
         headers: resHeaders,
