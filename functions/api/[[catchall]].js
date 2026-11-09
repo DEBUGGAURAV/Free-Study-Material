@@ -1,13 +1,13 @@
 /**
- * Cloudflare Pages Edge Function: Zero-Lag Universal API Proxy & Load Balancer
+ * Cloudflare Pages Edge Function: Zero-Lag Universal API Proxy & Intelligent Load Balancer
  * Handles GET, POST, PUT, DELETE, OPTIONS, PATCH for /api/* without 405 errors.
- * Intelligent Multi-Origin Failover with 60s dynamic health circuit-breaker.
+ * Multi-Origin Failover with 60s dynamic health circuit-breaker and sub-second failover.
  */
 
 const BACKEND_ORIGINS = [
-  "https://freestudymaterial1.onrender.com",  // #1 Active Primary (healthy, 0ms lag)
-  "https://freestudymaterial2.onrender.com",  // #2 Active Standby (healthy, instant backup)
-  "https://freestudymaterial.onrender.com",   // #3 Suspended Original (only if 1 & 2 are unavailable)
+  "https://freestudymaterial1.onrender.com",  // #1 Active Primary (0ms lag, healthy)
+  "https://freestudymaterial2.onrender.com",  // #2 Active Standby (0ms lag, healthy)
+  "https://freestudymaterial.onrender.com",   // #3 Tertiary Fallback (Render quota suspended)
 ];
 
 // Circuit Breaker: Cache unhealthy origins for 60s to avoid 2-5s retry lag on dead backends
@@ -25,7 +25,7 @@ export async function onRequest(context) {
       headers: {
         "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control, X-Admin-Bypass, X-Cluster-Sync",
         "Access-Control-Allow-Credentials": "true",
         "Access-Control-Max-Age": "86400",
       },
@@ -37,7 +37,7 @@ export async function onRequest(context) {
   const bodyBytes = hasBody ? await request.arrayBuffer() : null;
 
   const now = Date.now();
-  // Sort origins: Healthy origins first, recently failed origins last
+  // Sort origins: Healthy origins first, recently failed or disabled origins last
   const sortedOrigins = [...BACKEND_ORIGINS].sort((a, b) => {
     const aDead = (unhealthyOrigins.get(a) || 0) > now;
     const bDead = (unhealthyOrigins.get(b) || 0) > now;
@@ -76,11 +76,16 @@ export async function onRequest(context) {
         clearTimeout(timeoutId);
       }
 
-      // If backend returns 502/503/504 (or suspended), mark unhealthy and auto-failover
-      if (response.status >= 502 && response.status <= 504) {
+      // If backend returns 502/503/504 (or suspended, or server down 520-526, or explicitly disabled by admin), auto-failover
+      const isServerDown =
+        (response.status >= 500 && response.status <= 504) ||
+        (response.status >= 520 && response.status <= 526) ||
+        response.headers.get("x-node-disabled") === "true";
+
+      if (isServerDown) {
         unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);
         if (i < sortedOrigins.length - 1) {
-          continue;
+          continue; // Seamless failover to next backend
         }
       } else {
         // Successful response - clear any past unhealthy marks

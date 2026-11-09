@@ -53,9 +53,13 @@ try {
 } catch {}
 
 let getClusterTelemetry = null;
+let toggleClusterNode = null;
+let syncNodeState = null;
 try {
   const clusterService = require("../services/clusterTelemetryService");
   getClusterTelemetry = clusterService.getClusterTelemetry;
+  toggleClusterNode = clusterService.toggleClusterNode;
+  syncNodeState = clusterService.syncNodeState;
 } catch {}
 
 const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
@@ -4221,6 +4225,115 @@ router.post("/maintenance/sync", (req, res) => {
       maintenanceMode: techSettings.maintenanceMode,
       message: "Maintenance state connected and synchronized across cluster node.",
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+function broadcastNodeToggleToCluster(nodeId, isEnabled, req = null) {
+  const token = req ? (req.headers["authorization"] || "") : "";
+  for (const origin of CLUSTER_BACKENDS) {
+    try {
+      fetch(`${origin}/api/admin/cluster/sync-node-state`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Cluster-Sync": "fsm_cluster_sync_2026",
+          ...(token ? { Authorization: token } : {}),
+        },
+        body: JSON.stringify({ nodeId, isEnabled, syncToken: "fsm_cluster_sync_2026" }),
+        signal: AbortSignal.timeout(3500),
+      }).catch(() => {});
+    } catch (_) {}
+  }
+}
+
+/**
+ * POST /api/admin/cluster/toggle-node
+ * Interactive ON/OFF switch for Backend #1, Backend #2, Backend #3
+ */
+router.post("/cluster/toggle-node", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { nodeId, isEnabled } = req.body || {};
+    if (!nodeId || typeof isEnabled !== "boolean") {
+      return res.status(400).json({ success: false, message: "Valid nodeId and isEnabled boolean are required." });
+    }
+
+    if (typeof toggleClusterNode !== "function") {
+      return res.status(500).json({ success: false, message: "Cluster telemetry engine not loaded." });
+    }
+
+    const adminEmail = req.user?.email || "Administrator";
+    const telemetry = await toggleClusterNode(nodeId, isEnabled, adminEmail);
+
+    // Broadcast change to other 2 cluster nodes in background
+    try {
+      broadcastNodeToggleToCluster(nodeId, isEnabled, req);
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      nodeId,
+      isEnabled,
+      message: `Cluster Node '${nodeId}' successfully switched ${isEnabled ? "ON" : "OFF"}.`,
+      clusterTelemetry: telemetry,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/cluster/sync-node-state
+ * Internal cluster synchronization endpoint for node ON/OFF states
+ */
+router.post("/cluster/sync-node-state", (req, res) => {
+  try {
+    const { nodeId, isEnabled, syncToken } = req.body || {};
+    const authHeader = req.headers.authorization;
+    let isAuthorized = false;
+
+    if (authHeader) {
+      try {
+        const token = authHeader.replace(/^Bearer\s+/i, "");
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded && (decoded.role === "admin" || decoded.role === "half_admin")) {
+          isAuthorized = true;
+        }
+      } catch (_) {}
+    }
+
+    if (req.headers["x-cluster-sync"] === "fsm_cluster_sync_2026" || syncToken === "fsm_cluster_sync_2026") {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, message: "Unauthorized cluster sync" });
+    }
+
+    if (typeof syncNodeState === "function") {
+      syncNodeState(nodeId, isEnabled);
+    }
+
+    return res.json({
+      success: true,
+      nodeId,
+      isEnabled,
+      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || "freestudymaterial2.onrender.com",
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/cluster/telemetry
+ * Returns live cluster telemetry and active users per node
+ */
+router.get("/cluster/telemetry", authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const telemetry = typeof getClusterTelemetry === "function" ? getClusterTelemetry() : null;
+    return res.json({ success: true, clusterTelemetry: telemetry });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

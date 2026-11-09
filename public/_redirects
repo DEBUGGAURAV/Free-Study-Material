@@ -1,4 +1,4 @@
-# Cloudflare Pages Single-Page Application (SPA) & Backend Proxy Rules
-/api/*  https://freestudymaterial1.onrender.com/api/:splat  200
-/ws/*   https://freestudymaterial1.onrender.com/ws/:splat   200
+# Cloudflare Pages Single-Page Application (SPA) Routing
+# API requests (/api/*) are dynamically routed by functions/api/[[catchall]].js
+# which provides multi-origin load balancing, automatic failover, and zero 405 errors.
 /*      /index.html                                          200

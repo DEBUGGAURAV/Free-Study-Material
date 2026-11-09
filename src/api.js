@@ -1121,6 +1121,12 @@ export const api = {
   },
   getSystemMemory: () => request("/admin/system/memory"),
   getHardwareSpecs: () => request("/admin/system/hardware"),
+  toggleClusterNode: (nodeId, isEnabled) =>
+    request("/admin/cluster/toggle-node", {
+      method: "POST",
+      body: JSON.stringify({ nodeId, isEnabled }),
+    }),
+  getClusterTelemetry: () => request("/admin/cluster/telemetry"),
   getSoftwareSpecs: () => request("/admin/system/software"),
   getSoftwareInfo: () => request("/admin/system/software"),
   triggerAntiSleepPulse: () => request("/admin/anti-sleep-pulse", { method: "POST" }),

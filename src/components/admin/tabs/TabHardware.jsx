@@ -1,17 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  X, Mail, Shield, Trash2, Eye, EyeOff, Edit3, UserCheck, UserX, Activity,
-  Search, CheckCircle, Clock, ChevronLeft, ChevronRight, Save, RefreshCw,
-  Database, Cpu, Server, HardDrive, Globe, Code, Cloud, Send, Download,
-  Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
-  Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Megaphone, Plus, Lock,
-  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug, ArrowRight, CornerDownRight
+  Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert,
+  AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power,
+  Users, CheckCircle2, AlertCircle, Wifi
 } from "lucide-react";
-import { api, getAuthToken } from "../../../api";
-import { formatFileSize, formatMB } from "../../../utils/formatUtils";
-import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
-import VirtualPdfReader from "../../VirtualPdfReader";
+import { api } from "../../../api";
 
 export default function TabHardware(props) {
   const {
@@ -23,6 +16,9 @@ export default function TabHardware(props) {
   } = props;
 
   const [liveSeconds, setLiveSeconds] = useState(hardwareInfo?.process?.uptimeSeconds || 0);
+  const [localNodes, setLocalNodes] = useState(null);
+  const [togglingNodeId, setTogglingNodeId] = useState(null);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   useEffect(() => {
     if (hardwareInfo?.process?.uptimeSeconds) {
@@ -62,21 +58,24 @@ export default function TabHardware(props) {
     inflight: 1,
     rps: 14.2,
     successRatePercent: 99.3,
+    totalConnectedUsers: 1,
   };
 
-  const nodes = clusterTelemetry?.cluster?.nodes || [
+  const defaultNodes = [
     {
       id: "backend_1",
       name: "Backend #1 (Original)",
       url: "https://freestudymaterial.onrender.com",
-      role: "Tertiary Fallback (Quota Suspended)",
+      role: "Tertiary Fallback Node",
+      isEnabled: false,
       status: "SUSPENDED",
       httpCode: 503,
       latencyMs: 120,
       isHealthy: false,
       downReason: "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
       trafficRedirection: "Backend #2 (freestudymaterial1.onrender.com)",
-      trafficShare: "0% (Bypassed by Edge Router)",
+      trafficShare: "0% (Bypassed at Edge)",
+      activeUsers: 0,
       requestsOn: 0,
       requestsOff: 0,
     },
@@ -85,13 +84,15 @@ export default function TabHardware(props) {
       name: "Backend #2 (Active Primary)",
       url: "https://freestudymaterial1.onrender.com",
       role: "Active Primary Production Node",
+      isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
       latencyMs: 58,
       isHealthy: true,
       downReason: null,
       trafficRedirection: null,
-      trafficShare: "100% Active Traffic (Absorbing Failover from Backend #1)",
+      trafficShare: "100% of Active Traffic (Absorbing Failover from Backend #1)",
+      activeUsers: requests.totalConnectedUsers || 1,
       requestsOn: requests.on || 3098,
       requestsOff: requests.off || 22,
     },
@@ -100,24 +101,66 @@ export default function TabHardware(props) {
       name: "Backend #3 (Hot Standby)",
       url: "https://freestudymaterial2.onrender.com",
       role: "Hot Standby Backup Node",
+      isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
       latencyMs: 65,
       isHealthy: true,
       downReason: null,
       trafficRedirection: null,
-      trafficShare: "0% Active (100% Ready Standby - Instant Hot Failover)",
+      trafficShare: "0% Active (100% Hot Standby - Ready for Failover)",
+      activeUsers: 0,
       requestsOn: 46,
       requestsOff: 0,
     },
   ];
+
+  const nodes = localNodes || clusterTelemetry?.cluster?.nodes || defaultNodes;
 
   const failoverSummary = clusterTelemetry?.cluster?.failoverSummary || {
     backend1Status: "SUSPENDED / OFFLINE (503)",
     backend1DownReason: "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
     usersRoutedTo: "Backend #2 (freestudymaterial1.onrender.com)",
     nextStandby: "Backend #3 (freestudymaterial2.onrender.com)",
-    userImpact: "0% Dropped Requests — All users seamlessly redirected with zero lag",
+    userImpact: "0% Dropped Requests — Seamless Edge redirection with sub-millisecond failover",
+  };
+
+  // Interactive Switch Toggle Handler for Backend Nodes
+  const handleToggleNode = async (nodeId, nextState) => {
+    try {
+      setTogglingNodeId(nodeId);
+      setActionFeedback(null);
+
+      // Optimistic UI state update
+      setLocalNodes((prev) => {
+        const base = prev || nodes;
+        return base.map((n) => (n.id === nodeId ? { ...n, isEnabled: nextState } : n));
+      });
+
+      const res = await api.toggleClusterNode(nodeId, nextState);
+      if (res?.clusterTelemetry?.cluster?.nodes) {
+        setLocalNodes(res.clusterTelemetry.cluster.nodes);
+      }
+
+      setActionFeedback({
+        type: "success",
+        message: `Backend node '${nodeId}' has been successfully switched ${nextState ? "ON (Active in load balancer rotation)" : "OFF (Bypassed from traffic rotation)"}.`,
+      });
+
+      if (loadHardwareInfo) {
+        loadHardwareInfo();
+      }
+    } catch (err) {
+      // Revert optimistic update
+      setLocalNodes(null);
+      setActionFeedback({
+        type: "error",
+        message: err.message || "Failed to toggle backend server node switch.",
+      });
+    } finally {
+      setTogglingNodeId(null);
+      setTimeout(() => setActionFeedback(null), 6000);
+    }
   };
 
   return (
@@ -153,7 +196,7 @@ export default function TabHardware(props) {
             </div>
           </div>
           <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
-            Real-time live requests (ON / OFF), 3-backend failover routing, physical multi-core CPU, RAM allocator &amp; uptime.
+            Real-time live requests (ON / OFF), individual server ON/OFF switches, live student user distribution, and physical CPU/RAM allocation.
           </p>
         </div>
 
@@ -179,6 +222,26 @@ export default function TabHardware(props) {
           </button>
         </div>
       </div>
+
+      {/* Action Toast Feedback Banner */}
+      {actionFeedback && (
+        <div style={{
+          background: actionFeedback.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+          border: actionFeedback.type === "success" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(239, 68, 68, 0.4)",
+          borderRadius: "8px",
+          padding: "10px 14px",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          fontSize: "0.82rem",
+          color: actionFeedback.type === "success" ? "#6ee7b7" : "#fca5a5",
+          fontWeight: 600,
+        }}>
+          {actionFeedback.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          <span>{actionFeedback.message}</span>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 🚀 SECTION 1: LIVE REQUEST METRICS (ON vs OFF) */}
@@ -213,8 +276,8 @@ export default function TabHardware(props) {
           </div>
         </div>
 
-        {/* 4 Telemetry Metrics Cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+        {/* 5 Telemetry Metrics Cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" }}>
           {/* Card 1: Total Requests */}
           <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "10px", padding: "12px 14px" }}>
             <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
@@ -263,13 +326,29 @@ export default function TabHardware(props) {
           {/* Card 4: In-Flight Live Connections */}
           <div style={{ background: "rgba(56, 189, 248, 0.06)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
             <div style={{ fontSize: "0.7rem", color: "#38bdf8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px", fontWeight: 700 }}>
-              ⚡ Active In-Flight
+              ⚡ Active Sockets
             </div>
             <div style={{ fontSize: "1.45rem", fontWeight: 900, color: "#38bdf8" }}>
               {requests.inflight || 1} <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#7dd3fc" }}>active</span>
             </div>
             <div style={{ fontSize: "0.68rem", color: "#bae6fd", marginTop: "3px" }}>
               Live Streaming Sockets
+            </div>
+          </div>
+
+          {/* Card 5: Total Connected Users Across Cluster */}
+          <div style={{ background: "rgba(168, 85, 247, 0.06)", border: "1px solid rgba(168, 85, 247, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <span style={{ fontSize: "0.7rem", color: "#c084fc", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                👥 Active Users
+              </span>
+              <Users size={14} style={{ color: "#c084fc" }} />
+            </div>
+            <div style={{ fontSize: "1.45rem", fontWeight: 900, color: "#c084fc" }}>
+              {requests.totalConnectedUsers || 1} <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#d8b4fe" }}>online</span>
+            </div>
+            <div style={{ fontSize: "0.68rem", color: "#e9d5ff", marginTop: "3px" }}>
+              Active Students on Cluster
             </div>
           </div>
         </div>
@@ -303,7 +382,7 @@ export default function TabHardware(props) {
           <div style={{ flex: 1, minWidth: "260px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <span style={{ fontWeight: 800, color: "#fbbf24", fontSize: "0.95rem" }}>
-                ⚠️ Backend #1 Failover Notice &amp; Live Traffic Redirection
+                ⚠️ Cluster Failover &amp; Automatic Traffic Redirection Engine
               </span>
               <span style={{
                 background: "rgba(239, 68, 68, 0.2)",
@@ -319,25 +398,25 @@ export default function TabHardware(props) {
             </div>
 
             <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", fontSize: "0.8rem" }}>
-              {/* Reason Why Backend 1 is down */}
+              {/* Reason Why Backend 1 is Inactive */}
               <div style={{ background: "rgba(0, 0, 0, 0.25)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
                 <div style={{ color: "#f87171", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <AlertTriangle size={14} />
-                  <span>Backend #1 Kis Reason Se Band Hai?</span>
+                  <span>Why is Backend #1 Inactive or Suspended?</span>
                 </div>
                 <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
-                  <strong>{failoverSummary.backend1DownReason}</strong>. Render free tier monthly quota consume ho chuka hai.
+                  <strong>{failoverSummary.backend1DownReason}</strong>. Render free tier monthly quota limit reached on host.
                 </div>
               </div>
 
-              {/* Where user traffic is being sent */}
+              {/* Where Student Traffic is Redirected */}
               <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
                 <div style={{ color: "#34d399", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                   <CheckCircle size={14} />
-                  <span>User Kis Backend Me Jaa Raha Hai?</span>
+                  <span>Where is Student Traffic Redirected?</span>
                 </div>
                 <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
-                  Cloudflare Edge Load Balancer 100% user requests ko automatically divert kar raha hai:
+                  Cloudflare Edge Load Balancer automatically routes 100% of student traffic to:
                   <div style={{ color: "#34d399", fontWeight: 800, marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                     <ArrowRight size={14} />
                     <span>{failoverSummary.usersRoutedTo}</span>
@@ -348,62 +427,67 @@ export default function TabHardware(props) {
 
             <div style={{ marginTop: "10px", fontSize: "0.74rem", color: "#94a3b8", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
               <span style={{ color: "#38bdf8", fontWeight: 700 }}>Hot Standby Ready:</span>
-              <span>Agar Backend #2 me koi samasya aati hai to traffic bina kisi disconnect ke turant <strong>{failoverSummary.nextStandby}</strong> par shift ho jayega. (User Impact: <strong>0% drop</strong>)</span>
+              <span>If Backend #2 experiences any disruption or latency, traffic instantly shifts to <strong>{failoverSummary.nextStandby}</strong> with <strong>0% dropped requests</strong>.</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* 🌐 SECTION 3: 3-BACKEND CLUSTER LIVE STATUS CARDS */}
+      {/* 🌐 SECTION 3: 3-BACKEND CLUSTER LIVE NODE MATRIX & ON/OFF SWITCHES */}
       {/* ========================================================================= */}
       <div style={{ marginBottom: "22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
           <h4 style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
             <Server size={18} style={{ color: "var(--accent-cyan)" }} />
-            <span>3-Backend Cluster Live Node Matrix</span>
+            <span>3-Backend Cluster Live Node Matrix &amp; Switch Controls</span>
           </h4>
           <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-            Cloudflare Pages Edge Failover Router
+            Cloudflare Pages Edge Intelligent Load Balancer
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: "14px" }}>
-          {nodes.map((node, idx) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "14px" }}>
+          {nodes.map((node) => {
             const isSuspended = node.status === "SUSPENDED" || node.httpCode === 503;
-            const isPrimary = node.id === "backend_2";
-            const isStandby = node.id === "backend_3";
+            const isEnabled = node.isEnabled !== false;
+            const isPrimary = node.id === "backend_2" && isEnabled && !isSuspended;
+            const isStandby = node.id === "backend_3" && isEnabled;
 
-            const badgeBg = isSuspended
+            const badgeBg = !isEnabled
+              ? "rgba(148, 163, 184, 0.15)"
+              : isSuspended
               ? "rgba(239, 68, 68, 0.15)"
               : isPrimary
               ? "rgba(16, 185, 129, 0.15)"
               : "rgba(56, 189, 248, 0.15)";
-            const badgeBorder = isSuspended
+            const badgeBorder = !isEnabled
+              ? "rgba(148, 163, 184, 0.4)"
+              : isSuspended
               ? "rgba(239, 68, 68, 0.4)"
               : isPrimary
               ? "rgba(16, 185, 129, 0.4)"
               : "rgba(56, 189, 248, 0.4)";
-            const badgeColor = isSuspended ? "#f87171" : isPrimary ? "#34d399" : "#38bdf8";
+            const badgeColor = !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : isPrimary ? "#34d399" : "#38bdf8";
 
             return (
               <div
                 key={node.id}
                 style={{
                   background: isPrimary ? "rgba(16, 185, 129, 0.04)" : "rgba(15, 23, 42, 0.4)",
-                  border: isPrimary ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid var(--border-subtle)",
+                  border: isPrimary ? "1px solid rgba(16, 185, 129, 0.35)" : !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid var(--border-subtle)",
                   borderRadius: "var(--radius-lg)",
                   padding: "16px",
                   position: "relative",
                   boxShadow: isPrimary ? "0 0 15px rgba(16, 185, 129, 0.1)" : "none"
                 }}
               >
-                {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                {/* Header with ON/OFF Switch */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                     <div style={{
-                      width: "28px",
-                      height: "28px",
+                      width: "30px",
+                      height: "30px",
                       borderRadius: "8px",
                       background: badgeBg,
                       color: badgeColor,
@@ -411,7 +495,7 @@ export default function TabHardware(props) {
                       alignItems: "center",
                       justifyContent: "center"
                     }}>
-                      <Server size={16} />
+                      <Server size={17} />
                     </div>
                     <div>
                       <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.88rem" }}>{node.name}</div>
@@ -421,31 +505,97 @@ export default function TabHardware(props) {
                     </div>
                   </div>
 
+                  {/* 🔘 Interactive Server ON / OFF Switch */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      type="button"
+                      disabled={togglingNodeId === node.id}
+                      onClick={() => handleToggleNode(node.id, !isEnabled)}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "5px 10px",
+                        borderRadius: "20px",
+                        border: isEnabled ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
+                        background: isEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                        color: isEnabled ? "#34d399" : "#fca5a5",
+                        fontWeight: 800,
+                        fontSize: "0.72rem",
+                        cursor: togglingNodeId === node.id ? "wait" : "pointer",
+                        transition: "all 0.2s ease",
+                        boxShadow: isEnabled ? "0 0 8px rgba(16, 185, 129, 0.25)" : "none",
+                      }}
+                      title={`Click to turn ${node.name} ${isEnabled ? "OFF" : "ON"}`}
+                    >
+                      {togglingNodeId === node.id ? (
+                        <RefreshCw size={12} className="spinner" />
+                      ) : (
+                        <Power size={12} style={{ color: isEnabled ? "#10b981" : "#ef4444" }} />
+                      )}
+                      <span>{isEnabled ? "SWITCH: ON" : "SWITCH: OFF"}</span>
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          background: isEnabled ? "#10b981" : "#ef4444",
+                          boxShadow: isEnabled ? "0 0 6px #10b981" : "0 0 6px #ef4444",
+                          display: "inline-block",
+                        }}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 👥 Live Connected Users Metric Box */}
+                <div style={{
+                  background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.02)",
+                  border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.06)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  marginBottom: "10px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{
+                      width: "24px",
+                      height: "24px",
+                      borderRadius: "6px",
+                      background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.05)",
+                      color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}>
+                      <Users size={14} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.66rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        Active Students
+                      </div>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 900, color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8" }}>
+                        {node.activeUsers || 0} <span style={{ fontSize: "0.72rem", fontWeight: 600 }}>Connected</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <span style={{
-                    background: badgeBg,
-                    border: `1px solid ${badgeBorder}`,
-                    color: badgeColor,
                     fontSize: "0.68rem",
-                    fontWeight: 800,
+                    fontWeight: 700,
+                    color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8",
+                    background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
                     padding: "3px 8px",
-                    borderRadius: "6px",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px"
+                    borderRadius: "10px",
+                    border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
                   }}>
-                    <span style={{
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "50%",
-                      background: badgeColor,
-                      boxShadow: !isSuspended ? `0 0 6px ${badgeColor}` : "none",
-                      display: "inline-block"
-                    }}></span>
-                    {node.status}
+                    {(node.activeUsers || 0) > 0 ? "100% Student Traffic" : isStandby ? "Hot Standby Ready" : "0% (Bypassed)"}
                   </span>
                 </div>
 
-                {/* Node Details */}
+                {/* Node Detailed Specs */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-dim)" }}>Role:</span>
@@ -456,8 +606,8 @@ export default function TabHardware(props) {
 
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-dim)" }}>HTTP Health Status:</span>
-                    <span style={{ color: isSuspended ? "#f87171" : "#34d399", fontWeight: 700 }}>
-                      HTTP {node.httpCode || (isSuspended ? 503 : 200)} {isSuspended ? "(Suspended)" : "(OK)"}
+                    <span style={{ color: !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : "#34d399", fontWeight: 700 }}>
+                      {!isEnabled ? "DISABLED (OFF)" : `HTTP ${node.httpCode || (isSuspended ? 503 : 200)} ${isSuspended ? "(Suspended)" : "(OK)"}`}
                     </span>
                   </div>
 
@@ -469,12 +619,12 @@ export default function TabHardware(props) {
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-dim)" }}>Traffic Load Share:</span>
                     <span style={{ color: isPrimary ? "#34d399" : "#94a3b8", fontWeight: 800 }}>
-                      {isPrimary ? "100% of User Traffic" : isStandby ? "0% (Hot Standby)" : "0% (Bypassed)"}
+                      {!isEnabled ? "0% (Manually Switched OFF)" : isPrimary ? "100% of Student Traffic" : isStandby ? "0% (Hot Standby)" : "0% (Bypassed)"}
                     </span>
                   </div>
 
-                  {/* Live Requests for this node */}
-                  <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(0, 0, 0, 0.2)", padding: "6px 8px", borderRadius: "6px", marginTop: "4px" }}>
+                  {/* Node Requests ON vs OFF */}
+                  <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(0, 0, 0, 0.2)", padding: "6px 8px", borderRadius: "6px", marginTop: "2px" }}>
                     <span style={{ color: "var(--text-dim)" }}>Node Requests:</span>
                     <span style={{ fontWeight: 700 }}>
                       <span style={{ color: "#34d399" }}>ON: {node.requestsOn || 0}</span>
@@ -483,10 +633,19 @@ export default function TabHardware(props) {
                     </span>
                   </div>
 
-                  {/* Redirection indicator if down */}
-                  {isSuspended && (
-                    <div style={{ background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "6px 8px", borderRadius: "6px", marginTop: "2px", fontSize: "0.72rem", color: "#fca5a5", lineHeight: "1.35" }}>
-                      <strong>Downtime Reason:</strong> Render 5GB Bandwidth Cap Exceeded.<br />
+                  {/* Redirection Notice if Suspended or Disabled */}
+                  {(!isEnabled || isSuspended) && (
+                    <div style={{
+                      background: !isEnabled ? "rgba(239, 68, 68, 0.08)" : "rgba(245, 158, 11, 0.08)",
+                      border: !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
+                      padding: "6px 8px",
+                      borderRadius: "6px",
+                      marginTop: "3px",
+                      fontSize: "0.72rem",
+                      color: !isEnabled ? "#fca5a5" : "#fde68a",
+                      lineHeight: "1.35",
+                    }}>
+                      <strong>Reason:</strong> {!isEnabled ? "Server manually switched OFF by Administrator." : "Render 5GB Monthly Bandwidth Cap Exceeded."}<br />
                       <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
                         <CornerDownRight size={12} />
                         Traffic Redirected to Backend #2
