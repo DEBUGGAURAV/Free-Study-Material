@@ -1218,11 +1218,28 @@ export const api = {
       return { flags: { maintenanceMode: false, allowNotesDownload: true } };
     }
   },
-  toggleMaintenanceMode: (payload = {}) =>
-    request("/admin/maintenance/toggle", {
+  toggleMaintenanceMode: async (payload = {}) => {
+    const res = await request("/admin/maintenance/toggle", {
       method: "POST",
       body: JSON.stringify(payload),
-    }),
+    });
+
+    // Direct background sync with Server #3 (freestudymaterial2)
+    try {
+      const token = getAuthToken();
+      fetch("https://freestudymaterial2.onrender.com/api/admin/maintenance/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Cluster-Sync": "fsm_cluster_sync_2026",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
+      }).catch(() => {});
+    } catch (_) {}
+
+    return res;
+  },
   toggleDownloadAllowed: async (allowDownload, reason, schedule) => {
     invalidateClientNotesCache();
     const res = await request("/admin/download/toggle", {

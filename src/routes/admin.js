@@ -4116,6 +4116,9 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
       });
     } catch (_) {}
 
+    // Broadcast maintenance state to Server #3 and all cluster nodes
+    broadcastMaintenanceToCluster(techSettings, req);
+
     return res.json({
       success: true,
       maintenanceMode: techSettings.maintenanceMode,
@@ -4123,6 +4126,85 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
         ? "Maintenance Mode ACTIVATED. Public access paused while hosting remains active."
         : "Maintenance Mode DEACTIVATED. Platform is now 100% live for all students.",
       settings: techSettings,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+const CLUSTER_BACKENDS = [
+  "https://freestudymaterial2.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial.onrender.com",
+];
+
+function broadcastMaintenanceToCluster(payload, req = null) {
+  const token = req ? (req.headers["authorization"] || "") : "";
+  for (const origin of CLUSTER_BACKENDS) {
+    try {
+      fetch(`${origin}/api/admin/maintenance/sync`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Cluster-Sync": "fsm_cluster_sync_2026",
+          ...(token ? { Authorization: token } : {}),
+        },
+        body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
+        signal: AbortSignal.timeout(3500),
+      }).catch(() => {});
+    } catch (_) {}
+  }
+}
+
+/**
+ * POST /api/admin/maintenance/sync
+ * Connects and synchronizes Server #3 (and all cluster nodes) with maintenance state
+ */
+router.post("/maintenance/sync", (req, res) => {
+  try {
+    const { active, title, message, estimatedEnd, syncToken } = req.body || {};
+    const authHeader = req.headers.authorization;
+    let isAuthorized = false;
+
+    if (authHeader) {
+      try {
+        const token = authHeader.replace(/^Bearer\s+/i, "");
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded && (decoded.role === "admin" || decoded.role === "half_admin")) {
+          isAuthorized = true;
+        }
+      } catch (_) {}
+    }
+
+    if (req.headers["x-cluster-sync"] === "fsm_cluster_sync_2026" || syncToken === "fsm_cluster_sync_2026") {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, message: "Unauthorized cluster sync" });
+    }
+
+    if (active !== undefined) techSettings.maintenanceMode = Boolean(active);
+    if (title) techSettings.maintenanceTitle = title;
+    if (message) techSettings.maintenanceMessage = message;
+    if (estimatedEnd !== undefined) techSettings.maintenanceEstimatedEnd = estimatedEnd;
+
+    try {
+      const { updateMaintenanceConfig } = require("../middleware/maintenance");
+      updateMaintenanceConfig({
+        active: Boolean(techSettings.maintenanceMode),
+        title: techSettings.maintenanceTitle,
+        message: techSettings.maintenanceMessage,
+        estimatedEnd: techSettings.maintenanceEstimatedEnd,
+        bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
+      });
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || "freestudymaterial2.onrender.com",
+      maintenanceMode: techSettings.maintenanceMode,
+      message: "Maintenance state connected and synchronized across cluster node.",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
