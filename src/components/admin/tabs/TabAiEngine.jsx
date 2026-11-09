@@ -45,6 +45,7 @@ export default function TabAiEngine() {
   const [testingGemini, setTestingGemini] = useState(false);
   const [testingCloudflare, setTestingCloudflare] = useState(false);
   const [testingTurso, setTestingTurso] = useState(false);
+  const [testingNvidia, setTestingNvidia] = useState(false);
   const [testingGitHub, setTestingGitHub] = useState(false);
   const [testingHuggingFace, setTestingHuggingFace] = useState(false);
   const [testingOpenRouter, setTestingOpenRouter] = useState(false);
@@ -286,6 +287,7 @@ export default function TabAiEngine() {
       if (provider === "gemini") setTestingGemini(true);
       if (provider === "cloudflare") setTestingCloudflare(true);
       if (provider === "turso") setTestingTurso(true);
+      if (provider === "nvidia") setTestingNvidia(true);
       if (provider === "github") setTestingGitHub(true);
       if (provider === "huggingface" || provider === "hf") setTestingHuggingFace(true);
       if (provider === "openrouter") setTestingOpenRouter(true);
@@ -303,6 +305,7 @@ export default function TabAiEngine() {
       setTestingGemini(false);
       setTestingCloudflare(false);
       setTestingTurso(false);
+      setTestingNvidia(false);
       setTestingGitHub(false);
       setTestingHuggingFace(false);
       setTestingOpenRouter(false);
@@ -363,6 +366,8 @@ export default function TabAiEngine() {
     groqApiKeyConfigured: false,
     geminiApiKeyConfigured: false,
     cloudflareAiConfigured: false,
+    nvidiaEnabled: true,
+    nvidiaConfigured: false,
     githubModelsEnabled: true,
     githubModelsConfigured: false,
     huggingFaceEnabled: true,
@@ -595,16 +600,16 @@ export default function TabAiEngine() {
             <span>⚡ Multi-Tier AI Engine Fleet</span>
           </h4>
           <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontWeight: 700, border: "1px solid rgba(56, 189, 248, 0.3)" }}>
-            7 Active Providers
+            8 Active Providers
           </span>
         </div>
 
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", background: "rgba(15, 23, 42, 0.7)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
           {[
-            { id: "all", label: "🌟 All Engines (7)" },
-            { id: "primary", label: "⚡ Core LPUs (Groq / Gemini)" },
+            { id: "all", label: "🌟 All Engines (8)" },
+            { id: "primary", label: "⚡ Core LPUs & GPUs (Groq / Gemini / NVIDIA)" },
             { id: "edge", label: "🌐 Edge & Cache (Cloudflare / Turso)" },
-            { id: "zero_card", label: "🛡️ 100% Zero-Card (OpenRouter / GitHub / HF)" },
+            { id: "zero_card", label: "🛡️ 100% Zero-Card (NVIDIA / OpenRouter / GitHub / HF)" },
           ].map((f) => (
             <button
               key={f.id}
@@ -1485,6 +1490,129 @@ export default function TabAiEngine() {
                 >
                   <Zap size={11} className={testingOpenRouter ? "animate-spin" : ""} />
                   <span>{testingOpenRouter ? "Pinging..." : "Test Ping"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============================================================== */}
+        {/* 8. NVIDIA NIM (DGX Cloud • Llama 3.3 70B & Vision on H100)      */}
+        {/* ============================================================== */}
+        {(engineFilter === "all" || engineFilter === "primary" || engineFilter === "zero_card") && (
+          <div
+            style={{
+              background: settings.nvidiaEnabled !== false ? "linear-gradient(180deg, rgba(118, 185, 0, 0.08) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
+              border: settings.nvidiaEnabled !== false ? "1px solid rgba(118, 185, 0, 0.4)" : "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "16px",
+              padding: "18px 20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+              gap: "14px",
+              position: "relative",
+              boxShadow: settings.nvidiaEnabled !== false ? "0 10px 30px rgba(118, 185, 0, 0.12)" : "none",
+              backdropFilter: "blur(12px)",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(118, 185, 0, 0.25), rgba(34, 197, 94, 0.2))", border: "1px solid rgba(118, 185, 0, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                    🟢
+                  </div>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                        NVIDIA NIM (DGX Cloud)
+                      </h4>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(118, 185, 0, 0.2)", color: "#84cc16", fontWeight: 700 }}>
+                        Llama 3.3 70B &amp; Vision
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                      Hardware: NVIDIA H100 / H200 Tensor Core GPUs
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggle("nvidia", settings.nvidiaEnabled !== false)}
+                  style={{
+                    background: settings.nvidiaEnabled !== false ? "linear-gradient(135deg, #76b900, #4d7c0f)" : "rgba(255, 255, 255, 0.1)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "999px",
+                    padding: "5px 12px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    boxShadow: settings.nvidiaEnabled !== false ? "0 2px 10px rgba(118, 185, 0, 0.4)" : "none",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Power size={12} />
+                  <span>{settings.nvidiaEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
+                </button>
+              </div>
+
+              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
+                Enterprise accelerated inference powered by NVIDIA TensorRT-LLM on DGX Cloud. 1,000 free API credits on build.nvidia.com.
+              </p>
+            </div>
+
+            {/* Zero-Card Guarantee & Spec Badges */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.72rem" }}>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Zero Card Status</span>
+                <strong style={{ color: "#34d399" }}>💳 1,000 Free Credits</strong>
+              </div>
+              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Inference Engine</span>
+                <strong style={{ color: "#a3e635" }}>TensorRT-LLM H100</strong>
+              </div>
+            </div>
+
+            {/* Status & Action Footer */}
+            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <ShieldCheck size={14} color={settings.nvidiaConfigured ? "#34d399" : "#fbbf24"} />
+                <span style={{ color: settings.nvidiaConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
+                  {settings.nvidiaConfigured ? "Protected in .env" : "⚠️ Needs NVIDIA_API_KEY"}
+                </span>
+              </div>
+
+              <div style={{ display: "flex", gap: "5px" }}>
+                <a
+                  href="https://build.nvidia.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    fontSize: "0.7rem",
+                    color: "#94a3b8",
+                    padding: "3px 7px",
+                    borderRadius: "5px",
+                    textDecoration: "none",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  Portal ↗
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleTestPing("nvidia")}
+                  disabled={testingNvidia || !settings.nvidiaConfigured}
+                  className="btn-secondary"
+                  style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.nvidiaConfigured ? 1 : 0.5 }}
+                >
+                  <Zap size={11} className={testingNvidia ? "animate-spin" : ""} />
+                  <span>{testingNvidia ? "Pinging..." : "Test Ping"}</span>
                 </button>
               </div>
             </div>

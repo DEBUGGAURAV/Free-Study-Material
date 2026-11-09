@@ -111,3 +111,5 @@ services:
         sync: false
       - key: TURSO_HELP_AUTH_TOKEN
         sync: false
+      - key: NVIDIA_API_KEY
+        sync: false

@@ -579,8 +579,117 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
   }
 }
 
+/**
+ * 8. 🟢 NVIDIA NIM (NVIDIA Inference Microservices • DGX Cloud • H100 Tensor Core GPUs)
+ * Text: meta/llama-3.3-70b-instruct or nvidia/llama-3.1-nemotron-70b-instruct
+ * Vision: meta/llama-3.2-11b-vision-instruct
+ */
+async function queryNvidiaText(query, context = "", options = {}) {
+  const apiKey = (options.apiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim();
+  if (!apiKey) throw new Error("NVIDIA_API_KEY_MISSING");
+
+  const model = options.model || process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct";
+  const userContent = context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
+
+  try {
+    const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        temperature: typeof options.temperature === "number" ? options.temperature : 0.2,
+        max_tokens: options.maxTokens || 650,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`NVIDIA NIM Error (${res.status}): ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const answer = (data.choices?.[0]?.message?.content || "").trim();
+    if (!answer) throw new Error("Empty NVIDIA NIM response");
+    return { answer, model, provider: "nvidia" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function queryNvidiaVision(query, context = "", imageBase64, imageMimeType = "image/jpeg", options = {}) {
+  const apiKey = (options.apiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim();
+  if (!apiKey) throw new Error("NVIDIA_API_KEY_MISSING");
+
+  const cleanB64 = getCleanBase64(imageBase64);
+  const safeMime = getSafeMimeType(imageMimeType);
+  const model = options.model || process.env.NVIDIA_VISION_MODEL || "meta/llama-3.2-11b-vision-instruct";
+
+  const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
+First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
+End with 1-line "💡 Exam Takeaway".
+${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
+
+  try {
+    const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: promptText },
+              { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+            ],
+          },
+        ],
+        temperature: typeof options.temperature === "number" ? options.temperature : 0.15,
+        max_tokens: options.maxTokens || 700,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`NVIDIA NIM Vision Error (${res.status}): ${errText.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const answer = (data.choices?.[0]?.message?.content || "").trim();
+    if (!answer) throw new Error("Empty NVIDIA NIM Vision response");
+    return { answer, model, provider: "nvidia_vision" };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function isProviderConfigured(provider) {
   switch (provider) {
+    case "nvidia":
+    case "nvidia-nim":
+      return Boolean((process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim());
     case "github":
       return Boolean((process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "").trim());
     case "huggingface":
@@ -602,6 +711,8 @@ function isProviderConfigured(provider) {
 }
 
 module.exports = {
+  queryNvidiaText,
+  queryNvidiaVision,
   queryCerebras,
   querySambaNovaText,
   querySambaNovaVision,

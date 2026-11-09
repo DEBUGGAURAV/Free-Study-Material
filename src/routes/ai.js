@@ -715,6 +715,7 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     else if (provider === "cloudflare" || provider === "cf" || provider === "cloudflare-ai") update.cloudflareAiEnabled = Boolean(enabled);
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);
     else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
+    else if (provider === "nvidia" || provider === "nvidia-nim") update.nvidiaEnabled = Boolean(enabled);
     else if (provider === "cerebras") update.cerebrasEnabled = Boolean(enabled);
     else if (provider === "sambanova") update.sambanovaEnabled = Boolean(enabled);
     else if (provider === "mistral") update.mistralEnabled = Boolean(enabled);

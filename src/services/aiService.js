@@ -14,6 +14,8 @@ const { logAiSearchToTurso, getAiSearchLogsFromTurso } = require("./tursoService
 const { getHelpBotToken, getHelpChatId } = require("./helpTicketService");
 const { queryCloudflareWorkersAi, isCloudflareAiAvailable } = require("./cloudflareWorkersAiService");
 const {
+  queryNvidiaText,
+  queryNvidiaVision,
   queryCerebras,
   querySambaNovaText,
   querySambaNovaVision,
@@ -31,6 +33,7 @@ const DEFAULT_AI_SETTINGS = {
   groqEnabled: true,
   geminiEnabled: true,
   cloudflareAiEnabled: true,
+  nvidiaEnabled: true,
   githubModelsEnabled: true,
   huggingFaceEnabled: true,
   openRouterEnabled: true,
@@ -59,6 +62,7 @@ const DEFAULT_AI_SETTINGS = {
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
   geminiApiKey: "",
+  nvidiaApiKey: "",
   githubToken: "",
   huggingFaceApiKey: "",
   openRouterApiKey: "",
@@ -133,15 +137,13 @@ async function loadAiSettings() {
           // Environment variables take precedence if set
           groqApiKey: data.groqApiKey || process.env.GROQ_API_KEY || "",
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
+          nvidiaApiKey: data.nvidiaApiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "",
           cerebrasApiKey: data.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "",
           sambanovaApiKey: data.sambanovaApiKey || process.env.SAMBANOVA_API_KEY || "",
           mistralApiKey: data.mistralApiKey || process.env.MISTRAL_API_KEY || "",
           githubToken: data.githubToken || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "",
           huggingFaceApiKey: data.huggingFaceApiKey || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "",
           openRouterApiKey: data.openRouterApiKey || process.env.OPENROUTER_API_KEY || "",
-          cerebrasApiKey: data.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "",
-          sambanovaApiKey: data.sambanovaApiKey || process.env.SAMBANOVA_API_KEY || "",
-          mistralApiKey: data.mistralApiKey || process.env.MISTRAL_API_KEY || "",
           cohereApiKey: data.cohereApiKey || process.env.COHERE_API_KEY || "",
         };
 
@@ -156,6 +158,7 @@ async function loadAiSettings() {
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
         currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
+        currentAiSettings.nvidiaApiKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
         currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
         currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
         currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
@@ -168,6 +171,7 @@ async function loadAiSettings() {
     } else {
       currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
       currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
+      currentAiSettings.nvidiaApiKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
       currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
       currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
       currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
@@ -207,6 +211,9 @@ function getApiKey(provider) {
   }
   if (provider === "gemini") {
     return (process.env.GEMINI_API_KEY || currentAiSettings.geminiApiKey || "").trim();
+  }
+  if (provider === "nvidia" || provider === "nvidia-nim") {
+    return (process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || currentAiSettings.nvidiaApiKey || "").trim();
   }
   if (provider === "cerebras") {
     return (process.env.CEREBRAS_API_KEY || currentAiSettings.cerebrasApiKey || "").trim();
@@ -593,6 +600,24 @@ Strict Rules:
     }
   }
 
+  // Tier 2B: NVIDIA NIM Llama 3.2 Vision Failover (H100 Tensor Core GPU)
+  if (!extracted && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+    try {
+      const nvRes = await queryNvidiaVision("", "", cleanB64, imageMimeType, {
+        rawPrompt: ocrPrompt,
+        maxTokens: 420,
+        temperature: 0.05,
+        timeoutMs: 8000,
+        apiKey: getApiKey("nvidia"),
+      });
+      extracted = (nvRes.answer || "").trim();
+      provider = "nvidia_vision";
+      model = nvRes.model;
+    } catch (nvErr) {
+      console.warn("[HANDWRITING-OCR] NVIDIA NIM Vision notice:", nvErr.message);
+    }
+  }
+
   // Tier 3: SambaNova Cloud Llama 3.2 Vision Failover
   if (!extracted && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
     try {
@@ -784,6 +809,22 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       }
     }
 
+    // Tier 1B: NVIDIA NIM Llama 3.2 Vision Failover (NVIDIA H100 GPU)
+    if (!finalAnswer && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+      try {
+        const nvRes = await queryNvidiaVision(cleanQuery, context, imageBase64, imageMimeType, {
+          ...options,
+          apiKey: getApiKey("nvidia"),
+        });
+        finalAnswer = nvRes.answer;
+        finalProvider = "nvidia_vision";
+        finalModel = nvRes.model;
+      } catch (nvErr) {
+        console.warn("[AI-ENGINE] ⚠️ NVIDIA NIM Vision notice:", nvErr.message);
+        failoverOccurred = true;
+      }
+    }
+
     // Tier 1C: SambaNova Cloud Llama 3.2 Vision Failover
     if (!finalAnswer && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
       try {
@@ -937,6 +978,22 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       } catch (geminiErr) {
         console.warn("[AI-ENGINE] ⚠️ Gemini failover notice:", geminiErr.message);
       }
+    }
+  }
+
+  // Tier 4B (Text): NVIDIA NIM DGX Cloud (Llama 3.3 70B • TensorRT-LLM on H100 GPU)
+  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+    try {
+      const nvRes = await queryNvidiaText(cleanQuery, context, {
+        ...options,
+        apiKey: getApiKey("nvidia"),
+      });
+      finalAnswer = nvRes.answer;
+      finalProvider = "nvidia";
+      finalModel = nvRes.model;
+      failoverOccurred = true;
+    } catch (nvErr) {
+      console.warn("[AI-ENGINE] ⚠️ NVIDIA NIM text notice:", nvErr.message);
     }
   }
 
@@ -1103,6 +1160,9 @@ function getAiTelemetry() {
       cloudflareAiLimit: currentAiSettings.cloudflareAiLimit || 1000,
       cloudflareAiConfigured: isCloudflareAiAvailable(),
       cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
+      nvidiaEnabled: currentAiSettings.nvidiaEnabled !== false,
+      nvidiaConfigured: Boolean(getApiKey("nvidia")),
+      nvidiaModel: "meta/llama-3.3-70b-instruct",
       githubModelsEnabled: currentAiSettings.githubModelsEnabled !== false,
       githubModelsConfigured: isProviderConfigured("github"),
       huggingFaceEnabled: currentAiSettings.huggingFaceEnabled !== false,
@@ -1168,6 +1228,7 @@ async function updateAiSettings({
   circleSearchCooldownSec,
   groqApiKey,
   geminiApiKey,
+  nvidiaApiKey,
   cerebrasApiKey,
   sambanovaApiKey,
   mistralApiKey,
@@ -1175,6 +1236,7 @@ async function updateAiSettings({
   huggingFaceApiKey,
   openRouterApiKey,
   cohereApiKey,
+  nvidiaEnabled,
   huggingFaceEnabled,
   openRouterEnabled,
   cerebrasEnabled,
@@ -1189,6 +1251,7 @@ async function updateAiSettings({
   if (typeof groqEnabled === "boolean") currentAiSettings.groqEnabled = groqEnabled;
   if (typeof geminiEnabled === "boolean") currentAiSettings.geminiEnabled = geminiEnabled;
   if (typeof cloudflareAiEnabled === "boolean") currentAiSettings.cloudflareAiEnabled = cloudflareAiEnabled;
+  if (typeof nvidiaEnabled === "boolean") currentAiSettings.nvidiaEnabled = nvidiaEnabled;
   if (typeof edgeProxyEnabled === "boolean") currentAiSettings.edgeProxyEnabled = edgeProxyEnabled;
   if (typeof circleSearchEnabled === "boolean") currentAiSettings.circleSearchEnabled = circleSearchEnabled;
   if (typeof circleSearchDailyLimit === "number" && circleSearchDailyLimit > 0) currentAiSettings.circleSearchDailyLimit = circleSearchDailyLimit;
@@ -1206,6 +1269,9 @@ async function updateAiSettings({
   }
   if (typeof geminiApiKey === "string" && geminiApiKey.trim()) {
     currentAiSettings.geminiApiKey = geminiApiKey.trim();
+  }
+  if (typeof nvidiaApiKey === "string" && nvidiaApiKey.trim()) {
+    currentAiSettings.nvidiaApiKey = nvidiaApiKey.trim();
   }
   if (typeof githubToken === "string" && githubToken.trim()) {
     currentAiSettings.githubToken = githubToken.trim();
@@ -1275,6 +1341,11 @@ async function testAiProvider(provider) {
   } else if (provider === "cloudflare") {
     const res = await queryCloudflareWorkersAi("Test ping. Reply 'Cloudflare AI Ready' in 3 words.", "College test");
     return { provider: "cloudflare", success: true, answer: res, latencyMs: Date.now() - start };
+  } else if (provider === "nvidia" || provider === "nvidia-nim") {
+    const apiKey = getApiKey("nvidia");
+    if (!apiKey) throw new Error("NVIDIA_API_KEY is missing. Add it in Render or Admin Studio.");
+    const res = await queryNvidiaText("Test ping. Reply 'NVIDIA NIM Ready' in 3 words.", "College test", { apiKey });
+    return { provider: "nvidia", success: true, answer: res.answer, latencyMs: Date.now() - start };
   } else if (provider === "turso") {
     const { getCachedCircleSolution, computeQueryHash } = require("./tursoCircleSearchService");
     await getCachedCircleSolution(computeQueryHash("test-ping"));
@@ -1410,6 +1481,15 @@ function getAiEngineAuditDetails(provider, model, cached) {
       tier: "🧠 Tier 3 (Multimodal Vision & Deep Academic Reasoning)",
       model: model || "gemini-flash-lite-latest",
       speed: "⚡ ~0.4s Cloud TPU",
+    };
+  }
+
+  if (p.includes("nvidia")) {
+    return {
+      name: "🟢 NVIDIA NIM DGX Cloud",
+      tier: "⚡ Hardware Tensor Core Tier (NVIDIA H100 GPU)",
+      model: model || "meta/llama-3.3-70b-instruct",
+      speed: "⚡ ~250 tok/sec (TensorRT-LLM)",
     };
   }
 
