@@ -796,7 +796,24 @@ export default function AuthModal({
               return setError("Google Sign-In failed: " + err);
             }
             if (tokenResponse.access_token) {
-              await processGoogleLogin({ accessToken: tokenResponse.access_token });
+              let gInfo = null;
+              try {
+                const uRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+                });
+                if (uRes.ok) {
+                  gInfo = await uRes.json();
+                }
+              } catch (_) {}
+
+              await processGoogleLogin({
+                accessToken: tokenResponse.access_token,
+                email: gInfo?.email || "",
+                name: gInfo?.name || gInfo?.given_name || "",
+                picture: gInfo?.picture || "",
+                sub: gInfo?.sub || "",
+                email_verified: gInfo?.email_verified || false,
+              });
             } else {
               setLoading(false);
               setError("No access token received from Google.");

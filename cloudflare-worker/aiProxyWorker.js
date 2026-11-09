@@ -1198,11 +1198,11 @@ export default {
       }
     }
 
-    // 4. Multi-Origin Reverse Proxy with Instant Failover (#1: freestudymaterial, #2: freestudymaterial1, #3: freestudymaterial2)
+    // 4. Multi-Origin Reverse Proxy with Instant Failover (#1: freestudymaterial1, #2: freestudymaterial2, #3: freestudymaterial)
     const origins = [
-      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
       (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
       (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
+      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
     ].filter(Boolean);
 
     for (let i = 0; i < origins.length; i++) {
@@ -1214,7 +1214,20 @@ export default {
         if (originRes.status >= 502 && originRes.status <= 504 && i < origins.length - 1) {
           continue;
         }
-        const resHeaders = new Headers(originRes.headers);
+        const resHeaders = new Headers();
+        for (const [k, v] of originRes.headers.entries()) {
+          if (k.toLowerCase() !== "set-cookie") {
+            resHeaders.set(k, v);
+          }
+        }
+        if (typeof originRes.headers.getSetCookie === "function") {
+          for (const c of originRes.headers.getSetCookie()) {
+            resHeaders.append("Set-Cookie", c);
+          }
+        } else {
+          const raw = originRes.headers.get("set-cookie");
+          if (raw) resHeaders.set("set-cookie", raw);
+        }
         applyCors(resHeaders, request);
         resHeaders.set("X-Upstream-Origin", origin);
         return new Response(originRes.body, {

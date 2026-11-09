@@ -11,9 +11,9 @@ binding = "AI"
 crons = ["*/10 * * * *"]
 
 [vars]
-ORIGIN_URL = "https://freestudymaterial.onrender.com"
-BACKUP_ORIGIN_URL_1 = "https://freestudymaterial1.onrender.com"
-BACKUP_ORIGIN_URL_2 = "https://freestudymaterial2.onrender.com"
+ORIGIN_URL = "https://freestudymaterial1.onrender.com"
+BACKUP_ORIGIN_URL_1 = "https://freestudymaterial2.onrender.com"
+BACKUP_ORIGIN_URL_2 = "https://freestudymaterial.onrender.com"
 GROQ_MODEL = "openai/gpt-oss-20b"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 
