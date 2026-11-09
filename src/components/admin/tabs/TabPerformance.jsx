@@ -346,9 +346,7 @@ export default function TabPerformance(props) {
                 <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Edge Hit Ratio</div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#34d399", marginTop: "2px" }}>
-                    {cdnStats?.hitRatio && cdnStats.hitRatio !== "0.0%" && cdnStats.hitRatio !== "0%"
-                      ? cdnStats.hitRatio
-                      : (cdnStats?.edgeCdn?.cachedFilesCount > 0 ? "99.4%" : (cdnStats?.edgeCdn?.isPurged ? "0.0%" : "99.4%"))}
+                    {cdnStats?.hitRatio || "0%"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
                     Hits: {cdnStats?.hits ?? 0} • Misses: {cdnStats?.misses ?? 0}
