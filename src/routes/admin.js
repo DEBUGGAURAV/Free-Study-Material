@@ -52,6 +52,12 @@ try {
   triggerManualPulse = antiSleep.triggerManualPulse;
 } catch {}
 
+let getClusterTelemetry = null;
+try {
+  const clusterService = require("../services/clusterTelemetryService");
+  getClusterTelemetry = clusterService.getClusterTelemetry;
+} catch {}
+
 const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
 
 let getCacheWarmerStatus = null;
@@ -2338,6 +2344,7 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
         },
         ramCache: ramCache.getStats(),
         ramGuard: getMemoryGuardStats ? getMemoryGuardStats() : null,
+        clusterTelemetry: getClusterTelemetry ? getClusterTelemetry() : null,
       },
     });
   } catch (err) {

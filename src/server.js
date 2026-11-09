@@ -65,12 +65,16 @@ const examRoutes = require("./routes/exam");
 const aiRoutes = require("./routes/ai");
 const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
 const { startAntiSleepService, getAntiSleepTelemetry } = require("./services/antiSleepService");
+const { requestTelemetryMiddleware } = require("./services/clusterTelemetryService");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Trust reverse proxy (Cloudflare / Render - full chain resolution)
 app.set("trust proxy", true);
+
+// ⚡ Live Request Telemetry Tracker (In-memory, 0ms overhead)
+app.use(requestTelemetryMiddleware);
 
 // Record server activity for idle flusher
 app.use((req, res, next) => {
