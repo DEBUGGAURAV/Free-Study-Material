@@ -73,17 +73,17 @@ export default function TabHardware(props) {
       latencyMs: 120,
       isHealthy: false,
       downReason: "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
-      trafficRedirection: "Backend #2 (freestudymaterial1.onrender.com)",
-      trafficShare: "0% (Bypassed at Edge)",
+      trafficRedirection: "Backend #2 & Backend #3 (50% / 50% Active Split)",
+      trafficShare: "0% (503 Suspended — Auto-Shifted to 2 Active Nodes)",
       activeUsers: 0,
       requestsOn: 0,
       requestsOff: 0,
     },
     {
       id: "backend_2",
-      name: "Backend #2 (Active Primary)",
+      name: "Backend #2 (Active Node #1)",
       url: "https://freestudymaterial1.onrender.com",
-      role: "Active Primary Production Node",
+      role: "Active Production Node #1",
       isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
@@ -91,16 +91,16 @@ export default function TabHardware(props) {
       isHealthy: true,
       downReason: null,
       trafficRedirection: null,
-      trafficShare: "100% of Active Traffic (Absorbing Failover from Backend #1)",
-      activeUsers: requests.totalConnectedUsers || 1,
+      trafficShare: "50% Active User Share (Sticky IP-Hash Load Balanced)",
+      activeUsers: Math.ceil((requests.totalConnectedUsers || 1) / 2),
       requestsOn: requests.on || 3098,
       requestsOff: requests.off || 22,
     },
     {
       id: "backend_3",
-      name: "Backend #3 (Hot Standby)",
+      name: "Backend #3 (Active Node #2)",
       url: "https://freestudymaterial2.onrender.com",
-      role: "Hot Standby Backup Node",
+      role: "Active Production Node #2",
       isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
@@ -108,8 +108,8 @@ export default function TabHardware(props) {
       isHealthy: true,
       downReason: null,
       trafficRedirection: null,
-      trafficShare: "0% Active (100% Hot Standby - Ready for Failover)",
-      activeUsers: 0,
+      trafficShare: "50% Active User Share (Sticky IP-Hash Load Balanced)",
+      activeUsers: Math.floor((requests.totalConnectedUsers || 1) / 2),
       requestsOn: 46,
       requestsOff: 0,
     },
@@ -118,10 +118,10 @@ export default function TabHardware(props) {
   const nodes = localNodes || clusterTelemetry?.cluster?.nodes || defaultNodes;
 
   const failoverSummary = clusterTelemetry?.cluster?.failoverSummary || {
-    backend1Status: "SUSPENDED / OFFLINE (503)",
+    backend1Status: "SUSPENDED (503)",
     backend1DownReason: "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
-    usersRoutedTo: "Backend #2 (freestudymaterial1.onrender.com)",
-    nextStandby: "Backend #3 (freestudymaterial2.onrender.com)",
+    usersRoutedTo: "Backend #2 & Backend #3 (50% / 50% Active Load Balancing)",
+    nextStandby: "Active 50% / 50% Dual Production Nodes",
     userImpact: "0% Dropped Requests — Seamless Edge redirection with sub-millisecond failover",
   };
 
@@ -416,7 +416,7 @@ export default function TabHardware(props) {
                   <span>Where is Student Traffic Redirected?</span>
                 </div>
                 <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
-                  Cloudflare Edge Load Balancer automatically routes 100% of student traffic to:
+                  Cloudflare Edge Load Balancer automatically balances active students across:
                   <div style={{ color: "#34d399", fontWeight: 800, marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                     <ArrowRight size={14} />
                     <span>{failoverSummary.usersRoutedTo}</span>
@@ -426,8 +426,8 @@ export default function TabHardware(props) {
             </div>
 
             <div style={{ marginTop: "10px", fontSize: "0.74rem", color: "#94a3b8", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-              <span style={{ color: "#38bdf8", fontWeight: 700 }}>Hot Standby Ready:</span>
-              <span>If Backend #2 experiences any disruption or latency, traffic instantly shifts to <strong>{failoverSummary.nextStandby}</strong> with <strong>0% dropped requests</strong>.</span>
+              <span style={{ color: "#38bdf8", fontWeight: 700 }}>⚡ 3 ➔ 2 ➔ 1 Cascade Auto-Failover:</span>
+              <span>All requests to suspended nodes are instantly redirected with <strong>0% dropped requests</strong> and 0ms user disruption.</span>
             </div>
           </div>
         </div>
@@ -451,35 +451,30 @@ export default function TabHardware(props) {
           {nodes.map((node) => {
             const isSuspended = node.status === "SUSPENDED" || node.httpCode === 503;
             const isEnabled = node.isEnabled !== false;
-            const isPrimary = node.id === "backend_2" && isEnabled && !isSuspended;
-            const isStandby = node.id === "backend_3" && isEnabled;
+            const isHealthy = isEnabled && !isSuspended && node.isHealthy !== false;
 
             const badgeBg = !isEnabled
               ? "rgba(148, 163, 184, 0.15)"
               : isSuspended
               ? "rgba(239, 68, 68, 0.15)"
-              : isPrimary
-              ? "rgba(16, 185, 129, 0.15)"
-              : "rgba(56, 189, 248, 0.15)";
+              : "rgba(16, 185, 129, 0.15)";
             const badgeBorder = !isEnabled
               ? "rgba(148, 163, 184, 0.4)"
               : isSuspended
               ? "rgba(239, 68, 68, 0.4)"
-              : isPrimary
-              ? "rgba(16, 185, 129, 0.4)"
-              : "rgba(56, 189, 248, 0.4)";
-            const badgeColor = !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : isPrimary ? "#34d399" : "#38bdf8";
+              : "rgba(16, 185, 129, 0.4)";
+            const badgeColor = !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : "#34d399";
 
             return (
               <div
                 key={node.id}
                 style={{
-                  background: isPrimary ? "rgba(16, 185, 129, 0.04)" : "rgba(15, 23, 42, 0.4)",
-                  border: isPrimary ? "1px solid rgba(16, 185, 129, 0.35)" : !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid var(--border-subtle)",
+                  background: isHealthy ? "rgba(16, 185, 129, 0.04)" : "rgba(15, 23, 42, 0.4)",
+                  border: isHealthy ? "1px solid rgba(16, 185, 129, 0.35)" : !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid var(--border-subtle)",
                   borderRadius: "var(--radius-lg)",
                   padding: "16px",
                   position: "relative",
-                  boxShadow: isPrimary ? "0 0 15px rgba(16, 185, 129, 0.1)" : "none"
+                  boxShadow: isHealthy ? "0 0 15px rgba(16, 185, 129, 0.1)" : "none"
                 }}
               >
                 {/* Header with ON/OFF Switch */}

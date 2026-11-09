@@ -392,23 +392,42 @@ export default {
 
           const res = await fetch(originReq);
           const cType = (res.headers.get('content-type') || '').toLowerCase();
+          const routingHeader = res.headers.get('x-render-routing') || '';
           const isErrorStatus = res.status >= 500 || res.status === 502 || res.status === 503 || res.status === 504 || res.status === 402 || res.status === 403;
-          const isHtmlError = cType.includes('text/html');
+          const isHtmlError = cType.includes('text/html') || routingHeader.includes('suspend');
 
-          if ((isErrorStatus || isHtmlError) && i < streamOrigins.length - 1) {
-            continue; // Cascade failover to next online backend node!
+          if ((isErrorStatus || isHtmlError)) {
+            markOriginDown(curOrigin);
+            if (i < streamOrigins.length - 1) {
+              continue; // Cascade failover immediately to next online backend node!
+            }
           }
 
-          originRes = res;
-          activeOriginUsed = curOrigin;
-          break;
+          if (res.status === 200) {
+            markOriginUp(curOrigin);
+            originRes = res;
+            activeOriginUsed = curOrigin;
+            break;
+          } else if (i < streamOrigins.length - 1) {
+            continue;
+          } else {
+            originRes = res;
+            activeOriginUsed = curOrigin;
+          }
         } catch (fetchErr) {
+          markOriginDown(curOrigin);
           if (i < streamOrigins.length - 1) continue;
         }
       }
 
-      if (!originRes) {
-        return new Response('Document stream temporarily unavailable', { status: 503 });
+      if (!originRes || originRes.status >= 500) {
+        const errHeaders = new Headers({ 'Content-Type': 'application/json' });
+        applyCors(errHeaders, request);
+        return new Response(JSON.stringify({
+          error: 'Document stream temporarily unavailable while backend cluster auto-balances.',
+          service: 'Cloudflare Edge CDN',
+          activeNodes: activeHealthyCount
+        }), { status: 503, headers: errHeaders });
       }
 
       try {
@@ -621,36 +640,46 @@ export default {
       }
     }
 
-    // 5. General proxy to origin with cascade failover
+    // 5. Multi-Origin Active Load Balancer with 3 -> 2 -> 1 Cascade Auto-Failover
     for (let i = 0; i < streamOrigins.length; i++) {
       const origin = streamOrigins[i];
       try {
         const originReqUrl = new URL(url.pathname + url.search, origin);
         const originRes = await fetch(new Request(originReqUrl.toString(), request));
-        if (originRes.status >= 502 && originRes.status <= 504 && i < streamOrigins.length - 1) {
-          continue;
+
+        const routingHeader = originRes.headers.get('x-render-routing') || '';
+        const isSuspendedOrDown = (originRes.status >= 502 && originRes.status <= 504) || routingHeader.includes('suspend');
+
+        if (isSuspendedOrDown) {
+          markOriginDown(origin);
+          if (i < streamOrigins.length - 1) {
+            continue; // Failover to next online backend!
+          }
         }
+
+        if (originRes.status < 500 && !routingHeader.includes('suspend')) {
+          markOriginUp(origin);
+        }
+
         const resHeaders = new Headers(originRes.headers);
-        resHeaders.set('Access-Control-Allow-Origin', '*');
-        resHeaders.set('Access-Control-Expose-Headers', '*');
+        applyCors(resHeaders, request);
         resHeaders.set('X-Upstream-Origin', origin);
+        resHeaders.set('X-Cluster-Active-Nodes', String(activeHealthyCount));
         return new Response(originRes.body, {
           status: originRes.status,
           headers: resHeaders,
         });
       } catch (err) {
+        markOriginDown(origin);
         if (i < streamOrigins.length - 1) continue;
       }
     }
-    return new Response('Not found', { status: 404 });
+    return new Response('All backend nodes temporarily unreachable', { status: 503 });
   },
 
   // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
   async scheduled(event, env, ctx) {
-    const targets = [
-      (env.ORIGIN_URL || 'https://freestudymaterial1.onrender.com').replace(/\/+$/, ''),
-      (env.BACKUP_ORIGIN_URL_1 || 'https://freestudymaterial2.onrender.com').replace(/\/+$/, ''),
-    ].filter(Boolean);
+    const targets = getAllClusterOrigins(env);
     for (const target of targets) {
       try {
         await fetch(`${target}/health?cron=cf&t=${Date.now()}`, {

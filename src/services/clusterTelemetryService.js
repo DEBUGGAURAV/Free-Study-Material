@@ -126,7 +126,7 @@ function requestTelemetryMiddleware(req, res, next) {
 }
 
 /**
- * Recalculate dynamic user distribution and traffic shares across cluster
+ * Recalculate dynamic user distribution and traffic shares across cluster (3 -> 2 -> 1 Cascade)
  */
 function recalculateClusterDistribution() {
   const now = Date.now();
@@ -144,51 +144,65 @@ function recalculateClusterDistribution() {
   const b2 = clusterNodes[1];
   const b3 = clusterNodes[2];
 
-  // Determine active primary and standby
-  if (b2.isEnabled && b2.isHealthy) {
-    // Normal State: Backend 2 is Primary
-    b2.trafficShare = "100% of Active Traffic";
-    b2.activeUsers = totalLiveUsers;
-    b2.trafficRedirection = null;
+  // Identify all healthy & enabled nodes
+  const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
+  const activeCount = activeNodes.length;
 
-    if (b3.isEnabled && b3.isHealthy) {
-      b3.trafficShare = "0% Active (100% Hot Standby - Ready for Failover)";
-      b3.activeUsers = 0;
-      b3.trafficRedirection = null;
-    } else {
-      b3.trafficShare = "0% (Disabled / Offline)";
-      b3.activeUsers = 0;
+  // Reset all nodes first
+  for (const n of clusterNodes) {
+    n.activeUsers = 0;
+    n.trafficShare = "0% (Bypassed / Offline)";
+    n.trafficRedirection = null;
+  }
+
+  if (activeCount === 3) {
+    // 3 Nodes Online: 33.3% / 33.3% / 33.3% sticky IP-hash distribution
+    const baseShare = Math.floor(totalLiveUsers / 3);
+    const remainder = totalLiveUsers % 3;
+    b1.activeUsers = baseShare + (remainder > 0 ? 1 : 0);
+    b2.activeUsers = baseShare + (remainder > 1 ? 1 : 0);
+    b3.activeUsers = baseShare;
+
+    b1.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
+    b2.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
+    b3.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
+  } else if (activeCount === 2) {
+    // 2 Nodes Online (e.g. Backend 1 Suspended, Backend 2 & 3 Online): 50% / 50% auto-shift!
+    const half = Math.ceil(totalLiveUsers / 2);
+    const otherHalf = Math.max(0, totalLiveUsers - half);
+
+    activeNodes[0].activeUsers = half;
+    activeNodes[0].trafficShare = "50% Active User Share (Sticky IP-Hash Load Balanced)";
+
+    activeNodes[1].activeUsers = otherHalf;
+    activeNodes[1].trafficShare = "50% Active User Share (Sticky IP-Hash Load Balanced)";
+
+    // Set redirection details on down node(s)
+    const downNodes = clusterNodes.filter((n) => !n.isEnabled || !n.isHealthy);
+    for (const d of downNodes) {
+      d.trafficShare = d.status === "SUSPENDED"
+        ? "0% (503 Suspended — Auto-Shifted to 2 Active Nodes)"
+        : "0% (Disabled / Offline)";
+      d.trafficRedirection = `${activeNodes[0].name} & ${activeNodes[1].name} (50% / 50% Active Split)`;
     }
+  } else if (activeCount === 1) {
+    // 1 Node Online: 100% traffic on the single surviving node!
+    const survivor = activeNodes[0];
+    survivor.activeUsers = totalLiveUsers;
+    survivor.trafficShare = "100% of Active Traffic (Sole Active Survivor Node)";
 
-    b1.trafficShare = "0% (Bypassed at Edge)";
-    b1.activeUsers = 0;
-    b1.trafficRedirection = "Backend #2 (freestudymaterial1.onrender.com)";
-  } else if (b3.isEnabled && b3.isHealthy) {
-    // Failover State: Backend 2 is DOWN/DISABLED -> Backend 3 absorbs 100% of traffic
-    b3.trafficShare = "100% of Active Traffic (Primary Failover Active)";
-    b3.activeUsers = totalLiveUsers;
-    b3.trafficRedirection = null;
-
-    b2.trafficShare = "0% (Bypassed / Offline)";
-    b2.activeUsers = 0;
-    b2.trafficRedirection = "Backend #3 (freestudymaterial2.onrender.com)";
-
-    b1.trafficShare = "0% (Bypassed at Edge)";
-    b1.activeUsers = 0;
-    b1.trafficRedirection = "Backend #3 (freestudymaterial2.onrender.com)";
-  } else if (b1.isEnabled && b1.isHealthy) {
-    // Tertiary State: Only Backend 1 is online
-    b1.trafficShare = "100% of Active Traffic";
-    b1.activeUsers = totalLiveUsers;
-    b1.trafficRedirection = null;
-
-    b2.activeUsers = 0;
-    b3.activeUsers = 0;
+    for (const n of clusterNodes) {
+      if (n !== survivor) {
+        n.trafficShare = n.status === "SUSPENDED" ? "0% (503 Suspended)" : "0% (Bypassed)";
+        n.trafficRedirection = `${survivor.name} (100% Fallback Survivor)`;
+      }
+    }
   } else {
-    // All nodes down/disabled
-    b1.activeUsers = 0;
-    b2.activeUsers = 0;
-    b3.activeUsers = 0;
+    // 0 Nodes Online
+    for (const n of clusterNodes) {
+      n.activeUsers = 0;
+      n.trafficShare = "0% (All Nodes Offline / Suspended)";
+    }
   }
 }
 
@@ -364,15 +378,26 @@ function getClusterTelemetry() {
   const b2 = clusterNodes[1];
   const b3 = clusterNodes[2];
 
+  const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
+  const activeCount = activeNodes.length;
+
   const totalConnectedUsers = clusterNodes.reduce((acc, n) => acc + (n.activeUsers || 0), 0);
 
-  const activePrimaryNode = b2.isEnabled && b2.isHealthy
-    ? "Backend #2 (freestudymaterial1.onrender.com)"
-    : b3.isEnabled && b3.isHealthy
-    ? "Backend #3 (freestudymaterial2.onrender.com)"
+  const activePrimaryNode = activeCount === 3
+    ? "All 3 Nodes Active (~33.3% / 33.3% / 33.3% Sticky IP-Hash)"
+    : activeCount === 2
+    ? `${activeNodes[0].name} & ${activeNodes[1].name} (50% / 50% Active Load Balanced)`
+    : activeCount === 1
+    ? `${activeNodes[0].name} (100% Sole Active Survivor)`
     : "None (All Nodes Offline / Disabled)";
 
-  const isFailoverEngaged = !b1.isHealthy || !b2.isHealthy || !b2.isEnabled;
+  const isFailoverEngaged = activeCount < 3;
+
+  const usersRoutedToMessage = activeCount === 2
+    ? "Backend #2 & Backend #3 (50% / 50% Active Load Balancing)"
+    : activeCount === 1
+    ? activeNodes[0].url
+    : "All 3 Backends Balanced (~33.3% each)";
 
   return {
     requests: {
@@ -388,15 +413,14 @@ function getClusterTelemetry() {
     },
     cluster: {
       nodes: clusterNodes,
+      activeNodesCount: activeCount,
       activePrimary: activePrimaryNode,
       failoverActive: isFailoverEngaged,
       failoverSummary: {
         backend1Status: b1.isEnabled ? (b1.isHealthy ? "ONLINE" : "SUSPENDED (503)") : "MANUALLY DISABLED (OFF)",
         backend1DownReason: b1.downReason || "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
-        usersRoutedTo: b2.isEnabled && b2.isHealthy
-          ? "Backend #2 (freestudymaterial1.onrender.com)"
-          : "Backend #3 (freestudymaterial2.onrender.com)",
-        nextStandby: "Backend #3 (freestudymaterial2.onrender.com)",
+        usersRoutedTo: usersRoutedToMessage,
+        nextStandby: activeCount === 2 ? "Backend #3 (Active 50% Co-Worker)" : activeCount === 1 ? "Disaster Mode" : "All Standby Ready",
         userImpact: "0% Dropped Requests — Seamless Edge redirection with sub-millisecond failover",
       },
     },

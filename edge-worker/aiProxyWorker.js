@@ -46,6 +46,20 @@ function markOriginUp(origin) {
   failedOriginCooldowns.delete(origin);
 }
 
+// Returns all 3 cluster nodes guaranteed (even if Cloudflare env vars are missing or partial)
+function getAllClusterOrigins(env) {
+  const list = [
+    (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
+    (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
+    (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
+  ];
+  const unique = [];
+  for (const item of list) {
+    if (item && !unique.includes(item)) unique.push(item);
+  }
+  return unique;
+}
+
 function hashClientIdentifier(str) {
   let hash = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -1224,11 +1238,8 @@ export default {
       }
     }
 
-    // 4. Multi-Origin Active User Load Balancer with Cascade Failover (Exclusively Active Online Backends)
-    const baseOrigins = [
-      (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
-      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
-    ].filter(Boolean);
+    // 4. Multi-Origin Active User Load Balancer with 3 -> 2 -> 1 Cascade Failover
+    const baseOrigins = getAllClusterOrigins(env);
 
     // Filter currently healthy origins (exclude origins in temporary 25s auto-cooldown)
     const healthyOrigins = baseOrigins.filter((o) => getOriginCooldownRemaining(o) === 0);
@@ -1244,7 +1255,9 @@ export default {
     const clientHash = hashClientIdentifier(clientIp);
 
     // Active User Distribution:
-    // Evenly balances traffic across online nodes with instantaneous 0-downtime failover
+    // If 3 servers are healthy: users distributed 33% / 33% / 33%
+    // If 1 server goes down (e.g. suspended): remaining 2 servers automatically share 50% / 50%
+    // If 2 servers go down: single surviving server automatically receives 100%
     const startIndex = clientHash % activePool.length;
     const prioritizedOrigins = [
       ...activePool.slice(startIndex),
@@ -1260,16 +1273,17 @@ export default {
         const originRes = await fetch(new Request(originReqUrl.toString(), request));
 
         const cType = (originRes.headers.get("content-type") || "").toLowerCase();
+        const routingHeader = originRes.headers.get("x-render-routing") || "";
         const isBadStatus =
           (originRes.status >= 500 && originRes.status <= 504) ||
           originRes.status === 402 ||
           originRes.status === 403;
-        const isHtmlSuspension =
-          cType.includes("text/html") &&
-          (url.pathname.startsWith("/api/") || url.pathname.includes("/stream"));
+        const isSuspension =
+          routingHeader.includes("suspend") ||
+          (cType.includes("text/html") && (url.pathname.startsWith("/api/") || url.pathname.includes("/stream")));
 
-        // If current origin returned failure or suspension HTML, auto-failover to next online node!
-        if ((isBadStatus || isHtmlSuspension) && i < prioritizedOrigins.length - 1) {
+        // If current origin returned failure or suspension, auto-failover to next online node!
+        if ((isBadStatus || isSuspension) && i < prioritizedOrigins.length - 1) {
           markOriginDown(origin);
           continue; // Cascade failover to next online node!
         }
@@ -1310,10 +1324,7 @@ export default {
 
   // 💓 Scheduled Cron Trigger: Pings ALL active Render origins every 10 min to keep them awake!
   async scheduled(event, env, ctx) {
-    const targets = [
-      (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
-      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
-    ].filter(Boolean);
+    const targets = getAllClusterOrigins(env);
     for (const target of targets) {
       try {
         await fetch(`${target}/health?cron=cf&t=${Date.now()}`, {
