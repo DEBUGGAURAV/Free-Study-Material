@@ -12,6 +12,7 @@ crons = ["*/10 * * * *"]
 
 [vars]
 ORIGIN_URL = "https://freestudymaterial1.onrender.com"
+BACKUP_ORIGIN_URL = "https://freestudymaterial.onrender.com"
 GROQ_MODEL = "openai/gpt-oss-20b"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 

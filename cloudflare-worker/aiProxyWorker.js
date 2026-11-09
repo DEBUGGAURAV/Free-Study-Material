@@ -1198,33 +1198,49 @@ export default {
       }
     }
 
-    // 4. Default Reverse Proxy to Render Origin (for non-AI endpoints or pass-through)
-    const originBase = env.ORIGIN_URL || "https://freestudymaterial1.onrender.com";
-    try {
-      const originReqUrl = new URL(url.pathname + url.search, originBase);
-      const originRes = await fetch(new Request(originReqUrl.toString(), request));
-      const resHeaders = new Headers(originRes.headers);
-      applyCors(resHeaders, request);
-      return new Response(originRes.body, {
-        status: originRes.status,
-        headers: resHeaders,
-      });
-    } catch (err) {
-      return new Response("Service unavailable", { status: 503 });
+    // 4. Multi-Origin Reverse Proxy with Instant Failover (Primary: freestudymaterial1, Backup: freestudymaterial)
+    const primaryOrigin = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
+    const backupOrigin = (env.BACKUP_ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+    const origins = Array.from(new Set([primaryOrigin, backupOrigin])).filter(Boolean);
+
+    for (let i = 0; i < origins.length; i++) {
+      const origin = origins[i];
+      try {
+        const originReqUrl = new URL(url.pathname + url.search, origin);
+        const originRes = await fetch(new Request(originReqUrl.toString(), request));
+        // If primary returns 502, 503, 504 and backup origin is available, auto-failover to backup!
+        if (originRes.status >= 502 && originRes.status <= 504 && i < origins.length - 1) {
+          continue;
+        }
+        const resHeaders = new Headers(originRes.headers);
+        applyCors(resHeaders, request);
+        resHeaders.set("X-Upstream-Origin", origin);
+        return new Response(originRes.body, {
+          status: originRes.status,
+          headers: resHeaders,
+        });
+      } catch (err) {
+        if (i < origins.length - 1) continue;
+      }
     }
+    return new Response("Service unavailable", { status: 503 });
   },
 
-  // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
+  // 💓 Scheduled Cron Trigger: Pings BOTH Render origins every 10 min to keep both awake!
   async scheduled(event, env, ctx) {
-    const originBase = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
-    try {
-      await fetch(`${originBase}/health?cron=cf&t=${Date.now()}`, {
-        method: "GET",
-        headers: {
-          "User-Agent": "Cloudflare-Cron-AntiSleep/2.0",
-          "Cache-Control": "no-cache, no-store",
-        },
-      });
-    } catch (_) {}
+    const primary = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
+    const backup = (env.BACKUP_ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+    const targets = Array.from(new Set([primary, backup])).filter(Boolean);
+    for (const target of targets) {
+      try {
+        await fetch(`${target}/health?cron=cf&t=${Date.now()}`, {
+          method: "GET",
+          headers: {
+            "User-Agent": "Cloudflare-Cron-AntiSleep/2.0",
+            "Cache-Control": "no-cache, no-store",
+          },
+        });
+      } catch (_) {}
+    }
   },
 };
