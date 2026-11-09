@@ -1,23 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X,
-  Users,
-  Share2,
-  Copy,
-  Check,
-  Send,
-  MessageSquare,
-  PenTool,
-  Eraser,
-  RotateCcw,
-  Sparkles,
-  Zap,
-  Shield,
-  Maximize2,
-  FileText,
-  Volume2,
-  QrCode,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Users, Share2, Copy, Check, Send, MessageSquare, PenTool, Eraser, RotateCcw, Sparkles, Shield, QrCode } from "lucide-react";
 import QRCode from "qrcode";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 

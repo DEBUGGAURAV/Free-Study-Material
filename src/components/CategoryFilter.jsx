@@ -1,5 +1,5 @@
-import React from "react";
-import { LayoutGrid, List, Sparkles, GraduationCap, Calendar, Layers } from "lucide-react";
+import "react";
+import { LayoutGrid, List, GraduationCap, Calendar, Layers } from "lucide-react";
 import GeminiIcon from "./GeminiIcon";
 
 const COURSES = [

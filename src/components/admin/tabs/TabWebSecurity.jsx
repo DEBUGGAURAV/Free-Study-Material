@@ -1,11 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Shield, ShieldAlert, ShieldCheck, AlertTriangle, Lock, Unlock,
-  RefreshCw, Power, Globe, Server, Ban, Clock, CheckCircle,
-  AlertCircle, Bug, Eye, Search, Copy, Check, Filter, Trash2, Cpu,
-  MessageSquare, Send, Smartphone, ExternalLink, Bell, Tag, UserCheck,
-  Database, Zap, Flame, Save, X
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Shield, ShieldCheck, Lock, Unlock, RefreshCw, Power, Server, Ban, Clock, CheckCircle, AlertCircle, Bug, Search, Copy, Check, Trash2, MessageSquare, Send, ExternalLink, Database, Zap, Flame, Save, X } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabWebSecurity(props) {

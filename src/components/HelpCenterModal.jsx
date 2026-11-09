@@ -1,32 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X,
-  HelpCircle,
-  Search,
-  MessageSquare,
-  Send,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  BookOpen,
-  DownloadCloud,
-  Shield,
-  ExternalLink,
-  ChevronDown,
-  ChevronUp,
-  Ticket,
-  User,
-  Mail,
-  Phone,
-  Copy,
-  Check,
-  Lock,
-  Paperclip,
-  FileText,
-  Image as ImageIcon,
-  Film,
-  Download,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, HelpCircle, Search, MessageSquare, Send, CheckCircle2, Clock, ChevronDown, ChevronUp, Ticket, User, Mail, Phone, Copy, Check, Lock, Paperclip, FileText, Image as ImageIcon, Film } from "lucide-react";
 import { api } from "../api";
 
 const INITIAL_FAQS = [

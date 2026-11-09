@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { X, Bell, Pin, ExternalLink, Plus, Trash2, Edit3, Search, Clock, Sparkles } from "lucide-react";
 import { api } from "../api";
 

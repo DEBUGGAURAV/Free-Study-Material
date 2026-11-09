@@ -7,10 +7,10 @@ const API_BASE = "/api";
 
 // Same-Origin High-Performance Stream Base (Guarantees httpOnly auth cookie delivery)
 export const STREAM_BASE = "/api";
-import { fetchWithCdnFailover, parseSourceFromHeaders, acquireNoteDocument } from "./utils/cdnFailover";
+import { acquireNoteDocument } from "./utils/cdnFailover";
 import { saveAuthSession, loadAuthSession, clearAuthSession, saveAuthToken } from "./utils/authIndexedDb";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
-import { getAnyCachedNoteBuffer } from "./utils/offlineQueue";
+import "./utils/offlineQueue";
 
 let inMemoryToken = null;
 let inMemoryUser = null;

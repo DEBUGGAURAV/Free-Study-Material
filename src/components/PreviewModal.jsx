@@ -1,4 +1,4 @@
-import React from "react";
+import "react";
 import VirtualPdfReader from "./VirtualPdfReader";
 import { api } from "../api";
 import { getSmartStreamUrl } from "../utils/cdnFailover";

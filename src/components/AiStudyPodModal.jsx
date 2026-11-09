@@ -1,31 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import {
-  Sparkles,
-  Layers,
-  BookOpen,
-  Search,
-  RotateCw,
-  Clock,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Copy,
-  Check,
-  FileText,
-  Zap,
-  Shuffle,
-  Filter,
-  ExternalLink,
-  ShieldCheck,
-  HelpCircle,
-  Eye,
-  MessageSquare,
-  Send,
-  Trash2,
-  Pencil,
-  Image as ImageIcon,
-} from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Sparkles, Layers, Search, RotateCw, Clock, X, ChevronLeft, ChevronRight, CheckCircle2, Copy, Check, FileText, Shuffle, Filter, ShieldCheck, Eye, MessageSquare, Send, Trash2, Pencil, Image as ImageIcon } from "lucide-react";
 import { api } from "../api";
 import {
   getStudySessionHistory,

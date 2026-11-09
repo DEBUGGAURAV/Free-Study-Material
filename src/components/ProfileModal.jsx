@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Save, Key, Shield, Eye, EyeOff, Trash2, Cpu, Zap, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Globe, Activity, Sparkles, Copy, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";

@@ -1,17 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X, Mail, Shield, Trash2, Eye, EyeOff, Edit3, UserCheck, UserX, Activity,
-  Search, CheckCircle, Clock, ChevronLeft, ChevronRight, Save, RefreshCw,
-  Database, Cpu, Server, HardDrive, Globe, Code, Cloud, Send, Download,
-  Upload, Zap, Inbox, Key, Monitor, ShieldCheck, ShieldAlert, Filter, Bot,
-  Bell, BellOff, Power, AlertTriangle, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Megaphone, Plus, Lock,
-  MessageSquare, Crown, Paperclip, Volume2, Radio, Bug, Smartphone
-} from "lucide-react";
-import { api, getAuthToken } from "../../../api";
-import { formatFileSize, formatMB } from "../../../utils/formatUtils";
-import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
-import VirtualPdfReader from "../../VirtualPdfReader";
+import { useState, useEffect } from "react";
+import { Mail, Trash2, Activity, RefreshCw, Database, Globe, Code, Cloud, Send, Zap, ShieldCheck, Bot, Smartphone } from "lucide-react";
+import { api } from "../../../api";
+import "../../../utils/formatUtils";
+import "../../../utils/hardwareAdaptiveEngine";
+import "../../VirtualPdfReader";
 
 export default function TabSoftware(props) {
   const {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   FileText,
   Download,
@@ -16,15 +16,9 @@ import {
 } from "lucide-react";
 import { api, getAuthToken } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
-import { downloadFromPeerMesh, getCachedNoteBuffer } from "../utils/p2pMesh";
+import { getCachedNoteBuffer } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
-import {
-  saveNoteOffline,
-  isNotePinnedOffline,
-  togglePinOfflineNote,
-  deleteSingleOfflineNote,
-  getAnyCachedNoteBuffer,
-} from "../utils/offlineQueue";
+import { isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 
 export default function NoteCard({

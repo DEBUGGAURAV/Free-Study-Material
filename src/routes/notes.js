@@ -10,10 +10,25 @@ const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { getAllCachedNotes, getTursoNotesCacheStats } = require("../services/tursoNotesCacheService");
 const { downloadLimiter } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel, getDocumentBufferFromChannel } = require("../telegram/mtproto");
-const { authenticateToken, requireAdmin, JWT_SECRET } = require("../middleware/auth");
+const { authenticateToken, requireAuth, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { getLastSyncState, recordSyncEvent } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
+
+function isAdminUser(user) {
+  if (!user) return false;
+  const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+  return Boolean(
+    user.role === "admin" ||
+    user.role === "half_admin" ||
+    user.role === "sub_admin" ||
+    user.isMainAdmin ||
+    user.isMasterAdmin ||
+    user.id === "admin-root" ||
+    (adminEmail && user.email && user.email.toLowerCase().trim() === adminEmail) ||
+    (Array.isArray(user.permissions) && user.permissions.includes("all"))
+  );
+}
 
 // In-Memory Edge CDN & RAM Buffer Cache (Ultra-Lightweight Zero-RAM Mode: 0 MB Heap Buffer)
 const noteBufferCache = new Map();
@@ -1101,6 +1116,10 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const noteData = doc.data();
+    if (noteData.isVisible === false && !isAdminUser(req.user)) {
+      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+    }
+
     let cleanDesc = noteData.description;
     if (cleanDesc && (cleanDesc.includes("TECH TITAN STORAGE") || cleanDesc.includes("Synced from Telegram"))) {
       cleanDesc = "📚 Verified Academic Notes • Free Study Material";
@@ -1108,6 +1127,36 @@ router.get("/:id", authenticateToken, async (req, res) => {
     return res.json({ success: true, note: { id: doc.id, ...noteData, description: cleanDesc || "📚 Verified Academic Notes • Free Study Material" } });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
+    res.setHeader("Cache-Control", "no-store");
+
+    let user = req.user;
+    const ticket = req.query.ticket;
+    if (!user && typeof ticket === "string") {
+      const ticketMeta = ephemeralStreamTickets.get(ticket);
+      if (ticketMeta && ticketMeta.noteId === req.params.id && ticketMeta.expires > Date.now()) {
+        const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
+        const isIpMatch = !ticketMeta.ip || ticketMeta.ip === clientIp || clientIp === "127.0.0.1" || clientIp.includes("::1");
+        if (isIpMatch) {
+          user = { id: ticketMeta.userId, role: ticketMeta.role, email: ticketMeta.email };
+        }
+      }
+    }
+
+    const doc = await db.collection("notes").doc(req.params.id).get();
+    if (!doc.exists || (doc.data()?.isVisible === false && !isAdminUser(user))) {
+      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+    }
+
+    return res.json({ success: true, allowed: true });
+  } catch (err) {
+    console.error("[NOTES] Visibility check error:", err.message);
+    return res.status(500).json({ success: false, message: "Could not verify note visibility." });
   }
 });
 
@@ -1490,7 +1539,7 @@ function renderDownloadPausedHtml(noteTitle = "Academic Document", noteId = "", 
  * Generates an ephemeral single-use 60-second stream ticket bound to student's IP address.
  * Prevents direct console link copying, hotlinking, and unauthorized link sharing!
  */
-router.post("/:id/stream-ticket", authenticateToken, (req, res) => {
+router.post("/:id/stream-ticket", authenticateToken, requireAuth, (req, res) => {
   const { id } = req.params;
   const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
   const ticket = crypto.randomBytes(16).toString("hex");
@@ -1502,6 +1551,7 @@ router.post("/:id/stream-ticket", authenticateToken, (req, res) => {
     mobile: req.user.mobile || "",
     college: req.user.college || "",
     year: req.user.year || "",
+    role: req.user.role || "",
     noteId: id,
     ip: clientIp,
     expires: Date.now() + 60000, // strictly 60 seconds
@@ -1527,6 +1577,10 @@ router.post("/:id/cache-to-cdn", downloadLimiter, authenticateToken, async (req,
       }
       note = { id: doc.id, ...doc.data() };
       ramCache.set(`note_${id}`, note, 3 * 3600);
+    }
+
+    if (note.isVisible === false && !isAdminUser(req.user)) {
+      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
 
     // ⚡ 1. If already cached in RAM or on Disk or marked permanent CDN in Firestore, return immediately (Zero Storage Hits!)
@@ -1680,6 +1734,16 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       try {
         requestingUser = jwt.verify(queryToken, JWT_SECRET);
       } catch {}
+    }
+
+    const currentNoteDoc = await db.collection("notes").doc(id).get();
+    if (!currentNoteDoc.exists) {
+      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+    }
+    note.isVisible = currentNoteDoc.data()?.isVisible !== false;
+    ramCache.set(`note_${id}`, note, 3 * 3600);
+    if (!note.isVisible && !isAdminUser(requestingUser)) {
+      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
 
     // 🛡️ ANTI-CONSOLE-COPY & ANTI-HOTLINKING SECURITY SHIELD: Block unauthorized third-party cross-site embeds
@@ -1905,12 +1969,12 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     const isNoteDownloadDisabled = Boolean(isSingleNoteDisabled);
 
     const adminEmail = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
-    const isAdminUser = requestingUser && (
+    const isDownloadAdmin = requestingUser && (
       requestingUser.role === "admin" ||
       requestingUser.role === "half_admin" ||
       Boolean(adminEmail && requestingUser.email && requestingUser.email.toLowerCase().trim() === adminEmail)
     );
-    const isAdminInspectBypass = isAdminUser && req.query.admin_inspect === "1";
+    const isAdminInspectBypass = isDownloadAdmin && req.query.admin_inspect === "1";
 
     // 🔒 Master & Per-Note Download Gate Protection
     if (isDownload) {
@@ -1953,7 +2017,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     res.setHeader("Content-Type", contentType);
     const asciiSafeName = sanitizedName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
     res.setHeader("Content-Disposition", `${dispositionType}; filename="${asciiSafeName}"; filename*=UTF-8''${encodeURIComponent(sanitizedName)}`);
-    if (isNoteDownloadDisabled && !isAdminUser) {
+    if (isNoteDownloadDisabled && !isDownloadAdmin) {
       res.setHeader("X-Download-Options", "noopen");
     }
     res.setHeader("Accept-Ranges", "bytes");

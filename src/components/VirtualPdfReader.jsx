@@ -1,56 +1,17 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import {
-  X,
-  Moon,
-  Sun,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  ZoomIn,
-  ZoomOut,
-  Maximize,
-  Minimize,
-  Download,
-  FileText,
-  AlertCircle,
-  Sparkles,
-  Layers,
-  RefreshCw,
-  Volume2,
-  VolumeX,
-  Users,
-  Bot,
-  Send,
-  Mic,
-  MicOff,
-  Scissors,
-  Smartphone,
-  Battery,
-  Globe,
-  Zap,
-  Cloud,
-  Wifi,
-  Pin,
-  Trash2,
-  QrCode,
-  MessageSquare,
-  Copy,
-  Check,
-} from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check } from "lucide-react";
 import QRCode from "qrcode";
 import { cacheNoteBuffer, getCachedNoteBuffer, findPeersForNote } from "../utils/p2pMesh";
 import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
 import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
-import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
+import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 import { api, getAuthToken, getCurrentUser } from "../api";
-import { parseSourceFromHeaders, fetchWithCdnFailover, acquireNoteDocument } from "../utils/cdnFailover";
+import { acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
 import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
 import GeminiIcon from "./GeminiIcon";

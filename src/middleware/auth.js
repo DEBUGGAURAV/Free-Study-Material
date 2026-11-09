@@ -1,13 +1,12 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const envJwtSecret = (process.env.JWT_SECRET || "").trim();
+if (process.env.NODE_ENV === "production" && Buffer.byteLength(envJwtSecret, "utf8") < 32) {
+  throw new Error("JWT_SECRET must be configured with at least 32 characters before starting in production.");
+}
+const JWT_SECRET = envJwtSecret || crypto.randomBytes(64).toString("hex");
 const { db } = require("../firebase");
 const { ramCache } = require("../utils/ramCache");
-
-const envJwtSecret = (process.env.JWT_SECRET || "").trim();
-if (process.env.NODE_ENV === "production" && !envJwtSecret) {
-  console.warn("⚠️ [SECURITY WARNING] process.env.JWT_SECRET is not defined in production environment variables. Using fallback secret.");
-}
-const JWT_SECRET = envJwtSecret || "50ad069ae2a0432e1521d3765ec8b3a881bdcb39f85a47e95498c1dc04f8b4ef8c8bfb42a7a7aa0cc1f328ed1e0552fb86750f27f76000d36f86593d25f8ccd2";
 
 // 🛡️ Multi-Device Session Invalidation Cache (Category 1 Feature 4)
 // Stores minimum valid tokenVersion per userId: Map<userId, { minVersion: number, revokedAt: number }>

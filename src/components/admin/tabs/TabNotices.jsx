@@ -1,26 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Bell,
-  Search,
-  Plus,
-  Trash2,
-  Edit3,
-  Pin,
-  Clock,
-  Sparkles,
-  RefreshCw,
-  ExternalLink,
-  CheckSquare,
-  Square,
-  AlertTriangle,
-  Info,
-  Calendar,
-  CheckCircle,
-  Database,
-  Cpu,
-  ShieldAlert,
-  X,
-} from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Bell, Search, Plus, Trash2, Edit3, Pin, Clock, Sparkles, RefreshCw, ExternalLink, CheckSquare, Square, AlertTriangle, CheckCircle, Database, Cpu, X } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabNotices({ currentUser }) {

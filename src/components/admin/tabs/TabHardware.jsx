@@ -1,9 +1,5 @@
-import React, { useState, useEffect } from "react";
-import {
-  Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert,
-  AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power,
-  Users, CheckCircle2, AlertCircle, Wifi
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabHardware(props) {

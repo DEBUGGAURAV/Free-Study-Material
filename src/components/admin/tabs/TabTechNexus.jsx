@@ -1,10 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X, Shield, Trash2, Search, Clock, Save, RefreshCw,
-  Database, Cpu, Server, HardDrive, Globe, Cloud, Download,
-  Upload, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles,
-  FileText, Sliders, Layers, Scissors, RotateCcw, Lock, QrCode, Camera, MessageSquare
-} from "lucide-react";
+import { useState } from "react";
+import { X, Trash2, Search, Clock, Save, RefreshCw, Database, Cpu, HardDrive, Globe, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles, FileText, Sliders, Layers, Scissors, RotateCcw, QrCode, Camera } from "lucide-react";
 import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
 

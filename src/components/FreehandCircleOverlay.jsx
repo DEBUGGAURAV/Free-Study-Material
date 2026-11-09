@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Pencil, Sparkles, Copy, Check, Trash2, Undo2, X, Keyboard, Palette } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Pencil, Copy, Check, Trash2, Undo2, X, Keyboard, Palette } from "lucide-react";
 import GeminiIcon from "./GeminiIcon";
 import {
   PENCIL_CURSOR_STYLE,

@@ -1,28 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  MessageSquare,
-  HelpCircle,
-  Search,
-  RefreshCw,
-  Trash2,
-  CheckCircle,
-  AlertCircle,
-  Send,
-  Shield,
-  Zap,
-  Clock,
-  Sparkles,
-  ExternalLink,
-  ChevronRight,
-  Filter,
-  Check,
-  X,
-  Paperclip,
-  FileText,
-  Image as ImageIcon,
-  Film,
-  Download,
-} from "lucide-react";
+import { Search, RefreshCw, Trash2, CheckCircle, AlertCircle, Send, Zap, Clock, Check, X, Paperclip, FileText, Image as ImageIcon, Film, Download } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabHelpDesk() {

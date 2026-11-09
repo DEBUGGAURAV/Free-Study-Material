@@ -17,8 +17,8 @@
  * ============================================================================
  */
 
-import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
-import { cacheNoteBuffer } from "./p2pMesh";
+import { getAnyCachedNoteBuffer } from "./offlineQueue";
+import "./p2pMesh";
 import { saveToClientOfflineStorage } from "./cdnFailover";
 
 let isPrecacheRunning = false;

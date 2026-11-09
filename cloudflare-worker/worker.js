@@ -309,9 +309,58 @@ export default {
       // Check Cloudflare Edge Cache first
       let cachedResponse = await cache.match(cacheKey);
       if (cachedResponse) {
+        const noteId = url.pathname.match(/^\/api\/notes\/([^/]+)\//)?.[1];
+        if (noteId && (request.method === 'GET' || request.method === 'HEAD')) {
+          const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, originBase);
+          for (const name of ['ticket']) {
+            const value = url.searchParams.get(name);
+            if (value) accessUrl.searchParams.set(name, value);
+          }
+
+          const accessHeaders = new Headers();
+          for (const name of ['authorization', 'cookie', 'cf-connecting-ip', 'x-forwarded-for']) {
+            const value = request.headers.get(name);
+            if (value) accessHeaders.set(name, value);
+          }
+          const queryToken = url.searchParams.get('token');
+          if (!accessHeaders.has('authorization') && queryToken) {
+            accessHeaders.set('Authorization', `Bearer ${queryToken}`);
+          }
+
+          try {
+            const accessResponse = await fetch(accessUrl, {
+              method: 'GET',
+              headers: accessHeaders,
+              redirect: 'manual',
+            });
+            if (!accessResponse.ok) {
+              const headers = new Headers(accessResponse.headers);
+              headers.set('Cache-Control', 'no-store');
+              applyCors(headers, request);
+              return new Response(accessResponse.body, {
+                status: accessResponse.status,
+                headers,
+              });
+            }
+          } catch (_) {
+            const headers = new Headers({
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
+            });
+            applyCors(headers, request);
+            return new Response(JSON.stringify({
+              success: false,
+              message: 'Could not verify note visibility.',
+            }), {
+              status: 503,
+              headers,
+            });
+          }
+        }
+
         const headers = new Headers(cachedResponse.headers);
         headers.set('X-Real-Source', 'CLOUDFLARE_WORKER');
-        headers.set('X-Source-Label', `⚡ Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
+        headers.set('X-Source-Label', `Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
         headers.set('X-Edge-Cache', 'HIT');
         headers.set('CF-Cache-Status', 'HIT');
         headers.set('X-Cache', 'HIT');
@@ -471,7 +520,7 @@ export default {
           // Mark headers for the cached copy
           const edgeCachedHeaders = new Headers(responseHeaders);
           edgeCachedHeaders.set('X-Real-Source', 'CLOUDFLARE_WORKER');
-          edgeCachedHeaders.set('X-Source-Label', `⚡ Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
+          edgeCachedHeaders.set('X-Source-Label', `Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
           edgeCachedHeaders.set('X-Edge-Cache', 'HIT');
           edgeCachedHeaders.set('CF-Cache-Status', 'HIT');
           edgeCachedHeaders.set('X-Cache', 'HIT');
@@ -564,7 +613,7 @@ export default {
       if (cachedResponse) {
         const responseHeaders = new Headers(cachedResponse.headers);
         responseHeaders.set('X-Real-Source', 'CLOUDFLARE_WORKER');
-        responseHeaders.set('X-Source-Label', `⚡ Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
+        responseHeaders.set('X-Source-Label', `Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
         responseHeaders.set('X-Edge-Cache', 'HIT');
         responseHeaders.set('CF-Cache-Status', 'HIT');
         responseHeaders.set('X-Edge-Location', edgeColo);
@@ -617,7 +666,7 @@ export default {
         headers.set('Content-Disposition', `${disposition}; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
         headers.set('Cache-Control', 'public, max-age=604800, s-maxage=604800');
         headers.set('X-Real-Source', 'ACADEMIC_CLOUD_VAULT');
-        headers.set('X-Source-Label', '☁️ Primary Academic Cloud Storage (Encrypted Vault)');
+        headers.set('X-Source-Label', 'Primary Academic Cloud Storage (Encrypted Vault)');
         headers.set('X-Edge-Cache', 'MISS');
         headers.set('X-Edge-Location', edgeColo);
         headers.set('Access-Control-Allow-Origin', '*');

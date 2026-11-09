@@ -1,68 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X,
-  Mail,
-  Shield,
-  Trash2,
-  Eye,
-  EyeOff,
-  Edit3,
-  UserCheck,
-  UserX,
-  Activity,
-  Search,
-  CheckCircle,
-  Clock,
-  ChevronLeft,
-  ChevronRight,
-  Save,
-  RefreshCw,
-  Database,
-  Cpu,
-  Server,
-  HardDrive,
-  Globe,
-  Code,
-  Cloud,
-  Send,
-  Download,
-  Upload,
-  Zap,
-  Inbox,
-  Key,
-  Monitor,
-  ShieldCheck,
-  ShieldAlert,
-  Filter,
-  Bot,
-  Bell,
-  BellOff,
-  Power,
-  AlertTriangle,
-  Flame,
-  Check,
-  Share2,
-  Wifi,
-  Sparkles,
-  FileText,
-  Sliders,
-  Layers,
-  Scissors,
-  RotateCcw,
-  Megaphone,
-  Plus,
-  Lock,
-  MessageSquare,
-  Crown,
-  Paperclip,
-  Volume2,
-  Radio,
-  Bug,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock } from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import VirtualPdfReader from "../VirtualPdfReader";
-import { formatFileSize, formatMB, getNotePdfFileName } from "../../utils/formatUtils";
-import { detectClientHardwareProfile } from "../../utils/hardwareAdaptiveEngine";
+import { getNotePdfFileName } from "../../utils/formatUtils";
+import "../../utils/hardwareAdaptiveEngine";
 
 // Modular Tab Components
 import TabNotes from "./tabs/TabNotes";

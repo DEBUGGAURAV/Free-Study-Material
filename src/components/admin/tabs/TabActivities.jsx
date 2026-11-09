@@ -1,9 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  Activity, Trash2, LogOut, Smartphone, Laptop, Monitor, Tablet,
-  RefreshCw, Shield, CheckSquare, Square, AlertTriangle, CheckCircle2,
-  Clock, MapPin, Globe, Check, Eye, ChevronRight
-} from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Activity, Trash2, LogOut, Smartphone, Laptop, Tablet, RefreshCw, CheckSquare, Square, AlertTriangle, CheckCircle2, MapPin, Globe } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabActivities(props) {

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { CheckCircle2, AlertTriangle, Layers, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle2, AlertTriangle, X } from "lucide-react";
 import { api } from "../api";
 
 export default function QueueStatusPill({ activeJob, onCompleted, onDismiss }) {

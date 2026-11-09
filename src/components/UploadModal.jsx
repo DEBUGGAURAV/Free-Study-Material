@@ -1,16 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  X,
-  UploadCloud,
-  CheckCircle2,
-  AlertCircle,
-  Sparkles,
-  Activity,
-  Search,
-  ChevronDown,
-  Plus,
-  BookOpen,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, UploadCloud, CheckCircle2, AlertCircle, Sparkles, Activity, ChevronDown, Plus, BookOpen } from "lucide-react";
 import { api } from "../api";
 import { formatFileSize, formatMB } from "../utils/formatUtils";
 import { calculateHardwareHash, compressPdfClient } from "../utils/clientCompressor";

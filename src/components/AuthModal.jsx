@@ -1,27 +1,5 @@
-import React, { useState, useEffect } from "react";
-import {
-  X,
-  UserPlus,
-  LogIn,
-  User,
-  AlertCircle,
-  CheckCircle2,
-  Send,
-  KeyRound,
-  ShieldCheck,
-  ArrowLeft,
-  RefreshCw,
-  Mail,
-  ExternalLink,
-  Bot,
-  MessageSquare,
-  Copy,
-  Check,
-  Eye,
-  EyeOff,
-  Fingerprint,
-  Sparkles,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, UserPlus, LogIn, AlertCircle, CheckCircle2, Send, KeyRound, ShieldCheck, ArrowLeft, RefreshCw, Mail, Eye, EyeOff, Fingerprint, Sparkles } from "lucide-react";
 import { api } from "../api";
 import { loginWithPasskey, registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { triggerClientLockdown } from "../utils/antiTamperDefense";

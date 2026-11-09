@@ -11,7 +11,7 @@
  * ============================================================================
  */
 
-import { getCachedNoteBuffer, cacheNoteBuffer } from "./p2pMesh";
+import { cacheNoteBuffer } from "./p2pMesh";
 import { getOfflineNoteBuffer, getAnyCachedNoteBuffer } from "./offlineQueue";
 
 // Dynamic ICE configuration: 0 external servers when offline (instant local host resolution)
