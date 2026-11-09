@@ -24,9 +24,35 @@ function applyCors(headers, req) {
   headers.set("Access-Control-Allow-Headers", "*");
   headers.set(
     "Access-Control-Expose-Headers",
-    "Content-Type, X-AI-Engine, X-Edge-Location, X-Server-Hits, X-Edge-Cache, X-Response-Time"
+    "Content-Type, X-AI-Engine, X-Edge-Location, X-Server-Hits, X-Edge-Cache, X-Response-Time, X-Upstream-Origin, X-Cluster-Active-Nodes"
   );
   headers.set("Access-Control-Max-Age", "86400");
+}
+
+// 🌐 In-Memory Origin Health & Auto-Cascade Cooldown Tracker across Edge executions
+const failedOriginCooldowns = new Map(); // originUrl -> failureTimestamp
+
+function getOriginCooldownRemaining(origin) {
+  const failedAt = failedOriginCooldowns.get(origin) || 0;
+  const elapsed = Date.now() - failedAt;
+  return elapsed < 25000 ? 25000 - elapsed : 0; // 25s cooldown
+}
+
+function markOriginDown(origin) {
+  failedOriginCooldowns.set(origin, Date.now());
+}
+
+function markOriginUp(origin) {
+  failedOriginCooldowns.delete(origin);
+}
+
+function hashClientIdentifier(str) {
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash);
 }
 
 async function computeSha256(text) {
@@ -1198,22 +1224,55 @@ export default {
       }
     }
 
-    // 4. Multi-Origin Reverse Proxy with Instant Failover (#1: freestudymaterial1, #2: freestudymaterial2, #3: freestudymaterial)
-    const origins = [
+    // 4. Multi-Origin Active User Load Balancer with Cascade Failover (3 Nodes -> 2 Nodes -> 1 Node)
+    const baseOrigins = [
       (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
       (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
       (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
     ].filter(Boolean);
 
-    for (let i = 0; i < origins.length; i++) {
-      const origin = origins[i];
+    // Filter currently healthy origins (exclude origins in temporary 25s auto-cooldown)
+    const healthyOrigins = baseOrigins.filter((o) => getOriginCooldownRemaining(o) === 0);
+    // If all origins are in cooldown (e.g. rare global glitch), fallback to attempting all origins
+    const activePool = healthyOrigins.length > 0 ? healthyOrigins : baseOrigins;
+
+    // Sticky User Consistent Hashing (via Client IP or session token)
+    const clientIp =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-real-ip") ||
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      "127.0.0.1";
+    const clientHash = hashClientIdentifier(clientIp);
+
+    // Active User Distribution:
+    // If 3 servers are healthy: users distributed 33% / 33% / 33%
+    // If 1 server goes down: remaining 2 servers automatically share 50% / 50%
+    // If 2 servers go down: single surviving server automatically receives 100%
+    const startIndex = clientHash % activePool.length;
+    const prioritizedOrigins = [
+      ...activePool.slice(startIndex),
+      ...activePool.slice(0, startIndex),
+      // Append any cooling-down origins at the end for ultimate disaster recovery
+      ...baseOrigins.filter((o) => !activePool.includes(o)),
+    ];
+
+    for (let i = 0; i < prioritizedOrigins.length; i++) {
+      const origin = prioritizedOrigins[i];
       try {
         const originReqUrl = new URL(url.pathname + url.search, origin);
         const originRes = await fetch(new Request(originReqUrl.toString(), request));
+
         // If current origin returns 502, 503, 504 and next origin is available, auto-failover!
-        if (originRes.status >= 502 && originRes.status <= 504 && i < origins.length - 1) {
-          continue;
+        if (originRes.status >= 502 && originRes.status <= 504 && i < prioritizedOrigins.length - 1) {
+          markOriginDown(origin);
+          continue; // Cascade failover to next online node!
         }
+
+        // On successful application response (< 500), restore node to healthy status
+        if (originRes.status < 500) {
+          markOriginUp(origin);
+        }
+
         const resHeaders = new Headers();
         for (const [k, v] of originRes.headers.entries()) {
           if (k.toLowerCase() !== "set-cookie") {
@@ -1230,12 +1289,14 @@ export default {
         }
         applyCors(resHeaders, request);
         resHeaders.set("X-Upstream-Origin", origin);
+        resHeaders.set("X-Cluster-Active-Nodes", String(activePool.length));
         return new Response(originRes.body, {
           status: originRes.status,
           headers: resHeaders,
         });
       } catch (err) {
-        if (i < origins.length - 1) continue;
+        markOriginDown(origin);
+        if (i < prioritizedOrigins.length - 1) continue;
       }
     }
     return new Response("Service unavailable", { status: 503 });
