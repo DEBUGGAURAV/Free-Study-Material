@@ -17,15 +17,15 @@ const clusterNodes = [
     id: "backend_1",
     name: "Backend #1 (Original)",
     url: "https://freestudymaterial.onrender.com",
-    role: "Tertiary Fallback Node",
-    isEnabled: false, // Default OFF due to Render 5GB free monthly bandwidth cap
+    role: "Cluster Node #1",
+    isEnabled: true, // Auto-probes every 30s; automatically recovers when Render bandwidth quota resets
     status: "SUSPENDED",
     httpCode: 503,
     latencyMs: 120,
     isHealthy: false,
     downReason: "503 Service Suspended: Render Free 5GB Monthly Bandwidth Exceeded",
-    trafficRedirection: "Backend #2 (freestudymaterial1.onrender.com)",
-    trafficShare: "0% (Bypassed at Edge)",
+    trafficRedirection: "Backend #2 & #3 (50% / 50% Active Split)",
+    trafficShare: "0% (503 Suspended — Auto-Shifted to 2 Active Nodes)",
     activeUsers: 0,
     requestsOn: 0,
     requestsOff: 0,
@@ -33,10 +33,10 @@ const clusterNodes = [
   },
   {
     id: "backend_2",
-    name: "Backend #2 (Active Primary)",
+    name: "Backend #2 (Cluster Node #2)",
     url: "https://freestudymaterial1.onrender.com",
-    role: "Active Primary Production Node",
-    isEnabled: true, // Default ON
+    role: "Cluster Node #2",
+    isEnabled: true,
     status: "ONLINE",
     httpCode: 200,
     latencyMs: 58,
