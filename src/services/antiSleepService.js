@@ -32,7 +32,7 @@ function resolveWorkerUrl() {
 
 const antiSleepTelemetry = {
   isActive: false,
-  intervalMinutes: 9,
+  intervalMinutes: 12,
   lastPingTime: null,
   lastPingStatus: null,
   lastPingTarget: null,
@@ -126,6 +126,22 @@ async function executeAntiSleepPulse(isManual = false) {
     }
   }
 
+  // Layer 2C: Mutual Peer Keep-Alive (wakes and keeps all 3 cluster nodes awake simultaneously)
+  const peerNodes = [
+    "https://freestudymaterial1.onrender.com",
+    "https://freestudymaterial2.onrender.com",
+    "https://freestudymaterial.onrender.com",
+  ];
+  for (const peer of peerNodes) {
+    if (!siteUrl.includes(peer.replace("https://", ""))) {
+      fetch(`${peer}/health?pulse=peer&t=${Date.now()}`, {
+        method: "GET",
+        headers: { "User-Agent": "AcademicCloud-ClusterMesh/2.0" },
+        signal: AbortSignal.timeout(6000),
+      }).catch(() => {});
+    }
+  }
+
   // Layer 3: Local Port Loopback (keeps Node.js event loop active)
   if (boundPort) {
     try {
@@ -168,7 +184,7 @@ async function executeAntiSleepPulse(isManual = false) {
     }
   }
 
-  const intervalMs = (antiSleepTelemetry.intervalMinutes || 9) * 60 * 1000;
+  const intervalMs = (antiSleepTelemetry.intervalMinutes || 12) * 60 * 1000;
   antiSleepTelemetry.nextPingTime = new Date(Date.now() + intervalMs).toISOString();
 
   // Keep last 10 pulse records
@@ -201,9 +217,9 @@ function startAntiSleepService(port = 5000) {
     return;
   }
 
-  // Recommended default: 9 minutes (Render sleeps at 15m; 9m guarantees at least 1-2 external pulses per window)
+  // Recommended default: 12 minutes (Render sleeps after 15m; 12m guarantees 24/7 continuous uptime)
   const configuredMinutes = Number(process.env.KEEP_ALIVE_INTERVAL_MINUTES);
-  const intervalMinutes = Math.min(14, Math.max(2, !isNaN(configuredMinutes) && configuredMinutes > 0 ? configuredMinutes : 9));
+  const intervalMinutes = Math.min(14, Math.max(2, !isNaN(configuredMinutes) && configuredMinutes > 0 ? configuredMinutes : 12));
   antiSleepTelemetry.intervalMinutes = intervalMinutes;
   antiSleepTelemetry.isActive = true;
 

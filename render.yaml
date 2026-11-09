@@ -20,7 +20,7 @@ services:
       - key: DISABLE_KEEP_ALIVE
         value: "false"
       - key: KEEP_ALIVE_INTERVAL_MINUTES
-        value: "9"
+        value: "12"
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

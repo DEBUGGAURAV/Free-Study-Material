@@ -677,7 +677,7 @@ export default {
     return new Response('All backend nodes temporarily unreachable', { status: 503 });
   },
 
-  // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
+  // 💓 Scheduled Cron Trigger (Runs autonomously every 12 min on Cloudflare Anycast Edge)
   async scheduled(event, env, ctx) {
     const targets = getAllClusterOrigins(env);
     for (const target of targets) {

@@ -1322,7 +1322,7 @@ export default {
     return new Response("Service unavailable", { status: 503 });
   },
 
-  // 💓 Scheduled Cron Trigger: Pings ALL active Render origins every 10 min to keep them awake!
+  // 💓 Scheduled Cron Trigger: Pings ALL active Render origins every 12 min to keep them awake!
   async scheduled(event, env, ctx) {
     const targets = getAllClusterOrigins(env);
     for (const target of targets) {
