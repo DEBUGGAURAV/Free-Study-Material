@@ -4,8 +4,11 @@
  * Automatically fails over between Primary and Backup Render backends.
  */
 
-const PRIMARY_ORIGIN = "https://freestudymaterial1.onrender.com";
-const BACKUP_ORIGIN = "https://freestudymaterial.onrender.com";
+const BACKEND_ORIGINS = [
+  "https://freestudymaterial.onrender.com",   // #1 Main
+  "https://freestudymaterial1.onrender.com",  // #2 Secondary
+  "https://freestudymaterial2.onrender.com",  // #3 Tertiary
+];
 
 export async function onRequest(context) {
   const { request } = context;
@@ -29,7 +32,7 @@ export async function onRequest(context) {
   const hasBody = !["GET", "HEAD"].includes(request.method);
   const bodyBytes = hasBody ? await request.arrayBuffer() : null;
 
-  const origins = [PRIMARY_ORIGIN, BACKUP_ORIGIN];
+  const origins = BACKEND_ORIGINS;
   for (let i = 0; i < origins.length; i++) {
     const origin = origins[i];
     try {

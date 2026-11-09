@@ -1198,17 +1198,19 @@ export default {
       }
     }
 
-    // 4. Multi-Origin Reverse Proxy with Instant Failover (Primary: freestudymaterial1, Backup: freestudymaterial)
-    const primaryOrigin = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
-    const backupOrigin = (env.BACKUP_ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
-    const origins = Array.from(new Set([primaryOrigin, backupOrigin])).filter(Boolean);
+    // 4. Multi-Origin Reverse Proxy with Instant Failover (#1: freestudymaterial, #2: freestudymaterial1, #3: freestudymaterial2)
+    const origins = [
+      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
+    ].filter(Boolean);
 
     for (let i = 0; i < origins.length; i++) {
       const origin = origins[i];
       try {
         const originReqUrl = new URL(url.pathname + url.search, origin);
         const originRes = await fetch(new Request(originReqUrl.toString(), request));
-        // If primary returns 502, 503, 504 and backup origin is available, auto-failover to backup!
+        // If current origin returns 502, 503, 504 and next origin is available, auto-failover!
         if (originRes.status >= 502 && originRes.status <= 504 && i < origins.length - 1) {
           continue;
         }
@@ -1226,11 +1228,13 @@ export default {
     return new Response("Service unavailable", { status: 503 });
   },
 
-  // 💓 Scheduled Cron Trigger: Pings BOTH Render origins every 10 min to keep both awake!
+  // 💓 Scheduled Cron Trigger: Pings ALL 3 Render origins every 10 min to keep them awake!
   async scheduled(event, env, ctx) {
-    const primary = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
-    const backup = (env.BACKUP_ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
-    const targets = Array.from(new Set([primary, backup])).filter(Boolean);
+    const targets = [
+      (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_1 || "https://freestudymaterial1.onrender.com").replace(/\/+$/, ""),
+      (env.BACKUP_ORIGIN_URL_2 || "https://freestudymaterial2.onrender.com").replace(/\/+$/, ""),
+    ].filter(Boolean);
     for (const target of targets) {
       try {
         await fetch(`${target}/health?cron=cf&t=${Date.now()}`, {
