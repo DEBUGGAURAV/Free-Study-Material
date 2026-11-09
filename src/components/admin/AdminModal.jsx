@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock } from "lucide-react";
 import { api, getAuthToken } from "../../api";
+import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";
 import VirtualPdfReader from "../VirtualPdfReader";
 import { getNotePdfFileName } from "../../utils/formatUtils";
 import "../../utils/hardwareAdaptiveEngine";
@@ -1873,28 +1874,6 @@ export default function AdminModal({
       // 1. Primary API call (via Edge router)
       const res = await api.toggleMaintenanceMode(payload);
 
-      // 2. Broadcast directly to ALL 3 SERVERS simultaneously (Teeno Servers sync)
-      try {
-        const ALL_SERVERS = [
-          "https://freestudymaterial.onrender.com",
-          "https://freestudymaterial1.onrender.com",
-          "https://freestudymaterial2.onrender.com",
-        ];
-        const token = getAuthToken();
-        const syncReqs = ALL_SERVERS.map((origin) =>
-          fetch(`${origin}/api/admin/maintenance/sync`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Cluster-Sync": "fsm_cluster_sync_2026",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
-          }).catch(() => null)
-        );
-        Promise.allSettled(syncReqs).catch(() => {});
-      } catch (_) {}
-
       if (res && res.success) {
         setMaintenanceMode(Boolean(res.maintenanceMode));
         if (typeof onMaintenanceChange === "function") {
@@ -1927,28 +1906,6 @@ export default function AdminModal({
 
       // 1. Primary API call
       const res = await api.toggleMaintenanceMode(payload);
-
-      // 2. Broadcast directly to ALL 3 SERVERS simultaneously (Teeno Servers sync)
-      try {
-        const ALL_SERVERS = [
-          "https://freestudymaterial.onrender.com",
-          "https://freestudymaterial1.onrender.com",
-          "https://freestudymaterial2.onrender.com",
-        ];
-        const token = getAuthToken();
-        const syncReqs = ALL_SERVERS.map((origin) =>
-          fetch(`${origin}/api/admin/maintenance/sync`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Cluster-Sync": "fsm_cluster_sync_2026",
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
-            body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
-          }).catch(() => null)
-        );
-        Promise.allSettled(syncReqs).catch(() => {});
-      } catch (_) {}
 
       if (res && res.success) {
         if (typeof onMaintenanceChange === "function") {
@@ -2121,10 +2078,10 @@ export default function AdminModal({
               alignItems: "center",
               gap: "6px",
             }}
-            title="https://freestudymaterial.onrender.com (Node 1) is connected to Maintenance Mode"
+            title={`${BACKEND_CLUSTER_URLS[0] || "Backend 1"} is connected to Maintenance Mode`}
           >
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
-            Server #1 (freestudymaterial) CONNECTED
+            Server #1 CONNECTED
           </span>
 
           {/* Server #2 Connected */}
@@ -2141,10 +2098,10 @@ export default function AdminModal({
               alignItems: "center",
               gap: "6px",
             }}
-            title="https://freestudymaterial1.onrender.com (Node 2) is connected to Maintenance Mode"
+            title={`${BACKEND_CLUSTER_URLS[1] || "Backend 2"} is connected to Maintenance Mode`}
           >
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
-            Server #2 (freestudymaterial1) CONNECTED
+            Server #2 CONNECTED
           </span>
 
           {/* Server #3 Connected */}
@@ -2161,10 +2118,10 @@ export default function AdminModal({
               alignItems: "center",
               gap: "6px",
             }}
-            title="https://freestudymaterial2.onrender.com (Node 3) is connected to Maintenance Mode"
+            title={`${BACKEND_CLUSTER_URLS[2] || "Backend 3"} is connected to Maintenance Mode`}
           >
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
-            Server #3 (freestudymaterial2) CONNECTED
+            Server #3 CONNECTED
           </span>
         </div>
       </div>

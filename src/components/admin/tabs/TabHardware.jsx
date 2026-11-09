@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle } from "lucide-react";
 import { api } from "../../../api";
+import { BACKEND_CLUSTER_URLS } from "../../../config/clientConfig";
 
 export default function TabHardware(props) {
   const {
@@ -61,7 +62,7 @@ export default function TabHardware(props) {
     {
       id: "backend_1",
       name: "Backend #1 (Original)",
-      url: "https://freestudymaterial.onrender.com",
+      url: BACKEND_CLUSTER_URLS[0] || "",
       role: "Tertiary Fallback Node",
       isEnabled: false,
       status: "SUSPENDED",
@@ -78,7 +79,7 @@ export default function TabHardware(props) {
     {
       id: "backend_2",
       name: "Backend #2 (Active Node #1)",
-      url: "https://freestudymaterial1.onrender.com",
+      url: BACKEND_CLUSTER_URLS[1] || "",
       role: "Active Production Node #1",
       isEnabled: true,
       status: "ONLINE",
@@ -95,7 +96,7 @@ export default function TabHardware(props) {
     {
       id: "backend_3",
       name: "Backend #3 (Active Node #2)",
-      url: "https://freestudymaterial2.onrender.com",
+      url: BACKEND_CLUSTER_URLS[2] || "",
       role: "Active Production Node #2",
       isEnabled: true,
       status: "ONLINE",

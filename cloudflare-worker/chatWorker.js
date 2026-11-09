@@ -4,9 +4,6 @@
  * Purpose: 0% Render Load - Direct Edge WebSockets & Rapid Chat Ingestion
  */
 
-const ORIGIN_URL = "https://freestudymaterial1.onrender.com";
-const BACKUP_ORIGIN_URL = "https://freestudymaterial2.onrender.com";
-
 function applyCors(headers, req) {
   const origin = req.headers.get("Origin") || "*";
   headers.set("Access-Control-Allow-Origin", origin);
@@ -81,7 +78,15 @@ export default {
     }
 
     // 4. Default: Forward chat requests to Render backend origin
-    const originTarget = (env.ORIGIN_URL || ORIGIN_URL).replace(/\/$/, "");
+    const originTarget = (env.ORIGIN_URL || env.BACKUP_ORIGIN_URL_1 || "").replace(/\/+$/, "");
+    if (!originTarget) {
+      const headers = new Headers({ "Content-Type": "application/json" });
+      applyCors(headers, request);
+      return new Response(JSON.stringify({ success: false, error: "Backend origin is not configured" }), {
+        status: 503,
+        headers,
+      });
+    }
     const forwardUrl = originTarget + url.pathname + url.search;
 
     const proxyRequest = new Request(forwardUrl, {

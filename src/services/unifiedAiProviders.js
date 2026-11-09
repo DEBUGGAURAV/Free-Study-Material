@@ -1,11 +1,8 @@
 /**
- * ⚡ Unified Non-Chinese AI Waterfall Engine
- * High-Speed Multi-Tier Academic & Vision Providers:
- *   1. Cerebras Wafer-Scale LPU (USA • 2,000 tok/sec • Llama 3.3 70B)
- *   2. SambaNova Cloud RDU (USA • Llama 3.3 70B & Llama 3.2 Vision)
- *   3. Mistral AI (France - EU • Codestral & Pixtral 12B Math OCR)
- *   4. GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
- *   5. Cohere AI (Canada • Command R+ RAG Citations)
+ * Unified AI Provider Services
+ * Multi-Tier Academic & Vision Providers:
+ *   1. GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
+ *   2. Cohere AI (Canada • Command R+ RAG Citations)
  * 
  * 100% Non-Chinese Allied Providers • 0% Render RAM • Zero-Cost Free Tiers
  */
@@ -16,6 +13,12 @@ function getCleanBase64(imageBase64) {
 
 function getSafeMimeType(imageMimeType) {
   return imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
+}
+
+function getConfiguredModel(override, envKey) {
+  const model = String(override || process.env[envKey] || "").trim();
+  if (!model) throw new Error(`${envKey}_MISSING`);
+  return model;
 }
 
 const ACADEMIC_SYSTEM_PROMPT = `You are an elite, supportive academic AI tutor for university engineering and science students.
@@ -34,266 +37,13 @@ Rules:
 - Output ONLY the transcribed formula/text without quotes, markdown code blocks, or preamble. If completely blank, output EMPTY.`;
 
 /**
- * 1. ⚡ Cerebras Cloud (USA • Wafer-Scale Engine • ~2,000 tok/sec)
- */
-async function queryCerebras(query, context = "", options = {}) {
-  const apiKey = (process.env.CEREBRAS_API_KEY || "").trim();
-  if (!apiKey) throw new Error("CEREBRAS_API_KEY_MISSING");
-
-  const model = options.model || process.env.CEREBRAS_MODEL || "llama-3.3-70b";
-  const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-    : `[Student Question]:\n${query}`;
-
-  const controller = new AbortController();
-  const timeoutMs = options.timeoutMs || 9000;
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    const res = await fetch("https://api.cerebras.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        temperature: typeof options.temperature === "number" ? options.temperature : 0.2,
-        max_tokens: options.maxTokens || 550,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Cerebras Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty Cerebras response");
-    return { answer, model, provider: "cerebras" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * 2. 🧠 SambaNova Cloud (USA • RDU Hardware • Llama 3.3 70B & Llama 3.2 Vision)
- */
-async function querySambaNovaText(query, context = "", options = {}) {
-  const apiKey = (process.env.SAMBANOVA_API_KEY || "").trim();
-  if (!apiKey) throw new Error("SAMBANOVA_API_KEY_MISSING");
-
-  const model = options.model || process.env.SAMBANOVA_MODEL || "Meta-Llama-3.3-70B-Instruct";
-  const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-    : `[Student Question]:\n${query}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
-
-  try {
-    const res = await fetch("https://api.sambanova.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        temperature: typeof options.temperature === "number" ? options.temperature : 0.2,
-        max_tokens: options.maxTokens || 600,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`SambaNova Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty SambaNova response");
-    return { answer, model, provider: "sambanova" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function querySambaNovaVision(query, context = "", imageBase64, imageMimeType = "image/jpeg", options = {}) {
-  const apiKey = (process.env.SAMBANOVA_API_KEY || "").trim();
-  if (!apiKey) throw new Error("SAMBANOVA_API_KEY_MISSING");
-
-  const cleanB64 = getCleanBase64(imageBase64);
-  const safeMime = getSafeMimeType(imageMimeType);
-  const model = options.model || "Meta-Llama-3.2-11B-Vision-Instruct";
-
-  const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
-First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
-
-  try {
-    const res = await fetch("https://api.sambanova.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-            ],
-          },
-        ],
-        temperature: typeof options.temperature === "number" ? options.temperature : 0.15,
-        max_tokens: options.maxTokens || 700,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`SambaNova Vision Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty SambaNova Vision response");
-    return { answer, model, provider: "sambanova_vision" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * 3. 🇫🇷 Mistral AI (France - EU • Codestral & Pixtral 12B Math Vision)
- */
-async function queryMistralText(query, context = "", options = {}) {
-  const apiKey = (process.env.MISTRAL_API_KEY || "").trim();
-  if (!apiKey) throw new Error("MISTRAL_API_KEY_MISSING");
-
-  const model = options.model || process.env.MISTRAL_MODEL || "mistral-small-latest";
-  const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-    : `[Student Question]:\n${query}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
-
-  try {
-    const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        temperature: 0.2,
-        max_tokens: options.maxTokens || 600,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Mistral Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty Mistral response");
-    return { answer, model, provider: "mistral" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function queryMistralVision(query, context = "", imageBase64, imageMimeType = "image/jpeg", options = {}) {
-  const apiKey = (process.env.MISTRAL_API_KEY || "").trim();
-  if (!apiKey) throw new Error("MISTRAL_API_KEY_MISSING");
-
-  const cleanB64 = getCleanBase64(imageBase64);
-  const safeMime = getSafeMimeType(imageMimeType);
-  const model = options.model || "pixtral-12b-2409";
-
-  const promptText = options.rawPrompt || `You are an elite academic handwriting and math specialist.
-First write **📝 Extracted Text / Formula:** in clean LaTeX \\( ... \\), then solve step-by-step.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
-
-  try {
-    const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-            ],
-          },
-        ],
-        temperature: 0.15,
-        max_tokens: options.maxTokens || 700,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Mistral Vision Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty Mistral Pixtral response");
-    return { answer, model, provider: "mistral_vision" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * 4. 🐙 GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
+ * GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
  */
 async function queryGitHubModels(query, context = "", imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
   const token = (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "").trim();
   if (!token) throw new Error("GITHUB_MODELS_TOKEN_MISSING");
 
-  const model = options.model || "gpt-4o-mini";
+  const model = getConfiguredModel(options.model, "GITHUB_MODELS_MODEL");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
 
@@ -358,13 +108,13 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
 }
 
 /**
- * 5. 🇨🇦 Cohere AI (Canada • Command R+ Citations & RAG)
+ * Cohere AI (Canada • Command R+ Citations & RAG)
  */
 async function queryCohere(query, context = "", options = {}) {
   const apiKey = (process.env.COHERE_API_KEY || "").trim();
   if (!apiKey) throw new Error("COHERE_API_KEY_MISSING");
 
-  const model = options.model || "command-r-08-2024";
+  const model = getConfiguredModel(options.model, "COHERE_MODEL");
   const userContent = context && context.trim()
     ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
@@ -404,7 +154,7 @@ async function queryCohere(query, context = "", options = {}) {
 }
 
 /**
- * 6. 🤗 Hugging Face Serverless Router (100% Free • Zero Credit Card)
+ * Hugging Face Serverless Router (100% Free • Zero Credit Card)
  * Direct access to Llama 3.3 70B & Llama 3.2 11B Vision
  */
 async function queryHuggingFace(query, context = "", imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
@@ -413,7 +163,7 @@ async function queryHuggingFace(query, context = "", imageBase64 = null, imageMi
 
   const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = options.model || (cleanB64 ? "meta-llama/Llama-3.2-11B-Vision-Instruct" : "meta-llama/Llama-3.3-70B-Instruct");
+  const model = getConfiguredModel(options.model, cleanB64 ? "HUGGINGFACE_VISION_MODEL" : "HUGGINGFACE_MODEL");
 
   let messages = [];
   if (cleanB64) {
@@ -492,7 +242,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
 }
 
 /**
- * 7. 🌐 OpenRouter Free Tier (100% Free • Zero Credit Card • :free models)
+ * OpenRouter Free Tier (100% Free • Zero Credit Card • :free models)
  */
 async function queryOpenRouter(query, context = "", imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
   const apiKey = (process.env.OPENROUTER_API_KEY || "").trim();
@@ -500,7 +250,7 @@ async function queryOpenRouter(query, context = "", imageBase64 = null, imageMim
 
   const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = options.model || (cleanB64 ? "meta-llama/llama-3.2-11b-vision-instruct:free" : "meta-llama/llama-3.3-70b-instruct:free");
+  const model = getConfiguredModel(options.model, cleanB64 ? "OPENROUTER_VISION_MODEL" : "OPENROUTER_MODEL");
 
   let messages = [];
   if (cleanB64) {
@@ -537,15 +287,15 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
   };
 
   if (cleanB64) {
-    payload.model = options.model || "nvidia/nemotron-3.5-super-vl:free";
+    payload.model = model;
   } else if (options.model) {
     payload.model = options.model;
   } else {
-    payload.models = [
-      "nvidia/nemotron-3.5-lightning:free",
-      "google/gemma-4-31b-it:free",
-      "google/gemma-4-26b-a4b-it:free",
-    ];
+    payload.models = String(process.env.OPENROUTER_MODELS || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (!payload.models.length) throw new Error("OPENROUTER_MODELS_MISSING");
   }
 
   const controller = new AbortController();
@@ -557,7 +307,9 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://freestudymaterial.onrender.com",
+        ...(process.env.APP_URL || process.env.CLIENT_URL || process.env.SITE_URL
+          ? { "HTTP-Referer": process.env.APP_URL || process.env.CLIENT_URL || process.env.SITE_URL }
+          : {}),
         "X-Title": "Free Study Material",
       },
       body: JSON.stringify(payload),
@@ -580,7 +332,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
 }
 
 /**
- * 8. 🟢 NVIDIA NIM (NVIDIA Inference Microservices • DGX Cloud • H100 Tensor Core GPUs)
+ * NVIDIA NIM (NVIDIA Inference Microservices • DGX Cloud • H100 Tensor Core GPUs)
  * Text: meta/llama-3.3-70b-instruct or nvidia/llama-3.1-nemotron-70b-instruct
  * Vision: meta/llama-3.2-11b-vision-instruct
  */
@@ -588,7 +340,7 @@ async function queryNvidiaText(query, context = "", options = {}) {
   const apiKey = (options.apiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim();
   if (!apiKey) throw new Error("NVIDIA_API_KEY_MISSING");
 
-  const model = options.model || process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct";
+  const model = getConfiguredModel(options.model, "NVIDIA_MODEL");
   const userContent = context && context.trim()
     ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
@@ -636,7 +388,7 @@ async function queryNvidiaVision(query, context = "", imageBase64, imageMimeType
 
   const cleanB64 = getCleanBase64(imageBase64);
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = options.model || process.env.NVIDIA_VISION_MODEL || "meta/llama-3.2-11b-vision-instruct";
+  const model = getConfiguredModel(options.model, "NVIDIA_VISION_MODEL");
 
   const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
 First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
@@ -697,12 +449,6 @@ function isProviderConfigured(provider) {
       return Boolean((process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "").trim());
     case "openrouter":
       return Boolean((process.env.OPENROUTER_API_KEY || "").trim());
-    case "cerebras":
-      return Boolean((process.env.CEREBRAS_API_KEY || "").trim());
-    case "sambanova":
-      return Boolean((process.env.SAMBANOVA_API_KEY || "").trim());
-    case "mistral":
-      return Boolean((process.env.MISTRAL_API_KEY || "").trim());
     case "cohere":
       return Boolean((process.env.COHERE_API_KEY || "").trim());
     default:
@@ -713,11 +459,6 @@ function isProviderConfigured(provider) {
 module.exports = {
   queryNvidiaText,
   queryNvidiaVision,
-  queryCerebras,
-  querySambaNovaText,
-  querySambaNovaVision,
-  queryMistralText,
-  queryMistralVision,
   queryGitHubModels,
   queryCohere,
   queryHuggingFace,

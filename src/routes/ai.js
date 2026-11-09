@@ -716,9 +716,6 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);
     else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
     else if (provider === "nvidia" || provider === "nvidia-nim") update.nvidiaEnabled = Boolean(enabled);
-    else if (provider === "cerebras") update.cerebrasEnabled = Boolean(enabled);
-    else if (provider === "sambanova") update.sambanovaEnabled = Boolean(enabled);
-    else if (provider === "mistral") update.mistralEnabled = Boolean(enabled);
     else if (provider === "github" || provider === "github-models" || provider === "github_models") update.githubModelsEnabled = Boolean(enabled);
     else if (provider === "huggingface" || provider === "hf") update.huggingFaceEnabled = Boolean(enabled);
     else if (provider === "openrouter") update.openRouterEnabled = Boolean(enabled);
@@ -902,4 +899,3 @@ router.get("/admin/purge-history/export", authenticateToken, requireAdmin, async
 });
 
 module.exports = router;
-

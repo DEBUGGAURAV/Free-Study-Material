@@ -361,7 +361,7 @@ app.get("*", (req, res) => {
         <body style="font-family:sans-serif;background:#090d16;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
           <div style="text-align:center;">
             <h1>🚀 Academic Cloud API Online</h1>
-            <p>Domain: freestudymaterial.onrender.com</p>
+            <p>Domain: ${getSiteUrl() || "not configured"}</p>
             <p>Run <code>npm run build</code> to generate frontend bundle.</p>
           </div>
         </body>
@@ -555,4 +555,3 @@ function startServer(portToTry, attempt = 1) {
 startServer(initialPort);
 
 module.exports = app;
-

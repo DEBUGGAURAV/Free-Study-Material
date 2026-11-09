@@ -10,8 +10,7 @@ function isTrustedOrigin(origin) {
     origin.includes('onrender.com') ||
     origin.includes('localhost') ||
     origin.includes('127.0.0.1') ||
-    origin.includes('workers.dev') ||
-    origin.includes('freestudymaterial')
+    origin.includes('workers.dev')
   );
 }
 
@@ -55,16 +54,16 @@ function hashClientIdentifier(str) {
   return Math.abs(hash);
 }
 
-// Returns all 3 cluster nodes guaranteed (even if Cloudflare env vars are missing or partial)
+// Cluster origins are deployment configuration, not code defaults.
 function getAllClusterOrigins(env) {
   const list = [
-    (env.BACKUP_ORIGIN_URL_1 || 'https://freestudymaterial1.onrender.com').replace(/\/+$/, ''),
-    (env.BACKUP_ORIGIN_URL_2 || 'https://freestudymaterial2.onrender.com').replace(/\/+$/, ''),
-    (env.ORIGIN_URL || 'https://freestudymaterial.onrender.com').replace(/\/+$/, ''),
+    env.BACKUP_ORIGIN_URL_1,
+    env.BACKUP_ORIGIN_URL_2,
+    env.ORIGIN_URL,
   ];
   const unique = [];
   for (const item of list) {
-    if (item && !unique.includes(item)) unique.push(item);
+    if (item && !unique.includes(item.replace(/\/+$/, ''))) unique.push(item.replace(/\/+$/, ''));
   }
   return unique;
 }
@@ -99,8 +98,16 @@ export default {
     // Dynamic 3 -> 2 -> 1 Cascade Load Balancer
     const streamOrigins = getPrioritizedClusterOrigins(env, clientIp);
     const activeHealthyCount = streamOrigins.filter((o) => getOriginCooldownRemaining(o) === 0).length || 1;
-    const originBase = streamOrigins[0] || 'https://freestudymaterial1.onrender.com';
+    const originBase = streamOrigins[0] || '';
     const edgeColo = request.cf?.colo || 'Global';
+    if (!originBase) {
+      const headers = new Headers({ 'Content-Type': 'application/json' });
+      applyCors(headers, request);
+      return new Response(JSON.stringify({ success: false, error: 'Backend origins are not configured' }), {
+        status: 503,
+        headers,
+      });
+    }
 
     // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains
     const originHeader = request.headers.get('Origin') || request.headers.get('Referer') || '';
@@ -200,7 +207,7 @@ export default {
 
           if (groqKey) {
             try {
-              const groqModel = env.GROQ_MODEL || 'openai/gpt-oss-20b';
+              const groqModel = env.GROQ_MODEL;
               const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -233,7 +240,7 @@ export default {
 
           if (!answer && geminiKey) {
             try {
-              const geminiModel = env.GEMINI_MODEL || 'gemini-flash-lite-latest';
+              const geminiModel = env.GEMINI_MODEL;
               const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent?key=' + geminiKey;
               const geminiRes = await fetch(geminiUrl, {
                 method: 'POST',
@@ -264,7 +271,7 @@ export default {
               success: true,
               answer: answer,
               provider: provider,
-              model: provider === 'groq' ? (env.GROQ_MODEL || 'openai/gpt-oss-20b') : (env.GEMINI_MODEL || 'gemini-flash-lite-latest'),
+              model: provider === 'groq' ? env.GROQ_MODEL : env.GEMINI_MODEL,
               failover: failover,
               edgeLocation: edgeColo,
               cached: false

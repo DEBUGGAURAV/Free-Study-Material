@@ -1231,28 +1231,6 @@ export const api = {
       body: JSON.stringify(payload),
     });
 
-    // 2. Broadcast directly to ALL 3 Backend Servers simultaneously (Teeno Servers Connected)
-    try {
-      const ALL_SERVERS = [
-        "https://freestudymaterial.onrender.com",
-        "https://freestudymaterial1.onrender.com",
-        "https://freestudymaterial2.onrender.com",
-      ];
-      const token = getAuthToken();
-      const syncPromises = ALL_SERVERS.map((origin) =>
-        fetch(`${origin}/api/admin/maintenance/sync`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Cluster-Sync": "fsm_cluster_sync_2026",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
-        }).catch(() => null)
-      );
-      Promise.allSettled(syncPromises).catch(() => {});
-    } catch (_) {}
-
     return res;
   },
   toggleDownloadAllowed: async (allowDownload, reason, schedule) => {

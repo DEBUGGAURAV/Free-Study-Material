@@ -17,6 +17,40 @@ services:
         value: production
       - key: CLIENT_URL
         value: https://freestudymaterial.onrender.com
+      - key: APP_URL
+        value: https://freestudymaterial.onrender.com
+      - key: BACKEND_CLUSTER_URLS
+        value: https://freestudymaterial.onrender.com,https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+      - key: VITE_BACKEND_CLUSTER_URLS
+        value: https://freestudymaterial.onrender.com,https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+      - key: CLUSTER_SYNC_SECRET
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b
+      - key: GEMINI_MODEL
+        value: gemini-flash-lite-latest
+      - key: GEMINI_FALLBACK_MODELS
+        value: gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.0-flash
+      - key: CLOUDFLARE_AI_MODELS
+        value: "@cf/meta/llama-3.1-8b-instruct,@cf/meta/llama-3.2-1b-instruct"
+      - key: NVIDIA_MODEL
+        value: meta/llama-3.3-70b-instruct
+      - key: NVIDIA_VISION_MODEL
+        value: meta/llama-3.2-11b-vision-instruct
+      - key: GITHUB_MODELS_MODEL
+        value: gpt-4o-mini
+      - key: COHERE_MODEL
+        value: command-r-08-2024
+      - key: HUGGINGFACE_MODEL
+        value: meta-llama/Llama-3.3-70B-Instruct
+      - key: HUGGINGFACE_VISION_MODEL
+        value: meta-llama/Llama-3.2-11B-Vision-Instruct
+      - key: OPENROUTER_MODEL
+        value: meta-llama/llama-3.3-70b-instruct:free
+      - key: OPENROUTER_VISION_MODEL
+        value: meta-llama/llama-3.2-11b-vision-instruct:free
+      - key: OPENROUTER_MODELS
+        value: nvidia/nemotron-3.5-lightning:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free
       - key: DISABLE_KEEP_ALIVE
         value: "false"
       - key: KEEP_ALIVE_INTERVAL_MINUTES

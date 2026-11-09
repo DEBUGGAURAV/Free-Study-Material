@@ -22,6 +22,18 @@ export const SITE_DESCRIPTION =
   import.meta.env.VITE_SITE_DESCRIPTION ||
   `${SITE_NAME} — High performance university study notes, engineering blueprints, and cloud lecture archives.`;
 
+export const BACKEND_CLUSTER_URLS = (import.meta.env.VITE_BACKEND_CLUSTER_URLS || "")
+  .split(",")
+  .map((url) => {
+    try {
+      const parsed = new URL(url.trim());
+      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.origin : "";
+    } catch {
+      return "";
+    }
+  })
+  .filter((url, index, urls) => url && urls.indexOf(url) === index);
+
 /**
  * Returns current browser hostname or configured domain
  */
@@ -29,7 +41,7 @@ export function getClientDomain() {
   if (typeof window !== "undefined" && window.location && window.location.host) {
     return window.location.host;
   }
-  return import.meta.env.VITE_SITE_DOMAIN || "freestudymaterial.onrender.com";
+  return import.meta.env.VITE_SITE_DOMAIN || "";
 }
 
 /**
@@ -39,5 +51,5 @@ export function getClientOrigin() {
   if (typeof window !== "undefined" && window.location && window.location.origin) {
     return window.location.origin;
   }
-  return import.meta.env.VITE_CLIENT_URL || "https://freestudymaterial.onrender.com";
+  return import.meta.env.VITE_CLIENT_URL || "";
 }

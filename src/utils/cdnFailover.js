@@ -12,23 +12,17 @@ import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
 import { cacheNoteBuffer } from "./p2pMesh";
 import { loadAuthSession } from "./authIndexedDb";
 
-const isLocalHost =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1");
-
 // Determine valid Cloudflare Worker URL (Tier 2 Edge CDN Worker)
 const rawWorkerEnv =
   typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL
     ? String(import.meta.env.VITE_CF_WORKER_URL).trim()
     : "";
-export const CF_WORKER =
-  rawWorkerEnv || (!isLocalHost ? "https://fsm-edge.jnplotus.workers.dev" : "");
+export const CF_WORKER = rawWorkerEnv;
 
 export const originBase =
   typeof window !== "undefined" && window.location.origin
     ? window.location.origin
-    : "http://localhost:5000";
+    : import.meta.env?.VITE_BACKEND_URL || "";
 
 export const CDN_ENDPOINTS = CF_WORKER ? [CF_WORKER, originBase] : [originBase];
 

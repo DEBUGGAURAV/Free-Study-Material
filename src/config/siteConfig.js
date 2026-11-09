@@ -17,7 +17,7 @@ const DEFAULT_DOMAIN =
   process.env.RENDER_EXTERNAL_URL ||
   (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null) ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-  "https://freestudymaterial.onrender.com";
+  "";
 
 /**
  * Get active canonical platform URL dynamically
@@ -61,7 +61,7 @@ function getSiteDomain(req = null) {
     const url = new URL(getSiteUrl(req));
     return url.host;
   } catch (_) {
-    return "freestudymaterial.onrender.com";
+    return "";
   }
 }
 

@@ -16,11 +16,6 @@ const { queryCloudflareWorkersAi, isCloudflareAiAvailable } = require("./cloudfl
 const {
   queryNvidiaText,
   queryNvidiaVision,
-  queryCerebras,
-  querySambaNovaText,
-  querySambaNovaVision,
-  queryMistralText,
-  queryMistralVision,
   queryGitHubModels,
   queryCohere,
   queryHuggingFace,
@@ -37,17 +32,14 @@ const DEFAULT_AI_SETTINGS = {
   githubModelsEnabled: true,
   huggingFaceEnabled: true,
   openRouterEnabled: true,
-  cerebrasEnabled: true,
-  sambanovaEnabled: true,
-  mistralEnabled: true,
   cohereEnabled: true,
   edgeProxyEnabled: true,
   circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
   circleSearchCooldownSec: 3, // ⭕ Cooldown between circle searches
   circleSearchUsedToday: 0,
-  groqModel: "openai/gpt-oss-20b",
-  geminiModel: "gemini-flash-lite-latest",
+  groqModel: process.env.GROQ_MODEL || "",
+  geminiModel: process.env.GEMINI_MODEL || "",
   groqLimit: 14400,
   geminiLimit: 1500,
   cloudflareAiLimit: 1000,
@@ -66,9 +58,6 @@ const DEFAULT_AI_SETTINGS = {
   githubToken: "",
   huggingFaceApiKey: "",
   openRouterApiKey: "",
-  cerebrasApiKey: "",
-  sambanovaApiKey: "",
-  mistralApiKey: "",
   cohereApiKey: "",
   updatedAt: new Date().toISOString(),
 };
@@ -138,9 +127,6 @@ async function loadAiSettings() {
           groqApiKey: data.groqApiKey || process.env.GROQ_API_KEY || "",
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
           nvidiaApiKey: data.nvidiaApiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "",
-          cerebrasApiKey: data.cerebrasApiKey || process.env.CEREBRAS_API_KEY || "",
-          sambanovaApiKey: data.sambanovaApiKey || process.env.SAMBANOVA_API_KEY || "",
-          mistralApiKey: data.mistralApiKey || process.env.MISTRAL_API_KEY || "",
           githubToken: data.githubToken || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "",
           huggingFaceApiKey: data.huggingFaceApiKey || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "",
           openRouterApiKey: data.openRouterApiKey || process.env.OPENROUTER_API_KEY || "",
@@ -149,10 +135,10 @@ async function loadAiSettings() {
 
         // Auto-upgrade legacy/deprecated models to active, working models
         if (!currentAiSettings.geminiModel || currentAiSettings.geminiModel.includes("gemini-2.0") || currentAiSettings.geminiModel.includes("gemini-1.5") || currentAiSettings.geminiModel.includes("gemini-2.5")) {
-          currentAiSettings.geminiModel = "gemini-flash-lite-latest";
+          currentAiSettings.geminiModel = process.env.GEMINI_MODEL || "";
         }
         if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
-          currentAiSettings.groqModel = "openai/gpt-oss-20b";
+          currentAiSettings.groqModel = process.env.GROQ_MODEL || "";
         }
         saveAiSettingsToDb().catch(() => {});
       } else {
@@ -162,9 +148,6 @@ async function loadAiSettings() {
         currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
         currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
         currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
-        currentAiSettings.cerebrasApiKey = process.env.CEREBRAS_API_KEY || "";
-        currentAiSettings.sambanovaApiKey = process.env.SAMBANOVA_API_KEY || "";
-        currentAiSettings.mistralApiKey = process.env.MISTRAL_API_KEY || "";
         currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
         await db.collection("settings").doc("ai_engine").set(currentAiSettings, { merge: true });
       }
@@ -175,9 +158,6 @@ async function loadAiSettings() {
       currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
       currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
       currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
-      currentAiSettings.cerebrasApiKey = process.env.CEREBRAS_API_KEY || "";
-      currentAiSettings.sambanovaApiKey = process.env.SAMBANOVA_API_KEY || "";
-      currentAiSettings.mistralApiKey = process.env.MISTRAL_API_KEY || "";
       currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
     }
     checkDailyReset();
@@ -214,15 +194,6 @@ function getApiKey(provider) {
   }
   if (provider === "nvidia" || provider === "nvidia-nim") {
     return (process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || currentAiSettings.nvidiaApiKey || "").trim();
-  }
-  if (provider === "cerebras") {
-    return (process.env.CEREBRAS_API_KEY || currentAiSettings.cerebrasApiKey || "").trim();
-  }
-  if (provider === "sambanova") {
-    return (process.env.SAMBANOVA_API_KEY || currentAiSettings.sambanovaApiKey || "").trim();
-  }
-  if (provider === "mistral") {
-    return (process.env.MISTRAL_API_KEY || currentAiSettings.mistralApiKey || "").trim();
   }
   if (provider === "github") {
     return (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || currentAiSettings.githubToken || "").trim();
@@ -277,7 +248,7 @@ Formatting rules:
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: currentAiSettings.groqModel || "openai/gpt-oss-20b",
+        model: currentAiSettings.groqModel || process.env.GROQ_MODEL || "",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -451,10 +422,12 @@ Answer clearly and accurately based on the provided notes context.
     });
   }
 
-  const primaryModel = currentAiSettings.geminiModel || "gemini-flash-lite-latest";
-  const modelsToTry = Array.from(
-    new Set([primaryModel, "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-2.0-flash"])
-  );
+  const primaryModel = currentAiSettings.geminiModel || process.env.GEMINI_MODEL || "";
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+  const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels].filter(Boolean)));
 
   let lastError = null;
   const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 750;
@@ -593,7 +566,7 @@ Strict Rules:
       });
       extracted = (gemText || "").trim();
       provider = "gemini_vision";
-      model = currentAiSettings.geminiModel || "gemini-flash-lite-latest";
+      model = currentAiSettings.geminiModel || process.env.GEMINI_MODEL || "";
       currentAiSettings.geminiUsedToday += 1;
     } catch (gemErr) {
       console.warn("[HANDWRITING-OCR] Gemini Vision notice:", gemErr.message);
@@ -618,41 +591,7 @@ Strict Rules:
     }
   }
 
-  // Tier 3: SambaNova Cloud Llama 3.2 Vision Failover
-  if (!extracted && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
-    try {
-      const snRes = await querySambaNovaVision("", "", cleanB64, imageMimeType, {
-        rawPrompt: ocrPrompt,
-        maxTokens: 420,
-        temperature: 0.05,
-        timeoutMs: 8000,
-      });
-      extracted = (snRes.answer || "").trim();
-      provider = "sambanova_vision";
-      model = snRes.model;
-    } catch (snErr) {
-      console.warn("[HANDWRITING-OCR] SambaNova Vision notice:", snErr.message);
-    }
-  }
-
-  // Tier 4: Mistral Pixtral 12B Math & OCR Vision Failover (France - EU)
-  if (!extracted && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
-    try {
-      const misRes = await queryMistralVision("", "", cleanB64, imageMimeType, {
-        rawPrompt: ocrPrompt,
-        maxTokens: 420,
-        temperature: 0.05,
-        timeoutMs: 8000,
-      });
-      extracted = (misRes.answer || "").trim();
-      provider = "mistral_vision";
-      model = misRes.model;
-    } catch (misErr) {
-      console.warn("[HANDWRITING-OCR] Mistral Pixtral notice:", misErr.message);
-    }
-  }
-
-  // Tier 5: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure)
+  // Tier 3: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure)
   if (!extracted && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
     try {
       const ghRes = await queryGitHubModels("", "", cleanB64, imageMimeType, {
@@ -825,33 +764,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       }
     }
 
-    // Tier 1C: SambaNova Cloud Llama 3.2 Vision Failover
-    if (!finalAnswer && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
-      try {
-        const snRes = await querySambaNovaVision(cleanQuery, context, imageBase64, imageMimeType, options);
-        finalAnswer = snRes.answer;
-        finalProvider = "sambanova_vision";
-        finalModel = snRes.model;
-      } catch (snErr) {
-        console.warn("[AI-ENGINE] ⚠️ SambaNova Vision notice:", snErr.message);
-        failoverOccurred = true;
-      }
-    }
-
-    // Tier 1D: Mistral Pixtral 12B Math & OCR Vision Failover (France - EU)
-    if (!finalAnswer && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
-      try {
-        const misRes = await queryMistralVision(cleanQuery, context, imageBase64, imageMimeType, options);
-        finalAnswer = misRes.answer;
-        finalProvider = "mistral_vision";
-        finalModel = misRes.model;
-      } catch (misErr) {
-        console.warn("[AI-ENGINE] ⚠️ Mistral Pixtral notice:", misErr.message);
-        failoverOccurred = true;
-      }
-    }
-
-    // Tier 1E: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure • Zero Card)
+    // Tier 1C: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure • Zero Card)
     if (!finalAnswer && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
       try {
         const ghRes = await queryGitHubModels(cleanQuery, context, imageBase64, imageMimeType, options);
@@ -908,22 +821,6 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Intent 2: Normal Text Doubt / Query -> Unified High-Speed Waterfall Architecture
-  // Tier 1 (Text): Cerebras Cloud Wafer-Scale LPU (USA • 2,000 tok/sec King of Speed)
-  if (!finalAnswer && !isImageOrDiagram) {
-    const canUseCerebras = currentAiSettings.cerebrasEnabled !== false &&
-                           isProviderConfigured("cerebras");
-    if (canUseCerebras) {
-      try {
-        const cRes = await queryCerebras(cleanQuery, context, options);
-        finalAnswer = cRes.answer;
-        finalProvider = "cerebras";
-        finalModel = cRes.model;
-      } catch (cErr) {
-        console.warn("[AI-ENGINE] ⚠️ Cerebras notice:", cErr.message, "-> Shifting to Groq LPU...");
-        failoverOccurred = true;
-      }
-    }
-  }
 
   // Tier 2 (Text): Groq Cloud LPU (~800 tok/sec, 0.3s sub-second speed champion)
   if (!finalAnswer && !isImageOrDiagram) {
@@ -957,7 +854,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
         finalAnswer = await queryCloudflareWorkersAi(cleanQuery, context, options);
         currentAiSettings.cloudflareAiUsedToday = (currentAiSettings.cloudflareAiUsedToday || 0) + 1;
         finalProvider = "cloudflare_workers_ai";
-        finalModel = "@cf/meta/llama-3.1-8b-instruct";
+        finalModel = (process.env.CLOUDFLARE_AI_MODELS || "").split(",")[0] || "";
       } catch (cfErr) {
         console.warn("[AI-ENGINE] ⚠️ Cloudflare Workers AI notice:", cfErr.message, "-> Shifting to Gemini Tier 4...");
       }
@@ -997,33 +894,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   }
 
-  // Tier 5 (Text): SambaNova Cloud (Llama 3.3 70B on RDU • USA)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.sambanovaEnabled !== false && isProviderConfigured("sambanova")) {
-    try {
-      const snRes = await querySambaNovaText(cleanQuery, context, options);
-      finalAnswer = snRes.answer;
-      finalProvider = "sambanova";
-      finalModel = snRes.model;
-      failoverOccurred = true;
-    } catch (snErr) {
-      console.warn("[AI-ENGINE] ⚠️ SambaNova text notice:", snErr.message);
-    }
-  }
-
-  // Tier 6 (Text): Mistral AI (Codestral / Mistral Small • France - EU)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.mistralEnabled !== false && isProviderConfigured("mistral")) {
-    try {
-      const misRes = await queryMistralText(cleanQuery, context, options);
-      finalAnswer = misRes.answer;
-      finalProvider = "mistral";
-      finalModel = misRes.model;
-      failoverOccurred = true;
-    } catch (misErr) {
-      console.warn("[AI-ENGINE] ⚠️ Mistral text notice:", misErr.message);
-    }
-  }
-
-  // Tier 7 (Text): GitHub Models (OpenAI GPT-4o-mini • Microsoft Azure USA • Zero Card)
+  // Tier 5 (Text): GitHub Models (OpenAI GPT-4o-mini • Microsoft Azure USA • Zero Card)
   if (!finalAnswer && !isImageOrDiagram && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
     try {
       const ghRes = await queryGitHubModels(cleanQuery, context, null, "image/jpeg", options);
@@ -1159,22 +1030,16 @@ function getAiTelemetry() {
       cloudflareAiEnabled: currentAiSettings.cloudflareAiEnabled !== false,
       cloudflareAiLimit: currentAiSettings.cloudflareAiLimit || 1000,
       cloudflareAiConfigured: isCloudflareAiAvailable(),
-      cloudflareModel: "@cf/meta/llama-3.1-8b-instruct",
+      cloudflareModel: (process.env.CLOUDFLARE_AI_MODELS || "").split(",")[0] || "",
       nvidiaEnabled: currentAiSettings.nvidiaEnabled !== false,
       nvidiaConfigured: Boolean(getApiKey("nvidia")),
-      nvidiaModel: "meta/llama-3.3-70b-instruct",
+      nvidiaModel: process.env.NVIDIA_MODEL || "",
       githubModelsEnabled: currentAiSettings.githubModelsEnabled !== false,
       githubModelsConfigured: isProviderConfigured("github"),
       huggingFaceEnabled: currentAiSettings.huggingFaceEnabled !== false,
       huggingFaceConfigured: isProviderConfigured("huggingface"),
       openRouterEnabled: currentAiSettings.openRouterEnabled !== false,
       openRouterConfigured: isProviderConfigured("openrouter"),
-      cerebrasEnabled: currentAiSettings.cerebrasEnabled !== false,
-      cerebrasConfigured: isProviderConfigured("cerebras"),
-      sambanovaEnabled: currentAiSettings.sambanovaEnabled !== false,
-      sambanovaConfigured: isProviderConfigured("sambanova"),
-      mistralEnabled: currentAiSettings.mistralEnabled !== false,
-      mistralConfigured: isProviderConfigured("mistral"),
       cohereEnabled: currentAiSettings.cohereEnabled !== false,
       cohereConfigured: isProviderConfigured("cohere"),
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
@@ -1229,9 +1094,6 @@ async function updateAiSettings({
   groqApiKey,
   geminiApiKey,
   nvidiaApiKey,
-  cerebrasApiKey,
-  sambanovaApiKey,
-  mistralApiKey,
   githubToken,
   huggingFaceApiKey,
   openRouterApiKey,
@@ -1239,9 +1101,6 @@ async function updateAiSettings({
   nvidiaEnabled,
   huggingFaceEnabled,
   openRouterEnabled,
-  cerebrasEnabled,
-  sambanovaEnabled,
-  mistralEnabled,
   githubModelsEnabled,
   cohereEnabled,
   groqLimit,
@@ -1258,9 +1117,6 @@ async function updateAiSettings({
   if (typeof circleSearchCooldownSec === "number" && circleSearchCooldownSec >= 0) currentAiSettings.circleSearchCooldownSec = circleSearchCooldownSec;
   if (typeof huggingFaceEnabled === "boolean") currentAiSettings.huggingFaceEnabled = huggingFaceEnabled;
   if (typeof openRouterEnabled === "boolean") currentAiSettings.openRouterEnabled = openRouterEnabled;
-  if (typeof cerebrasEnabled === "boolean") currentAiSettings.cerebrasEnabled = cerebrasEnabled;
-  if (typeof sambanovaEnabled === "boolean") currentAiSettings.sambanovaEnabled = sambanovaEnabled;
-  if (typeof mistralEnabled === "boolean") currentAiSettings.mistralEnabled = mistralEnabled;
   if (typeof githubModelsEnabled === "boolean") currentAiSettings.githubModelsEnabled = githubModelsEnabled;
   if (typeof cohereEnabled === "boolean") currentAiSettings.cohereEnabled = cohereEnabled;
 
@@ -1281,15 +1137,6 @@ async function updateAiSettings({
   }
   if (typeof openRouterApiKey === "string" && openRouterApiKey.trim()) {
     currentAiSettings.openRouterApiKey = openRouterApiKey.trim();
-  }
-  if (typeof cerebrasApiKey === "string" && cerebrasApiKey.trim()) {
-    currentAiSettings.cerebrasApiKey = cerebrasApiKey.trim();
-  }
-  if (typeof sambanovaApiKey === "string" && sambanovaApiKey.trim()) {
-    currentAiSettings.sambanovaApiKey = sambanovaApiKey.trim();
-  }
-  if (typeof mistralApiKey === "string" && mistralApiKey.trim()) {
-    currentAiSettings.mistralApiKey = mistralApiKey.trim();
   }
   if (typeof cohereApiKey === "string" && cohereApiKey.trim()) {
     currentAiSettings.cohereApiKey = cohereApiKey.trim();
@@ -1350,15 +1197,6 @@ async function testAiProvider(provider) {
     const { getCachedCircleSolution, computeQueryHash } = require("./tursoCircleSearchService");
     await getCachedCircleSolution(computeQueryHash("test-ping"));
     return { provider: "turso", success: true, answer: "Turso LibSQL Edge Cloud Ready (0ms Cache Active)", latencyMs: Date.now() - start };
-  } else if (provider === "cerebras") {
-    const res = await queryCerebras("Test ping. Reply 'Cerebras LPU Ready' in 3 words.", "College test");
-    return { provider: "cerebras", success: true, answer: res.answer, latencyMs: Date.now() - start };
-  } else if (provider === "sambanova") {
-    const res = await querySambaNovaText("Test ping. Reply 'SambaNova RDU Ready' in 3 words.", "College test");
-    return { provider: "sambanova", success: true, answer: res.answer, latencyMs: Date.now() - start };
-  } else if (provider === "mistral") {
-    const res = await queryMistralText("Test ping. Reply 'Mistral Ready' in 3 words.", "College test");
-    return { provider: "mistral", success: true, answer: res.answer, latencyMs: Date.now() - start };
   } else if (provider === "github") {
     const res = await queryGitHubModels("Test ping. Reply 'GitHub Models Ready' in 3 words.", "College test");
     return { provider: "github", success: true, answer: res.answer, latencyMs: Date.now() - start };
@@ -1461,7 +1299,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🔥 Cloudflare Workers AI (Native Edge GPU)",
       tier: "🌐 Tier 2 (Serverless Edge GPU Inference)",
-      model: model || "@cf/meta/llama-3.1-8b-instruct",
+      model: model || (process.env.CLOUDFLARE_AI_MODELS || "").split(",")[0] || "",
       speed: "⚡ ~0.3s Edge GPU",
     };
   }
@@ -1470,7 +1308,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "⚡ Groq Cloud LPU",
       tier: "🚀 Tier 1 (Ultra-Fast Hardware LPU)",
-      model: model || "openai/gpt-oss-20b",
+      model: model || currentAiSettings.groqModel || process.env.GROQ_MODEL || "",
       speed: "⚡ ~800 tokens/sec",
     };
   }
@@ -1479,7 +1317,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🌐 Google Gemini Flash",
       tier: "🧠 Tier 3 (Multimodal Vision & Deep Academic Reasoning)",
-      model: model || "gemini-flash-lite-latest",
+      model: model || currentAiSettings.geminiModel || process.env.GEMINI_MODEL || "",
       speed: "⚡ ~0.4s Cloud TPU",
     };
   }
@@ -1488,35 +1326,8 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🟢 NVIDIA NIM DGX Cloud",
       tier: "⚡ Hardware Tensor Core Tier (NVIDIA H100 GPU)",
-      model: model || "meta/llama-3.3-70b-instruct",
+      model: model || process.env.NVIDIA_MODEL || "",
       speed: "⚡ ~250 tok/sec (TensorRT-LLM)",
-    };
-  }
-
-  if (p.includes("cerebras")) {
-    return {
-      name: "⚡ Cerebras Wafer-Scale LPU",
-      tier: "🚀 Tier 1 (Ultra-Fast 2,000 tok/s Hardware LPU)",
-      model: model || "llama-3.3-70b",
-      speed: "⚡ ~2,000 tok/sec (0.15s)",
-    };
-  }
-
-  if (p.includes("sambanova")) {
-    return {
-      name: "🧠 SambaNova Cloud RDU",
-      tier: "⚡ Tier 5 (Reconfigurable Dataflow Unit • USA)",
-      model: model || "Meta-Llama-3.3-70B / 3.2 Vision",
-      speed: "⚡ ~300 tok/sec",
-    };
-  }
-
-  if (p.includes("mistral") || p.includes("pixtral")) {
-    return {
-      name: "🇫🇷 Mistral AI (Europe)",
-      tier: "📐 Tier 6 (European Math & LaTeX Vision)",
-      model: model || "Mistral / Pixtral 12B",
-      speed: "⚡ ~200 tok/sec",
     };
   }
 
@@ -1524,7 +1335,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🐙 GitHub Models (Microsoft Azure)",
       tier: "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)",
-      model: model || "gpt-4o-mini",
+      model: model || process.env.GITHUB_MODELS_MODEL || "",
       speed: "⚡ Microsoft Cloud",
     };
   }
@@ -1533,7 +1344,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🇨🇦 Cohere AI (Canada)",
       tier: "📌 Tier 8 (Command R+ Citations)",
-      model: model || "command-r-08-2024",
+      model: model || process.env.COHERE_MODEL || "",
       speed: "⚡ Enterprise Cloud",
     };
   }
@@ -1542,7 +1353,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🤗 Hugging Face Serverless",
       tier: "🚀 Serverless Router (Llama 3.3 70B & 3.2 Vision)",
-      model: model || "meta-llama/Llama-3.3-70B-Instruct",
+      model: model || process.env.HUGGINGFACE_MODEL || "",
       speed: "⚡ Serverless Cloud",
     };
   }
@@ -1551,7 +1362,7 @@ function getAiEngineAuditDetails(provider, model, cached) {
     return {
       name: "🌐 OpenRouter Free Engine",
       tier: "🚀 Free Model Router",
-      model: model || "meta-llama/llama-3.3-70b-instruct:free",
+      model: model || process.env.OPENROUTER_MODEL || "",
       speed: "⚡ Cloud Router",
     };
   }
@@ -1803,4 +1614,3 @@ module.exports = {
   dispatchUserPurgeTelegramAudit,
   exportAiSearchReport,
 };
-

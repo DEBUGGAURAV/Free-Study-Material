@@ -13,9 +13,19 @@ crons = ["*/12 * * * *"]
 [vars]
 ORIGIN_URL = "https://freestudymaterial1.onrender.com"
 BACKUP_ORIGIN_URL_1 = "https://freestudymaterial2.onrender.com"
-BACKUP_ORIGIN_URL_2 = "https://freestudymaterial2.onrender.com"
+BACKUP_ORIGIN_URL_2 = "https://freestudymaterial.onrender.com"
+APP_URL = "https://freestudymaterial.onrender.com"
 GROQ_MODEL = "openai/gpt-oss-20b"
+GROQ_VISION_MODELS = "meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct"
 GEMINI_MODEL = "gemini-flash-lite-latest"
+GEMINI_FALLBACK_MODELS = "gemini-2.5-flash-lite,gemini-flash-latest"
+CLOUDFLARE_AI_MODEL = "@cf/meta/llama-3.1-8b-instruct"
+GITHUB_MODELS_MODEL = "gpt-4o-mini"
+COHERE_MODEL = "command-r-08-2024"
+HUGGINGFACE_MODEL = "meta-llama/Llama-3.3-70B-Instruct"
+HUGGINGFACE_VISION_MODEL = "meta-llama/Llama-3.2-11B-Vision-Instruct"
+OPENROUTER_VISION_MODEL = "nvidia/nemotron-3.5-super-vl:free"
+OPENROUTER_MODELS = "nvidia/nemotron-3.5-lightning:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free"
 
 # Note: Add the following secrets in Cloudflare Dashboard or via CLI:
 # wrangler secret put GROQ_API_KEY

@@ -4,19 +4,19 @@
  * 
  * Tracks:
  * 1. Live requests ON (Successful 2xx/3xx) & OFF (Failed 4xx/5xx) & live RPS
- * 2. 3-Backend Cluster Status with Admin Interactive ON/OFF Switches:
- *    - Backend #1: https://freestudymaterial.onrender.com (Original - 5GB Quota Suspended)
- *    - Backend #2: https://freestudymaterial1.onrender.com (Active Primary - Online)
- *    - Backend #3: https://freestudymaterial2.onrender.com (Hot Standby - Online)
+ * 2. Backend cluster status with admin interactive ON/OFF switches.
  * 3. Live Active Student Users connected to each backend server
  * 4. Automatic user traffic failover redirection across nodes
  */
+
+const { getBackendClusterUrls } = require("../config/clusterConfig");
+const backendClusterUrls = getBackendClusterUrls();
 
 const clusterNodes = [
   {
     id: "backend_1",
     name: "Backend #1 (Original)",
-    url: "https://freestudymaterial.onrender.com",
+    url: backendClusterUrls[0] || "",
     role: "Cluster Node #1",
     isEnabled: true, // Auto-probes every 30s; automatically recovers when Render bandwidth quota resets
     status: "SUSPENDED",
@@ -34,7 +34,7 @@ const clusterNodes = [
   {
     id: "backend_2",
     name: "Backend #2 (Cluster Node #2)",
-    url: "https://freestudymaterial1.onrender.com",
+    url: backendClusterUrls[1] || "",
     role: "Cluster Node #2",
     isEnabled: true,
     status: "ONLINE",
@@ -52,7 +52,7 @@ const clusterNodes = [
   {
     id: "backend_3",
     name: "Backend #3 (Hot Standby)",
-    url: "https://freestudymaterial2.onrender.com",
+    url: backendClusterUrls[2] || "",
     role: "Hot Standby Backup Node",
     isEnabled: true, // Default ON (Ready in hot standby rotation)
     status: "ONLINE",
@@ -105,7 +105,7 @@ function requestTelemetryMiddleware(req, res, next) {
   const thisNode = clusterNodes.find((n) => {
     const host = process.env.RENDER_EXTERNAL_HOSTNAME || "";
     return host && n.url.includes(host);
-  }) || clusterNodes[1];
+  }) || clusterNodes.find((node) => node.url) || clusterNodes[0];
   thisNode.requestsOn++;
 
   const onComplete = () => {

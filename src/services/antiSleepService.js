@@ -11,6 +11,7 @@
  */
 
 const { getSiteUrl } = require("../config/siteConfig");
+const { getBackendClusterUrls } = require("../config/clusterConfig");
 
 function resolveSiteUrl() {
   return (
@@ -18,7 +19,9 @@ function resolveSiteUrl() {
     process.env.RENDER_EXTERNAL_URL ||
     (process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : null) ||
     (process.env.RENDER_SERVICE_NAME ? `https://${process.env.RENDER_SERVICE_NAME}.onrender.com` : null) ||
-    getSiteUrl()
+    getSiteUrl() ||
+    getBackendClusterUrls()[0] ||
+    ""
   ).replace(/\/+$/, "");
 }
 
@@ -26,7 +29,7 @@ function resolveWorkerUrl() {
   return (
     process.env.CF_WORKER_URL ||
     process.env.VITE_CF_WORKER_URL ||
-    "https://fsm-edge.jnplotus.workers.dev"
+    ""
   ).replace(/\/+$/, "");
 }
 
@@ -127,11 +130,7 @@ async function executeAntiSleepPulse(isManual = false) {
   }
 
   // Layer 2C: Mutual Peer Keep-Alive (wakes and keeps all 3 cluster nodes awake simultaneously)
-  const peerNodes = [
-    "https://freestudymaterial1.onrender.com",
-    "https://freestudymaterial2.onrender.com",
-    "https://freestudymaterial.onrender.com",
-  ];
+  const peerNodes = getBackendClusterUrls();
   for (const peer of peerNodes) {
     if (!siteUrl.includes(peer.replace("https://", ""))) {
       fetch(`${peer}/health?pulse=peer&t=${Date.now()}`, {

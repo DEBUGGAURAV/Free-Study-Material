@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const os = require("os");
 const { db } = require("../firebase");
@@ -8,6 +9,7 @@ const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
 const { encrypt, decrypt, blindIndex, decryptUserObject } = require("../utils/cryptoVault");
 const { getSiteDomain } = require("../config/siteConfig");
+const { getBackendClusterUrls } = require("../config/clusterConfig");
 const { createStepUpToken, requireStepUpAuth } = require("../middleware/adminStepUp");
 
 let deleteTelegramMessages = null;
@@ -4147,23 +4149,33 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
 });
 
 const CLUSTER_BACKENDS = [
-  "https://freestudymaterial2.onrender.com",
-  "https://freestudymaterial1.onrender.com",
-  "https://freestudymaterial.onrender.com",
+  ...getBackendClusterUrls().reverse(),
 ];
+const CLUSTER_SYNC_SECRET = process.env.CLUSTER_SYNC_SECRET || "";
+
+function isValidClusterSyncRequest(req, syncToken) {
+  const supplied = req.headers["x-cluster-sync"] || syncToken || "";
+  if (!CLUSTER_SYNC_SECRET || typeof supplied !== "string") return false;
+  const expectedBuffer = Buffer.from(CLUSTER_SYNC_SECRET);
+  const suppliedBuffer = Buffer.from(supplied);
+  return expectedBuffer.length === suppliedBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
 
 function broadcastMaintenanceToCluster(payload, req = null) {
-  const token = req ? (req.headers["authorization"] || "") : "";
+  if (!CLUSTER_SYNC_SECRET) {
+    console.warn("[CLUSTER] CLUSTER_SYNC_SECRET is not configured; maintenance sync was skipped.");
+    return;
+  }
   for (const origin of CLUSTER_BACKENDS) {
     try {
       fetch(`${origin}/api/admin/maintenance/sync`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Cluster-Sync": "fsm_cluster_sync_2026",
-          ...(token ? { Authorization: token } : {}),
+          "X-Cluster-Sync": CLUSTER_SYNC_SECRET,
         },
-        body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(3500),
       }).catch(() => {});
     } catch (_) {}
@@ -4177,24 +4189,7 @@ function broadcastMaintenanceToCluster(payload, req = null) {
 router.post("/maintenance/sync", (req, res) => {
   try {
     const { active, title, message, estimatedEnd, syncToken } = req.body || {};
-    const authHeader = req.headers.authorization;
-    let isAuthorized = false;
-
-    if (authHeader) {
-      try {
-        const token = authHeader.replace(/^Bearer\s+/i, "");
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded && (decoded.role === "admin" || decoded.role === "half_admin")) {
-          isAuthorized = true;
-        }
-      } catch (_) {}
-    }
-
-    if (req.headers["x-cluster-sync"] === "fsm_cluster_sync_2026" || syncToken === "fsm_cluster_sync_2026") {
-      isAuthorized = true;
-    }
-
-    if (!isAuthorized) {
+    if (!isValidClusterSyncRequest(req, syncToken)) {
       return res.status(401).json({ success: false, message: "Unauthorized cluster sync" });
     }
 
@@ -4214,14 +4209,9 @@ router.post("/maintenance/sync", (req, res) => {
       });
     } catch (_) {}
 
-    // Broadcast maintenance state to all 3 cluster servers
-    try {
-      broadcastMaintenanceToCluster(techSettings, req);
-    } catch (_) {}
-
     return res.json({
       success: true,
-      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || "freestudymaterial2.onrender.com",
+      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || getSiteDomain() || "unknown",
       maintenanceMode: techSettings.maintenanceMode,
       message: "Maintenance state connected and synchronized across cluster node.",
     });
@@ -4231,17 +4221,19 @@ router.post("/maintenance/sync", (req, res) => {
 });
 
 function broadcastNodeToggleToCluster(nodeId, isEnabled, req = null) {
-  const token = req ? (req.headers["authorization"] || "") : "";
+  if (!CLUSTER_SYNC_SECRET) {
+    console.warn("[CLUSTER] CLUSTER_SYNC_SECRET is not configured; node-state sync was skipped.");
+    return;
+  }
   for (const origin of CLUSTER_BACKENDS) {
     try {
       fetch(`${origin}/api/admin/cluster/sync-node-state`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Cluster-Sync": "fsm_cluster_sync_2026",
-          ...(token ? { Authorization: token } : {}),
+          "X-Cluster-Sync": CLUSTER_SYNC_SECRET,
         },
-        body: JSON.stringify({ nodeId, isEnabled, syncToken: "fsm_cluster_sync_2026" }),
+        body: JSON.stringify({ nodeId, isEnabled }),
         signal: AbortSignal.timeout(3500),
       }).catch(() => {});
     } catch (_) {}
@@ -4290,24 +4282,7 @@ router.post("/cluster/toggle-node", authenticateToken, requireAdmin, async (req,
 router.post("/cluster/sync-node-state", (req, res) => {
   try {
     const { nodeId, isEnabled, syncToken } = req.body || {};
-    const authHeader = req.headers.authorization;
-    let isAuthorized = false;
-
-    if (authHeader) {
-      try {
-        const token = authHeader.replace(/^Bearer\s+/i, "");
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded && (decoded.role === "admin" || decoded.role === "half_admin")) {
-          isAuthorized = true;
-        }
-      } catch (_) {}
-    }
-
-    if (req.headers["x-cluster-sync"] === "fsm_cluster_sync_2026" || syncToken === "fsm_cluster_sync_2026") {
-      isAuthorized = true;
-    }
-
-    if (!isAuthorized) {
+    if (!isValidClusterSyncRequest(req, syncToken)) {
       return res.status(401).json({ success: false, message: "Unauthorized cluster sync" });
     }
 
@@ -4319,7 +4294,7 @@ router.post("/cluster/sync-node-state", (req, res) => {
       success: true,
       nodeId,
       isEnabled,
-      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || "freestudymaterial2.onrender.com",
+      serverNode: process.env.RENDER_EXTERNAL_HOSTNAME || getSiteDomain() || "unknown",
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -82,7 +82,6 @@ function sameOriginGuard(req, res, next) {
     const allowedHosts = new Set([
       reqHost,
       configuredHost,
-      "freestudymaterial.onrender.com",
       "localhost:5000",
       "localhost:5173",
       "127.0.0.1:5000",
@@ -105,4 +104,3 @@ function sameOriginGuard(req, res, next) {
 module.exports = {
   sameOriginGuard,
 };
-

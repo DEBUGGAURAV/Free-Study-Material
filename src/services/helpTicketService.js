@@ -20,6 +20,7 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const { createClient } = require("@libsql/client");
+const { getSiteUrl } = require("../config/siteConfig");
 
 // Fallback in-memory cache to guarantee 0ms instant availability (Capped to prevent memory leaks)
 const memoryTickets = new Map();
@@ -601,7 +602,7 @@ async function dispatchTelegramHelpNotice(ticket) {
     ? (() => { try { return JSON.parse(rawAttachments); } catch (_) { return []; } })()
     : [];
 
-  const appBaseUrl = process.env.APP_URL || "https://freestudymaterial.onrender.com";
+  const appBaseUrl = (process.env.APP_URL || getSiteUrl()).replace(/\/+$/, "");
   let attachmentNotice = null;
   if (attachments.length > 0) {
     const list = attachments
@@ -1457,7 +1458,7 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   const subjectDisplay = ticket.subject ? escapeTelegramHtml(ticket.subject) : null;
   const replyEscaped = escapeTelegramHtml(replyText || "");
 
-  const appBaseUrl = process.env.APP_URL || "https://freestudymaterial.onrender.com";
+  const appBaseUrl = (process.env.APP_URL || getSiteUrl()).replace(/\/+$/, "");
   let attachmentNotice = null;
   if (Array.isArray(attachments) && attachments.length > 0) {
     const list = attachments

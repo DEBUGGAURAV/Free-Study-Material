@@ -1863,7 +1863,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     // When downloading a PDF, redirect top-level browser downloads to Cloudflare Edge Worker CDN unless the request came from the worker itself,
     // or is an explicit direct request (e.g. Tier 3 fallback), or an internal API fetch request.
     // Cloudflare Edge serves the multi-megabyte PDF for free with 0 bytes of Render bandwidth!
-    const cfWorkerUrl = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "https://fsm-edge.jnplotus.workers.dev").trim();
+    const cfWorkerUrl = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
     const isDirectFromWorker = Boolean(
       req.headers["cf-worker"] === "true" ||
       req.headers["x-via-worker"] === "true" ||

@@ -3,11 +3,6 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  define: {
-    'import.meta.env.VITE_CF_WORKER_URL': JSON.stringify(
-      process.env.VITE_CF_WORKER_URL || process.env.CF_WORKER_URL || 'https://fsm-edge.jnplotus.workers.dev'
-    ),
-  },
   plugins: [
     react(),
     {
