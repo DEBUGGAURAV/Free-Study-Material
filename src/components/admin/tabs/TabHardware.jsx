@@ -580,13 +580,13 @@ export default function TabHardware(props) {
                   <span style={{
                     fontSize: "0.68rem",
                     fontWeight: 700,
-                    color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8",
+                    color: (node.activeUsers || 0) > 0 ? "#34d399" : isSuspended ? "#f87171" : "#94a3b8",
                     background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
                     padding: "3px 8px",
                     borderRadius: "10px",
                     border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
                   }}>
-                    {(node.activeUsers || 0) > 0 ? "100% Student Traffic" : isStandby ? "Hot Standby Ready" : "0% (Bypassed)"}
+                    {node.trafficShare || ((node.activeUsers || 0) > 0 ? "Active Traffic Share" : "0% (Bypassed)")}
                   </span>
                 </div>
 
@@ -594,7 +594,7 @@ export default function TabHardware(props) {
                 <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-dim)" }}>Role:</span>
-                    <span style={{ color: isPrimary ? "#34d399" : isStandby ? "#38bdf8" : "#94a3b8", fontWeight: 700 }}>
+                    <span style={{ color: isHealthy ? "#34d399" : "#94a3b8", fontWeight: 700 }}>
                       {node.role}
                     </span>
                   </div>
@@ -613,8 +613,8 @@ export default function TabHardware(props) {
 
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
                     <span style={{ color: "var(--text-dim)" }}>Traffic Load Share:</span>
-                    <span style={{ color: isPrimary ? "#34d399" : "#94a3b8", fontWeight: 800 }}>
-                      {!isEnabled ? "0% (Manually Switched OFF)" : isPrimary ? "100% of Student Traffic" : isStandby ? "0% (Hot Standby)" : "0% (Bypassed)"}
+                    <span style={{ color: (node.activeUsers || 0) > 0 ? "#34d399" : isSuspended ? "#f87171" : "#94a3b8", fontWeight: 800 }}>
+                      {node.trafficShare || (!isEnabled ? "0% (Manually Switched OFF)" : isSuspended ? "0% (Suspended)" : "Active")}
                     </span>
                   </div>
 
@@ -640,10 +640,10 @@ export default function TabHardware(props) {
                       color: !isEnabled ? "#fca5a5" : "#fde68a",
                       lineHeight: "1.35",
                     }}>
-                      <strong>Reason:</strong> {!isEnabled ? "Server manually switched OFF by Administrator." : "Render 5GB Monthly Bandwidth Cap Exceeded."}<br />
+                      <strong>Reason:</strong> {!isEnabled ? "Server manually switched OFF by Administrator." : (node.downReason || "Render 5GB Monthly Bandwidth Cap Exceeded.")}<br />
                       <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
                         <CornerDownRight size={12} />
-                        Traffic Redirected to Backend #2
+                        Traffic Redirected to: {node.trafficRedirection || "Backend #2 & Backend #3 (50% / 50% Active Split)"}
                       </span>
                     </div>
                   )}
