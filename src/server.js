@@ -180,6 +180,7 @@ app.use(
         allowedOrigins.includes(origin) ||
         (cfWorkerUrl && origin === cfWorkerUrl) ||
         origin.endsWith(".workers.dev") ||
+        origin.endsWith(".pages.dev") ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1")
       ) {
