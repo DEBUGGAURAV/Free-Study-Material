@@ -34,13 +34,11 @@ services:
       - key: CLOUDFLARE_AI_MODELS
         value: "@cf/meta/llama-3.1-8b-instruct,@cf/meta/llama-3.2-1b-instruct"
       - key: NVIDIA_MODEL
-        value: meta/llama-3.3-70b-instruct
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
       - key: NVIDIA_VISION_MODEL
         value: meta/llama-3.2-11b-vision-instruct
       - key: GITHUB_MODELS_MODEL
         value: gpt-4o-mini
-      - key: COHERE_MODEL
-        value: command-r-08-2024
       - key: HUGGINGFACE_MODEL
         value: meta-llama/Llama-3.3-70B-Instruct
       - key: HUGGINGFACE_VISION_MODEL

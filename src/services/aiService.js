@@ -17,7 +17,6 @@ const {
   queryNvidiaText,
   queryNvidiaVision,
   queryGitHubModels,
-  queryCohere,
   queryHuggingFace,
   queryOpenRouter,
   isProviderConfigured,
@@ -32,7 +31,6 @@ const DEFAULT_AI_SETTINGS = {
   githubModelsEnabled: true,
   huggingFaceEnabled: true,
   openRouterEnabled: true,
-  cohereEnabled: true,
   edgeProxyEnabled: true,
   circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
@@ -58,7 +56,6 @@ const DEFAULT_AI_SETTINGS = {
   githubToken: "",
   huggingFaceApiKey: "",
   openRouterApiKey: "",
-  cohereApiKey: "",
   updatedAt: new Date().toISOString(),
 };
 
@@ -130,7 +127,6 @@ async function loadAiSettings() {
           githubToken: data.githubToken || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "",
           huggingFaceApiKey: data.huggingFaceApiKey || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "",
           openRouterApiKey: data.openRouterApiKey || process.env.OPENROUTER_API_KEY || "",
-          cohereApiKey: data.cohereApiKey || process.env.COHERE_API_KEY || "",
         };
 
         // Auto-upgrade legacy/deprecated models to active, working models
@@ -148,7 +144,6 @@ async function loadAiSettings() {
         currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
         currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
         currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
-        currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
         await db.collection("settings").doc("ai_engine").set(currentAiSettings, { merge: true });
       }
     } else {
@@ -158,7 +153,6 @@ async function loadAiSettings() {
       currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
       currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
       currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
-      currentAiSettings.cohereApiKey = process.env.COHERE_API_KEY || "";
     }
     checkDailyReset();
     isSettingsLoaded = true;
@@ -203,9 +197,6 @@ function getApiKey(provider) {
   }
   if (provider === "openrouter") {
     return (process.env.OPENROUTER_API_KEY || currentAiSettings.openRouterApiKey || "").trim();
-  }
-  if (provider === "cohere") {
-    return (process.env.COHERE_API_KEY || currentAiSettings.cohereApiKey || "").trim();
   }
   return "";
 }
@@ -933,19 +924,6 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   }
 
-  // Tier 10 (Text): Cohere AI (Command R+ Citations • Canada)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.cohereEnabled !== false && isProviderConfigured("cohere")) {
-    try {
-      const cohRes = await queryCohere(cleanQuery, context, options);
-      finalAnswer = cohRes.answer;
-      finalProvider = "cohere";
-      finalModel = cohRes.model;
-      failoverOccurred = true;
-    } catch (cohErr) {
-      console.warn("[AI-ENGINE] ⚠️ Cohere notice:", cohErr.message);
-    }
-  }
-
   // Fallback to Local Academic Notes Synthesis if both APIs are down/unconfigured
   if (!finalAnswer) {
     if (context && context.trim()) {
@@ -1040,8 +1018,6 @@ function getAiTelemetry() {
       huggingFaceConfigured: isProviderConfigured("huggingface"),
       openRouterEnabled: currentAiSettings.openRouterEnabled !== false,
       openRouterConfigured: isProviderConfigured("openrouter"),
-      cohereEnabled: currentAiSettings.cohereEnabled !== false,
-      cohereConfigured: isProviderConfigured("cohere"),
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
       aiSearchTopicId: currentAiSettings.aiSearchTopicId || null,
@@ -1097,12 +1073,10 @@ async function updateAiSettings({
   githubToken,
   huggingFaceApiKey,
   openRouterApiKey,
-  cohereApiKey,
   nvidiaEnabled,
   huggingFaceEnabled,
   openRouterEnabled,
   githubModelsEnabled,
-  cohereEnabled,
   groqLimit,
   geminiLimit,
   cloudflareAiLimit,
@@ -1118,7 +1092,6 @@ async function updateAiSettings({
   if (typeof huggingFaceEnabled === "boolean") currentAiSettings.huggingFaceEnabled = huggingFaceEnabled;
   if (typeof openRouterEnabled === "boolean") currentAiSettings.openRouterEnabled = openRouterEnabled;
   if (typeof githubModelsEnabled === "boolean") currentAiSettings.githubModelsEnabled = githubModelsEnabled;
-  if (typeof cohereEnabled === "boolean") currentAiSettings.cohereEnabled = cohereEnabled;
 
   if (typeof groqApiKey === "string" && groqApiKey.trim()) {
     currentAiSettings.groqApiKey = groqApiKey.trim();
@@ -1137,9 +1110,6 @@ async function updateAiSettings({
   }
   if (typeof openRouterApiKey === "string" && openRouterApiKey.trim()) {
     currentAiSettings.openRouterApiKey = openRouterApiKey.trim();
-  }
-  if (typeof cohereApiKey === "string" && cohereApiKey.trim()) {
-    currentAiSettings.cohereApiKey = cohereApiKey.trim();
   }
 
   if (typeof groqLimit === "number" && groqLimit > 0) currentAiSettings.groqLimit = groqLimit;
@@ -1200,9 +1170,6 @@ async function testAiProvider(provider) {
   } else if (provider === "github") {
     const res = await queryGitHubModels("Test ping. Reply 'GitHub Models Ready' in 3 words.", "College test");
     return { provider: "github", success: true, answer: res.answer, latencyMs: Date.now() - start };
-  } else if (provider === "cohere") {
-    const res = await queryCohere("Test ping. Reply 'Cohere Ready' in 3 words.", "College test");
-    return { provider: "cohere", success: true, answer: res.answer, latencyMs: Date.now() - start };
   } else if (provider === "huggingface" || provider === "hf") {
     const res = await queryHuggingFace("Test ping. Reply 'HuggingFace Ready' in 3 words.", "College test");
     return { provider: "huggingface", success: true, answer: res.answer, latencyMs: Date.now() - start };
@@ -1337,15 +1304,6 @@ function getAiEngineAuditDetails(provider, model, cached) {
       tier: "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)",
       model: model || process.env.GITHUB_MODELS_MODEL || "",
       speed: "⚡ Microsoft Cloud",
-    };
-  }
-
-  if (p.includes("cohere")) {
-    return {
-      name: "🇨🇦 Cohere AI (Canada)",
-      tier: "📌 Tier 8 (Command R+ Citations)",
-      model: model || process.env.COHERE_MODEL || "",
-      speed: "⚡ Enterprise Cloud",
     };
   }
 

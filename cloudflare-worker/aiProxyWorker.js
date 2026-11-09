@@ -454,34 +454,6 @@ async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, im
 }
 
 /**
- * 🇨🇦 Cohere AI (Canada • Command R+ Citations)
- */
-async function queryCohereEdge(env, query, context) {
-  const apiKey = (env.COHERE_API_KEY || "").trim();
-  if (!apiKey) throw new Error("COHERE_API_KEY_MISSING");
-  const model = getRequiredSetting(env, "COHERE_MODEL");
-  const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
-    : `[Student Question]:\n${query}`;
-  const res = await fetch("https://api.cohere.com/v2/chat", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: "You are an elite academic tutor. Answer clearly with citations." },
-        { role: "user", content: userContent },
-      ],
-    }),
-  });
-  if (!res.ok) throw new Error(`Cohere Error (${res.status})`);
-  const data = await res.json();
-  const answer = (data.message?.content?.[0]?.text || "").trim();
-  if (!answer) throw new Error("Empty Cohere response");
-  return { answer, model };
-}
-
-/**
  * 🤗 Hugging Face Serverless Edge (100% Free • Zero Credit Card)
  */
 async function queryHuggingFaceEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
@@ -639,9 +611,6 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
     } else if (p.includes("github")) {
       engineName = "🐙 GitHub Models (Microsoft Azure)";
       engineTier = "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)";
-    } else if (p.includes("cohere")) {
-      engineName = "🇨🇦 Cohere AI (Canada)";
-      engineTier = "📌 Tier 8 (Command R+ Citations)";
     } else if (p.includes("heuristic")) {
       engineName = "🛡️ FSM Offline Heuristic Notes Solver";
       engineTier = "📄 Tier 9 (Offline Extractive Fallback)";
@@ -966,14 +935,7 @@ export default {
                     answer = ghRes.answer;
                     provider = "github_models";
                     model = ghRes.model;
-                  } catch (_) {
-                    try {
-                      const cohRes = await queryCohereEdge(env, cleanQuery, context);
-                      answer = cohRes.answer;
-                      provider = "cohere";
-                      model = cohRes.model;
-                    } catch (_) {}
-                  }
+                  } catch (_) {}
                 }
               }
             }

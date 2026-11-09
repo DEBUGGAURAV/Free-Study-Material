@@ -2,7 +2,6 @@
  * Unified AI Provider Services
  * Multi-Tier Academic & Vision Providers:
  *   1. GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
- *   2. Cohere AI (Canada • Command R+ RAG Citations)
  * 
  * 100% Non-Chinese Allied Providers • 0% Render RAM • Zero-Cost Free Tiers
  */
@@ -108,52 +107,6 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
 }
 
 /**
- * Cohere AI (Canada • Command R+ Citations & RAG)
- */
-async function queryCohere(query, context = "", options = {}) {
-  const apiKey = (process.env.COHERE_API_KEY || "").trim();
-  if (!apiKey) throw new Error("COHERE_API_KEY_MISSING");
-
-  const model = getConfiguredModel(options.model, "COHERE_MODEL");
-  const userContent = context && context.trim()
-    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-    : `[Student Question]:\n${query}`;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 10000);
-
-  try {
-    const res = await fetch("https://api.cohere.com/v2/chat", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Cohere Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.message?.content?.[0]?.text || "").trim();
-    if (!answer) throw new Error("Empty Cohere response");
-    return { answer, model, provider: "cohere" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
  * Hugging Face Serverless Router (100% Free • Zero Credit Card)
  * Direct access to Llama 3.3 70B & Llama 3.2 11B Vision
  */
@@ -203,8 +156,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
 
   try {
-    // 1. Primary: Router Endpoint (Fast Western Inference Providers)
-    let res = await fetch("https://router.huggingface.co/v1/chat/completions", {
+    const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -212,24 +164,11 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
-    }).catch(() => null);
+    });
 
-    // 2. Failover: Direct api-inference endpoint if router rejected token permissions
-    if (!res || !res.ok) {
-      res = await fetch(`https://api-inference.huggingface.co/models/${model}/v1/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      }).catch(() => null);
-    }
-
-    if (!res || !res.ok) {
-      const errText = res ? await res.text().catch(() => "") : "Network timeout";
-      throw new Error(`HuggingFace Error (${res ? res.status : 504}): ${errText.slice(0, 200)}`);
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HuggingFace Error (${res.status}): ${errText.slice(0, 200)}`);
     }
 
     const data = await res.json();
@@ -449,8 +388,6 @@ function isProviderConfigured(provider) {
       return Boolean((process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "").trim());
     case "openrouter":
       return Boolean((process.env.OPENROUTER_API_KEY || "").trim());
-    case "cohere":
-      return Boolean((process.env.COHERE_API_KEY || "").trim());
     default:
       return false;
   }
@@ -460,7 +397,6 @@ module.exports = {
   queryNvidiaText,
   queryNvidiaVision,
   queryGitHubModels,
-  queryCohere,
   queryHuggingFace,
   queryOpenRouter,
   isProviderConfigured,
