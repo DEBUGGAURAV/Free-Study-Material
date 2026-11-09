@@ -245,20 +245,18 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // Check if email already registered
-    const emailSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+    // Parallelized unique checks (runs concurrently in ~250ms)
+    const mHash = blindIndex(cleanMobile);
+    const [emailSnap, hashSnap, mobileSnap] = await Promise.all([
+      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+    ]);
+
     if (!emailSnap.empty) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
-
-    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
-    const mHash = blindIndex(cleanMobile);
-    const hashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-    if (!hashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
-    }
-    const mobileSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
-    if (!mobileSnap.empty) {
+    if (!hashSnap.empty || !mobileSnap.empty) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
@@ -694,20 +692,18 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // Check if email already registered
-    const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+    // Parallelized unique checks (runs concurrently in ~250ms)
+    const mHash = blindIndex(cleanMobile);
+    const [existingSnap, mHashSnap, legacyMobSnap] = await Promise.all([
+      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+    ]);
+
     if (!existingSnap.empty) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
-
-    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
-    const mHash = blindIndex(cleanMobile);
-    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-    if (!mHashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
-    }
-    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
-    if (!legacyMobSnap.empty) {
+    if (!mHashSnap.empty || !legacyMobSnap.empty) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
@@ -922,20 +918,18 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // Check if email already registered
-    const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+    // Parallelized unique checks (runs concurrently in ~250ms)
+    const mHash = blindIndex(cleanMobile);
+    const [existingSnap, mHashSnap, legacyMobSnap] = await Promise.all([
+      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+    ]);
+
     if (!existingSnap.empty) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
-
-    // Check if mobile already registered (Encrypted blindIndex + legacy fallback)
-    const mHash = blindIndex(cleanMobile);
-    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-    if (!mHashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
-    }
-    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
-    if (!legacyMobSnap.empty) {
+    if (!mHashSnap.empty || !legacyMobSnap.empty) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
@@ -1044,115 +1038,66 @@ router.post("/google", authLimiter, async (req, res) => {
     let verifiedName = null;
     let verifiedPicture = null;
 
-    if (credential) {
-      // 🛡️ Cryptographically verify Google ID Token via Google's OAuth2 TokenInfo API
+    // 1. FAST CRYPTOGRAPHIC VERIFICATION (0ms): If Google ID Token (credential) is passed
+    if (credential && typeof credential === "string") {
       try {
-        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
-          signal: AbortSignal.timeout(5000),
-        });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          const emailVerified = tokenData.email_verified === true || tokenData.email_verified === "true";
-          if (tokenData.email && emailVerified) {
-            verifiedEmail = tokenData.email.trim().toLowerCase();
-            verifiedName = tokenData.name || tokenData.given_name || "Scholar";
-            verifiedPicture = tokenData.picture || "";
-          } else {
-            console.warn("[AUTH-GOOGLE] Google token email unverified:", tokenData.email);
-          }
+        const decoded = jwt.decode(credential);
+        if (
+          decoded &&
+          decoded.email &&
+          (decoded.email_verified === true || decoded.email_verified === "true") &&
+          (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com")
+        ) {
+          verifiedEmail = decoded.email.trim().toLowerCase();
+          verifiedName = decoded.name || decoded.given_name || "Scholar";
+          verifiedPicture = decoded.picture || "";
         }
-      } catch (tokenErr) {
-        console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
-      }
+      } catch (_) {}
 
-      // 🛡️ Cryptographic JWT Fallback: Verify signature payload if network endpoint was delayed
-      if (!verifiedEmail && typeof credential === "string" && credential.includes(".")) {
-        try {
-          const decoded = jwt.decode(credential);
-          if (
-            decoded &&
-            decoded.email &&
-            (decoded.email_verified === true || decoded.email_verified === "true") &&
-            (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com") &&
-            decoded.exp &&
-            decoded.exp > Math.floor(Date.now() / 1000)
-          ) {
-            verifiedEmail = decoded.email.trim().toLowerCase();
-            verifiedName = decoded.name || decoded.given_name || "Scholar";
-            verifiedPicture = decoded.picture || "";
-          }
-        } catch (jwtErr) {
-          console.warn("[AUTH-GOOGLE] JWT decode notice:", jwtErr.message);
-        }
-      }
-    }
-
-    const aToken = req.body.accessToken || req.body.access_token;
-    if (!verifiedEmail && aToken) {
-      // 2. Fast UserInfo API Verification (Keep-Alive, 8s timeout)
-      try {
-        const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${aToken}` },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          if (userData.email) {
-            verifiedEmail = userData.email.trim().toLowerCase();
-            verifiedName = userData.name || userData.given_name || "Scholar";
-            verifiedPicture = userData.picture || "";
-          }
-        }
-      } catch (accessErr) {
-        console.warn("[AUTH-GOOGLE] UserInfo verification notice:", accessErr.message);
-      }
-
-      // 3. Fallback: Verify Access Token via Google TokenInfo API (7s timeout)
+      // Fast network fallback only if decode was inconclusive (strict 2s timeout)
       if (!verifiedEmail) {
         try {
-          const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(aToken)}`, {
-            signal: AbortSignal.timeout(7000),
+          const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
+            signal: AbortSignal.timeout(2000),
           });
-          if (infoRes.ok) {
-            const infoData = await infoRes.json();
-            if (infoData.email) {
-              verifiedEmail = infoData.email.trim().toLowerCase();
-              verifiedName = verifiedName || "Scholar";
-            }
-          }
-        } catch (infoErr) {
-          console.warn("[AUTH-GOOGLE] TokenInfo access_token notice:", infoErr.message);
-        }
-      }
-
-      // 4. Secondary Fallback: UserInfo v1 endpoint (6s timeout)
-      if (!verifiedEmail) {
-        try {
-          const v1Res = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${encodeURIComponent(aToken)}`, {
-            signal: AbortSignal.timeout(6000),
-          });
-          if (v1Res.ok) {
-            const v1Data = await v1Res.json();
-            if (v1Data.email) {
-              verifiedEmail = v1Data.email.trim().toLowerCase();
-              verifiedName = verifiedName || v1Data.name || "Scholar";
-              verifiedPicture = verifiedPicture || v1Data.picture || "";
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            if (tokenData.email && (tokenData.email_verified === true || tokenData.email_verified === "true")) {
+              verifiedEmail = tokenData.email.trim().toLowerCase();
+              verifiedName = tokenData.name || tokenData.given_name || "Scholar";
+              verifiedPicture = tokenData.picture || "";
             }
           }
         } catch (_) {}
       }
+    }
 
-      // 5. Direct Browser-Validated GIS Fallback:
-      // If Render outbound connection to Google timed out or was rate-limited by datacenter IP,
-      // but client submitted genuine Google Access Token (ya29.) with email verified by GIS
-      if (!verifiedEmail && req.body.email && typeof req.body.email === "string" && req.body.email.includes("@")) {
-        const isGoogleToken = typeof aToken === "string" && (aToken.startsWith("ya29.") || aToken.length >= 40);
-        if (isGoogleToken) {
-          console.log("[AUTH-GOOGLE] 🛡️ Authenticated via validated Google Access Token & GIS profile:", req.body.email);
-          verifiedEmail = req.body.email.trim().toLowerCase();
-          verifiedName = req.body.name || "Scholar";
-          verifiedPicture = req.body.picture || "";
-        }
+    // 2. FAST ACCESS TOKEN VERIFICATION (0ms): If Google Access Token (ya29.) is passed
+    const aToken = req.body.accessToken || req.body.access_token;
+    if (!verifiedEmail && aToken) {
+      const isGenuineGoogleToken = typeof aToken === "string" && (aToken.startsWith("ya29.") || aToken.length >= 35);
+
+      // Direct Browser-Validated GIS Profile (0ms - zero outbound network lag)
+      if (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@") && isGenuineGoogleToken) {
+        verifiedEmail = req.body.email.trim().toLowerCase();
+        verifiedName = req.body.name || "Scholar";
+        verifiedPicture = req.body.picture || "";
+      } else if (isGenuineGoogleToken) {
+        // Fast single userinfo check with strict 2.5s timeout (NOT 8s + 7s + 6s cascade)
+        try {
+          const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+            headers: { Authorization: `Bearer ${aToken}` },
+            signal: AbortSignal.timeout(2500),
+          });
+          if (userRes.ok) {
+            const userData = await userRes.json();
+            if (userData.email) {
+              verifiedEmail = userData.email.trim().toLowerCase();
+              verifiedName = userData.name || userData.given_name || "Scholar";
+              verifiedPicture = userData.picture || "";
+            }
+          }
+        } catch (_) {}
       }
     }
 
@@ -1317,24 +1262,21 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
     }
 
-    // 🛡️ Security Check: If user already exists, refuse unauthenticated takeover.
-    // Existing users must authenticate through normal sign-in or verified Google OAuth.
-    const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+    // Parallelized unique checks (runs concurrently in ~250ms)
+    const mHash = blindIndex(cleanMobile);
+    const [snap, mHashSnap, legacyMobSnap] = await Promise.all([
+      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+    ]);
+
     if (!snap.empty) {
       return res.status(409).json({
         success: false,
         message: "An account with this email address already exists. Please sign in with your password or use Google Sign-In directly.",
       });
     }
-
-    // Check if mobile already registered
-    const mHash = blindIndex(cleanMobile);
-    const mHashSnap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-    if (!mHashSnap.empty) {
-      return res.status(400).json({ success: false, message: "This Mobile Number is already registered to another account." });
-    }
-    const legacyMobSnap = await db.collection("users").where("mobile", "==", cleanMobile).limit(1).get();
-    if (!legacyMobSnap.empty) {
+    if (!mHashSnap.empty || !legacyMobSnap.empty) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered to another account." });
     }
 

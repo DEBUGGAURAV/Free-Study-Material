@@ -53,10 +53,11 @@ export async function onRequest(context) {
       reqHeaders.delete("host"); // Allow fetch to set correct target host header
       reqHeaders.set("X-Forwarded-Host", url.host);
       reqHeaders.set("X-Forwarded-Proto", "https");
+      reqHeaders.set("Connection", "keep-alive");
 
-      // Set 6-second subrequest timeout to fail fast if backend stalls
+      // Set 12-second subrequest timeout to prevent premature aborts on container cold-starts
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
 
       const init = {
         method: request.method,

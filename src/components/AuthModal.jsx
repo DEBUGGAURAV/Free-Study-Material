@@ -796,10 +796,13 @@ export default function AuthModal({
               return setError("Google Sign-In failed: " + err);
             }
             if (tokenResponse.access_token) {
+              setLoading(true);
+              setSuccessMsg("Verifying Google profile...");
               let gInfo = null;
               try {
                 const uRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
                   headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+                  signal: AbortSignal.timeout ? AbortSignal.timeout(2500) : undefined,
                 });
                 if (uRes.ok) {
                   gInfo = await uRes.json();
