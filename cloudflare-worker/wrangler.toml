@@ -11,7 +11,7 @@ binding = "AI"
 crons = ["*/10 * * * *"]
 
 [vars]
-ORIGIN_URL = "https://freestudymaterial.onrender.com"
+ORIGIN_URL = "https://freestudymaterial1.onrender.com"
 GROQ_MODEL = "openai/gpt-oss-20b"
 GEMINI_MODEL = "gemini-flash-lite-latest"
 

@@ -827,7 +827,7 @@ export default {
 
     // 🛡️ 24/7 Anti-Sleep Relay Endpoint (Bypasses container NAT loopback, pings origin from external Cloudflare IP)
     if (url.pathname === "/api/anti-sleep-relay" || url.pathname === "/api/keepalive") {
-      const targetParam = url.searchParams.get("target") || env.ORIGIN_URL || "https://freestudymaterial.onrender.com";
+      const targetParam = url.searchParams.get("target") || env.ORIGIN_URL || "https://freestudymaterial1.onrender.com";
       let cleanTarget;
       try {
         const parsed = new URL(targetParam);
@@ -1199,7 +1199,7 @@ export default {
     }
 
     // 4. Default Reverse Proxy to Render Origin (for non-AI endpoints or pass-through)
-    const originBase = env.ORIGIN_URL || "https://freestudymaterial.onrender.com";
+    const originBase = env.ORIGIN_URL || "https://freestudymaterial1.onrender.com";
     try {
       const originReqUrl = new URL(url.pathname + url.search, originBase);
       const originRes = await fetch(new Request(originReqUrl.toString(), request));
@@ -1216,7 +1216,7 @@ export default {
 
   // 💓 Scheduled Cron Trigger (Runs autonomously every 10 min on Cloudflare Anycast Edge)
   async scheduled(event, env, ctx) {
-    const originBase = (env.ORIGIN_URL || "https://freestudymaterial.onrender.com").replace(/\/+$/, "");
+    const originBase = (env.ORIGIN_URL || "https://freestudymaterial1.onrender.com").replace(/\/+$/, "");
     try {
       await fetch(`${originBase}/health?cron=cf&t=${Date.now()}`, {
         method: "GET",
