@@ -1219,23 +1219,32 @@ export const api = {
     }
   },
   toggleMaintenanceMode: async (payload = {}) => {
+    // 1. Primary update via API gateway
     const res = await request("/admin/maintenance/toggle", {
       method: "POST",
       body: JSON.stringify(payload),
     });
 
-    // Direct background sync with Server #3 (freestudymaterial2)
+    // 2. Broadcast directly to ALL 3 Backend Servers simultaneously (Teeno Servers Connected)
     try {
+      const ALL_SERVERS = [
+        "https://freestudymaterial.onrender.com",
+        "https://freestudymaterial1.onrender.com",
+        "https://freestudymaterial2.onrender.com",
+      ];
       const token = getAuthToken();
-      fetch("https://freestudymaterial2.onrender.com/api/admin/maintenance/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Cluster-Sync": "fsm_cluster_sync_2026",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
-      }).catch(() => {});
+      const syncPromises = ALL_SERVERS.map((origin) =>
+        fetch(`${origin}/api/admin/maintenance/sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Cluster-Sync": "fsm_cluster_sync_2026",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ ...payload, syncToken: "fsm_cluster_sync_2026" }),
+        }).catch(() => null)
+      );
+      Promise.allSettled(syncPromises).catch(() => {});
     } catch (_) {}
 
     return res;

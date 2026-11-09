@@ -3938,6 +3938,11 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
       });
     } catch (_) {}
 
+    // Broadcast maintenance state to all 3 cluster servers
+    try {
+      broadcastMaintenanceToCluster(techSettings, req);
+    } catch (_) {}
+
     return res.json({
       success: true,
       message: "Next-Gen technology controls successfully saved & applied!",
@@ -4116,6 +4121,11 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
       });
     } catch (_) {}
 
+    // Broadcast maintenance state to all 3 cluster servers
+    try {
+      broadcastMaintenanceToCluster(techSettings, req);
+    } catch (_) {}
+
     // Broadcast maintenance state to Server #3 and all cluster nodes
     broadcastMaintenanceToCluster(techSettings, req);
 
@@ -4198,6 +4208,11 @@ router.post("/maintenance/sync", (req, res) => {
         estimatedEnd: techSettings.maintenanceEstimatedEnd,
         bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
       });
+    } catch (_) {}
+
+    // Broadcast maintenance state to all 3 cluster servers
+    try {
+      broadcastMaintenanceToCluster(techSettings, req);
     } catch (_) {}
 
     return res.json({
