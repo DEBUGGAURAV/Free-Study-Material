@@ -626,8 +626,8 @@ export default function AuthModal({
     const academicDomainRegex = /(?:\.edu(?:\.[a-z]{2})?|\.ac\.[a-z]{2,}|\.org\.in|\.res\.in|\.ernet\.in|\.gov\.in)$/i;
     if (academicDomainRegex.test(domain)) return true;
 
-    // Reject all other unverified custom/burner domains
-    return false;
+    // Allow all other valid non-disposable domains with a dot
+    return domain.includes(".");
   };
 
   // Google Auth Core Processor
@@ -923,7 +923,7 @@ export default function AuthModal({
     }
 
     try {
-      const res = await api.login(signInIdentifier, signInPassword);
+      const res = await api.login(signInIdentifier.trim(), signInPassword);
       if (res.user?.hasPasskey) {
         localStorage.setItem("academic_vault_has_passkey", "true");
       }
@@ -2145,6 +2145,53 @@ export default function AuthModal({
                       {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
                     </div>
                     <div style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
+                    {error.toLowerCase().includes("google") && (
+                      <div style={{ marginTop: "8px" }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setError(null);
+                            handleGoogleSignIn();
+                          }}
+                          style={{
+                            background: "#ffffff",
+                            color: "#0f172a",
+                            border: "none",
+                            padding: "6px 12px",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          Continue with Google ↗
+                        </button>
+                      </div>
+                    )}
+                    {(error.toLowerCase().includes("incorrect password") || error.toLowerCase().includes("forgot password")) && (
+                      <div style={{ marginTop: "6px" }}>
+                        <span
+                          onClick={() => {
+                            const em = signInIdentifier.trim();
+                            resetAllFormFields();
+                            setTab("forgot");
+                            if (em.includes("@")) setForgotEmail(em);
+                          }}
+                          style={{
+                            color: "#38bdf8",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            textDecoration: "underline",
+                          }}
+                        >
+                          Reset your password here ↗
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

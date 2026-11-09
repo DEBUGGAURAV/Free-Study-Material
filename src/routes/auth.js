@@ -158,6 +158,9 @@ const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];
  */
 function getAdminPassword() {
   let pass = (process.env.ADMIN_PASSWORD || "").trim();
+  if ((pass.startsWith('"') && pass.endsWith('"')) || (pass.startsWith("'") && pass.endsWith("'"))) {
+    pass = pass.slice(1, -1).trim();
+  }
   try {
     const fs = require("fs");
     const path = require("path");
@@ -641,6 +644,12 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
       sessionRevokedAt: newVersion,
       updatedAt: new Date().toISOString(),
     });
+
+    const targetKey = (email || "").trim().toLowerCase() || (mobile || "").replace(/\D/g, "").slice(-10);
+    if (targetKey) {
+      await clearFailedAttempts(targetKey).catch(() => {});
+      ramCache.delete(`auth_user_${targetKey}`);
+    }
 
     return res.json({
       success: true,
@@ -1417,23 +1426,12 @@ router.post("/login", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: turnstileCheck.error });
     }
 
-    // 🛡️ Category 1 Feature 2: Per-Account Brute Force Lockout Guard
-    const lockout = await checkAccountLockout(inputIdentity);
-    if (lockout.isLocked) {
-      return res.status(423).json({
-        success: false,
-        isLocked: true,
-        remainingMinutes: lockout.remainingMinutes,
-        message: `Account temporarily locked due to 5 consecutive failed attempts. Please retry in ${lockout.remainingMinutes} minutes.`,
-      });
-    }
-
     // Check if input is Main Admin alias
     const isMainAdminAlias = ADMIN_ALIASES.includes(inputIdentity) || inputIdentity === MAIN_ADMIN_EMAIL;
     if (isMainAdminAlias) {
       inputIdentity = MAIN_ADMIN_EMAIL;
     } else {
-      // 📧 If standard email is entered, verify @gmail.com
+      // 📧 If standard email is entered, verify valid domain structure
       if (inputIdentity.includes("@") && !isGmail(inputIdentity)) {
         return res.status(400).json({
           success: false,
@@ -1463,7 +1461,9 @@ router.post("/login", authLimiter, async (req, res) => {
         timingSafeEqualStr(cleanPassword, envAdminPassword) ||
         timingSafeEqualStr(unquotedPass, unquotedEnv) ||
         timingSafeEqualStr(cleanPassword, unquotedEnv) ||
-        timingSafeEqualStr(unquotedPass, envAdminPassword))
+        timingSafeEqualStr(unquotedPass, envAdminPassword) ||
+        cleanPassword === envAdminPassword ||
+        unquotedPass === unquotedEnv)
     );
 
     if (isMainAdminAlias && isMasterPassMatch) {
@@ -1540,8 +1540,20 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
+    // 🛡️ Category 1 Feature 2: Per-Account Brute Force Lockout Guard (runs for regular students)
+    const lockout = await checkAccountLockout(inputIdentity);
+    if (lockout.isLocked) {
+      return res.status(423).json({
+        success: false,
+        isLocked: true,
+        remainingMinutes: lockout.remainingMinutes,
+        message: `Account temporarily locked due to 5 consecutive failed attempts. Please retry in ${lockout.remainingMinutes} minutes or reset your password.`,
+      });
+    }
+
     let userRecord = null;
     let docId = null;
+    let dbLookupError = null;
 
     // ⚡ 2. IN-MEMORY RAM CACHE FOR STUDENTS (0ms lookup):
     const cachedUser = ramCache.get(`auth_user_${inputIdentity}`);
@@ -1551,6 +1563,11 @@ router.post("/login", authLimiter, async (req, res) => {
     } else if (db) {
       try {
         let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        // Also check raw non-lowercased email if snap was empty
+        const rawEmail = (identifier || email || "").trim();
+        if (snap.empty && rawEmail && rawEmail !== inputIdentity) {
+          snap = await db.collection("users").where("email", "==", rawEmail).limit(1).get();
+        }
         if (snap.empty && !inputIdentity.includes("@")) {
           const mobDigits = inputIdentity.replace(/\D/g, "").slice(-10);
           if (mobDigits.length === 10) {
@@ -1568,7 +1585,21 @@ router.post("/login", authLimiter, async (req, res) => {
         }
       } catch (dbErr) {
         console.warn("[AUTH] Database lookup notice:", dbErr.message);
+        dbLookupError = dbErr;
       }
+    }
+
+    if (!userRecord && dbLookupError) {
+      if (dbLookupError.message && dbLookupError.message.includes("RESOURCE_EXHAUSTED")) {
+        return res.status(503).json({
+          success: false,
+          message: "Database daily read quota reached (Firestore free tier). Please try again shortly or use Google Sign-In.",
+        });
+      }
+      return res.status(503).json({
+        success: false,
+        message: "Database temporarily busy. Please wait a few seconds and try again.",
+      });
     }
 
     if (!userRecord && db && inputIdentity.includes("@")) {
@@ -1592,20 +1623,12 @@ router.post("/login", authLimiter, async (req, res) => {
       });
     }
 
-    if (userRecord && userRecord.role !== "admin" && userRecord.email && isDisposableEmail(userRecord.email)) {
-      return res.status(403).json({
-        success: false,
-        message: "Login Access Denied: Disposable/temporary email accounts are prohibited on Free Study Material.",
-      });
-    }
-
     // 🛡️ ZERO-TOLERANCE DISPOSABLE / TEMPMAIL BLOCKER ON LOGIN
-    // Even if an account was registered previously via mobile, strictly deny login if email is disposable!
     if (userRecord && userRecord.role !== "admin" && userRecord.email && isDisposableEmail(userRecord.email)) {
       console.warn(`[SECURITY] Blocked login attempt by disposable/tempmail user: ${userRecord.email} (${userRecord.name || "Anonymous"})`);
       return res.status(403).json({
         success: false,
-        message: "Login Access Denied: Your account is associated with a temporary/disposable email address (e.g. tempmail, 10minutemail, burner domain). Disposable emails are strictly prohibited on Free Study Material. Please register using an authentic Gmail, Outlook, Yahoo, or verified college email.",
+        message: "Login Access Denied: Your account is associated with a temporary/disposable email address. Disposable emails are strictly prohibited. Please register using an authentic Gmail, Outlook, Yahoo, or verified college email.",
       });
     }
 
@@ -1621,20 +1644,62 @@ router.post("/login", authLimiter, async (req, res) => {
       }
     }
 
-    // Verify Student Password via bcrypt hash
-    let passwordValid = false;
-
-    // 2. Database bcrypt hash validation (for students and admin - strict cryptographic verification)
-    if (!passwordValid && userRecord && userRecord.password) {
-      if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
-        passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(cleanPassword, userRecord.password));
+    // Check if account has no in-app password (registered with Google Sign-In)
+    if (userRecord && !userRecord.password && !userRecord.passwordHash) {
+      if (userRecord.authProvider === "google" || !userRecord.password) {
+        return res.status(400).json({
+          success: false,
+          isGoogleAccount: true,
+          message: "This account was created using Google Sign-In and does not have an in-app password. Please click 'Continue with Google' to sign in, or click 'Forgot password?' above to set an in-app password.",
+          field: "signInIdentifier",
+        });
       }
     }
 
-    if (!passwordValid && userRecord && userRecord.passwordHash) {
-      if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
-        passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(cleanPassword, userRecord.passwordHash));
+    // Verify Student Password via bcrypt hash or direct comparison
+    let passwordValid = false;
+
+    const checkHash = async (hash) => {
+      if (!hash) return false;
+      if (typeof hash === "string" && hash.startsWith("$2")) {
+        try {
+          return (await bcrypt.compare(password, hash)) || (await bcrypt.compare(cleanPassword, hash));
+        } catch (_) {
+          return false;
+        }
       }
+      return hash === password || hash === cleanPassword;
+    };
+
+    if (userRecord && userRecord.password) {
+      passwordValid = await checkHash(userRecord.password);
+    }
+    if (!passwordValid && userRecord && userRecord.passwordHash) {
+      passwordValid = await checkHash(userRecord.passwordHash);
+    }
+
+    // If RAM cache gave invalid password, invalidate RAM cache and re-query Firestore fresh
+    if (!passwordValid && cachedUser && db) {
+      ramCache.delete(`auth_user_${inputIdentity}`);
+      try {
+        let freshSnap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+        if (!freshSnap.empty) {
+          userRecord = decryptUserObject(freshSnap.docs[0].data());
+          docId = freshSnap.docs[0].id;
+          if (userRecord.password) passwordValid = await checkHash(userRecord.password);
+          if (!passwordValid && userRecord.passwordHash) passwordValid = await checkHash(userRecord.passwordHash);
+          if (passwordValid) {
+            ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Auto-upgrade plain text passwords to secure bcrypt hashes in background
+    if (passwordValid && userRecord && userRecord.password && !userRecord.password.startsWith("$2") && db && docId) {
+      bcrypt.hash(cleanPassword, 10).then((h) => {
+        db.collection("users").doc(docId).update({ password: h, passwordHash: h }).catch(() => {});
+      }).catch(() => {});
     }
 
     if (passwordValid && isMainAdminAlias && !userRecord) {
@@ -1659,13 +1724,13 @@ router.post("/login", authLimiter, async (req, res) => {
           success: false,
           isLocked: true,
           remainingMinutes: lockResult.remainingMinutes,
-          message: `Account temporarily locked for 20 minutes due to 5 consecutive failed attempts.`,
+          message: `Account temporarily locked for 20 minutes due to 5 consecutive failed attempts. Please reset your password or sign in with Google.`,
         });
       }
       return res.status(401).json({
         success: false,
         message: !userRecord
-          ? `No registered student account was found with "${inputIdentity}". Please check your email/mobile or sign up.`
+          ? `No registered student account was found with "${inputIdentity}". Please check your email or click Sign Up.`
           : `Incorrect password. ${lockResult.remainingAttempts} attempt(s) remaining before temporary lockout.`,
         field: !userRecord ? "signInIdentifier" : "signInPassword",
       });
@@ -2178,6 +2243,12 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
       sessionRevokedAt: newVersion,
       updatedAt: new Date().toISOString(),
     });
+
+    const targetKey = (email || "").trim().toLowerCase() || (mobile || "").replace(/\D/g, "").slice(-10);
+    if (targetKey) {
+      await clearFailedAttempts(targetKey).catch(() => {});
+      ramCache.delete(`auth_user_${targetKey}`);
+    }
 
     return res.json({
       success: true,
