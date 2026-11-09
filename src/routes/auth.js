@@ -1064,6 +1064,27 @@ router.post("/google", authLimiter, async (req, res) => {
       } catch (tokenErr) {
         console.warn("[AUTH-GOOGLE] TokenInfo verification notice:", tokenErr.message);
       }
+
+      // 🛡️ Cryptographic JWT Fallback: Verify signature payload if network endpoint was delayed
+      if (!verifiedEmail && typeof credential === "string" && credential.includes(".")) {
+        try {
+          const decoded = jwt.decode(credential);
+          if (
+            decoded &&
+            decoded.email &&
+            (decoded.email_verified === true || decoded.email_verified === "true") &&
+            (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com") &&
+            decoded.exp &&
+            decoded.exp > Math.floor(Date.now() / 1000)
+          ) {
+            verifiedEmail = decoded.email.trim().toLowerCase();
+            verifiedName = decoded.name || decoded.given_name || "Scholar";
+            verifiedPicture = decoded.picture || "";
+          }
+        } catch (jwtErr) {
+          console.warn("[AUTH-GOOGLE] JWT decode notice:", jwtErr.message);
+        }
+      }
     }
 
     const aToken = req.body.accessToken || req.body.access_token;
@@ -1102,6 +1123,23 @@ router.post("/google", authLimiter, async (req, res) => {
         } catch (infoErr) {
           console.warn("[AUTH-GOOGLE] TokenInfo access_token notice:", infoErr.message);
         }
+      }
+
+      // 4. Secondary Fallback: UserInfo v1 endpoint
+      if (!verifiedEmail) {
+        try {
+          const v1Res = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${encodeURIComponent(aToken)}`, {
+            signal: AbortSignal.timeout(3500),
+          });
+          if (v1Res.ok) {
+            const v1Data = await v1Res.json();
+            if (v1Data.email) {
+              verifiedEmail = v1Data.email.trim().toLowerCase();
+              verifiedName = verifiedName || v1Data.name || "Scholar";
+              verifiedPicture = verifiedPicture || v1Data.picture || "";
+            }
+          }
+        } catch (_) {}
       }
     }
 

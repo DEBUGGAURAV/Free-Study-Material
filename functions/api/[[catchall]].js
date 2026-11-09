@@ -26,6 +26,9 @@ export async function onRequest(context) {
   }
 
   // 2. Multi-Origin Failover Proxy
+  const hasBody = !["GET", "HEAD"].includes(request.method);
+  const bodyBytes = hasBody ? await request.arrayBuffer() : null;
+
   const origins = [PRIMARY_ORIGIN, BACKUP_ORIGIN];
   for (let i = 0; i < origins.length; i++) {
     const origin = origins[i];
@@ -35,16 +38,14 @@ export async function onRequest(context) {
       reqHeaders.set("X-Forwarded-Host", url.host);
       reqHeaders.set("X-Forwarded-Proto", "https");
 
-      const hasBody = !["GET", "HEAD"].includes(request.method);
       const init = {
         method: request.method,
         headers: reqHeaders,
         redirect: "follow",
       };
 
-      if (hasBody) {
-        init.body = request.body;
-        init.duplex = "half";
+      if (hasBody && bodyBytes) {
+        init.body = bodyBytes;
       }
 
       const response = await fetch(new Request(targetUrl.toString(), init));
