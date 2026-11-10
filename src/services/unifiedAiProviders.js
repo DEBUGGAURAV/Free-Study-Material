@@ -14,8 +14,8 @@ function getSafeMimeType(imageMimeType) {
   return imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
 }
 
-function getConfiguredModel(override, envKey) {
-  const model = String(override || process.env[envKey] || "").trim();
+function getConfiguredModel(override, envKey, fallback = "") {
+  const model = String(override || process.env[envKey] || fallback || "").trim();
   if (!model) throw new Error(`${envKey}_MISSING`);
   return model;
 }
@@ -42,7 +42,7 @@ async function queryGitHubModels(query, context = "", imageBase64 = null, imageM
   const token = (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "").trim();
   if (!token) throw new Error("GITHUB_MODELS_TOKEN_MISSING");
 
-  const model = getConfiguredModel(options.model, "GITHUB_MODELS_MODEL");
+  const model = getConfiguredModel(options.model, "GITHUB_MODELS_MODEL", "openai/gpt-4o-mini");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
 
@@ -77,7 +77,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
   }
 
   try {
-    const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    const res = await fetch("https://models.github.ai/inference/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -116,7 +116,8 @@ async function queryHuggingFace(query, context = "", imageBase64 = null, imageMi
 
   const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = getConfiguredModel(options.model, cleanB64 ? "HUGGINGFACE_VISION_MODEL" : "HUGGINGFACE_MODEL");
+  const defaultHf = cleanB64 ? "meta-llama/Llama-3.2-11B-Vision-Instruct" : "meta-llama/Llama-3.3-70B-Instruct";
+  const model = getConfiguredModel(options.model, cleanB64 ? "HUGGINGFACE_VISION_MODEL" : "HUGGINGFACE_MODEL", defaultHf);
 
   let messages = [];
   if (cleanB64) {
@@ -189,7 +190,8 @@ async function queryOpenRouter(query, context = "", imageBase64 = null, imageMim
 
   const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = getConfiguredModel(options.model, cleanB64 ? "OPENROUTER_VISION_MODEL" : "OPENROUTER_MODEL");
+  const defaultOr = cleanB64 ? "meta-llama/llama-3.2-11b-vision-instruct:free" : "meta-llama/llama-3.3-70b-instruct:free";
+  const model = getConfiguredModel(options.model, cleanB64 ? "OPENROUTER_VISION_MODEL" : "OPENROUTER_MODEL", defaultOr);
 
   let messages = [];
   if (cleanB64) {
@@ -230,11 +232,10 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
   } else if (options.model) {
     payload.model = options.model;
   } else {
-    payload.models = String(process.env.OPENROUTER_MODELS || "")
+    payload.models = String(process.env.OPENROUTER_MODELS || "nvidia/nemotron-3.5-lightning:free,google/gemma-4-31b-it:free,google/gemma-4-26b-a4b-it:free")
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    if (!payload.models.length) throw new Error("OPENROUTER_MODELS_MISSING");
   }
 
   const controller = new AbortController();
@@ -272,14 +273,15 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
 
 /**
  * NVIDIA NIM (NVIDIA Inference Microservices • DGX Cloud • H100 Tensor Core GPUs)
- * Text: meta/llama-3.3-70b-instruct or nvidia/llama-3.1-nemotron-70b-instruct
- * Vision: meta/llama-3.2-11b-vision-instruct
+ * Text: nvidia/nemotron-3.5-lightning-30b-a3b (llama-3.3-70b reached end of life)
+ * Vision: nvidia/nemotron-3.5-super-vl-120b-a12b
+ * enable_thinking=false keeps the answer in `content` instead of reasoning tokens.
  */
 async function queryNvidiaText(query, context = "", options = {}) {
   const apiKey = (options.apiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim();
   if (!apiKey) throw new Error("NVIDIA_API_KEY_MISSING");
 
-  const model = getConfiguredModel(options.model, "NVIDIA_MODEL");
+  const model = getConfiguredModel(options.model, "NVIDIA_MODEL", "nvidia/nemotron-3.5-lightning-30b-a3b");
   const userContent = context && context.trim()
     ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
@@ -303,6 +305,7 @@ async function queryNvidiaText(query, context = "", options = {}) {
         ],
         temperature: typeof options.temperature === "number" ? options.temperature : 0.2,
         max_tokens: options.maxTokens || 650,
+        chat_template_kwargs: { enable_thinking: false },
       }),
       signal: controller.signal,
     });
@@ -327,7 +330,7 @@ async function queryNvidiaVision(query, context = "", imageBase64, imageMimeType
 
   const cleanB64 = getCleanBase64(imageBase64);
   const safeMime = getSafeMimeType(imageMimeType);
-  const model = getConfiguredModel(options.model, "NVIDIA_VISION_MODEL");
+  const model = getConfiguredModel(options.model, "NVIDIA_VISION_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b");
 
   const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
 First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
@@ -358,6 +361,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
         ],
         temperature: typeof options.temperature === "number" ? options.temperature : 0.15,
         max_tokens: options.maxTokens || 700,
+        chat_template_kwargs: { enable_thinking: false },
       }),
       signal: controller.signal,
     });
