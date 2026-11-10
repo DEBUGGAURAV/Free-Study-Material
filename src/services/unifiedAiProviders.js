@@ -81,6 +81,8 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
       method: "POST",
       headers: {
         "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -92,90 +94,20 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
       signal: controller.signal,
     });
 
+    const rawBody = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`GitHub Models Error (${res.status}): ${errText.slice(0, 200)}`);
+      throw new Error(`GitHub Models Error (${res.status}): ${rawBody.slice(0, 200)}`);
     }
 
-    const data = await res.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch (_) {
+      throw new Error(`GitHub Models returned a non-API reply (HTTP ${res.status}: "${rawBody.trim().slice(0, 40)}") - endpoint blocked or intercepted by the network`);
+    }
     const answer = (data.choices?.[0]?.message?.content || "").trim();
     if (!answer) throw new Error("Empty GitHub Models response");
     return { answer, model, provider: cleanB64 ? "github_vision" : "github_models" };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-/**
- * Hugging Face Serverless Router (100% Free • Zero Credit Card)
- * Direct access to Llama 3.3 70B & Llama 3.2 11B Vision
- */
-async function queryHuggingFace(query, context = "", imageBase64 = null, imageMimeType = "image/jpeg", options = {}) {
-  const token = (process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "").trim();
-  if (!token) throw new Error("HUGGINGFACE_API_KEY_MISSING");
-
-  const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
-  const safeMime = getSafeMimeType(imageMimeType);
-  const defaultHf = cleanB64 ? "meta-llama/Llama-3.2-11B-Vision-Instruct" : "meta-llama/Llama-3.3-70B-Instruct";
-  const model = getConfiguredModel(options.model, cleanB64 ? "HUGGINGFACE_VISION_MODEL" : "HUGGINGFACE_MODEL", defaultHf);
-
-  let messages = [];
-  if (cleanB64) {
-    const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
-First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: promptText },
-          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-        ],
-      },
-    ];
-  } else {
-    const userContent = context && context.trim()
-      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-      : `[Student Question]:\n${query}`;
-
-    messages = [
-      { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ];
-  }
-
-  const payload = {
-    model,
-    messages,
-    temperature: cleanB64 ? 0.15 : 0.2,
-    max_tokens: options.maxTokens || 650,
-  };
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
-
-  try {
-    const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HuggingFace Error (${res.status}): ${errText.slice(0, 200)}`);
-    }
-
-    const data = await res.json();
-    const answer = (data.choices?.[0]?.message?.content || "").trim();
-    if (!answer) throw new Error("Empty HuggingFace response");
-    return { answer, model, provider: cleanB64 ? "huggingface_vision" : "huggingface" };
   } finally {
     clearTimeout(timeout);
   }
@@ -387,9 +319,6 @@ function isProviderConfigured(provider) {
       return Boolean((process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "").trim());
     case "github":
       return Boolean((process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "").trim());
-    case "huggingface":
-    case "hf":
-      return Boolean((process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "").trim());
     case "openrouter":
       return Boolean((process.env.OPENROUTER_API_KEY || "").trim());
     default:
@@ -401,7 +330,6 @@ module.exports = {
   queryNvidiaText,
   queryNvidiaVision,
   queryGitHubModels,
-  queryHuggingFace,
   queryOpenRouter,
   isProviderConfigured,
   OCR_SYSTEM_PROMPT,

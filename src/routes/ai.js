@@ -717,7 +717,6 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
     else if (provider === "circle" || provider === "circle-search") update.circleSearchEnabled = Boolean(enabled);
     else if (provider === "nvidia" || provider === "nvidia-nim") update.nvidiaEnabled = Boolean(enabled);
     else if (provider === "github" || provider === "github-models" || provider === "github_models") update.githubModelsEnabled = Boolean(enabled);
-    else if (provider === "huggingface" || provider === "hf") update.huggingFaceEnabled = Boolean(enabled);
     else if (provider === "openrouter") update.openRouterEnabled = Boolean(enabled);
     else {
       return res.status(400).json({ success: false, message: "Invalid provider specified" });

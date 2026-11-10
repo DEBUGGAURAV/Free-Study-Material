@@ -432,7 +432,7 @@ async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, im
     ];
   }
 
-  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+  const res = await fetch("https://models.github.ai/inference/chat/completions", {
     method: "POST",
     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -446,55 +446,6 @@ async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, im
   const data = await res.json();
   const answer = (data.choices?.[0]?.message?.content || "").trim();
   if (!answer) throw new Error("Empty GitHub Models response");
-  return { answer, model };
-}
-
-/**
- * 🤗 Hugging Face Serverless Edge (100% Free • Zero Credit Card)
- */
-async function queryHuggingFaceEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
-  const token = (env.HUGGINGFACE_API_KEY || env.HF_TOKEN || "").trim();
-  if (!token) throw new Error("HUGGINGFACE_API_KEY_MISSING");
-  const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
-  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
-  const model = getRequiredSetting(env, cleanB64 ? "HUGGINGFACE_VISION_MODEL" : "HUGGINGFACE_MODEL");
-
-  let messages = [];
-  if (cleanB64) {
-    const promptText = customPrompt || `You are an elite academic tutor. Decipher handwriting/diagrams and solve step-by-step.${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: promptText },
-          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-        ],
-      },
-    ];
-  } else {
-    const userContent = context && context.trim()
-      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
-      : `[Student Question]:\n${query}`;
-    messages = [
-      { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
-      { role: "user", content: userContent },
-    ];
-  }
-
-  const res = await fetch("https://router.huggingface.co/v1/chat/completions", {
-    method: "POST",
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: cleanB64 ? 0.15 : 0.2,
-      max_tokens: 600,
-    }),
-  });
-  if (!res.ok) throw new Error(`HuggingFace Error (${res.status})`);
-  const data = await res.json();
-  const answer = (data.choices?.[0]?.message?.content || "").trim();
-  if (!answer) throw new Error("Empty HuggingFace response");
   return { answer, model };
 }
 

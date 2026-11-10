@@ -16,7 +16,6 @@ export default function TabAiEngine() {
   const [testingTurso, setTestingTurso] = useState(false);
   const [testingNvidia, setTestingNvidia] = useState(false);
   const [testingGitHub, setTestingGitHub] = useState(false);
-  const [testingHuggingFace, setTestingHuggingFace] = useState(false);
   const [testingOpenRouter, setTestingOpenRouter] = useState(false);
   const [testResult, setTestResult] = useState(null);
 
@@ -258,7 +257,6 @@ export default function TabAiEngine() {
       if (provider === "turso") setTestingTurso(true);
       if (provider === "nvidia") setTestingNvidia(true);
       if (provider === "github") setTestingGitHub(true);
-      if (provider === "huggingface" || provider === "hf") setTestingHuggingFace(true);
       if (provider === "openrouter") setTestingOpenRouter(true);
       setTestResult(null);
 
@@ -276,7 +274,6 @@ export default function TabAiEngine() {
       setTestingTurso(false);
       setTestingNvidia(false);
       setTestingGitHub(false);
-      setTestingHuggingFace(false);
       setTestingOpenRouter(false);
     }
   };
@@ -339,8 +336,6 @@ export default function TabAiEngine() {
     nvidiaConfigured: false,
     githubModelsEnabled: true,
     githubModelsConfigured: false,
-    huggingFaceEnabled: true,
-    huggingFaceConfigured: false,
     openRouterEnabled: true,
     openRouterConfigured: false,
   };
@@ -569,16 +564,16 @@ export default function TabAiEngine() {
             <span>⚡ Multi-Tier AI Engine Fleet</span>
           </h4>
           <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontWeight: 700, border: "1px solid rgba(56, 189, 248, 0.3)" }}>
-            8 Active Providers
+            7 Active Providers
           </span>
         </div>
 
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", background: "rgba(15, 23, 42, 0.7)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
           {[
-            { id: "all", label: "🌟 All Engines (8)" },
+            { id: "all", label: "🌟 All Engines (7)" },
             { id: "primary", label: "⚡ Core LPUs & GPUs (Groq / Gemini / NVIDIA)" },
             { id: "edge", label: "🌐 Edge & Cache (Cloudflare / Turso)" },
-            { id: "zero_card", label: "🛡️ 100% Zero-Card (NVIDIA / OpenRouter / GitHub / HF)" },
+            { id: "zero_card", label: "🛡️ 100% Zero-Card (NVIDIA / OpenRouter / GitHub)" },
           ].map((f) => (
             <button
               key={f.id}
@@ -1220,129 +1215,6 @@ export default function TabAiEngine() {
         )}
 
         {/* ============================================================== */}
-        {/* 6. Hugging Face Serverless Router (USA/France • Llama 3.3 70B)  */}
-        {/* ============================================================== */}
-        {(engineFilter === "all" || engineFilter === "zero_card") && (
-          <div
-            style={{
-              background: settings.huggingFaceEnabled !== false ? "linear-gradient(180deg, rgba(234, 179, 8, 0.06) 0%, rgba(15, 23, 42, 0.75) 100%)" : "rgba(15, 23, 42, 0.5)",
-              border: settings.huggingFaceEnabled !== false ? "1px solid rgba(234, 179, 8, 0.35)" : "1px solid rgba(255, 255, 255, 0.08)",
-              borderRadius: "16px",
-              padding: "18px 20px",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "space-between",
-              gap: "14px",
-              position: "relative",
-              boxShadow: settings.huggingFaceEnabled !== false ? "0 10px 30px rgba(234, 179, 8, 0.1)" : "none",
-              backdropFilter: "blur(12px)",
-            }}
-          >
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(245, 158, 11, 0.2))", border: "1px solid rgba(234, 179, 8, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
-                    🤗
-                  </div>
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
-                        Hugging Face Serverless
-                      </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(234, 179, 8, 0.2)", color: "#facc15", fontWeight: 700 }}>
-                        Llama-3.3-70B
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
-                      Host: USA / France Datacenters
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleToggle("huggingface", settings.huggingFaceEnabled !== false)}
-                  style={{
-                    background: settings.huggingFaceEnabled !== false ? "linear-gradient(135deg, #eab308, #ca8a04)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#000",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.huggingFaceEnabled !== false ? "0 2px 10px rgba(234, 179, 8, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.huggingFaceEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-                </button>
-              </div>
-
-              <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
-                World's #1 open-source AI platform. Direct Serverless Router API for 70B reasoning &amp; OCR vision. Completely free with free account token.
-              </p>
-            </div>
-
-            {/* Zero-Card Guarantee & Spec Badges */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px", fontSize: "0.72rem" }}>
-              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
-                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Zero Card Status</span>
-                <strong style={{ color: "#34d399" }}>💳 100% Free Quota</strong>
-              </div>
-              <div style={{ background: "rgba(255, 255, 255, 0.02)", padding: "6px 10px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
-                <span style={{ color: "var(--text-muted)", display: "block", fontSize: "0.64rem" }}>Router Model</span>
-                <strong style={{ color: "#facc15" }}>meta-llama/Llama-3.3-70B</strong>
-              </div>
-            </div>
-
-            {/* Status & Action Footer */}
-            <div style={{ padding: "8px 12px", background: "rgba(0, 0, 0, 0.25)", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.05)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <ShieldCheck size={14} color={settings.huggingFaceConfigured ? "#34d399" : "#fbbf24"} />
-                <span style={{ color: settings.huggingFaceConfigured ? "#34d399" : "#fbbf24", fontWeight: 600 }}>
-                  {settings.huggingFaceConfigured ? "Protected in .env" : "⚠️ Needs HUGGINGFACE_API_KEY"}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", gap: "5px" }}>
-                <a
-                  href="https://huggingface.co/settings/tokens"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "#94a3b8",
-                    padding: "3px 7px",
-                    borderRadius: "5px",
-                    textDecoration: "none",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                    display: "inline-flex",
-                    alignItems: "center",
-                  }}
-                >
-                  Tokens ↗
-                </a>
-                <button
-                  type="button"
-                  onClick={() => handleTestPing("huggingface")}
-                  disabled={testingHuggingFace || !settings.huggingFaceConfigured}
-                  className="btn-secondary"
-                  style={{ padding: "4px 10px", fontSize: "0.72rem", cursor: "pointer", opacity: settings.huggingFaceConfigured ? 1 : 0.5 }}
-                >
-                  <Zap size={11} className={testingHuggingFace ? "animate-spin" : ""} />
-                  <span>{testingHuggingFace ? "Pinging..." : "Test Ping"}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ============================================================== */}
         {/* 7. OpenRouter Free Tier (USA • Multi-Provider Free Router)      */}
         {/* ============================================================== */}
         {(engineFilter === "all" || engineFilter === "zero_card") && (
@@ -1878,7 +1750,7 @@ export default function TabAiEngine() {
           </div>
 
           <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)" }}>
-            Router: Turso Cache (0ms) ➔ Groq LPU (~0.3s) ➔ Cloudflare AI Edge ➔ Gemini Flash ➔ GitHub Models ➔ Hugging Face ➔ OpenRouter
+            Router: Turso Cache (0ms) ➔ Groq LPU (~0.3s) ➔ Cloudflare AI Edge ➔ Gemini Flash ➔ GitHub Models ➔ OpenRouter
           </div>
         </div>
       </div>

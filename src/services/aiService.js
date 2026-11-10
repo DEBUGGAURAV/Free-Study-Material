@@ -17,7 +17,6 @@ const {
   queryNvidiaText,
   queryNvidiaVision,
   queryGitHubModels,
-  queryHuggingFace,
   queryOpenRouter,
   isProviderConfigured,
 } = require("./unifiedAiProviders");
@@ -29,15 +28,14 @@ const DEFAULT_AI_SETTINGS = {
   cloudflareAiEnabled: true,
   nvidiaEnabled: true,
   githubModelsEnabled: true,
-  huggingFaceEnabled: true,
   openRouterEnabled: true,
   edgeProxyEnabled: true,
   circleSearchEnabled: true, // ⭕ Circle to Search & Solve Master Toggle
   circleSearchDailyLimit: 2000, // ⭕ Daily Limit for Circle to Search Queries
   circleSearchCooldownSec: 3, // ⭕ Cooldown between circle searches
   circleSearchUsedToday: 0,
-  groqModel: process.env.GROQ_MODEL || "",
-  geminiModel: process.env.GEMINI_MODEL || "",
+  groqModel: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+  geminiModel: process.env.GEMINI_MODEL || "gemini-flash-lite-latest",
   groqLimit: 14400,
   geminiLimit: 1500,
   cloudflareAiLimit: 1000,
@@ -54,7 +52,6 @@ const DEFAULT_AI_SETTINGS = {
   geminiApiKey: "",
   nvidiaApiKey: "",
   githubToken: "",
-  huggingFaceApiKey: "",
   openRouterApiKey: "",
   updatedAt: new Date().toISOString(),
 };
@@ -125,16 +122,15 @@ async function loadAiSettings() {
           geminiApiKey: data.geminiApiKey || process.env.GEMINI_API_KEY || "",
           nvidiaApiKey: data.nvidiaApiKey || process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "",
           githubToken: data.githubToken || process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "",
-          huggingFaceApiKey: data.huggingFaceApiKey || process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "",
           openRouterApiKey: data.openRouterApiKey || process.env.OPENROUTER_API_KEY || "",
         };
 
         // Auto-upgrade legacy/deprecated models to active, working models
         if (!currentAiSettings.geminiModel || currentAiSettings.geminiModel.includes("gemini-2.0") || currentAiSettings.geminiModel.includes("gemini-1.5") || currentAiSettings.geminiModel.includes("gemini-2.5")) {
-          currentAiSettings.geminiModel = process.env.GEMINI_MODEL || "";
+          currentAiSettings.geminiModel = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
         }
         if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
-          currentAiSettings.groqModel = process.env.GROQ_MODEL || "";
+          currentAiSettings.groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
         }
         saveAiSettingsToDb().catch(() => {});
       } else {
@@ -142,7 +138,6 @@ async function loadAiSettings() {
         currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
         currentAiSettings.nvidiaApiKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
         currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
-        currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
         currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
         await db.collection("settings").doc("ai_engine").set(currentAiSettings, { merge: true });
       }
@@ -151,7 +146,6 @@ async function loadAiSettings() {
       currentAiSettings.geminiApiKey = process.env.GEMINI_API_KEY || "";
       currentAiSettings.nvidiaApiKey = process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || "";
       currentAiSettings.githubToken = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || "";
-      currentAiSettings.huggingFaceApiKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || "";
       currentAiSettings.openRouterApiKey = process.env.OPENROUTER_API_KEY || "";
     }
     checkDailyReset();
@@ -191,9 +185,6 @@ function getApiKey(provider) {
   }
   if (provider === "github") {
     return (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN || currentAiSettings.githubToken || "").trim();
-  }
-  if (provider === "huggingface" || provider === "hf") {
-    return (process.env.HUGGINGFACE_API_KEY || process.env.HF_TOKEN || currentAiSettings.huggingFaceApiKey || "").trim();
   }
   if (provider === "openrouter") {
     return (process.env.OPENROUTER_API_KEY || currentAiSettings.openRouterApiKey || "").trim();
@@ -239,7 +230,7 @@ Formatting rules:
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: currentAiSettings.groqModel || process.env.GROQ_MODEL || "",
+        model: currentAiSettings.groqModel || process.env.GROQ_MODEL || "openai/gpt-oss-20b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent },
@@ -305,7 +296,7 @@ ${query ? `\n[Student Prompt / Hint]:\n${query}` : ""}`;
 
   const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 750;
   const temperature = typeof options.temperature === "number" ? options.temperature : 0.2;
-  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 9500;
+  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 7500;
   let lastErr = null;
 
   for (const vModel of visionModels) {
@@ -413,8 +404,8 @@ Answer clearly and accurately based on the provided notes context.
     });
   }
 
-  const primaryModel = currentAiSettings.geminiModel || process.env.GEMINI_MODEL || "";
-  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || "")
+  const primaryModel = currentAiSettings.geminiModel || process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
+  const fallbackModels = (process.env.GEMINI_FALLBACK_MODELS || "gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.0-flash")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
@@ -423,7 +414,7 @@ Answer clearly and accurately based on the provided notes context.
   let lastError = null;
   const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 750;
   const temperature = typeof options.temperature === "number" ? options.temperature : 0.25;
-  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 11000;
+  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 9000;
 
   for (let idx = 0; idx < modelsToTry.length; idx++) {
     const model = modelsToTry[idx];
@@ -698,6 +689,9 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   const isImageOrDiagram = Boolean(options.imageBase64);
   const imageBase64 = options.imageBase64 || null;
   const imageMimeType = options.imageMimeType || "image/jpeg";
+  const maxProviderAttempts = isImageOrDiagram ? 2 : 3;
+  let providerAttempts = 0;
+  const canTryMoreProviders = () => !finalAnswer && providerAttempts < maxProviderAttempts;
 
   // 🎯 SMART INTENT ROUTER:
   // Intent 1: Photo / Screenshot / Diagram / Handwritten Note -> Dual Multimodal Vision Waterfall!
@@ -708,7 +702,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       currentAiSettings.groqUsedToday < currentAiSettings.groqLimit &&
       Boolean(getApiKey("groq"));
 
-    if (canUseGroqVision) {
+    if (canUseGroqVision && canTryMoreProviders()) {
+      providerAttempts += 1;
       try {
         const gvRes = await queryGroqVision(cleanQuery, context, imageBase64, imageMimeType, options);
         finalAnswer = gvRes.answer;
@@ -722,12 +717,13 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
 
     const canUseGemini =
-      !finalAnswer &&
+      canTryMoreProviders() &&
       currentAiSettings.geminiEnabled &&
       currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit &&
       Boolean(getApiKey("gemini"));
 
     if (canUseGemini) {
+      providerAttempts += 1;
       try {
         finalAnswer = await queryGemini(cleanQuery, context, imageBase64, imageMimeType, options);
         currentAiSettings.geminiUsedToday += 1;
@@ -740,7 +736,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
 
     // Tier 1B: NVIDIA NIM Llama 3.2 Vision Failover (NVIDIA H100 GPU)
-    if (!finalAnswer && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+    if (canTryMoreProviders() && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+      providerAttempts += 1;
       try {
         const nvRes = await queryNvidiaVision(cleanQuery, context, imageBase64, imageMimeType, {
           ...options,
@@ -756,7 +753,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
 
     // Tier 1C: GitHub Models GPT-4o-mini Vision Failover (Microsoft Azure • Zero Card)
-    if (!finalAnswer && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+    if (canTryMoreProviders() && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+      providerAttempts += 1;
       try {
         const ghRes = await queryGitHubModels(cleanQuery, context, imageBase64, imageMimeType, options);
         finalAnswer = ghRes.answer;
@@ -768,21 +766,9 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       }
     }
 
-    // Tier 1F: Hugging Face Serverless Vision (Zero Card • Llama 3.2 11B Vision)
-    if (!finalAnswer && currentAiSettings.huggingFaceEnabled !== false && isProviderConfigured("huggingface")) {
-      try {
-        const hfRes = await queryHuggingFace(cleanQuery, context, imageBase64, imageMimeType, options);
-        finalAnswer = hfRes.answer;
-        finalProvider = "huggingface_vision";
-        finalModel = hfRes.model;
-      } catch (hfErr) {
-        console.warn("[AI-ENGINE] ⚠️ Hugging Face Vision notice:", hfErr.message);
-        failoverOccurred = true;
-      }
-    }
-
     // Tier 1G: OpenRouter Free Vision (Zero Card • Llama 3.2 Vision Free)
-    if (!finalAnswer && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+    if (canTryMoreProviders() && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+      providerAttempts += 1;
       try {
         const orRes = await queryOpenRouter(cleanQuery, context, imageBase64, imageMimeType, options);
         finalAnswer = orRes.answer;
@@ -795,12 +781,13 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
 
     // Tier 1H: If vision models had an issue AND we already have pre-extracted query text, solve via Groq text LPU!
-    if (!finalAnswer && cleanQuery && cleanQuery.length > 5 && !cleanQuery.startsWith("Question / Diagram from Page")) {
+    if (canTryMoreProviders() && !finalAnswer && cleanQuery && cleanQuery.length > 5 && !cleanQuery.startsWith("Question / Diagram from Page")) {
       const canUseGroqText =
         currentAiSettings.groqEnabled &&
         currentAiSettings.groqUsedToday < currentAiSettings.groqLimit &&
         Boolean(getApiKey("groq"));
       if (canUseGroqText) {
+        providerAttempts += 1;
         try {
           finalAnswer = await queryGroq(cleanQuery, context, options);
           currentAiSettings.groqUsedToday += 1;
@@ -815,11 +802,12 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
 
   // Tier 2 (Text): Groq Cloud LPU (~800 tok/sec, 0.3s sub-second speed champion)
   if (!finalAnswer && !isImageOrDiagram) {
-    const canUseGroq = currentAiSettings.groqEnabled && 
+    const canUseGroq = canTryMoreProviders() && currentAiSettings.groqEnabled && 
                        currentAiSettings.groqUsedToday < currentAiSettings.groqLimit && 
                        Boolean(getApiKey("groq"));
 
     if (canUseGroq) {
+      providerAttempts += 1;
       try {
         finalAnswer = await queryGroq(cleanQuery, context, options);
         currentAiSettings.groqUsedToday += 1;
@@ -836,7 +824,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Tier 3 (Text): Cloudflare Workers AI (Native Edge GPU - @cf/meta/llama-3.1-8b-instruct)
-  if (!finalAnswer && !isImageOrDiagram) {
+  if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders()) {
+    providerAttempts += 1;
     const canUseCfAi = currentAiSettings.cloudflareAiEnabled !== false &&
                        (currentAiSettings.cloudflareAiUsedToday || 0) < (currentAiSettings.cloudflareAiLimit || 1000) &&
                        isCloudflareAiAvailable();
@@ -853,11 +842,12 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Tier 4 (Text): Google Gemini Flash Failover
-  if (!finalAnswer && !isImageOrDiagram) {
+  if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders()) {
     const canUseGemini = currentAiSettings.geminiEnabled && 
                          currentAiSettings.geminiUsedToday < currentAiSettings.geminiLimit && 
                          Boolean(getApiKey("gemini"));
     if (canUseGemini) {
+      providerAttempts += 1;
       try {
         finalAnswer = await queryGemini(cleanQuery, context, null, "image/jpeg", options);
         currentAiSettings.geminiUsedToday += 1;
@@ -870,7 +860,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Tier 4B (Text): NVIDIA NIM DGX Cloud (Llama 3.3 70B • TensorRT-LLM on H100 GPU)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+  if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders() && currentAiSettings.nvidiaEnabled !== false && Boolean(getApiKey("nvidia"))) {
+    providerAttempts += 1;
     try {
       const nvRes = await queryNvidiaText(cleanQuery, context, {
         ...options,
@@ -886,7 +877,8 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
   }
 
   // Tier 5 (Text): GitHub Models (OpenAI GPT-4o-mini • Microsoft Azure USA • Zero Card)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+  if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders() && currentAiSettings.githubModelsEnabled !== false && isProviderConfigured("github")) {
+    providerAttempts += 1;
     try {
       const ghRes = await queryGitHubModels(cleanQuery, context, null, "image/jpeg", options);
       finalAnswer = ghRes.answer;
@@ -898,21 +890,9 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     }
   }
 
-  // Tier 8 (Text): Hugging Face Serverless (Llama 3.3 70B • Zero Card)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.huggingFaceEnabled !== false && isProviderConfigured("huggingface")) {
-    try {
-      const hfRes = await queryHuggingFace(cleanQuery, context, null, "image/jpeg", options);
-      finalAnswer = hfRes.answer;
-      finalProvider = "huggingface";
-      finalModel = hfRes.model;
-      failoverOccurred = true;
-    } catch (hfErr) {
-      console.warn("[AI-ENGINE] ⚠️ Hugging Face notice:", hfErr.message);
-    }
-  }
-
   // Tier 9 (Text): OpenRouter Free Tier (Llama 3.3 70B Free • Zero Card)
-  if (!finalAnswer && !isImageOrDiagram && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+  if (!finalAnswer && !isImageOrDiagram && canTryMoreProviders() && currentAiSettings.openRouterEnabled !== false && isProviderConfigured("openrouter")) {
+    providerAttempts += 1;
     try {
       const orRes = await queryOpenRouter(cleanQuery, context, null, "image/jpeg", options);
       finalAnswer = orRes.answer;
@@ -1014,8 +994,6 @@ function getAiTelemetry() {
       nvidiaModel: process.env.NVIDIA_MODEL || "",
       githubModelsEnabled: currentAiSettings.githubModelsEnabled !== false,
       githubModelsConfigured: isProviderConfigured("github"),
-      huggingFaceEnabled: currentAiSettings.huggingFaceEnabled !== false,
-      huggingFaceConfigured: isProviderConfigured("huggingface"),
       openRouterEnabled: currentAiSettings.openRouterEnabled !== false,
       openRouterConfigured: isProviderConfigured("openrouter"),
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
@@ -1071,10 +1049,8 @@ async function updateAiSettings({
   geminiApiKey,
   nvidiaApiKey,
   githubToken,
-  huggingFaceApiKey,
   openRouterApiKey,
   nvidiaEnabled,
-  huggingFaceEnabled,
   openRouterEnabled,
   githubModelsEnabled,
   groqLimit,
@@ -1089,7 +1065,6 @@ async function updateAiSettings({
   if (typeof circleSearchEnabled === "boolean") currentAiSettings.circleSearchEnabled = circleSearchEnabled;
   if (typeof circleSearchDailyLimit === "number" && circleSearchDailyLimit > 0) currentAiSettings.circleSearchDailyLimit = circleSearchDailyLimit;
   if (typeof circleSearchCooldownSec === "number" && circleSearchCooldownSec >= 0) currentAiSettings.circleSearchCooldownSec = circleSearchCooldownSec;
-  if (typeof huggingFaceEnabled === "boolean") currentAiSettings.huggingFaceEnabled = huggingFaceEnabled;
   if (typeof openRouterEnabled === "boolean") currentAiSettings.openRouterEnabled = openRouterEnabled;
   if (typeof githubModelsEnabled === "boolean") currentAiSettings.githubModelsEnabled = githubModelsEnabled;
 
@@ -1104,9 +1079,6 @@ async function updateAiSettings({
   }
   if (typeof githubToken === "string" && githubToken.trim()) {
     currentAiSettings.githubToken = githubToken.trim();
-  }
-  if (typeof huggingFaceApiKey === "string" && huggingFaceApiKey.trim()) {
-    currentAiSettings.huggingFaceApiKey = huggingFaceApiKey.trim();
   }
   if (typeof openRouterApiKey === "string" && openRouterApiKey.trim()) {
     currentAiSettings.openRouterApiKey = openRouterApiKey.trim();
@@ -1170,9 +1142,6 @@ async function testAiProvider(provider) {
   } else if (provider === "github") {
     const res = await queryGitHubModels("Test ping. Reply 'GitHub Models Ready' in 3 words.", "College test");
     return { provider: "github", success: true, answer: res.answer, latencyMs: Date.now() - start };
-  } else if (provider === "huggingface" || provider === "hf") {
-    const res = await queryHuggingFace("Test ping. Reply 'HuggingFace Ready' in 3 words.", "College test");
-    return { provider: "huggingface", success: true, answer: res.answer, latencyMs: Date.now() - start };
   } else if (provider === "openrouter") {
     const res = await queryOpenRouter("Test ping. Reply 'OpenRouter Ready' in 3 words.", "College test");
     return { provider: "openrouter", success: true, answer: res.answer, latencyMs: Date.now() - start };
@@ -1304,15 +1273,6 @@ function getAiEngineAuditDetails(provider, model, cached) {
       tier: "🛡️ Tier 7 (OpenAI GPT-4o-mini Inference)",
       model: model || process.env.GITHUB_MODELS_MODEL || "",
       speed: "⚡ Microsoft Cloud",
-    };
-  }
-
-  if (p.includes("huggingface") || p.includes("hf")) {
-    return {
-      name: "🤗 Hugging Face Serverless",
-      tier: "🚀 Serverless Router (Llama 3.3 70B & 3.2 Vision)",
-      model: model || process.env.HUGGINGFACE_MODEL || "",
-      speed: "⚡ Serverless Cloud",
     };
   }
 

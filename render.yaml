@@ -36,13 +36,9 @@ services:
       - key: NVIDIA_MODEL
         value: nvidia/nemotron-3.5-lightning-30b-a3b
       - key: NVIDIA_VISION_MODEL
-        value: meta/llama-3.2-11b-vision-instruct
+        value: nvidia/nemotron-3.5-super-vl-120b-a12b
       - key: GITHUB_MODELS_MODEL
-        value: gpt-4o-mini
-      - key: HUGGINGFACE_MODEL
-        value: meta-llama/Llama-3.3-70B-Instruct
-      - key: HUGGINGFACE_VISION_MODEL
-        value: meta-llama/Llama-3.2-11B-Vision-Instruct
+        value: openai/gpt-4o-mini
       - key: OPENROUTER_MODEL
         value: meta-llama/llama-3.3-70b-instruct:free
       - key: OPENROUTER_VISION_MODEL
