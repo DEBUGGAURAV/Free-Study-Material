@@ -64,11 +64,10 @@ Formatting rules:
     ? `[Academic Notes Excerpt & Citations]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
     : `[Student Question]:\n${query}`;
 
-  const candidateModels = (process.env.CLOUDFLARE_AI_MODELS || "")
+  const candidateModels = (process.env.CLOUDFLARE_AI_MODELS || "@cf/meta/llama-3.1-8b-instruct,@cf/meta/llama-3.2-1b-instruct")
     .split(",")
     .map((model) => model.trim())
     .filter(Boolean);
-  if (!candidateModels.length) throw new Error("CLOUDFLARE_AI_MODELS_MISSING");
 
   const maxTokens = typeof options.maxTokens === "number" ? options.maxTokens : 600;
   let lastError = null;
