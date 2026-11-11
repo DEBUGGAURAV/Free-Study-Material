@@ -1028,7 +1028,7 @@ export default function App() {
   };
 
   const handleQueueCompleted = (noteId) => {
-    fetchNotes();
+    fetchNotes(null, true);
     fetchBranches();
   };
 
@@ -1961,6 +1961,12 @@ export default function App() {
             {/* Hero Banner with Tech Architecture */}
             <HeroBanner
               totalNotes={notes.length}
+              onBrowsePapers={() => setSelectedCourse("Question Papers")}
+              onOpenAiStudy={() => {
+                setHomeAiPodNote(null);
+                setHomeAiPodInitialTab("chat");
+                setIsHomeAiPodOpen(true);
+              }}
               onOpenUpload={() => {
                 if (!currentUser) {
                   openAuth("signup");

@@ -1,12 +1,17 @@
 import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles } from "lucide-react";
 
-export default function HeroBanner({ totalNotes = 0, onOpenUpload }) {
+export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePapers, onOpenAiStudy }) {
   const browseMaterials = () => {
     document.getElementById("study-materials")?.scrollIntoView({
       behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
       block: "start",
     });
   };
+  const libraryLinks = [
+    [FileText, "Class notes", "Review topics at your pace", browseMaterials],
+    [Search, "Previous papers", "Find practice material by course", () => { onBrowsePapers(); browseMaterials(); }],
+    [Sparkles, "AI study tools", "Get more from your materials", onOpenAiStudy],
+  ];
 
   return (
     <section className="hero-section">
@@ -59,21 +64,13 @@ export default function HeroBanner({ totalNotes = 0, onOpenUpload }) {
           </div>
 
           <div className="hero-library-list">
-            <div className="hero-library-item">
-              <span className="hero-library-item-icon"><FileText size={17} /></span>
-              <span><strong>Class notes</strong><small>Review topics at your pace</small></span>
-              <ArrowRight size={15} />
-            </div>
-            <div className="hero-library-item">
-              <span className="hero-library-item-icon"><Search size={17} /></span>
-              <span><strong>Previous papers</strong><small>Find practice material by course</small></span>
-              <ArrowRight size={15} />
-            </div>
-            <div className="hero-library-item">
-              <span className="hero-library-item-icon"><Sparkles size={17} /></span>
-              <span><strong>AI study tools</strong><small>Get more from your materials</small></span>
-              <ArrowRight size={15} />
-            </div>
+            {libraryLinks.map(([Icon, title, description, onClick]) => (
+              <button className="hero-library-item" key={title} onClick={onClick}>
+                <span className="hero-library-item-icon"><Icon size={17} /></span>
+                <span><strong>{title}</strong><small>{description}</small></span>
+                <ArrowRight size={15} />
+              </button>
+            ))}
           </div>
         </div>
       </div>

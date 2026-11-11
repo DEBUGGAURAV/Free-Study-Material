@@ -2447,6 +2447,9 @@ select option,
 .hero-title span {
   display: block;
   background: linear-gradient(110deg, #c4b5fd 0%, #67e8f9 90%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .hero-subtitle {
@@ -2556,8 +2559,26 @@ select option,
   grid-template-columns: 34px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 11px;
+  width: 100%;
   padding: 10px 0;
+  border: 0;
+  background: transparent;
   color: var(--text-dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.hero-library-item:hover {
+  color: #c4b5fd;
+  transform: translateX(3px);
+}
+
+.hero-library-item:focus-visible {
+  outline: 2px solid #67e8f9;
+  outline-offset: 3px;
+  border-radius: 8px;
 }
 
 .hero-library-item > span:nth-child(2) {
