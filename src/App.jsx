@@ -1103,7 +1103,7 @@ export default function App() {
       }
     }
 
-    setTableDownloads((prev) => ({ ...prev, [note.id]: { percent: 5, speed: "98.4 MB/s" } }));
+    setTableDownloads((prev) => ({ ...prev, [note.id]: { percent: 0, speed: "Calculating..." } }));
     try {
       await api.downloadNoteWithProgress(
         note.id,
@@ -1825,18 +1825,11 @@ export default function App() {
               </div>
 
               <div className="tech-hud-grid visitor-material-grid">
-                {(notes && notes.length > 0
-                  ? notes.slice(0, 6)
-                  : [
-                      { title: "Engineering Mathematics III", subject: "Linear Algebra & Transforms", branch: "CSE / IT", size: "18.4 MB" },
-                      { title: "Operating Systems & Kernel Architecture", subject: "Process Sync & Memory Virtualization", branch: "CSE / BCA", size: "24.1 MB" },
-                      { title: "Data Structures & Algorithms in C++", subject: "Trees, Graphs & Dynamic Programming", branch: "All Branches", size: "32.6 MB" },
-                    ]
-                ).map((item, idx) => {
+                {notes.length ? notes.slice(0, 6).map((item) => {
                   const sizeStr = item.size || formatFileSize(item.compressedSize || item.fileSize || 1048576);
                   return (
                     <div
-                      key={item.id || idx}
+                      key={item.id || item.title}
                       style={{
                         background: "var(--bg-glass-card)",
                         border: "1px dashed rgba(255, 255, 255, 0.15)",
@@ -1865,7 +1858,7 @@ export default function App() {
                       </div>
                     </div>
                   );
-                })}
+                }) : <p style={{ color: "var(--text-dim)" }}>No study materials are available to preview yet.</p>}
               </div>
             </div>
           </div>

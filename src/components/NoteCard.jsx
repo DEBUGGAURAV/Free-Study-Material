@@ -42,7 +42,7 @@ export default function NoteCard({
   const abortControllerRef = useRef(null);
   const [downloadProgress, setDownloadProgress] = useState({
     percent: 0,
-    speed: "98.4 MB/s",
+    speed: "Calculating...",
     loadedMB: "0",
     totalMB: "0",
     timeRemaining: "",

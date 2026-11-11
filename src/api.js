@@ -864,14 +864,11 @@ export const api = {
 
           const percent = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0;
 
-          // âš¡ Full-Throttle Maximum Fiber Ingestion Pipeline (68.5 - 89.4 MB/s Full Speed)
-          const dynamicUploadJitter = Number(((e.loaded % 7) * 2.3 + (percent % 4) * 1.6).toFixed(1));
-          const hardcodedUploadMB = (68.5 + dynamicUploadJitter).toFixed(1);
-          const speedFormatted = `${hardcodedUploadMB} MB/s`;
-
           const remainingBytes = e.total - e.loaded;
-          const simulatedUploadBytes = parseFloat(hardcodedUploadMB) * 1024 * 1024;
-          const secondsRemaining = simulatedUploadBytes > 0 ? (remainingBytes / simulatedUploadBytes).toFixed(1) : "0";
+          const speedFormatted = speedBytes >= 1024 * 1024
+            ? `${(speedBytes / (1024 * 1024)).toFixed(1)} MB/s`
+            : speedBytes > 0 ? `${Math.round(speedBytes / 1024)} KB/s` : "Calculating...";
+          const secondsRemaining = speedBytes > 0 ? remainingBytes / speedBytes : null;
 
           if (onProgress) {
             onProgress({
@@ -879,7 +876,9 @@ export const api = {
               speed: speedFormatted,
               loadedMB: (e.loaded / (1024 * 1024)).toFixed(2),
               totalMB: (e.total / (1024 * 1024)).toFixed(2),
-              timeRemaining: Number(secondsRemaining) > 0 ? `~${secondsRemaining}s remaining` : "Completing...",
+              timeRemaining: secondsRemaining === null
+                ? "Calculating..."
+                : secondsRemaining > 0.1 ? `~${secondsRemaining.toFixed(1)}s remaining` : "Completing...",
             });
           }
         }
