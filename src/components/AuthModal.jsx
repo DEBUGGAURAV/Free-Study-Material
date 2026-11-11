@@ -1265,7 +1265,7 @@ export default function AuthModal({
       }}
     >
       <div
-        className="modal-content"
+        className="modal-content auth-modal-content"
         style={{ maxWidth: "415px", width: "100%" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -1879,6 +1879,7 @@ export default function AuthModal({
                 {supportsPasskey && (
                   <button
                     type="button"
+                    className="passkey-signin-button"
                     onClick={handlePasskeySignIn}
                     disabled={loading || passkeyLoading}
                     style={{
@@ -1888,25 +1889,12 @@ export default function AuthModal({
                       justifyContent: "center",
                       gap: "14px",
                       padding: "14px 18px",
-                      background: "linear-gradient(135deg, rgba(14, 165, 233, 0.16) 0%, rgba(99, 102, 241, 0.18) 50%, rgba(168, 85, 247, 0.16) 100%)",
-                      border: "1px solid rgba(56, 189, 248, 0.45)",
+                      background: "linear-gradient(120deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.2) 52%, rgba(168, 85, 247, 0.22))",
                       borderRadius: "14px",
                       cursor: "pointer",
                       marginBottom: "16px",
-                      boxShadow: "0 4px 20px rgba(14, 165, 233, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)",
-                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
                       position: "relative",
                       overflow: "hidden",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = "translateY(-1px)";
-                      e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.85)";
-                      e.currentTarget.style.boxShadow = "0 8px 26px rgba(14, 165, 233, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.45)";
-                      e.currentTarget.style.boxShadow = "0 4px 20px rgba(14, 165, 233, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15)";
                     }}
                   >
                     <div
@@ -1927,26 +1915,9 @@ export default function AuthModal({
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        <span style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", letterSpacing: "0.2px" }}>
-                          {passkeyLoading ? "Authenticating with Biometrics..." : "Sign In with Passkey / Biometrics"}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "0.65rem",
-                            fontWeight: 800,
-                            textTransform: "uppercase",
-                            letterSpacing: "0.6px",
-                            background: "linear-gradient(135deg, #06b6d4, #6366f1)",
-                            color: "#ffffff",
-                            padding: "2px 7px",
-                            borderRadius: "6px",
-                            boxShadow: "0 2px 6px rgba(6, 182, 212, 0.3)",
-                          }}
-                        >
-                          Biometric
-                        </span>
-                      </div>
+                      <span style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", letterSpacing: "0.2px" }}>
+                        {passkeyLoading ? "Authenticating with Biometrics..." : "Sign In with Passkey / Biometrics"}
+                      </span>
                       <span style={{ fontSize: "0.75rem", color: "rgba(224, 242, 254, 0.8)", marginTop: "2px" }}>
                         Face ID, Fingerprint, or Windows Hello PIN
                       </span>

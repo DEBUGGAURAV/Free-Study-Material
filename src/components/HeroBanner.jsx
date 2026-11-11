@@ -1,94 +1,96 @@
-import "react";
-import { Sparkles } from "lucide-react";
-import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
+import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles } from "lucide-react";
 
-export default function HeroBanner({ totalNotes }) {
-  const techCards = [
-    {
-      icon: "☁️",
-      color: "#38bdf8",
-      name: "Ultra-Fast Academic Cloud Engine",
-      desc: "Unlimited direct cloud streaming through High-Performance Academic Storage Nodes and Local Server for 1ms cached downloads.",
-    },
-    {
-      icon: "⚡",
-      color: "#60a5fa",
-      name: "WebRTC P2P Mesh Network",
-      desc: "Direct 100 MB/s peer-to-peer file transfer between students on the same hostel or campus Wi-Fi without server bandwidth limits.",
-    },
-    {
-      icon: "📑",
-      color: "#a855f7",
-      name: "Virtual Reader",
-      desc: "Read handwritten notes and textbooks instantly in your browser with Night Mode, page jump, and zero download waiting time.",
-    },
-    {
-      icon: "🔍",
-      color: "#f59e0b",
-      name: "Tesseract OCR Deep Search",
-      desc: "Universal search matches typed titles as well as handwritten formulas scanned directly inside students' handwritten PDF pages.",
-    },
-    {
-      icon: "🗜️",
-      color: "#34d399",
-      name: "In-Memory LRU RAM & Brotli Booster",
-      desc: "Dedicated 500 MB in-memory RAM cache pool delivering microsecond document streaming with dual Brotli & Gzip compression for 25% extra bandwidth savings.",
-    },
-    {
-      icon: "🗄️",
-      color: "#06b6d4",
-      name: "Distributed Multi-Worker Vault & Zero-Loss Archiving",
-      desc: "High-speed parallel multi-worker streaming engine with automated snapshot recovery, ensuring accident-proof note preservation and zero-loss cloud archiving.",
-    },
-    {
-      icon: "🛡️",
-      color: "#10b981",
-      name: "Brevo SMTP & Zero-Threat Security Shield",
-      desc: "Cryptographic 6-digit email OTP verification, 10-round bcrypt salted encryption, and multi-tiered DDoS protection for 100% student data safety.",
-    },
-    {
-      icon: "🤖",
-      color: "#eab308",
-      name: "Real-Time Bot Poller & Fast Ingest",
-      desc: "Snappy 5s Telegram long-polling & SHA-256 deduplication for instant study material publishing.",
-    },
-    {
-      icon: "🔒",
-      color: "#22c55e",
-      name: "100% Autonomous & Zero Data Sharing",
-      desc: "This platform operates completely autonomously with zero human intervention. All student data, credentials, and activity logs are strictly private and will never be shared, sold, or tracked.",
-    },
-  ];
+export default function HeroBanner({ totalNotes = 0, onOpenUpload }) {
+  const browseMaterials = () => {
+    document.getElementById("study-materials")?.scrollIntoView({
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth",
+      block: "start",
+    });
+  };
 
   return (
     <section className="hero-section">
-      <div className="hero-badge-pill">
-        <Sparkles size={14} />
-        <span>Next-Gen Academic Cloud • Zero Cost High Performance Architecture</span>
-      </div>
+      <div className="hero-layout">
+        <div className="hero-copy">
+          <div className="hero-badge-pill">
+            <Sparkles size={14} />
+            <span>Your study library, all in one place</span>
+          </div>
 
-      <h1 className="hero-title">
-        {SITE_NAME} — <span>{SITE_TAGLINE}</span>
-      </h1>
+          <h1 className="hero-title">
+            Find the notes you need. <span>Focus on what matters.</span>
+          </h1>
 
-      <p className="hero-subtitle">
-        Powered by WebRTC Campus Mesh, Virtual Reader, Tesseract OCR handwritten search,
-        Brotli compression, and Multi-Gigabit High-Speed Cloud Streaming with Local Server caching.
-      </p>
+          <p className="hero-subtitle">
+            Browse student-shared notes and previous question papers. Search by subject or course,
+            then start studying right in your browser.
+          </p>
 
-      {/* Technology HUD: 3x3 Grid (3 columns, exactly 3 in each column/row) */}
-      <div className="tech-hud-grid">
-        {techCards.map((card, idx) => (
-          <div className="tech-hud-card" key={idx}>
-            <div className="tech-icon-box" style={{ color: card.color }}>
-              {card.icon}
+          <div className="hero-actions">
+            <button type="button" className="btn-primary" onClick={browseMaterials}>
+              Explore study materials
+              <ArrowRight size={17} />
+            </button>
+            <button type="button" className="btn-secondary" onClick={onOpenUpload}>
+              Share your notes
+            </button>
+          </div>
+
+          <p className="hero-reassurance">
+            <ShieldCheck size={15} />
+            Shared by students <span aria-hidden="true">·</span> Study at your own pace
+          </p>
+        </div>
+
+        <div className="hero-library-card" aria-label="What you can find in the study library">
+          <div className="hero-library-heading">
+            <div className="hero-library-icon">
+              <BookOpen size={19} />
             </div>
             <div>
-              <div className="tech-hud-name">{card.name}</div>
-              <div className="tech-hud-desc">{card.desc}</div>
+              <p className="hero-library-kicker">THE STUDY LIBRARY</p>
+              <h2>Start with what you need</h2>
             </div>
           </div>
-        ))}
+
+          <div className="hero-library-count">
+            <strong>{totalNotes.toLocaleString()}</strong>
+            <span>{totalNotes === 1 ? "resource to explore" : "resources to explore"}</span>
+          </div>
+
+          <div className="hero-library-list">
+            <div className="hero-library-item">
+              <span className="hero-library-item-icon"><FileText size={17} /></span>
+              <span><strong>Class notes</strong><small>Review topics at your pace</small></span>
+              <ArrowRight size={15} />
+            </div>
+            <div className="hero-library-item">
+              <span className="hero-library-item-icon"><Search size={17} /></span>
+              <span><strong>Previous papers</strong><small>Find practice material by course</small></span>
+              <ArrowRight size={15} />
+            </div>
+            <div className="hero-library-item">
+              <span className="hero-library-item-icon"><Sparkles size={17} /></span>
+              <span><strong>AI study tools</strong><small>Get more from your materials</small></span>
+              <ArrowRight size={15} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="hero-benefits" aria-label="Study library features">
+        <div className="hero-benefit">
+          <Search size={17} />
+          <span><strong>Find it faster</strong><small>Search notes and subjects</small></span>
+        </div>
+        <div className="hero-benefit">
+          <BookOpen size={17} />
+          <span><strong>Study your way</strong><small>Read materials online</small></span>
+        </div>
+        <div className="hero-benefit">
+          <Sparkles size={17} />
+          <span><strong>Study with AI</strong><small>Explore built-in study tools</small></span>
+        </div>
       </div>
     </section>
   );

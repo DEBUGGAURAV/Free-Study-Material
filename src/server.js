@@ -69,6 +69,7 @@ const { requestTelemetryMiddleware } = require("./services/clusterTelemetryServi
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || "0.0.0.0";
 
 // Trust reverse proxy (Cloudflare / Render - full chain resolution)
 app.set("trust proxy", true);
@@ -429,7 +430,7 @@ function startServer(portToTry, attempt = 1) {
   });
 
   // 🛡️ High-Concurrency TCP Backlog (2,048 Queue Depth): Prevents ECONNREFUSED under massive traffic surges
-  server.listen(portToTry, "0.0.0.0", 2048, async () => {
+  server.listen(portToTry, HOST, 2048, async () => {
     console.log(`=======================================================`);
     console.log(`⚡ ${getVaultName().toUpperCase()} RUNNING ON PORT ${portToTry}`);
     console.log(`🌐 Domain: ${getSiteUrl()}`);

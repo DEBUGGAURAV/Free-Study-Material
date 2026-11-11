@@ -1582,22 +1582,23 @@ export default function App() {
         )}
 
         {!currentUser ? (
-          <div style={{ padding: "20px 0 60px" }}>
+          <div className="visitor-landing" style={{ padding: "20px 0 60px" }}>
             {/* Restricted Access Hero */}
             <div
+              className="visitor-access-card"
               style={{
-                background: "linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 30, 0.98) 100%)",
-                border: "1px solid rgba(99, 102, 241, 0.35)",
+                background: "linear-gradient(135deg, rgba(18, 27, 48, 0.96) 0%, rgba(9, 15, 29, 0.98) 100%)",
+                border: "1px solid rgba(129, 140, 248, 0.24)",
                 borderRadius: "var(--radius-xl)",
-                padding: "48px 24px",
-                textAlign: "center",
-                boxShadow: "0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(99, 102, 241, 0.15)",
+                padding: "clamp(26px, 5vw, 56px)",
+                textAlign: "left",
+                boxShadow: "0 24px 70px -35px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.05)",
                 position: "relative",
                 overflow: "hidden",
                 marginBottom: "36px",
               }}
             >
-              <div
+              <div className="visitor-access-badge"
                 style={{
                   position: "absolute",
                   top: "-60px",
@@ -1634,33 +1635,33 @@ export default function App() {
                   border: "1px solid rgba(99, 102, 241, 0.4)",
                   borderRadius: "var(--radius-full)",
                   padding: "8px 18px",
-                  fontSize: "0.82rem",
+                  fontSize: "0.76rem",
                   fontWeight: 700,
                   color: "var(--accent-indigo)",
-                  marginBottom: "20px",
-                  letterSpacing: "0.05em",
+                  marginBottom: "18px",
+                  letterSpacing: "0.04em",
                   textTransform: "uppercase",
                 }}
               >
                 <Lock size={15} />
-                <span>Restricted Access • Registered Students Only</span>
+                <span>Free study library for students</span>
               </div>
 
               <h1
                 style={{
-                  fontSize: "2.5rem",
+                  fontSize: "clamp(2rem, 5vw, 3.4rem)",
                   fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  lineHeight: 1.2,
+                  letterSpacing: "-0.05em",
+                  lineHeight: 1.08,
                   marginBottom: "16px",
                   background: "linear-gradient(135deg, #ffffff 30%, #a5b4fc 70%, #06b6d4 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
-                  maxWidth: "850px",
-                  margin: "0 auto 16px",
+                  maxWidth: "760px",
+                  margin: "0 0 16px",
                 }}
               >
-                {SITE_VAULT_NAME}
+                Study smarter with resources from your campus community.
               </h1>
 
               <p
@@ -1668,54 +1669,54 @@ export default function App() {
                   color: "var(--text-muted)",
                   fontSize: "1.02rem",
                   lineHeight: 1.6,
-                  maxWidth: "700px",
-                  margin: "0 auto 30px",
+                  maxWidth: "680px",
+                  margin: "0 0 26px",
                 }}
               >
-                Platform access is strictly restricted to verified college students. Sign up or sign in to unlock 10,000+ notes, instant high-speed downloads, Mozilla In-App PDF Reader &amp; P2P campus file sharing!
+                Create a free student account to browse shared notes, previous question papers, and built-in study tools. Already have an account? Sign in to continue.
               </p>
 
               {/* Primary CTAs */}
-              <div style={{ display: "flex", justifyContent: "center", gap: "16px", flexWrap: "wrap", marginBottom: "32px" }}>
+              <div className="visitor-actions" style={{ display: "flex", justifyContent: "flex-start", gap: "12px", flexWrap: "wrap", marginBottom: "26px" }}>
                 <button
                   className="btn-primary"
-                  style={{ padding: "13px 30px", fontSize: "0.98rem", fontWeight: 700, borderRadius: "var(--radius-md)" }}
+                  style={{ padding: "13px 22px", fontSize: "0.9rem", fontWeight: 700, borderRadius: "var(--radius-md)" }}
                   onClick={() => openAuth("signup")}
                 >
                   <Sparkles size={18} />
-                  <span>🎓 Sign Up</span>
+                  <span>Create a free account</span>
                   <ArrowRight size={18} />
                 </button>
 
                 <button
                   className="btn-secondary"
-                  style={{ padding: "13px 26px", fontSize: "0.98rem", fontWeight: 600, borderRadius: "var(--radius-md)" }}
+                  style={{ padding: "13px 20px", fontSize: "0.9rem", fontWeight: 600, borderRadius: "var(--radius-md)" }}
                   onClick={() => openAuth("signin")}
                 >
                   <Lock size={16} />
-                  <span>⚡ Sign In</span>
+                  <span>Already a student? Sign in</span>
                 </button>
               </div>
 
               {/* Quick Trust Points */}
-              <div style={{ display: "flex", justifyContent: "center", gap: "20px", flexWrap: "wrap", fontSize: "0.82rem", color: "var(--text-dim)" }}>
+              <div className="visitor-trust-points" style={{ display: "flex", justifyContent: "flex-start", gap: "16px 22px", flexWrap: "wrap", fontSize: "0.78rem", color: "var(--text-dim)" }}>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CheckCircle size={15} style={{ color: "#34d399" }} /> 100% Free Lifetime
+                  <CheckCircle size={15} style={{ color: "#34d399" }} /> Free to join
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CheckCircle size={15} style={{ color: "#34d399" }} /> Zero Ads &amp; Popups
+                  <CheckCircle size={15} style={{ color: "#34d399" }} /> Notes and past papers
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CheckCircle size={15} style={{ color: "#34d399" }} /> High-Speed Distributed Cloud
+                  <CheckCircle size={15} style={{ color: "#34d399" }} /> Search by course and branch
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CheckCircle size={15} style={{ color: "#34d399" }} /> All Engineering &amp; Degree Branches
+                  <CheckCircle size={15} style={{ color: "#34d399" }} /> Online study tools
                 </span>
               </div>
             </div>
 
             {/* Platform Technology Highlights */}
-            <div style={{ marginBottom: "36px" }}>
+            <div className="visitor-tech-highlights" style={{ marginBottom: "36px" }}>
               <h3 style={{ fontSize: "1.15rem", fontWeight: 700, textAlign: "center", marginBottom: "20px", color: "#fff" }}>
                 🚀 Exclusive Benefits Inside The Vault
               </h3>
@@ -1816,14 +1817,14 @@ export default function App() {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                 <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-                  🔒 Locked Materials Preview (Register to Unlock Full Vault)
+                  A preview of the study library
                 </h4>
                 <span style={{ fontSize: "0.78rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }} onClick={() => openAuth("signup")}>
                   Create Free Account &rarr;
                 </span>
               </div>
 
-              <div className="tech-hud-grid">
+              <div className="tech-hud-grid visitor-material-grid">
                 {(notes && notes.length > 0
                   ? notes.slice(0, 6)
                   : [
@@ -1958,7 +1959,16 @@ export default function App() {
             )}
 
             {/* Hero Banner with Tech Architecture */}
-            <HeroBanner totalNotes={notes.length} />
+            <HeroBanner
+              totalNotes={notes.length}
+              onOpenUpload={() => {
+                if (!currentUser) {
+                  openAuth("signup");
+                } else {
+                  setIsUploadOpen(true);
+                }
+              }}
+            />
 
             {/* Filter Bar (With Dynamic Custom Branches & View Switcher) */}
             <CategoryFilter

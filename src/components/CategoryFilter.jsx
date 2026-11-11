@@ -32,7 +32,14 @@ export default function CategoryFilter({
   const branchList = ["All", ...(branches.length > 0 ? branches : ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"])];
 
   return (
-    <div className="control-bar-wrapper">
+    <section id="study-materials" className="control-bar-wrapper">
+      <div className="library-heading">
+        <div>
+          <p>THE LIBRARY</p>
+          <h2>Explore study materials</h2>
+        </div>
+        <span>Filter by course, year, or branch to find the right resources.</span>
+      </div>
       {/* Dynamic Course & Program Filter Bar (Replaced rigid Semester Scene) */}
       <div className="semester-tabs" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--accent-cyan)", fontSize: "0.78rem", fontWeight: 700, paddingRight: "4px", flexShrink: 0 }}>
@@ -171,6 +178,6 @@ export default function CategoryFilter({
           </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
