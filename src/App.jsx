@@ -16,6 +16,12 @@ import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./con
 import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
 import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
 import { clearStudySessionHistory } from "./utils/studentSessionHistory";
+import {
+  hydrateNotesCatalogFromIdb,
+  saveNotesCatalogToIdb,
+  searchNotesCatalogLocally,
+  hasLocalCatalogReady,
+} from "./utils/smartNotesSearchCache";
 import GeminiIcon from "./components/GeminiIcon";
 
 import ModalErrorBoundary from "./components/ModalErrorBoundary";
@@ -304,7 +310,8 @@ export default function App() {
     }
 
     // Smart Page QR Code / Direct Note Link Handler (Opens note directly on specified page + joins Page Study Pod if QR scanned)
-    const urlNoteId = params.get("noteId") || params.get("note");
+    const notePathMatch = window.location.pathname.match(/^\/note\/([^/]+)\/?$/i);
+    const urlNoteId = params.get("noteId") || params.get("note") || (notePathMatch && notePathMatch[1]);
     const urlPage = parseInt(params.get("page") || "1", 10);
     if (urlNoteId) {
       if (urlPage > 0) setPreviewInitialPage(urlPage);
@@ -838,9 +845,71 @@ export default function App() {
     });
   }, []);
 
+  const allCatalogNotesRef = useRef([]);
+  const filterStateRef = useRef({ searchTerm, selectedBranch, selectedCourse, selectedYear });
+  filterStateRef.current = { searchTerm, selectedBranch, selectedCourse, selectedYear };
+
+  const sortNotesByTimestamp = useCallback((rawList = []) => {
+    const len = rawList.length;
+    for (let i = 0; i < len; i++) {
+      const n = rawList[i];
+      if (!n) continue;
+      if (n._sortTimestamp === undefined) {
+        const val = n.createdAt || n.updatedAt;
+        if (typeof val === "number") n._sortTimestamp = val;
+        else if (val && val._seconds !== undefined) n._sortTimestamp = val._seconds * 1000;
+        else if (val) {
+          const t = new Date(val).getTime();
+          n._sortTimestamp = isNaN(t) ? 0 : t;
+        } else {
+          n._sortTimestamp = 0;
+        }
+      }
+    }
+    const sorted = rawList.slice().sort((a, b) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0));
+    if (sorted.length > 0) sorted[0].isLatest = true;
+    return sorted;
+  }, []);
+
+  // ⚡ Hydrate full catalog from IndexedDB + build MiniSearch index on startup (0ms offline-ready)
   useEffect(() => {
-    fetchNotes();
-  }, [currentUser, selectedCourse, selectedYear, selectedBranch, searchTerm]);
+    let active = true;
+    hydrateNotesCatalogFromIdb().then((cached) => {
+      if (!active || !cached?.notes?.length) return;
+      const sorted = sortNotesByTimestamp(cached.notes);
+      allCatalogNotesRef.current = sorted;
+      const f = filterStateRef.current;
+      const filtered = searchNotesCatalogLocally({
+        query: f.searchTerm,
+        branch: f.selectedBranch,
+        course: f.selectedCourse,
+        year: f.selectedYear,
+        fallbackNotes: sorted,
+      });
+      setNotes(filtered);
+      setLoading(false);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [sortNotesByTimestamp]);
+
+  // Fetch master catalog from backend ONLY when auth session changes (not on every search keystroke!)
+  useEffect(() => {
+    fetchNotes(currentUser, false);
+  }, [currentUser]);
+
+  // ⚡ Zero-Firestore-Read Local MiniSearch + Facet Filtering (<1ms per keystroke / tab click)
+  useEffect(() => {
+    if (hasLocalCatalogReady() || allCatalogNotesRef.current.length > 0) {
+      const filtered = searchNotesCatalogLocally({
+        query: searchTerm,
+        branch: selectedBranch,
+        course: selectedCourse,
+        year: selectedYear,
+        fallbackNotes: allCatalogNotesRef.current,
+      });
+      setNotes(filtered);
+    }
+  }, [selectedCourse, selectedYear, selectedBranch, searchTerm]);
 
   const fetchBranches = async () => {
     try {
@@ -903,51 +972,61 @@ export default function App() {
     }
   };
 
-  const handleDeleteNoteFromState = (noteId) => {
+  const removeNoteFromCatalogAndState = useCallback((noteId) => {
     if (!noteId) return;
-    setNotes((prevNotes) => {
-      const next = prevNotes.filter((n) => n.id !== noteId);
+    if (allCatalogNotesRef.current.length > 0) {
+      const updatedCatalog = allCatalogNotesRef.current.filter((n) => n.id !== noteId);
+      allCatalogNotesRef.current = updatedCatalog;
+      saveNotesCatalogToIdb(updatedCatalog).catch(() => {});
       try {
-        safeStorage.setItem("fsm_cached_notes", JSON.stringify(next));
+        safeStorage.setItem("fsm_cached_notes", JSON.stringify(updatedCatalog));
       } catch (_) {}
-      return next;
-    });
+      const f = filterStateRef.current;
+      setNotes(searchNotesCatalogLocally({
+        query: f.searchTerm,
+        branch: f.selectedBranch,
+        course: f.selectedCourse,
+        year: f.selectedYear,
+        fallbackNotes: updatedCatalog,
+      }));
+    } else {
+      setNotes((prevNotes) => {
+        const next = prevNotes.filter((n) => n.id !== noteId);
+        try {
+          safeStorage.setItem("fsm_cached_notes", JSON.stringify(next));
+        } catch (_) {}
+        return next;
+      });
+    }
     setPreviewNote((prev) => (prev && prev.id === noteId ? null : prev));
+  }, []);
+
+  const handleDeleteNoteFromState = (noteId) => {
+    removeNoteFromCatalogAndState(noteId);
   };
 
   useEffect(() => {
     const handleNotesSynced = (e) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
-        const getNoteTs = (n) => {
-          if (!n) return 0;
-          if (n._sortTimestamp) return n._sortTimestamp;
-          const val = n.createdAt || n.updatedAt;
-          if (!val) return 0;
-          if (typeof val === "number") return val;
-          if (val._seconds !== undefined) return val._seconds * 1000;
-          const t = new Date(val).getTime();
-          return isNaN(t) ? 0 : t;
-        };
-        const sorted = e.detail.slice().sort((a, b) => getNoteTs(b) - getNoteTs(a));
-        if (sorted.length > 0) sorted[0].isLatest = true;
-        setNotes(sorted);
-      if (sorted.length > 0) {
+        const sorted = sortNotesByTimestamp(e.detail);
+        allCatalogNotesRef.current = sorted;
+        saveNotesCatalogToIdb(sorted).catch(() => {});
+        const f = filterStateRef.current;
+        setNotes(searchNotesCatalogLocally({
+          query: f.searchTerm,
+          branch: f.selectedBranch,
+          course: f.selectedCourse,
+          year: f.selectedYear,
+          fallbackNotes: sorted,
+        }));
         triggerIdleCatalogPrecache(sorted);
-      }
       }
     };
 
     const handleNoteDeleted = (e) => {
       const { noteId } = e.detail || {};
       if (noteId) {
-        setNotes((prevNotes) => {
-          const next = prevNotes.filter((n) => n.id !== noteId);
-          try {
-            safeStorage.setItem("fsm_cached_notes", JSON.stringify(next));
-          } catch (_) {}
-          return next;
-        });
-        setPreviewNote((prev) => (prev && prev.id === noteId ? null : prev));
+        removeNoteFromCatalogAndState(noteId);
       }
     };
 
@@ -957,18 +1036,16 @@ export default function App() {
       window.removeEventListener("fsm:notes-synced", handleNotesSynced);
       window.removeEventListener("fsm:note-deleted", handleNoteDeleted);
     };
-  }, []);
+  }, [removeNoteFromCatalogAndState, sortNotesByTimestamp]);
 
   const fetchNotes = async (activeUser = null, forceBypass = false) => {
     try {
-      if (notes.length === 0) {
+      if (notes.length === 0 && allCatalogNotesRef.current.length === 0) {
         setLoading(true);
       }
+      // Fetch full unfiltered catalog once so MiniSearch + IndexedDB handles all search/filter locally with 0 Firestore reads
       const res = await api.getNotes({
-        branch: selectedBranch,
-        course: selectedCourse,
-        year: selectedYear,
-        search: searchTerm,
+        all: true,
         bypassCache: forceBypass,
       }, forceBypass);
       if (res && res.offline && typeof navigator !== "undefined" && !navigator.onLine) {
@@ -977,39 +1054,22 @@ export default function App() {
         setIsOffline(false);
       }
       const rawNotes = res.notes || [];
-      const len = rawNotes.length;
-      // ⚡ O(N) single-pass precomputation: Avoids thousands of redundant Date parses in sort comparator
-      for (let i = 0; i < len; i++) {
-        const n = rawNotes[i];
-        if (!n) continue;
-        if (n._sortTimestamp === undefined) {
-          const val = n.createdAt || n.updatedAt;
-          if (typeof val === "number") n._sortTimestamp = val;
-          else if (val && val._seconds !== undefined) n._sortTimestamp = val._seconds * 1000;
-          else if (val) {
-            const t = new Date(val).getTime();
-            n._sortTimestamp = isNaN(t) ? 0 : t;
-          } else {
-            n._sortTimestamp = 0;
-          }
-        }
-      }
-      const sorted = rawNotes.slice().sort((a, b) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0));
-      if (sorted.length > 0) {
-        sorted[0].isLatest = true;
-        try {
-          if (!searchTerm && (!selectedBranch || selectedBranch === "All") && (!selectedCourse || selectedCourse === "All Courses") && (!selectedYear || selectedYear === "All Years")) {
-            safeStorage.setItem("fsm_cached_notes", JSON.stringify(sorted));
-          }
-        } catch (_) {}
-      } else {
-        try {
-          if (!searchTerm && (!selectedBranch || selectedBranch === "All") && (!selectedCourse || selectedCourse === "All Courses") && (!selectedYear || selectedYear === "All Years")) {
-            safeStorage.setItem("fsm_cached_notes", JSON.stringify([]));
-          }
-        } catch (_) {}
-      }
-      setNotes(sorted);
+      const sorted = sortNotesByTimestamp(rawNotes);
+      allCatalogNotesRef.current = sorted;
+      saveNotesCatalogToIdb(sorted).catch(() => {});
+      try {
+        safeStorage.setItem("fsm_cached_notes", JSON.stringify(sorted));
+      } catch (_) {}
+
+      const f = filterStateRef.current;
+      const filtered = searchNotesCatalogLocally({
+        query: f.searchTerm,
+        branch: f.selectedBranch,
+        course: f.selectedCourse,
+        year: f.selectedYear,
+        fallbackNotes: sorted,
+      });
+      setNotes(filtered);
       if (sorted.length > 0) {
         triggerIdleCatalogPrecache(sorted);
       }

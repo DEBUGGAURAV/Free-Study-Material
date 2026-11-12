@@ -14,6 +14,7 @@ const { authenticateToken, requireAuth, requireAdmin, JWT_SECRET } = require("..
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { getLastSyncState, recordSyncEvent } = require("../telegram/syncTracker");
 const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
+const { getPublicNoteMeta, renderNoteOgPngBuffer } = require("../utils/ogPreviewHelper");
 
 function isAdminUser(user) {
   if (!user) return false;
@@ -1081,6 +1082,39 @@ router.get("/exam-prefetch", authenticateToken, async (req, res) => {
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/notes/:id/public-meta
+ * Public sanitized note metadata for WhatsApp / Telegram OG preview crawlers (0 PII exposed)
+ */
+router.get("/:id/public-meta", async (req, res) => {
+  try {
+    const meta = await getPublicNoteMeta(req.params.id);
+    if (!meta) {
+      return res.status(404).json({ success: false, message: "Note metadata not found" });
+    }
+    res.setHeader("Cache-Control", "public, max-age=3600, s-maxage=86400");
+    return res.json({ success: true, note: meta });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/notes/:id/og-image.png
+ * Dynamic 1200x630 PNG preview card for WhatsApp, Telegram, Discord & X share links
+ */
+router.get("/:id/og-image.png", async (req, res) => {
+  try {
+    const meta = await getPublicNoteMeta(req.params.id);
+    const pngBuf = await renderNoteOgPngBuffer(meta);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
+    return res.send(pngBuf);
+  } catch (err) {
+    return res.status(500).send("Preview unavailable");
   }
 });
 

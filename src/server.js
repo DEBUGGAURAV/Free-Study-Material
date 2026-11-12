@@ -33,6 +33,7 @@ const {
 const { warmCacheOnBoot } = require("./utils/cacheWarmer");
 const { ipJailFirewall } = require("./middleware/ipJail");
 const { globalSanitizer } = require("./middleware/sanitize");
+const { getPublicNoteMeta, buildOgMetaTagsHtml, escapeXmlAndHtml } = require("./utils/ogPreviewHelper");
 const { initTursoTables } = require("./services/tursoService");
 
 // 🚀 Pillar 1: Autonomous Self-Healing, Idle Cleaner, 1-Hour Temp Pruner & Disk Pruner
@@ -321,6 +322,47 @@ app.use(
     },
   })
 );
+
+// 🔗 Smart WhatsApp / Telegram Dynamic OG Preview Injector for Note Share Links (/?note=ID or /note/ID)
+app.get("*", async (req, res, next) => {
+  const pathMatch = req.path.match(/^\/note\/([^/]+)\/?$/i);
+  const sharedNoteId = (req.query?.note || req.query?.noteId || (pathMatch && pathMatch[1]) || "").trim();
+  if (
+    !sharedNoteId ||
+    req.path.startsWith("/api/") ||
+    req.path.startsWith("/assets/") ||
+    /\.(js|css|mjs|map|png|jpg|jpeg|svg|ico|woff2?|json)$/i.test(req.path)
+  ) {
+    return next();
+  }
+
+  try {
+    const fs = require("fs");
+    const indexPath = path.join(distPath, "index.html");
+    const noteMeta = await getPublicNoteMeta(sharedNoteId);
+    const proto = req.headers["x-forwarded-proto"] || req.protocol || "https";
+    const host = req.headers["x-forwarded-host"] || req.get("host");
+    const originUrl = `${proto}://${host}`;
+    const pageUrl = `${originUrl}${req.originalUrl}`;
+    const ogTags = buildOgMetaTagsHtml(noteMeta, pageUrl, originUrl);
+    const pageTitle = noteMeta
+      ? `${escapeXmlAndHtml(noteMeta.title)} — ${escapeXmlAndHtml(noteMeta.subject)} | Free Study Material`
+      : "Free Study Material — Academic Cloud & Notes Vault";
+
+    if (fs.existsSync(indexPath)) {
+      let html = fs.readFileSync(indexPath, "utf8");
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${pageTitle}</title>${ogTags}`);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=120, s-maxage=600");
+      return res.status(200).send(html);
+    }
+
+    // Minimal crawler-friendly fallback if dist isn't built yet
+    return res.status(200).send(`<!doctype html><html><head><meta charset="utf-8"><title>${pageTitle}</title>${ogTags}</head><body><h1>${pageTitle}</h1></body></html>`);
+  } catch (_) {
+    return next();
+  }
+});
 
 app.use(
   express.static(distPath, {

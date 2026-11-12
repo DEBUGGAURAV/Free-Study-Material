@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check } from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { cacheNoteBuffer, getCachedNoteBuffer, findPeersForNote } from "../utils/p2pMesh";
 import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
@@ -10,6 +10,16 @@ import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
+import {
+  getReadingProgress,
+  saveReadingProgress,
+  getNoteAnnotations,
+  togglePageBookmark,
+  addPageHighlight,
+  deleteNoteAnnotation,
+  getPomodoroStats,
+  recordPomodoroCompletion,
+} from "../utils/readerStudyStore";
 import { api, getAuthToken, getCurrentUser } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
@@ -698,6 +708,165 @@ export default function VirtualPdfReader({
   const [useNativeViewer, setUseNativeViewer] = useState(false);
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
+
+  // 🔖 Zero-DB-Cost Local Study Features: Resume Last Page + Bookmarks/Highlights + Focus Timer
+  const [resumedPageNotice, setResumedPageNotice] = useState(null);
+  const hasAttemptedResumeRef = useRef(false);
+  const [annotations, setAnnotations] = useState([]);
+  const [showBookmarksPanel, setShowBookmarksPanel] = useState(false);
+  const [highlightDraftText, setHighlightDraftText] = useState("");
+  const [highlightDraftNote, setHighlightDraftNote] = useState("");
+  const [highlightDraftColor, setHighlightDraftColor] = useState("#fde047");
+
+  const [pomodoroMode, setPomodoroMode] = useState("focus"); // "focus" (25m) | "break" (5m)
+  const [pomodoroSeconds, setPomodoroSeconds] = useState(25 * 60);
+  const [pomodoroRunning, setPomodoroRunning] = useState(false);
+  const [pomodoroStats, setPomodoroStats] = useState({ completedSessions: 0, totalFocusMinutes: 0 });
+  const [showPomodoroPopover, setShowPomodoroPopover] = useState(false);
+
+  const playPomodoroChime = useCallback(() => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const now = ctx.currentTime;
+      [523.25, 659.25, 783.99].forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
+        gain.gain.setValueAtTime(0.08, now + idx * 0.14);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.14 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + idx * 0.14);
+        osc.stop(now + idx * 0.14 + 0.36);
+      });
+    } catch (_) {}
+  }, []);
+
+  // Load saved reading progress, annotations, and daily Pomodoro stats from IndexedDB (0 Firestore reads)
+  useEffect(() => {
+    let active = true;
+    const activeId = noteId || note?.id;
+    hasAttemptedResumeRef.current = false;
+
+    getPomodoroStats().then((stats) => {
+      if (active && stats) setPomodoroStats(stats);
+    }).catch(() => {});
+
+    if (!activeId) return () => { active = false; };
+
+    getNoteAnnotations(activeId).then((list) => {
+      if (active) setAnnotations(list || []);
+    }).catch(() => {});
+
+    const urlPageParam = typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("page")) : 0;
+    const hasExplicitPage = (initialPage && Number(initialPage) > 1) || (urlPageParam > 1);
+
+    if (!hasExplicitPage) {
+      getReadingProgress(activeId).then((progress) => {
+        if (!active || !progress || !progress.lastPage || progress.lastPage <= 1) return;
+        hasAttemptedResumeRef.current = true;
+        setCurrentPage(progress.lastPage);
+        setResumedPageNotice(progress.lastPage);
+        setTimeout(() => {
+          setResumedPageNotice((prev) => (prev === progress.lastPage ? null : prev));
+        }, 6000);
+      }).catch(() => {});
+    }
+
+    return () => { active = false; };
+  }, [noteId, note?.id, initialPage]);
+
+  // In continuous scroll mode, smoothly jump to resumed page once PDF pages mount
+  useEffect(() => {
+    if (!pdfDoc || !numPages || !hasAttemptedResumeRef.current || currentPage <= 1) return;
+    if (scrollMode === "continuous" && !useNativeViewer) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`continuous-page-${currentPage}`);
+        if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
+        hasAttemptedResumeRef.current = false;
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+    hasAttemptedResumeRef.current = false;
+  }, [pdfDoc, numPages, scrollMode, useNativeViewer, currentPage]);
+
+  // Persist currentPage to IndexedDB whenever user navigates (debounced 400ms)
+  useEffect(() => {
+    const activeId = noteId || note?.id;
+    if (!activeId || !currentPage || currentPage < 1) return;
+    const t = setTimeout(() => {
+      saveReadingProgress(activeId, currentPage, numPages || 0).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [noteId, note?.id, currentPage, numPages]);
+
+  // Tick Pomodoro Focus Timer
+  useEffect(() => {
+    if (!pomodoroRunning) return;
+    const interval = setInterval(() => {
+      setPomodoroSeconds((prev) => {
+        if (prev <= 1) {
+          playPomodoroChime();
+          if (pomodoroMode === "focus") {
+            recordPomodoroCompletion(25).then((updated) => {
+              if (updated) setPomodoroStats(updated);
+            }).catch(() => {});
+            setPomodoroMode("break");
+            setPomodoroRunning(false);
+            return 5 * 60;
+          }
+          setPomodoroMode("focus");
+          setPomodoroRunning(false);
+          return 25 * 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [pomodoroRunning, pomodoroMode, playPomodoroChime]);
+
+  const activeNoteIdForStudy = noteId || note?.id;
+  const isCurrentPageBookmarked = annotations.some((a) => a.type === "bookmark" && Number(a.pageNum) === Number(currentPage));
+  const currentPageHighlights = annotations.filter((a) => a.type === "highlight" && Number(a.pageNum) === Number(currentPage));
+
+  const handleToggleCurrentBookmark = async () => {
+    if (!activeNoteIdForStudy) return;
+    const res = await togglePageBookmark(activeNoteIdForStudy, currentPage, `Page ${currentPage}`);
+    if (res && Array.isArray(res.annotations)) {
+      setAnnotations(res.annotations);
+    }
+  };
+
+  const handleSaveHighlight = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!activeNoteIdForStudy || (!highlightDraftText.trim() && !highlightDraftNote.trim())) return;
+    const updated = await addPageHighlight(activeNoteIdForStudy, {
+      pageNum: currentPage,
+      text: highlightDraftText.trim(),
+      noteText: highlightDraftNote.trim(),
+      color: highlightDraftColor,
+    });
+    if (Array.isArray(updated)) {
+      setAnnotations(updated);
+      setHighlightDraftText("");
+      setHighlightDraftNote("");
+    }
+  };
+
+  const handleDeleteStudyAnnotation = async (annId) => {
+    if (!activeNoteIdForStudy || !annId) return;
+    const updated = await deleteNoteAnnotation(activeNoteIdForStudy, annId);
+    if (Array.isArray(updated)) setAnnotations(updated);
+  };
+
+  const formatTimerClock = (sec) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
 
   // Comprehensive Mobile, Touch & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
   const isTouchOrMobileDevice = typeof window !== "undefined" && (
@@ -3817,8 +3986,85 @@ export default function VirtualPdfReader({
           </div>
         </div>
 
-        {/* Right: Search, Tools Toggle, Night Mode, Download, Close */}
+        {/* Right: Search, Bookmarks/Highlights, Focus Timer, Tools Toggle, Night Mode, Download, Close */}
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          {/* ⏱️ Pomodoro Focus Timer Pill */}
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setShowPomodoroPopover((prev) => !prev)}
+              style={{
+                padding: "5px 9px",
+                borderRadius: "6px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                fontFamily: "var(--font-mono)",
+                background: pomodoroRunning
+                  ? (pomodoroMode === "focus" ? "rgba(244, 63, 94, 0.2)" : "rgba(16, 185, 129, 0.2)")
+                  : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                border: pomodoroRunning
+                  ? `1px solid ${pomodoroMode === "focus" ? "#f43f5e" : "#10b981"}`
+                  : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: pomodoroRunning
+                  ? (pomodoroMode === "focus" ? "#fda4af" : "#6ee7b7")
+                  : (nightMode ? "#cbd5e1" : "#475569"),
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+              title="Pomodoro Focus Timer (0 DB Cost • Local Browser)"
+            >
+              <Timer size={13} />
+              <span>{formatTimerClock(pomodoroSeconds)}</span>
+            </button>
+          </div>
+
+          {/* 🔖 Quick Bookmark Current Page Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleCurrentBookmark}
+            style={{
+              padding: "5px 8px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              background: isCurrentPageBookmarked ? "rgba(245, 158, 11, 0.22)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+              border: isCurrentPageBookmarked ? "1px solid #f59e0b" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+              color: isCurrentPageBookmarked ? "#fbbf24" : (nightMode ? "#cbd5e1" : "#475569"),
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title={isCurrentPageBookmarked ? `Remove Bookmark (Page ${currentPage})` : `Bookmark Page ${currentPage}`}
+          >
+            <Bookmark size={13} fill={isCurrentPageBookmarked ? "#fbbf24" : "none"} />
+          </button>
+
+          {/* 🖍️ Highlights & Bookmarks Drawer Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowBookmarksPanel((prev) => !prev)}
+            style={{
+              padding: "5px 9px",
+              borderRadius: "6px",
+              fontSize: "0.74rem",
+              fontWeight: 700,
+              background: showBookmarksPanel ? "rgba(250, 204, 21, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+              border: showBookmarksPanel ? "1px solid #eab308" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+              color: showBookmarksPanel ? "#fde047" : (nightMode ? "#cbd5e1" : "#475569"),
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+            }}
+            title="Bookmarks & Highlighted Notes (Saved Offline)"
+          >
+            <Highlighter size={13} />
+            <span>Marks{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
+          </button>
+
           {/* 🔍 Search Toggle Button */}
           <button
             type="button"
@@ -4611,6 +4857,379 @@ export default function VirtualPdfReader({
         </div>
       )}
 
+      {/* 🔖 Resumed Last Page Notification Pill */}
+      {resumedPageNotice && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "74px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 65,
+            background: "rgba(15, 23, 42, 0.94)",
+            border: "1px solid rgba(245, 158, 11, 0.55)",
+            borderRadius: "999px",
+            padding: "7px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            boxShadow: "0 10px 28px rgba(0, 0, 0, 0.55)",
+            fontSize: "0.78rem",
+            color: "#fef3c7",
+          }}
+        >
+          <span>🔖 Resumed where you left off (<strong>Page {resumedPageNotice}</strong>)</span>
+          <button
+            type="button"
+            onClick={() => {
+              changePage(1);
+              setResumedPageNotice(null);
+            }}
+            style={{
+              background: "rgba(255, 255, 255, 0.12)",
+              border: "none",
+              color: "#38bdf8",
+              borderRadius: "999px",
+              padding: "3px 9px",
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Page 1
+          </button>
+          <button
+            type="button"
+            onClick={() => setResumedPageNotice(null)}
+            style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", display: "flex" }}
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+
+      {/* ⏱️ Pomodoro Focus Timer Floating Card */}
+      {showPomodoroPopover && (
+        <div
+          style={{
+            position: "fixed",
+            top: "56px",
+            right: "16px",
+            width: "265px",
+            background: nightMode ? "rgba(15, 23, 42, 0.97)" : "#ffffff",
+            border: "1px solid rgba(244, 63, 94, 0.4)",
+            borderRadius: "14px",
+            padding: "14px",
+            zIndex: 70,
+            boxShadow: "0 18px 42px rgba(0, 0, 0, 0.45)",
+            color: nightMode ? "#f8fafc" : "#0f172a",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+            <span style={{ fontSize: "0.8rem", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <Timer size={15} color="#f43f5e" /> Exam Focus Timer
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPomodoroPopover(false)}
+              style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setPomodoroRunning(false);
+                setPomodoroMode("focus");
+                setPomodoroSeconds(25 * 60);
+              }}
+              style={{
+                flex: 1,
+                padding: "5px 8px",
+                borderRadius: "7px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: pomodoroMode === "focus" ? "1px solid #f43f5e" : "1px solid rgba(148, 163, 184, 0.25)",
+                background: pomodoroMode === "focus" ? "rgba(244, 63, 94, 0.18)" : "transparent",
+                color: pomodoroMode === "focus" ? "#fda4af" : (nightMode ? "#94a3b8" : "#64748b"),
+              }}
+            >
+              🔥 Focus (25m)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPomodoroRunning(false);
+                setPomodoroMode("break");
+                setPomodoroSeconds(5 * 60);
+              }}
+              style={{
+                flex: 1,
+                padding: "5px 8px",
+                borderRadius: "7px",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: pomodoroMode === "break" ? "1px solid #10b981" : "1px solid rgba(148, 163, 184, 0.25)",
+                background: pomodoroMode === "break" ? "rgba(16, 185, 129, 0.18)" : "transparent",
+                color: pomodoroMode === "break" ? "#6ee7b7" : (nightMode ? "#94a3b8" : "#64748b"),
+              }}
+            >
+              ☕ Break (5m)
+            </button>
+          </div>
+
+          <div
+            style={{
+              textAlign: "center",
+              fontFamily: "var(--font-mono)",
+              fontSize: "2rem",
+              fontWeight: 800,
+              margin: "6px 0 12px",
+              color: pomodoroMode === "focus" ? "#fb7185" : "#34d399",
+            }}
+          >
+            {formatTimerClock(pomodoroSeconds)}
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>
+            <button
+              type="button"
+              onClick={() => setPomodoroRunning((r) => !r)}
+              style={{
+                flex: 1,
+                padding: "7px 10px",
+                borderRadius: "8px",
+                border: "none",
+                background: pomodoroRunning ? "#f59e0b" : "linear-gradient(135deg, #f43f5e, #6366f1)",
+                color: "#fff",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+              }}
+            >
+              {pomodoroRunning ? <Pause size={14} /> : <Play size={14} />}
+              <span>{pomodoroRunning ? "Pause" : "Start Focus"}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPomodoroRunning(false);
+                setPomodoroSeconds(pomodoroMode === "focus" ? 25 * 60 : 5 * 60);
+              }}
+              style={{
+                padding: "7px 10px",
+                borderRadius: "8px",
+                border: "1px solid rgba(148, 163, 184, 0.3)",
+                background: "transparent",
+                color: nightMode ? "#cbd5e1" : "#475569",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+              title="Reset Timer"
+            >
+              <RotateCcw size={14} />
+            </button>
+          </div>
+
+          <div style={{ fontSize: "0.72rem", color: "#94a3b8", textAlign: "center", borderTop: "1px solid rgba(148,163,184,0.16)", paddingTop: "8px" }}>
+            🍅 Today: <strong>{pomodoroStats.completedSessions}</strong> sessions ({pomodoroStats.totalFocusMinutes}m) • Local Browser
+          </div>
+        </div>
+      )}
+
+      {/* 🔖 Bookmarks & Highlights Side Drawer (0 DB Cost • IndexedDB) */}
+      {showBookmarksPanel && (
+        <div
+          style={{
+            position: "fixed",
+            right: "16px",
+            top: "58px",
+            bottom: "68px",
+            width: isTouchOrMobileDevice ? "calc(100vw - 32px)" : "340px",
+            background: nightMode ? "rgba(15, 23, 42, 0.97)" : "#ffffff",
+            border: "1px solid rgba(250, 204, 21, 0.35)",
+            borderRadius: "14px",
+            zIndex: 68,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.55)",
+            color: nightMode ? "#f8fafc" : "#0f172a",
+          }}
+        >
+          <div
+            style={{
+              padding: "12px 14px",
+              borderBottom: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 800, fontSize: "0.84rem" }}>
+              <Highlighter size={15} color="#fde047" />
+              <span>Bookmarks &amp; Highlights</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowBookmarksPanel(false)}
+              style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
+            >
+              <X size={15} />
+            </button>
+          </div>
+
+          {/* Add Highlight on Current Page */}
+          <form
+            onSubmit={handleSaveHighlight}
+            style={{
+              padding: "12px",
+              borderBottom: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+              background: nightMode ? "rgba(255,255,255,0.02)" : "#f8fafc",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.74rem", fontWeight: 700, color: "#94a3b8" }}>
+              <span>Add Highlight on Page {currentPage}</span>
+              <div style={{ display: "flex", gap: "5px" }}>
+                {["#fde047", "#38bdf8", "#4ade80", "#f472b6"].map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setHighlightDraftColor(c)}
+                    style={{
+                      width: "15px",
+                      height: "15px",
+                      borderRadius: "50%",
+                      background: c,
+                      border: highlightDraftColor === c ? "2px solid #fff" : "1px solid rgba(255,255,255,0.3)",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                    title="Select highlight color"
+                  />
+                ))}
+              </div>
+            </div>
+            <textarea
+              rows={2}
+              placeholder="Paste or type important line / formula from this page..."
+              value={highlightDraftText}
+              onChange={(e) => setHighlightDraftText(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: "8px",
+                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid #cbd5e1",
+                background: nightMode ? "rgba(2, 6, 23, 0.7)" : "#fff",
+                color: nightMode ? "#f8fafc" : "#0f172a",
+                fontSize: "0.78rem",
+                resize: "none",
+                outline: "none",
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Short study note (optional, e.g. IMP for Exam)"
+              value={highlightDraftNote}
+              onChange={(e) => setHighlightDraftNote(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "6px 10px",
+                borderRadius: "8px",
+                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid #cbd5e1",
+                background: nightMode ? "rgba(2, 6, 23, 0.7)" : "#fff",
+                color: nightMode ? "#f8fafc" : "#0f172a",
+                fontSize: "0.75rem",
+                outline: "none",
+              }}
+            />
+            <button
+              type="submit"
+              style={{
+                padding: "7px 10px",
+                borderRadius: "8px",
+                border: "none",
+                background: "linear-gradient(135deg, #eab308, #f59e0b)",
+                color: "#0f172a",
+                fontWeight: 800,
+                fontSize: "0.76rem",
+                cursor: "pointer",
+              }}
+            >
+              + Save Highlight (Page {currentPage})
+            </button>
+          </form>
+
+          {/* Saved List */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "10px 12px", display: "flex", flexDirection: "column", gap: "8px" }}>
+            {annotations.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "26px 10px", fontSize: "0.78rem", color: "#94a3b8" }}>
+                No bookmarks or highlights saved for this PDF yet.<br />
+                Tap 🔖 to bookmark a page or save important lines above!
+              </div>
+            ) : (
+              annotations.map((ann) => (
+                <div
+                  key={ann.id}
+                  onClick={() => changePage(ann.pageNum)}
+                  style={{
+                    padding: "9px 10px",
+                    borderRadius: "9px",
+                    border: `1px solid ${ann.color || "#f59e0b"}55`,
+                    borderLeft: `4px solid ${ann.color || "#f59e0b"}`,
+                    background: nightMode ? "rgba(255,255,255,0.04)" : "#f8fafc",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.72rem" }}>
+                    <span style={{ fontWeight: 800, color: ann.color || "#fbbf24" }}>
+                      {ann.type === "bookmark" ? "🔖 Bookmark" : "🖍️ Highlight"} • Page {ann.pageNum}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteStudyAnnotation(ann.id);
+                      }}
+                      style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px" }}
+                      title="Delete"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  {ann.text && (
+                    <div style={{ fontSize: "0.78rem", lineHeight: 1.4, color: nightMode ? "#f1f5f9" : "#1e293b" }}>
+                      {ann.text}
+                    </div>
+                  )}
+                  {ann.noteText && (
+                    <div style={{ fontSize: "0.72rem", color: "#38bdf8", fontStyle: "italic" }}>
+                      📝 {ann.noteText}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main Virtual Document Canvas Area */}
       <div
         ref={mainScrollRef}
@@ -4632,6 +5251,38 @@ export default function VirtualPdfReader({
           WebkitOverflowScrolling: "touch",
         }}
       >
+        {/* 📌 Page Bookmark / Highlight Quick Indicator Pill */}
+        {(isCurrentPageBookmarked || currentPageHighlights.length > 0) && !showBookmarksPanel && (
+          <button
+            type="button"
+            onClick={() => setShowBookmarksPanel(true)}
+            style={{
+              position: "fixed",
+              top: "58px",
+              left: "16px",
+              zIndex: 50,
+              background: "rgba(15, 23, 42, 0.88)",
+              border: "1px solid rgba(250, 204, 21, 0.45)",
+              color: "#fde047",
+              borderRadius: "999px",
+              padding: "4px 10px",
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.35)",
+            }}
+            title="View saved bookmarks & highlights on this page"
+          >
+            {isCurrentPageBookmarked && <span>🔖 Bookmarked</span>}
+            {currentPageHighlights.length > 0 && (
+              <span>🖍️ {currentPageHighlights.length} Highlight{currentPageHighlights.length > 1 ? "s" : ""}</span>
+            )}
+          </button>
+        )}
+
         {/* 📖 Web Reader View */}
         {useNativeViewer && (
           <div
