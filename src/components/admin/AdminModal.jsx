@@ -1,29 +1,39 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock, LayoutGrid, Search, ChevronDown } from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";
-import VirtualPdfReader from "../VirtualPdfReader";
 import { getNotePdfFileName } from "../../utils/formatUtils";
 import "../../utils/hardwareAdaptiveEngine";
 
-// Modular Tab Components
-import TabNotes from "./tabs/TabNotes";
-import TabStudents from "./tabs/TabStudents";
-import TabHardware from "./tabs/TabHardware";
-import TabSoftware from "./tabs/TabSoftware";
-import TabPipeline from "./tabs/TabPipeline";
-import TabPerformance from "./tabs/TabPerformance";
-import TabDatabase from "./tabs/TabDatabase";
-import TabRestoreVault from "./tabs/TabRestoreVault";
-import TabSecurityBot from "./tabs/TabSecurityBot";
-import TabTechNexus from "./tabs/TabTechNexus";
-import TabCommunityChat from "./tabs/TabCommunityChat";
-import TabTurso from "./tabs/TabTurso";
-import TabActivities from "./tabs/TabActivities";
-import TabHelpDesk from "./tabs/TabHelpDesk";
-import TabWebSecurity from "./tabs/TabWebSecurity";
-import TabNotices from "./tabs/TabNotices";
-import TabAiEngine from "./tabs/TabAiEngine";
+const VirtualPdfReader = lazy(() => import("../VirtualPdfReader"));
+
+// Modular Tab Components (Code-split via React.lazy for faster Admin Studio startup)
+const TabNotes = lazy(() => import("./tabs/TabNotes"));
+const TabStudents = lazy(() => import("./tabs/TabStudents"));
+const TabHardware = lazy(() => import("./tabs/TabHardware"));
+const TabSoftware = lazy(() => import("./tabs/TabSoftware"));
+const TabPipeline = lazy(() => import("./tabs/TabPipeline"));
+const TabPerformance = lazy(() => import("./tabs/TabPerformance"));
+const TabDatabase = lazy(() => import("./tabs/TabDatabase"));
+const TabRestoreVault = lazy(() => import("./tabs/TabRestoreVault"));
+const TabSecurityBot = lazy(() => import("./tabs/TabSecurityBot"));
+const TabTechNexus = lazy(() => import("./tabs/TabTechNexus"));
+const TabCommunityChat = lazy(() => import("./tabs/TabCommunityChat"));
+const TabTurso = lazy(() => import("./tabs/TabTurso"));
+const TabActivities = lazy(() => import("./tabs/TabActivities"));
+const TabHelpDesk = lazy(() => import("./tabs/TabHelpDesk"));
+const TabWebSecurity = lazy(() => import("./tabs/TabWebSecurity"));
+const TabNotices = lazy(() => import("./tabs/TabNotices"));
+const TabAiEngine = lazy(() => import("./tabs/TabAiEngine"));
+
+function AdminModuleFallback({ label = "Loading module..." }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", padding: "48px 20px", color: "#94a3b8", fontSize: "0.86rem", fontWeight: 600 }}>
+      <RefreshCw size={16} className="spin" style={{ color: "#38bdf8" }} />
+      <span>{label}</span>
+    </div>
+  );
+}
 
 
 export default function AdminModal({
@@ -3314,44 +3324,45 @@ export default function AdminModal({
 
         {/* Dynamic Tab Body */}
         <div className="admin-tab-body" style={{ flex: 1, overflowY: "auto", padding: "20px 28px", position: "relative" }}>
-          {activeTab === "notes" && <TabNotes {...tabProps} />}
-          {activeTab === "students" && <TabStudents {...tabProps} />}
-          {activeTab === "hardware" && <TabHardware {...tabProps} />}
-          {activeTab === "software" && <TabSoftware {...tabProps} />}
-          {activeTab === "pipeline" && <TabPipeline {...tabProps} />}
-          {activeTab === "performance" && <TabPerformance {...tabProps} />}
-          {activeTab === "database" && <TabDatabase {...tabProps} />}
-          {activeTab === "recycle_bin" && <TabRestoreVault {...tabProps} />}
-          {activeTab === "security_bot" && <TabSecurityBot {...tabProps} />}
-          {activeTab === "tech_nexus" && <TabTechNexus {...tabProps} />}
-          {activeTab === "community_chat" && <TabCommunityChat {...tabProps} />}
-          {activeTab === "turso" && <TabTurso {...tabProps} />}
-          {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
-          {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
-          {activeTab === "notices_board" && <TabNotices {...tabProps} currentUser={currentUser} />}
-          {activeTab === "ai_engine" && <TabAiEngine {...tabProps} currentUser={currentUser} />}
-          {activeTab === "activities" && (
-            selectedStudentForActivity ? (
-              <TabActivities {...tabProps} />
-            ) : (
-              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📊</div>
-                <h4 style={{ color: "#fff", marginBottom: "8px" }}>Student Activity & Session Inspector</h4>
-                <p style={{ fontSize: "0.85rem", maxWidth: "460px", margin: "0 auto 16px auto" }}>
-                  Please select a student from the <strong>Students</strong> tab (click the ⚡ Activity icon on any student row) to inspect their active devices, termination options, and security history.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("students")}
-                  className="btn-primary"
-                  style={{ padding: "8px 18px", fontSize: "0.84rem" }}
-                >
-                  Go to Students Directory
-                </button>
-              </div>
-            )
-          )}
-
+          <Suspense fallback={<AdminModuleFallback />}>
+            {activeTab === "notes" && <TabNotes {...tabProps} />}
+            {activeTab === "students" && <TabStudents {...tabProps} />}
+            {activeTab === "hardware" && <TabHardware {...tabProps} />}
+            {activeTab === "software" && <TabSoftware {...tabProps} />}
+            {activeTab === "pipeline" && <TabPipeline {...tabProps} />}
+            {activeTab === "performance" && <TabPerformance {...tabProps} />}
+            {activeTab === "database" && <TabDatabase {...tabProps} />}
+            {activeTab === "recycle_bin" && <TabRestoreVault {...tabProps} />}
+            {activeTab === "security_bot" && <TabSecurityBot {...tabProps} />}
+            {activeTab === "tech_nexus" && <TabTechNexus {...tabProps} />}
+            {activeTab === "community_chat" && <TabCommunityChat {...tabProps} />}
+            {activeTab === "turso" && <TabTurso {...tabProps} />}
+            {activeTab === "help_desk" && <TabHelpDesk {...tabProps} />}
+            {activeTab === "web_security" && <TabWebSecurity {...tabProps} />}
+            {activeTab === "notices_board" && <TabNotices {...tabProps} currentUser={currentUser} />}
+            {activeTab === "ai_engine" && <TabAiEngine {...tabProps} currentUser={currentUser} />}
+            {activeTab === "activities" && (
+              selectedStudentForActivity ? (
+                <TabActivities {...tabProps} />
+              ) : (
+                <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
+                  <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📊</div>
+                  <h4 style={{ color: "#fff", marginBottom: "8px" }}>Student Activity & Session Inspector</h4>
+                  <p style={{ fontSize: "0.85rem", maxWidth: "460px", margin: "0 auto 16px auto" }}>
+                    Please select a student from the <strong>Students</strong> tab (click the ⚡ Activity icon on any student row) to inspect their active devices, termination options, and security history.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("students")}
+                    className="btn-primary"
+                    style={{ padding: "8px 18px", fontSize: "0.84rem" }}
+                  >
+                    Go to Students Directory
+                  </button>
+                </div>
+              )
+            )}
+          </Suspense>
         </div>
 
         {/* SUB-MODAL 1: Mozilla PDF Reader Document Preview Overlay */}
@@ -3376,20 +3387,22 @@ export default function AdminModal({
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <VirtualPdfReader
-                url={api.getStreamUrl(previewNoteInAdmin.id, getNotePdfFileName(previewNoteInAdmin))}
-                title={previewNoteInAdmin.title || previewNoteInAdmin.fileName || "Vault Document"}
-                subject={previewNoteInAdmin.subject || "Academic Vault"}
-                noteId={previewNoteInAdmin.id}
-                note={previewNoteInAdmin}
-                onClose={() => setPreviewNoteInAdmin(null)}
-                onDownload={() => {
-                  const pdfName = getNotePdfFileName(previewNoteInAdmin);
-                  api.downloadNoteWithProgress(previewNoteInAdmin.id, pdfName).catch(() => {
-                    window.open(api.getDownloadUrl(previewNoteInAdmin.id, pdfName), "_blank");
-                  });
-                }}
-              />
+              <Suspense fallback={<AdminModuleFallback label="Loading PDF Reader..." />}>
+                <VirtualPdfReader
+                  url={api.getStreamUrl(previewNoteInAdmin.id, getNotePdfFileName(previewNoteInAdmin))}
+                  title={previewNoteInAdmin.title || previewNoteInAdmin.fileName || "Vault Document"}
+                  subject={previewNoteInAdmin.subject || "Academic Vault"}
+                  noteId={previewNoteInAdmin.id}
+                  note={previewNoteInAdmin}
+                  onClose={() => setPreviewNoteInAdmin(null)}
+                  onDownload={() => {
+                    const pdfName = getNotePdfFileName(previewNoteInAdmin);
+                    api.downloadNoteWithProgress(previewNoteInAdmin.id, pdfName).catch(() => {
+                      window.open(api.getDownloadUrl(previewNoteInAdmin.id, pdfName), "_blank");
+                    });
+                  }}
+                />
+              </Suspense>
             </div>
           </div>
         )}
