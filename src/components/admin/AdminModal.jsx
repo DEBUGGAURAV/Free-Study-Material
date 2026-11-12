@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock } from "lucide-react";
+import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock, LayoutGrid, Search, ChevronDown } from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";
 import VirtualPdfReader from "../VirtualPdfReader";
@@ -53,25 +53,30 @@ export default function AdminModal({
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const [maintenanceFeedback, setMaintenanceFeedback] = useState("");
 
-  // Dashboard Slides Catalog (1 to 12)
+  // Dashboard Modules Catalog (Clean, Unnumbered & Grouped by Function)
   const DASHBOARD_TABS = [
-    { id: "notes", num: 1, label: "1. 📚 Notes Vault", title: "Notes Vault" },
-    { id: "students", num: 2, label: "2. 👥 Student Registry", title: "Student Registry" },
-    { id: "hardware", num: 3, label: "3. 🖥️ Server Hardware", title: "Server Hardware" },
-    { id: "software", num: 4, label: maintenanceMode ? "4. 🛠️ Software & Maint. (PAUSED)" : "4. 💻 Software & Maintenance", title: "Software Infrastructure & Server Maintenance" },
-    { id: "pipeline", num: 5, label: "5. 🚀 Upload Pipeline", title: "Upload Pipeline" },
-    { id: "performance", num: 6, label: "6. ⚡ CDN & Performance", title: "CDN & Performance" },
-    { id: "database", num: 7, label: isHalfAdmin ? "7. 🔒 Database (Restricted)" : "7. 🗄️ Database Studio", title: "Database Studio" },
-    { id: "recycle_bin", num: 8, label: "8. ♻️ Restore Vault", title: "Restore Vault" },
-    { id: "security_bot", num: 9, label: "9. 🤖 Security Bot", title: "Security Bot Controls" },
-    { id: "tech_nexus", num: 10, label: maintenanceMode ? "10. 🧬 Tech Nexus (PAUSED)" : "10. 🧬 Next-Gen Tech", title: "Next-Gen Tech Nexus" },
-    { id: "community_chat", num: 11, label: "11. 💬 Community Chat", title: "Live Community Chat & Moderation Hub" },
-    { id: "turso", num: 12, label: "12. ⚡ Turso Database", title: "Turso LibSQL Edge Database" },
-    { id: "help_desk", num: 13, label: "13. 🎫 Support Desk", title: "Help & Support Tickets Desk" },
-    { id: "web_security", num: 14, label: "14. 🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
-    { id: "notices_board", num: 15, label: "15. 📢 Notice Board & Alerts", title: "Notice Board & Global Broadcast Studio" },
-    { id: "ai_engine", num: 16, label: "16. 🤖 AI Studio (Groq / Gemini)", title: "AI Studio (Groq LPU + Gemini 2.0 Failover)" },
+    { id: "notes", group: "Core Workspace", accent: "#22d3ee", label: "📚 Notes Vault", title: "Notes Vault" },
+    { id: "students", group: "Core Workspace", accent: "#818cf8", label: "👥 Student Registry", title: "Student Registry" },
+    { id: "help_desk", group: "Core Workspace", accent: "#34d399", label: "🎫 Support Desk", title: "Help & Support Tickets Desk" },
+    { id: "notices_board", group: "Core Workspace", accent: "#fbbf24", label: "📢 Notice Board & Alerts", title: "Notice Board & Global Broadcast Studio" },
+    { id: "hardware", group: "Cloud & Infra", accent: "#2dd4bf", label: "🖥️ Server Hardware", title: "Server Hardware" },
+    { id: "software", group: "Cloud & Infra", accent: "#60a5fa", label: maintenanceMode ? "🛠️ Software & Maint. (PAUSED)" : "💻 Software & Maintenance", title: "Software Infrastructure & Server Maintenance" },
+    { id: "pipeline", group: "Cloud & Infra", accent: "#22d3ee", label: "🚀 Upload Pipeline", title: "Upload Pipeline" },
+    { id: "performance", group: "Cloud & Infra", accent: "#facc15", label: "⚡ CDN & Performance", title: "CDN & Performance" },
+    { id: "database", group: "Data & Realtime", accent: "#38bdf8", label: isHalfAdmin ? "🔒 Database (Restricted)" : "🗄️ Database Studio", title: "Database Studio" },
+    { id: "turso", group: "Data & Realtime", accent: "#38bdf8", label: "⚡ Turso Database", title: "Turso LibSQL Edge Database" },
+    { id: "recycle_bin", group: "Data & Realtime", accent: "#fbbf24", label: "♻️ Restore Vault", title: "Restore Vault" },
+    { id: "community_chat", group: "Data & Realtime", accent: "#10b981", label: "💬 Community Chat", title: "Live Community Chat & Moderation Hub" },
+    { id: "security_bot", group: "Security & AI", accent: "#c084fc", label: "🤖 Security Bot", title: "Security Bot Controls" },
+    { id: "web_security", group: "Security & AI", accent: "#f43f5e", label: "🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
+    { id: "tech_nexus", group: "Security & AI", accent: "#ec4899", label: maintenanceMode ? "🧬 Tech Nexus (PAUSED)" : "🧬 Next-Gen Tech", title: "Next-Gen Tech Nexus" },
+    { id: "ai_engine", group: "Security & AI", accent: "#a78bfa", label: "🤖 AI Studio (Groq / Gemini)", title: "AI Studio (Groq LPU + Gemini 2.0 Failover)" },
   ];
+
+  const [quickJumpOpen, setQuickJumpOpen] = useState(false);
+  const [quickJumpQuery, setQuickJumpQuery] = useState("");
+  const tabButtonRefs = useRef({});
+  const quickJumpInputRef = useRef(null);
 
   const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
   const isMasterAdminUser = (u) => {
@@ -89,23 +94,56 @@ export default function AdminModal({
   const currentTabIndex = VISIBLE_TABS.findIndex((t) => t.id === activeTab);
   const slideNext = () => {
     const nextIdx = currentTabIndex === -1 ? 0 : (currentTabIndex + 1) % VISIBLE_TABS.length;
-    setActiveTab(VISIBLE_TABS[nextIdx].id);
+    selectAdminTab(VISIBLE_TABS[nextIdx].id);
   };
   const slidePrev = () => {
     const prevIdx = currentTabIndex === -1 ? 0 : (currentTabIndex - 1 + VISIBLE_TABS.length) % VISIBLE_TABS.length;
-    setActiveTab(VISIBLE_TABS[prevIdx].id);
+    selectAdminTab(VISIBLE_TABS[prevIdx].id);
   };
+
+  useEffect(() => {
+    if (!isOpen) {
+      setQuickJumpOpen(false);
+      return;
+    }
+    const activeEl = tabButtonRefs.current[activeTab];
+    if (activeEl && typeof activeEl.scrollIntoView === "function") {
+      activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    if (quickJumpOpen) {
+      const timer = setTimeout(() => quickJumpInputRef.current?.focus(), 40);
+      return () => clearTimeout(timer);
+    }
+  }, [quickJumpOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setQuickJumpOpen((prev) => !prev);
+        return;
+      }
+      if (e.key === "Escape" && quickJumpOpen) {
+        e.stopPropagation();
+        setQuickJumpOpen(false);
+        return;
+      }
       if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target?.tagName)) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        setQuickJumpOpen(true);
+        return;
+      }
       if (e.key === "ArrowRight") slideNext();
       if (e.key === "ArrowLeft") slidePrev();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, currentTabIndex]);
+  }, [isOpen, currentTabIndex, quickJumpOpen]);
 
   // Global KPIs & Telemetry
   const [stats, setStats] = useState(null);
@@ -2620,6 +2658,77 @@ export default function AdminModal({
     vaultRetentionDays,
   };
 
+  /**
+   * Switches active admin module and triggers its telemetry refresh loaders.
+   */
+  const selectAdminTab = (tabId) => {
+    setActiveTab(tabId);
+    setQuickJumpOpen(false);
+    setQuickJumpQuery("");
+    if (tabId === "students") {
+      setSelectedStudentForActivity(null);
+      loadStudents(studentPage, studentSearch);
+    } else if (tabId === "hardware") {
+      loadHardwareInfo();
+    } else if (tabId === "software") {
+      loadSoftwareInfo();
+    } else if (tabId === "pipeline") {
+      loadUploadPipelines();
+    } else if (tabId === "performance") {
+      loadCdnStats();
+      loadCdnFiles();
+      loadSystemMemory();
+    } else if (tabId === "database") {
+      loadDatabaseOverview();
+    } else if (tabId === "recycle_bin") {
+      loadRecycleBinItems();
+    } else if (tabId === "security_bot") {
+      loadSecurityBotSettings();
+    } else if (tabId === "tech_nexus") {
+      loadTechNexus();
+    } else if (tabId === "community_chat") {
+      loadAdminChat();
+      loadChatBotTelemetry();
+    } else if (tabId === "turso") {
+      loadTursoData();
+      loadTursoAudits();
+    }
+  };
+
+  const getTabBadgeText = (tabId) => {
+    if (tabId === "notes") return `${notes.filter((n) => !deletedNoteIds.has(n.id)).length}`;
+    if (tabId === "students") return `${studentsTotal || stats?.totalStudents || 0}`;
+    if (tabId === "hardware") return "Live";
+    if (tabId === "pipeline") {
+      return `${uploadPipelines.filter((p) => p.status === "processing" || (p.currentStage && p.currentStage < 6)).length}`;
+    }
+    if (tabId === "recycle_bin") return `${recycleBinItems.length}`;
+    if (tabId === "security_bot") return botSettings?.enableOtp ? "Live" : "Paused";
+    if (tabId === "tech_nexus") return techTelemetry?.meshOnline ? "Mesh" : "Active";
+    if (tabId === "community_chat") return chatOnlineCount > 0 ? `${chatOnlineCount}` : "Live";
+    if (tabId === "turso") return tursoStatus?.connected ? (tursoStatus?.isCloud ? "Cloud" : "Standby") : "";
+    return "";
+  };
+
+  const activeTabMeta = VISIBLE_TABS.find((t) => t.id === activeTab) || VISIBLE_TABS[0];
+  const filteredQuickJumpTabs = VISIBLE_TABS.filter((t) => {
+    const q = quickJumpQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      t.label.toLowerCase().includes(q) ||
+      t.title.toLowerCase().includes(q) ||
+      (t.group || "").toLowerCase().includes(q) ||
+      t.id.toLowerCase().includes(q)
+    );
+  });
+
+  const quickJumpGroups = ["Core Workspace", "Cloud & Infra", "Data & Realtime", "Security & AI"]
+    .map((groupName) => ({
+      groupName,
+      items: filteredQuickJumpTabs.filter((t) => t.group === groupName),
+    }))
+    .filter((g) => g.items.length > 0);
+
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000, padding: "8px" }}>
       <div
@@ -2804,27 +2913,27 @@ export default function AdminModal({
           </div>
         </div>
 
-        {/* Tab Navigation Strip with Clean Single-Row Slide Controls */}
+        {/* Tab Navigation Strip + Command Launcher Dock */}
         <div
           className="admin-tab-nav-strip"
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             background: "rgba(7, 10, 18, 0.98)",
             borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-            padding: "8px 18px",
+            padding: "8px 16px",
             gap: "12px",
             flexWrap: "nowrap",
-            overflowX: "hidden",
           }}
         >
-          {/* All Dashboard Tabs (Clean Single-Row Horizontal Scrollable Track) */}
+          {/* All Dashboard Tabs (Unnumbered Clean Scrollable Pills) */}
           <div
             className="admin-tab-buttons-scroll"
             style={{
               display: "flex",
-              gap: "6px",
+              gap: "7px",
               flexWrap: "nowrap",
               overflowX: "auto",
               alignItems: "center",
@@ -2833,156 +2942,374 @@ export default function AdminModal({
               paddingBottom: "1px",
             }}
           >
-            {VISIBLE_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`filter-tab ${activeTab === tab.id ? "active" : ""}`}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  if (tab.id === "students") {
-                    setSelectedStudentForActivity(null);
-                    loadStudents(studentPage, studentSearch);
-                  } else if (tab.id === "hardware") {
-                    loadHardwareInfo();
-                  } else if (tab.id === "software") {
-                    loadSoftwareInfo();
-                  } else if (tab.id === "pipeline") {
-                    loadUploadPipelines();
-                  } else if (tab.id === "performance") {
-                    loadCdnStats();
-                    loadCdnFiles();
-                    loadSystemMemory();
-                  } else if (tab.id === "database") {
-                    loadDatabaseOverview();
-                  } else if (tab.id === "recycle_bin") {
-                    loadRecycleBinItems();
-                  } else if (tab.id === "security_bot") {
-                    loadSecurityBotSettings();
-                  } else if (tab.id === "tech_nexus") {
-                    loadTechNexus();
-                  } else if (tab.id === "community_chat") {
-                    loadAdminChat();
-                    loadChatBotTelemetry();
-                  } else if (tab.id === "turso") {
-                    loadTursoData();
-                    loadTursoAudits();
-                  }
-                }}
-                style={{
-                  fontSize: "0.78rem",
-                  padding: "6px 11px",
-                  borderRadius: "8px",
-                  whiteSpace: "nowrap",
-                  fontWeight: activeTab === tab.id ? 800 : 600,
-                  border: activeTab === tab.id ? "1px solid var(--accent-cyan)" : "1px solid rgba(255, 255, 255, 0.08)",
-                  background: activeTab === tab.id ? "rgba(6, 182, 212, 0.16)" : "rgba(255, 255, 255, 0.03)",
-                  color:
-                    activeTab === tab.id
-                      ? "#fff"
-                      : tab.id === "database"
-                      ? "#38bdf8"
-                      : tab.id === "recycle_bin" && recycleBinItems.length > 0
-                      ? "#fbbf24"
-                      : tab.id === "security_bot"
-                      ? "#c084fc"
-                      : tab.id === "tech_nexus"
-                      ? "#ec4899"
-                      : tab.id === "community_chat"
-                      ? "#10b981"
-                      : tab.id === "turso"
-                      ? "#38bdf8"
-                      : tab.id === "pipeline" && uploadPipelines.some((p) => p.status === "processing" || (p.currentStage && p.currentStage < 6))
-                      ? "var(--accent-cyan)"
-                      : "var(--text-dim)",
-                }}
-                title={tab.title}
-              >
-                {tab.label}
-                {tab.id === "notes" && ` (${notes.filter((n) => !deletedNoteIds.has(n.id)).length})`}
-                {tab.id === "students" && ` (${studentsTotal || stats?.totalStudents || 0})`}
-                {tab.id === "hardware" && " (Live)"}
-                {tab.id === "pipeline" &&
-                  ` (${uploadPipelines.filter((p) => p.status === "processing" || (p.currentStage && p.currentStage < 6)).length})`}
-                {tab.id === "recycle_bin" && ` (${recycleBinItems.length})`}
-                {tab.id === "security_bot" && (botSettings?.enableOtp ? " (Live)" : " (Paused)")}
-                {tab.id === "tech_nexus" && (techTelemetry?.meshOnline ? " (Mesh)" : " (Active)")}
-                {tab.id === "community_chat" && (chatOnlineCount > 0 ? ` (${chatOnlineCount})` : " (Live)")}
-                {tab.id === "turso" && (tursoStatus?.connected ? (tursoStatus?.isCloud ? " (Cloud)" : " (Standby)") : "")}
-              </button>
-            ))}
+            {VISIBLE_TABS.map((tab) => {
+              const isSelected = activeTab === tab.id;
+              const badgeText = getTabBadgeText(tab.id);
+              const accentColor = tab.accent || "#38bdf8";
+
+              return (
+                <button
+                  key={tab.id}
+                  ref={(el) => {
+                    tabButtonRefs.current[tab.id] = el;
+                  }}
+                  type="button"
+                  className={`filter-tab ${isSelected ? "active" : ""}`}
+                  onClick={() => selectAdminTab(tab.id)}
+                  style={{
+                    fontSize: "0.78rem",
+                    padding: "6px 12px",
+                    borderRadius: "10px",
+                    whiteSpace: "nowrap",
+                    fontWeight: isSelected ? 750 : 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    border: isSelected
+                      ? `1px solid ${accentColor}`
+                      : "1px solid rgba(255, 255, 255, 0.09)",
+                    background: isSelected
+                      ? `linear-gradient(135deg, ${accentColor}26, rgba(15, 23, 42, 0.9))`
+                      : "rgba(255, 255, 255, 0.03)",
+                    color: isSelected ? "#ffffff" : "#cbd5e1",
+                    boxShadow: isSelected ? `0 0 18px -6px ${accentColor}` : "none",
+                    transition: "all 0.16s ease",
+                  }}
+                  title={`${tab.group} • ${tab.title}`}
+                >
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "999px",
+                      background: accentColor,
+                      boxShadow: isSelected ? `0 0 8px ${accentColor}` : "none",
+                      opacity: isSelected ? 1 : 0.65,
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span>{tab.label}</span>
+                  {badgeText && (
+                    <span
+                      style={{
+                        fontSize: "0.66rem",
+                        fontWeight: 700,
+                        padding: "1px 6px",
+                        borderRadius: "999px",
+                        background: isSelected ? `${accentColor}30` : "rgba(255, 255, 255, 0.07)",
+                        color: isSelected ? accentColor : "#94a3b8",
+                        border: `1px solid ${isSelected ? `${accentColor}55` : "rgba(255, 255, 255, 0.08)"}`,
+                      }}
+                    >
+                      {badgeText}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
             {selectedStudentForActivity && (
               <button
+                type="button"
                 className={`filter-tab ${activeTab === "activities" ? "active" : ""}`}
-                onClick={() => setActiveTab("activities")}
-                style={{ whiteSpace: "nowrap", fontSize: "0.78rem", padding: "6px 11px" }}
+                onClick={() => selectAdminTab("activities")}
+                style={{
+                  whiteSpace: "nowrap",
+                  fontSize: "0.78rem",
+                  padding: "6px 12px",
+                  borderRadius: "10px",
+                  color: "#f8fafc",
+                }}
               >
                 📊 Activity: {selectedStudentForActivity.name}
               </button>
             )}
           </div>
 
-          {/* Compact Right-Side Slide Controller & Direct Number Jumpers (1 to 8) */}
-          <div style={{ display: "flex", alignItems: "center", gap: "5px", flexShrink: 0, background: "rgba(255, 255, 255, 0.04)", padding: "3px 8px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+          {/* Unique Unnumbered Quick-Jump Command Dock */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              flexShrink: 0,
+              background: "rgba(15, 23, 42, 0.92)",
+              padding: "3px",
+              borderRadius: "11px",
+              border: "1px solid rgba(56, 189, 248, 0.25)",
+              boxShadow: "0 6px 20px -10px rgba(6, 182, 212, 0.45)",
+            }}
+          >
             <button
+              type="button"
               onClick={slidePrev}
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#fff",
+                color: "#cbd5e1",
                 cursor: "pointer",
-                padding: "2px 4px",
+                padding: "5px 6px",
                 display: "flex",
                 alignItems: "center",
-                borderRadius: "4px",
+                borderRadius: "7px",
               }}
-              title="Slide Left (ArrowLeft)"
+              title="Previous Module (ArrowLeft)"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-              {VISIBLE_TABS.map((t, idx) => (
-                <button
-                  key={t.id}
-                  onClick={() => setActiveTab(t.id)}
-                  style={{
-                    background: activeTab === t.id ? "var(--accent-cyan)" : "transparent",
-                    color: activeTab === t.id ? "#000" : "var(--text-dim)",
-                    border: "none",
-                    borderRadius: "4px",
-                    fontWeight: 800,
-                    fontSize: "0.72rem",
-                    width: "20px",
-                    height: "20px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                  }}
-                  title={`Slide ${idx + 1}: ${t.title}`}
-                >
-                  {idx + 1}
-                </button>
-              ))}
-            </div>
+
             <button
+              type="button"
+              onClick={() => setQuickJumpOpen((prev) => !prev)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "7px",
+                padding: "5px 10px",
+                borderRadius: "8px",
+                border: `1px solid ${quickJumpOpen ? "#38bdf8" : "rgba(56, 189, 248, 0.3)"}`,
+                background: quickJumpOpen
+                  ? "linear-gradient(135deg, rgba(6, 182, 212, 0.28), rgba(79, 70, 229, 0.32))"
+                  : "linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(99, 102, 241, 0.16))",
+                color: "#f8fafc",
+                cursor: "pointer",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+              title="Open Quick-Jump Module Grid (Ctrl+K or /)"
+            >
+              <LayoutGrid size={14} style={{ color: activeTabMeta?.accent || "#38bdf8" }} />
+              <span>Quick Jump</span>
+              <span
+                style={{
+                  fontSize: "0.62rem",
+                  padding: "1px 5px",
+                  borderRadius: "4px",
+                  background: "rgba(255, 255, 255, 0.1)",
+                  color: "#94a3b8",
+                  fontFamily: "var(--font-mono)",
+                }}
+              >
+                ⌘K
+              </span>
+              <ChevronDown
+                size={13}
+                style={{
+                  color: "#94a3b8",
+                  transform: quickJumpOpen ? "rotate(180deg)" : "none",
+                  transition: "transform 0.15s ease",
+                }}
+              />
+            </button>
+
+            <button
+              type="button"
               onClick={slideNext}
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#fff",
+                color: "#cbd5e1",
                 cursor: "pointer",
-                padding: "2px 4px",
+                padding: "5px 6px",
                 display: "flex",
                 alignItems: "center",
-                borderRadius: "4px",
+                borderRadius: "7px",
               }}
-              title="Slide Right (ArrowRight)"
+              title="Next Module (ArrowRight)"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={15} />
             </button>
           </div>
+
+          {/* Categorized Floating Quick-Jump Command Drawer */}
+          {quickJumpOpen && (
+            <>
+              <div
+                onClick={() => setQuickJumpOpen(false)}
+                style={{
+                  position: "fixed",
+                  inset: 0,
+                  background: "rgba(2, 6, 23, 0.45)",
+                  zIndex: 90,
+                }}
+              />
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 8px)",
+                  right: "16px",
+                  left: "16px",
+                  maxWidth: "960px",
+                  marginLeft: "auto",
+                  zIndex: 100,
+                  background: "linear-gradient(160deg, rgba(13, 21, 39, 0.99), rgba(7, 11, 22, 0.99))",
+                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  boxShadow: "0 28px 65px rgba(0, 0, 0, 0.85), 0 0 36px rgba(56, 189, 248, 0.16)",
+                  backdropFilter: "blur(20px)",
+                  maxHeight: "min(68vh, 520px)",
+                  overflowY: "auto",
+                }}
+              >
+                {/* Search Header */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    background: "rgba(255, 255, 255, 0.04)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <Search size={15} style={{ color: "#38bdf8", flexShrink: 0 }} />
+                  <input
+                    ref={quickJumpInputRef}
+                    type="text"
+                    value={quickJumpQuery}
+                    onChange={(e) => setQuickJumpQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && filteredQuickJumpTabs.length > 0) {
+                        selectAdminTab(filteredQuickJumpTabs[0].id);
+                      }
+                    }}
+                    placeholder="Instant jump to module (Notes, Students, Hardware, AI, Turso, Security...)"
+                    style={{
+                      flex: 1,
+                      background: "transparent",
+                      border: "none",
+                      outline: "none",
+                      color: "#f8fafc",
+                      fontSize: "0.84rem",
+                    }}
+                  />
+                  {quickJumpQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setQuickJumpQuery("")}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.08)",
+                        border: "none",
+                        borderRadius: "6px",
+                        color: "#cbd5e1",
+                        fontSize: "0.7rem",
+                        padding: "2px 7px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <span style={{ fontSize: "0.68rem", color: "#64748b", fontFamily: "var(--font-mono)" }}>
+                    ESC
+                  </span>
+                </div>
+
+                {/* Categorized Grid */}
+                {quickJumpGroups.length === 0 ? (
+                  <div style={{ padding: "20px", textAlign: "center", color: "#94a3b8", fontSize: "0.82rem" }}>
+                    No matching modules for "{quickJumpQuery}".
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
+                      gap: "12px",
+                    }}
+                  >
+                    {quickJumpGroups.map(({ groupName, items }) => (
+                      <div
+                        key={groupName}
+                        style={{
+                          background: "rgba(255, 255, 255, 0.025)",
+                          border: "1px solid rgba(255, 255, 255, 0.07)",
+                          borderRadius: "12px",
+                          padding: "10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                            letterSpacing: "0.6px",
+                            color: "#94a3b8",
+                            padding: "0 4px 4px",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                          }}
+                        >
+                          {groupName}
+                        </div>
+
+                        {items.map((tab) => {
+                          const isSelected = activeTab === tab.id;
+                          const badgeText = getTabBadgeText(tab.id);
+                          const accentColor = tab.accent || "#38bdf8";
+
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => selectAdminTab(tab.id)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "8px",
+                                width: "100%",
+                                textAlign: "left",
+                                padding: "8px 10px",
+                                borderRadius: "8px",
+                                border: isSelected
+                                  ? `1px solid ${accentColor}`
+                                  : "1px solid rgba(255, 255, 255, 0.06)",
+                                borderLeft: `3px solid ${accentColor}`,
+                                background: isSelected
+                                  ? `${accentColor}20`
+                                  : "rgba(15, 23, 42, 0.65)",
+                                color: isSelected ? "#ffffff" : "#e2e8f0",
+                                fontSize: "0.78rem",
+                                fontWeight: isSelected ? 750 : 600,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {tab.label}
+                              </span>
+                              {badgeText && (
+                                <span
+                                  style={{
+                                    fontSize: "0.66rem",
+                                    fontWeight: 700,
+                                    padding: "1px 6px",
+                                    borderRadius: "999px",
+                                    background: `${accentColor}22`,
+                                    color: accentColor,
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {badgeText}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Dynamic Tab Body */}

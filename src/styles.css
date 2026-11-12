@@ -126,9 +126,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 /* Deck 1: Primary Identity, Wide Spotlight Search & Publish/Auth Capsule */
 .navbar-content {
   pointer-events: auto;
-  background: rgba(8, 13, 25, 0.88);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  background: rgba(8, 13, 25, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-full);
   box-shadow: 0 18px 42px -12px rgba(0, 0, 0, 0.82), 0 0 24px rgba(56, 189, 248, 0.09);
@@ -380,9 +380,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   flex-wrap: wrap;
   gap: 6px;
   padding: 5px 10px;
-  background: rgba(10, 16, 30, 0.86);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  background: rgba(10, 16, 30, 0.93);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(56, 189, 248, 0.18);
   border-radius: var(--radius-full);
   box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.75), 0 0 18px rgba(99, 102, 241, 0.12);
@@ -597,9 +597,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   width: calc(100% - 16px);
   max-width: 500px;
   z-index: 1050;
-  background: rgba(9, 14, 26, 0.94);
-  backdrop-filter: blur(28px) saturate(200%);
-  -webkit-backdrop-filter: blur(28px) saturate(200%);
+  background: rgba(9, 14, 26, 0.96);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(56, 189, 248, 0.22);
   border-radius: var(--radius-full);
   box-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.85), 0 0 24px rgba(99, 102, 241, 0.25);
@@ -1066,9 +1066,7 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .note-card {
-  background: linear-gradient(175deg, rgba(16, 24, 40, 0.88) 0%, rgba(9, 14, 26, 0.98) 100%);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: linear-gradient(175deg, rgba(16, 24, 40, 0.94) 0%, rgba(9, 14, 26, 0.99) 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 18px;
   padding: 12px 13px 11px;
@@ -1080,7 +1078,10 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
-  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, box-shadow 0.25s ease;
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 380px;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease;
   box-shadow: 0 10px 25px -8px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -1909,7 +1910,7 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   font-size: 1.35rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--text-main);
 }
 
 .modal-close-btn {
@@ -1923,8 +1924,8 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .modal-close-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-main);
+  background: #edf2ff;
 }
 
 /* Form Styles */
@@ -3547,6 +3548,15 @@ select option,
 .auth-modal-content input[id*="OtpCode"] { background: #f4f7fc !important; color: #3552c5 !important; }
 .auth-modal-content .passkey-signin-button { border-color: #bde3dc; background: linear-gradient(110deg, #4361ee, #347bc8) !important; color: #fff; box-shadow: 0 6px 20px -14px rgba(15, 159, 143, 0.5); }
 .auth-modal-content .passkey-password-switch { border: 1px solid #dce4ef !important; background: #f7f9fc !important; color: #40516c !important; }
+.profile-modal-content { border-color: #dbe3f0; background: linear-gradient(155deg, #ffffff, #f7faff); color: #172338; box-shadow: 0 30px 80px -42px rgba(29, 48, 77, 0.42); }
+.profile-modal-content .modal-title { color: #172338; }
+.profile-modal-content .modal-close-btn { border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; }
+.profile-modal-content .modal-close-btn:hover { border-color: #c6d3ff; background: #edf2ff; color: #3552c5; }
+.profile-modal-content .form-label { color: #475569; }
+.profile-modal-content .form-input, .profile-modal-content .form-select, .profile-modal-content .form-textarea { border-color: #cbd5e1; background: #ffffff; color: #172338; }
+.profile-modal-content .form-input::placeholder { color: #94a3b8; opacity: 1; }
+.profile-modal-content .form-input:focus, .profile-modal-content .form-select:focus { border-color: #4361ee; background: #ffffff; box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.14); }
+.profile-modal-content select option, .profile-modal-content .form-select option { background: #ffffff !important; color: #172338 !important; }
 .search-circle-btn, .btn-admin-mobile-header { border-color: #d2e8e4 !important; background: #edf8f6 !important; color: #087c70 !important; }
 .search-circle-btn:hover { border-color: #a9d9cf !important; background: #e0f3ef !important; }
 .search-ai-btn { border-color: #dce5fa !important; background: #edf2ff !important; color: #3d59c5 !important; }

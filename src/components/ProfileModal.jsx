@@ -495,8 +495,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
-        className="modal-content"
-        style={{ maxWidth: "520px" }}
+        className="modal-content profile-modal-content"
+        style={{ maxWidth: "540px" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
@@ -506,8 +506,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 width: "36px",
                 height: "36px",
                 borderRadius: "var(--radius-sm)",
-                background: "rgba(99, 102, 241, 0.15)",
-                color: "var(--accent-indigo)",
+                background: "#eef2ff",
+                border: "1px solid #c7d2fe",
+                color: "#3552c5",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -517,7 +518,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             </div>
             <div>
               <div className="modal-title">My Account Settings</div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+              <div style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 500 }}>
                 {currentUser.email} • {currentUser.role?.toUpperCase()}
               </div>
             </div>
@@ -567,13 +568,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
         {msg && (
           <div
             style={{
-              background: msg.type === "error" ? "rgba(244, 63, 94, 0.12)" : "rgba(16, 185, 129, 0.12)",
-              border: msg.type === "error" ? "1px solid rgba(244, 63, 94, 0.35)" : "1px solid rgba(16, 185, 129, 0.35)",
-              color: msg.type === "error" ? "#f43f5e" : "#10b981",
+              background: msg.type === "error" ? "#fff1f2" : "#ecfdf5",
+              border: msg.type === "error" ? "1px solid #fda4af" : "1px solid #6ee7b7",
+              color: msg.type === "error" ? "#be123c" : "#047857",
               padding: "10px 14px",
               borderRadius: "var(--radius-md)",
               marginBottom: "16px",
               fontSize: "0.85rem",
+              fontWeight: 600,
               display: "flex",
               alignItems: "center",
               gap: "8px",
@@ -589,8 +591,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             {/* 🛡️ Adaptive Hardware Guard Card */}
             <div
               style={{
-                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.1), rgba(99, 102, 241, 0.1))",
-                border: "1px solid rgba(6, 182, 212, 0.3)",
+                background: "linear-gradient(135deg, #f0f9ff, #eef2ff)",
+                border: "1px solid #bae6fd",
                 borderRadius: "10px",
                 padding: "12px 14px",
                 marginBottom: "16px",
@@ -599,19 +601,19 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 gap: "6px",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "0.84rem", color: "#fff" }}>
-                  <Shield size={16} style={{ color: "#38bdf8" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, fontSize: "0.84rem", color: "#0f172a" }}>
+                  <Shield size={16} style={{ color: "#0284c7" }} />
                   <span>Adaptive Hardware Guard:</span>
-                  <span style={{ fontSize: "0.7rem", color: "#34d399", background: "rgba(16, 185, 129, 0.2)", padding: "1px 6px", borderRadius: "4px", fontWeight: 800 }}>ACTIVE</span>
+                  <span style={{ fontSize: "0.7rem", color: "#047857", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: "4px", fontWeight: 800 }}>ACTIVE</span>
                 </div>
-                <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700 }}>
+                <span style={{ fontSize: "0.72rem", color: "#0369a1", fontWeight: 700 }}>
                   ⚡ Mode: {hwProfile.tier === "workstation" || hwProfile.tier === "high" ? "High-Performance Engine" : "Safe Dynamic Mode"}
                 </span>
               </div>
-              <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                <span>📱 Hardware: <strong>{hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM</strong></span>
-                <span style={{ color: "#34d399" }}>(Auto-Clamping Enabled)</span>
+              <div style={{ fontSize: "0.76rem", color: "#475569", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                <span>📱 Hardware: <strong style={{ color: "#0f172a" }}>{hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM</strong></span>
+                <span style={{ color: "#047857", fontWeight: 600 }}>(Auto-Clamping Enabled)</span>
               </div>
             </div>
 
@@ -663,8 +665,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             {isMobileChanged && (
               <div
                 style={{
-                  background: "rgba(99, 102, 241, 0.08)",
-                  border: "1px solid rgba(99, 102, 241, 0.28)",
+                  background: "#eef2ff",
+                  border: "1px solid #c7d2fe",
                   borderRadius: "10px",
                   padding: "14px",
                   marginBottom: "16px",
@@ -672,8 +674,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Shield size={16} style={{ color: "var(--accent-cyan)" }} />
-                    <span style={{ fontWeight: 700, color: "var(--accent-cyan)", fontSize: "0.82rem" }}>
+                    <Shield size={16} style={{ color: "#0f766e" }} />
+                    <span style={{ fontWeight: 700, color: "#0f766e", fontSize: "0.82rem" }}>
                       Security Verification Required
                     </span>
                   </div>
@@ -687,8 +689,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     {sendingOtp ? "Sending..." : otpSent ? "Resend OTP" : "Send OTP to Email"}
                   </button>
                 </div>
-                <p style={{ fontSize: "0.74rem", color: "var(--text-dim)", margin: "0 0 10px 0", lineHeight: "1.4" }}>
-                  To prevent unauthorized number hijacking, a 6-digit authorization code must be sent to your registered email (<strong>{currentUser.email}</strong>).
+                <p style={{ fontSize: "0.74rem", color: "#334155", margin: "0 0 10px 0", lineHeight: "1.4" }}>
+                  To prevent unauthorized number hijacking, a 6-digit authorization code must be sent to your registered email (<strong style={{ color: "#0f172a" }}>{currentUser.email}</strong>).
                 </p>
                 <input
                   type="text"
@@ -721,7 +723,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 className="form-input"
                 value={currentUser.email}
                 readOnly
-                style={{ opacity: 0.7 }}
+                style={{ background: "#f1f5f9", color: "#334155", cursor: "default" }}
               />
             </div>
 
@@ -763,7 +765,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     background: "none",
                     border: "none",
                     padding: "4px",
-                    color: showCurrentPassword ? "#a78bfa" : "var(--text-dim)",
+                    color: showCurrentPassword ? "#4361ee" : "#475569",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -798,7 +800,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     background: "none",
                     border: "none",
                     padding: "4px",
-                    color: showNewPassword ? "#a78bfa" : "var(--text-dim)",
+                    color: showNewPassword ? "#4361ee" : "#475569",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -833,7 +835,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     background: "none",
                     border: "none",
                     padding: "4px",
-                    color: showConfirmPassword ? "#a78bfa" : "var(--text-dim)",
+                    color: showConfirmPassword ? "#4361ee" : "#475569",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
@@ -861,13 +863,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             style={{
               marginTop: "20px",
               paddingTop: "16px",
-              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+              borderTop: "1px solid #e2e8f0",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <ShieldAlert size={16} color="#38bdf8" />
-                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
+                <ShieldAlert size={16} color="#0284c7" />
+                <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a" }}>
                   Active Devices &amp; Remote Session Control
                 </span>
               </div>
@@ -876,10 +878,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 onClick={loadSessionsAndActivity}
                 disabled={sessionsLoading}
                 style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#38bdf8",
+                  background: "#f0f9ff",
+                  border: "1px solid #bae6fd",
+                  borderRadius: "6px",
+                  padding: "4px 9px",
+                  color: "#0369a1",
                   fontSize: "0.74rem",
+                  fontWeight: 600,
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
@@ -890,19 +895,19 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 <span>Refresh</span>
               </button>
             </div>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-dim)", margin: "0 0 12px", lineHeight: "1.4" }}>
+            <p style={{ fontSize: "0.75rem", color: "#475569", margin: "0 0 12px", lineHeight: "1.4" }}>
               Manage all phones, tablets, and computers currently logged into your account. You can terminate any individual session or revoke all devices remotely.
             </p>
 
             {/* List of Active Devices */}
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "14px" }}>
               {sessionsLoading && activeSessions.length === 0 ? (
-                <div style={{ padding: "12px", textAlign: "center", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                <div style={{ padding: "12px", textAlign: "center", fontSize: "0.78rem", color: "#475569" }}>
                   Loading active devices...
                 </div>
               ) : activeSessions.length === 0 ? (
-                <div style={{ padding: "12px", borderRadius: "8px", background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.06)", fontSize: "0.78rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Smartphone size={16} color="#38bdf8" />
+                <div style={{ padding: "12px", borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: "0.78rem", color: "#475569", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Smartphone size={16} color="#0284c7" />
                   <span>Current Device (Active session verified)</span>
                 </div>
               ) : (
@@ -922,8 +927,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         justifyContent: "space-between",
                         padding: "10px 12px",
                         borderRadius: "8px",
-                        background: isCurrent ? "rgba(56, 189, 248, 0.07)" : "rgba(255, 255, 255, 0.03)",
-                        border: isCurrent ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.07)",
+                        background: isCurrent ? "#f0f9ff" : "#f8fafc",
+                        border: isCurrent ? "1px solid #bae6fd" : "1px solid #e2e8f0",
                         gap: "10px",
                         flexWrap: "wrap",
                       }}
@@ -934,8 +939,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             width: "32px",
                             height: "32px",
                             borderRadius: "6px",
-                            background: isCurrent ? "rgba(56, 189, 248, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                            color: isCurrent ? "#38bdf8" : "var(--text-dim)",
+                            background: isCurrent ? "#e0f2fe" : "#e2e8f0",
+                            color: isCurrent ? "#0369a1" : "#475569",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -945,18 +950,18 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                           {sess.deviceType === "mobile" ? <Smartphone size={16} /> : <Laptop size={16} />}
                         </div>
                         <div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
                             <span>{sess.deviceName}</span>
                             {isCurrent && (
-                              <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "999px", background: "rgba(16, 185, 129, 0.15)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.3)", fontWeight: 700 }}>
+                              <span style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "999px", background: "#d1fae5", color: "#047857", border: "1px solid #a7f3d0", fontWeight: 700 }}>
                                 This Device
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "2px" }}>
                             <span>{sess.location || "India"}</span>
                             <span style={{ margin: "0 5px" }}>•</span>
-                            <span style={{ color: isCurrent ? "#34d399" : "var(--text-dim)" }}>{timeLabel}</span>
+                            <span style={{ color: isCurrent ? "#047857" : "#475569", fontWeight: isCurrent ? 600 : 400 }}>{timeLabel}</span>
                           </div>
                         </div>
                       </div>
@@ -972,9 +977,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                               padding: "5px 10px",
                               fontSize: "0.74rem",
                               borderRadius: "6px",
-                              background: "rgba(244, 63, 94, 0.14)",
-                              border: "1px solid rgba(244, 63, 94, 0.35)",
-                              color: "#fda4af",
+                              background: "#fff1f2",
+                              border: "1px solid #fda4af",
+                              color: "#be123c",
                               cursor: isTerminating ? "not-allowed" : "pointer",
                               display: "inline-flex",
                               alignItems: "center",
@@ -997,9 +1002,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             padding: "5px 10px",
                             fontSize: "0.74rem",
                             borderRadius: "6px",
-                            background: "rgba(239, 68, 68, 0.12)",
-                            border: "1px solid rgba(239, 68, 68, 0.3)",
-                            color: "#fca5a5",
+                            background: "#fef2f2",
+                            border: "1px solid #fca5a5",
+                            color: "#b91c1c",
                             cursor: isTerminating ? "not-allowed" : "pointer",
                             display: "inline-flex",
                             alignItems: "center",
@@ -1032,13 +1037,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   gap: "6px",
                   padding: "9px 12px",
                   borderRadius: "8px",
-                  background: "rgba(245, 158, 11, 0.12)",
-                  border: "1px solid rgba(245, 158, 11, 0.35)",
-                  color: "#fcd34d",
+                  background: "#fffbeb",
+                  border: "1px solid #fcd34d",
+                  color: "#b45309",
                   fontSize: "0.78rem",
                   fontWeight: 600,
                   cursor: (terminatingAllOther || activeSessions.length <= 1) ? "not-allowed" : "pointer",
-                  opacity: activeSessions.length <= 1 ? 0.6 : 1,
+                  opacity: activeSessions.length <= 1 ? 0.55 : 1,
                   transition: "all 0.2s ease",
                 }}
                 title="Log out all other devices while keeping this device active"
@@ -1058,9 +1063,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   gap: "6px",
                   padding: "9px 12px",
                   borderRadius: "8px",
-                  background: "rgba(244, 63, 94, 0.12)",
-                  border: "1px solid rgba(244, 63, 94, 0.35)",
-                  color: "#fda4af",
+                  background: "#fff1f2",
+                  border: "1px solid #fda4af",
+                  color: "#be123c",
                   fontSize: "0.78rem",
                   fontWeight: 600,
                   cursor: loggingOutAll ? "not-allowed" : "pointer",
@@ -1077,8 +1082,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             <div
               style={{
                 borderRadius: "8px",
-                background: "rgba(15, 23, 42, 0.4)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
                 padding: "10px 12px",
               }}
             >
@@ -1092,11 +1097,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   userSelect: "none",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: 700, color: "#fff" }}>
-                  <Activity size={14} color="#a78bfa" />
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
+                  <Activity size={14} color="#6d28d9" />
                   <span>Recent Security Activity (Last 15 Events)</span>
                 </div>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
                   {showSecurityHistory ? "▲ Hide" : "▼ Show"}
                 </span>
               </div>
@@ -1104,11 +1109,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               {showSecurityHistory && (
                 <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "6px" }}>
                   {securityLogsLoading ? (
-                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "#475569" }}>
                       Loading recent activity...
                     </div>
                   ) : securityLogs.length === 0 ? (
-                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                    <div style={{ padding: "8px", textAlign: "center", fontSize: "0.74rem", color: "#475569" }}>
                       No recent security activity recorded yet.
                     </div>
                   ) : (
@@ -1117,17 +1122,17 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       const mins = Math.floor(diff / 60000);
                       const timeStr = mins < 2 ? "Just now" : (mins < 60 ? `${mins}m ago` : (mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`));
 
-                      let badgeColor = "#38bdf8";
-                      let badgeBg = "rgba(56, 189, 248, 0.12)";
+                      let badgeColor = "#0369a1";
+                      let badgeBg = "#e0f2fe";
                       if (log.action.includes("TERMINATE") || log.action.includes("REVOKE")) {
-                        badgeColor = "#fca5a5";
-                        badgeBg = "rgba(239, 68, 68, 0.12)";
+                        badgeColor = "#b91c1c";
+                        badgeBg = "#fee2e2";
                       } else if (log.action === "LOGIN") {
-                        badgeColor = "#34d399";
-                        badgeBg = "rgba(16, 185, 129, 0.12)";
+                        badgeColor = "#047857";
+                        badgeBg = "#d1fae5";
                       } else if (log.action.includes("PASSWORD")) {
-                        badgeColor = "#fcd34d";
-                        badgeBg = "rgba(245, 158, 11, 0.12)";
+                        badgeColor = "#b45309";
+                        badgeBg = "#fef3c7";
                       }
 
                       return (
@@ -1139,7 +1144,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             justifyContent: "space-between",
                             padding: "6px 8px",
                             borderRadius: "6px",
-                            background: "rgba(255, 255, 255, 0.02)",
+                            background: "#ffffff",
+                            border: "1px solid #e2e8f0",
                             fontSize: "0.72rem",
                             gap: "8px",
                           }}
@@ -1148,11 +1154,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             <span style={{ padding: "2px 6px", borderRadius: "4px", background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: "0.68rem", flexShrink: 0 }}>
                               {log.action}
                             </span>
-                            <span style={{ color: "#e2e8f0", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                            <span style={{ color: "#334155", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                               {log.details || log.deviceName}
                             </span>
                           </div>
-                          <span style={{ color: "var(--text-dim)", flexShrink: 0, fontSize: "0.68rem" }}>
+                          <span style={{ color: "#64748b", flexShrink: 0, fontSize: "0.68rem", fontWeight: 500 }}>
                             {timeStr}
                           </span>
                         </div>
@@ -1174,22 +1180,22 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   width: "52px",
                   height: "52px",
                   borderRadius: "16px",
-                  background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.2))",
-                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                  background: "linear-gradient(135deg, #e0f2fe, #eef2ff)",
+                  border: "1px solid #bae6fd",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   margin: "0 auto 10px",
-                  color: "#38bdf8",
+                  color: "#0284c7",
                 }}
               >
                 <Key size={26} />
               </div>
-              <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#fff" }}>
+              <h3 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
                 Passkey & Biometric Sign-In
               </h3>
-              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-                Sign in to your account in 0ms using your device's built-in <strong>Face ID</strong>, <strong>Fingerprint</strong>, or <strong>Windows Hello PIN</strong>.
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "#475569", lineHeight: 1.5 }}>
+                Sign in to your account in 0ms using your device's built-in <strong style={{ color: "#0f172a" }}>Face ID</strong>, <strong style={{ color: "#0f172a" }}>Fingerprint</strong>, or <strong style={{ color: "#0f172a" }}>Windows Hello PIN</strong>.
               </p>
             </div>
 
@@ -1202,7 +1208,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 width: "100%",
                 padding: "12px 16px",
                 borderRadius: "12px",
-                background: "linear-gradient(135deg, #06b6d4, #3b82f6)",
+                background: "linear-gradient(135deg, #0284c7, #3b82f6)",
                 border: "none",
                 color: "#fff",
                 fontWeight: 700,
@@ -1212,7 +1218,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 justifyContent: "center",
                 gap: "8px",
                 cursor: "pointer",
-                boxShadow: "0 6px 20px rgba(6, 182, 212, 0.3)",
+                boxShadow: "0 8px 20px -10px rgba(2, 132, 199, 0.5)",
               }}
             >
               <Key size={18} />
@@ -1221,23 +1227,23 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
             {/* Passkeys List */}
             <div>
-              <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
+              <div style={{ fontSize: "0.76rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
                 Registered Passkeys ({passkeys.length})
               </div>
 
               {loadingPasskeys ? (
-                <div style={{ textAlign: "center", padding: "20px", color: "var(--text-dim)", fontSize: "0.82rem" }}>
+                <div style={{ textAlign: "center", padding: "20px", color: "#475569", fontSize: "0.82rem" }}>
                   Loading passkeys from Firebase...
                 </div>
               ) : passkeys.length === 0 ? (
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px dashed rgba(255, 255, 255, 0.1)",
+                    background: "#f8fafc",
+                    border: "1px dashed #cbd5e1",
                     borderRadius: "12px",
                     padding: "16px",
                     textAlign: "center",
-                    color: "var(--text-dim)",
+                    color: "#475569",
                     fontSize: "0.82rem",
                   }}
                 >
@@ -1249,8 +1255,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     <div
                       key={p.id}
                       style={{
-                        background: "rgba(255, 255, 255, 0.04)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        background: "#f8fafc",
+                        border: "1px solid #e2e8f0",
                         borderRadius: "12px",
                         padding: "12px 14px",
                         display: "flex",
@@ -1264,8 +1270,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             width: "36px",
                             height: "36px",
                             borderRadius: "10px",
-                            background: "rgba(56, 189, 248, 0.15)",
-                            color: "#38bdf8",
+                            background: "#e0f2fe",
+                            color: "#0284c7",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1274,10 +1280,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                           <Shield size={18} />
                         </div>
                         <div>
-                          <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>
                             {p.deviceName}
                           </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#475569" }}>
                             Added: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "Active"} • Secure in Firebase
                           </div>
                         </div>
@@ -1288,11 +1294,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         onClick={() => handleDeletePasskey(p.id)}
                         disabled={deletingPasskeyId === p.id}
                         style={{
-                          background: "rgba(239, 68, 68, 0.15)",
-                          border: "1px solid rgba(239, 68, 68, 0.3)",
+                          background: "#fff1f2",
+                          border: "1px solid #fecdd3",
                           borderRadius: "8px",
                           padding: "6px",
-                          color: "#f87171",
+                          color: "#be123c",
                           cursor: "pointer",
                           display: "flex",
                           alignItems: "center",
@@ -1313,16 +1319,16 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
-                background: "rgba(16, 185, 129, 0.08)",
-                border: "1px solid rgba(16, 185, 129, 0.2)",
+                background: "#ecfdf5",
+                border: "1px solid #a7f3d0",
                 borderRadius: "10px",
                 padding: "10px 14px",
                 fontSize: "0.75rem",
-                color: "#6ee7b7",
+                color: "#065f46",
                 lineHeight: 1.4,
               }}
             >
-              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <CheckCircle2 size={16} style={{ flexShrink: 0, color: "#059669" }} />
               <span>
                 <strong>100% Phishing Resistant:</strong> Passkey private keys never leave your device sensor. Protected by Firebase Cloud Storage.
               </span>
@@ -1335,21 +1341,21 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <div
               style={{
-                background: "rgba(56, 189, 248, 0.08)",
-                border: "1px solid rgba(56, 189, 248, 0.25)",
+                background: "#f0f9ff",
+                border: "1px solid #bae6fd",
                 borderRadius: "12px",
                 padding: "16px",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <HardDrive size={18} style={{ color: "#38bdf8" }} />
+                  <HardDrive size={18} style={{ color: "#0284c7" }} />
                   <div>
-                    <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "#f8fafc" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.92rem", color: "#0f172a" }}>
                       Device Hardware Storage Meter
                     </span>
                     {lastRefreshedAt && (
-                      <div style={{ fontSize: "0.68rem", color: refreshSuccess ? "#34d399" : "var(--text-dim)", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div style={{ fontSize: "0.68rem", color: refreshSuccess ? "#047857" : "#475569", display: "flex", alignItems: "center", gap: "4px", fontWeight: 600 }}>
                         {refreshSuccess ? <CheckCircle2 size={11} /> : <Clock size={11} />}
                         <span>{refreshSuccess ? `Audited successfully at ${lastRefreshedAt}` : `Last checked: ${lastRefreshedAt}`}</span>
                       </div>
@@ -1361,10 +1367,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   onClick={handleRefreshAllStorage}
                   disabled={refreshingStorage}
                   style={{
-                    background: refreshingStorage ? "rgba(56, 189, 248, 0.2)" : refreshSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                    border: `1px solid ${refreshingStorage ? "rgba(56, 189, 248, 0.5)" : refreshSuccess ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                    background: refreshingStorage ? "#e0f2fe" : refreshSuccess ? "#d1fae5" : "#ffffff",
+                    border: `1px solid ${refreshingStorage ? "#7dd3fc" : refreshSuccess ? "#6ee7b7" : "#cbd5e1"}`,
                     borderRadius: "6px",
-                    color: refreshingStorage ? "#38bdf8" : refreshSuccess ? "#34d399" : "var(--text-muted)",
+                    color: refreshingStorage ? "#0369a1" : refreshSuccess ? "#047857" : "#334155",
                     padding: "5px 12px",
                     fontSize: "0.72rem",
                     cursor: refreshingStorage ? "not-allowed" : "pointer",
@@ -1386,49 +1392,47 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </div>
 
               {/* Primary Metric: Stored Offline Notes Vault */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", marginBottom: "6px" }}>
-                <span style={{ color: "var(--text-muted)" }}>📚 Stored Offline Notes Vault:</span>
-                <span style={{ fontWeight: 800, color: totalNotesBytes > 0 ? "#38bdf8" : "#34d399", background: totalNotesBytes > 0 ? "rgba(56, 189, 248, 0.12)" : "rgba(16, 185, 129, 0.12)", border: `1px solid ${totalNotesBytes > 0 ? "rgba(56, 189, 248, 0.25)" : "rgba(16, 185, 129, 0.25)"}`, padding: "2px 8px", borderRadius: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", marginBottom: "6px", flexWrap: "wrap", gap: "6px" }}>
+                <span style={{ color: "#334155", fontWeight: 600 }}>📚 Stored Offline Notes Vault:</span>
+                <span style={{ fontWeight: 800, color: totalNotesBytes > 0 ? "#0369a1" : "#047857", background: totalNotesBytes > 0 ? "#e0f2fe" : "#d1fae5", border: `1px solid ${totalNotesBytes > 0 ? "#7dd3fc" : "#6ee7b7"}`, padding: "2px 8px", borderRadius: "6px" }}>
                   {totalNotesMB} MB ({storedNotes.length} {storedNotes.length === 1 ? "Note" : "Notes"} Cached)
                 </span>
               </div>
 
               {/* Secondary Metric: Total Browser Origin Quota */}
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "var(--text-dim)", marginBottom: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "#475569", marginBottom: "4px" }}>
                 <span>Browser PWA Engine, WASM &amp; Font Cache:</span>
-                <span style={{ color: "#94a3b8", fontWeight: 600 }}>
+                <span style={{ color: "#0f172a", fontWeight: 700 }}>
                   {storageInfo ? `${storageInfo.usageMB} MB` : "Calculating..."}
                 </span>
               </div>
-              <div style={{ fontSize: "0.68rem", color: "#64748b", marginBottom: "8px", lineHeight: "1.4" }}>
+              <div style={{ fontSize: "0.68rem", color: "#475569", marginBottom: "8px", lineHeight: "1.4" }}>
                 ℹ️ Required by Chrome for 0ms offline launch &amp; PDF reader canvas. Your saved offline study notes use {totalNotesMB} MB.
               </div>
 
               {/* Progress Bar */}
-              <div style={{ height: "6px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "4px", overflow: "hidden", marginBottom: "8px" }}>
+              <div style={{ height: "6px", background: "#dbeafe", borderRadius: "4px", overflow: "hidden", marginBottom: "8px" }}>
                 <div
                   style={{
                     height: "100%",
                     width: `${Math.min(100, Math.max(1, Number(storageInfo?.percentUsed || 0)))}%`,
-                    background: "linear-gradient(90deg, #38bdf8, #818cf8)",
+                    background: "linear-gradient(90deg, #0284c7, #4361ee)",
                     borderRadius: "4px",
                   }}
                 />
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#475569", fontWeight: 500 }}>
                 <span>Available Browser Quota: {storageInfo ? `${(Number(storageInfo.quotaMB) / 1024).toFixed(1)} GB` : "Unlimited"}</span>
                 <span>{storageInfo ? `${storageInfo.percentUsed}% Utilized` : "0.00% Utilized"}</span>
               </div>
             </div>
 
-
-
             {/* Stored Offline Notes Section */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 700, color: "#f8fafc", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <FileText size={15} style={{ color: "#38bdf8" }} />
+                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <FileText size={15} style={{ color: "#0284c7" }} />
                   <span>Stored Offline Notes Vault ({storedNotes.length})</span>
                 </div>
                 <button
@@ -1436,13 +1440,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   onClick={loadStoredNotes}
                   disabled={loadingStoredNotes}
                   style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
                     borderRadius: "6px",
-                    color: "var(--text-muted)",
-                    padding: "3px 8px",
+                    color: "#334155",
+                    padding: "4px 9px",
                     cursor: "pointer",
                     fontSize: "0.7rem",
+                    fontWeight: 600,
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
@@ -1456,12 +1461,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               {/* Dynamic Device LRU & 48h Auto-Delete Banner */}
               <div
                 style={{
-                  background: "rgba(56, 189, 248, 0.08)",
-                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                  background: "#f0f9ff",
+                  border: "1px solid #bae6fd",
                   borderRadius: "8px",
                   padding: "8px 12px",
                   fontSize: "0.72rem",
-                  color: "#7dd3fc",
+                  color: "#0369a1",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -1475,24 +1480,24 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </div>
 
               {loadingStoredNotes ? (
-                <div style={{ padding: "14px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                <div style={{ padding: "14px", textAlign: "center", color: "#475569", fontSize: "0.76rem" }}>
                   Scanning device IndexedDB for cached notes...
                 </div>
               ) : storedNotes.length === 0 ? (
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.02)",
-                    border: "1px dashed rgba(255, 255, 255, 0.12)",
+                    background: "#f8fafc",
+                    border: "1px dashed #cbd5e1",
                     borderRadius: "10px",
                     padding: "16px",
                     textAlign: "center",
-                    color: "var(--text-dim)",
+                    color: "#475569",
                     fontSize: "0.76rem",
                     lineHeight: 1.5,
                   }}
                 >
                   <div style={{ fontSize: "1.2rem", marginBottom: "4px" }}>📭</div>
-                  <div style={{ color: "#f8fafc", fontWeight: 600, marginBottom: "2px" }}>No Offline Notes Stored</div>
+                  <div style={{ color: "#0f172a", fontWeight: 700, marginBottom: "2px" }}>No Offline Notes Stored</div>
                   <div>Open any note in the Virtual PDF Reader or click "Save Offline" on any card to read 100% without internet.</div>
                 </div>
               ) : (
@@ -1506,8 +1511,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       <div
                         key={n.id}
                         style={{
-                          background: isPinned ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.03)",
-                          border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)"}`,
+                          background: isPinned ? "#ecfdf5" : "#f8fafc",
+                          border: `1px solid ${isPinned ? "#a7f3d0" : "#e2e8f0"}`,
                           borderRadius: "8px",
                           padding: "10px 12px",
                           display: "flex",
@@ -1517,25 +1522,25 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         }}
                       >
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {n.title}
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#475569", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
                             <span>📚 {n.subject}</span>
                             {n.branch && <span>• {n.branch}</span>}
                             {isPinned ? (
-                              <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                              <span style={{ color: "#047857", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#d1fae5", border: "1px solid #6ee7b7", padding: "1px 6px", borderRadius: "4px" }}>
                                 <Pin size={10} /> Kept Forever
                               </span>
                             ) : (
-                              <span style={{ color: "#fbbf24", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                              <span style={{ color: "#b45309", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 6px", borderRadius: "4px" }}>
                                 <Clock size={10} /> Auto-expires in {remainingHours}h
                               </span>
                             )}
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-                          <span style={{ fontSize: "0.7rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                          <span style={{ fontSize: "0.7rem", color: "#0369a1", background: "#e0f2fe", border: "1px solid #bae6fd", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
                             {n.sizeMB && Number(n.sizeMB) > 0 ? `${n.sizeMB} MB` : "Cached"}
                           </span>
                           <button
@@ -1543,9 +1548,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             onClick={() => handleTogglePin(n.id, n.title)}
                             title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion and LRU)"}
                             style={{
-                              background: isPinned ? "rgba(16, 185, 129, 0.16)" : "rgba(255, 255, 255, 0.06)",
-                              border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.14)"}`,
-                              color: isPinned ? "#34d399" : "#cbd5e1",
+                              background: isPinned ? "#d1fae5" : "#ffffff",
+                              border: `1px solid ${isPinned ? "#6ee7b7" : "#cbd5e1"}`,
+                              color: isPinned ? "#047857" : "#334155",
                               padding: "4px 8px",
                               borderRadius: "6px",
                               cursor: "pointer",
@@ -1565,9 +1570,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             disabled={deletingNoteId === n.id}
                             title="Delete this note from device offline storage"
                             style={{
-                              background: "rgba(244, 63, 94, 0.12)",
-                              border: "1px solid rgba(244, 63, 94, 0.3)",
-                              color: "#f43f5e",
+                              background: "#fff1f2",
+                              border: "1px solid #fda4af",
+                              color: "#be123c",
                               padding: "4px 8px",
                               borderRadius: "6px",
                               cursor: deletingNoteId === n.id ? "not-allowed" : "pointer",
@@ -1592,8 +1597,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             {/* Circled AI Q&A Notes Section (48h Auto-Evict) */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 700, color: "#f8fafc", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Sparkles size={15} style={{ color: "#38bdf8" }} />
+                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Sparkles size={15} style={{ color: "#0284c7" }} />
                   <span>Circled AI Q&amp;A Notes ({storedCircleNotes.length})</span>
                 </div>
                 <button
@@ -1601,13 +1606,14 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   onClick={loadStoredCircleNotes}
                   disabled={loadingCircleNotes}
                   style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
                     borderRadius: "6px",
-                    color: "var(--text-muted)",
-                    padding: "3px 8px",
+                    color: "#334155",
+                    padding: "4px 9px",
                     cursor: "pointer",
                     fontSize: "0.7rem",
+                    fontWeight: 600,
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
@@ -1621,12 +1627,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               {/* 48h Default Auto-Expire Banner */}
               <div
                 style={{
-                  background: "rgba(56, 189, 248, 0.06)",
-                  border: "1px solid rgba(56, 189, 248, 0.2)",
+                  background: "#f0f9ff",
+                  border: "1px solid #bae6fd",
                   borderRadius: "8px",
                   padding: "8px 12px",
                   fontSize: "0.72rem",
-                  color: "#7dd3fc",
+                  color: "#0369a1",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -1643,18 +1649,18 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               </div>
 
               {loadingCircleNotes ? (
-                <div style={{ padding: "14px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                <div style={{ padding: "14px", textAlign: "center", color: "#475569", fontSize: "0.76rem" }}>
                   Scanning device IndexedDB for circled solutions...
                 </div>
               ) : storedCircleNotes.length === 0 ? (
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.02)",
-                    border: "1px dashed rgba(255, 255, 255, 0.12)",
+                    background: "#f8fafc",
+                    border: "1px dashed #cbd5e1",
                     borderRadius: "10px",
                     padding: "16px",
                     textAlign: "center",
-                    color: "var(--text-dim)",
+                    color: "#475569",
                     fontSize: "0.76rem",
                     lineHeight: 1.5,
                   }}
@@ -1662,7 +1668,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: "6px" }}>
                     <GeminiIcon size={26} withRing />
                   </div>
-                  <div style={{ color: "#f8fafc", fontWeight: 600, marginBottom: "2px" }}>No Circled AI Notes Saved</div>
+                  <div style={{ color: "#0f172a", fontWeight: 700, marginBottom: "2px" }}>No Circled AI Notes Saved</div>
                   <div>Circle any question, diagram, or formula in the Virtual PDF Reader to solve it and save answers offline here.</div>
                 </div>
               ) : (
@@ -1676,8 +1682,8 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       <div
                         key={cn.key}
                         style={{
-                          background: isPinned ? "rgba(16, 185, 129, 0.04)" : "rgba(255, 255, 255, 0.03)",
-                          border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)"}`,
+                          background: isPinned ? "#ecfdf5" : "#f8fafc",
+                          border: `1px solid ${isPinned ? "#a7f3d0" : "#e2e8f0"}`,
                           borderRadius: "8px",
                           padding: "10px 12px",
                           display: "flex",
@@ -1687,17 +1693,17 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         }}
                       >
                         <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => setViewingCircleAnswer(cn)}>
-                          <div style={{ fontWeight: 600, color: "#f8fafc", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {cn.query ? (cn.query.length > 55 ? `${cn.query.slice(0, 55)}...` : cn.query) : "Circled Question"}
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
+                          <div style={{ fontSize: "0.7rem", color: "#475569", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
                             <span>📖 {cn.subject || "Study Notes"}</span>
                             {isPinned ? (
-                              <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                              <span style={{ color: "#047857", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#d1fae5", border: "1px solid #6ee7b7", padding: "1px 6px", borderRadius: "4px" }}>
                                 <Pin size={10} /> Kept Forever
                               </span>
                             ) : (
-                              <span style={{ color: "#fbbf24", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "rgba(245, 158, 11, 0.12)", border: "1px solid rgba(245, 158, 11, 0.25)", padding: "1px 6px", borderRadius: "4px" }}>
+                              <span style={{ color: "#b45309", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 6px", borderRadius: "4px" }}>
                                 <Clock size={10} /> Auto-expires in {remainingHours}h
                               </span>
                             )}
@@ -1709,9 +1715,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             onClick={() => setViewingCircleAnswer(cn)}
                             title="View step-by-step AI solution"
                             style={{
-                              background: "rgba(56, 189, 248, 0.12)",
-                              border: "1px solid rgba(56, 189, 248, 0.3)",
-                              color: "#38bdf8",
+                              background: "#e0f2fe",
+                              border: "1px solid #7dd3fc",
+                              color: "#0369a1",
                               padding: "4px 8px",
                               borderRadius: "6px",
                               cursor: "pointer",
@@ -1730,9 +1736,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             onClick={() => handleTogglePinCircle(cn.key, cn.query)}
                             title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion)"}
                             style={{
-                              background: isPinned ? "rgba(16, 185, 129, 0.16)" : "rgba(255, 255, 255, 0.06)",
-                              border: `1px solid ${isPinned ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.14)"}`,
-                              color: isPinned ? "#34d399" : "#cbd5e1",
+                              background: isPinned ? "#d1fae5" : "#ffffff",
+                              border: `1px solid ${isPinned ? "#6ee7b7" : "#cbd5e1"}`,
+                              color: isPinned ? "#047857" : "#334155",
                               padding: "4px 8px",
                               borderRadius: "6px",
                               cursor: "pointer",
@@ -1752,9 +1758,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             disabled={deletingCircleKey === cn.key}
                             title="Delete this circled solution from local storage"
                             style={{
-                              background: "rgba(244, 63, 94, 0.12)",
-                              border: "1px solid rgba(244, 63, 94, 0.3)",
-                              color: "#f43f5e",
+                              background: "#fff1f2",
+                              border: "1px solid #fda4af",
+                              color: "#be123c",
                               padding: "4px 8px",
                               borderRadius: "6px",
                               cursor: deletingCircleKey === cn.key ? "not-allowed" : "pointer",
@@ -1783,9 +1789,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 onClick={handleWipeStorage}
                 disabled={clearingStorage}
                 style={{
-                  background: "rgba(244, 63, 94, 0.12)",
-                  border: "1px solid rgba(244, 63, 94, 0.35)",
-                  color: "#f43f5e",
+                  background: "#fff1f2",
+                  border: "1px solid #fda4af",
+                  color: "#be123c",
                   padding: "10px 14px",
                   borderRadius: "8px",
                   fontWeight: 700,
@@ -1801,7 +1807,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 {clearingStorage ? "Purging Device Storage..." : "Free Up Device Space (Clear All Cached Notes)"}
               </button>
 
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+              <div style={{ fontSize: "0.72rem", color: "#475569", lineHeight: 1.4 }}>
                 💡 <em>Note: Clearing storage deletes local offline copies. You can always re-read or download them again when internet is available. Browsers also auto-prune oldest notes when device disk space is below 10%.</em>
               </div>
             </div>
@@ -1814,7 +1820,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0, 0, 0, 0.78)",
+              background: "rgba(15, 23, 42, 0.55)",
               backdropFilter: "blur(5px)",
               zIndex: 10005,
               display: "flex",
@@ -1826,15 +1832,15 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
           >
             <div
               style={{
-                background: "#0f172a",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
+                background: "#ffffff",
+                border: "1px solid #cbd5e1",
                 borderRadius: "14px",
                 maxWidth: "540px",
                 width: "100%",
                 maxHeight: "85vh",
                 display: "flex",
                 flexDirection: "column",
-                boxShadow: "0 20px 40px rgba(0, 0, 0, 0.65)",
+                boxShadow: "0 24px 48px -12px rgba(15, 23, 42, 0.28)",
                 overflow: "hidden",
               }}
               onClick={(e) => e.stopPropagation()}
@@ -1846,17 +1852,17 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "14px 18px",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-                  background: "rgba(56, 189, 248, 0.06)",
+                  borderBottom: "1px solid #e2e8f0",
+                  background: "#f8fafc",
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Sparkles size={18} style={{ color: "#38bdf8" }} />
+                  <Sparkles size={18} style={{ color: "#0284c7" }} />
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#f8fafc" }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "#0f172a" }}>
                       Circled AI Solution
                     </div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                    <div style={{ fontSize: "0.7rem", color: "#475569" }}>
                       {viewingCircleAnswer.subject || "Study Notes"} • {viewingCircleAnswer.provider ? `${String(viewingCircleAnswer.provider).toUpperCase()} AI` : "Cloud AI"}
                     </div>
                   </div>
@@ -1865,11 +1871,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   type="button"
                   onClick={() => setViewingCircleAnswer(null)}
                   style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--text-muted)",
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "50%",
+                    color: "#475569",
                     cursor: "pointer",
-                    padding: "4px",
+                    padding: "5px",
                     display: "flex",
                   }}
                 >
@@ -1882,16 +1889,16 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 {/* Question Snippet */}
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.04)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
                     borderRadius: "8px",
                     padding: "10px 12px",
                   }}
                 >
-                  <div style={{ fontSize: "0.7rem", color: "#94a3b8", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "#475569", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                     Circled Text / Question:
                   </div>
-                  <div style={{ fontSize: "0.82rem", color: "#f1f5f9", fontStyle: "italic", lineHeight: 1.4 }}>
+                  <div style={{ fontSize: "0.82rem", color: "#0f172a", fontStyle: "italic", lineHeight: 1.4 }}>
                     "{viewingCircleAnswer.query}"
                   </div>
                 </div>
@@ -1899,7 +1906,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 {/* AI Answer */}
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#0369a1", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       ✨ Step-by-Step AI Solution:
                     </span>
                     <button
@@ -1912,10 +1919,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                         }
                       }}
                       style={{
-                        background: copiedCircleAnswer ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.06)",
-                        border: `1px solid ${copiedCircleAnswer ? "rgba(16, 185, 129, 0.4)" : "rgba(255, 255, 255, 0.12)"}`,
+                        background: copiedCircleAnswer ? "#d1fae5" : "#f8fafc",
+                        border: `1px solid ${copiedCircleAnswer ? "#6ee7b7" : "#cbd5e1"}`,
                         borderRadius: "6px",
-                        color: copiedCircleAnswer ? "#34d399" : "var(--text-muted)",
+                        color: copiedCircleAnswer ? "#047857" : "#334155",
                         padding: "3px 8px",
                         fontSize: "0.68rem",
                         cursor: "pointer",
@@ -1931,12 +1938,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   </div>
                   <div
                     style={{
-                      background: "rgba(15, 23, 42, 0.8)",
-                      border: "1px solid rgba(56, 189, 248, 0.2)",
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
                       borderRadius: "8px",
                       padding: "12px 14px",
                       fontSize: "0.82rem",
-                      color: "#e2e8f0",
+                      color: "#0f172a",
                       lineHeight: 1.6,
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
@@ -1956,11 +1963,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "12px 18px",
-                  borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-                  background: "rgba(255, 255, 255, 0.02)",
+                  borderTop: "1px solid #e2e8f0",
+                  background: "#f8fafc",
                 }}
               >
-                <div style={{ fontSize: "0.7rem", color: viewingCircleAnswer.isPinned ? "#34d399" : "#fbbf24", display: "flex", alignItems: "center", gap: "4px" }}>
+                <div style={{ fontSize: "0.7rem", color: viewingCircleAnswer.isPinned ? "#047857" : "#b45309", fontWeight: 600, display: "flex", alignItems: "center", gap: "4px" }}>
                   {viewingCircleAnswer.isPinned ? (
                     <>
                       <Pin size={11} />
@@ -1977,9 +1984,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   type="button"
                   onClick={() => setViewingCircleAnswer(null)}
                   style={{
-                    background: "rgba(56, 189, 248, 0.15)",
-                    border: "1px solid rgba(56, 189, 248, 0.35)",
-                    color: "#38bdf8",
+                    background: "#edf2ff",
+                    border: "1px solid #c7d2fe",
+                    color: "#3552c5",
                     borderRadius: "6px",
                     padding: "5px 14px",
                     fontSize: "0.76rem",

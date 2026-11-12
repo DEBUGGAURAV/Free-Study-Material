@@ -30,6 +30,14 @@ const {
   decryptUserObject,
 } = require("../utils/cryptoVault");
 
+/**
+ * Strips registered JWT timing/ID claims (exp, iat, nbf, jti) before re-signing with expiresIn.
+ */
+function signReissuedAuthToken(userPayload, newVersion) {
+  const { exp, iat, nbf, jti, ...cleanClaims } = userPayload || {};
+  return jwt.sign({ ...cleanClaims, v: newVersion }, JWT_SECRET, { expiresIn: "7d" });
+}
+
 // In-Memory OTP Store: key = `${type}_${email}`, value = { otp, expiresAt, attempts, userData }
 const otpStore = new Map();
 
@@ -2611,11 +2619,7 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
     });
 
     // Re-issue fresh token for CURRENT device with newVersion so current session stays active
-    const updatedPayload = {
-      ...req.user,
-      v: newVersion,
-    };
-    const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
+    const freshToken = signReissuedAuthToken(req.user, newVersion);
     setAuthCookie(res, req, freshToken);
 
     // 📜 Record Password Change Security Event (Auto-capped at 15)
@@ -2895,11 +2899,7 @@ router.post("/terminate-other-sessions", authenticateToken, async (req, res) => 
     setRevokedTokenVersion(req.user.id, newVersion);
 
     // Re-issue cookie for THIS device with newVersion
-    const updatedPayload = {
-      ...req.user,
-      v: newVersion,
-    };
-    const freshToken = jwt.sign(updatedPayload, JWT_SECRET, { expiresIn: "7d" });
+    const freshToken = signReissuedAuthToken(req.user, newVersion);
     setAuthCookie(res, req, freshToken);
 
     // 📜 Record Password Change Security Event (Auto-capped at 15)
