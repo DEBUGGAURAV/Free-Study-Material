@@ -232,15 +232,17 @@ export default function Navbar({
                 </button>
               )}
 
-              <button
-                type="button"
-                className="btn-upload-mobile-compact"
-                onClick={onOpenUpload}
-                title="Upload Notes"
-              >
-                <UploadCloud size={14} />
-                <span>Upload</span>
-              </button>
+              {currentUser && (
+                <button
+                  type="button"
+                  className="btn-upload-mobile-compact"
+                  onClick={onOpenUpload}
+                  title="Upload Notes"
+                >
+                  <UploadCloud size={14} />
+                  <span>Upload</span>
+                </button>
+              )}
 
               {currentUser ? (
                 <div className="mobile-user-cluster">
@@ -268,21 +270,21 @@ export default function Navbar({
                   </button>
                 </div>
               ) : (
-                <button
-                  type="button"
-                  className="btn-signin-nav"
-                  onClick={onOpenAuth}
-                  style={{ padding: "5px 11px", fontSize: "0.74rem" }}
-                >
-                  <LogIn size={13} />
-                  <span>Sign In</span>
-                </button>
+                <div className="nav-auth-actions nav-auth-actions-mobile">
+                  <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
+                    Sign Up
+                  </button>
+                  <button type="button" className="btn-signin-nav" onClick={() => onOpenAuth("signin")}>
+                    <LogIn size={13} />
+                    <span>Sign In</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
 
           {/* Center Section: Wide Universal Spotlight Search (Never Crushed!) */}
-          <div className="search-wrapper">
+          {currentUser && <div className="search-wrapper">
             <Search size={15} className="search-icon" />
             <input
               ref={searchInputRef}
@@ -333,7 +335,7 @@ export default function Navbar({
                 }}
                 title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
               >
-                <GeminiIcon size={14} withRing />
+                <GeminiIcon size={14} withRing ringColor="#3552c5" color="#0f8b7e" />
                 <span>Circle</span>
               </button>
 
@@ -358,25 +360,27 @@ export default function Navbar({
                 }}
                 title="✨ AI Study: Flashcards, Summary & Smart Note Filter"
               >
-                <Sparkles size={11} color="#a78bfa" />
+                <Sparkles size={11} color="#3d59c5" />
                 <span>AI</span>
               </button>
 
               <kbd className="search-kbd-shortcut">⌘K</kbd>
             </div>
-          </div>
+          </div>}
 
           {/* Right Section (Desktop): Core Publish, Admin & User Identity */}
           <div className="nav-core-right">
-            <button
-              type="button"
-              className="btn-upload-notes"
-              onClick={onOpenUpload}
-              title="Upload Notes, PYQs or Solutions to Cloud Vault"
-            >
-              <UploadCloud size={15} />
-              <span>Upload Notes</span>
-            </button>
+            {currentUser && (
+              <button
+                type="button"
+                className="btn-upload-notes"
+                onClick={onOpenUpload}
+                title="Upload Notes, PYQs or Solutions to Cloud Vault"
+              >
+                <UploadCloud size={15} />
+                <span>Upload Notes</span>
+              </button>
+            )}
 
             {isAdminOrManager && (
               <button
@@ -420,22 +424,27 @@ export default function Navbar({
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                className="btn-signin-nav"
-                onClick={onOpenAuth}
-                title="Sign In / Register as Student"
-              >
-                <LogIn size={15} />
-                <span>Sign In</span>
-              </button>
+              <div className="nav-auth-actions">
+                <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
+                  Sign Up
+                </button>
+                <button
+                  type="button"
+                  className="btn-signin-nav"
+                  onClick={() => onOpenAuth("signin")}
+                  title="Sign In as Student"
+                >
+                  <LogIn size={15} />
+                  <span>Sign In</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
 
         {/* DECK 2: SUSPENDED HOLOGRAPHIC FEATURE LAUNCHPAD (Desktop & Tablet)
             Every feature shows BOTH Icon + Explicit Label — super easy to find! */}
-        <nav className="nav-feature-launchpad" aria-label="Academic Tools & Live Features">
+        {currentUser && <nav className="nav-feature-launchpad" aria-label="Academic Tools & Live Features">
           <button
             type="button"
             className="launchpad-pill pill-airdrop"
@@ -507,22 +516,22 @@ export default function Navbar({
               <span>Install App</span>
             </button>
           )}
-        </nav>
+        </nav>}
       </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
           MOBILE FLOATING BOTTOM DOCK (1-Tap Thumb Reach with Clear Labels)
           ══════════════════════════════════════════════════════════════════════ */}
-      <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Tools">
+      {currentUser && <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Tools">
         {/* ✨ AI Study Popup */}
         <button
           type="button"
           className="dock-item dock-ai"
           onClick={onOpenAiStudyPod}
-          style={{ color: "#c4b5fd" }}
+          style={{ color: "#5846b8" }}
           title="AI Study (Flashcards, Summary, Notes Filter)"
         >
-          <Sparkles size={17} color="#a78bfa" />
+          <Sparkles size={17} color="#5846b8" />
           <span>AI Study</span>
         </button>
 
@@ -531,10 +540,10 @@ export default function Navbar({
           type="button"
           className="dock-item dock-circle"
           onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
-          style={{ color: "#38bdf8" }}
+          style={{ color: "#3552c5" }}
           title="Circle to Search: Ask Question or Diagram with Gemini AI"
         >
-          <GeminiIcon size={17} withRing />
+          <GeminiIcon size={17} withRing ringColor="#3552c5" color="#0f8b7e" />
           <span>Circle</span>
         </button>
 
@@ -544,15 +553,15 @@ export default function Navbar({
             className="dock-item dock-admin"
             onClick={onOpenAdmin}
             style={{
-              color: "#38bdf8",
-              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.22))",
-              border: "1px solid rgba(56, 189, 248, 0.45)",
+              color: "#3552c5",
+              background: "#edf2ff",
+              border: "1px solid #dce5fa",
               borderRadius: "12px",
             }}
             title="Admin Studio Control Panel"
           >
-            <Shield size={17} color="#38bdf8" />
-            <span style={{ color: "#38bdf8", fontWeight: 800 }}>Admin</span>
+            <Shield size={17} color="#3552c5" />
+            <span style={{ color: "#3552c5", fontWeight: 800 }}>Admin</span>
           </button>
         )}
 
@@ -616,7 +625,7 @@ export default function Navbar({
             <span>Install</span>
           </button>
         )}
-      </nav>
+      </nav>}
     </>
   );
 }

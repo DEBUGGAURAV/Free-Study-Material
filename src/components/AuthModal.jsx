@@ -1383,6 +1383,7 @@ export default function AuthModal({
         {error && !purgedAccountNotice && Object.keys(fieldErrors).length === 0 && (
           <div
             id="auth-top-error-banner"
+            className={`auth-error-banner ${error.toLowerCase().includes("blocked") ? "blocked" : ""}`}
             style={{
               background: error.toLowerCase().includes("blocked")
                 ? "linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(15, 23, 42, 0.95))"
@@ -1403,14 +1404,15 @@ export default function AuthModal({
           >
             <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
+              <div className="auth-error-title" style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
                 {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
               </div>
-              <div style={{ lineHeight: "1.45" }}>{error}</div>
+              <div className="auth-error-message" style={{ lineHeight: "1.45" }}>{error}</div>
               {error.toLowerCase().includes("google") && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "10px" }}>
                   <button
                     type="button"
+                    className="auth-error-retry"
                     onClick={() => {
                       setError(null);
                       handleGoogleSignIn();
@@ -1610,7 +1612,7 @@ export default function AuthModal({
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div className="google-user-summary-name" style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {googleUser?.name || "Verified Student"}
                   </div>
                   <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -1831,6 +1833,7 @@ export default function AuthModal({
                 {/* Option to toggle to Password mode */}
                 <button
                   type="button"
+                  className="passkey-password-switch"
                   onClick={() => {
                     setLoginViewMode("password");
                     localStorage.setItem("academic_vault_login_pref", "password");
@@ -1862,6 +1865,7 @@ export default function AuthModal({
                 <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "14px", marginBottom: "8px" }}>
                   New student?{" "}
                   <span
+                    className="auth-light-link"
                     style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                     onClick={() => {
                       resetAllFormFields();
@@ -2011,6 +2015,7 @@ export default function AuthModal({
                 <label className="form-label">Password *</label>
                 {!isMaintenanceMode && (
                   <span
+                    className="auth-light-link"
                     style={{ fontSize: "0.74rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                     onClick={() => {
                       resetAllFormFields();
@@ -2069,6 +2074,7 @@ export default function AuthModal({
             {error && (
               <div
                 id="auth-bottom-error-banner"
+                className={`auth-error-banner ${error.toLowerCase().includes("blocked") ? "blocked" : ""}`}
                 style={{
                   background: error.toLowerCase().includes("blocked")
                     ? "linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(15, 23, 42, 0.95))"
@@ -2090,10 +2096,10 @@ export default function AuthModal({
                 <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
                   <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
+                    <div className="auth-error-title" style={{ fontWeight: 800, color: "#f87171", marginBottom: "3px" }}>
                       {error.toLowerCase().includes("blocked") ? "🚫 Account Blocked by Administrator" : "Authentication Alert"}
                     </div>
-                    <div style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
+                    <div className="auth-error-message" style={{ fontSize: "0.83rem", color: "#fef2f2" }}>{error}</div>
                     {error.toLowerCase().includes("google") && (
                       <div style={{ marginTop: "8px" }}>
                         <button
@@ -2129,6 +2135,7 @@ export default function AuthModal({
                             setTab("forgot");
                             if (em.includes("@")) setForgotEmail(em);
                           }}
+                          className="auth-light-link"
                           style={{
                             color: "#38bdf8",
                             fontSize: "0.8rem",
@@ -2169,6 +2176,7 @@ export default function AuthModal({
               <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "16px", marginBottom: "8px" }}>
                 New student?{" "}
                 <span
+                  className="auth-light-link"
                   style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
                   onClick={() => {
                     resetAllFormFields();
@@ -2212,6 +2220,7 @@ export default function AuthModal({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
               <button
                 type="button"
+                className={`auth-method-tab ${forgotMode === "telebot" ? "active" : ""}`}
                 onClick={() => {
                   if (forgotMode !== "telebot") {
                     resetForgotFields();
@@ -2240,6 +2249,7 @@ export default function AuthModal({
 
               <button
                 type="button"
+                className={`auth-method-tab ${forgotMode === "email" ? "active" : ""}`}
                 onClick={() => {
                   if (forgotMode !== "email") {
                     resetForgotFields();
@@ -2324,7 +2334,7 @@ export default function AuthModal({
                       </span>
                     </div>
 
-                    <div style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.75rem", color: "#7dd3fc" }}>
+                    <div className="auth-light-info" style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.75rem", color: "#7dd3fc" }}>
                       ⚡ <strong>Instant Delivery:</strong> Passcode will be delivered directly via Telegram Bot <strong>@fsm_security_otp_bot</strong> with zero email delay.
                     </div>
 
@@ -2365,7 +2375,7 @@ export default function AuthModal({
                   /* Step 2: Enter Telegram OTP & New Password */
                   <form onSubmit={handleForgotTelegramVerify} autoComplete="off">
                     <div style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: "10px", padding: "14px", marginBottom: "16px", textAlign: "center" }}>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
+                      <div className="auth-light-heading" style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
                         Passcode Waiting in Telegram Bot
                       </div>
                       <p style={{ margin: "0 0 10px", fontSize: "0.78rem", color: "var(--text-dim)" }}>
@@ -2391,7 +2401,7 @@ export default function AuthModal({
                         <TelegramIcon />
                         <span>Open Telegram Bot ↗</span>
                       </a>
-                      <p style={{ margin: "10px 0 0", fontSize: "0.76rem", color: "#7dd3fc" }}>
+                      <p className="auth-light-info" style={{ margin: "10px 0 0", fontSize: "0.76rem", color: "#7dd3fc" }}>
                         🛡️ In the bot: Tap <strong>[ 📲 Verify & Share My Telegram Number ]</strong>, then type your registered <strong>Email Address</strong> to receive your 6-digit passcode.
                       </p>
                     </div>
@@ -2769,6 +2779,7 @@ export default function AuthModal({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "16px" }}>
               <button
                 type="button"
+                className={`auth-method-tab ${regMode === "telebot" ? "active" : ""}`}
                 onClick={() => {
                   setError(null);
                   if (regMode !== "telebot") {
@@ -2798,6 +2809,7 @@ export default function AuthModal({
 
               <button
                 type="button"
+                className={`auth-method-tab ${regMode === "email" ? "active" : ""}`}
                 onClick={() => {
                   setError(null);
                   if (regMode !== "email") {
@@ -2976,7 +2988,7 @@ export default function AuthModal({
                       </div>
                     </div>
 
-                    <div style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.75rem", color: "#7dd3fc" }}>
+                    <div className="auth-light-info" style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "8px", padding: "10px 12px", marginBottom: "16px", fontSize: "0.75rem", color: "#7dd3fc" }}>
                       ⚡ <strong>Instant Bot Verification:</strong> 6-digit OTP verification code will be delivered instantly via Telegram Bot.
                     </div>
 
@@ -3003,7 +3015,7 @@ export default function AuthModal({
                   /* Step 2: Enter Telegram OTP */
                   <form onSubmit={handleSignUpTelegramVerify} autoComplete="off">
                     <div style={{ background: "rgba(56, 189, 248, 0.1)", border: "1px solid rgba(56, 189, 248, 0.3)", borderRadius: "10px", padding: "16px", marginBottom: "16px", textAlign: "center" }}>
-                      <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
+                      <div className="auth-light-heading" style={{ fontSize: "0.9rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
                         Verification Waiting in Telegram Bot
                       </div>
                       <p style={{ margin: "0 0 10px", fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: "1.4" }}>
@@ -3037,7 +3049,7 @@ export default function AuthModal({
                         </button>
                       </div>
 
-                      <p style={{ margin: "10px 0 0", fontSize: "0.76rem", color: "#7dd3fc" }}>
+                      <p className="auth-light-info" style={{ margin: "10px 0 0", fontSize: "0.76rem", color: "#7dd3fc" }}>
                         🛡️ In the bot, tap <strong>[ 📲 Verify & Share My Telegram Number ]</strong> to receive your 6-digit passcode.
                       </p>
                     </div>
@@ -3314,7 +3326,7 @@ export default function AuthModal({
                       </div>
                       <h4 style={{ margin: "0 0 4px", color: "#fff", fontSize: "1.05rem" }}>Verify Student Email</h4>
                       <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-dim)" }}>
-                        Enter the 6-digit verification code dispatched to <strong style={{ color: "#38bdf8" }}>{email}</strong>
+                        Enter the 6-digit verification code dispatched to <strong className="auth-light-link" style={{ color: "#38bdf8" }}>{email}</strong>
                       </p>
                     </div>
 

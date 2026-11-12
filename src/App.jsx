@@ -1341,7 +1341,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div className={`app-shell ${currentUser ? "authenticated" : "guest"}`} style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {/* Top Navbar */}
       <Navbar
         searchTerm={searchTerm}
@@ -1375,7 +1375,7 @@ export default function App() {
           setIsAirdropOpen(true);
         }}
         onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenAuth={() => openAuth("signin")}
+        onOpenAuth={(mode) => openAuth(mode || "signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
         onOpenAiStudyPod={(targetTab = "chat", note = null) => {
           if (!currentUser) {
@@ -1598,7 +1598,7 @@ export default function App() {
                 marginBottom: "36px",
               }}
             >
-              <div className="visitor-access-badge"
+              <div className="visitor-access-glow"
                 style={{
                   position: "absolute",
                   top: "-60px",
@@ -1612,6 +1612,7 @@ export default function App() {
                 }}
               />
               <div
+                className="visitor-access-glow-secondary"
                 style={{
                   position: "absolute",
                   bottom: "-60px",
@@ -1627,6 +1628,7 @@ export default function App() {
 
               {/* Lock Badge */}
               <div
+                className="visitor-kicker"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -1814,14 +1816,12 @@ export default function App() {
             </div>
 
             {/* Sample Locked Vault Teaser Cards */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", margin: 0 }}>
-                  A preview of the study library
-                </h4>
-                <span style={{ fontSize: "0.78rem", color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }} onClick={() => openAuth("signup")}>
-                  Create Free Account &rarr;
-                </span>
+            <div className="visitor-preview-section">
+              <div className="visitor-preview-heading">
+                <h4 className="visitor-preview-title">Inside your study library</h4>
+                <button className="visitor-preview-signup" onClick={() => openAuth("signup")}>
+                  Create free account <ArrowRight size={15} />
+                </button>
               </div>
 
               <div className="tech-hud-grid visitor-material-grid">
@@ -1858,7 +1858,31 @@ export default function App() {
                       </div>
                     </div>
                   );
-                }) : <p style={{ color: "var(--text-dim)" }}>No study materials are available to preview yet.</p>}
+                }) : (
+                  <>
+                    <article className="visitor-preview-card">
+                      <span className="visitor-preview-icon"><BookOpen size={20} /></span>
+                      <span className="visitor-preview-label">STUDENT LIBRARY</span>
+                      <h4>Shared course notes</h4>
+                      <p>Find class notes by subject and branch, then preview or download materials shared by students.</p>
+                      <button onClick={() => openAuth("signup")}>Explore the library <ArrowRight size={14} /></button>
+                    </article>
+                    <article className="visitor-preview-card">
+                      <span className="visitor-preview-icon"><FileText size={20} /></span>
+                      <span className="visitor-preview-label">EXAM PREP</span>
+                      <h4>Past question papers</h4>
+                      <p>Browse previous papers alongside your course resources and prepare with more confidence.</p>
+                      <button onClick={() => openAuth("signup")}>Get started <ArrowRight size={14} /></button>
+                    </article>
+                    <article className="visitor-preview-card">
+                      <span className="visitor-preview-icon"><Sparkles size={20} /></span>
+                      <span className="visitor-preview-label">BUILT-IN TOOLS</span>
+                      <h4>Study in one place</h4>
+                      <p>Use the PDF reader and study tools together with the materials you need for class.</p>
+                      <button onClick={() => openAuth("signup")}>See study tools <ArrowRight size={14} /></button>
+                    </article>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1867,18 +1891,18 @@ export default function App() {
             {/* Account Lifecycle Security Policy Banner (Front Page After Login) */}
             {!hideSecurityBanner && (
               <div
+                className="student-security-banner"
                 style={{
-                  background: "linear-gradient(135deg, rgba(30, 41, 59, 0.75), rgba(15, 23, 42, 0.9))",
-                  border: "1px solid rgba(56, 189, 248, 0.25)",
-                  borderRadius: "12px",
+                  background: "linear-gradient(120deg, #f0faf8, #f2f6ff)",
+                  border: "1px solid #d5e7e8",
+                  borderRadius: "16px",
                   padding: "14px 18px",
                   margin: "0 0 20px 0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   gap: "16px",
-                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
-                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 12px 30px -24px rgba(29, 48, 77, 0.42)",
                   flexWrap: "wrap",
                   position: "relative",
                   zIndex: 1,
@@ -1887,55 +1911,55 @@ export default function App() {
                 <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
                   <div
                     style={{
-                      width: "38px",
-                      height: "38px",
-                      borderRadius: "10px",
-                      background: "rgba(56, 189, 248, 0.12)",
-                      border: "1px solid rgba(56, 189, 248, 0.3)",
+                      width: "40px",
+                      height: "40px",
+                      borderRadius: "12px",
+                      background: "#e5f5f1",
+                      border: "1px solid #cce8df",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: "1.2rem",
                       flexShrink: 0,
                     }}
                   >
-                    🛡️
+                    <ShieldCheck size={19} color="#087c70" />
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#1d2b42", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                       <span>Account Security Policy: Active Student Protection</span>
                       <span
                         style={{
                           fontSize: "0.68rem",
                           padding: "2px 8px",
                           borderRadius: "999px",
-                          background: "rgba(16, 185, 129, 0.15)",
-                          color: "#34d399",
+                          background: "#e4f6ef",
+                          color: "#087c70",
                           fontWeight: 600,
-                          border: "1px solid rgba(16, 185, 129, 0.3)",
+                          border: "1px solid #c5eadd",
                         }}
                       >
                         Active &amp; Safe
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "2px", lineHeight: "1.4" }}>
+                    <div style={{ fontSize: "0.78rem", color: "#526179", marginTop: "2px", lineHeight: "1.5" }}>
                       To protect student privacy and university resources, accounts that do not log in for <strong>90 consecutive days</strong> are automatically deleted. Simply sign in once every 90 days to keep your student account active.
                     </div>
                   </div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 600 }}>
+                  <span style={{ fontSize: "0.75rem", color: "#087c70", fontWeight: 700 }}>
                     Logged in as {currentUser?.name || currentUser?.email}
                   </span>
                   <button
+                    className="student-security-dismiss"
                     onClick={() => setHideSecurityBanner(true)}
                     style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      color: "var(--text-dim)",
-                      borderRadius: "6px",
-                      padding: "4px 8px",
+                      background: "#fff",
+                      border: "1px solid #dce4ef",
+                      color: "#526179",
+                      borderRadius: "9px",
+                      padding: "6px 10px",
                       cursor: "pointer",
                       fontSize: "0.72rem",
                       display: "flex",
@@ -2173,13 +2197,14 @@ export default function App() {
 
       {/* Footer */}
       <footer
+        className="app-footer"
         style={{
-          borderTop: "1px solid var(--border-subtle)",
+          borderTop: "1px solid #e1e7f0",
           padding: "24px",
           textAlign: "center",
           fontSize: "0.8rem",
-          color: "var(--text-dim)",
-          background: "rgba(7, 10, 18, 0.95)",
+          color: "#526179",
+          background: "linear-gradient(110deg, #f8faff, #f0f7f7)",
         }}
       >
         <div style={{ maxWidth: "1380px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px" }}>
@@ -2429,7 +2454,7 @@ export default function App() {
       <button
         type="button"
         onClick={() => setIsHelpOpen(true)}
-        className="floating-help-trigger"
+        className={`floating-help-trigger ${currentUser ? "authenticated" : "guest"}`}
         title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
         style={{
           position: "fixed",
@@ -2456,7 +2481,7 @@ export default function App() {
       </button>
 
       {/* 🚀 Persistent Floating Side Action Dock (AI Study Pod & Circle to Search) */}
-      <div
+      {currentUser && <div
         className="floating-side-action-dock"
         style={{
           position: "fixed",
@@ -2537,7 +2562,7 @@ export default function App() {
           <GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />
           <span className="floating-action-text">Circle Search</span>
         </button>
-      </div>
+      </div>}
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
       <FreehandCircleOverlay
@@ -2557,7 +2582,7 @@ export default function App() {
       />
 
       {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
-      {!isChatOpen && (
+      {currentUser && !isChatOpen && (
         <button
           onClick={() => {
             if (!currentUser) {
