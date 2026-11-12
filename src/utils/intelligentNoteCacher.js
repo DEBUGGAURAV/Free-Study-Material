@@ -119,10 +119,12 @@ export async function smartPrecacheConditionNotes(currentNote = null, catalog = 
   // Prevent parallel overlapping runs
   if (isPrecacheRunning) return;
 
-  // Respect user battery / save-data preference
+  // Respect user battery / save-data / slow-network preference
   if (typeof navigator !== "undefined") {
     if (!navigator.onLine) return;
-    if (navigator.connection && navigator.connection.saveData === true) return;
+    if (navigator.connection?.saveData === true) return;
+    const effType = navigator.connection?.effectiveType;
+    if (effType === "slow-2g" || effType === "2g") return;
   }
 
   isPrecacheRunning = true;
@@ -184,11 +186,14 @@ export async function smartPrecacheConditionNotes(currentNote = null, catalog = 
       addedIds.add(String(n.id));
     }
 
-    // Sequential low-priority execution (1 note at a time, spaced 1 second apart)
-    for (const item of candidates) {
+    // Limit background home precache to max 2 lightweight notes so post-login browsing stays snappy
+    const boundedCandidates = currentNote ? candidates.slice(0, 4) : candidates.slice(0, 2);
+    for (const item of boundedCandidates) {
       if (typeof navigator !== "undefined" && !navigator.onLine) break;
+      const sizeBytes = Number(item.note?.compressedSize || item.note?.fileSize || 0);
+      if (sizeBytes > 8 * 1024 * 1024) continue;
       await fetchAndStoreSingleNote(item.note, item.condition);
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 1500));
     }
   } catch (err) {
     console.debug("[SMART-CACHE] Condition pre-cache notice:", err.message);
@@ -198,14 +203,19 @@ export async function smartPrecacheConditionNotes(currentNote = null, catalog = 
 }
 
 /**
- * Idle Catalog Precache for Home Page
+ * Idle Catalog Precache for Home Page (deferred so initial post-login render/scroll stays instant)
  */
+let idlePrecacheTimer = null;
 export function triggerIdleCatalogPrecache(catalog = null) {
   if (typeof window === "undefined") return;
-  const runner = () => smartPrecacheConditionNotes(null, catalog);
-  if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(runner, { timeout: 4000 });
-  } else {
-    setTimeout(runner, 3000);
-  }
+  if (idlePrecacheTimer) clearTimeout(idlePrecacheTimer);
+  idlePrecacheTimer = setTimeout(() => {
+    idlePrecacheTimer = null;
+    const runner = () => smartPrecacheConditionNotes(null, catalog);
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(runner, { timeout: 6000 });
+    } else {
+      runner();
+    }
+  }, 10000);
 }

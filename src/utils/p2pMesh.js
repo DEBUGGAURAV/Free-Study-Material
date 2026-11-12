@@ -8,6 +8,57 @@ const DB_NAME = "fsm_p2p_cache_v1";
 const STORE_NAME = "note_chunks";
 
 let memoryPeerId = null;
+let cachedKeySetPromise = null;
+let cachedKeySetValue = null;
+
+export function invalidateCachedNoteIdsSet() {
+  cachedKeySetValue = null;
+  cachedKeySetPromise = null;
+}
+
+/**
+ * Fast O(1)-after-first-scan check returning a Set of noteIds cached in IndexedDB
+ * without deserializing multi-MB PDF ArrayBuffers into JS heap.
+ */
+export async function getCachedNoteIdsSet(forceRefresh = false) {
+  if (!forceRefresh && cachedKeySetValue) return cachedKeySetValue;
+  if (!forceRefresh && cachedKeySetPromise) return cachedKeySetPromise;
+
+  cachedKeySetPromise = (async () => {
+    let db = null;
+    try {
+      db = await openDB(800);
+      const keys = await new Promise((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) { settled = true; resolve([]); }
+        }, 700);
+        try {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const req = tx.objectStore(STORE_NAME).getAllKeys();
+          req.onsuccess = () => {
+            if (!settled) { settled = true; clearTimeout(timer); resolve(Array.isArray(req.result) ? req.result : []); }
+          };
+          req.onerror = () => {
+            if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
+          };
+        } catch {
+          if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
+        }
+      });
+      const keySet = new Set(keys.map((k) => String(k)));
+      cachedKeySetValue = keySet;
+      return keySet;
+    } catch {
+      return cachedKeySetValue || new Set();
+    } finally {
+      try { if (db) db.close(); } catch (_) {}
+      cachedKeySetPromise = null;
+    }
+  })();
+
+  return cachedKeySetPromise;
+}
 
 // Generate unique persistent peer ID for this device
 function getPeerId() {
@@ -104,6 +155,7 @@ export async function cacheNoteBuffer(noteId, arrayBuffer) {
       };
       tx.objectStore(STORE_NAME).put(arrayBuffer, noteId);
     });
+    if (cachedKeySetValue) cachedKeySetValue.add(String(noteId));
     
     // Announce to signaling hub that we now seed this note
     announceAsSeeder(noteId);

@@ -756,17 +756,30 @@ export const api = {
     const cacheKey = `notes_${queryString}`;
     const cached = shouldBypass ? null : clientMemoryCache.get(cacheKey);
 
+    const persistOfflineBackup = (payload) => {
+      if (queryString && queryString !== "?all=true") return;
+      const writeFn = () => {
+        try {
+          const compactNotes = Array.isArray(payload?.notes)
+            ? payload.notes.map(({ ocrText, ...meta }) => meta)
+            : [];
+          localStorage.setItem("fsm_offline_notes", JSON.stringify({ ...payload, notes: compactNotes }));
+        } catch (_) {}
+      };
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(writeFn, { timeout: 2500 });
+      } else {
+        setTimeout(writeFn, 400);
+      }
+    };
+
     if (cached) {
       if (typeof navigator === "undefined" || navigator.onLine) {
         request(`/notes${queryString}`)
           .then((fresh) => {
             if (fresh && fresh.notes) {
               clientMemoryCache.set(cacheKey, fresh);
-              try {
-                if (!queryString || queryString === "?all=true") {
-                  localStorage.setItem("fsm_offline_notes", JSON.stringify(fresh));
-                }
-              } catch (_) {}
+              persistOfflineBackup(fresh);
               if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("fsm:notes-synced", { detail: fresh.notes }));
               }
@@ -781,11 +794,7 @@ export const api = {
       const res = await request(`/notes${queryString}`);
       if (res && res.notes) {
         clientMemoryCache.set(cacheKey, res);
-        try {
-          if (!queryString || queryString === "?all=true") {
-            localStorage.setItem("fsm_offline_notes", JSON.stringify(res));
-          }
-        } catch (_) {}
+        persistOfflineBackup(res);
       }
       return res;
     } catch (err) {

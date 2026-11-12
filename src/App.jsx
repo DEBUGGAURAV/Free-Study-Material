@@ -732,15 +732,21 @@ export default function App() {
       return false;
     };
 
+    let lastRecordedActivityCheck = 0;
     const recordUserActivity = () => {
       if (!currentUserRef.current) return;
-      // 🚨 CRITICAL MOBILE FIX: If user returns after 30+ minutes of phone sleep / lock,
-      // their first touch MUST NOT overwrite the timestamp! We must check timeout first!
-      if (checkInactivityAndTimeout()) return;
-
       const now = Date.now();
+      // Fast throttle: skip redundant localStorage/inactivity math during high-frequency mousemove/scroll frames
+      if (now - lastRecordedActivityCheck < 1000) return;
+      lastRecordedActivityCheck = now;
+
+      // Check in-memory timestamp first before touching localStorage
+      if (lastActivityRef.current > 0 && now - lastActivityRef.current >= getEffectiveTimeoutMs()) {
+        if (checkInactivityAndTimeout()) return;
+      }
+
       lastActivityRef.current = now;
-      if (now - lastStorageSyncRef.current > 5000) {
+      if (now - lastStorageSyncRef.current > 10000) {
         lastStorageSyncRef.current = now;
         safeStorage.setItem("vault_last_active", String(now));
       }
@@ -894,10 +900,11 @@ export default function App() {
     return () => { active = false; };
   }, [sortNotesByTimestamp]);
 
-  // Fetch master catalog from backend ONLY when auth session changes (not on every search keystroke!)
+  // Fetch master catalog from backend ONLY when auth sign-in state flips (avoid duplicate refetch when getMe() refreshes user object)
+  const isUserSignedIn = Boolean(currentUser);
   useEffect(() => {
-    fetchNotes(currentUser, false);
-  }, [currentUser]);
+    fetchNotes(currentUserRef.current, false);
+  }, [isUserSignedIn]);
 
   // ⚡ Zero-Firestore-Read Local MiniSearch + Facet Filtering (<1ms per keystroke / tab click)
   useEffect(() => {
@@ -1010,7 +1017,17 @@ export default function App() {
   useEffect(() => {
     const handleNotesSynced = (e) => {
       if (e.detail && Array.isArray(e.detail) && e.detail.length > 0) {
-        const sorted = sortNotesByTimestamp(e.detail);
+        const prev = allCatalogNotesRef.current;
+        const incoming = e.detail;
+        // Skip redundant re-sort/MiniSearch rebuild if catalog length & boundary items match
+        if (
+          prev.length === incoming.length &&
+          prev[0]?.id === incoming[0]?.id &&
+          prev[prev.length - 1]?.id === incoming[incoming.length - 1]?.id
+        ) {
+          return;
+        }
+        const sorted = sortNotesByTimestamp(incoming);
         allCatalogNotesRef.current = sorted;
         saveNotesCatalogToIdb(sorted).catch(() => {});
         const f = filterStateRef.current;
@@ -1059,9 +1076,6 @@ export default function App() {
       const sorted = sortNotesByTimestamp(rawNotes);
       allCatalogNotesRef.current = sorted;
       saveNotesCatalogToIdb(sorted).catch(() => {});
-      try {
-        safeStorage.setItem("fsm_cached_notes", JSON.stringify(sorted));
-      } catch (_) {}
 
       const f = filterStateRef.current;
       const filtered = searchNotesCatalogLocally({
@@ -1072,6 +1086,20 @@ export default function App() {
         fallbackNotes: sorted,
       });
       setNotes(filtered);
+
+      // Defer lightweight metadata backup to idle frame so login render stays instant
+      const writeCompactStorageBackup = () => {
+        try {
+          const compact = sorted.map(({ ocrText, ...meta }) => meta);
+          safeStorage.setItem("fsm_cached_notes", JSON.stringify(compact));
+        } catch (_) {}
+      };
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(writeCompactStorageBackup, { timeout: 2500 });
+      } else {
+        setTimeout(writeCompactStorageBackup, 400);
+      }
+
       if (sorted.length > 0) {
         triggerIdleCatalogPrecache(sorted);
       }

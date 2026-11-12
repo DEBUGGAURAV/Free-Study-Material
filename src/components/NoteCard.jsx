@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FileText,
   Download,
@@ -16,12 +16,12 @@ import {
 } from "lucide-react";
 import { api, getAuthToken } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
-import { getCachedNoteBuffer } from "../utils/p2pMesh";
+import { getCachedNoteIdsSet, invalidateCachedNoteIdsSet } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
 import { isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead } from "../utils/studentStudyContext";
 
-export default function NoteCard({
+function NoteCard({
   note,
   onPreview,
   currentUser,
@@ -56,9 +56,9 @@ export default function NoteCard({
     let active = true;
     if (!note?.id) return;
     setIsPinned(isNotePinnedOffline(note.id));
-    getCachedNoteBuffer(note.id)
-      .then((buf) => {
-        if (active) setIsCachedOffline(Boolean(buf && buf.byteLength > 0));
+    getCachedNoteIdsSet()
+      .then((keySet) => {
+        if (active) setIsCachedOffline(keySet.has(String(note.id)));
       })
       .catch(() => {});
 
@@ -66,9 +66,12 @@ export default function NoteCard({
       if (active && note?.id) {
         if (e?.detail?.noteId && e.detail.noteId !== note.id) return;
         setIsPinned(isNotePinnedOffline(note.id));
-        getCachedNoteBuffer(note.id)
-          .then((buf) => {
-            if (active) setIsCachedOffline(Boolean(buf && buf.byteLength > 0));
+        if (e?.type === "fsm:offline-notes-changed") {
+          invalidateCachedNoteIdsSet();
+        }
+        getCachedNoteIdsSet(e?.type === "fsm:offline-notes-changed")
+          .then((keySet) => {
+            if (active) setIsCachedOffline(keySet.has(String(note.id)));
           })
           .catch(() => {});
       }
@@ -671,3 +674,5 @@ export default function NoteCard({
     </article>
   );
 }
+
+export default React.memo(NoteCard);
