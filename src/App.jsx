@@ -2732,6 +2732,7 @@ export default function App() {
       {/* 🔑 Non-blocking Post-Registration Passkey Consent Prompt (Student is ALREADY on Notes Page!) */}
       {passkeyPromptUser && (
         <div
+          className="dark-modal-surface"
           style={{
             position: "fixed",
             bottom: "24px",

@@ -312,26 +312,26 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
 
               {file ? (
                 <div>
-                  <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.95rem" }}>
+                  <div style={{ fontWeight: 700, color: "var(--text-main)", fontSize: "0.95rem" }}>
                     {file.name}
                   </div>
                   <div style={{ color: "var(--accent-cyan)", fontSize: "0.8rem", marginTop: "4px" }}>
                     {formatFileSize(file.size)} • Ready for Client WASM &amp; High-Speed Transfer
                   </div>
                   {hardwareHash && (
-                    <div style={{ fontSize: "0.72rem", color: "#34d399", marginTop: "4px", fontFamily: "var(--font-mono)" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#059669", marginTop: "4px", fontFamily: "var(--font-mono)" }}>
                       ⚡ Hardware Hash: {hardwareHash.substring(0, 16)}... (SHA-256 Verified)
                     </div>
                   )}
                   {clientCompressMsg && (
-                    <div style={{ fontSize: "0.74rem", color: "#fbbf24", marginTop: "4px", fontWeight: 600 }}>
+                    <div style={{ fontSize: "0.74rem", color: "#b45309", marginTop: "4px", fontWeight: 600 }}>
                       {clientCompressMsg}
                     </div>
                   )}
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontWeight: 600, color: "#fff", fontSize: "0.95rem" }}>
+                  <div style={{ fontWeight: 600, color: "var(--text-main)", fontSize: "0.95rem" }}>
                     Choose a document or drag & drop here
                   </div>
                   <div style={{ color: "var(--text-dim)", fontSize: "0.8rem", marginTop: "4px" }}>
@@ -353,7 +353,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", color: "#fff", fontWeight: 700 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", color: "var(--text-main)", fontWeight: 700 }}>
                     <Activity size={15} style={{ color: "var(--accent-cyan)" }} />
                     <span>Uploading: {uploadProgress.percent}%</span>
                   </div>
@@ -367,7 +367,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                   style={{
                     width: "100%",
                     height: "8px",
-                    background: "rgba(255, 255, 255, 0.1)",
+                    background: "#e2e8f0",
                     borderRadius: "var(--radius-full)",
                     overflow: "hidden",
                     marginBottom: "8px",
@@ -453,10 +453,10 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                         zIndex: 60,
                         maxHeight: "220px",
                         overflowY: "auto",
-                        background: "var(--bg-surface-elevated, #12192e)",
-                        border: "1px solid var(--border-subtle, rgba(255, 255, 255, 0.12))",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
                         borderRadius: "10px",
-                        boxShadow: "0 10px 25px rgba(0, 0, 0, 0.6)",
+                        boxShadow: "0 14px 30px rgba(15, 23, 42, 0.14)",
                         padding: "6px",
                       }}
                     >
@@ -510,7 +510,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
                                 transition: "background 0.15s ease",
                               }}
                               onMouseEnter={(e) => {
-                                if (!isSelected) e.currentTarget.style.background = "rgba(255, 255, 255, 0.06)";
+                                if (!isSelected) e.currentTarget.style.background = "#edf2ff";
                               }}
                               onMouseLeave={(e) => {
                                 if (!isSelected) e.currentTarget.style.background = "transparent";

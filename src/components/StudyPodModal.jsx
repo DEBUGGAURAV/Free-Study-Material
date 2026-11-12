@@ -270,7 +270,7 @@ export default function StudyPodModal({
       }}
     >
       <div
-        className="modal-content"
+        className="modal-content dark-modal-surface"
         style={{
           width: "96vw",
           maxWidth: "1280px",

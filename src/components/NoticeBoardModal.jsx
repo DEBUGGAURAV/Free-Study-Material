@@ -242,8 +242,8 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
           {showCreateForm && canManageNotices && (
             <div
               style={{
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid var(--border-highlight)",
+                background: "#f8faff",
+                border: "1px solid #cbd5e1",
                 borderRadius: "var(--radius-md)",
                 padding: "18px",
                 marginBottom: "20px",
@@ -400,8 +400,8 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                     height: "40px",
                     borderRadius: "10px",
                     fontSize: "0.86rem",
-                    background: "rgba(255, 255, 255, 0.04)",
-                    borderColor: searchQuery ? "var(--accent-cyan)" : "var(--border-subtle)",
+                    background: "#ffffff",
+                    borderColor: searchQuery ? "var(--accent-cyan)" : "#cbd5e1",
                   }}
                 />
                 {searchQuery && (
@@ -414,7 +414,7 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                       right: "10px",
                       top: "50%",
                       transform: "translateY(-50%)",
-                      background: "rgba(255, 255, 255, 0.1)",
+                      background: "#e2e8f0",
                       border: "none",
                       borderRadius: "50%",
                       width: "22px",
@@ -422,7 +422,7 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      color: "var(--text-muted)",
+                      color: "#334155",
                       cursor: "pointer",
                     }}
                   >
@@ -441,10 +441,10 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                     borderRadius: "8px",
                     fontSize: "0.78rem",
                     fontWeight: 600,
-                    border: "none",
+                    border: "1px solid #cbd5e1",
                     cursor: "pointer",
-                    background: filterMode === "all" ? "var(--accent-cyan)" : "rgba(255, 255, 255, 0.06)",
-                    color: filterMode === "all" ? "#0f172a" : "var(--text-muted)",
+                    background: filterMode === "all" ? "#087c70" : "#f1f5f9",
+                    color: filterMode === "all" ? "#ffffff" : "#475569",
                     transition: "all 0.15s ease",
                   }}
                 >
@@ -459,10 +459,10 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                       borderRadius: "8px",
                       fontSize: "0.78rem",
                       fontWeight: 600,
-                      border: "none",
+                      border: "1px solid #cbd5e1",
                       cursor: "pointer",
-                      background: filterMode === "pinned" ? "#6366f1" : "rgba(255, 255, 255, 0.06)",
-                      color: filterMode === "pinned" ? "#fff" : "var(--text-muted)",
+                      background: filterMode === "pinned" ? "#4361ee" : "#f1f5f9",
+                      color: filterMode === "pinned" ? "#ffffff" : "#475569",
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
@@ -498,8 +498,8 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                   <div
                     key={n.id}
                     style={{
-                      background: n.isPinned ? "rgba(99, 102, 241, 0.08)" : "rgba(255, 255, 255, 0.03)",
-                      border: n.isPinned ? "1px solid rgba(99, 102, 241, 0.35)" : "1px solid var(--border-subtle)",
+                      background: n.isPinned ? "#eef2ff" : "#f8faff",
+                      border: n.isPinned ? "1px solid #c7d2fe" : "1px solid #e2e8f0",
                       borderRadius: "var(--radius-md)",
                       padding: "16px 18px",
                       transition: "all 0.2s ease",
@@ -516,8 +516,8 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                                 fontWeight: 700,
                                 padding: "2px 8px",
                                 borderRadius: "var(--radius-full)",
-                                background: "rgba(99, 102, 241, 0.2)",
-                                color: "#a5b4fc",
+                                background: "#e0e7ff",
+                                color: "#3730a3",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
@@ -526,7 +526,7 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                               <Pin size={10} /> PINNED
                             </span>
                           )}
-                          <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                          <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
                             {n.title}
                           </h4>
                         </div>
@@ -539,11 +539,11 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
 
                           {/* Retention / Expiry Info */}
                           {n.retentionDays === -1 ? (
-                            <span style={{ color: "#34d399", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <span style={{ color: "#059669", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
                               <Sparkles size={11} /> Never Expires
                             </span>
                           ) : n.expiresAt ? (
-                            <span style={{ color: isExpiring ? "#f87171" : "var(--text-dim)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <span style={{ color: isExpiring ? "#dc2626" : "var(--text-dim)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
                               <Clock size={11} /> Auto-removes: {new Date(n.expiresAt).toLocaleDateString()}
                             </span>
                           ) : null}

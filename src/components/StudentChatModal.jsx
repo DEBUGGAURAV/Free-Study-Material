@@ -2043,7 +2043,7 @@ export default function StudentChatModal({
 
   return (
     <div
-      className="scm-overlay"
+      className="scm-overlay dark-modal-surface"
       onClick={onClose}
     >
       <style>{`

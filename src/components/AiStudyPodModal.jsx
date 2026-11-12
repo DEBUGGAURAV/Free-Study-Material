@@ -481,6 +481,7 @@ export default function AiStudyPodModal({
       onClick={onClose}
     >
       <div
+        className="dark-modal-surface"
         style={{
           width: "100%",
           maxWidth: "760px",

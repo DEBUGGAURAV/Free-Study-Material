@@ -1272,8 +1272,8 @@ export default function AuthModal({
         {/* Modal Header */}
         <div className="modal-header">
           {showPostRegPasskeyPrompt ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#fff", fontSize: "0.95rem" }}>
-              <Fingerprint size={18} color="#38bdf8" />
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#1d2b42", fontSize: "0.95rem" }}>
+              <Fingerprint size={18} color="#3552c5" />
               <span>Biometric Passkey Setup</span>
             </div>
           ) : isMaintenanceMode ? (

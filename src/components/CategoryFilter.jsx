@@ -58,7 +58,7 @@ export default function CategoryFilter({
       </div>
 
       {/* Year / Level Quick Bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderBottom: "1px solid rgba(255, 255, 255, 0.05)", overflowX: "auto" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 700, paddingRight: "4px", flexShrink: 0 }}>
           <Calendar size={13} />
           <span>Year / Level:</span>
@@ -109,7 +109,7 @@ export default function CategoryFilter({
             <div
               style={{
                 display: "flex",
-                background: "rgba(255, 255, 255, 0.04)",
+                background: "#f1f5f9",
                 border: "1px solid var(--border-subtle)",
                 borderRadius: "var(--radius-sm)",
                 padding: "2px",
@@ -152,9 +152,9 @@ export default function CategoryFilter({
               type="button"
               onClick={onOpenCircleSearch}
               style={{
-                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(99, 102, 241, 0.22))",
-                border: "1px solid rgba(56, 189, 248, 0.45)",
-                color: "#38bdf8",
+                background: "linear-gradient(135deg, #eff6ff, #eef2ff)",
+                border: "1px solid #bae6fd",
+                color: "#0369a1",
                 borderRadius: "var(--radius-sm)",
                 padding: "4px 10px",
                 fontSize: "0.76rem",
@@ -168,13 +168,13 @@ export default function CategoryFilter({
               }}
               title="Circle to Search: Ask question or upload diagram to solve with Gemini AI"
             >
-              <GeminiIcon size={14} withRing ringColor="#38bdf8" color="#38bdf8" />
+              <GeminiIcon size={14} withRing ringColor="#0284c7" color="#0284c7" />
               <span>Circle Search</span>
             </button>
           )}
 
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", fontWeight: 600 }}>
-            Showing <span style={{ color: "#fff" }}>{totalCount}</span> notes
+            Showing <span style={{ color: "var(--text-main)", fontWeight: 800 }}>{totalCount}</span> notes
           </div>
         </div>
       </div>

@@ -743,6 +743,7 @@ export default function CircleSearchModal({
       onClick={onClose}
     >
       <div
+        className="dark-modal-surface"
         style={{
           width: "100%",
           maxWidth: "800px",

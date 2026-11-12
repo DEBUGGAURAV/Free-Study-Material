@@ -544,9 +544,9 @@ export default function Navbar({
               onClick={handleToggleWebPush}
               disabled={pushBusy}
               style={{
-                borderColor: pushStatus.subscribed ? "rgba(52, 211, 153, 0.45)" : "rgba(56, 189, 248, 0.4)",
-                color: pushStatus.subscribed ? "#34d399" : "#38bdf8",
-                background: pushStatus.subscribed ? "rgba(16, 185, 129, 0.14)" : "rgba(56, 189, 248, 0.1)",
+                borderColor: pushStatus.subscribed ? "#a7f3d0" : "#bfdbfe",
+                color: pushStatus.subscribed ? "#065f46" : "#1d4ed8",
+                background: pushStatus.subscribed ? "#d1fae5" : "#eff6ff",
               }}
               title={pushStatus.subscribed ? "Web Push Alerts Active (Click to mute)" : "Get instant browser notifications for new PYQs, notes & notices"}
             >

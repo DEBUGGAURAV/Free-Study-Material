@@ -514,6 +514,7 @@ export default function CampusAirdropModal({
       }}
     >
       <div
+        className="dark-modal-surface"
         style={{
           width: "100%",
           maxWidth: "480px",

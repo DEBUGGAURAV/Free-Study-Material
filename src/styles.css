@@ -1943,8 +1943,8 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .form-input, .form-select, .form-textarea {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
   border-radius: var(--radius-md);
   padding: 11px 14px;
   font-size: 0.9rem;
@@ -1954,17 +1954,22 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   transition: all 0.2s ease;
 }
 
+.form-input::placeholder, .form-textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: var(--accent-indigo);
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
 }
 
 select option,
 .form-input option,
 .form-select option {
-  background: #0f172a !important;
-  color: #ffffff !important;
+  background: #ffffff !important;
+  color: #172338 !important;
   padding: 8px 12px;
 }
 
@@ -3618,4 +3623,71 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; }
+}
+
+/* ==========================================================================
+   DARK MODAL SCOPE OVERRIDES (Prevents Light :root variables inside dark studio/feature modals)
+   ========================================================================== */
+.dark-modal-surface,
+.admin-modal-container,
+.help-center-modal-content {
+  --bg-primary: #060913;
+  --bg-surface: #0f172a;
+  --bg-surface-elevated: #1e293b;
+  --bg-glass-card: rgba(15, 23, 42, 0.85);
+  --border-subtle: rgba(148, 163, 184, 0.24);
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-dim: #94a3b8;
+  color: #f8fafc;
+}
+
+.dark-modal-surface .form-input,
+.dark-modal-surface .form-select,
+.dark-modal-surface .form-textarea,
+.admin-modal-container .form-input,
+.admin-modal-container .form-select,
+.admin-modal-container .form-textarea {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #f8fafc;
+  color-scheme: dark;
+}
+
+.dark-modal-surface .form-input::placeholder,
+.dark-modal-surface .form-textarea::placeholder,
+.admin-modal-container .form-input::placeholder,
+.admin-modal-container .form-textarea::placeholder {
+  color: #94a3b8;
+}
+
+.dark-modal-surface .form-input:focus,
+.dark-modal-surface .form-select:focus,
+.dark-modal-surface .form-textarea:focus,
+.admin-modal-container .form-input:focus,
+.admin-modal-container .form-select:focus,
+.admin-modal-container .form-textarea:focus {
+  background: rgba(15, 23, 42, 0.98);
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+.dark-modal-surface select option,
+.admin-modal-container select option {
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.dark-modal-surface .btn-secondary,
+.admin-modal-container .btn-secondary {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.dark-modal-surface .btn-secondary:hover,
+.admin-modal-container .btn-secondary:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: #38bdf8;
+  color: #ffffff;
 }
