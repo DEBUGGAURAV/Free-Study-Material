@@ -480,7 +480,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
-        className="modal-content"
+        className="modal-content help-center-modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: "680px",
@@ -1024,7 +1024,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         className="form-input"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        style={{ cursor: "pointer" }}
+                        style={{ cursor: "pointer", width: "100%", color: "#f8fafc", colorScheme: "dark" }}
                       >
                         <option value="general">General Support</option>
                         <option value="missing_notes">📚 Request Missing Notes</option>
@@ -1045,6 +1045,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
                         required={category === "block_appeal"}
+                        style={{ width: "100%" }}
                       />
                     </div>
                   </div>
@@ -1076,17 +1077,26 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       {category === "block_appeal" ? "Block Appeal Details & Reason *" : "Your Question / Details *"}
                     </label>
                     <textarea
-                      className="form-input"
-                      rows={4}
+                      className="form-input help-textarea-noscroll"
+                      rows={5}
                       placeholder={
                         category === "block_appeal"
                           ? "Provide your Incident ID (e.g. FSM-SEC-XXXXXX), registered email/mobile number, and a brief description of the incident. Administrators will review the telemetry and unblock your account."
                           : "Type your question or requirement clearly here. Our admin team will review and answer you directly."
                       }
                       value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
+                      onChange={(e) => {
+                        setQuestion(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = `${Math.max(126, e.target.scrollHeight)}px`;
+                      }}
                       required
-                      style={{ resize: "vertical" }}
+                      style={{
+                        width: "100%",
+                        resize: "none",
+                        overflow: "hidden",
+                        minHeight: "126px",
+                      }}
                     />
                   </div>
 
