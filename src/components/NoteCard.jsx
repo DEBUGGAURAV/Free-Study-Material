@@ -414,7 +414,7 @@ export default function NoteCard({
           </div>
           <div className="note-specs-item specs-divider">
             <span className="note-specs-label">File Size</span>
-            <span className="note-specs-val" style={{ color: "var(--accent-cyan)" }}>
+            <span className="note-specs-val" style={{ color: "#087c70" }}>
               {formattedSize}
             </span>
           </div>

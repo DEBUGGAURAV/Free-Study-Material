@@ -1549,12 +1549,13 @@ export default function App() {
         {/* Notice Board Ticker Bar (if notices exist) */}
         {notices.length > 0 && (
           <div
+            className="notice-ticker"
             style={{
-              margin: "16px 0 16px",
-              background: "rgba(6, 182, 212, 0.08)",
-              border: "1px solid rgba(6, 182, 212, 0.25)",
-              borderRadius: "var(--radius-md)",
-              padding: "10px 18px",
+              margin: "10px 0 10px",
+              background: "linear-gradient(110deg, #edf6ff, #eaf7f4)",
+              border: "1px solid #bdd7e5",
+              borderRadius: "14px",
+              padding: "9px 16px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -1566,16 +1567,16 @@ export default function App() {
             onClick={() => setIsNoticeBoardOpen(true)}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px", overflow: "hidden" }}>
-              <Bell size={16} style={{ color: "var(--accent-cyan)", flexShrink: 0 }} />
-              <span style={{ fontSize: "0.82rem", color: "#fff", fontWeight: 600 }}>
+              <Bell size={16} style={{ color: "#087c70", flexShrink: 0 }} />
+              <span style={{ fontSize: "0.82rem", color: "#1d2b42", fontWeight: 750 }}>
                 Latest Notice:
               </span>
-              <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <span style={{ fontSize: "0.82rem", color: "#43546b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {notices[0].title}
               </span>
             </div>
 
-            <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 700, flexShrink: 0 }}>
+            <span style={{ fontSize: "0.75rem", color: "#3552c5", fontWeight: 750, flexShrink: 0 }}>
               View Notice Board &rarr;
             </span>
           </div>
@@ -1896,8 +1897,8 @@ export default function App() {
                   background: "linear-gradient(120deg, #f0faf8, #f2f6ff)",
                   border: "1px solid #d5e7e8",
                   borderRadius: "16px",
-                  padding: "14px 18px",
-                  margin: "0 0 20px 0",
+                  padding: "10px 16px",
+                  margin: "0 0 10px 0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -2046,7 +2047,7 @@ export default function App() {
                   <div style={{ border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", overflow: "hidden", background: "var(--bg-glass-card)" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
                       <thead>
-                        <tr style={{ background: "rgba(255, 255, 255, 0.03)", color: "var(--text-dim)", textAlign: "left" }}>
+                        <tr style={{ background: "#f8faff", color: "var(--text-dim)", textAlign: "left" }}>
                           <th style={{ padding: "12px 16px" }}>Material Title & Subject</th>
                           <th style={{ padding: "12px 16px" }}>Program & Branch</th>
                           <th style={{ padding: "12px 16px" }}>File Size</th>
@@ -2056,10 +2057,10 @@ export default function App() {
                       </thead>
                       <tbody>
                         {displayedNotes.map((note) => (
-                          <tr key={note.id} style={{ borderTop: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                            <td style={{ padding: "12px 16px", color: "#fff", fontWeight: 600 }}>
+                          <tr key={note.id} style={{ borderTop: "1px solid var(--border-subtle)" }}>
+                            <td style={{ padding: "12px 16px", color: "var(--text-main)", fontWeight: 600 }}>
                               <div>{note.title}</div>
-                              <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", fontWeight: 400 }}>{note.subject}</div>
+                              <div style={{ fontSize: "0.75rem", color: "#087c70", fontWeight: 500 }}>{note.subject}</div>
                             </td>
                             <td style={{ padding: "12px 16px" }}>
                               <span className="tech-pill branch">{note.branch}</span> {note.course || "B.Tech"} • {note.year || note.semester || "All"}
