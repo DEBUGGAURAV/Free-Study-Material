@@ -376,8 +376,8 @@ export default function AdminModal({
       } else if (activeTab === "students") {
         loadStudents(studentPage, studentSearch);
       } else if (activeTab === "hardware") {
-        loadHardwareInfo();
-        const hwTimer = setInterval(loadHardwareInfo, 3000);
+        loadHardwareInfo(true, true);
+        const hwTimer = setInterval(() => loadHardwareInfo(false, false), 3000);
         return () => clearInterval(hwTimer);
       } else if (activeTab === "software") {
         loadSoftwareInfo();
@@ -427,15 +427,15 @@ export default function AdminModal({
     } catch {}
   };
 
-  const loadHardwareInfo = async () => {
+  const loadHardwareInfo = async (forceRefresh = false, showLoading = true) => {
     try {
-      setHardwareLoading(true);
-      const res = await api.getHardwareSpecs();
+      if (showLoading) setHardwareLoading(true);
+      const res = await api.getHardwareSpecs(forceRefresh === true);
       if (res?.hardware) setHardwareInfo(res.hardware);
     } catch (err) {
       console.warn("[ADMIN] Hardware specs load error:", err.message);
     } finally {
-      setHardwareLoading(false);
+      if (showLoading) setHardwareLoading(false);
     }
   };
 
@@ -2711,7 +2711,7 @@ export default function AdminModal({
                 loadStats();
                 if (activeTab === "notes") onRefreshNotes?.();
                 if (activeTab === "students") loadStudents();
-                if (activeTab === "hardware") loadHardwareInfo();
+                if (activeTab === "hardware") loadHardwareInfo(true);
                 if (activeTab === "software") loadSoftwareInfo();
                 if (activeTab === "pipeline") loadUploadPipelines();
                 if (activeTab === "performance") { loadCdnStats(); loadCdnFiles(); }

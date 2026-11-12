@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle } from "lucide-react";
+import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle, Wifi } from "lucide-react";
 import { api } from "../../../api";
 import { BACKEND_CLUSTER_URLS } from "../../../config/clientConfig";
 
@@ -192,7 +192,7 @@ export default function TabHardware(props) {
               LIVE STREAMING (3s Auto-Sync)
             </div>
           </div>
-          <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "4px 0 0" }}>
+          <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: "4px 0 0" }}>
             Real-time live requests (ON / OFF), individual server ON/OFF switches, live student user distribution, and physical CPU/RAM allocation.
           </p>
         </div>
@@ -209,13 +209,13 @@ export default function TabHardware(props) {
             <span>{cleaningUp ? "Sweeping SSD Buffers..." : "🧹 Clean SSD & Temp Buffers"}</span>
           </button>
           <button
-            onClick={loadHardwareInfo}
+            onClick={() => loadHardwareInfo?.(true)}
             className="btn-primary"
             disabled={hardwareLoading}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 14px" }}
           >
             <RefreshCw size={14} className={hardwareLoading ? "spinner" : ""} />
-            <span>Refresh Specs</span>
+            <span>{hardwareLoading ? "Probing Backends..." : "Probe Speed & Specs"}</span>
           </button>
         </div>
       </div>
@@ -260,13 +260,13 @@ export default function TabHardware(props) {
               <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.95rem", letterSpacing: "0.3px" }}>
                 Live Request Traffic Telemetry (ON / OFF)
               </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+              <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
                 Cloudflare Edge &amp; Node.js Real-time HTTP Traffic Analyzer
               </div>
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <span style={{ fontSize: "0.74rem", color: "var(--text-dim)" }}>Throughput:</span>
+            <span style={{ fontSize: "0.74rem", color: "#94a3b8" }}>Throughput:</span>
             <span style={{ background: "rgba(99, 102, 241, 0.15)", border: "1px solid rgba(99, 102, 241, 0.3)", color: "#a5b4fc", padding: "2px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700 }}>
               ⚡ {requests.rps || 12.4} Req/Sec
             </span>
@@ -277,7 +277,7 @@ export default function TabHardware(props) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px" }}>
           {/* Card 1: Total Requests */}
           <div style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "10px", padding: "12px 14px" }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
+            <div style={{ fontSize: "0.7rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
               Total Requests
             </div>
             <div style={{ fontSize: "1.45rem", fontWeight: 900, color: "#ffffff" }}>
@@ -354,297 +354,401 @@ export default function TabHardware(props) {
       {/* ========================================================================= */}
       {/* ⚠️ SECTION 2: FAILOVER ROUTING & USER REDIRECTION STATUS */}
       {/* ========================================================================= */}
-      <div style={{
-        background: "rgba(245, 158, 11, 0.08)",
-        border: "1px solid rgba(245, 158, 11, 0.4)",
-        borderRadius: "var(--radius-lg)",
-        padding: "16px 20px",
-        marginBottom: "20px",
-      }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+      {(() => {
+        const activeNodesCount = nodes.filter((n) => n.isEnabled !== false && n.isHealthy !== false && n.status !== "SUSPENDED").length;
+        const allHealthy = activeNodesCount === nodes.filter((n) => n.url).length && activeNodesCount > 0;
+        return (
           <div style={{
-            width: "36px",
-            height: "36px",
-            borderRadius: "10px",
-            background: "rgba(245, 158, 11, 0.2)",
-            color: "#fbbf24",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            marginTop: "2px"
+            background: allHealthy ? "rgba(16, 185, 129, 0.07)" : "rgba(245, 158, 11, 0.08)",
+            border: allHealthy ? "1px solid rgba(16, 185, 129, 0.35)" : "1px solid rgba(245, 158, 11, 0.4)",
+            borderRadius: "var(--radius-lg)",
+            padding: "16px 20px",
+            marginBottom: "20px",
           }}>
-            <ShieldAlert size={20} />
-          </div>
-          <div style={{ flex: 1, minWidth: "260px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-              <span style={{ fontWeight: 800, color: "#fbbf24", fontSize: "0.95rem" }}>
-                ⚠️ Cluster Failover &amp; Automatic Traffic Redirection Engine
-              </span>
-              <span style={{
-                background: "rgba(239, 68, 68, 0.2)",
-                border: "1px solid rgba(239, 68, 68, 0.5)",
-                color: "#fca5a5",
-                padding: "1px 8px",
-                borderRadius: "12px",
-                fontSize: "0.68rem",
-                fontWeight: 700
+            <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flexWrap: "wrap" }}>
+              <div style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: allHealthy ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                color: allHealthy ? "#34d399" : "#fbbf24",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+                marginTop: "2px"
               }}>
-                HTTP 503 SUSPENDED
-              </span>
-            </div>
-
-            <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", fontSize: "0.8rem" }}>
-              {/* Reason Why Backend 1 is Inactive */}
-              <div style={{ background: "rgba(0, 0, 0, 0.25)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
-                <div style={{ color: "#f87171", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <AlertTriangle size={14} />
-                  <span>Why is Backend #1 Inactive or Suspended?</span>
-                </div>
-                <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
-                  <strong>{failoverSummary.backend1DownReason}</strong>. Render free tier monthly quota limit reached on host.
-                </div>
+                {allHealthy ? <CheckCircle size={20} /> : <ShieldAlert size={20} />}
               </div>
-
-              {/* Where Student Traffic is Redirected */}
-              <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
-                <div style={{ color: "#34d399", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <CheckCircle size={14} />
-                  <span>Where is Student Traffic Redirected?</span>
+              <div style={{ flex: 1, minWidth: "260px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 800, color: allHealthy ? "#34d399" : "#fbbf24", fontSize: "0.95rem" }}>
+                    {allHealthy ? "✅ Cluster Healthy & Active Traffic Load Balancer" : "⚠️ Cluster Failover & Automatic Traffic Redirection Engine"}
+                  </span>
+                  <span style={{
+                    background: allHealthy ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                    border: allHealthy ? "1px solid rgba(16, 185, 129, 0.45)" : "1px solid rgba(239, 68, 68, 0.5)",
+                    color: allHealthy ? "#6ee7b7" : "#fca5a5",
+                    padding: "1px 8px",
+                    borderRadius: "12px",
+                    fontSize: "0.68rem",
+                    fontWeight: 700
+                  }}>
+                    {allHealthy ? `${activeNodesCount}/${nodes.length} NODES ONLINE` : failoverSummary.backend1Status || "FAILOVER ACTIVE"}
+                  </span>
                 </div>
-                <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
-                  Cloudflare Edge Load Balancer automatically balances active students across:
-                  <div style={{ color: "#34d399", fontWeight: 800, marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <ArrowRight size={14} />
-                    <span>{failoverSummary.usersRoutedTo}</span>
+
+                <div style={{ marginTop: "10px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px", fontSize: "0.8rem" }}>
+                  {!allHealthy && (
+                    <div style={{ background: "rgba(0, 0, 0, 0.25)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.05)" }}>
+                      <div style={{ color: "#f87171", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <AlertTriangle size={14} />
+                        <span>Node Status Notice</span>
+                      </div>
+                      <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
+                        <strong>{failoverSummary.backend1DownReason}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
+                    <div style={{ color: "#34d399", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <CheckCircle size={14} />
+                      <span>Active Traffic Distribution</span>
+                    </div>
+                    <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
+                      Cloudflare Edge Load Balancer automatically balances active students across:
+                      <div style={{ color: "#34d399", fontWeight: 800, marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <ArrowRight size={14} />
+                        <span>{failoverSummary.usersRoutedTo}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                <div style={{ marginTop: "10px", fontSize: "0.74rem", color: "#94a3b8", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ color: "#38bdf8", fontWeight: 700 }}>⚡ 3 ➔ 2 ➔ 1 Cascade Auto-Failover:</span>
+                  <span>{failoverSummary.userImpact || "0% dropped requests with sub-millisecond failover."}</span>
+                </div>
               </div>
             </div>
-
-            <div style={{ marginTop: "10px", fontSize: "0.74rem", color: "#94a3b8", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-              <span style={{ color: "#38bdf8", fontWeight: 700 }}>⚡ 3 ➔ 2 ➔ 1 Cascade Auto-Failover:</span>
-              <span>All requests to suspended nodes are instantly redirected with <strong>0% dropped requests</strong> and 0ms user disruption.</span>
-            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
-      {/* 🌐 SECTION 3: 3-BACKEND CLUSTER LIVE NODE MATRIX & ON/OFF SWITCHES */}
+      {/* 🌐 SECTION 3: 3-BACKEND CLUSTER LIVE USERS, SPEED & HARDWARE MATRIX */}
       {/* ========================================================================= */}
       <div style={{ marginBottom: "22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-          <h4 style={{ fontSize: "0.92rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-            <Server size={18} style={{ color: "var(--accent-cyan)" }} />
-            <span>3-Backend Cluster Live Node Matrix &amp; Switch Controls</span>
+          <h4 style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+            <Server size={18} style={{ color: "#38bdf8" }} />
+            <span>Each Backend: Live Users, Connection Speed &amp; Hardware Details</span>
           </h4>
-          <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
-            Cloudflare Pages Edge Intelligent Load Balancer
+          <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+            Real-Time Per-Node Live Probe • Auto-Sync Every 3s
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(310px, 1fr))", gap: "14px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: "14px" }}>
           {nodes.map((node) => {
             const isSuspended = node.status === "SUSPENDED" || node.httpCode === 503;
+            const isOffline = node.status === "OFFLINE" || node.status === "UNCONFIGURED";
             const isEnabled = node.isEnabled !== false;
-            const isHealthy = isEnabled && !isSuspended && node.isHealthy !== false;
+            const isHealthy = isEnabled && !isSuspended && !isOffline && node.isHealthy !== false;
+            const hw = node.hardware || null;
 
             const badgeBg = !isEnabled
               ? "rgba(148, 163, 184, 0.15)"
-              : isSuspended
+              : isSuspended || isOffline
               ? "rgba(239, 68, 68, 0.15)"
               : "rgba(16, 185, 129, 0.15)";
-            const badgeBorder = !isEnabled
-              ? "rgba(148, 163, 184, 0.4)"
-              : isSuspended
-              ? "rgba(239, 68, 68, 0.4)"
-              : "rgba(16, 185, 129, 0.4)";
-            const badgeColor = !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : "#34d399";
+            const badgeColor = !isEnabled ? "#94a3b8" : isSuspended || isOffline ? "#f87171" : "#34d399";
+
+            const latencyVal = Number(node.latencyMs || 0);
+            const latencyColor = !isHealthy
+              ? "#f87171"
+              : latencyVal <= 120
+              ? "#34d399"
+              : latencyVal <= 350
+              ? "#fbbf24"
+              : "#f87171";
+
+            const cpuPct = Math.min(100, Math.max(0, Number(hw?.cpuUsagePercent ?? 0)));
+            const ramPct = Math.min(100, Math.max(0, Number(hw?.ramUsagePercent ?? 0)));
+            const cpuBarColor = cpuPct > 80 ? "#ef4444" : cpuPct > 55 ? "#f59e0b" : "#10b981";
+            const ramBarColor = ramPct > 85 ? "#ef4444" : ramPct > 65 ? "#f59e0b" : "#38bdf8";
 
             return (
               <div
                 key={node.id}
                 style={{
-                  background: isHealthy ? "rgba(16, 185, 129, 0.04)" : "rgba(15, 23, 42, 0.4)",
-                  border: isHealthy ? "1px solid rgba(16, 185, 129, 0.35)" : !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid var(--border-subtle)",
+                  background: isHealthy
+                    ? "linear-gradient(180deg, rgba(16, 185, 129, 0.06) 0%, rgba(15, 23, 42, 0.72) 100%)"
+                    : "rgba(15, 23, 42, 0.55)",
+                  border: isHealthy
+                    ? "1px solid rgba(16, 185, 129, 0.35)"
+                    : !isEnabled || isSuspended
+                    ? "1px solid rgba(239, 68, 68, 0.35)"
+                    : "1px solid rgba(148, 163, 184, 0.2)",
                   borderRadius: "var(--radius-lg)",
                   padding: "16px",
                   position: "relative",
-                  boxShadow: isHealthy ? "0 0 15px rgba(16, 185, 129, 0.1)" : "none"
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  boxShadow: isHealthy ? "0 6px 24px rgba(16, 185, 129, 0.1)" : "none",
                 }}
               >
                 {/* Header with ON/OFF Switch */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
                     <div style={{
-                      width: "30px",
-                      height: "30px",
+                      width: "32px",
+                      height: "32px",
                       borderRadius: "8px",
                       background: badgeBg,
                       color: badgeColor,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center"
+                      justifyContent: "center",
+                      flexShrink: 0,
                     }}>
                       <Server size={17} />
                     </div>
-                    <div>
-                      <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.88rem" }}>{node.name}</div>
-                      <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={node.url}>
-                        {node.url.replace("https://", "")}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, color: "#fff", fontSize: "0.88rem" }}>{node.name}</span>
+                        {node.isCurrentResponder && (
+                          <span style={{
+                            fontSize: "0.6rem",
+                            fontWeight: 800,
+                            padding: "1px 6px",
+                            borderRadius: "999px",
+                            background: "rgba(56, 189, 248, 0.18)",
+                            border: "1px solid rgba(56, 189, 248, 0.4)",
+                            color: "#38bdf8",
+                          }}>
+                            HOST
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: "#94a3b8", maxWidth: "185px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={node.url}>
+                        {(node.url || "Not configured").replace(/^https?:\/\//, "")}
                       </div>
                     </div>
                   </div>
 
-                  {/* 🔘 Interactive Server ON / OFF Switch */}
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <button
-                      type="button"
-                      disabled={togglingNodeId === node.id}
-                      onClick={() => handleToggleNode(node.id, !isEnabled)}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "5px 10px",
-                        borderRadius: "20px",
-                        border: isEnabled ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
-                        background: isEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
-                        color: isEnabled ? "#34d399" : "#fca5a5",
-                        fontWeight: 800,
-                        fontSize: "0.72rem",
-                        cursor: togglingNodeId === node.id ? "wait" : "pointer",
-                        transition: "all 0.2s ease",
-                        boxShadow: isEnabled ? "0 0 8px rgba(16, 185, 129, 0.25)" : "none",
-                      }}
-                      title={`Click to turn ${node.name} ${isEnabled ? "OFF" : "ON"}`}
-                    >
-                      {togglingNodeId === node.id ? (
-                        <RefreshCw size={12} className="spinner" />
-                      ) : (
-                        <Power size={12} style={{ color: isEnabled ? "#10b981" : "#ef4444" }} />
-                      )}
-                      <span>{isEnabled ? "SWITCH: ON" : "SWITCH: OFF"}</span>
-                      <span
-                        style={{
-                          width: "8px",
-                          height: "8px",
-                          borderRadius: "50%",
-                          background: isEnabled ? "#10b981" : "#ef4444",
-                          boxShadow: isEnabled ? "0 0 6px #10b981" : "0 0 6px #ef4444",
-                          display: "inline-block",
-                        }}
-                      />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 👥 Live Connected Users Metric Box */}
-                <div style={{
-                  background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.02)",
-                  border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.06)",
-                  borderRadius: "8px",
-                  padding: "8px 12px",
-                  marginBottom: "10px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{
-                      width: "24px",
-                      height: "24px",
-                      borderRadius: "6px",
-                      background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.05)",
-                      color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8",
-                      display: "flex",
+                  {/* Interactive Server ON / OFF Switch */}
+                  <button
+                    type="button"
+                    disabled={togglingNodeId === node.id || !node.url}
+                    onClick={() => handleToggleNode(node.id, !isEnabled)}
+                    style={{
+                      display: "inline-flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                    }}>
-                      <Users size={14} />
-                    </div>
-                    <div>
-                      <div style={{ fontSize: "0.66rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                        Active Students
-                      </div>
-                      <div style={{ fontSize: "1.05rem", fontWeight: 900, color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8" }}>
-                        {node.activeUsers || 0} <span style={{ fontSize: "0.72rem", fontWeight: 600 }}>Connected</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <span style={{
-                    fontSize: "0.68rem",
-                    fontWeight: 700,
-                    color: (node.activeUsers || 0) > 0 ? "#34d399" : isSuspended ? "#f87171" : "#94a3b8",
-                    background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                    padding: "3px 8px",
-                    borderRadius: "10px",
-                    border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
-                  }}>
-                    {node.trafficShare || ((node.activeUsers || 0) > 0 ? "Active Traffic Share" : "0% (Bypassed)")}
-                  </span>
+                      gap: "5px",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      border: isEnabled ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
+                      background: isEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      color: isEnabled ? "#34d399" : "#fca5a5",
+                      fontWeight: 800,
+                      fontSize: "0.7rem",
+                      cursor: togglingNodeId === node.id ? "wait" : "pointer",
+                      transition: "all 0.2s ease",
+                      flexShrink: 0,
+                    }}
+                    title={`Click to turn ${node.name} ${isEnabled ? "OFF" : "ON"}`}
+                  >
+                    {togglingNodeId === node.id ? (
+                      <RefreshCw size={11} className="spinner" />
+                    ) : (
+                      <Power size={11} style={{ color: isEnabled ? "#10b981" : "#ef4444" }} />
+                    )}
+                    <span>{isEnabled ? "ON" : "OFF"}</span>
+                  </button>
                 </div>
 
-                {/* Node Detailed Specs */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "10px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Role:</span>
-                    <span style={{ color: isHealthy ? "#34d399" : "#94a3b8", fontWeight: 700 }}>
-                      {node.role}
+                {/* 1. LIVE USERS, SOCKETS & TRAFFIC */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: "8px",
+                }}>
+                  <div style={{
+                    background: (node.activeUsers || 0) > 0 ? "rgba(16, 185, 129, 0.08)" : "rgba(255, 255, 255, 0.03)",
+                    border: (node.activeUsers || 0) > 0 ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255, 255, 255, 0.07)",
+                    borderRadius: "8px",
+                    padding: "8px 10px",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.64rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 700 }}>
+                      <Users size={12} style={{ color: "#c084fc" }} />
+                      <span>Live Users</span>
+                    </div>
+                    <div style={{ fontSize: "1.05rem", fontWeight: 900, color: (node.activeUsers || 0) > 0 ? "#34d399" : "#94a3b8", marginTop: "2px" }}>
+                      {node.activeUsers || 0} <span style={{ fontSize: "0.68rem", fontWeight: 600 }}>online</span>
+                    </div>
+                    <div style={{ fontSize: "0.66rem", color: "#94a3b8", marginTop: "2px" }}>
+                      Sockets: <strong style={{ color: "#38bdf8" }}>{node.activeSockets || 0}</strong> • {node.rps || 0} req/s
+                    </div>
+                  </div>
+
+                  {/* 2. CONNECTION SPEED & PING */}
+                  <div style={{
+                    background: isHealthy ? "rgba(56, 189, 248, 0.07)" : "rgba(255, 255, 255, 0.03)",
+                    border: isHealthy ? "1px solid rgba(56, 189, 248, 0.28)" : "1px solid rgba(255, 255, 255, 0.07)",
+                    borderRadius: "8px",
+                    padding: "8px 10px",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "0.64rem", color: "#94a3b8", textTransform: "uppercase", fontWeight: 700 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <Wifi size={12} style={{ color: "#38bdf8" }} />
+                        <span>Conn. Speed</span>
+                      </span>
+                      <span style={{ color: latencyColor, fontWeight: 800 }}>
+                        {isHealthy ? `${latencyVal} ms` : `HTTP ${node.httpCode || 0}`}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "1rem", fontWeight: 900, color: isHealthy ? "#38bdf8" : "#f87171", marginTop: "2px" }}>
+                      {isHealthy
+                        ? node.connectionSpeedMbps >= 1
+                          ? `${node.connectionSpeedMbps} Mbps`
+                          : `${node.throughputKBps || 0} KB/s`
+                        : "0 Mbps"}
+                    </div>
+                    <div style={{ fontSize: "0.66rem", color: latencyColor, fontWeight: 700, marginTop: "2px" }}>
+                      {node.speedGrade || (isHealthy ? "Online" : node.status)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* HTTP Status, Traffic Share & Requests ON/OFF */}
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "5px",
+                  fontSize: "0.74rem",
+                  background: "rgba(0, 0, 0, 0.22)",
+                  padding: "8px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                    <span style={{ color: "#94a3b8" }}>Health &amp; Speed Link:</span>
+                    <span style={{ color: !isEnabled ? "#94a3b8" : isSuspended || isOffline ? "#f87171" : "#34d399", fontWeight: 700 }}>
+                      {!isEnabled
+                        ? "DISABLED (OFF)"
+                        : `HTTP ${node.httpCode || 0} • ${isHealthy ? `${(node.throughputKBps || 0).toLocaleString()} KB/s` : node.status}`}
                     </span>
                   </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>HTTP Health Status:</span>
-                    <span style={{ color: !isEnabled ? "#94a3b8" : isSuspended ? "#f87171" : "#34d399", fontWeight: 700 }}>
-                      {!isEnabled ? "DISABLED (OFF)" : `HTTP ${node.httpCode || (isSuspended ? 503 : 200)} ${isSuspended ? "(Suspended)" : "(OK)"}`}
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                    <span style={{ color: "#94a3b8" }}>Load Share:</span>
+                    <span style={{ color: (node.activeUsers || 0) > 0 ? "#34d399" : isSuspended ? "#f87171" : "#cbd5e1", fontWeight: 700, textAlign: "right" }}>
+                      {node.trafficShare || "Probing..."}
                     </span>
                   </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Latency:</span>
-                    <span style={{ color: "#e2e8f0", fontWeight: 600 }}>{node.latencyMs ? `${node.latencyMs} ms` : "60 ms"}</span>
-                  </div>
-
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Traffic Load Share:</span>
-                    <span style={{ color: (node.activeUsers || 0) > 0 ? "#34d399" : isSuspended ? "#f87171" : "#94a3b8", fontWeight: 800 }}>
-                      {node.trafficShare || (!isEnabled ? "0% (Manually Switched OFF)" : isSuspended ? "0% (Suspended)" : "Active")}
-                    </span>
-                  </div>
-
-                  {/* Node Requests ON vs OFF */}
-                  <div style={{ display: "flex", justifyContent: "space-between", background: "rgba(0, 0, 0, 0.2)", padding: "6px 8px", borderRadius: "6px", marginTop: "2px" }}>
-                    <span style={{ color: "var(--text-dim)" }}>Node Requests:</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
+                    <span style={{ color: "#94a3b8" }}>Node Requests:</span>
                     <span style={{ fontWeight: 700 }}>
                       <span style={{ color: "#34d399" }}>ON: {node.requestsOn || 0}</span>
-                      <span style={{ color: "#94a3b8", margin: "0 4px" }}>|</span>
+                      <span style={{ color: "#64748b", margin: "0 4px" }}>|</span>
                       <span style={{ color: "#f87171" }}>OFF: {node.requestsOff || 0}</span>
                     </span>
                   </div>
+                </div>
 
-                  {/* Redirection Notice if Suspended or Disabled */}
-                  {(!isEnabled || isSuspended) && (
-                    <div style={{
-                      background: !isEnabled ? "rgba(239, 68, 68, 0.08)" : "rgba(245, 158, 11, 0.08)",
-                      border: !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
-                      padding: "6px 8px",
-                      borderRadius: "6px",
-                      marginTop: "3px",
-                      fontSize: "0.72rem",
-                      color: !isEnabled ? "#fca5a5" : "#fde68a",
-                      lineHeight: "1.35",
-                    }}>
-                      <strong>Reason:</strong> {!isEnabled ? "Server manually switched OFF by Administrator." : (node.downReason || "Render 5GB Monthly Bandwidth Cap Exceeded.")}<br />
-                      <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
-                        <CornerDownRight size={12} />
-                        Traffic Redirected to: {node.trafficRedirection || "Backend #2 & Backend #3 (50% / 50% Active Split)"}
+                {/* 3. PER-BACKEND HARDWARE DETAILS (CPU, RAM, OS, Uptime) */}
+                {hw ? (
+                  <div style={{
+                    background: "rgba(15, 23, 42, 0.72)",
+                    border: "1px solid rgba(99, 102, 241, 0.25)",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    fontSize: "0.73rem",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", paddingBottom: "5px" }}>
+                      <span style={{ color: "#a5b4fc", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.72rem" }}>
+                        <Cpu size={13} />
+                        <span>Hardware Telemetry</span>
+                      </span>
+                      <span style={{ color: "#34d399", fontWeight: 700, fontSize: "0.68rem" }}>
+                        ⏱ {hw.uptimeFormatted || "Active"}
                       </span>
                     </div>
-                  )}
-                </div>
+
+                    {/* CPU Row + Bar */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                        <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }} title={hw.cpuModel}>
+                          CPU: <strong style={{ color: "#e2e8f0" }}>{hw.cpuCores} Cores</strong> ({hw.cpuModel})
+                        </span>
+                        <span style={{ color: cpuBarColor, fontWeight: 800 }}>{cpuPct}%</span>
+                      </div>
+                      <div style={{ width: "100%", height: "5px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
+                        <div style={{ width: `${cpuPct}%`, height: "100%", background: cpuBarColor, borderRadius: "99px", transition: "width 0.3s ease" }} />
+                      </div>
+                    </div>
+
+                    {/* RAM Row + Bar */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                        <span style={{ color: "#94a3b8" }}>
+                          RAM: <strong style={{ color: "#e2e8f0" }}>{hw.rssMB} MB</strong> RSS / {hw.ramUsedGB} / {hw.ramTotalGB} GB
+                        </span>
+                        <span style={{ color: ramBarColor, fontWeight: 800 }}>{ramPct}%</span>
+                      </div>
+                      <div style={{ width: "100%", height: "5px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
+                        <div style={{ width: `${ramPct}%`, height: "100%", background: ramBarColor, borderRadius: "99px", transition: "width 0.3s ease" }} />
+                      </div>
+                    </div>
+
+                    {/* OS / Heap / Region / PID compact grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px", fontSize: "0.69rem", color: "#94a3b8", paddingTop: "2px" }}>
+                      <div>Heap: <strong style={{ color: "#38bdf8" }}>{hw.heapUsedMB}/{hw.heapTotalMB} MB</strong></div>
+                      <div>Region: <strong style={{ color: "#e2e8f0" }}>{node.region || "singapore"}</strong></div>
+                      <div>OS: <strong style={{ color: "#e2e8f0" }}>{hw.osPlatform} ({hw.arch})</strong></div>
+                      <div>Node: <strong style={{ color: "#cbd5e1" }}>{hw.nodeVersion} • #{hw.pid}</strong></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: "rgba(15, 23, 42, 0.55)",
+                    border: "1px dashed rgba(148, 163, 184, 0.25)",
+                    borderRadius: "10px",
+                    padding: "10px 12px",
+                    fontSize: "0.72rem",
+                    color: "#94a3b8",
+                  }}>
+                    {isSuspended || !isEnabled || isOffline
+                      ? "Hardware telemetry unavailable while this backend is offline / suspended."
+                      : "Waiting for remote backend hardware telemetry (deploy updated build on this node for full CPU/RAM/User stats)."}
+                  </div>
+                )}
+
+                {/* Redirection Notice if Suspended, Offline or Disabled */}
+                {(!isEnabled || isSuspended || isOffline) && (
+                  <div style={{
+                    background: !isEnabled ? "rgba(239, 68, 68, 0.08)" : "rgba(245, 158, 11, 0.08)",
+                    border: !isEnabled ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(245, 158, 11, 0.3)",
+                    padding: "7px 10px",
+                    borderRadius: "6px",
+                    fontSize: "0.71rem",
+                    color: !isEnabled ? "#fca5a5" : "#fde68a",
+                    lineHeight: "1.35",
+                  }}>
+                    <strong>Reason:</strong> {!isEnabled ? "Server manually switched OFF by Administrator." : (node.downReason || "Node unreachable / quota exceeded.")}<br />
+                    {node.trafficRedirection && (
+                      <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px", marginTop: "3px" }}>
+                        <CornerDownRight size={12} />
+                        Traffic Redirected to: {node.trafficRedirection}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -663,23 +767,23 @@ export default function TabHardware(props) {
             </div>
             <div>
               <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>CPU &amp; Architecture</div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Compute Core Engine</div>
+              <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Compute Core Engine</div>
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Processor Model:</span>
+              <span style={{ color: "#94a3b8" }}>Processor Model:</span>
               <span style={{ color: "#fff", fontWeight: 600, maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={hardwareInfo?.cpu?.model}>
                 {hardwareInfo?.cpu?.model || "Intel / AMD x64"}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Active Cores:</span>
+              <span style={{ color: "#94a3b8" }}>Active Cores:</span>
               <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>{hardwareInfo?.cpu?.cores || 4} Cores</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>CPU Utilization:</span>
+              <span style={{ color: "#94a3b8" }}>CPU Utilization:</span>
               <span style={{
                 color: (hardwareInfo?.cpu?.usagePercent || 12) > 80 ? "#f43f5e" : (hardwareInfo?.cpu?.usagePercent || 12) > 50 ? "#fbbf24" : "#34d399",
                 fontWeight: 800,
@@ -699,11 +803,11 @@ export default function TabHardware(props) {
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Clock Speed:</span>
+              <span style={{ color: "#94a3b8" }}>Clock Speed:</span>
               <span style={{ color: "#fff", fontWeight: 600 }}>{hardwareInfo?.cpu?.speedMHz ? `${hardwareInfo.cpu.speedMHz} MHz` : "Dynamic"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-dim)" }}>Architecture:</span>
+              <span style={{ color: "#94a3b8" }}>Architecture:</span>
               <span style={{ color: "#34d399", fontWeight: 700 }}>{hardwareInfo?.cpu?.architecture || "x64"}</span>
             </div>
           </div>
@@ -717,25 +821,25 @@ export default function TabHardware(props) {
             </div>
             <div>
               <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>RAM Memory Pool</div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Dynamic Memory Allocation</div>
+              <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Dynamic Memory Allocation</div>
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Total Physical RAM:</span>
+              <span style={{ color: "#94a3b8" }}>Total Physical RAM:</span>
               <span style={{ color: "#fff", fontWeight: 600 }}>{hardwareInfo?.memory?.totalGB ? `${hardwareInfo.memory.totalGB} GB` : "Available"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Allocated / Used RAM:</span>
+              <span style={{ color: "#94a3b8" }}>Allocated / Used RAM:</span>
               <span style={{ color: "#fbbf24", fontWeight: 700 }}>{hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} GB (${hardwareInfo.memory.usagePercent}%)` : "Active"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Free Memory:</span>
+              <span style={{ color: "#94a3b8" }}>Free Memory:</span>
               <span style={{ color: "#34d399", fontWeight: 700 }}>{hardwareInfo?.memory?.freeGB ? `${hardwareInfo.memory.freeGB} GB` : "Normal"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-dim)" }}>Process RSS / Heap:</span>
+              <span style={{ color: "#94a3b8" }}>Process RSS / Heap:</span>
               <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>
                 {hardwareInfo?.v8ProcessMemory?.rssMB ? `${hardwareInfo.v8ProcessMemory.rssMB} MB RSS / ${hardwareInfo.v8ProcessMemory.heapUsedMB} MB Heap` : "Active"}
               </span>
@@ -751,25 +855,25 @@ export default function TabHardware(props) {
             </div>
             <div>
               <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Operating System &amp; Uptime</div>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Host Environment Specs</div>
+              <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>Host Environment Specs</div>
             </div>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>OS Platform:</span>
+              <span style={{ color: "#94a3b8" }}>OS Platform:</span>
               <span style={{ color: "#fff", fontWeight: 600 }}>{hardwareInfo?.os?.platform || "Windows / Linux"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>System Hostname:</span>
+              <span style={{ color: "#94a3b8" }}>System Hostname:</span>
               <span style={{ color: "var(--accent-cyan)", fontWeight: 600 }}>{hardwareInfo?.os?.hostname || "localhost"}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-              <span style={{ color: "var(--text-dim)" }}>Server Process PID:</span>
+              <span style={{ color: "#94a3b8" }}>Server Process PID:</span>
               <span style={{ color: "#fbbf24", fontWeight: 700 }}>PID #{hardwareInfo?.process?.pid || 5000}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "var(--text-dim)" }}>Server Uptime:</span>
+              <span style={{ color: "#94a3b8" }}>Server Uptime:</span>
               <span style={{
                 color: "#34d399",
                 fontWeight: 700,

@@ -1119,7 +1119,8 @@ export const api = {
     return res;
   },
   getSystemMemory: () => request("/admin/system/memory"),
-  getHardwareSpecs: () => request("/admin/system/hardware"),
+  getHardwareSpecs: (refresh = false) =>
+    request(refresh ? "/admin/system/hardware?refresh=1" : "/admin/system/hardware"),
   toggleClusterNode: (nodeId, isEnabled) =>
     request("/admin/cluster/toggle-node", {
       method: "POST",

@@ -55,11 +55,15 @@ try {
 } catch {}
 
 let getClusterTelemetry = null;
+let getLocalNodeTelemetry = null;
+let probeClusterNodes = null;
 let toggleClusterNode = null;
 let syncNodeState = null;
 try {
   const clusterService = require("../services/clusterTelemetryService");
   getClusterTelemetry = clusterService.getClusterTelemetry;
+  getLocalNodeTelemetry = clusterService.getLocalNodeTelemetry;
+  probeClusterNodes = clusterService.probeClusterNodes;
   toggleClusterNode = clusterService.toggleClusterNode;
   syncNodeState = clusterService.syncNodeState;
 } catch {}
@@ -2251,8 +2255,17 @@ router.post("/cdn/purge/:noteId", authenticateToken, checkAdminOrPermission(["ma
 const fs = require("fs");
 const path = require("path");
 
-router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"), (req, res) => {
+router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
+    if (typeof probeClusterNodes === "function") {
+      try {
+        await probeClusterNodes({
+          authHeader: req.headers.authorization || "",
+          force: req.query?.refresh === "1",
+        });
+      } catch (_) {}
+    }
+
     const cpus = os.cpus() || [];
     const cpuModel = cpus[0]?.model || "Unknown Processor";
     const cpuSpeedMHz = cpus[0]?.speed || 0;
@@ -4305,10 +4318,42 @@ router.post("/cluster/sync-node-state", (req, res) => {
  * GET /api/admin/cluster/telemetry
  * Returns live cluster telemetry and active users per node
  */
-router.get("/cluster/telemetry", authenticateToken, requireAdmin, (req, res) => {
+router.get("/cluster/telemetry", authenticateToken, requireAdmin, async (req, res) => {
   try {
+    if (typeof probeClusterNodes === "function") {
+      try {
+        await probeClusterNodes({
+          authHeader: req.headers.authorization || "",
+          force: req.query?.refresh === "1",
+        });
+      } catch (_) {}
+    }
     const telemetry = typeof getClusterTelemetry === "function" ? getClusterTelemetry() : null;
     return res.json({ success: true, clusterTelemetry: telemetry });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/admin/cluster/node-telemetry
+ * Returns THIS backend node's own live users, sockets, RPS, and hardware details.
+ * Authorized via X-Cluster-Sync secret OR Admin JWT.
+ */
+router.get("/cluster/node-telemetry", (req, res, next) => {
+  if (isValidClusterSyncRequest(req)) {
+    return next();
+  }
+  return authenticateToken(req, res, () => checkAdminOrPermission("all")(req, res, next));
+}, (req, res) => {
+  try {
+    const telemetry = typeof getLocalNodeTelemetry === "function" ? getLocalNodeTelemetry() : null;
+    const includeBench = req.query?.benchmark === "1";
+    return res.json({
+      success: true,
+      telemetry,
+      ...(includeBench ? { benchmarkPad: "0".repeat(32768) } : {}),
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
