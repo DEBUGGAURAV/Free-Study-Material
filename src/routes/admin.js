@@ -3846,6 +3846,11 @@ let techSettings = {
   dedupMaxVarianceMB: 3, // Default 3 MB (3,145,728 Bytes)
   dedupMaxVarianceBytes: 3 * 1024 * 1024, // 3,145,728 Bytes
 
+  // 🧠 Zero-Demerit Trio (Mermaid Diagrams, Native Web Push, 1-Click Shareable Card)
+  enableAiMermaid: true,
+  enableWebPush: true,
+  enableShareRevisionCard: true,
+
   updatedAt: new Date().toISOString(),
 };
 
@@ -3907,6 +3912,11 @@ router.get("/tech-controls", authenticateToken, checkAdminOrPermission("all"), a
 
     const memoryCacheInfo = notesRouter && notesRouter.getMemoryCacheInfo ? notesRouter.getMemoryCacheInfo() : { itemCount: 0, maxItems: 50, totalMB: "0.00", items: [] };
     const dbWritesSaved = notesRouter && notesRouter.getDbWritesPreventedCount ? notesRouter.getDbWritesPreventedCount() : 0;
+    let webPushStats = { subscriberCount: 0, vapidReady: false, totalSent: 0 };
+    try {
+      const { getPushStats } = require("../services/webPushService");
+      webPushStats = await getPushStats();
+    } catch (_) {}
 
     return res.json({
       success: true,
@@ -3914,7 +3924,8 @@ router.get("/tech-controls", authenticateToken, checkAdminOrPermission("all"), a
       telemetry: {
         memoryCache: memoryCacheInfo,
         dbWritesSaved,
-        activeTechnologiesCount: 15,
+        webPush: webPushStats,
+        activeTechnologiesCount: 18,
         serverUptimeSeconds: Math.floor(process.uptime()),
         edgeWorkerEndpoint: (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim(),
       },
@@ -4069,6 +4080,9 @@ router.get("/tech-flags", (req, res) => {
       allowNotesDownload: downloadAllowed,
       downloadSchedule: techSettings.downloadSchedule || "manual",
       downloadDisabledReason: techSettings.downloadDisabledReason || "Notes download has been temporarily paused by the administrator. You can still read notes in the Online Reader.",
+      enableAiMermaid: techSettings.enableAiMermaid !== false,
+      enableWebPush: techSettings.enableWebPush !== false,
+      enableShareRevisionCard: techSettings.enableShareRevisionCard !== false,
     },
   });
 });

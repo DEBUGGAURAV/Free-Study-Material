@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Sparkles, Layers, Search, RotateCw, Clock, X, ChevronLeft, ChevronRight, CheckCircle2, Copy, Check, FileText, Shuffle, Filter, ShieldCheck, Eye, MessageSquare, Send, Trash2, Pencil, Image as ImageIcon } from "lucide-react";
+import { Sparkles, Layers, Search, RotateCw, Clock, X, ChevronLeft, ChevronRight, CheckCircle2, Copy, Check, FileText, Shuffle, Filter, ShieldCheck, Eye, MessageSquare, Send, Trash2, Pencil, Image as ImageIcon, Share2 } from "lucide-react";
 import { api } from "../api";
 import {
   getStudySessionHistory,
@@ -7,6 +7,8 @@ import {
 } from "../utils/studentSessionHistory";
 import MathMarkdown from "./MathMarkdown";
 import GeminiIcon from "./GeminiIcon";
+import { useTechFlags } from "../utils/techFlagsStore";
+import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
 
 export default function AiStudyPodModal({
   isOpen,
@@ -33,6 +35,28 @@ export default function AiStudyPodModal({
   const [currentNoteId, setCurrentNoteId] = useState(noteId);
   const [currentTitle, setCurrentTitle] = useState(noteTitle);
   const [currentSubject, setCurrentSubject] = useState(subject);
+  const { enableShareRevisionCard } = useTechFlags();
+  const [sharingCardId, setSharingCardId] = useState(null);
+
+  const handleExportRevisionCard = async (keyId, textContent, subtitleLabel) => {
+    if (!textContent || sharingCardId) return;
+    setSharingCardId(keyId);
+    try {
+      const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev";
+      const shareUrl = currentNoteId ? `${origin}/?note=${encodeURIComponent(currentNoteId)}` : origin;
+      await shareOrDownloadRevisionCard({
+        title: currentTitle || "Study Cheat-Sheet",
+        subtitle: subtitleLabel || currentSubject || "AI Revision Card",
+        badgeText: "⚡ 1-CLICK REVISION CARD",
+        content: textContent,
+        shareUrl,
+      });
+    } catch (err) {
+      alert(`Could not generate Revision Card: ${err?.message || "Canvas error"}`);
+    } finally {
+      setSharingCardId(null);
+    }
+  };
 
   // 💬 AI Conversation Chatbox State (Opens FIRST by default!)
   const [chatMessages, setChatMessages] = useState([]);
@@ -1005,29 +1029,55 @@ export default function AiStudyPodModal({
                               : `✨ AI Tutor (${msg.provider || "Cloud AI"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
                           </span>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(msg.content);
-                              setCopiedChatId(msg.id);
-                              setTimeout(() => setCopiedChatId(null), 1800);
-                            }}
-                            style={{
-                              background: "rgba(255, 255, 255, 0.07)",
-                              border: "1px solid rgba(255, 255, 255, 0.14)",
-                              color: copiedChatId === msg.id ? "#34d399" : "#cbd5e1",
-                              borderRadius: "7px",
-                              padding: "3px 8px",
-                              fontSize: "0.71rem",
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            {copiedChatId === msg.id ? <Check size={11} /> : <Copy size={11} />}
-                            <span>{copiedChatId === msg.id ? "Copied" : "Copy"}</span>
-                          </button>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                            {enableShareRevisionCard && (
+                              <button
+                                type="button"
+                                onClick={() => handleExportRevisionCard(`chat_${msg.id}`, msg.content, currentSubject || "AI Answer Cheat-Sheet")}
+                                disabled={sharingCardId === `chat_${msg.id}`}
+                                title="Download or Share HD Revision Card (PNG)"
+                                style={{
+                                  background: "rgba(56, 189, 248, 0.14)",
+                                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                                  color: "#38bdf8",
+                                  borderRadius: "7px",
+                                  padding: "3px 8px",
+                                  fontSize: "0.71rem",
+                                  fontWeight: 700,
+                                  cursor: "pointer",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <Share2 size={11} />
+                                <span>{sharingCardId === `chat_${msg.id}` ? "Saving..." : "Card PNG"}</span>
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(msg.content);
+                                setCopiedChatId(msg.id);
+                                setTimeout(() => setCopiedChatId(null), 1800);
+                              }}
+                              style={{
+                                background: "rgba(255, 255, 255, 0.07)",
+                                border: "1px solid rgba(255, 255, 255, 0.14)",
+                                color: copiedChatId === msg.id ? "#34d399" : "#cbd5e1",
+                                borderRadius: "7px",
+                                padding: "3px 8px",
+                                fontSize: "0.71rem",
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              {copiedChatId === msg.id ? <Check size={11} /> : <Copy size={11} />}
+                              <span>{copiedChatId === msg.id ? "Copied" : "Copy"}</span>
+                            </button>
+                          </div>
                         </div>
 
                         <MathMarkdown content={msg.content} />
@@ -1545,6 +1595,30 @@ export default function AiStudyPodModal({
                     >
                       <Eye size={13} />
                       <span>Read PDF</span>
+                    </button>
+                  )}
+                  {summary && enableShareRevisionCard && (
+                    <button
+                      type="button"
+                      onClick={() => handleExportRevisionCard("summary_card", displaySummary || summary, `${currentSubject || "Exam"} • Quick Revision Card`)}
+                      disabled={sharingCardId === "summary_card"}
+                      style={{
+                        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(56, 189, 248, 0.22))",
+                        border: "1px solid rgba(52, 211, 153, 0.45)",
+                        color: "#6ee7b7",
+                        borderRadius: "8px",
+                        padding: "6px 12px",
+                        fontSize: "0.74rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                      title="Export 1-Click Shareable HD Cheat-Sheet Card (PNG with QR)"
+                    >
+                      <Share2 size={13} />
+                      <span>{sharingCardId === "summary_card" ? "Generating PNG..." : "Share Card (PNG)"}</span>
                     </button>
                   )}
                   {summary && (

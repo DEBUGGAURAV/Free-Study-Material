@@ -63,6 +63,7 @@ const chatRoutes = require("./routes/chat");
 const helpRoutes = require("./routes/help");
 const securityRoutes = require("./routes/security");
 const examRoutes = require("./routes/exam");
+const pushRoutes = require("./routes/push");
 const aiRoutes = require("./routes/ai");
 const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
 const { startAntiSleepService, getAntiSleepTelemetry } = require("./services/antiSleepService");
@@ -307,6 +308,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/help", helpRoutes);
 app.use("/api/security", securityRoutes);
 app.use("/api/exam", examRoutes);
+app.use("/api/push", pushRoutes);
 app.use("/api/ai", express.json({ limit: "15mb" }), aiRoutes);
 
 // Serve Client Web Application (Vite Dist) & Public Assets with proper PWA Cache-Control

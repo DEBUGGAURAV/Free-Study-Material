@@ -512,6 +512,18 @@ async function runUploadTask(task) {
             importedCount: 1,
           });
         } catch {}
+
+        try {
+          const { broadcastPushNotification } = require("./webPushService");
+          const cleanNoteTitle = String(meta?.title || originalName || "New Study Note").trim();
+          const subjLabel = meta?.subject ? `${meta.subject} • ` : "";
+          broadcastPushNotification({
+            title: `🔥 New Note Uploaded: ${cleanNoteTitle}`,
+            body: `${subjLabel}Tap to read & study offline now.`,
+            url: `/?note=${encodeURIComponent(noteId)}`,
+            tag: `fsm-note-${noteId}`,
+          }).catch(() => {});
+        } catch {}
       }
 
       // 💽 Pre-seed Server NVMe SSD Disk Cache so newly uploaded note streams instantly (Tier 3)

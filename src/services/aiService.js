@@ -214,6 +214,18 @@ function getApiKey(provider) {
   return "";
 }
 
+function isAiMermaidEnabled() {
+  try {
+    const adminRoutes = require("../routes/admin");
+    if (adminRoutes && typeof adminRoutes.getTechSettings === "function") {
+      return adminRoutes.getTechSettings()?.enableAiMermaid !== false;
+    }
+  } catch (_) {}
+  return true;
+}
+
+const MERMAID_INSTRUCTION = `\n- Whenever explaining a process, architecture, hierarchy, protocol layers, or comparison (e.g. OSI Model, Deadlock, DBMS Normalization, Trees), include ONE clean fenced \`\`\`mermaid diagram block (using \`graph TD\` or \`mindmap\` with simple alphanumeric IDs like A["Concept"] --> B["Detail"], no HTML tags) so it renders visually.`;
+
 /**
  * Query Groq Cloud LPU API (Llama 3.1 8B Instant)
  */
@@ -227,12 +239,13 @@ async function queryGroq(query, context, options = {}) {
     throw new Error("GROQ_RPM_LIMIT");
   }
 
+  const mermaidNote = isAiMermaidEnabled() ? MERMAID_INSTRUCTION : "";
   const systemPrompt = `You are a brilliant, supportive AI academic tutor for college students studying engineering, science, and higher education. 
 Answer the student's question accurately, concisely, and clearly based primarily on their provided lecture notes context.
 Formatting rules:
 - Highlight key definitions and formulas in **bold** or standard LaTeX notation like \\(x = \\pm 2\\).
 - If page numbers or excerpts exist in the context, cite them clearly (e.g. "📌 [Reference: Page X]").
-- Use clean bullet points for steps, algorithms, or properties.
+- Use clean bullet points for steps, algorithms, or properties.${mermaidNote}
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
   const userContent = context && context.trim()
@@ -407,7 +420,7 @@ Answer clearly and accurately based on the provided notes context.
 - If page numbers or excerpts exist in the context, cite them prominently (e.g. "📌 [From Page X]").
 - Highlight key definitions and formulas in **bold** or LaTeX format \\(x = \\pm 2\\).
 - Use clean bullet points for steps or derivations.
-- Keep the explanation high-yield, structured, and complete.
+- Keep the explanation high-yield, structured, and complete.${isAiMermaidEnabled() ? MERMAID_INSTRUCTION : ""}
 - Add a 1-line "💡 Exam Takeaway" at the end.`;
 
   const promptText = options.rawPrompt

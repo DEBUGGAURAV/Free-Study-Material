@@ -125,6 +125,17 @@ router.post("/", authenticateToken, requireAdmin, async (req, res) => {
     await upsertNoticeInCache(newNotice);
     ramCache.delete("active_notices_board");
 
+    // 3. Fire-and-forget Native Web Push alert to subscribed students
+    try {
+      const { broadcastPushNotification } = require("../services/webPushService");
+      broadcastPushNotification({
+        title: `📢 ${newNotice.title}`,
+        body: String(newNotice.content || "New notice posted on the board.").slice(0, 160),
+        url: "/?open=notices",
+        tag: `fsm-notice-${newNotice.id}`,
+      }).catch(() => {});
+    } catch (_) {}
+
     return res.status(201).json({
       success: true,
       message: "Notice published & cached on Turso Edge successfully!",

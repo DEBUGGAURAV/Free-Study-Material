@@ -16,6 +16,7 @@ import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./con
 import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
 import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
 import { clearStudySessionHistory } from "./utils/studentSessionHistory";
+import { broadcastTechFlagsUpdate } from "./utils/techFlagsStore";
 import {
   hydrateNotesCatalogFromIdb,
   saveNotesCatalogToIdb,
@@ -489,6 +490,7 @@ export default function App() {
           if (res.flags.downloadDisabledReason) {
             setDownloadDisabledReason(res.flags.downloadDisabledReason);
           }
+          broadcastTechFlagsUpdate(res.flags);
 
           if (res.flags.maintenanceMode) {
             setMaintenanceState({

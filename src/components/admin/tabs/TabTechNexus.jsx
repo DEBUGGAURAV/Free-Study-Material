@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { X, Trash2, Search, Clock, Save, RefreshCw, Database, Cpu, HardDrive, Globe, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles, FileText, Sliders, Layers, Scissors, RotateCcw, QrCode, Camera } from "lucide-react";
+import { X, Trash2, Search, Clock, Save, RefreshCw, Database, Cpu, HardDrive, Globe, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles, FileText, Sliders, Layers, Scissors, RotateCcw, QrCode, Camera, BellRing, Send, Brain } from "lucide-react";
 import { api } from "../../../api";
 import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
+import { broadcastTechFlagsUpdate } from "../../../utils/techFlagsStore";
 
 export default function TabTechNexus(props) {
   const {
@@ -23,6 +24,43 @@ export default function TabTechNexus(props) {
   } = props;
 
   const [sweepLoading, setSweepLoading] = useState(false);
+  const [pushTitle, setPushTitle] = useState("🔥 New Study Material Alert");
+  const [pushBody, setPushBody] = useState("Fresh PYQs & Exam Cheat-Sheets are live now. Tap to open!");
+  const [pushUrl, setPushUrl] = useState("/");
+  const [pushSending, setPushSending] = useState(false);
+
+  const handleSendPushBroadcast = async () => {
+    if (!pushTitle.trim() || !pushBody.trim()) {
+      setTechActionMsg("❌ Enter both Notification Title and Message before sending.");
+      return;
+    }
+    setPushSending(true);
+    try {
+      const res = await api.sendPushBroadcast({
+        title: pushTitle.trim(),
+        body: pushBody.trim(),
+        url: pushUrl.trim() || "/",
+        tag: "fsm-admin-manual",
+      });
+      setTechActionMsg(`🔔 ${res?.message || "Web Push broadcast dispatched!"}`);
+      if (typeof loadTechNexus === "function") loadTechNexus();
+    } catch (err) {
+      setTechActionMsg(`❌ Web Push broadcast failed: ${err?.message || "Server error"}`);
+    } finally {
+      setPushSending(false);
+      setTimeout(() => setTechActionMsg(""), 7000);
+    }
+  };
+
+  const handleCommitTechSettings = async (overrideObj) => {
+    const merged = overrideObj ? { ...techSettings, ...overrideObj } : techSettings;
+    broadcastTechFlagsUpdate({
+      enableAiMermaid: merged.enableAiMermaid !== false,
+      enableWebPush: merged.enableWebPush !== false,
+      enableShareRevisionCard: merged.enableShareRevisionCard !== false,
+    });
+    return saveTechSettings(overrideObj);
+  };
 
   const handleVarianceMbChange = (val) => {
     const num = parseFloat(val);
@@ -186,6 +224,9 @@ export default function TabTechNexus(props) {
                         enableSmartDeduplication: true,
                         dedupMaxVarianceMB: 3,
                         dedupMaxVarianceBytes: 3 * 1024 * 1024,
+                        enableAiMermaid: true,
+                        enableWebPush: true,
+                        enableShareRevisionCard: true,
                       };
 
                       setTechSettings((prev) => ({
@@ -193,7 +234,7 @@ export default function TabTechNexus(props) {
                         ...autoProfile,
                       }));
 
-                      saveTechSettings(autoProfile);
+                      handleCommitTechSettings(autoProfile);
                       setTechActionMsg(`🤖 100% Automatic Adaptive Mode Enabled! All technologies will dynamically scale down on old/budget phones and scale up on fast PCs.`);
                     }}
                     style={{
@@ -227,7 +268,7 @@ export default function TabTechNexus(props) {
                   </button>
 
                   <button
-                    onClick={() => saveTechSettings()}
+                    onClick={() => handleCommitTechSettings()}
                     disabled={techSaving}
                     className="btn-primary"
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", padding: "8px 16px" }}
@@ -1467,6 +1508,249 @@ export default function TabTechNexus(props) {
                 </div>
               </div>
 
+              {/* ═══════════════════════════════════════════════════════════════ */}
+              {/* 🧠 ZERO-DEMERIT TRIO: MERMAID, NATIVE WEB PUSH, SHARE PNG CARD */}
+              {/* ═══════════════════════════════════════════════════════════════ */}
+              <div
+                style={{
+                  marginBottom: "22px",
+                  padding: "18px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.72))",
+                  border: "1px solid rgba(56, 189, 248, 0.25)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "14px" }}>
+                  <div>
+                    <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#f8fafc", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>✨ Zero-Demerit Student Growth &amp; Revision Controls</span>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "2px" }}>
+                      100% Free browser-native engines (₹0 extra API/server charges) — Toggle any feature ON/OFF globally in real time.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: "14px" }}>
+                  {/* 1. 🧠 Mermaid.js Flowcharts & Mind-Maps */}
+                  <div
+                    style={{
+                      padding: "14px",
+                      borderRadius: "12px",
+                      background: "rgba(2, 6, 23, 0.55)",
+                      border: techSettings.enableAiMermaid !== false ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid rgba(148, 163, 184, 0.2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Brain size={18} color="#38bdf8" />
+                        <div>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff" }}>
+                            Mermaid AI Flowcharts &amp; Mind-Maps
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                            Interactive SVG diagrams inside AI Summary &amp; Study Chat
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCommitTechSettings({ enableAiMermaid: techSettings.enableAiMermaid === false })}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontWeight: 800,
+                          fontSize: "0.72rem",
+                          cursor: "pointer",
+                          background: techSettings.enableAiMermaid !== false ? "#10b981" : "#475569",
+                          color: "#fff",
+                        }}
+                      >
+                        {techSettings.enableAiMermaid !== false ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: "0.73rem", color: "#cbd5e1", lineHeight: 1.5, background: "rgba(15, 23, 42, 0.7)", padding: "8px 10px", borderRadius: "8px" }}>
+                      <div>• Engine: Lazy-loaded client Mermaid SVG (`securityLevel: strict`)</div>
+                      <div>• AI Prompts: {techSettings.enableAiMermaid !== false ? "Auto-generating diagrams" : "Paused (raw code fallback)"}</div>
+                      <div>• Export: Vector `.svg` download + Zoom controls built-in</div>
+                    </div>
+                  </div>
+
+                  {/* 3. 📸 1-Click Shareable Cheat-Sheet Card */}
+                  <div
+                    style={{
+                      padding: "14px",
+                      borderRadius: "12px",
+                      background: "rgba(2, 6, 23, 0.55)",
+                      border: techSettings.enableShareRevisionCard !== false ? "1px solid rgba(52, 211, 153, 0.4)" : "1px solid rgba(148, 163, 184, 0.2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <Camera size={18} color="#34d399" />
+                        <div>
+                          <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fff" }}>
+                            1-Click Shareable Revision Card (PNG)
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                            Client HTML5 Canvas export with Free Study Material QR
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCommitTechSettings({ enableShareRevisionCard: techSettings.enableShareRevisionCard === false })}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontWeight: 800,
+                          fontSize: "0.72rem",
+                          cursor: "pointer",
+                          background: techSettings.enableShareRevisionCard !== false ? "#10b981" : "#475569",
+                          color: "#fff",
+                        }}
+                      >
+                        {techSettings.enableShareRevisionCard !== false ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                    <div style={{ fontSize: "0.73rem", color: "#cbd5e1", lineHeight: 1.5, background: "rgba(15, 23, 42, 0.7)", padding: "8px 10px", borderRadius: "8px" }}>
+                      <div>• Resolution: 1080px HD PNG rendered 100% in browser</div>
+                      <div>• Locations: AI Summary, Tutor Chat &amp; PDF Highlights drawer</div>
+                      <div>• Viral Hook: Auto-embeds scannable QR link to direct note URL</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. 🔔 Native Web Push Notifications (Full-width row with Broadcast Console & Live Telemetry) */}
+                <div
+                  style={{
+                    marginTop: "14px",
+                    padding: "16px",
+                    borderRadius: "12px",
+                    background: "rgba(2, 6, 23, 0.55)",
+                    border: techSettings.enableWebPush !== false ? "1px solid rgba(139, 92, 246, 0.45)" : "1px solid rgba(148, 163, 184, 0.2)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                      <BellRing size={19} color="#a78bfa" />
+                      <div>
+                        <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#fff" }}>
+                          Native Web Push Notifications (VAPID + Service Worker)
+                        </div>
+                        <div style={{ fontSize: "0.73rem", color: "#94a3b8" }}>
+                          Auto-notifies subscribed students on new Notes, PYQs &amp; Exam Notices with zero Brevo/SMS limit.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#c4b5fd", background: "rgba(139, 92, 246, 0.14)", border: "1px solid rgba(139, 92, 246, 0.3)", padding: "4px 10px", borderRadius: "999px" }}>
+                        📱 Subscribers: {techTelemetry?.webPush?.subscriberCount ?? 0}
+                      </span>
+                      <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#34d399", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.3)", padding: "4px 10px", borderRadius: "999px" }}>
+                        🚀 Dispatched: {techTelemetry?.webPush?.totalSent ?? 0}
+                      </span>
+                      <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "4px 10px", borderRadius: "999px" }}>
+                        🔑 VAPID: {techTelemetry?.webPush?.vapidReady ? `Ready (${techTelemetry?.webPush?.vapidSource || "db"})` : "Initializing"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCommitTechSettings({ enableWebPush: techSettings.enableWebPush === false })}
+                        style={{
+                          padding: "5px 14px",
+                          borderRadius: "999px",
+                          border: "none",
+                          fontWeight: 800,
+                          fontSize: "0.74rem",
+                          cursor: "pointer",
+                          background: techSettings.enableWebPush !== false ? "#10b981" : "#475569",
+                          color: "#fff",
+                        }}
+                      >
+                        {techSettings.enableWebPush !== false ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Test / Manual Broadcast Form */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "8px", alignItems: "end" }}>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.71rem", color: "#94a3b8", marginBottom: "4px", fontWeight: 700 }}>
+                        Push Title
+                      </label>
+                      <input
+                        type="text"
+                        value={pushTitle}
+                        onChange={(e) => setPushTitle(e.target.value)}
+                        placeholder="🔥 New CS Unit-4 PYQ Uploaded"
+                        style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(15,23,42,0.85)", color: "#fff", fontSize: "0.76rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.71rem", color: "#94a3b8", marginBottom: "4px", fontWeight: 700 }}>
+                        Notification Message
+                      </label>
+                      <input
+                        type="text"
+                        value={pushBody}
+                        onChange={(e) => setPushBody(e.target.value)}
+                        placeholder="Tap to open notes & download offline"
+                        style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(15,23,42,0.85)", color: "#fff", fontSize: "0.76rem" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.71rem", color: "#94a3b8", marginBottom: "4px", fontWeight: 700 }}>
+                        Click Target URL
+                      </label>
+                      <input
+                        type="text"
+                        value={pushUrl}
+                        onChange={(e) => setPushUrl(e.target.value)}
+                        placeholder="/"
+                        style={{ width: "100%", padding: "7px 10px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.14)", background: "rgba(15,23,42,0.85)", color: "#fff", fontSize: "0.76rem" }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendPushBroadcast}
+                      disabled={pushSending || techSettings.enableWebPush === false}
+                      style={{
+                        padding: "8px 14px",
+                        borderRadius: "8px",
+                        border: "none",
+                        background: techSettings.enableWebPush === false ? "#475569" : "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                        color: "#fff",
+                        fontWeight: 800,
+                        fontSize: "0.76rem",
+                        cursor: techSettings.enableWebPush === false ? "not-allowed" : "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        height: "34px",
+                      }}
+                    >
+                      <Send size={13} />
+                      <span>{pushSending ? "Sending..." : "Send Push Broadcast"}</span>
+                    </button>
+                  </div>
+                  {techTelemetry?.webPush?.lastBroadcastAt && (
+                    <div style={{ marginTop: "8px", fontSize: "0.71rem", color: "#94a3b8" }}>
+                      Last Broadcast: <strong style={{ color: "#e2e8f0" }}>{techTelemetry.webPush.lastBroadcastTitle || "Alert"}</strong> • {new Date(techTelemetry.webPush.lastBroadcastAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Bottom Commit Action Toolbar */}
               <div
                 style={{
@@ -1492,7 +1776,7 @@ export default function TabTechNexus(props) {
 
                 <div style={{ display: "flex", gap: "10px" }}>
                   <button
-                    onClick={() => saveTechSettings()}
+                    onClick={() => handleCommitTechSettings()}
                     disabled={techSaving}
                     className="btn-primary"
                     style={{ fontSize: "0.85rem", padding: "10px 22px", display: "inline-flex", alignItems: "center", gap: "8px" }}

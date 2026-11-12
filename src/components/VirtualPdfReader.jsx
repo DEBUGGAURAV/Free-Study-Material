@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2 } from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
+import { useTechFlags } from "../utils/techFlagsStore";
+import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
 import QRCode from "qrcode";
 import { cacheNoteBuffer, getCachedNoteBuffer, findPeersForNote } from "../utils/p2pMesh";
 import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
@@ -657,6 +659,7 @@ export default function VirtualPdfReader({
 }) {
   const getActiveReaderToken = () => explicitToken || getAuthToken() || "";
   const getActiveReaderUser = () => currentUser || getCurrentUser();
+  const { enableShareRevisionCard } = useTechFlags();
 
   const isSingleNoteDisabled = note?.allowDownload === false || note?.allowDownload === "false" || note?.allowDownload === 0 || note?.allowDownload === "0";
   const isBlocked = Boolean(isDownloadBlocked || isSingleNoteDisabled);
@@ -5227,6 +5230,46 @@ export default function VirtualPdfReader({
               ))
             )}
           </div>
+
+          {annotations.length > 0 && enableShareRevisionCard && (
+            <div style={{ padding: "10px 12px", borderTop: nightMode ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)" }}>
+              <button
+                type="button"
+                onClick={async () => {
+                  const lines = annotations
+                    .slice(0, 12)
+                    .map((a) => `• [P.${a.pageNum}] ${a.text || a.noteText || "Important Bookmarked Page"}`)
+                    .join("\n");
+                  const origin = typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev";
+                  await shareOrDownloadRevisionCard({
+                    title: title || "PDF Highlights",
+                    subtitle: `${subject || "Study Notes"} • Saved Highlights Card`,
+                    badgeText: "🔖 MY HIGHLIGHTS CARD",
+                    content: lines,
+                    shareUrl: noteId ? `${origin}/?note=${encodeURIComponent(noteId)}` : origin,
+                  });
+                }}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #10b981, #0284c7)",
+                  color: "#fff",
+                  fontWeight: 800,
+                  fontSize: "0.76rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+              >
+                <Share2 size={14} />
+                <span>📸 Share Highlights Card (PNG + QR)</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 

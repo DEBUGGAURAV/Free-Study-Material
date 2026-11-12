@@ -766,3 +766,56 @@ self.addEventListener('periodicsync', (event) => {
     event.waitUntil(executeExamPrefetch());
   }
 });
+
+// 🔔 Native Web Push Notification Handler (VAPID)
+self.addEventListener('push', (event) => {
+  let payload = {
+    title: 'Free Study Material',
+    body: 'New study notes & exam updates are ready!',
+    url: '/',
+    tag: 'fsm-update',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+  };
+
+  if (event.data) {
+    try {
+      const parsed = event.data.json();
+      payload = { ...payload, ...parsed };
+    } catch {
+      payload.body = event.data.text() || payload.body;
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon || '/icon-192.png',
+      badge: payload.badge || '/icon-192.png',
+      tag: payload.tag || 'fsm-update',
+      renotify: true,
+      data: { url: payload.url || '/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification && event.notification.data && event.notification.data.url) || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          if (targetUrl && targetUrl !== '/' && 'navigate' in client) {
+            client.navigate(targetUrl).catch(() => {});
+          }
+          return client.focus();
+        }
+      }
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

@@ -1203,6 +1203,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ limit }),
     }),
+  getPushStats: () => request("/push/stats"),
+  sendPushBroadcast: (payload) =>
+    request("/push/broadcast", {
+      method: "POST",
+      body: JSON.stringify(payload || {}),
+    }),
   getPublicTechFlags: async () => {
     try {
       const res = await request("/admin/tech-flags");

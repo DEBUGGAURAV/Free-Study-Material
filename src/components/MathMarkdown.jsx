@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import MermaidDiagram from "./MermaidDiagram";
+import { useTechFlags } from "../utils/techFlagsStore";
 
 /**
  * 🧮 Render LaTeX math safely using KaTeX
@@ -125,117 +127,166 @@ function formatInlineMarkdown(text) {
 }
 
 /**
- * ⚡ MathMarkdown: Renders rich markdown + KaTeX mathematical formulas
+ * Splits raw markdown into alternating text and ```mermaid code segments.
  */
-export default function MathMarkdown({ content = "", className = "", style = {} }) {
-  const htmlContent = useMemo(() => {
-    if (!content) return "";
+export function splitMarkdownAndMermaid(rawContent = "") {
+  if (!rawContent) return [];
+  const source = String(rawContent);
+  const regex = /```mermaid\s*\n([\s\S]*?)```/gi;
+  const segments = [];
+  let lastIdx = 0;
+  let match;
 
-    const lines = String(content).split("\n");
-    const blocks = [];
-    let inList = false;
-    let listItems = [];
+  while ((match = regex.exec(source)) !== null) {
+    if (match.index > lastIdx) {
+      const textChunk = source.slice(lastIdx, match.index).trim();
+      if (textChunk) segments.push({ type: "markdown", content: textChunk });
+    }
+    const diagramCode = (match[1] || "").trim();
+    if (diagramCode) {
+      segments.push({ type: "mermaid", content: diagramCode });
+    }
+    lastIdx = match.index + match[0].length;
+  }
 
-    const flushList = () => {
-      if (inList && listItems.length > 0) {
-        blocks.push(
-          `<ul style="margin: 8px 0 14px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; list-style-type: disc;">${listItems.join("")}</ul>`
-        );
-        listItems = [];
-        inList = false;
-      }
-    };
+  if (lastIdx < source.length) {
+    const tail = source.slice(lastIdx).trim();
+    if (tail) segments.push({ type: "markdown", content: tail });
+  }
 
-    for (let i = 0; i < lines.length; i++) {
-      const rawLine = lines[i];
-      const trimmed = rawLine.trim();
+  return segments;
+}
 
-      if (!trimmed) {
-        flushList();
-        continue;
-      }
+function renderMarkdownBlockToHtml(content = "") {
+  if (!content) return "";
 
-      // 1. Headers: ###, ##, #
-      if (/^#{1,6}\s+/.test(trimmed)) {
-        flushList();
-        const level = (trimmed.match(/^#+/) || ["#"])[0].length;
-        const text = trimmed.replace(/^#+\s*/, "");
-        const fontSize = level === 1 ? "1.2rem" : level === 2 ? "1.05rem" : "0.95rem";
-        const color = level === 1 ? "#38bdf8" : level === 2 ? "#a78bfa" : "#f1f5f9";
-        blocks.push(
-          `<h${level} style="margin: 16px 0 8px 0; font-size: ${fontSize}; font-weight: 700; color: ${color}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(text)}</h${level}>`
-        );
-        continue;
-      }
+  const lines = String(content).split("\n");
+  const blocks = [];
+  let inList = false;
+  let listItems = [];
 
-      // 2. Standalone Section Header lines like "**⚡ Key Formulas & Theorems**"
-      if (/^\*\*(📌|⚡|💡|🔥|📊|📖|🎯)?\s*.*?\*\*$/.test(trimmed)) {
-        flushList();
-        const innerText = trimmed.replace(/^\*\*/, "").replace(/\*\*$/, "").trim();
-        let borderAccent = "rgba(56, 189, 248, 0.4)";
-        let bgAccent = "rgba(56, 189, 248, 0.08)";
-        let textAccent = "#38bdf8";
-
-        if (innerText.includes("⚡") || innerText.toLowerCase().includes("formula")) {
-          borderAccent = "rgba(245, 158, 11, 0.4)";
-          bgAccent = "rgba(245, 158, 11, 0.08)";
-          textAccent = "#fbbf24";
-        } else if (innerText.includes("💡") || innerText.toLowerCase().includes("takeaway")) {
-          borderAccent = "rgba(52, 211, 153, 0.4)";
-          bgAccent = "rgba(52, 211, 153, 0.08)";
-          textAccent = "#34d399";
-        } else if (innerText.includes("📌") || innerText.toLowerCase().includes("summary")) {
-          borderAccent = "rgba(139, 92, 246, 0.4)";
-          bgAccent = "rgba(139, 92, 246, 0.08)";
-          textAccent = "#c084fc";
-        }
-
-        blocks.push(
-          `<div style="margin: 18px 0 10px 0; padding: 6px 14px; background: ${bgAccent}; border-left: 3px solid ${borderAccent}; border-radius: 6px; font-weight: 800; font-size: 0.95rem; color: ${textAccent}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(innerText)}</div>`
-        );
-        continue;
-      }
-
-      // 3. Bullet points: - item, * item, • item
-      if (/^[-*•]\s+/.test(trimmed)) {
-        inList = true;
-        const text = trimmed.replace(/^[-*•]\s+/, "");
-        listItems.push(
-          `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
-        );
-        continue;
-      }
-
-      // 4. Numbered list: 1. item
-      if (/^\d+\.\s+/.test(trimmed)) {
-        inList = true;
-        const text = trimmed.replace(/^\d+\.\s+/, "");
-        listItems.push(
-          `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
-        );
-        continue;
-      }
-
-      // 5. Blockquote: > text
-      if (/^>\s+/.test(trimmed)) {
-        flushList();
-        const text = trimmed.replace(/^>\s+/, "");
-        blocks.push(
-          `<blockquote style="margin: 10px 0; padding: 8px 14px; border-left: 3px solid #6366f1; background: rgba(99, 102, 241, 0.08); border-radius: 0 8px 8px 0; color: #cbd5e1; font-style: italic;">${formatInlineMarkdown(text)}</blockquote>`
-        );
-        continue;
-      }
-
-      // 6. Normal paragraph
-      flushList();
+  const flushList = () => {
+    if (inList && listItems.length > 0) {
       blocks.push(
-        `<p style="margin: 8px 0; line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
+        `<ul style="margin: 8px 0 14px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; list-style-type: disc;">${listItems.join("")}</ul>`
       );
+      listItems = [];
+      inList = false;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmed = rawLine.trim();
+
+    if (!trimmed) {
+      flushList();
+      continue;
     }
 
+    // 1. Headers: ###, ##, #
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      flushList();
+      const level = (trimmed.match(/^#+/) || ["#"])[0].length;
+      const text = trimmed.replace(/^#+\s*/, "");
+      const fontSize = level === 1 ? "1.2rem" : level === 2 ? "1.05rem" : "0.95rem";
+      const color = level === 1 ? "#38bdf8" : level === 2 ? "#a78bfa" : "#f1f5f9";
+      blocks.push(
+        `<h${level} style="margin: 16px 0 8px 0; font-size: ${fontSize}; font-weight: 700; color: ${color}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(text)}</h${level}>`
+      );
+      continue;
+    }
+
+    // 2. Standalone Section Header lines like "**⚡ Key Formulas & Theorems**"
+    if (/^\*\*(📌|⚡|💡|🔥|📊|📖|🎯|🧠)?\s*.*?\*\*$/.test(trimmed)) {
+      flushList();
+      const innerText = trimmed.replace(/^\*\*/, "").replace(/\*\*$/, "").trim();
+      let borderAccent = "rgba(56, 189, 248, 0.4)";
+      let bgAccent = "rgba(56, 189, 248, 0.08)";
+      let textAccent = "#38bdf8";
+
+      if (innerText.includes("⚡") || innerText.toLowerCase().includes("formula")) {
+        borderAccent = "rgba(245, 158, 11, 0.4)";
+        bgAccent = "rgba(245, 158, 11, 0.08)";
+        textAccent = "#fbbf24";
+      } else if (innerText.includes("💡") || innerText.toLowerCase().includes("takeaway")) {
+        borderAccent = "rgba(52, 211, 153, 0.4)";
+        bgAccent = "rgba(52, 211, 153, 0.08)";
+        textAccent = "#34d399";
+      } else if (innerText.includes("📌") || innerText.toLowerCase().includes("summary")) {
+        borderAccent = "rgba(139, 92, 246, 0.4)";
+        bgAccent = "rgba(139, 92, 246, 0.08)";
+        textAccent = "#c084fc";
+      }
+
+      blocks.push(
+        `<div style="margin: 18px 0 10px 0; padding: 6px 14px; background: ${bgAccent}; border-left: 3px solid ${borderAccent}; border-radius: 6px; font-weight: 800; font-size: 0.95rem; color: ${textAccent}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(innerText)}</div>`
+      );
+      continue;
+    }
+
+    // 3. Bullet points: - item, * item, • item
+    if (/^[-*•]\s+/.test(trimmed)) {
+      inList = true;
+      const text = trimmed.replace(/^[-*•]\s+/, "");
+      listItems.push(
+        `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
+      );
+      continue;
+    }
+
+    // 4. Numbered list: 1. item
+    if (/^\d+\.\s+/.test(trimmed)) {
+      inList = true;
+      const text = trimmed.replace(/^\d+\.\s+/, "");
+      listItems.push(
+        `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
+      );
+      continue;
+    }
+
+    // 5. Blockquote: > text
+    if (/^>\s+/.test(trimmed)) {
+      flushList();
+      const text = trimmed.replace(/^>\s+/, "");
+      blocks.push(
+        `<blockquote style="margin: 10px 0; padding: 8px 14px; border-left: 3px solid #6366f1; background: rgba(99, 102, 241, 0.08); border-radius: 0 8px 8px 0; color: #cbd5e1; font-style: italic;">${formatInlineMarkdown(text)}</blockquote>`
+      );
+      continue;
+    }
+
+    // 6. Normal paragraph
     flushList();
-    return blocks.join("");
-  }, [content]);
+    blocks.push(
+      `<p style="margin: 8px 0; line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
+    );
+  }
+
+  flushList();
+  return blocks.join("");
+}
+
+/**
+ * ⚡ MathMarkdown: Renders rich markdown + KaTeX math + Mermaid diagrams
+ */
+export default function MathMarkdown({ content = "", className = "", style = {} }) {
+  const { enableAiMermaid } = useTechFlags();
+
+  const renderedSegments = useMemo(() => {
+    const rawParts = splitMarkdownAndMermaid(content);
+    return rawParts.map((part) => {
+      if (part.type === "mermaid") {
+        if (!enableAiMermaid) {
+          return {
+            type: "html",
+            html: `<pre style="margin:10px 0;padding:10px;border-radius:8px;background:rgba(15,23,42,0.7);color:#94a3b8;font-size:0.75rem;overflow-x:auto;">${escapeHtml(part.content)}</pre>`,
+          };
+        }
+        return { type: "mermaid", code: part.content };
+      }
+      return { type: "html", html: renderMarkdownBlockToHtml(part.content) };
+    });
+  }, [content, enableAiMermaid]);
 
   return (
     <div
@@ -245,8 +296,15 @@ export default function MathMarkdown({ content = "", className = "", style = {} 
         wordBreak: "break-word",
         ...style,
       }}
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
-    />
+    >
+      {renderedSegments.map((seg, idx) =>
+        seg.type === "mermaid" ? (
+          <MermaidDiagram key={`mmd-${idx}`} code={seg.code} />
+        ) : (
+          <div key={`md-${idx}`} dangerouslySetInnerHTML={{ __html: seg.html }} />
+        )
+      )}
+    </div>
   );
 }
 

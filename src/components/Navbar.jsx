@@ -6,6 +6,7 @@ import {
   Shield,
   LogOut,
   Bell,
+  BellRing,
   LogIn,
   Smartphone,
   Mic,
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
+import { useTechFlags } from "../utils/techFlagsStore";
+import { getWebPushStatus, subscribeWebPush, unsubscribeWebPush } from "../utils/webPushClient";
 
 export default function Navbar({
   searchTerm,
@@ -39,6 +42,35 @@ export default function Navbar({
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const searchInputRef = useRef(null);
+  const { enableWebPush } = useTechFlags();
+  const [pushStatus, setPushStatus] = useState({ supported: false, subscribed: false });
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    getWebPushStatus().then((st) => {
+      if (mounted) setPushStatus(st);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [currentUser]);
+
+  const handleToggleWebPush = async () => {
+    if (pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushStatus.subscribed) {
+        await unsubscribeWebPush();
+        setPushStatus((prev) => ({ ...prev, subscribed: false }));
+      } else {
+        await subscribeWebPush();
+        setPushStatus((prev) => ({ ...prev, subscribed: true, permission: "granted" }));
+      }
+    } catch (err) {
+      alert(`🔔 Notification Setup:\n${err?.message || "Could not update push notifications."}`);
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const [isInstalled, setIsInstalled] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -504,6 +536,24 @@ export default function Navbar({
             <HelpCircle size={14} />
             <span>Help Desk</span>
           </button>
+
+          {enableWebPush && pushStatus.supported && (
+            <button
+              type="button"
+              className="launchpad-pill"
+              onClick={handleToggleWebPush}
+              disabled={pushBusy}
+              style={{
+                borderColor: pushStatus.subscribed ? "rgba(52, 211, 153, 0.45)" : "rgba(56, 189, 248, 0.4)",
+                color: pushStatus.subscribed ? "#34d399" : "#38bdf8",
+                background: pushStatus.subscribed ? "rgba(16, 185, 129, 0.14)" : "rgba(56, 189, 248, 0.1)",
+              }}
+              title={pushStatus.subscribed ? "Web Push Alerts Active (Click to mute)" : "Get instant browser notifications for new PYQs, notes & notices"}
+            >
+              <BellRing size={14} />
+              <span>{pushBusy ? "Saving..." : pushStatus.subscribed ? "Alerts On" : "Push Alerts"}</span>
+            </button>
+          )}
 
           {!isInstalled && (
             <button

@@ -609,6 +609,18 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
     // Pull full authentic PDF OCR text from Firestore & client
     const enrichedContext = await getNoteFullContext(noteId, context);
 
+    let mermaidEnabled = true;
+    try {
+      const adminRoutes = require("./admin");
+      if (adminRoutes?.getTechSettings) {
+        mermaidEnabled = adminRoutes.getTechSettings()?.enableAiMermaid !== false;
+      }
+    } catch (_) {}
+
+    const mermaidSectionPrompt = mermaidEnabled
+      ? `\n\n### 🧠 7. Visual Architecture / Concept Flowchart (Mermaid)\nProvide ONE concise fenced \`\`\`mermaid block (\`graph TD\` or \`mindmap\`, max 8-10 nodes with simple ASCII IDs like \`A["Topic"] --> B["Subtopic"]\`, no HTML tags) summarizing how the concepts connect.`
+      : "";
+
     // 2. Cache Miss: Generate Fresh User-Friendly Executive Summary using AI Waterfall
     const prompt = `You are a distinguished university professor creating an authoritative, deeply structured, and user-friendly Executive Study Summary for college students studying "${cleanTitle}" [Subject: ${subject || "Engineering"}].
 Based on the complete lecture notes and OCR text below, write an engaging, crystal-clear, exam-oriented synthesis.
@@ -630,7 +642,7 @@ Explain the physical workflow, algorithm, or derivation steps systematically wit
 List 5 essential questions professors frequently ask in university exams along with concise, model scoring answers.
 
 ### 💡 6. Rapid Revision Cheat-Sheet
-Provide 4-5 bulleted quick-revision golden rules for students to review right before entering the exam hall.
+Provide 4-5 bulleted quick-revision golden rules for students to review right before entering the exam hall.${mermaidSectionPrompt}
 
 Context Notes & Document OCR Text:
 ${enrichedContext.slice(0, 9500) || cleanTitle}`;
