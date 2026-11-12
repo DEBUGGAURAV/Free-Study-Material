@@ -45,7 +45,7 @@ const DEFAULT_AI_SETTINGS = {
   totalQueriesToday: 0,
   failoversToday: 0,
   cachedHitsToday: 0,
-  aiSearchTopicId: Number(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || 14) || 14, // 🤖 Telegram sub-topic for student AI queries (Default: Topic 14)
+  aiSearchTopicId: Number(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || 17) || 17, // 🤖 Telegram sub-topic for student AI queries (Default: Topic 17)
   purgeAuditTopicId: null, // 🔥 Telegram sub-topic for Firebase/Turso purge logs
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
@@ -60,22 +60,23 @@ let currentAiSettings = { ...DEFAULT_AI_SETTINGS };
 let isSettingsLoaded = false;
 
 /**
- * Resolves the dedicated Telegram Topic ID for AI Search Logs (default: 14).
- * Strictly prevents AI searches from leaking into Help Active (Topic 6) or Help Closed (Topic 7).
+ * Resolves the dedicated Telegram Topic ID for AI Search Logs (default: 17).
+ * Strictly prevents AI searches from leaking into Help Active (6), Help Closed (7), or wrong topic (14).
  */
 function getAiSearchTopicId() {
   const helpActiveId = parseInt(process.env.HELP_TOPIC_ACTIVE_ID || "6", 10) || 6;
   const helpClosedId = parseInt(process.env.HELP_TOPIC_CLOSED_ID || "7", 10) || 7;
+  const blockedTopics = new Set([helpActiveId, helpClosedId, 14]);
   const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
   const savedTopic = Number(currentAiSettings.aiSearchTopicId || 0);
 
-  if (savedTopic > 0 && savedTopic !== helpActiveId && savedTopic !== helpClosedId) {
-    return savedTopic;
-  }
-  if (!isNaN(envTopic) && envTopic > 0 && envTopic !== helpActiveId && envTopic !== helpClosedId) {
+  if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     return envTopic;
   }
-  return 14;
+  if (savedTopic > 0 && !blockedTopics.has(savedTopic)) {
+    return savedTopic;
+  }
+  return 17;
 }
 
 // 1-minute rolling rate limiter window
@@ -1361,7 +1362,7 @@ async function createAiSearchForumTopic(token, chatId) {
 }
 
 /**
- * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Default Topic 14, auto-creates if needed)
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Default Topic 17, auto-creates if needed)
  */
 async function dispatchAiSearchTelegramAudit({
   user,
@@ -1436,7 +1437,7 @@ async function dispatchAiSearchTelegramAudit({
       return true;
     }
 
-    // If topic 14 (or configured topic) was deleted/missing/closed, auto-create a fresh AI Search topic and retry!
+    // If topic 17 (or configured topic) was deleted/missing/closed, auto-create a fresh AI Search topic and retry!
     const errDesc = String(data?.description || "");
     if (/thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(errDesc)) {
       console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);

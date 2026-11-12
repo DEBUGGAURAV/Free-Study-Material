@@ -136,7 +136,7 @@ services:
       - key: HELP_TOPIC_CLOSED_ID
         value: "7"
       - key: AI_SEARCH_TOPIC_ID
-        value: "14"
+        value: "17"
       - key: TURSO_HELP_DATABASE_URL
         sync: false
       - key: TURSO_HELP_AUTH_TOKEN
