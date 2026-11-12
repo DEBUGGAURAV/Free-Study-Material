@@ -91,8 +91,12 @@ function getHelpAdminChatId() {
   ).trim();
 }
 
+const dynamicHelpTopicIds = { active: null, closed: null };
+const creatingHelpTopicLocks = { active: null, closed: null };
+
 // Supergroup Topic 6: Active Support Tickets
 function getHelpActiveTopicId() {
+  if (dynamicHelpTopicIds.active) return dynamicHelpTopicIds.active;
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
   const parsed = topic ? parseInt(topic, 10) : 6;
   return !isNaN(parsed) && parsed > 0 ? parsed : 6;
@@ -100,9 +104,44 @@ function getHelpActiveTopicId() {
 
 // Supergroup Topic 7: Closed & Resolved Tickets Report
 function getHelpClosedTopicId() {
+  if (dynamicHelpTopicIds.closed) return dynamicHelpTopicIds.closed;
   const topic = process.env.HELP_TOPIC_CLOSED_ID || process.env.HELP_CLOSED_TOPIC_ID;
   const parsed = topic ? parseInt(topic, 10) : 7;
   return !isNaN(parsed) && parsed > 0 ? parsed : 7;
+}
+
+async function createHelpForumTopicIfNeeded(botToken, chatId, role = "active") {
+  if (!botToken || !chatId || (role !== "active" && role !== "closed")) return null;
+  if (creatingHelpTopicLocks[role]) return creatingHelpTopicLocks[role];
+
+  creatingHelpTopicLocks[role] = (async () => {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/createForumTopic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          name: role === "active" ? "🎫 Active Support Tickets" : "✅ Closed & Resolved Tickets",
+          icon_color: role === "active" ? 7322096 : 9367192,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && data.result?.message_thread_id) {
+        const newId = Number(data.result.message_thread_id);
+        dynamicHelpTopicIds[role] = newId;
+        console.log(`[HELP-BOT] 🆕 Auto-created ${role} support topic: Topic #${newId}`);
+        return newId;
+      }
+      return null;
+    } catch (err) {
+      console.warn(`[HELP-BOT] Auto-create ${role} topic error:`, err.message);
+      return null;
+    } finally {
+      creatingHelpTopicLocks[role] = null;
+    }
+  })();
+
+  return creatingHelpTopicLocks[role];
 }
 
 let tableInitPromise = null;
@@ -461,7 +500,7 @@ function escapeTelegramHtml(str) {
  * 1. Automatically falls back to plain text if HTML entity parsing fails (400 Bad Request)
  * 2. Automatically falls back to main chat if topic thread fails
  */
-async function sendTelegramMessageSafe(botToken, payload) {
+async function sendTelegramMessageSafe(botToken, payload, topicRole = null) {
   try {
     let res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
@@ -488,6 +527,30 @@ async function sendTelegramMessageSafe(botToken, payload) {
       });
       data = await res.json().catch(() => null);
       if (data && data.ok) return data;
+    }
+
+    // Resilient fallback 1.5: If topic thread is missing/deleted/closed, auto-create a fresh topic and retry
+    if (
+      payload.message_thread_id &&
+      topicRole &&
+      data &&
+      data.description &&
+      /thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(data.description)
+    ) {
+      const freshTopicId = await createHelpForumTopicIfNeeded(botToken, payload.chat_id, topicRole);
+      if (freshTopicId) {
+        const retriedPayload = { ...payload, message_thread_id: freshTopicId };
+        res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(retriedPayload),
+        });
+        data = await res.json().catch(() => null);
+        if (data && data.ok) {
+          payload.message_thread_id = freshTopicId;
+          return data;
+        }
+      }
     }
 
     // Resilient fallback 2: If topic thread failed, retry to main supergroup chat
@@ -656,7 +719,7 @@ async function dispatchTelegramHelpNotice(ticket) {
       payload.message_thread_id = activeTopicId;
     }
 
-    const res = await sendTelegramMessageSafe(botToken, payload);
+    const res = await sendTelegramMessageSafe(botToken, payload, "active");
     let sentMsgId = res && res.ok && res.result?.message_id ? String(res.result.message_id) : null;
 
     // Also dispatch notification to Admin DM so Admin can reply directly via Bot DM as well!
@@ -768,7 +831,7 @@ async function dispatchClosedTicketReport(ticket, closedBy = "Administrator", re
       payload.message_thread_id = closedTopicId;
     }
 
-    await sendTelegramMessageSafe(botToken, payload);
+    await sendTelegramMessageSafe(botToken, payload, "closed");
 
     // Also notify Admin DM
     const adminChatId = getHelpAdminChatId();

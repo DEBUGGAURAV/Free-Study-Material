@@ -45,7 +45,7 @@ const DEFAULT_AI_SETTINGS = {
   totalQueriesToday: 0,
   failoversToday: 0,
   cachedHitsToday: 0,
-  aiSearchTopicId: null, // 🤖 Telegram sub-topic for student AI queries
+  aiSearchTopicId: Number(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || 14) || 14, // 🤖 Telegram sub-topic for student AI queries (Default: Topic 14)
   purgeAuditTopicId: null, // 🔥 Telegram sub-topic for Firebase/Turso purge logs
   lastResetDate: new Date().toISOString().slice(0, 10),
   groqApiKey: "",
@@ -58,6 +58,25 @@ const DEFAULT_AI_SETTINGS = {
 
 let currentAiSettings = { ...DEFAULT_AI_SETTINGS };
 let isSettingsLoaded = false;
+
+/**
+ * Resolves the dedicated Telegram Topic ID for AI Search Logs (default: 14).
+ * Strictly prevents AI searches from leaking into Help Active (Topic 6) or Help Closed (Topic 7).
+ */
+function getAiSearchTopicId() {
+  const helpActiveId = parseInt(process.env.HELP_TOPIC_ACTIVE_ID || "6", 10) || 6;
+  const helpClosedId = parseInt(process.env.HELP_TOPIC_CLOSED_ID || "7", 10) || 7;
+  const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
+  const savedTopic = Number(currentAiSettings.aiSearchTopicId || 0);
+
+  if (savedTopic > 0 && savedTopic !== helpActiveId && savedTopic !== helpClosedId) {
+    return savedTopic;
+  }
+  if (!isNaN(envTopic) && envTopic > 0 && envTopic !== helpActiveId && envTopic !== helpClosedId) {
+    return envTopic;
+  }
+  return 14;
+}
 
 // 1-minute rolling rate limiter window
 const rollingMinuteTracker = {
@@ -132,6 +151,8 @@ async function loadAiSettings() {
         if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
           currentAiSettings.groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
         }
+        // Heal AI Search Topic ID if missing or previously mapped to Help Box topics (6 or 7)
+        currentAiSettings.aiSearchTopicId = getAiSearchTopicId();
         saveAiSettingsToDb().catch(() => {});
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
@@ -998,7 +1019,7 @@ function getAiTelemetry() {
       openRouterConfigured: isProviderConfigured("openrouter"),
       groqStorageSource: process.env.GROQ_API_KEY ? "ENV" : (currentAiSettings.groqApiKey ? "DATABASE" : "NONE"),
       geminiStorageSource: process.env.GEMINI_API_KEY ? "ENV" : (currentAiSettings.geminiApiKey ? "DATABASE" : "NONE"),
-      aiSearchTopicId: currentAiSettings.aiSearchTopicId || null,
+      aiSearchTopicId: getAiSearchTopicId(),
       purgeAuditTopicId: currentAiSettings.purgeAuditTopicId || null,
       cfAiWorkerUrl: process.env.CF_AI_WORKER_URL || (process.env.CF_CHAT_WORKER_URL ? process.env.CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "https://fsm-ai-edge.jnplotus.workers.dev"),
     },
@@ -1302,8 +1323,45 @@ function getAiEngineAuditDetails(provider, model, cached) {
   };
 }
 
+let creatingAiTopicPromise = null;
+
+async function createAiSearchForumTopic(token, chatId) {
+  if (!token || !chatId) return null;
+  if (creatingAiTopicPromise) return creatingAiTopicPromise;
+
+  creatingAiTopicPromise = (async () => {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/createForumTopic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: chatId,
+          name: "🤖 AI Search Logs & Student Queries",
+          icon_color: 7322096,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.ok && data.result?.message_thread_id) {
+        const newId = Number(data.result.message_thread_id);
+        currentAiSettings.aiSearchTopicId = newId;
+        await saveAiSettingsToDb().catch(() => {});
+        console.log(`[TELEGRAM-AI-AUDIT] 🆕 Auto-created AI Search Logs topic: Topic #${newId}`);
+        return newId;
+      }
+      return null;
+    } catch (err) {
+      console.warn("[TELEGRAM-AI-AUDIT] Auto-create topic warning:", err.message);
+      return null;
+    } finally {
+      creatingAiTopicPromise = null;
+    }
+  })();
+
+  return creatingAiTopicPromise;
+}
+
 /**
- * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Default Topic 14, auto-creates if needed)
  */
 async function dispatchAiSearchTelegramAudit({
   user,
@@ -1319,9 +1377,9 @@ async function dispatchAiSearchTelegramAudit({
 }) {
   const token = getHelpBotToken();
   const chatId = getHelpChatId();
-  // Support dynamic thread ID from admin settings, or fallback to environment variables
-  const topicId = currentAiSettings.aiSearchTopicId || process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || null;
   if (!token || !chatId) return false;
+
+  const topicId = getAiSearchTopicId();
 
   try {
     const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
@@ -1364,17 +1422,37 @@ async function dispatchAiSearchTelegramAudit({
       text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
+      message_thread_id: Number(topicId),
     };
-    if (topicId) {
-      payload.message_thread_id = Number(topicId);
-    }
 
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    return true;
+    const data = await res.json().catch(() => null);
+
+    if (data && data.ok) {
+      return true;
+    }
+
+    // If topic 14 (or configured topic) was deleted/missing/closed, auto-create a fresh AI Search topic and retry!
+    const errDesc = String(data?.description || "");
+    if (/thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(errDesc)) {
+      console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);
+      const freshTopicId = await createAiSearchForumTopic(token, chatId);
+      if (freshTopicId) {
+        const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, message_thread_id: Number(freshTopicId) }),
+        });
+        const retryData = await retryRes.json().catch(() => null);
+        return Boolean(retryData && retryData.ok);
+      }
+    }
+
+    return false;
   } catch (err) {
     console.debug("[TELEGRAM-AI-AUDIT] Notice:", err.message);
     return false;
