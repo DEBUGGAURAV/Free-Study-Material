@@ -132,11 +132,11 @@ services:
       - key: HELP_CHAT_ID
         sync: false
       - key: HELP_TOPIC_ACTIVE_ID
-        value: "6"
+        sync: false
       - key: HELP_TOPIC_CLOSED_ID
-        value: "7"
+        sync: false
       - key: AI_SEARCH_TOPIC_ID
-        value: "17"
+        sync: false
       - key: TURSO_HELP_DATABASE_URL
         sync: false
       - key: TURSO_HELP_AUTH_TOKEN
