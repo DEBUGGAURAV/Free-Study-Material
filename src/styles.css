@@ -3553,7 +3553,28 @@ select option,
 .auth-modal-content input[id*="OtpCode"] { background: #f4f7fc !important; color: #3552c5 !important; }
 .auth-modal-content .passkey-signin-button { border-color: #bde3dc; background: linear-gradient(110deg, #4361ee, #347bc8) !important; color: #fff; box-shadow: 0 6px 20px -14px rgba(15, 159, 143, 0.5); }
 .auth-modal-content .passkey-password-switch { border: 1px solid #dce4ef !important; background: #f7f9fc !important; color: #40516c !important; }
-.profile-modal-content { border-color: #dbe3f0; background: linear-gradient(155deg, #ffffff, #f7faff); color: #172338; box-shadow: 0 30px 80px -42px rgba(29, 48, 77, 0.42); }
+.profile-modal-content {
+  border-color: #dbe3f0;
+  background: linear-gradient(155deg, #ffffff, #f7faff);
+  color: #172338;
+  box-shadow: 0 30px 80px -42px rgba(29, 48, 77, 0.42);
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.profile-modal-content::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.profile-modal-content * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.profile-modal-content *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
 .profile-modal-content .modal-title { color: #172338; }
 .profile-modal-content .modal-close-btn { border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; }
 .profile-modal-content .modal-close-btn:hover { border-color: #c6d3ff; background: #edf2ff; color: #3552c5; }

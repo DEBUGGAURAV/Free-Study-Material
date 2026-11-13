@@ -163,6 +163,15 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   }, [tab]);
 
+  // Lock background body scroll while ProfileModal is active
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   const handleDeleteSingleNote = async (noteId, noteTitle) => {
     if (!window.confirm(`Are you sure you want to delete "${noteTitle || 'this note'}" from offline storage?`)) return;
     try {
@@ -496,7 +505,11 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content profile-modal-content"
-        style={{ maxWidth: "540px" }}
+        style={{
+          maxWidth: tab === "storage" ? "640px" : "540px",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-header">
@@ -1501,7 +1514,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   <div>Open any note in the Virtual PDF Reader or click "Save Offline" on any card to read 100% without internet.</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {storedNotes.map((n) => {
                     const isPinned = pinnedIds.includes(String(n.id));
                     const ageHours = n.savedAt ? Math.floor((Date.now() - new Date(n.savedAt).getTime()) / (3600 * 1000)) : 0;
@@ -1672,7 +1685,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   <div>Circle any question, diagram, or formula in the Virtual PDF Reader to solve it and save answers offline here.</div>
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {storedCircleNotes.map((cn) => {
                     const isPinned = Boolean(cn.isPinned);
                     const ageHours = cn.savedAt ? Math.floor((Date.now() - Number(cn.savedAt)) / (3600 * 1000)) : 0;
