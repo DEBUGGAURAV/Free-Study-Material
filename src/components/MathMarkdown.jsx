@@ -82,25 +82,25 @@ function formatInlineMarkdown(text) {
   // 1. Extract block math $$...$$ and \[...\]
   let safeText = balanced.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 8px 0; overflow-x: auto; padding: 4px 0;">${renderMathSafely(eq, true)}</div>`);
+    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 12px 0; overflow-x: auto; padding: 10px 14px; background: rgba(10, 15, 29, 0.85); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">${renderMathSafely(eq, true)}</div>`);
     return `%%%MATH_HOLDER_${idx}%%%`;
   });
   safeText = safeText.replace(/\\\[([\s\S]*?)\\\]/g, (_, eq) => {
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 8px 0; overflow-x: auto; padding: 4px 0;">${renderMathSafely(eq, true)}</div>`);
+    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 12px 0; overflow-x: auto; padding: 10px 14px; background: rgba(10, 15, 29, 0.85); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">${renderMathSafely(eq, true)}</div>`);
     return `%%%MATH_HOLDER_${idx}%%%`;
   });
 
   // 2. Extract inline math \(...\) and $...$
   safeText = safeText.replace(/\\\(([\s\S]*?)\\\)/g, (_, eq) => {
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`);
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(eq, false)}</span>`);
     return `%%%MATH_HOLDER_${idx}%%%`;
   });
   safeText = safeText.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, eq) => {
     if (/^\s*\d/.test(eq)) return match;
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`);
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(eq, false)}</span>`);
     return `${prefix}%%%MATH_HOLDER_${idx}%%%`;
   });
 
@@ -109,11 +109,11 @@ function formatInlineMarkdown(text) {
 
   // 3. Process Markdown (bold, italic, code)
   // Bold: **text** or __text__
-  safeText = safeText.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
-  safeText = safeText.replace(/__(.+?)__/g, '<strong style="color: #f8fafc; font-weight: 700;">$1</strong>');
+  safeText = safeText.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #ffffff; font-weight: 750; letter-spacing: -0.1px;">$1</strong>');
+  safeText = safeText.replace(/__(.+?)__/g, '<strong style="color: #ffffff; font-weight: 750; letter-spacing: -0.1px;">$1</strong>');
 
   // Inline code: `code`
-  safeText = safeText.replace(/`([^`]+)`/g, '<code style="background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 2px 6px; font-size: 0.85em; font-family: monospace; color: #38bdf8;">$1</code>');
+  safeText = safeText.replace(/`([^`]+)`/g, '<code style="background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 6px; padding: 2px 7px; font-size: 0.84em; font-family: \'JetBrains Mono\', Consolas, monospace; color: #38bdf8; box-shadow: 0 0 10px rgba(56, 189, 248, 0.12);">$1</code>');
 
   // Italic: *text*
   safeText = safeText.replace(/(^|[^\*])\*([^\*\n]+?)\*([^\*]|$)/g, '$1<em style="color: #cbd5e1;">$2</em>$3');
@@ -164,14 +164,29 @@ function renderMarkdownBlockToHtml(content = "") {
   const blocks = [];
   let inList = false;
   let listItems = [];
+  let inCodeBlock = false;
+  let codeBlockLang = "";
+  let codeBlockLines = [];
 
   const flushList = () => {
     if (inList && listItems.length > 0) {
       blocks.push(
-        `<ul style="margin: 8px 0 14px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; list-style-type: disc;">${listItems.join("")}</ul>`
+        `<ul style="margin: 10px 0 16px 0; padding-left: 22px; display: flex; flex-direction: column; gap: 8px; list-style-type: disc;">${listItems.join("")}</ul>`
       );
       listItems = [];
       inList = false;
+    }
+  };
+
+  const flushCodeBlock = () => {
+    if (inCodeBlock && codeBlockLines.length > 0) {
+      const rawCode = codeBlockLines.join("\n");
+      blocks.push(
+        `<div style="margin: 14px 0; border-radius: 12px; background: rgba(10, 15, 29, 0.95); border: 1px solid rgba(99, 102, 241, 0.28); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);"><div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; background: rgba(99, 102, 241, 0.12); border-bottom: 1px solid rgba(99, 102, 241, 0.2); font-size: 0.72rem; font-weight: 700; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px;"><span>💻 ${escapeHtml(codeBlockLang || "Code")}</span><span style="font-size: 0.68rem; color: #64748b;">Academic Snippet</span></div><pre style="margin: 0; padding: 12px 16px; overflow-x: auto; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 0.82rem; line-height: 1.6; color: #38bdf8;"><code>${escapeHtml(rawCode)}</code></pre></div>`
+      );
+      codeBlockLines = [];
+      inCodeBlock = false;
+      codeBlockLang = "";
     }
   };
 
@@ -179,48 +194,83 @@ function renderMarkdownBlockToHtml(content = "") {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
 
+    // Check code blocks ```
+    if (trimmed.startsWith("```")) {
+      flushList();
+      if (inCodeBlock) {
+        flushCodeBlock();
+      } else {
+        inCodeBlock = true;
+        codeBlockLang = trimmed.replace(/^```/, "").trim();
+        codeBlockLines = [];
+      }
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.push(rawLine);
+      continue;
+    }
+
     if (!trimmed) {
       flushList();
       continue;
     }
 
-    // 1. Headers: ###, ##, #
+    // 1. Creative Gradient Headers: ###, ##, #
     if (/^#{1,6}\s+/.test(trimmed)) {
       flushList();
       const level = (trimmed.match(/^#+/) || ["#"])[0].length;
       const text = trimmed.replace(/^#+\s*/, "");
-      const fontSize = level === 1 ? "1.2rem" : level === 2 ? "1.05rem" : "0.95rem";
-      const color = level === 1 ? "#38bdf8" : level === 2 ? "#a78bfa" : "#f1f5f9";
+      
+      let headerStyle = "";
+      if (level === 1) {
+        headerStyle = "margin: 20px 0 10px 0; font-size: 1.25rem; font-weight: 800; background: linear-gradient(135deg, #38bdf8 0%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;";
+      } else if (level === 2) {
+        headerStyle = "margin: 18px 0 8px 0; font-size: 1.08rem; font-weight: 750; background: linear-gradient(135deg, #a78bfa 0%, #34d399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 7px;";
+      } else {
+        headerStyle = "margin: 14px 0 6px 0; font-size: 0.96rem; font-weight: 700; color: #f1f5f9; border-left: 3px solid #38bdf8; padding-left: 8px; display: flex; align-items: center; gap: 6px;";
+      }
+
       blocks.push(
-        `<h${level} style="margin: 16px 0 8px 0; font-size: ${fontSize}; font-weight: 700; color: ${color}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(text)}</h${level}>`
+        `<h${level} style="${headerStyle}">${formatInlineMarkdown(text)}</h${level}>`
       );
       continue;
     }
 
-    // 2. Standalone Section Header lines like "**⚡ Key Formulas & Theorems**"
-    if (/^\*\*(📌|⚡|💡|🔥|📊|📖|🎯|🧠)?\s*.*?\*\*$/.test(trimmed)) {
+    // 2. Standalone Themed Academic Callout Cards (⚡ Formulas, 💡 Insights, 🎯 Solutions, ⚠️ Pitfalls)
+    if (/^\*\*(📌|⚡|💡|🔥|📊|📖|🎯|🧠|⚠️|🔬)?\s*.*?\*\*$/.test(trimmed)) {
       flushList();
       const innerText = trimmed.replace(/^\*\*/, "").replace(/\*\*$/, "").trim();
       let borderAccent = "rgba(56, 189, 248, 0.4)";
-      let bgAccent = "rgba(56, 189, 248, 0.08)";
+      let bgAccent = "linear-gradient(135deg, rgba(56, 189, 248, 0.12), rgba(14, 165, 233, 0.04))";
       let textAccent = "#38bdf8";
+      let iconBadge = "📌";
 
-      if (innerText.includes("⚡") || innerText.toLowerCase().includes("formula")) {
-        borderAccent = "rgba(245, 158, 11, 0.4)";
-        bgAccent = "rgba(245, 158, 11, 0.08)";
+      if (innerText.includes("⚡") || innerText.toLowerCase().includes("formula") || innerText.toLowerCase().includes("theorem")) {
+        borderAccent = "rgba(245, 158, 11, 0.45)";
+        bgAccent = "linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(217, 119, 6, 0.04))";
         textAccent = "#fbbf24";
-      } else if (innerText.includes("💡") || innerText.toLowerCase().includes("takeaway")) {
-        borderAccent = "rgba(52, 211, 153, 0.4)";
-        bgAccent = "rgba(52, 211, 153, 0.08)";
+        iconBadge = "⚡";
+      } else if (innerText.includes("💡") || innerText.toLowerCase().includes("takeaway") || innerText.toLowerCase().includes("concept")) {
+        borderAccent = "rgba(52, 211, 153, 0.45)";
+        bgAccent = "linear-gradient(135deg, rgba(52, 211, 153, 0.12), rgba(16, 185, 129, 0.04))";
         textAccent = "#34d399";
-      } else if (innerText.includes("📌") || innerText.toLowerCase().includes("summary")) {
-        borderAccent = "rgba(139, 92, 246, 0.4)";
-        bgAccent = "rgba(139, 92, 246, 0.08)";
+        iconBadge = "💡";
+      } else if (innerText.includes("🎯") || innerText.toLowerCase().includes("exam") || innerText.toLowerCase().includes("solution")) {
+        borderAccent = "rgba(139, 92, 246, 0.45)";
+        bgAccent = "linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(99, 102, 241, 0.05))";
         textAccent = "#c084fc";
+        iconBadge = "🎯";
+      } else if (innerText.includes("⚠️") || innerText.toLowerCase().includes("warning") || innerText.toLowerCase().includes("mistake")) {
+        borderAccent = "rgba(244, 63, 94, 0.45)";
+        bgAccent = "linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(225, 29, 72, 0.04))";
+        textAccent = "#fda4af";
+        iconBadge = "⚠️";
       }
 
       blocks.push(
-        `<div style="margin: 18px 0 10px 0; padding: 6px 14px; background: ${bgAccent}; border-left: 3px solid ${borderAccent}; border-radius: 6px; font-weight: 800; font-size: 0.95rem; color: ${textAccent}; display: flex; align-items: center; gap: 6px;">${formatInlineMarkdown(innerText)}</div>`
+        `<div style="margin: 18px 0 12px 0; padding: 9px 16px; background: ${bgAccent}; border: 1px solid ${borderAccent}; border-left: 4px solid ${textAccent}; border-radius: 10px; font-weight: 800; font-size: 0.94rem; color: ${textAccent}; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);"><span style="font-size: 1.1rem;">${iconBadge}</span><span>${formatInlineMarkdown(innerText)}</span></div>`
       );
       continue;
     }
@@ -230,7 +280,7 @@ function renderMarkdownBlockToHtml(content = "") {
       inList = true;
       const text = trimmed.replace(/^[-*•]\s+/, "");
       listItems.push(
-        `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
+        `<li style="line-height: 1.7; color: #f1f5f9; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
       );
       continue;
     }
@@ -240,7 +290,7 @@ function renderMarkdownBlockToHtml(content = "") {
       inList = true;
       const text = trimmed.replace(/^\d+\.\s+/, "");
       listItems.push(
-        `<li style="line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(text)}</li>`
+        `<li style="line-height: 1.7; color: #f1f5f9; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
       );
       continue;
     }
@@ -250,7 +300,7 @@ function renderMarkdownBlockToHtml(content = "") {
       flushList();
       const text = trimmed.replace(/^>\s+/, "");
       blocks.push(
-        `<blockquote style="margin: 10px 0; padding: 8px 14px; border-left: 3px solid #6366f1; background: rgba(99, 102, 241, 0.08); border-radius: 0 8px 8px 0; color: #cbd5e1; font-style: italic;">${formatInlineMarkdown(text)}</blockquote>`
+        `<blockquote style="margin: 12px 0; padding: 10px 16px; border-left: 3.5px solid #8b5cf6; background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.05)); border-radius: 0 10px 10px 0; color: #e2e8f0; font-style: italic; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">${formatInlineMarkdown(text)}</blockquote>`
       );
       continue;
     }
@@ -258,11 +308,12 @@ function renderMarkdownBlockToHtml(content = "") {
     // 6. Normal paragraph
     flushList();
     blocks.push(
-      `<p style="margin: 8px 0; line-height: 1.65; color: #e2e8f0; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
+      `<p style="margin: 9px 0; line-height: 1.7; color: #f1f5f9; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
     );
   }
 
   flushList();
+  flushCodeBlock();
   return blocks.join("");
 }
 

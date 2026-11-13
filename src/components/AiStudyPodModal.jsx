@@ -488,13 +488,13 @@ export default function AiStudyPodModal({
         className="dark-modal-surface"
         style={{
           width: "100%",
-          maxWidth: "760px",
-          height: "90vh",
-          maxHeight: "820px",
-          background: "#0b0f19",
-          border: "1.5px solid rgba(139, 92, 246, 0.4)",
-          borderRadius: "24px",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.9), 0 0 35px rgba(139, 92, 246, 0.25)",
+          maxWidth: "780px",
+          height: "92vh",
+          maxHeight: "840px",
+          background: "radial-gradient(ellipse at top left, #121829 0%, #080c16 100%)",
+          border: "1.5px solid rgba(139, 92, 246, 0.45)",
+          borderRadius: "26px",
+          boxShadow: "0 30px 80px rgba(0,0,0,0.95), 0 0 45px rgba(139, 92, 246, 0.28), inset 0 1px 0 rgba(255,255,255,0.15)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -512,53 +512,55 @@ export default function AiStudyPodModal({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "linear-gradient(135deg, rgba(139, 92, 246, 0.18), rgba(6, 182, 212, 0.12))",
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.15))",
+            backdropFilter: "blur(14px)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
             <div
               style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                width: "42px",
+                height: "42px",
+                borderRadius: "14px",
+                background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 4px 14px rgba(139, 92, 246, 0.4)",
+                boxShadow: "0 4px 18px rgba(139, 92, 246, 0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
                 flexShrink: 0,
               }}
             >
-              <Sparkles size={20} color="#fff" />
+              <Sparkles size={22} color="#fff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }} />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.2px" }}>
-                  AI Study
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>AI Study Studio</span>
                 </h3>
                 <span
                   style={{
                     fontSize: "0.68rem",
-                    padding: "2px 7px",
+                    padding: "2px 8px",
                     borderRadius: "999px",
                     background: "rgba(52, 211, 153, 0.18)",
                     color: "#34d399",
                     fontWeight: 700,
-                    border: "1px solid rgba(52, 211, 153, 0.3)",
+                    border: "1px solid rgba(52, 211, 153, 0.35)",
+                    boxShadow: "0 0 10px rgba(52, 211, 153, 0.2)",
                   }}
                 >
-                  ⚡ 0ms Turso Cache Active
+                  ⚡ 0ms Edge Cache Active
                 </span>
               </div>
               <p
                 style={{
-                  margin: "2px 0 0",
-                  fontSize: "0.76rem",
-                  color: "#94a3b8",
+                  margin: "3px 0 0",
+                  fontSize: "0.78rem",
+                  color: "#cbd5e1",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
-                  maxWidth: "460px",
+                  maxWidth: "480px",
                 }}
                 title={currentTitle}
               >
@@ -572,12 +574,12 @@ export default function AiStudyPodModal({
             onClick={onClose}
             style={{
               background: "rgba(255, 255, 255, 0.08)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              color: "#94a3b8",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#cbd5e1",
               cursor: "pointer",
               borderRadius: "50%",
-              width: "34px",
-              height: "34px",
+              width: "36px",
+              height: "36px",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -926,40 +928,89 @@ export default function AiStudyPodModal({
 
                     <div
                       style={{
-                        display: "flex",
-                        flexWrap: "wrap",
-                        justifyContent: "center",
-                        gap: "8px",
-                        maxWidth: "560px",
-                        marginTop: "6px",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                        gap: "10px",
+                        maxWidth: "620px",
+                        width: "100%",
+                        marginTop: "8px",
                       }}
                     >
                       {[
-                        currentNoteId
-                          ? `Explain key topics of ${currentTitle} in simple Hinglish`
-                          : "Explain Banker's Algorithm with a solved example",
-                        currentNoteId
-                          ? `Top 5 semester exam questions from ${currentTitle}`
-                          : "Derive Laplace transform of sin(at) step-by-step",
-                        "Difference between TCP and UDP for viva",
-                        "Normalize a database table up to 3NF & BCNF",
-                      ].map((prompt, idx) => (
+                        {
+                          icon: "⚡",
+                          title: "Formula Vault & Derivations",
+                          prompt: currentNoteId
+                            ? `Extract all critical formulas, mathematical laws & theorems from ${currentTitle}`
+                            : "Derive Laplace transform of e^(2t) sin(3t) step-by-step with proofs",
+                          accent: "#fbbf24",
+                          border: "rgba(245, 158, 11, 0.35)",
+                          bg: "linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.04))",
+                        },
+                        {
+                          icon: "🎯",
+                          title: "Top 5 Exam Questions & Solutions",
+                          prompt: currentNoteId
+                            ? `What are the top 5 most recurring semester exam questions from ${currentTitle}? Provide complete answers.`
+                            : "Solve Banker's Algorithm safe sequence with an actual 5-process university exam numerical",
+                          accent: "#c084fc",
+                          border: "rgba(139, 92, 246, 0.35)",
+                          bg: "linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.04))",
+                        },
+                        {
+                          icon: "🧠",
+                          title: "Visual Mind Map & Flowchart",
+                          prompt: currentNoteId
+                            ? `Generate a crisp Mermaid architecture flowchart / mind-map diagram summarizing ${currentTitle}`
+                            : "Draw a Mermaid architecture diagram explaining TCP 3-way handshake and connection teardown",
+                          accent: "#38bdf8",
+                          border: "rgba(56, 189, 248, 0.35)",
+                          bg: "linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(14, 165, 233, 0.04))",
+                        },
+                        {
+                          icon: "💡",
+                          title: "5-Min Rapid Revision in Hinglish",
+                          prompt: currentNoteId
+                            ? `Explain all core concepts of ${currentTitle} in crystal-clear simple Hinglish with practical analogies`
+                            : "Explain Database Normalization (1NF to BCNF) in practical Hinglish with real table examples",
+                          accent: "#34d399",
+                          border: "rgba(52, 211, 153, 0.35)",
+                          bg: "linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(16, 185, 129, 0.04))",
+                        },
+                      ].map((item, idx) => (
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => handleSendChatMessage(prompt)}
+                          onClick={() => handleSendChatMessage(item.prompt)}
                           style={{
-                            background: "rgba(255, 255, 255, 0.04)",
-                            border: "1px solid rgba(139, 92, 246, 0.3)",
-                            borderRadius: "12px",
-                            padding: "7px 12px",
-                            fontSize: "0.75rem",
-                            color: "#cbd5e1",
+                            background: item.bg,
+                            border: `1px solid ${item.border}`,
+                            borderRadius: "14px",
+                            padding: "12px 14px",
                             cursor: "pointer",
                             textAlign: "left",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "4px",
+                            transition: "all 0.2s ease",
+                            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.25)",
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.transform = "translateY(-2px)";
+                            e.currentTarget.style.borderColor = item.accent;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.transform = "translateY(0)";
+                            e.currentTarget.style.borderColor = item.border;
                           }}
                         >
-                          ✨ {prompt}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 750, fontSize: "0.82rem", color: item.accent }}>
+                            <span>{item.icon}</span>
+                            <span>{item.title}</span>
+                          </div>
+                          <span style={{ fontSize: "0.74rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                            {item.prompt.slice(0, 75)}...
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -1001,13 +1052,14 @@ export default function AiStudyPodModal({
                       <div
                         key={msg.id}
                         style={{
-                          background: "rgba(15, 23, 42, 0.72)",
-                          border: "1px solid rgba(255, 255, 255, 0.1)",
-                          borderRadius: "16px 16px 16px 4px",
-                          padding: "14px 16px",
-                          fontSize: "0.87rem",
-                          lineHeight: 1.65,
-                          color: "#f1f5f9",
+                          background: "linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(10, 15, 29, 0.98) 100%)",
+                          border: "1.5px solid rgba(139, 92, 246, 0.35)",
+                          borderRadius: "18px 18px 18px 4px",
+                          padding: "16px 18px",
+                          fontSize: "0.88rem",
+                          lineHeight: 1.7,
+                          color: "#f8fafc",
+                          boxShadow: "0 10px 30px -10px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
                         }}
                       >
                         <div
@@ -1015,26 +1067,46 @@ export default function AiStudyPodModal({
                             display: "flex",
                             justifyContent: "space-between",
                             alignItems: "center",
-                            marginBottom: "8px",
-                            gap: "6px",
+                            marginBottom: "10px",
+                            paddingBottom: "8px",
+                            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                            gap: "8px",
+                            flexWrap: "wrap",
                           }}
                         >
-                          <span
-                            style={{
-                              fontSize: "0.69rem",
-                              padding: "2px 8px",
-                              borderRadius: "999px",
-                              background: msg.cached ? "rgba(16, 185, 129, 0.15)" : "rgba(139, 92, 246, 0.18)",
-                              color: msg.cached ? "#34d399" : "#c4b5fd",
-                              fontWeight: 700,
-                            }}
-                          >
-                            {msg.cached
-                              ? "⚡ 0ms Cache Hit"
-                              : `✨ AI Tutor (${msg.provider || "Cloud AI"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <div
+                              style={{
+                                width: "22px",
+                                height: "22px",
+                                borderRadius: "6px",
+                                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              🤖
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.72rem",
+                                padding: "3px 9px",
+                                borderRadius: "999px",
+                                background: msg.cached ? "rgba(16, 185, 129, 0.16)" : "rgba(139, 92, 246, 0.2)",
+                                color: msg.cached ? "#34d399" : "#c4b5fd",
+                                fontWeight: 750,
+                                border: `1px solid ${msg.cached ? "rgba(52, 211, 153, 0.35)" : "rgba(139, 92, 246, 0.35)"}`,
+                              }}
+                            >
+                              {msg.cached
+                                ? "⚡ 0ms Lightning Cache"
+                                : `✨ Academic AI Mentor (${msg.provider || "Cloud Engine"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
+                            </span>
+                          </div>
 
-                          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                             {enableShareRevisionCard && (
                               <button
                                 type="button"
@@ -1042,21 +1114,22 @@ export default function AiStudyPodModal({
                                 disabled={sharingCardId === `chat_${msg.id}`}
                                 title="Download or Share HD Revision Card (PNG)"
                                 style={{
-                                  background: "rgba(56, 189, 248, 0.14)",
-                                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                                  background: "linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18))",
+                                  border: "1px solid rgba(56, 189, 248, 0.4)",
                                   color: "#38bdf8",
                                   borderRadius: "7px",
-                                  padding: "3px 8px",
-                                  fontSize: "0.71rem",
-                                  fontWeight: 700,
+                                  padding: "4px 9px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 750,
                                   cursor: "pointer",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
+                                  transition: "all 0.15s ease",
                                 }}
                               >
-                                <Share2 size={11} />
-                                <span>{sharingCardId === `chat_${msg.id}` ? "Saving..." : "Card PNG"}</span>
+                                <Share2 size={12} />
+                                <span>{sharingCardId === `chat_${msg.id}` ? "Saving..." : "📸 Card PNG"}</span>
                               </button>
                             )}
                             <button
@@ -1067,25 +1140,82 @@ export default function AiStudyPodModal({
                                 setTimeout(() => setCopiedChatId(null), 1800);
                               }}
                               style={{
-                                background: "rgba(255, 255, 255, 0.07)",
-                                border: "1px solid rgba(255, 255, 255, 0.14)",
+                                background: "rgba(255, 255, 255, 0.08)",
+                                border: "1px solid rgba(255, 255, 255, 0.15)",
                                 color: copiedChatId === msg.id ? "#34d399" : "#cbd5e1",
                                 borderRadius: "7px",
-                                padding: "3px 8px",
-                                fontSize: "0.71rem",
+                                padding: "4px 9px",
+                                fontSize: "0.72rem",
+                                fontWeight: 600,
                                 cursor: "pointer",
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
+                                transition: "all 0.15s ease",
                               }}
                             >
-                              {copiedChatId === msg.id ? <Check size={11} /> : <Copy size={11} />}
+                              {copiedChatId === msg.id ? <Check size={12} /> : <Copy size={12} />}
                               <span>{copiedChatId === msg.id ? "Copied" : "Copy"}</span>
                             </button>
                           </div>
                         </div>
 
                         <MathMarkdown content={msg.content} />
+
+                        {/* ⚡ Smart Interactive 1-Click Follow-up Chips */}
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "6px",
+                            marginTop: "14px",
+                            paddingTop: "10px",
+                            borderTop: "1px dashed rgba(255, 255, 255, 0.1)",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                            ⚡ Follow-up:
+                          </span>
+                          {[
+                            { icon: "💡", label: "Simpler Hinglish", prompt: "Explain the above answer in simpler, practical Hinglish with an everyday analogy." },
+                            { icon: "⚡", label: "Formula Vault", prompt: "Extract all key formulas and mathematical laws from the above solution into a clean bullet list." },
+                            { icon: "🧠", label: "Mind Map Diagram", prompt: "Generate a clean Mermaid flowchart / mind-map diagram for the concepts discussed above." },
+                            { icon: "🎯", label: "Top 3 Exam Questions", prompt: "Give 3 most likely university exam numericals/questions on this topic with quick solving hints." },
+                          ].map((chip, cIdx) => (
+                            <button
+                              key={cIdx}
+                              type="button"
+                              onClick={() => handleSendChatMessage(chip.prompt)}
+                              disabled={isSendingChat}
+                              style={{
+                                background: "rgba(255, 255, 255, 0.05)",
+                                border: "1px solid rgba(139, 92, 246, 0.35)",
+                                borderRadius: "999px",
+                                padding: "3px 9px",
+                                fontSize: "0.71rem",
+                                color: "#c4b5fd",
+                                cursor: isSendingChat ? "not-allowed" : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontWeight: 600,
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "rgba(139, 92, 246, 0.2)";
+                                e.currentTarget.style.borderColor = "#a855f7";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
+                                e.currentTarget.style.borderColor = "rgba(139, 92, 246, 0.35)";
+                              }}
+                            >
+                              <span>{chip.icon}</span>
+                              <span>{chip.label}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )
                   )

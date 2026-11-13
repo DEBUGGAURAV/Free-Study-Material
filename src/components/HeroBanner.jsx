@@ -10,7 +10,7 @@ export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePaper
   const libraryLinks = [
     [FileText, "Class notes", "Review topics at your pace", browseMaterials],
     [Search, "Previous papers", "Find practice material by course", () => { onBrowsePapers(); browseMaterials(); }],
-    [Sparkles, "AI study tools", "Get more from your materials", onOpenAiStudy],
+    [Sparkles, "✨ AI Study Studio", "Flashcards, Mind-Maps & Exam Summaries", onOpenAiStudy],
   ];
 
   return (
@@ -84,10 +84,42 @@ export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePaper
           <BookOpen size={17} />
           <span><strong>Study your way</strong><small>Read materials online</small></span>
         </div>
-        <div className="hero-benefit">
-          <Sparkles size={17} />
-          <span><strong>Study with AI</strong><small>Explore built-in study tools</small></span>
-        </div>
+        <button
+          type="button"
+          onClick={onOpenAiStudy}
+          className="hero-benefit"
+          style={{
+            cursor: "pointer",
+            textAlign: "left",
+            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(6, 182, 212, 0.16))",
+            border: "1px solid rgba(139, 92, 246, 0.45)",
+            boxShadow: "0 4px 18px rgba(99, 102, 241, 0.15)",
+            transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <div style={{
+            width: "30px",
+            height: "30px",
+            borderRadius: "9px",
+            background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fff",
+            flexShrink: 0,
+            boxShadow: "0 2px 8px rgba(139, 92, 246, 0.45)",
+          }}>
+            <Sparkles size={16} />
+          </div>
+          <span>
+            <strong style={{ color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>Study with AI</span>
+              <span style={{ fontSize: "0.62rem", padding: "1px 6px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.4)" }}>0ms Edge</span>
+            </strong>
+            <small style={{ color: "#94a3b8" }}>3D Flashcards, Mind-Maps &amp; Summaries</small>
+          </span>
+          <ArrowRight size={14} style={{ marginLeft: "auto", color: "#38bdf8", opacity: 0.8 }} />
+        </button>
       </div>
     </section>
   );

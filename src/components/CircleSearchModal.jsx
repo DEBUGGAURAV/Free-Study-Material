@@ -1599,13 +1599,14 @@ export default function CircleSearchModal({
                     key={msg.id}
                     ref={idx === messages.length - 1 ? latestAiMessageRef : null}
                     style={{
-                      background: "rgba(0, 0, 0, 0.34)",
-                      border: "1px solid rgba(255, 255, 255, 0.09)",
-                      borderRadius: "16px 16px 16px 4px",
-                      padding: "14px 16px",
-                      fontSize: "0.87rem",
-                      lineHeight: "1.65",
-                      color: "#f1f5f9",
+                      background: "linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(10, 15, 29, 0.98) 100%)",
+                      border: "1.5px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "18px 18px 18px 4px",
+                      padding: "16px 18px",
+                      fontSize: "0.88rem",
+                      lineHeight: "1.7",
+                      color: "#f8fafc",
+                      boxShadow: "0 10px 30px -10px rgba(56, 189, 248, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
                     }}
                   >
                     <div
@@ -1613,38 +1614,57 @@ export default function CircleSearchModal({
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        marginBottom: "8px",
+                        marginBottom: "10px",
+                        paddingBottom: "8px",
+                        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
                         flexWrap: "wrap",
                         gap: "6px",
                       }}
                     >
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          fontSize: "0.69rem",
-                          padding: "2px 9px",
-                          borderRadius: "999px",
-                          background: msg.cached ? "rgba(16, 185, 129, 0.15)" : "rgba(56, 189, 248, 0.15)",
-                          color: msg.cached ? "#34d399" : "#38bdf8",
-                          fontWeight: 700,
-                        }}
-                      >
-                        <Zap size={11} />
-                        {msg.cached
-                          ? `⚡ ${msg.cacheTier || "Turso Cache"} (0ms)`
-                          : `✨ AI Tutor (${msg.provider || "Gemini"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
-                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div
+                          style={{
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "6px",
+                            background: "linear-gradient(135deg, #0284c7, #38bdf8)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          ✏️
+                        </div>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            fontSize: "0.72rem",
+                            padding: "3px 9px",
+                            borderRadius: "999px",
+                            background: msg.cached ? "rgba(16, 185, 129, 0.16)" : "rgba(56, 189, 248, 0.16)",
+                            color: msg.cached ? "#34d399" : "#38bdf8",
+                            fontWeight: 750,
+                            border: `1px solid ${msg.cached ? "rgba(52, 211, 153, 0.35)" : "rgba(56, 189, 248, 0.35)"}`,
+                          }}
+                        >
+                          <Zap size={11} />
+                          {msg.cached
+                            ? `⚡ ${msg.cacheTier || "0ms Cache"} Hit`
+                            : `✨ Pencil Vision AI (${msg.provider || "Deep Vision"}${msg.latencyMs ? ` • ${msg.latencyMs}ms` : ""})`}
+                        </span>
+                      </div>
 
                       <button
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.text)}
                         style={{
-                          background: "rgba(255, 255, 255, 0.07)",
-                          border: "1px solid rgba(255, 255, 255, 0.14)",
+                          background: "rgba(255, 255, 255, 0.08)",
+                          border: "1px solid rgba(255, 255, 255, 0.15)",
                           borderRadius: "7px",
-                          padding: "3px 9px",
+                          padding: "4px 9px",
                           color: copiedMsgId === msg.id ? "#34d399" : "#cbd5e1",
                           fontSize: "0.72rem",
                           fontWeight: 600,
@@ -1652,14 +1672,64 @@ export default function CircleSearchModal({
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "4px",
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        {copiedMsgId === msg.id ? <Check size={11} /> : <Copy size={11} />}
-                        <span>{copiedMsgId === msg.id ? "Copied" : "Copy"}</span>
+                        {copiedMsgId === msg.id ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedMsgId === msg.id ? "Copied" : "Copy Solution"}</span>
                       </button>
                     </div>
 
                     <MathMarkdown content={msg.text} />
+
+                    {/* ⚡ Follow-up Actions for Circle / Pencil AI */}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: "6px",
+                        marginTop: "14px",
+                        paddingTop: "10px",
+                        borderTop: "1px dashed rgba(255, 255, 255, 0.1)",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                        ⚡ Quick Follow-up:
+                      </span>
+                      {[
+                        { icon: "💡", label: "Simpler Hinglish", prompt: "Explain the above derivation in simple conversational Hinglish." },
+                        { icon: "⚡", label: "Key Formulas", prompt: "Summarize all formulas and rules used in this solution into a clean bullet list." },
+                        { icon: "🎯", label: "Similar Practice Problem", prompt: "Give another similar exam numerical with its final answer for practice." },
+                      ].map((action, aIdx) => (
+                        <button
+                          key={aIdx}
+                          type="button"
+                          onClick={() => {
+                            setFollowUpInput(action.prompt);
+                            handleSendFollowUp(action.prompt);
+                          }}
+                          disabled={isSolving}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.05)",
+                            border: "1px solid rgba(56, 189, 248, 0.35)",
+                            borderRadius: "999px",
+                            padding: "3px 9px",
+                            fontSize: "0.71rem",
+                            color: "#7dd3fc",
+                            cursor: isSolving ? "not-allowed" : "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            fontWeight: 600,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <span>{action.icon}</span>
+                          <span>{action.label}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )
               )}

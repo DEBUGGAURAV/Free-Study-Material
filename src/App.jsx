@@ -2572,7 +2572,7 @@ export default function App() {
       </button>
 
       {/* 🚀 Persistent Floating Side Action Dock (AI Study Pod & Circle to Search) */}
-      {currentUser && <div
+      <div
         className="floating-side-action-dock"
         style={{
           position: "fixed",
@@ -2601,24 +2601,24 @@ export default function App() {
           className="floating-ai-pod-trigger"
           title="Open AI Study Chatbox, 3D Flashcards & Summary"
           style={{
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(168, 85, 247, 0.95))",
+            background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%)",
             color: "#ffffff",
-            border: "1.5px solid rgba(255, 255, 255, 0.3)",
+            border: "1.5px solid rgba(255, 255, 255, 0.4)",
             borderRadius: "999px",
-            padding: "9px 16px",
+            padding: "9px 18px",
             display: "flex",
             alignItems: "center",
-            gap: "7px",
-            boxShadow: "0 8px 25px rgba(99, 102, 241, 0.45), 0 0 15px rgba(168, 85, 247, 0.25)",
+            gap: "8px",
+            boxShadow: "0 8px 30px rgba(99, 102, 241, 0.55), 0 0 20px rgba(6, 182, 212, 0.35)",
             cursor: "pointer",
             fontWeight: 800,
-            fontSize: "0.82rem",
-            backdropFilter: "blur(12px)",
-            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            fontSize: "0.84rem",
+            backdropFilter: "blur(14px)",
+            transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
           }}
         >
-          <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }} />
-          <span className="floating-action-text">AI Study</span>
+          <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 5px rgba(255,255,255,0.9))" }} />
+          <span className="floating-action-text">✨ AI Study Studio</span>
         </button>
 
         {/* ⭕ Circle to Search Floating Capsule (Instant Freehand Pencil!) */}
@@ -2653,7 +2653,7 @@ export default function App() {
           <GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />
           <span className="floating-action-text">Circle Search</span>
         </button>
-      </div>}
+      </div>
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
       <FreehandCircleOverlay

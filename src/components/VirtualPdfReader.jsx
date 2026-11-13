@@ -4316,22 +4316,23 @@ export default function VirtualPdfReader({
             type="button"
             onClick={handleOpenAiStudy}
             style={{
-              padding: "4px 10px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              borderRadius: "6px",
-              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              padding: "5px 12px",
+              fontSize: "0.75rem",
+              fontWeight: 750,
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #6366f1, #06b6d4)",
               color: "#fff",
-              border: "none",
+              border: "1px solid rgba(255, 255, 255, 0.25)",
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "4px",
+              gap: "5px",
               whiteSpace: "nowrap",
+              boxShadow: "0 2px 10px rgba(99, 102, 241, 0.35)",
             }}
           >
-            <Layers size={13} />
-            <span>✨ Flashcards & Summary</span>
+            <Sparkles size={13} style={{ filter: "drop-shadow(0 0 2px rgba(255,255,255,0.7))" }} />
+            <span>✨ AI Study Studio</span>
           </button>
 
           {/* AI Query */}
@@ -6359,23 +6360,24 @@ export default function VirtualPdfReader({
             type="button"
             onClick={handleOpenAiStudy}
             style={{
-              background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%)",
               color: "#fff",
-              border: "none",
+              border: "1px solid rgba(255, 255, 255, 0.35)",
               borderRadius: "999px",
-              padding: "4px 12px",
-              fontSize: "0.72rem",
+              padding: "5px 14px",
+              fontSize: "0.74rem",
               fontWeight: 800,
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "4px",
-              boxShadow: "0 2px 8px rgba(139, 92, 246, 0.35)",
+              gap: "6px",
+              boxShadow: "0 4px 16px rgba(99, 102, 241, 0.45), 0 0 12px rgba(6, 182, 212, 0.25)",
+              transition: "all 0.2s ease",
             }}
-            title="✨ Open AI Study (3D Flashcards & Summary)"
+            title="✨ Open AI Study Studio (Tutor Chat, 3D Flashcards & Summary)"
           >
-            <Sparkles size={12} />
-            <span>✨ AI Study</span>
+            <Sparkles size={13} style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.8))" }} />
+            <span>✨ AI Study Studio</span>
           </button>
 
           {enableDiscussionBridge && (

@@ -377,23 +377,24 @@ export default function Navbar({
                 className="search-ai-btn"
                 onClick={onOpenAiStudyPod}
                 style={{
-                  background: "linear-gradient(135deg, rgba(139, 92, 246, 0.28), rgba(6, 182, 212, 0.28))",
-                  border: "1px solid rgba(139, 92, 246, 0.5)",
-                  color: "#c4b5fd",
-                  borderRadius: "6px",
-                  padding: "2px 7px",
-                  fontSize: "0.72rem",
+                  background: "linear-gradient(135deg, rgba(99, 102, 241, 0.38), rgba(6, 182, 212, 0.38))",
+                  border: "1px solid rgba(139, 92, 246, 0.55)",
+                  color: "#ffffff",
+                  borderRadius: "8px",
+                  padding: "3px 9px",
+                  fontSize: "0.74rem",
                   fontWeight: 800,
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "3px",
-                  marginLeft: "2px",
+                  gap: "4px",
+                  marginLeft: "4px",
+                  boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
                 }}
-                title="✨ AI Study: Flashcards, Summary & Smart Note Filter"
+                title="✨ AI Study Studio: Conversational Tutor, Flashcards & Summary"
               >
-                <Sparkles size={11} color="#3d59c5" />
-                <span>AI</span>
+                <Sparkles size={12} color="#38bdf8" />
+                <span>AI Study</span>
               </button>
 
               <kbd className="search-kbd-shortcut">⌘K</kbd>
@@ -578,11 +579,11 @@ export default function Navbar({
           type="button"
           className="dock-item dock-ai"
           onClick={onOpenAiStudyPod}
-          style={{ color: "#5846b8" }}
+          style={{ color: "#a855f7" }}
           title="AI Study (Flashcards, Summary, Notes Filter)"
         >
-          <Sparkles size={17} color="#5846b8" />
-          <span>AI Study</span>
+          <Sparkles size={17} color="#a855f7" style={{ filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))" }} />
+          <span style={{ fontWeight: 750, color: "#e0e7ff" }}>AI Study</span>
         </button>
 
         {/* ♊ Circle to Search & Solve */}
