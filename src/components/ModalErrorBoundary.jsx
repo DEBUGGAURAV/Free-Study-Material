@@ -30,15 +30,21 @@ export default class ModalErrorBoundary extends Component {
         sessionStorage.clear();
       }
       if ("caches" in window) {
-        caches.keys().then((names) => names.forEach((n) => caches.delete(n)));
+        caches.keys().then((names) => names.forEach((n) => caches.delete(n))).catch(() => {});
       }
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations().then((regs) => {
           regs.forEach((r) => r.unregister());
-        });
+        }).catch(() => {});
       }
     } catch (_) {}
-    window.location.replace(window.location.origin + "/?fresh=" + Date.now());
+    try {
+      const targetUrl = new URL(window.location.href);
+      targetUrl.searchParams.set("fresh", String(Date.now()));
+      window.location.replace(targetUrl.toString());
+    } catch (_) {
+      window.location.replace(window.location.origin + "/?fresh=" + Date.now());
+    }
   };
 
   render() {
