@@ -8,6 +8,7 @@
 const BACKEND_ORIGINS = [
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
+  "https://freestudymaterial.onrender.com",
 ];
 
 const CRAWLER_UA_REGEX = /(?:whatsapp|telegrambot|facebookexternalhit|facebot|twitterbot|discordbot|slackbot|linkedinbot|skypeuripreview|embedly|pinterest|vkshare|applebot|googlebot|bingbot|duckduckbot|preview)/i;

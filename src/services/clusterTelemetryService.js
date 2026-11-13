@@ -103,14 +103,20 @@ function createInitialNode(id, name, url, role, defaults = {}) {
   };
 }
 
+const DEFAULT_CLUSTER_URLS = [
+  "https://freestudymaterial.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+];
+
 const clusterNodes = [
   createInitialNode(
     "backend_1",
-    "Backend #1 (Original)",
-    backendClusterUrls[0] || "",
-    "Cluster Node #1",
+    "Backend #1 (Old Backend Server)",
+    backendClusterUrls[0] || DEFAULT_CLUSTER_URLS[0],
+    "Old Backend Server (Position #1)",
     {
-      status: backendClusterUrls[0] ? "CHECKING" : "UNCONFIGURED",
+      status: "CHECKING",
       httpCode: 0,
       latencyMs: 0,
       isHealthy: false,
@@ -118,26 +124,26 @@ const clusterNodes = [
   ),
   createInitialNode(
     "backend_2",
-    "Backend #2 (Cluster Node #2)",
-    backendClusterUrls[1] || "",
-    "Cluster Node #2",
+    "Backend #2 (Active Node #2)",
+    backendClusterUrls[1] || DEFAULT_CLUSTER_URLS[1],
+    "Active Production Node #2",
     {
-      status: backendClusterUrls[1] ? "ONLINE" : "UNCONFIGURED",
-      httpCode: backendClusterUrls[1] ? 200 : 0,
-      latencyMs: 0,
-      isHealthy: Boolean(backendClusterUrls[1]),
+      status: "ONLINE",
+      httpCode: 200,
+      latencyMs: 50,
+      isHealthy: true,
     }
   ),
   createInitialNode(
     "backend_3",
-    "Backend #3 (Cluster Node #3)",
-    backendClusterUrls[2] || "",
-    "Cluster Node #3",
+    "Backend #3 (Active Node #3)",
+    backendClusterUrls[2] || DEFAULT_CLUSTER_URLS[2],
+    "Active Production Node #3",
     {
-      status: backendClusterUrls[2] ? "ONLINE" : "UNCONFIGURED",
-      httpCode: backendClusterUrls[2] ? 200 : 0,
-      latencyMs: 0,
-      isHealthy: Boolean(backendClusterUrls[2]),
+      status: "ONLINE",
+      httpCode: 200,
+      latencyMs: 50,
+      isHealthy: true,
     }
   ),
 ];
@@ -436,7 +442,10 @@ async function probeSingleNode(node, authHeader = "") {
   }
 
   node.isCurrentResponder = false;
-  const headers = {};
+  const headers = {
+    "User-Agent": "FreeStudyMaterial-ClusterSync/1.0 (Windows NT 10.0; Win64; x64)",
+    "Accept": "application/json, text/plain, */*",
+  };
   const syncSecret = process.env.CLUSTER_SYNC_SECRET || "";
   if (syncSecret) headers["X-Cluster-Sync"] = syncSecret;
   if (authHeader) headers["Authorization"] = authHeader;
@@ -451,7 +460,7 @@ async function probeSingleNode(node, authHeader = "") {
     let res = await fetch(targetEndpoint, {
       method: "GET",
       headers,
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(12000),
     });
     const firstByteMs = Math.max(1, Date.now() - reqStart);
     let rawText = await res.text();
@@ -463,7 +472,8 @@ async function probeSingleNode(node, authHeader = "") {
       const hStart = Date.now();
       res = await fetch(`${node.url}/health?t=${Date.now()}&probe=cf`, {
         method: "GET",
-        signal: AbortSignal.timeout(4500),
+        headers,
+        signal: AbortSignal.timeout(12000),
       });
       const hText = await res.text();
       const hMs = Math.max(1, Date.now() - hStart);

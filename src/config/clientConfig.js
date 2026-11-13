@@ -22,17 +22,34 @@ export const SITE_DESCRIPTION =
   import.meta.env.VITE_SITE_DESCRIPTION ||
   `${SITE_NAME} — High performance university study notes, engineering blueprints, and cloud lecture archives.`;
 
-export const BACKEND_CLUSTER_URLS = (import.meta.env.VITE_BACKEND_CLUSTER_URLS || "")
-  .split(",")
-  .map((url) => {
-    try {
-      const parsed = new URL(url.trim());
-      return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.origin : "";
-    } catch {
-      return "";
+export const DEFAULT_CLUSTER_URLS = [
+  "https://freestudymaterial.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+];
+
+export const BACKEND_CLUSTER_URLS = (() => {
+  const envUrls = (import.meta.env.VITE_BACKEND_CLUSTER_URLS || "")
+    .split(",")
+    .map((url) => {
+      try {
+        const parsed = new URL(String(url || "").trim());
+        return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.origin : "";
+      } catch {
+        return "";
+      }
+    })
+    .filter((url, index, urls) => url && urls.indexOf(url) === index);
+
+  if (envUrls.length >= 3) return envUrls;
+  const merged = [...envUrls];
+  for (const def of DEFAULT_CLUSTER_URLS) {
+    if (!merged.includes(def) && merged.length < 3) {
+      merged.push(def);
     }
-  })
-  .filter((url, index, urls) => url && urls.indexOf(url) === index);
+  }
+  return merged.length >= 3 ? merged : DEFAULT_CLUSTER_URLS;
+})();
 
 /**
  * Returns current browser hostname or configured domain

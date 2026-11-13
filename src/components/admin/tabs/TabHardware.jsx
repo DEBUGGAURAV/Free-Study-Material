@@ -61,9 +61,9 @@ export default function TabHardware(props) {
   const defaultNodes = [
     {
       id: "backend_1",
-      name: "Backend #1 (Original)",
-      url: BACKEND_CLUSTER_URLS[0] || "",
-      role: "Tertiary Fallback Node",
+      name: "Backend #1 (Old Backend Server)",
+      url: BACKEND_CLUSTER_URLS[0] || "https://freestudymaterial.onrender.com",
+      role: "Old Backend Server (Position #1)",
       isEnabled: false,
       status: "SUSPENDED",
       httpCode: 503,
@@ -78,9 +78,9 @@ export default function TabHardware(props) {
     },
     {
       id: "backend_2",
-      name: "Backend #2 (Active Node #1)",
-      url: BACKEND_CLUSTER_URLS[1] || "",
-      role: "Active Production Node #1",
+      name: "Backend #2 (Active Node #2)",
+      url: BACKEND_CLUSTER_URLS[1] || "https://freestudymaterial1.onrender.com",
+      role: "Active Production Node #2",
       isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
@@ -95,9 +95,9 @@ export default function TabHardware(props) {
     },
     {
       id: "backend_3",
-      name: "Backend #3 (Active Node #2)",
-      url: BACKEND_CLUSTER_URLS[2] || "",
-      role: "Active Production Node #2",
+      name: "Backend #3 (Active Node #3)",
+      url: BACKEND_CLUSTER_URLS[2] || "https://freestudymaterial2.onrender.com",
+      role: "Active Production Node #3",
       isEnabled: true,
       status: "ONLINE",
       httpCode: 200,
