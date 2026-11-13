@@ -185,6 +185,7 @@ async function request(endpoint, options = {}) {
   }
 
   let res;
+  let lastFetchErr = null;
   try {
     res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
@@ -192,13 +193,44 @@ async function request(endpoint, options = {}) {
       headers,
     });
   } catch (fetchErr) {
+    lastFetchErr = fetchErr;
+  }
+
+  // 🛡️ Multi-Backend Intelligent Failover:
+  // If local/origin backend is offline (connection refused, 502, 503, 504),
+  // automatically failover to live cluster nodes (Backend 2 & Backend 3)
+  const isUnreachable = !res || [502, 503, 504].includes(res.status);
+  if (isUnreachable && typeof window !== "undefined") {
+    const clusterBackends = [
+      "https://freestudymaterial1.onrender.com",
+      "https://freestudymaterial2.onrender.com",
+    ];
+    for (const clusterOrigin of clusterBackends) {
+      try {
+        const cleanEp = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+        const fallbackRes = await fetch(`${clusterOrigin}/api${cleanEp}`, {
+          ...options,
+          credentials: "include",
+          headers,
+          signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined,
+        });
+        if (fallbackRes && (fallbackRes.ok || fallbackRes.status < 500)) {
+          res = fallbackRes;
+          lastFetchErr = null;
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (!res && lastFetchErr) {
     const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
     const msg = isOffline
       ? "You are currently offline. Please check your internet connection."
-      : "Backend server is unreachable on port 5000. Please ensure the server is running (`npm start`).";
+      : "Backend server is temporarily unreachable. Please check your connection or ensure the server is running.";
     const netErr = new Error(msg);
     netErr.status = 503;
-    netErr.original = fetchErr;
+    netErr.original = lastFetchErr;
     throw netErr;
   }
 
@@ -1576,10 +1608,11 @@ export const api = {
       } : null,
     };
 
-    // Attempt Cloudflare Edge AI Worker first (0% Render Server Load)
+    // 1. Attempt Cloudflare Edge AI Worker first (0% Render Server Load)
     const cfAiWorkerUrl = (
       (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_AI_WORKER_URL) ||
-      (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_CHAT_WORKER_URL ? import.meta.env.VITE_CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "")
+      (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_CHAT_WORKER_URL ? import.meta.env.VITE_CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "") ||
+      "https://fsm-ai-edge.jnplotus.workers.dev"
     ).trim();
 
     if (cfAiWorkerUrl) {
@@ -1593,15 +1626,41 @@ export const api = {
             ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined,
+          signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined,
         });
         if (edgeRes && edgeRes.ok) {
           return await edgeRes.json();
         }
+      } catch (edgeErr) {
+        console.warn("[AI] Edge AI Worker timed out or failed, falling back to cluster backends:", edgeErr.message);
+      }
+    }
+
+    // 2. Direct Cluster Backends Failover (Backend 2 & Backend 3)
+    const clusterBackends = [
+      "https://freestudymaterial1.onrender.com",
+      "https://freestudymaterial2.onrender.com",
+    ];
+
+    for (const origin of clusterBackends) {
+      try {
+        const authToken = getAuthToken();
+        const directRes = await fetch(`${origin}/api/ai/ask`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined,
+        });
+        if (directRes && directRes.ok) {
+          return await directRes.json();
+        }
       } catch (_) {}
     }
 
-    // Seamless Fallback to Render Node.js origin
+    // 3. Seamless Fallback to local / configured request origin
     return request("/ai/ask", {
       method: "POST",
       body: JSON.stringify(payload),

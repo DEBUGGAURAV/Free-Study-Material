@@ -114,6 +114,7 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
         cached: true,
         noteId,
         queryType: "ai_query",
+        answer: cachedSolution.answer,
       }).catch(() => {});
 
       return res.json({
@@ -224,6 +225,7 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
         cached: true,
         noteId,
         queryType: "circle_search",
+        answer: cachedSolution.answer,
       }).catch(() => {});
 
       return res.json({
@@ -473,6 +475,7 @@ router.post("/flashcards", studentAiLimiter, async (req, res) => {
           noteId,
           noteTitle: cleanTitle,
           queryType: "flashcards",
+          answer: cards,
         }).catch(() => {});
 
         return res.json({
@@ -593,6 +596,7 @@ router.post("/summary", studentAiLimiter, async (req, res) => {
         noteId,
         noteTitle: cleanTitle,
         queryType: "summary",
+        answer: cachedSolution.answer,
       }).catch(() => {});
 
       return res.json({

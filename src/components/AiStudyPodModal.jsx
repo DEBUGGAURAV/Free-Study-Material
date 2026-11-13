@@ -190,12 +190,16 @@ export default function AiStudyPodModal({
       });
       setSessionHistory(updatedHist);
     } catch (err) {
+      const rawMsg = err.message || "Please try again.";
+      const displayMsg = rawMsg.includes("port 5000")
+        ? "AI Study Engine is reconnecting to high-speed cloud edge. Please retry in a moment."
+        : rawMsg;
       setChatMessages((prev) => [
         ...prev,
         {
           id: `err_${Date.now()}`,
           role: "assistant",
-          content: `⚠️ Could not process your message: ${err.message || "Please try again."}`,
+          content: `⚠️ Could not process your message: ${displayMsg}`,
           provider: "error",
           timestamp: Date.now(),
         },

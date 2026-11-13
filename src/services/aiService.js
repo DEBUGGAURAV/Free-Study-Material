@@ -60,15 +60,13 @@ let currentAiSettings = { ...DEFAULT_AI_SETTINGS };
 let isSettingsLoaded = false;
 
 /**
- * Resolves the dedicated Telegram Topic ID for AI Search Logs (default: 17).
- * Strictly prevents AI searches from leaking into Help Active (6), Help Closed (7), or wrong topic (14).
+ * Resolves the dedicated Telegram Topic ID for AI Search Logs (strictly Topic 17).
+ * Strictly prevents AI searches from leaking into Help Active (6), Help Closed (7), or legacy topics.
  */
 function getAiSearchTopicId() {
-  const helpActiveId = parseInt(process.env.HELP_TOPIC_ACTIVE_ID || "6", 10) || 6;
-  const helpClosedId = parseInt(process.env.HELP_TOPIC_CLOSED_ID || "7", 10) || 7;
-  const blockedTopics = new Set([helpActiveId, helpClosedId, 14]);
   const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
   const savedTopic = Number(currentAiSettings.aiSearchTopicId || 0);
+  const blockedTopics = new Set([6, 7, 14, 60, 70]);
 
   if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     return envTopic;
@@ -152,8 +150,12 @@ async function loadAiSettings() {
         if (!currentAiSettings.groqModel || currentAiSettings.groqModel.includes("llama-3.1") || currentAiSettings.groqModel.includes("llama-3.3")) {
           currentAiSettings.groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
         }
-        // Heal AI Search Topic ID if missing or previously mapped to Help Box topics (6 or 7)
-        currentAiSettings.aiSearchTopicId = getAiSearchTopicId();
+        // Strictly enforce AI Search Topic ID to Topic 17 (never topic 6 or 7)
+        if (!currentAiSettings.aiSearchTopicId || currentAiSettings.aiSearchTopicId === 6 || currentAiSettings.aiSearchTopicId === 7 || currentAiSettings.aiSearchTopicId === 14) {
+          currentAiSettings.aiSearchTopicId = 17;
+        } else {
+          currentAiSettings.aiSearchTopicId = getAiSearchTopicId();
+        }
         saveAiSettingsToDb().catch(() => {});
       } else {
         currentAiSettings.groqApiKey = process.env.GROQ_API_KEY || "";
@@ -702,6 +704,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
       noteId,
       noteTitle,
       queryType,
+      answer: cachedAnswer,
     }).catch(() => {});
 
     return {
@@ -986,6 +989,7 @@ async function generateAcademicAnswer(query, context = "", options = {}) {
     noteTitle,
     queryType,
     failover: failoverOccurred,
+    answer: finalAnswer,
   }).catch(() => {});
 
   return {
@@ -1375,7 +1379,8 @@ async function createAiSearchForumTopic(token, chatId) {
 }
 
 /**
- * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Default Topic 17, auto-creates if needed)
+ * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic (Strictly Topic 17)
+ * Consolidates student query and AI solution/response into ONE single complete message.
  */
 async function dispatchAiSearchTelegramAudit({
   user,
@@ -1388,31 +1393,66 @@ async function dispatchAiSearchTelegramAudit({
   noteTitle = null,
   queryType = "ai_query",
   failover = false,
+  answer = null,
 }) {
   const token = getHelpBotToken();
   const chatId = getHelpChatId();
   if (!token || !chatId) return false;
 
-  const topicId = getAiSearchTopicId();
+  // Strictly enforce Topic 17 (AI Search & Queries Hub) and block leakage into Topic 6/7
+  let topicId = getAiSearchTopicId();
+  if (!topicId || topicId === 6 || topicId === 7 || topicId === 14) {
+    topicId = 17;
+  }
 
   try {
     const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
     const studentEmail = (user?.email || "anonymous@student.edu").replace(/[<>]/g, "");
     const studentMobile = user?.mobile || user?.phone || "N/A";
-    const cleanQuery = String(query || "").slice(0, 400).replace(/[<>]/g, "");
+    const cleanQuery = String(query || "").slice(0, 600).replace(/[<>]/g, "");
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
     const isCircle = queryType === "circle_search" || String(queryType).includes("circle");
     const isFlashcards = queryType === "flashcards" || String(queryType).includes("flashcard");
     const isSummary = queryType === "summary" || String(queryType).includes("summary");
 
-    let headline = `🤖 <b>AI Academic Query</b>`;
+    let headline = `🤖 <b>AI Academic Query & Solution</b>`;
     if (isCircle) headline = `⭕ <b>Circle to Search & Solve</b>`;
     else if (isFlashcards) headline = `🗂️ <b>Note Study Flashcards</b>`;
     else if (isSummary) headline = `📄 <b>Note Executive Summary</b>`;
 
     const engine = getAiEngineAuditDetails(provider, model, cached);
 
+    // Format Answer / Solution cleanly for Telegram HTML
+    let answerBlock = "";
+    if (answer) {
+      let rawAnswerText = "";
+      if (typeof answer === "string") {
+        rawAnswerText = answer;
+      } else if (Array.isArray(answer)) {
+        rawAnswerText = answer
+          .slice(0, 5)
+          .map((card, idx) => `Card ${idx + 1}: ${card.question || ""}\n→ ${card.answer || ""}`)
+          .join("\n\n");
+      } else if (typeof answer === "object") {
+        rawAnswerText = JSON.stringify(answer, null, 2);
+      }
+
+      // Sanitize HTML and cap at 2000 chars so the whole message easily fits under 3900 chars (single Telegram message)
+      const cleanAnswer = rawAnswerText
+        .replace(/<[^>]+>/g, "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .slice(0, 2000)
+        .trim();
+
+      if (cleanAnswer) {
+        answerBlock = `💡 <b>AI Generated Solution / Response:</b>\n<blockquote>${cleanAnswer}</blockquote>`;
+      }
+    }
+
+    // Consolidated single complete message (Question + AI Solution in ONE payload)
     const text = [
       headline,
       `━━━━━━━━━━━━━━━━━━━━`,
@@ -1427,8 +1467,11 @@ async function dispatchAiSearchTelegramAudit({
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
       noteTitle ? `📚 <b>Document:</b> ${noteTitle.replace(/[<>]/g, "")}` : "",
-      `❓ <b>Query / Formula:</b>\n<blockquote>${cleanQuery}</blockquote>`,
-      `🕒 <b>Timestamp:</b> ${timeStr}`,
+      `❓ <b>Student Question / Formula:</b>\n<blockquote>${cleanQuery}</blockquote>`,
+      answerBlock,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `🕒 <b>Timestamp:</b> ${timeStr} IST`,
+      `📍 <i>Delivered to Dedicated AI Queries Hub (Topic #${topicId})</i>`,
     ].filter(Boolean).join("\n");
 
     const payload = {
@@ -1450,20 +1493,19 @@ async function dispatchAiSearchTelegramAudit({
       return true;
     }
 
-    // If topic 17 (or configured topic) was deleted/missing/closed, auto-create a fresh AI Search topic and retry!
+    // If topic 17 (or configured topic) was rejected/missing, auto-create a fresh AI Search topic and retry!
     const errDesc = String(data?.description || "");
     if (/thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(errDesc)) {
       console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);
       const freshTopicId = await createAiSearchForumTopic(token, chatId);
-      if (freshTopicId) {
-        const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...payload, message_thread_id: Number(freshTopicId) }),
-        });
-        const retryData = await retryRes.json().catch(() => null);
-        return Boolean(retryData && retryData.ok);
-      }
+      const targetRetryId = freshTopicId || 17;
+      const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, message_thread_id: Number(targetRetryId) }),
+      });
+      const retryData = await retryRes.json().catch(() => null);
+      return Boolean(retryData && retryData.ok);
     }
 
     return false;
