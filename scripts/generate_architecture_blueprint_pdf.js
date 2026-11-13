@@ -914,7 +914,7 @@ async function createMasterArchitectureBlueprintPDF() {
         "Immune to OWASP Top 10 web vulnerabilities (XSS token theft, CSRF, Clickjacking, and Brute Force attacks).",
     },
     {
-      name: "Master Admin Permanent Immunity Shield (jnplotus@gmail.com)",
+      name: "Master Admin Permanent Immunity Shield",
       tag: "GOVERNANCE IMMUNITY SHIELD",
       accent: colors.accentRose,
       mechanism:
@@ -1156,4 +1156,3 @@ async function createMasterArchitectureBlueprintPDF() {
 }
 
 createMasterArchitectureBlueprintPDF().catch(console.error);
-

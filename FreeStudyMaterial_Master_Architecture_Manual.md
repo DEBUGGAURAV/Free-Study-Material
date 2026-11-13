@@ -556,23 +556,23 @@ NODE_ENV=production
 CLIENT_URL=https://freestudymaterial.onrender.com
 
 # Core Security Secrets
-JWT_SECRET=your_super_secret_jwt_key_here
-ADMIN_EMAIL=admin@gmail.com
-ADMIN_PASSWORD=your_secure_password_here
+JWT_SECRET=<set-in-deployment-secrets>
+ADMIN_EMAIL=<set-in-deployment-secrets>
+ADMIN_PASSWORD=<set-in-deployment-secrets>
 
 # Firebase Admin SDK Credentials
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgk...YOUR_KEY...\n-----END PRIVATE KEY-----"
+FIREBASE_PRIVATE_KEY=<set-in-deployment-secrets>
 
 # Telegram MTProto & Channel Storage
 TELEGRAM_API_ID=12345678
-TELEGRAM_API_HASH=abcdef0123456789abcdef0123456789
-TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+TELEGRAM_API_HASH=<set-in-deployment-secrets>
+TELEGRAM_BOT_TOKEN=<set-in-deployment-secrets>
 TELEGRAM_STORAGE_CHAT_ID=-1001234567890
 
 # Dedicated Chat Audit Bot (@fsm_chat_bot)
-TELEGRAM_CHAT_AUDIT_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+TELEGRAM_CHAT_AUDIT_BOT_TOKEN=<set-in-deployment-secrets>
 TELEGRAM_CHAT_AUDIT_ADMIN_ID=987654321
 TELEGRAM_CHAT_AUDIT_SUPERGROUP_ID=-1001234567890
 TELEGRAM_CHAT_TOPIC_PUBLIC_CHAT=1
@@ -583,7 +583,7 @@ TELEGRAM_CHAT_TOPIC_PRESENCE=37
 
 # Turso (LibSQL Edge Database)
 TURSO_DATABASE_URL=libsql://your-database-name.turso.io
-TURSO_AUTH_TOKEN=your_turso_auth_token_here
+TURSO_AUTH_TOKEN=<set-in-deployment-secrets>
 ```
 
 * **Zero-Leak Security:** All secrets in `render.yaml` are marked `sync: false`, preventing credential leaks to GitHub.
@@ -680,4 +680,3 @@ A standardized `.env.example` file is tracked within the workspace root, outlini
 ---
 **End of Master Technical Architecture & Operator Manual**  
 *Authored by Antigravity Autonomous Engineering Core • Free Study Material Architecture Group*
-

@@ -54,6 +54,47 @@ const SUBJECT_PATTERNS = [
 ];
 
 /**
+ * Normalizes any academic year string into standard UI category ("1st Year", "2nd Year", "3rd Year", "4th Year")
+ */
+function normalizeAcademicYear(raw = "") {
+  const str = String(raw || "").trim();
+  if (!str) return "";
+  if (
+    /\b(4TH|FOURTH|4|FINAL)\s*(YEAR|YR|YER)?\b/i.test(str) ||
+    /\bYEAR\s*4\b/i.test(str) ||
+    /\b(SEM|SEMESTER)\s*[78]\b/i.test(str) ||
+    /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(str)
+  ) {
+    return "4th Year";
+  }
+  if (
+    /\b(3RD|THIRD|3)\s*(YEAR|YR|YER)?\b/i.test(str) ||
+    /\bYEAR\s*3\b/i.test(str) ||
+    /\b(SEM|SEMESTER)\s*[56]\b/i.test(str) ||
+    /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(str)
+  ) {
+    return "3rd Year";
+  }
+  if (
+    /\b(2ND|SECOND|2)\s*(YEAR|YR|YER)?\b/i.test(str) ||
+    /\bYEAR\s*2\b/i.test(str) ||
+    /\b(SEM|SEMESTER)\s*[34]\b/i.test(str) ||
+    /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(str)
+  ) {
+    return "2nd Year";
+  }
+  if (
+    /\b(1ST|FIRST|1)\s*(YEAR|YR|YER)?\b/i.test(str) ||
+    /\bYEAR\s*1\b/i.test(str) ||
+    /\b(SEM|SEMESTER)\s*[12]\b/i.test(str) ||
+    /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(str)
+  ) {
+    return "1st Year";
+  }
+  return "";
+}
+
+/**
  * Resolves a dynamic CSE subject from any string
  */
 function resolveDynamicCseSubject(text = "") {
@@ -84,6 +125,7 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
   let branch = "CSE";
   let course = "B.Tech";
   let year = "All Years";
+  let explicitYear = "";
 
   // Check explicit caption lines
   if (caption) {
@@ -93,7 +135,7 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
       if (/^Subject:\s*/i.test(line)) subject = line.replace(/^Subject:\s*/i, "").trim();
       if (/^Branch:\s*/i.test(line)) branch = line.replace(/^Branch:\s*/i, "").trim().toUpperCase();
       if (/^Course:\s*/i.test(line)) course = line.replace(/^Course:\s*/i, "").trim();
-      if (/^Year:\s*/i.test(line)) year = line.replace(/^Year:\s*/i, "").trim();
+      if (/^Year:\s*/i.test(line)) explicitYear = line.replace(/^Year:\s*/i, "").trim();
     }
   }
 
@@ -172,54 +214,123 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
     course = "B.Tech";
   }
 
-  // 5. Resolve Academic Year (Supports Year keywords, Semester numbers, and Subject Codes)
-  const normCombined = combined.replace(/[-_]+/g, " ");
-
-  // Priority 1: Explicit Year Designation (3rd Year, 3rd Yr, Year 3, etc.)
-  if (/\b(3RD|THIRD|3)\s*(YEAR|YR)\b/i.test(normCombined) || /\bYEAR\s*3\b/i.test(normCombined)) {
-    year = "3rd Year";
-  } else if (/\b(4TH|FOURTH|4|FINAL)\s*(YEAR|YR)\b/i.test(normCombined) || /\bYEAR\s*4\b/i.test(normCombined)) {
-    year = "4th Year";
-  } else if (/\b(2ND|SECOND|2)\s*(YEAR|YR)\b/i.test(normCombined) || /\bYEAR\s*2\b/i.test(normCombined)) {
-    year = "2nd Year";
-  } else if (/\b(1ST|FIRST|1)\s*(YEAR|YR)\b/i.test(normCombined) || /\bYEAR\s*1\b/i.test(normCombined)) {
-    year = "1st Year";
-  }
-  // Priority 2: Semester Number or Subject Course Code Matching
-  else if (
-    /\b(SEM|SEMESTER)\s*[56]\b/i.test(normCombined) ||
-    /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-    /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME)\s*[56]\d{2}\b/i.test(normCombined)
-  ) {
-    year = "3rd Year";
-  } else if (
-    /\b(SEM|SEMESTER)\s*[78]\b/i.test(normCombined) ||
-    /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-    /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME)\s*[78]\d{2}\b/i.test(normCombined)
-  ) {
-    year = "4th Year";
-  } else if (
-    /\b(SEM|SEMESTER)\s*[34]\b/i.test(normCombined) ||
-    /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-    /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME)\s*[34]\d{2}\b/i.test(normCombined)
-  ) {
-    year = "2nd Year";
-  } else if (
-    /\b(SEM|SEMESTER)\s*[12]\b/i.test(normCombined) ||
-    /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-    /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME)\s*[12]\d{2}\b/i.test(normCombined)
-  ) {
-    year = "1st Year";
+  // 5. Resolve Academic Year
+  const normalizedExplicit = normalizeAcademicYear(explicitYear);
+  if (normalizedExplicit) {
+    year = normalizedExplicit;
   } else {
-    // Priority 3: Intelligent heuristic based on syllabus subject curriculum
-    if (subject.includes("DSA") || subject.includes("Discrete") || subject.includes("COA")) {
-      year = "2nd Year";
-    } else if (subject.includes("DAA") || subject.includes("Operating Systems") || subject.includes("DBMS")) {
-      year = "2nd Year";
-    } else if (subject.includes("Web Tech") || subject.includes("CNS") || subject.includes("Cryptography") || subject.includes("Compiler") || subject.includes("Computer Networks") || subject.includes("Artificial Intelligence")) {
+    // Check closest document indicators first (filename + caption)
+    const docSpecific = `${fileName} ${caption}`.toUpperCase().replace(/[-_]+/g, " ");
+    const normCombined = combined.replace(/[-_]+/g, " ");
+
+    // Priority 1: Check document-specific text FIRST for 4th Year / Final Year / 3rd / 2nd / 1st
+    // (Evaluating 4th Year first prevents "3rd Year" chat/topic titles from corrupting 4th year uploads)
+    if (
+      /\b(4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
+      /\bYEAR\s*4\b/i.test(docSpecific) ||
+      /\b(SEM|SEMESTER)\s*[78]\b/i.test(docSpecific) ||
+      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[78]\d{1,2}\b/i.test(docSpecific)
+    ) {
+      year = "4th Year";
+    } else if (
+      /\b(3RD|THIRD)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
+      /\bYEAR\s*3\b/i.test(docSpecific) ||
+      /\b(SEM|SEMESTER)\s*[56]\b/i.test(docSpecific) ||
+      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[56]\d{1,2}\b/i.test(docSpecific)
+    ) {
       year = "3rd Year";
-    } else if (subject.includes("Machine Learning") || subject.includes("Cloud") || subject.includes("Deep Learning") || subject.includes("Data Science")) {
+    } else if (
+      /\b(2ND|SECOND)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
+      /\bYEAR\s*2\b/i.test(docSpecific) ||
+      /\b(SEM|SEMESTER)\s*[34]\b/i.test(docSpecific) ||
+      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[34]\d{1,2}\b/i.test(docSpecific)
+    ) {
+      year = "2nd Year";
+    } else if (
+      /\b(1ST|FIRST)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
+      /\bYEAR\s*1\b/i.test(docSpecific) ||
+      /\b(SEM|SEMESTER)\s*[12]\b/i.test(docSpecific) ||
+      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[12]\d{1,2}\b/i.test(docSpecific)
+    ) {
+      year = "1st Year";
+    }
+    // Priority 2: Check full combined string (forum topic / supergroup title)
+    else if (
+      /\b(4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
+      /\bYEAR\s*4\b/i.test(normCombined) ||
+      /\b(SEM|SEMESTER)\s*[78]\b/i.test(normCombined) ||
+      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[78]\d{1,2}\b/i.test(normCombined)
+    ) {
+      year = "4th Year";
+    } else if (
+      /\b(3RD|THIRD)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
+      /\bYEAR\s*3\b/i.test(normCombined) ||
+      /\b(SEM|SEMESTER)\s*[56]\b/i.test(normCombined) ||
+      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[56]\d{1,2}\b/i.test(normCombined)
+    ) {
       year = "3rd Year";
+    } else if (
+      /\b(2ND|SECOND)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
+      /\bYEAR\s*2\b/i.test(normCombined) ||
+      /\b(SEM|SEMESTER)\s*[34]\b/i.test(normCombined) ||
+      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[34]\d{1,2}\b/i.test(normCombined)
+    ) {
+      year = "2nd Year";
+    } else if (
+      /\b(1ST|FIRST)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
+      /\bYEAR\s*1\b/i.test(normCombined) ||
+      /\b(SEM|SEMESTER)\s*[12]\b/i.test(normCombined) ||
+      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
+      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[12]\d{1,2}\b/i.test(normCombined)
+    ) {
+      year = "1st Year";
+    } else {
+      // Priority 3: Intelligent heuristic based on syllabus subject curriculum
+      if (
+        subject.includes("Distributed Systems") ||
+        subject.includes("Blockchain") ||
+        subject.includes("Renewable Energy") ||
+        subject.includes("NLP") ||
+        subject.includes("Natural Language")
+      ) {
+        year = "4th Year";
+      } else if (
+        subject.includes("Cloud") ||
+        subject.includes("Deep Learning")
+      ) {
+        if (/[478]|FINAL/i.test(normCombined)) {
+          year = "4th Year";
+        } else {
+          year = "3rd Year";
+        }
+      } else if (
+        subject.includes("DSA") ||
+        subject.includes("Discrete") ||
+        subject.includes("COA") ||
+        subject.includes("DAA") ||
+        subject.includes("Operating Systems") ||
+        subject.includes("DBMS")
+      ) {
+        year = "2nd Year";
+      } else if (
+        subject.includes("Web Tech") ||
+        subject.includes("CNS") ||
+        subject.includes("Cryptography") ||
+        subject.includes("Compiler") ||
+        subject.includes("Computer Networks") ||
+        subject.includes("Artificial Intelligence") ||
+        subject.includes("Machine Learning") ||
+        subject.includes("Data Science")
+      ) {
+        year = "3rd Year";
+      }
     }
   }
 

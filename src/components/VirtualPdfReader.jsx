@@ -712,6 +712,29 @@ export default function VirtualPdfReader({
   const [nativeLoading, setNativeLoading] = useState(false);
   const [nativeSrc, setNativeSrc] = useState("");
 
+  // Comprehensive Mobile, Touch & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
+  const isTouchOrMobileDevice = typeof window !== "undefined" && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "") ||
+    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "") ||
+    Boolean(navigator.userAgentData?.mobile) ||
+    Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
+    ("ontouchstart" in window) ||
+    Boolean(window.matchMedia && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)) ||
+    (typeof screen !== "undefined" && Math.min(screen.width, screen.height) <= 900) ||
+    (typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth <= 900) ||
+    navigator.pdfViewerEnabled === false
+  );
+  const isMobileDevice = isTouchOrMobileDevice;
+
+  // Genuine Desktop PDFium capability: True ONLY on desktop PCs (Windows/Mac/Linux) with built-in PDFium plugin and without coarse touch
+  const hasNativePdfium = typeof window !== "undefined" &&
+    navigator.pdfViewerEnabled === true &&
+    !isTouchOrMobileDevice;
+  const canUseNativePdfViewer = hasNativePdfium;
+
+  const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
+  const loadGenerationRef = useRef(0);
+
   // 🔖 Zero-DB-Cost Local Study Features: Resume Last Page + Bookmarks/Highlights + Focus Timer
   const [resumedPageNotice, setResumedPageNotice] = useState(null);
   const hasAttemptedResumeRef = useRef(false);
@@ -870,29 +893,6 @@ export default function VirtualPdfReader({
     const s = sec % 60;
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
-
-  // Comprehensive Mobile, Touch & Tablet Detection (100% covers Android, iOS, tablets, and mobile browsers with "Desktop site" toggled on)
-  const isTouchOrMobileDevice = typeof window !== "undefined" && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Tablet|Silk|Kindle/i.test(navigator.userAgent || "") ||
-    /Android|iPhone|iPad|iPod/i.test(navigator.platform || "") ||
-    Boolean(navigator.userAgentData?.mobile) ||
-    Boolean(navigator.maxTouchPoints && navigator.maxTouchPoints > 0) ||
-    ("ontouchstart" in window) ||
-    Boolean(window.matchMedia && (window.matchMedia("(pointer: coarse)").matches || window.matchMedia("(hover: none)").matches)) ||
-    (typeof screen !== "undefined" && Math.min(screen.width, screen.height) <= 900) ||
-    (typeof window !== "undefined" && window.innerWidth > 0 && window.innerWidth <= 900) ||
-    navigator.pdfViewerEnabled === false
-  );
-  const isMobileDevice = isTouchOrMobileDevice;
-
-  // Genuine Desktop PDFium capability: True ONLY on desktop PCs (Windows/Mac/Linux) with built-in PDFium plugin and without coarse touch
-  const hasNativePdfium = typeof window !== "undefined" &&
-    navigator.pdfViewerEnabled === true &&
-    !isTouchOrMobileDevice;
-  const canUseNativePdfViewer = hasNativePdfium;
-
-  const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
-  const loadGenerationRef = useRef(0);
 
   // 📐 Auto-Fit Scale Engine: Computes exact scale so 100% of the page fits on screen with ZERO cut-off
   const calculateFitScale = useCallback(async (targetMode = fitMode, targetPage = currentPage) => {

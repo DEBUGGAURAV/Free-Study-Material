@@ -273,7 +273,7 @@ In `src/services/accountPurgeService.js`:
 - A daily cron job scans all user profiles in Firestore.
 - **90-Day Policy**: Accounts inactive for $> 90$ consecutive days are automatically pruned to protect university resources and student privacy.
 - **🛡️ 3-Layer Admin Permanent Immunity**:
-  1. *Email Match*: Any user with `email === process.env.ADMIN_EMAIL` or `jnplotus@gmail.com` is unconditionally skipped.
+  1. *Email Match*: Any user with `email === process.env.ADMIN_EMAIL` is unconditionally skipped.
   2. *Alias Protection*: Hardcoded `ADMIN_ALIASES` list.
   3. *Role-Based Shield*: Any account with `role === 'admin'`, `role === 'half_admin'`, `id === 'admin-root'`, or `isAdmin === true` can **NEVER** be deleted by any automated purge process under any condition.
 
@@ -416,8 +416,8 @@ NODE_ENV=production
 CLIENT_URL=https://freestudymaterial.onrender.com
 
 # Security & Tokens
-JWT_SECRET=fsm_super_secret_jwt_key_2026
-ADMIN_EMAIL=jnplotus@gmail.com
+JWT_SECRET=<set-in-deployment-secrets>
+ADMIN_EMAIL=<set-in-deployment-secrets>
 ADMIN_PASSWORD=...
 
 # Firebase Cloud Firestore
@@ -430,7 +430,7 @@ TELEGRAM_API_ID=...
 TELEGRAM_API_HASH=...
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHANNEL_ID=-1001887463691
-TELEGRAM_SESSION_STRING="1ApWapzMBuy4..."
+TELEGRAM_SESSION_STRING=<set-in-deployment-secrets>
 
 # Cloudflare Edge Worker
 CLOUDFLARE_WORKER_URL=https://fsm-edge.jnplotus.workers.dev
@@ -443,4 +443,3 @@ CLOUDFLARE_WORKER_URL=https://fsm-edge.jnplotus.workers.dev
 
 ---
 *System Document Finalized • Build Certified Stable • 0 Known Vulnerabilities • Full Enterprise Redundancy.*
-

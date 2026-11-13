@@ -72,6 +72,20 @@ export default class GlobalErrorBoundary extends Component {
         }
       }
 
+      if (typeof window !== "undefined" && "indexedDB" in window) {
+        try {
+          if (typeof window.indexedDB.databases === "function") {
+            const dbs = await window.indexedDB.databases();
+            for (const db of dbs) {
+              if (db.name) window.indexedDB.deleteDatabase(db.name);
+            }
+          }
+        } catch (_) {}
+        ["fsm_notes_catalog_db", "fsm_p2p_cache_v1", "fsm_offline_vault", "fsm_offline_cache"].forEach((name) => {
+          try { window.indexedDB.deleteDatabase(name); } catch (_) {}
+        });
+      }
+
       window.location.replace(window.location.origin + "/?reset=" + Date.now());
     } catch (_) {
       window.location.replace(window.location.origin + "/");
@@ -189,7 +203,7 @@ export default class GlobalErrorBoundary extends Component {
                   fontSize: "0.85rem",
                 }}
               >
-                {this.state.isResetting ? "🧹 Purging Stale Cache & Restarting..." : "🧹 Purge Stale Cache & Restart"}
+                {this.state.isResetting ? "🔄 Clearing App Cache & Restarting..." : "🔄 Clear App Cache & Restart"}
               </button>
             </div>
           </div>
