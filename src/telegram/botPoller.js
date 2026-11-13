@@ -463,6 +463,7 @@ async function processIncomingMessage(message) {
       year,
       semester: year,
       description: caption || `Synced from Telegram: ${chatTitle || (message.chat.type === "private" ? "Direct Bot DM" : "Telegram Group")}`,
+      fileName: fileName,
       originalName: fileName,
       fileHash,
       mimeType: doc.mime_type || "application/pdf",

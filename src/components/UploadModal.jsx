@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, UploadCloud, CheckCircle2, AlertCircle, Sparkles, Activity, ChevronDown, Plus, BookOpen } from "lucide-react";
 import { api } from "../api";
-import { formatFileSize, formatMB } from "../utils/formatUtils";
+import { formatFileSize, formatMB, sanitizeNoteTitle } from "../utils/formatUtils";
 import { calculateHardwareHash, compressPdfClient } from "../utils/clientCompressor";
 
 export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {
@@ -96,7 +96,7 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
       setFile(selected);
       setClientCompressMsg("");
       if (!title) {
-        setTitle(selected.name.replace(/\.[^/.]+$/, ""));
+        setTitle(sanitizeNoteTitle(selected.name));
       }
       // ⚡ Hardware-Accelerated SHA-256 (Web Crypto API) in 2ms
       calculateHardwareHash(selected).then((hash) => {
@@ -163,7 +163,8 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
       if (hardwareHash) {
         formData.append("fileHash", hardwareHash);
       }
-      formData.append("title", title);
+      const cleanTitle = sanitizeNoteTitle(title || uploadFile.name || file.name);
+      formData.append("title", cleanTitle);
       formData.append("subject", subject);
       formData.append("branch", isCustomBranch ? customBranchName.trim().toUpperCase() : branch);
       formData.append("customBranch", isCustomBranch ? customBranchName.trim().toUpperCase() : "");

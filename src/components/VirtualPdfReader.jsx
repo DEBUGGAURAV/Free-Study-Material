@@ -1401,7 +1401,7 @@ export default function VirtualPdfReader({
     } else {
       const activeId = noteId || note?.id;
       if (activeId) {
-        const cleanName = getNotePdfFileName(note || { id: activeId, title });
+        const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
         const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
         const token = getActiveReaderToken();
         setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
@@ -1486,7 +1486,7 @@ export default function VirtualPdfReader({
         // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
         const token = getActiveReaderToken();
         const activeId = noteId || note?.id;
-        const cleanName = getNotePdfFileName(note || { id: activeId, title });
+        const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
         const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
         const directUrl = `/api/notes/${activeId}/${pathSegment}?preview=1&direct=1${token ? `&token=${encodeURIComponent(token)}` : ""}`;
         if (!nativeSrc) setNativeSrc(directUrl);
@@ -1857,7 +1857,7 @@ export default function VirtualPdfReader({
     }
     if (isDownloadingPdf) return;
 
-    const fileName = getNotePdfFileName(note || { title, id: noteId });
+    const fileName = getNotePdfFileName(note || { title, id: noteId, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
 
     const controller = new AbortController();
     downloadAbortRef.current = controller;
@@ -3657,7 +3657,7 @@ export default function VirtualPdfReader({
 
     const activeId = noteId || note?.id;
     if (activeId) {
-      const cleanName = getNotePdfFileName(note || { id: activeId, title });
+      const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
       const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
       const token = getActiveReaderToken();
       setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);

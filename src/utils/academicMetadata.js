@@ -274,7 +274,20 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
   if (caption) {
     const lines = caption.split("\n");
     for (const line of lines) {
-      if (/^Title:\s*/i.test(line)) title = line.replace(/^Title:\s*/i, "").trim() || title;
+      if (/^Title:\s*/i.test(line)) {
+        const rawT = line.replace(/^Title:\s*/i, "").trim();
+        if (rawT) {
+          title = rawT
+            .replace(/\.[^/.]+$/, "")
+            .replace(/\s*\(\d+\)\s*$/, "")
+            .replace(/\s*\[\d+\]\s*$/, "")
+            .replace(/[_\-]+/g, " ")
+            .replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ")
+            .replace(/\bLePic\b/gi, "")
+            .replace(/\s+/g, " ")
+            .trim() || rawT;
+        }
+      }
       if (/^Subject:\s*/i.test(line)) subject = line.replace(/^Subject:\s*/i, "").trim();
       if (/^Branch:\s*/i.test(line)) branch = line.replace(/^Branch:\s*/i, "").trim().toUpperCase();
       if (/^Course:\s*/i.test(line)) course = line.replace(/^Course:\s*/i, "").trim();

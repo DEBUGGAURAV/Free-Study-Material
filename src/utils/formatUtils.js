@@ -38,6 +38,20 @@ export function formatMB(bytes) {
 }
 
 /**
+ * Automatically sanitizes a note title from a filename or user input by stripping
+ * alphanumeric subject/course codes (e.g., KCS071, CS-501, BCS301, KOE074), copy indicators,
+ * and normalizing underscores/hyphens into human-readable titles.
+ */
+export function sanitizeNoteTitle(rawTitle, fallbackOriginalName = "") {
+  let text = String(rawTitle || fallbackOriginalName || "").replace(/\.[^/.]+$/, "").trim();
+  text = text.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
+  text = text.replace(/[_\-]+/g, " ");
+  text = text.replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ");
+  text = text.replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
+  return text || String(fallbackOriginalName).replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
+}
+
+/**
  * Resolves the accurate, user-expected PDF download file name from note metadata.
  * Strips illegal characters and guarantees the .pdf extension.
  */

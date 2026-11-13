@@ -160,7 +160,18 @@ router.post(
       };
 
       const file = req.file;
-      const noteTitle = sanitizeField(title || file.originalname, 180);
+
+      // Title Sanitization: Automatically strip alphanumeric subject codes (e.g. KCS071, CS-501, BCS301, KOE074)
+      const sanitizeNoteTitle = (rawTitle, fallbackOriginalName = "") => {
+        let text = String(rawTitle || fallbackOriginalName || "").replace(/\.[^/.]+$/, "").trim();
+        text = text.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
+        text = text.replace(/[_\-]+/g, " ");
+        text = text.replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ");
+        text = text.replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
+        return text || String(fallbackOriginalName).replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
+      };
+
+      const noteTitle = sanitizeField(sanitizeNoteTitle(title, file.originalname), 180);
       const noteSubject = sanitizeField(subject || "General Academic", 100);
       
       // Determine final branch: customBranch takes precedence if provided!
@@ -189,6 +200,7 @@ router.post(
           semester: noteYear, // Backward compatibility for legacy clients
           description: description || "",
           tags: tags ? (Array.isArray(tags) ? tags : typeof tags === "string" ? tags.split(",") : []).map((t) => String(t).trim()).filter(Boolean) : [],
+          fileName: file.originalname,
           originalName: file.originalname,
           mimeType: file.mimetype,
           fileSize: file.size,
