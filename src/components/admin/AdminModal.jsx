@@ -2798,8 +2798,8 @@ export default function AdminModal({
           className="admin-modal-header"
           style={{
             padding: "14px 24px",
-            background: "rgba(15, 23, 42, 0.85)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            background: "linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 31, 0.92) 100%)",
+            borderBottom: "1px solid rgba(56, 189, 248, 0.18)",
             backdropFilter: "blur(20px)",
             display: "flex",
             justifyContent: "space-between",
@@ -2811,48 +2811,55 @@ export default function AdminModal({
           <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
             <div
               style={{
-                width: "42px",
-                height: "42px",
+                width: "44px",
+                height: "44px",
                 borderRadius: "12px",
                 background: "linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)",
+                border: "1.5px solid rgba(56, 189, 248, 0.4)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#fff",
-                boxShadow: "0 4px 16px rgba(99, 102, 241, 0.45)",
+                boxShadow: "0 0 24px rgba(6, 182, 212, 0.4)",
                 flexShrink: 0,
               }}
             >
-              <Shield size={22} />
+              <Shield size={23} />
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "#fff", margin: 0, letterSpacing: "-0.02em" }}>
+                <h2 style={{ fontSize: "1.22rem", fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
                   Academic Cloud Studio &amp; Control Center
                 </h2>
                 <span
                   style={{
-                    background: "rgba(16, 185, 129, 0.15)",
-                    border: "1px solid rgba(16, 185, 129, 0.4)",
-                    color: "#10b981",
+                    background: "rgba(16, 185, 129, 0.16)",
+                    border: "1px solid rgba(16, 185, 129, 0.5)",
+                    color: "#34d399",
                     fontSize: "0.68rem",
-                    fontWeight: 700,
-                    padding: "2px 8px",
+                    fontWeight: 750,
+                    padding: "2px 9px",
                     borderRadius: "999px",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "5px",
+                    gap: "6px",
+                    boxShadow: "0 0 12px rgba(16, 185, 129, 0.25)",
                   }}
                 >
                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
-                  {health?.status === "online" ? "LIVE ENGINE v3" : "ONLINE"}
+                  {health?.status === "online" ? "LIVE ENGINE v3.2 • ZERO-LATENCY EDGE" : "ONLINE • EDGE SHIELD ACTIVE"}
                 </span>
               </div>
-              <div style={{ fontSize: "0.78rem", color: "var(--accent-cyan)", marginTop: "2px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span>Signed in as: <strong>{currentUser?.name || currentUser?.email}</strong></span>
+              <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "3px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span>Signed in as: <strong style={{ color: "#ffffff", fontWeight: 700 }}>{currentUser?.name || currentUser?.email}</strong></span>
                 {isMainAdmin && (
-                  <span style={{ background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", padding: "1px 8px", borderRadius: "6px", fontWeight: 800, fontSize: "0.7rem", border: "1px solid rgba(245, 158, 11, 0.4)" }}>
+                  <span style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.15))", color: "#fbbf24", padding: "1px 8px", borderRadius: "6px", fontWeight: 800, fontSize: "0.7rem", border: "1px solid rgba(245, 158, 11, 0.5)", boxShadow: "0 0 10px rgba(245, 158, 11, 0.25)" }}>
                     👑 MASTER ADMIN
+                  </span>
+                )}
+                {isHalfAdmin && (
+                  <span style={{ background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", padding: "1px 8px", borderRadius: "6px", fontWeight: 700, fontSize: "0.7rem", border: "1px solid rgba(168, 85, 247, 0.4)" }}>
+                    ⚡ MODERATOR ADMIN
                   </span>
                 )}
               </div>
@@ -2877,7 +2884,16 @@ export default function AdminModal({
                 if (activeTab === "turso") { loadTursoData(); loadTursoAudits(); }
               }}
               className="btn-icon"
-              style={{ width: "36px", height: "36px", background: "rgba(255, 255, 255, 0.05)", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.1)" }}
+              style={{
+                width: "38px",
+                height: "38px",
+                background: "rgba(255, 255, 255, 0.05)",
+                borderRadius: "9px",
+                border: "1px solid rgba(56, 189, 248, 0.28)",
+                color: "#38bdf8",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
               title="Refresh Current Telemetry"
             >
               <RefreshCw size={16} />
@@ -2885,76 +2901,115 @@ export default function AdminModal({
             <button
               className="modal-close-btn"
               onClick={onClose}
-              style={{ width: "36px", height: "36px", borderRadius: "8px" }}
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "9px",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                background: "rgba(239, 68, 68, 0.12)",
+                color: "#fca5a5",
+                cursor: "pointer",
+              }}
+              title="Close Admin Studio"
             >
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Global KPIs Bar */}
+        {/* Global KPIs Bar (Vibrant Cyber Telemetry Cards) */}
         <div
           className="admin-kpis-strip"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
             gap: "10px",
-            padding: "10px 22px",
-            background: "rgba(8, 12, 22, 0.75)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-            backdropFilter: "blur(12px)",
+            padding: "12px 22px",
+            background: "rgba(8, 12, 22, 0.88)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
+            backdropFilter: "blur(14px)",
           }}
         >
-          <div style={{ background: "linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(255, 255, 255, 0.07)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Card 1: Vault Materials */}
+          <div style={{ background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(99, 102, 241, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(99, 102, 241, 0.2)" }}>
             <div>
-              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fff", marginTop: "1px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(99, 102, 241, 0.2)", color: "#818cf8" }}>CATALOG</span>
+              </div>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#ffffff", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
               </div>
             </div>
-            <FileText size={20} style={{ color: "rgba(99, 102, 241, 0.7)" }} />
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(99, 102, 241, 0.2)", border: "1px solid rgba(99, 102, 241, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#818cf8", flexShrink: 0 }}>
+              <BookOpen size={18} />
+            </div>
           </div>
 
-          <div style={{ background: "linear-gradient(135deg, rgba(6, 182, 212, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(6, 182, 212, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Card 2: Verified Students */}
+          <div style={{ background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(6, 182, 212, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(6, 182, 212, 0.2)" }}>
             <div>
-              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--accent-cyan)", marginTop: "1px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(6, 182, 212, 0.2)", color: "#22d3ee" }}>LEARNERS</span>
+              </div>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#22d3ee", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {studentsTotal || stats?.totalStudents || 0}
               </div>
             </div>
-            <UserCheck size={20} style={{ color: "var(--accent-cyan)", opacity: 0.8 }} />
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(6, 182, 212, 0.2)", border: "1px solid rgba(6, 182, 212, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22d3ee", flexShrink: 0 }}>
+              <Users size={18} />
+            </div>
           </div>
 
-          <div style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(16, 185, 129, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Card 3: Bandwidth Saved */}
+          <div style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(16, 185, 129, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(16, 185, 129, 0.2)" }}>
             <div>
-              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#10b981", marginTop: "1px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399" }}>ZERO-COST</span>
+              </div>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#34d399", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
                   ? stats.formattedSaved
                   : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
               </div>
             </div>
-            <Zap size={20} style={{ color: "#10b981", opacity: 0.8 }} />
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.2)", border: "1px solid rgba(16, 185, 129, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#34d399", flexShrink: 0 }}>
+              <Zap size={18} />
+            </div>
           </div>
 
-          <div style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(245, 158, 11, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Card 4: RAM Consumption */}
+          <div style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(245, 158, 11, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(245, 158, 11, 0.2)" }}>
             <div>
-              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24", marginTop: "1px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" }}>1MS CACHE</span>
+              </div>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#fbbf24", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
               </div>
             </div>
-            <Cpu size={20} style={{ color: "#fbbf24", opacity: 0.8 }} />
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(245, 158, 11, 0.2)", border: "1px solid rgba(245, 158, 11, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fbbf24", flexShrink: 0 }}>
+              <Cpu size={18} />
+            </div>
           </div>
 
-          <div style={{ background: "linear-gradient(135deg, rgba(167, 139, 250, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%)", border: "1px solid rgba(167, 139, 250, 0.18)", borderRadius: "10px", padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          {/* Card 5: Edge CDN Hit Ratio */}
+          <div style={{ background: "linear-gradient(135deg, rgba(167, 139, 250, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(167, 139, 250, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(167, 139, 250, 0.2)" }}>
             <div>
-              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</div>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#a78bfa", marginTop: "1px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(167, 139, 250, 0.2)", color: "#c084fc" }}>HIT RATIO</span>
+              </div>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#c084fc", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {cdnStats?.hitRatio || "99.4%"}
               </div>
             </div>
-            <Globe size={20} style={{ color: "#a78bfa", opacity: 0.8 }} />
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(167, 139, 250, 0.2)", border: "1px solid rgba(167, 139, 250, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#c084fc", flexShrink: 0 }}>
+              <Globe size={18} />
+            </div>
           </div>
         </div>
 
@@ -2991,6 +3046,7 @@ export default function AdminModal({
               const isSelected = activeTab === tab.id;
               const badgeText = getTabBadgeText(tab.id);
               const accentColor = tab.accent || "#38bdf8";
+              const TabIcon = tab.icon || BookOpen;
 
               return (
                 <button
@@ -3006,44 +3062,50 @@ export default function AdminModal({
                     padding: "6px 12px",
                     borderRadius: "10px",
                     whiteSpace: "nowrap",
-                    fontWeight: isSelected ? 750 : 600,
+                    fontWeight: isSelected ? 800 : 600,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "6px",
+                    gap: "7px",
                     border: isSelected
-                      ? `1px solid ${accentColor}`
-                      : "1px solid rgba(255, 255, 255, 0.09)",
+                      ? `1.5px solid ${accentColor}`
+                      : "1px solid rgba(255, 255, 255, 0.1)",
                     background: isSelected
-                      ? `linear-gradient(135deg, ${accentColor}26, rgba(15, 23, 42, 0.9))`
-                      : "rgba(255, 255, 255, 0.03)",
+                      ? `linear-gradient(135deg, ${accentColor}33, rgba(15, 23, 42, 0.95))`
+                      : "rgba(255, 255, 255, 0.035)",
                     color: isSelected ? "#ffffff" : "#cbd5e1",
-                    boxShadow: isSelected ? `0 0 18px -6px ${accentColor}` : "none",
+                    boxShadow: isSelected ? `0 0 20px -4px ${accentColor}66` : "none",
                     transition: "all 0.16s ease",
+                    cursor: "pointer",
                   }}
                   title={`${tab.group} • ${tab.title}`}
                 >
                   <span
                     style={{
-                      width: "6px",
-                      height: "6px",
-                      borderRadius: "999px",
-                      background: accentColor,
-                      boxShadow: isSelected ? `0 0 8px ${accentColor}` : "none",
-                      opacity: isSelected ? 1 : 0.65,
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "6px",
+                      background: isSelected ? accentColor : `${accentColor}25`,
+                      color: isSelected ? "#ffffff" : accentColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: isSelected ? `0 0 10px ${accentColor}` : "none",
                       flexShrink: 0,
                     }}
-                  />
-                  <span>{tab.label}</span>
+                  >
+                    <TabIcon size={12} />
+                  </span>
+                  <span style={{ fontWeight: isSelected ? 800 : 600 }}>{tab.label}</span>
                   {badgeText && (
                     <span
                       style={{
                         fontSize: "0.66rem",
-                        fontWeight: 700,
+                        fontWeight: 800,
                         padding: "1px 6px",
                         borderRadius: "999px",
-                        background: isSelected ? `${accentColor}30` : "rgba(255, 255, 255, 0.07)",
-                        color: isSelected ? accentColor : "#94a3b8",
-                        border: `1px solid ${isSelected ? `${accentColor}55` : "rgba(255, 255, 255, 0.08)"}`,
+                        background: isSelected ? `${accentColor}40` : "rgba(255, 255, 255, 0.08)",
+                        color: isSelected ? "#ffffff" : accentColor,
+                        border: `1px solid ${isSelected ? accentColor : "rgba(255, 255, 255, 0.12)"}`,
                       }}
                     >
                       {badgeText}
@@ -3299,6 +3361,7 @@ export default function AdminModal({
                           const isSelected = activeTab === tab.id;
                           const badgeText = getTabBadgeText(tab.id);
                           const accentColor = tab.accent || "#38bdf8";
+                          const TabIcon = tab.icon || BookOpen;
 
                           return (
                             <button
@@ -3309,36 +3372,56 @@ export default function AdminModal({
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "space-between",
-                                gap: "8px",
+                                gap: "10px",
                                 width: "100%",
                                 textAlign: "left",
                                 padding: "8px 10px",
-                                borderRadius: "8px",
+                                borderRadius: "9px",
                                 border: isSelected
-                                  ? `1px solid ${accentColor}`
-                                  : "1px solid rgba(255, 255, 255, 0.06)",
-                                borderLeft: `3px solid ${accentColor}`,
+                                  ? `1.5px solid ${accentColor}`
+                                  : "1px solid rgba(255, 255, 255, 0.07)",
+                                borderLeft: `3.5px solid ${accentColor}`,
                                 background: isSelected
-                                  ? `${accentColor}20`
-                                  : "rgba(15, 23, 42, 0.65)",
+                                  ? `linear-gradient(135deg, ${accentColor}25, rgba(15, 23, 42, 0.95))`
+                                  : "rgba(15, 23, 42, 0.75)",
                                 color: isSelected ? "#ffffff" : "#e2e8f0",
-                                fontSize: "0.78rem",
-                                fontWeight: isSelected ? 750 : 600,
+                                fontSize: "0.79rem",
+                                fontWeight: isSelected ? 800 : 600,
                                 cursor: "pointer",
+                                transition: "all 0.15s ease",
                               }}
                             >
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {tab.label}
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    width: "26px",
+                                    height: "26px",
+                                    borderRadius: "7px",
+                                    background: isSelected ? accentColor : `${accentColor}22`,
+                                    color: isSelected ? "#ffffff" : accentColor,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    boxShadow: isSelected ? `0 0 10px ${accentColor}` : "none",
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  <TabIcon size={13} />
+                                </div>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {tab.label}
+                                </span>
+                              </div>
                               {badgeText && (
                                 <span
                                   style={{
                                     fontSize: "0.66rem",
-                                    fontWeight: 700,
-                                    padding: "1px 6px",
+                                    fontWeight: 800,
+                                    padding: "2px 7px",
                                     borderRadius: "999px",
-                                    background: `${accentColor}22`,
+                                    background: `${accentColor}25`,
                                     color: accentColor,
+                                    border: `1px solid ${accentColor}55`,
                                     flexShrink: 0,
                                   }}
                                 >
@@ -3358,7 +3441,132 @@ export default function AdminModal({
         </div>
 
         {/* Dynamic Tab Body */}
-        <div className="admin-tab-body" style={{ flex: 1, overflowY: "auto", padding: "20px 28px", position: "relative" }}>
+        <div className="admin-tab-body" style={{ flex: 1, overflowY: "auto", padding: "18px 24px", position: "relative" }}>
+          {/* Active Module HUD Command Banner */}
+          <div
+            style={{
+              padding: "14px 18px",
+              borderRadius: "14px",
+              background: `linear-gradient(135deg, ${activeTabMeta?.accent || "#38bdf8"}18 0%, rgba(15, 23, 42, 0.75) 100%)`,
+              border: `1px solid ${activeTabMeta?.accent || "#38bdf8"}44`,
+              boxShadow: `0 10px 28px -12px ${activeTabMeta?.accent || "#38bdf8"}35`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: "12px",
+              marginBottom: "18px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div
+                style={{
+                  width: "42px",
+                  height: "42px",
+                  borderRadius: "12px",
+                  background: `linear-gradient(135deg, ${activeTabMeta?.accent || "#38bdf8"}38, ${activeTabMeta?.accent || "#38bdf8"}15)`,
+                  border: `1.5px solid ${activeTabMeta?.accent || "#38bdf8"}77`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: activeTabMeta?.accent || "#38bdf8",
+                  boxShadow: `0 0 18px ${activeTabMeta?.accent || "#38bdf8"}44`,
+                  flexShrink: 0,
+                }}
+              >
+                {(() => {
+                  const ActiveIcon = activeTabMeta?.icon || BookOpen;
+                  return <ActiveIcon size={21} />;
+                })()}
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#ffffff", letterSpacing: "-0.01em" }}>
+                    {activeTabMeta?.title || activeTabMeta?.label}
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: "0.64rem",
+                      fontWeight: 800,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.6px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background: `${activeTabMeta?.accent || "#38bdf8"}25`,
+                      color: activeTabMeta?.accent || "#38bdf8",
+                      border: `1px solid ${activeTabMeta?.accent || "#38bdf8"}55`,
+                    }}
+                  >
+                    {activeTabMeta?.group || "SYSTEM MODULE"}
+                  </span>
+                </div>
+                <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                  {activeTabMeta?.desc || "Active enterprise telemetry and control surface"}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  loadStats();
+                  if (activeTab === "notes") onRefreshNotes?.();
+                  if (activeTab === "students") loadStudents();
+                  if (activeTab === "hardware") loadHardwareInfo(true);
+                  if (activeTab === "software") loadSoftwareInfo();
+                  if (activeTab === "pipeline") loadUploadPipelines();
+                  if (activeTab === "performance") { loadCdnStats(); loadCdnFiles(); }
+                  if (activeTab === "database") { loadDatabaseOverview(); loadCollectionItems(); }
+                  if (activeTab === "recycle_bin") loadRecycleBinItems();
+                  if (activeTab === "security_bot") loadSecurityBotSettings();
+                  if (activeTab === "tech_nexus") loadTechNexus();
+                  if (activeTab === "community_chat") { loadAdminChat(selectedChatRoomId); loadChatBotTelemetry(); }
+                  if (activeTab === "turso") { loadTursoData(); loadTursoAudits(); }
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 13px",
+                  borderRadius: "8px",
+                  background: "rgba(255, 255, 255, 0.06)",
+                  border: "1px solid rgba(255, 255, 255, 0.14)",
+                  color: "#f8fafc",
+                  fontSize: "0.76rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                title="Refresh Current Module Telemetry"
+              >
+                <RefreshCw size={13} style={{ color: activeTabMeta?.accent || "#38bdf8" }} />
+                <span>Refresh Module</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setQuickJumpOpen(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 12px",
+                  borderRadius: "8px",
+                  background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.22))",
+                  border: "1px solid rgba(56, 189, 248, 0.4)",
+                  color: "#ffffff",
+                  fontSize: "0.75rem",
+                  fontWeight: 750,
+                  cursor: "pointer",
+                }}
+                title="Quick Switch Module (Ctrl+K or /)"
+              >
+                <Search size={13} style={{ color: "#38bdf8" }} />
+                <span>Quick Jump (⌘K)</span>
+              </button>
+            </div>
+          </div>
           <Suspense fallback={<AdminModuleFallback />}>
             {activeTab === "notes" && <TabNotes {...tabProps} />}
             {activeTab === "students" && <TabStudents {...tabProps} />}

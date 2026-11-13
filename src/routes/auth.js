@@ -1302,7 +1302,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Valid 10-digit mobile number is required." });
     }
     if (!cleanCollege) {
-      return res.status(400).json({ success: false, message: "College / University name is required." });
+      return res.status(400).json({ success: false, message: "College name is required." });
     }
 
     if (!db) {

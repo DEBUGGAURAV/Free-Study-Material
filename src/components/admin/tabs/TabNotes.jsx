@@ -1,5 +1,5 @@
 import "react";
-import { Trash2, Eye, EyeOff, Edit3, Search, Clock, RefreshCw, Download, Power, Lock } from "lucide-react";
+import { Trash2, Eye, EyeOff, Edit3, Search, Clock, RefreshCw, Download, Power, Lock, BookOpen, Layers, Server, Sliders, FileText } from "lucide-react";
 import "../../../api";
 import { formatFileSize } from "../../../utils/formatUtils";
 import "../../../utils/hardwareAdaptiveEngine";
@@ -123,7 +123,7 @@ export default function TabNotes(props) {
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", gap: "12px", flexWrap: "wrap" }}>
                 <div style={{ position: "relative", minWidth: "280px", flex: 1 }}>
-                  <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                  <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#38bdf8" }} />
                   <input
                     type="text"
                     className="form-input"
@@ -334,15 +334,40 @@ export default function TabNotes(props) {
               </div>
 
               {/* Notes Table */}
-              <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+              <div style={{ background: "rgba(15, 23, 42, 0.55)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 8px 30px rgba(0, 0, 0, 0.35)" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
                   <thead>
-                    <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
-                      <th style={{ padding: "12px 16px" }}>DOCUMENT TITLE &amp; SUBJECT</th>
-                      <th style={{ padding: "12px 16px" }}>BRANCH &amp; COURSE</th>
-                      <th style={{ padding: "12px 16px" }}>COMPRESSED SIZE</th>
-                      <th style={{ padding: "12px 16px" }}>DOWNLOADS</th>
-                      <th style={{ padding: "12px 16px", textAlign: "right" }}>ACTIONS</th>
+                    <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(56, 189, 248, 0.2)", color: "#cbd5e1", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.5px" }}>
+                      <th style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <BookOpen size={13} style={{ color: "#38bdf8" }} />
+                          <span>DOCUMENT TITLE &amp; SUBJECT</span>
+                        </div>
+                      </th>
+                      <th style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Layers size={13} style={{ color: "#818cf8" }} />
+                          <span>BRANCH &amp; COURSE</span>
+                        </div>
+                      </th>
+                      <th style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Server size={13} style={{ color: "#fbbf24" }} />
+                          <span>COMPRESSED SIZE</span>
+                        </div>
+                      </th>
+                      <th style={{ padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <Download size={13} style={{ color: "#34d399" }} />
+                          <span>DOWNLOAD GATE</span>
+                        </div>
+                      </th>
+                      <th style={{ padding: "12px 16px", textAlign: "right" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px" }}>
+                          <Sliders size={13} style={{ color: "#c084fc" }} />
+                          <span>CONTROLS</span>
+                        </div>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

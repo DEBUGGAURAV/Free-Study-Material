@@ -854,7 +854,7 @@ export default function AuthModal({
       return setFormError("Please enter a valid 10-digit mobile number.", "googleMobile");
     }
     if (!cleanCollege) {
-      return setFormError("College / University name is mandatory.", "googleCollege");
+      return setFormError("College name is mandatory.", "googleCollege");
     }
 
     setLoading(true);
@@ -1353,7 +1353,7 @@ export default function AuthModal({
                   Account Safely Deleted (90 Days Inactivity)
                 </div>
                 <div style={{ fontSize: "0.8rem", color: "#fca5a5", marginTop: "4px", lineHeight: "1.45" }}>
-                  Your old account was safely and successfully deleted due to 90 days of inactivity. Any study notes you uploaded remain preserved for university scholars. Please create a new account to continue.
+                  Your old account was safely and successfully deleted due to 90 days of inactivity. Any study notes you uploaded remain preserved for student scholars. Please create a new account to continue.
                 </div>
               </div>
             </div>
@@ -1645,14 +1645,14 @@ export default function AuthModal({
               </div>
 
               <div className="form-group" id="field-group-googleCollege">
-                <label className="form-label">College / University Name *</label>
+                <label className="form-label">College Name *</label>
                 <FieldNotice fieldKey="googleCollege" />
                 <input
                   id="input-googleCollege"
                   type="text"
                   className="form-input"
                   style={fieldErrors.googleCollege ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                  placeholder="e.g. University / College name"
+                  placeholder="e.g. College name"
                   value={googleCollege}
                   onChange={(e) => {
                     setGoogleCollege(e.target.value);
@@ -2901,14 +2901,14 @@ export default function AuthModal({
                     </div>
 
                     <div className="form-group" id="field-group-college">
-                      <label className="form-label">College / University Name *</label>
+                      <label className="form-label">College Name *</label>
                       <FieldNotice fieldKey="college" />
                       <input
                         id="input-college"
                         type="text"
                         className="form-input"
                         style={fieldErrors.college ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="e.g. University / College name"
+                        placeholder="e.g. College name"
                         value={college}
                         onChange={(e) => {
                           setCollege(e.target.value);
@@ -3212,14 +3212,14 @@ export default function AuthModal({
                     </div>
 
                     <div className="form-group" id="field-group-college-email">
-                      <label className="form-label">College / University Name *</label>
+                      <label className="form-label">College Name *</label>
                       <FieldNotice fieldKey="college" />
                       <input
                         id="input-college-email"
                         type="text"
                         className="form-input"
                         style={fieldErrors.college ? { borderColor: "#f43f5e", boxShadow: "0 0 0 1px #f43f5e" } : {}}
-                        placeholder="e.g. University / College name"
+                        placeholder="e.g. College name"
                         value={college}
                         onChange={(e) => {
                           setCollege(e.target.value);

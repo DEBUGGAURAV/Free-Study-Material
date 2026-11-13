@@ -50,7 +50,7 @@ const SUBJECT_PATTERNS = [
 
   // Humanities & Core
   { regex: /\b(UHV|UNIVERSAL\s*HUMAN\s*VALUES?)\b/i, name: "Universal Human Values (UHV)" },
-  { regex: /\b(KNC|CONSTITUTION(\s*OF\s*INDIA)?|INDIAN\s*TRADITION)\b/i, name: "Indian Tradition & Constitution" },
+  { regex: /\b(CONSTITUTION(\s*OF\s*INDIA)?|INDIAN\s*TRADITION)\b/i, name: "Indian Tradition & Constitution" },
 ];
 
 /**

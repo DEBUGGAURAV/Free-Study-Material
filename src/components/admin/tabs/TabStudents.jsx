@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Trash2, Eye, Edit3, UserCheck, UserX, Activity, Search, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Smartphone, Laptop } from "lucide-react";
+import { X, Trash2, Eye, Edit3, UserCheck, UserX, Activity, Search, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Smartphone, Laptop, BookOpen, Shield, Sliders, Layers } from "lucide-react";
 import { api } from "../../../api";
 import "../../../utils/formatUtils";
 import "../../../utils/hardwareAdaptiveEngine";
@@ -190,7 +190,7 @@ export default function TabStudents(props) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: "10px", flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: "8px", flex: 1, minWidth: "300px", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: 1, minWidth: "240px" }}>
-            <Search size={15} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+            <Search size={15} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#38bdf8" }} />
             <input
               type="text"
               className="form-input"
@@ -305,15 +305,40 @@ export default function TabStudents(props) {
       )}
 
       {/* Student Registry Table */}
-      <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+      <div style={{ background: "rgba(15, 23, 42, 0.55)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "var(--radius-lg)", overflow: "hidden", boxShadow: "0 8px 30px rgba(0, 0, 0, 0.35)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
           <thead>
-            <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
-              <th style={{ padding: "12px 16px" }}>STUDENT NAME &amp; EMAIL</th>
-              <th style={{ padding: "12px 16px" }}>COLLEGE, BRANCH &amp; YEAR</th>
-              <th style={{ padding: "12px 16px" }}>ROLE</th>
-              <th style={{ padding: "12px 16px" }}>STATUS</th>
-              <th style={{ padding: "12px 16px", textAlign: "right" }}>ACTIONS</th>
+            <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(56, 189, 248, 0.2)", color: "#cbd5e1", fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.5px" }}>
+              <th style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <UserCheck size={13} style={{ color: "#38bdf8" }} />
+                  <span>STUDENT NAME &amp; EMAIL</span>
+                </div>
+              </th>
+              <th style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <BookOpen size={13} style={{ color: "#818cf8" }} />
+                  <span>COLLEGE, BRANCH &amp; YEAR</span>
+                </div>
+              </th>
+              <th style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Shield size={13} style={{ color: "#fbbf24" }} />
+                  <span>ROLE</span>
+                </div>
+              </th>
+              <th style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Activity size={13} style={{ color: "#34d399" }} />
+                  <span>STATUS</span>
+                </div>
+              </th>
+              <th style={{ padding: "12px 16px", textAlign: "right" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "6px" }}>
+                  <Sliders size={13} style={{ color: "#c084fc" }} />
+                  <span>ACTIONS</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody>
