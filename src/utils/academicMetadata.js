@@ -255,12 +255,14 @@ function parseTopicMetadata(threadTitle = "") {
  * 4. Group / Chat title
  */
 function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", threadTitle = "" }) {
-  // 1. Sanitize file name for title (remove (1), [1], _LePic, and any subject code)
+  // 1. Sanitize file name for title (remove (1), [1], _LePic, and any university subject codes)
   let title = fileName.replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
   title = title.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
+  // Normalize delimiters first so word boundaries cleanly match subject codes
+  title = title.replace(/[_\-]+/g, " ");
   // Strip university-specific subject/course codes (e.g. KCS-501, CS301, BCS-301, KOE074, etc.)
-  title = title.replace(/\b[A-Z]{2,5}\s*[-_]?\s*0?\d{2,4}[A-Z]?\b/gi, " ").trim();
-  title = title.replace(/[_\-]+/g, " ").replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
+  title = title.replace(/\b[A-Z]{2,5}\s*0?\d{2,4}[A-Z]?\b/gi, " ");
+  title = title.replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
 
   let subject = "";
   let branch = "CSE";
