@@ -55,12 +55,27 @@ export default class GlobalErrorBoundary extends Component {
     } catch (_) {}
   }
 
-  handleReload = () => {
+  handleReload = async () => {
     this.setState({ hasError: false, error: null, errorInfo: null });
     try {
+      if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            reg.active?.postMessage({ action: "PURGE_CACHE" });
+            reg.active?.postMessage({ action: "SKIP_WAITING" });
+          }
+        } catch (_) {}
+      }
+      if (typeof window !== "undefined" && "caches" in window) {
+        try {
+          const names = await caches.keys();
+          await Promise.all(names.map((n) => caches.delete(n)));
+        } catch (_) {}
+      }
       if (typeof window !== "undefined") {
         const url = new URL(window.location.href);
-        url.searchParams.set("v", String(Date.now()));
+        url.searchParams.set("clean", String(Date.now()));
         window.location.replace(url.toString());
         return;
       }

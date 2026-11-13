@@ -7,6 +7,7 @@ const { db } = require("../firebase");
 router.use(authenticateToken);
 const {
   generateAcademicAnswer,
+  isAiGloballyEnabled,
   extractHandwritingVision,
   getAiTelemetry,
   updateAiSettings,
@@ -85,6 +86,15 @@ function studentAiLimiter(req, res, next) {
 router.post("/ask", studentAiLimiter, async (req, res) => {
   const startTime = Date.now();
   try {
+    if (!isAiGloballyEnabled()) {
+      return res.status(503).json({
+        success: false,
+        disabled: true,
+        message: "⚠️ All AI Study Engines are currently turned OFF by the Administrator.",
+        answer: "⚠️ All AI Study Engines are currently turned OFF by the Administrator. Please check back later or enable an AI engine in Admin Studio.",
+      });
+    }
+
     const { query, context, noteId, subject, imageBase64, imageMimeType, skipCache } = req.body;
     if ((!query || !String(query).trim()) && !imageBase64) {
       return res.status(400).json({ success: false, message: "Query text or image is required" });
@@ -184,11 +194,12 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
 
     // 0. Check Master Admin Toggle & Daily Limit
     const telemetry = getAiTelemetry();
-    if (telemetry?.settings?.circleSearchEnabled === false) {
+    if (!isAiGloballyEnabled() || telemetry?.settings?.circleSearchEnabled === false) {
       return res.status(403).json({
         success: false,
         disabled: true,
-        message: "Circle to Search AI is currently paused by admin in Tab 16.",
+        message: "Circle to Search AI is currently paused by admin.",
+        answer: "⚠️ Circle to Search AI is currently paused by the Administrator. All AI engines are offline.",
       });
     }
 
@@ -700,7 +711,8 @@ router.get("/status", (req, res) => {
   const telemetry = getAiTelemetry();
   res.json({
     success: true,
-    active: telemetry.settings.groqEnabled || telemetry.settings.geminiEnabled,
+    active: isAiGloballyEnabled(),
+    masterAiEnabled: telemetry.settings.masterAiEnabled,
     groqActive: telemetry.settings.groqEnabled && telemetry.settings.groqApiKeyConfigured,
     geminiActive: telemetry.settings.geminiEnabled && telemetry.settings.geminiApiKeyConfigured,
     totalDailyCapacity: telemetry.usage.totalDailyCapacity,
@@ -726,7 +738,8 @@ router.post("/admin/toggle", authenticateToken, requireAdmin, async (req, res) =
   try {
     const { provider, enabled } = req.body;
     const update = {};
-    if (provider === "groq") update.groqEnabled = Boolean(enabled);
+    if (provider === "master" || provider === "all") update.masterAiEnabled = Boolean(enabled);
+    else if (provider === "groq") update.groqEnabled = Boolean(enabled);
     else if (provider === "gemini") update.geminiEnabled = Boolean(enabled);
     else if (provider === "cloudflare" || provider === "cf" || provider === "cloudflare-ai") update.cloudflareAiEnabled = Boolean(enabled);
     else if (provider === "edge") update.edgeProxyEnabled = Boolean(enabled);

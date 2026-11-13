@@ -299,8 +299,53 @@ export default function TabStudents(props) {
       </div>
 
       {studentsError && (
-        <div style={{ background: "rgba(244, 63, 94, 0.1)", border: "1px solid rgba(244, 63, 94, 0.3)", color: "#f43f5e", padding: "10px 14px", borderRadius: "var(--radius-md)", marginBottom: "14px", fontSize: "0.85rem" }}>
-          {studentsError}
+        <div
+          style={{
+            background: "rgba(244, 63, 94, 0.12)",
+            border: "1px solid rgba(244, 63, 94, 0.35)",
+            color: "#fca5a5",
+            padding: "12px 16px",
+            borderRadius: "10px",
+            marginBottom: "16px",
+            fontSize: "0.86rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "1.1rem" }}>⚠️</span>
+            <span>
+              {String(studentsError).includes("<") || String(studentsError).includes("Suspended")
+                ? "Backend cluster node is waking up from sleep. Click Refresh below to load students."
+                : studentsError}
+            </span>
+          </div>
+          {typeof loadStudents === "function" && (
+            <button
+              type="button"
+              onClick={() => loadStudents()}
+              disabled={studentsLoading}
+              style={{
+                background: "linear-gradient(135deg, #0284c7 0%, #3b82f6 100%)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                padding: "6px 14px",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                cursor: studentsLoading ? "not-allowed" : "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <RefreshCw size={12} className={studentsLoading ? "spin" : ""} />
+              <span>{studentsLoading ? "Loading..." : "Refresh Student Registry"}</span>
+            </button>
+          )}
         </div>
       )}
 

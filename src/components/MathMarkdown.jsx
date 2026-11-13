@@ -9,7 +9,9 @@ import { useTechFlags } from "../utils/techFlagsStore";
  */
 function renderMathSafely(mathText, isBlock = false) {
   try {
-    return katex.renderToString(mathText.trim(), {
+    const clean = String(mathText || "").trim();
+    if (!clean) return "";
+    return katex.renderToString(clean, {
       displayMode: isBlock,
       throwOnError: false,
       output: "htmlAndMathml",
@@ -29,33 +31,19 @@ function escapeHtml(str) {
 }
 
 /**
- * Replace LaTeX markers \( ... \), \[ ... \], $$ ... $$, and $ ... $ with KaTeX HTML
+ * Detects whether a string is a bare LaTeX equation without explicit delimiters
  */
-function processLatex(text) {
-  if (!text) return "";
+function isBareLatex(text) {
+  const trimmed = String(text || "").trim();
+  if (!trimmed) return false;
+  // Skip markdown headings, bullets, callout badges, blockquotes
+  if (/^([#\-*•>]|\d+\.|\*\*📌|\*\*⚡|\*\*💡|\*\*🎯|\*\*⚠️)/.test(trimmed)) return false;
 
-  // 1. Block math: $$ ... $$ or \[ ... \]
-  let out = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
-    return `<div class="katex-block-wrapper" style="margin: 10px 0; overflow-x: auto; padding: 6px 0;">${renderMathSafely(eq, true)}</div>`;
-  });
+  const hasLatexCommands = /\\(frac|sqrt|boxed|mathcal|mathbf|mathrm|text|int|sum|prod|lim|alpha|beta|theta|lambda|sigma|omega|partial|nabla|infty|pm|times|cdot|le|ge|neq|approx|equiv|rightarrow|leftarrow|Rightarrow|Leftarrow|cap|cup|in|subset|forall|exists|Re|Im|sin|cos|tan|log|ln|exp|det|vec|hat|bar|dot|ddot|quad|qquad)\b/.test(trimmed);
+  const hasMathSyntax = /[a-zA-Z0-9]\^\{|\_\{|\\frac\{|\\boxed\{|\\mathcal\{/.test(trimmed);
+  const startsWithEq = /^[A-Za-z0-9\(\)\'\"]+\s*=\s*\\/.test(trimmed) || /^=\s*\\/.test(trimmed);
 
-  out = out.replace(/\\\[([\s\S]*?)\\\]/g, (_, eq) => {
-    return `<div class="katex-block-wrapper" style="margin: 10px 0; overflow-x: auto; padding: 6px 0;">${renderMathSafely(eq, true)}</div>`;
-  });
-
-  // 2. Inline math: \( ... \)
-  out = out.replace(/\\\(([\s\S]*?)\\\)/g, (_, eq) => {
-    return `<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`;
-  });
-
-  // 3. Inline math: $ ... $ (ensuring not followed/preceded by currency numbers like $50)
-  out = out.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, eq) => {
-    // Avoid matching currency like "$100" or "$ 50"
-    if (/^\s*\d/.test(eq)) return match;
-    return `${prefix}<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px;">${renderMathSafely(eq, false)}</span>`;
-  });
-
-  return out;
+  return hasLatexCommands || hasMathSyntax || startsWithEq;
 }
 
 /**
@@ -64,50 +52,30 @@ function processLatex(text) {
 function formatInlineMarkdown(text) {
   if (!text) return "";
 
-  // Defensively balance any unclosed LaTeX math delimiters to prevent raw unparsed formulas
-  let balanced = String(text);
-  const openInline = (balanced.match(/\\\(/g) || []).length;
-  const closeInline = (balanced.match(/\\\)/g) || []).length;
-  if (openInline > closeInline) {
-    balanced += " \\)".repeat(openInline - closeInline);
-  }
-  const openBlock = (balanced.match(/\\\[/g) || []).length;
-  const closeBlock = (balanced.match(/\\\]/g) || []).length;
-  if (openBlock > closeBlock) {
-    balanced += " \\]".repeat(openBlock - closeBlock);
-  }
-
   const mathPlaceholders = [];
 
-  // 1. Extract block math $$...$$ and \[...\]
-  let safeText = balanced.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
+  // Extract inline math \( ... \)
+  let safeText = text.replace(/\\\(([\s\S]*?)\\\)/g, (_, eq) => {
+    const clean = eq.trim();
+    if (!clean) return "";
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 12px 0; overflow-x: auto; padding: 10px 14px; background: rgba(10, 15, 29, 0.85); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">${renderMathSafely(eq, true)}</div>`);
-    return `%%%MATH_HOLDER_${idx}%%%`;
-  });
-  safeText = safeText.replace(/\\\[([\s\S]*?)\\\]/g, (_, eq) => {
-    const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<div class="katex-block-wrapper" style="margin: 12px 0; overflow-x: auto; padding: 10px 14px; background: rgba(10, 15, 29, 0.85); border-radius: 10px; border: 1px solid rgba(139, 92, 246, 0.3); box-shadow: 0 4px 14px rgba(0,0,0,0.4);">${renderMathSafely(eq, true)}</div>`);
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(clean, false)}</span>`);
     return `%%%MATH_HOLDER_${idx}%%%`;
   });
 
-  // 2. Extract inline math \(...\) and $...$
-  safeText = safeText.replace(/\\\(([\s\S]*?)\\\)/g, (_, eq) => {
-    const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(eq, false)}</span>`);
-    return `%%%MATH_HOLDER_${idx}%%%`;
-  });
+  // Extract inline math $ ... $ (ignoring currency numbers like $50 or $100)
   safeText = safeText.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, eq) => {
     if (/^\s*\d/.test(eq)) return match;
+    const clean = eq.trim();
+    if (!clean) return prefix;
     const idx = mathPlaceholders.length;
-    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(eq, false)}</span>`);
+    mathPlaceholders.push(`<span class="katex-inline-wrapper" style="display: inline-block; vertical-align: middle; margin: 0 2px; padding: 1px 4px; background: rgba(99, 102, 241, 0.12); border-radius: 4px;">${renderMathSafely(clean, false)}</span>`);
     return `${prefix}%%%MATH_HOLDER_${idx}%%%`;
   });
 
-  // 2.5 Sanitize HTML to prevent Stored & Reflected XSS injection
+  // Sanitize HTML to prevent Stored & Reflected XSS injection
   safeText = escapeHtml(safeText);
 
-  // 3. Process Markdown (bold, italic, code)
   // Bold: **text** or __text__
   safeText = safeText.replace(/\*\*(.+?)\*\*/g, '<strong style="color: #ffffff; font-weight: 750; letter-spacing: -0.1px;">$1</strong>');
   safeText = safeText.replace(/__(.+?)__/g, '<strong style="color: #ffffff; font-weight: 750; letter-spacing: -0.1px;">$1</strong>');
@@ -118,7 +86,7 @@ function formatInlineMarkdown(text) {
   // Italic: *text*
   safeText = safeText.replace(/(^|[^\*])\*([^\*\n]+?)\*([^\*]|$)/g, '$1<em style="color: #cbd5e1;">$2</em>$3');
 
-  // 4. Restore math placeholders with rendered KaTeX HTML
+  // Restore math placeholders with rendered KaTeX HTML
   safeText = safeText.replace(/%%%MATH_HOLDER_(\d+)%%%/g, (_, idx) => {
     return mathPlaceholders[parseInt(idx, 10)] || "";
   });
@@ -160,13 +128,47 @@ export function splitMarkdownAndMermaid(rawContent = "") {
 function renderMarkdownBlockToHtml(content = "") {
   if (!content) return "";
 
-  const lines = String(content).split("\n");
+  const blockPlaceholders = [];
+
+  // Step 1: Pre-extract multi-line Block Math $$...$$ BEFORE line splitting
+  let preprocessed = String(content).replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
+    const clean = eq.trim();
+    if (!clean) return "";
+    const idx = blockPlaceholders.length;
+    blockPlaceholders.push(renderMathSafely(clean, true));
+    return `\n\n%%%MATH_BLOCK_${idx}%%%\n\n`;
+  });
+
+  // Step 2: Pre-extract multi-line Block Math \[ ... \] BEFORE line splitting
+  preprocessed = preprocessed.replace(/\\\[([\s\S]*?)\\\]/g, (_, eq) => {
+    const clean = eq.trim();
+    if (!clean) return "";
+    const idx = blockPlaceholders.length;
+    blockPlaceholders.push(renderMathSafely(clean, true));
+    return `\n\n%%%MATH_BLOCK_${idx}%%%\n\n`;
+  });
+
+  // Step 3: Pre-extract LaTeX standard environments: \begin{equation|align|gather}...
+  preprocessed = preprocessed.replace(/\\begin\{(equation|align|gather|multline|bmatrix|pmatrix|matrix|cases)\*?\}[\s\S]*?\\end\{\1\*?\}/g, (fullMatch) => {
+    const clean = fullMatch.trim();
+    if (!clean) return "";
+    const idx = blockPlaceholders.length;
+    blockPlaceholders.push(renderMathSafely(clean, true));
+    return `\n\n%%%MATH_BLOCK_${idx}%%%\n\n`;
+  });
+
+  // Step 4: Discard orphan delimiters on isolated lines
+  preprocessed = preprocessed.replace(/^\s*\\\]\s*$/gm, "");
+  preprocessed = preprocessed.replace(/^\s*\\\[\s*$/gm, "");
+
+  const lines = preprocessed.split("\n");
   const blocks = [];
   let inList = false;
   let listItems = [];
   let inCodeBlock = false;
   let codeBlockLang = "";
   let codeBlockLines = [];
+  let bareLatexGroup = [];
 
   const flushList = () => {
     if (inList && listItems.length > 0) {
@@ -190,6 +192,19 @@ function renderMarkdownBlockToHtml(content = "") {
     }
   };
 
+  const flushBareLatex = () => {
+    if (bareLatexGroup.length > 0) {
+      const combinedMath = bareLatexGroup.length > 1
+        ? `\\begin{aligned} ${bareLatexGroup.join(" \\\\ ")} \\end{aligned}`
+        : bareLatexGroup[0];
+      const rendered = renderMathSafely(combinedMath, true);
+      blocks.push(
+        `<div class="katex-block-wrapper" style="margin: 14px 0; overflow-x: auto; padding: 12px 18px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.88)); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.35); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); backdrop-filter: blur(12px);">${rendered}</div>`
+      );
+      bareLatexGroup = [];
+    }
+  };
+
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
@@ -197,6 +212,7 @@ function renderMarkdownBlockToHtml(content = "") {
     // Check code blocks ```
     if (trimmed.startsWith("```")) {
       flushList();
+      flushBareLatex();
       if (inCodeBlock) {
         flushCodeBlock();
       } else {
@@ -214,8 +230,35 @@ function renderMarkdownBlockToHtml(content = "") {
 
     if (!trimmed) {
       flushList();
+      flushBareLatex();
       continue;
     }
+
+    // Check pre-extracted block math placeholders
+    if (trimmed.startsWith("%%%MATH_BLOCK_")) {
+      flushList();
+      flushBareLatex();
+      const match = trimmed.match(/%%%MATH_BLOCK_(\d+)%%%/);
+      if (match) {
+        const idx = parseInt(match[1], 10);
+        const mathHtml = blockPlaceholders[idx] || "";
+        if (mathHtml) {
+          blocks.push(
+            `<div class="katex-block-wrapper" style="margin: 14px 0; overflow-x: auto; padding: 12px 18px; background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.88)); border-radius: 12px; border: 1px solid rgba(139, 92, 246, 0.35); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); backdrop-filter: blur(12px);">${mathHtml}</div>`
+          );
+        }
+      }
+      continue;
+    }
+
+    // Check bare LaTeX equations without delimiters
+    if (isBareLatex(trimmed)) {
+      flushList();
+      bareLatexGroup.push(trimmed);
+      continue;
+    }
+
+    flushBareLatex();
 
     // 1. Creative Gradient Headers: ###, ##, #
     if (/^#{1,6}\s+/.test(trimmed)) {
@@ -313,6 +356,7 @@ function renderMarkdownBlockToHtml(content = "") {
   }
 
   flushList();
+  flushBareLatex();
   flushCodeBlock();
   return blocks.join("");
 }
@@ -358,4 +402,3 @@ export default function MathMarkdown({ content = "", className = "", style = {} 
     </div>
   );
 }
-

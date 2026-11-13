@@ -4,7 +4,7 @@
  * Zero-Blank-Screen Offline Guarantee (Supports Vite Dev & Production Bundles)
  */
 
-const CACHE_NAME = 'fsm-cache-v30';
+const CACHE_NAME = 'fsm-cache-v31';
 
 // Pre-cached core assets guaranteed to exist in all environments
 const PRECACHE_CORE = [
@@ -396,23 +396,26 @@ export default {};`,
 
         // ⚡ Performance Accelerator: Stale-While-Revalidate for /assets/ (Instant 0ms Load!)
         if (isImmutableAsset) {
-          const cachedAsset =
-            (await cache.match(request)) ||
-            (await cache.match(cleanUrl)) ||
-            (await cache.match(request, { ignoreSearch: true }));
+          const hasCacheBust = url.searchParams.has('clean') || url.searchParams.has('reset') || url.searchParams.has('purge') || url.searchParams.has('v');
+          if (!hasCacheBust) {
+            const cachedAsset =
+              (await cache.match(request)) ||
+              (await cache.match(cleanUrl)) ||
+              (await cache.match(request, { ignoreSearch: true }));
 
-          if (cachedAsset) {
-            // Revalidate in background if online (never blocks browser execution)
-            if (self.navigator.onLine) {
-              fetch(request)
-                .then((networkResponse) => {
-                  if (networkResponse && networkResponse.status === 200) {
-                    cache.put(cleanUrl, networkResponse.clone()).catch(() => {});
-                  }
-                })
-                .catch(() => {});
+            if (cachedAsset) {
+              // Revalidate in background if online (never blocks browser execution)
+              if (self.navigator.onLine) {
+                fetch(request)
+                  .then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                      cache.put(cleanUrl, networkResponse.clone()).catch(() => {});
+                    }
+                  })
+                  .catch(() => {});
+              }
+              return cachedAsset;
             }
-            return cachedAsset;
           }
         }
 
@@ -818,4 +821,16 @@ self.addEventListener('notificationclick', (event) => {
       }
     })
   );
+});
+
+// 🧹 Cache Purge & Skip Waiting IPC Listener
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING' || event.data?.action === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (event.data === 'PURGE_CACHE' || event.data?.action === 'PURGE_CACHE') {
+    event.waitUntil(
+      caches.keys().then((names) => Promise.all(names.map((name) => caches.delete(name))))
+    );
+  }
 });

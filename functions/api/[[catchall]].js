@@ -5,9 +5,8 @@
  */
 
 const BACKEND_ORIGINS = [
-  "https://freestudymaterial1.onrender.com",  // Active Node #2
-  "https://freestudymaterial2.onrender.com",  // Active Node #3
-  "https://freestudymaterial.onrender.com",   // Position #1 (Old Backend Server)
+  "https://freestudymaterial1.onrender.com",  // Active Healthy Node #2
+  "https://freestudymaterial2.onrender.com",  // Active Healthy Node #3
 ];
 
 // Circuit Breaker: Cache unhealthy origins for 60s to avoid 2-5s retry lag on dead backends
@@ -55,9 +54,9 @@ export async function onRequest(context) {
       reqHeaders.set("X-Forwarded-Proto", "https");
       reqHeaders.set("Connection", "keep-alive");
 
-      // Set 12-second subrequest timeout to prevent premature aborts on container cold-starts
+      // Set 22-second subrequest timeout to safely accommodate Render container spin-ups
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 22000);
 
       const init = {
         method: request.method,
@@ -91,6 +90,22 @@ export async function onRequest(context) {
         if (i < sortedOrigins.length - 1) {
           continue; // Seamless failover to next backend
         }
+        // If all backends failed or last one is down/HTML/suspended -> NEVER return raw HTML to an /api/* endpoint!
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "CLUSTER_WAKING_UP",
+            message: "Cloud cluster node is spinning up. Please click refresh.",
+          }),
+          {
+            status: 503,
+            headers: {
+              "Content-Type": "application/json",
+              "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+              "Access-Control-Allow-Credentials": "true",
+            },
+          }
+        );
       } else {
         // Successful response - clear any past unhealthy marks
         unhealthyOrigins.delete(origin);

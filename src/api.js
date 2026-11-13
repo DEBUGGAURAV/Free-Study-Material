@@ -212,9 +212,9 @@ async function request(endpoint, options = {}) {
           ...options,
           credentials: "include",
           headers,
-          signal: AbortSignal.timeout ? AbortSignal.timeout(12000) : undefined,
+          signal: AbortSignal.timeout ? AbortSignal.timeout(20000) : undefined,
         });
-        if (fallbackRes && (fallbackRes.ok || fallbackRes.status < 500)) {
+        if (fallbackRes && (fallbackRes.ok || (fallbackRes.status < 500 && fallbackRes.status !== 402))) {
           res = fallbackRes;
           lastFetchErr = null;
           break;
@@ -239,7 +239,14 @@ async function request(endpoint, options = {}) {
   try {
     data = JSON.parse(rawText);
   } catch (_) {
-    if (rawText && rawText.length < 500) {
+    // Sanitize any raw HTML or error pages (e.g. Render 503 / Service Suspended)
+    if (rawText && (rawText.includes("<!DOCTYPE") || rawText.includes("<html") || rawText.includes("Service Suspended") || rawText.includes("<body"))) {
+      data = {
+        success: false,
+        error: "CLUSTER_WAKING_UP",
+        message: "Cloud server is waking up. Please click refresh in a few seconds.",
+      };
+    } else if (rawText && rawText.length < 500) {
       data = { message: rawText.trim() };
     }
   }

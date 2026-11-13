@@ -23,6 +23,7 @@ const {
 
 // Default In-Memory Telemetry State
 const DEFAULT_AI_SETTINGS = {
+  masterAiEnabled: true,
   groqEnabled: true,
   geminiEnabled: true,
   cloudflareAiEnabled: true,
@@ -58,6 +59,22 @@ const DEFAULT_AI_SETTINGS = {
 
 let currentAiSettings = { ...DEFAULT_AI_SETTINGS };
 let isSettingsLoaded = false;
+
+/**
+ * Checks if AI engine is globally enabled and at least one inference provider is active
+ */
+function isAiGloballyEnabled() {
+  if (currentAiSettings.masterAiEnabled === false) return false;
+  return Boolean(
+    currentAiSettings.groqEnabled ||
+    currentAiSettings.geminiEnabled ||
+    currentAiSettings.cloudflareAiEnabled ||
+    currentAiSettings.nvidiaEnabled ||
+    currentAiSettings.githubModelsEnabled ||
+    currentAiSettings.openRouterEnabled ||
+    currentAiSettings.edgeProxyEnabled
+  );
+}
 
 /**
  * Resolves the dedicated Telegram Topic ID for AI Search Logs (strictly Topic 17).
@@ -656,6 +673,14 @@ Strict Rules:
  */
 async function generateAcademicAnswer(query, context = "", options = {}) {
   checkDailyReset();
+
+  // Strict Admin Kill-Switch Guard: If all AI engines are paused, immediately reject
+  if (!isAiGloballyEnabled()) {
+    const err = new Error("⚠️ All AI Study Engines are currently turned OFF by the Administrator.");
+    err.disabled = true;
+    throw err;
+  }
+
   const cleanQuery = (query || "").trim();
   if (!cleanQuery && !options.imageBase64) {
     throw new Error("Question prompt or diagram image is required");
@@ -1012,6 +1037,8 @@ function getAiTelemetry() {
   return {
     success: true,
     settings: {
+      masterAiEnabled: currentAiSettings.masterAiEnabled !== false,
+      isAiGloballyEnabled: isAiGloballyEnabled(),
       groqEnabled: currentAiSettings.groqEnabled,
       geminiEnabled: currentAiSettings.geminiEnabled,
       edgeProxyEnabled: currentAiSettings.edgeProxyEnabled,
@@ -1077,6 +1104,7 @@ function getAiTelemetry() {
  * Updates AI toggle states or keys from Admin Studio
  */
 async function updateAiSettings({
+  masterAiEnabled,
   groqEnabled,
   geminiEnabled,
   cloudflareAiEnabled,
@@ -1096,6 +1124,26 @@ async function updateAiSettings({
   geminiLimit,
   cloudflareAiLimit,
 }) {
+  if (typeof masterAiEnabled === "boolean") {
+    currentAiSettings.masterAiEnabled = masterAiEnabled;
+    if (!masterAiEnabled) {
+      currentAiSettings.groqEnabled = false;
+      currentAiSettings.geminiEnabled = false;
+      currentAiSettings.cloudflareAiEnabled = false;
+      currentAiSettings.nvidiaEnabled = false;
+      currentAiSettings.githubModelsEnabled = false;
+      currentAiSettings.openRouterEnabled = false;
+      currentAiSettings.edgeProxyEnabled = false;
+      currentAiSettings.circleSearchEnabled = false;
+    } else {
+      currentAiSettings.groqEnabled = true;
+      currentAiSettings.geminiEnabled = true;
+      currentAiSettings.cloudflareAiEnabled = true;
+      currentAiSettings.edgeProxyEnabled = true;
+      currentAiSettings.circleSearchEnabled = true;
+    }
+  }
+
   if (typeof groqEnabled === "boolean") currentAiSettings.groqEnabled = groqEnabled;
   if (typeof geminiEnabled === "boolean") currentAiSettings.geminiEnabled = geminiEnabled;
   if (typeof cloudflareAiEnabled === "boolean") currentAiSettings.cloudflareAiEnabled = cloudflareAiEnabled;
@@ -1106,6 +1154,18 @@ async function updateAiSettings({
   if (typeof circleSearchCooldownSec === "number" && circleSearchCooldownSec >= 0) currentAiSettings.circleSearchCooldownSec = circleSearchCooldownSec;
   if (typeof openRouterEnabled === "boolean") currentAiSettings.openRouterEnabled = openRouterEnabled;
   if (typeof githubModelsEnabled === "boolean") currentAiSettings.githubModelsEnabled = githubModelsEnabled;
+
+  if (typeof masterAiEnabled !== "boolean") {
+    currentAiSettings.masterAiEnabled = Boolean(
+      currentAiSettings.groqEnabled ||
+      currentAiSettings.geminiEnabled ||
+      currentAiSettings.cloudflareAiEnabled ||
+      currentAiSettings.nvidiaEnabled ||
+      currentAiSettings.githubModelsEnabled ||
+      currentAiSettings.openRouterEnabled ||
+      currentAiSettings.edgeProxyEnabled
+    );
+  }
 
   if (typeof groqApiKey === "string" && groqApiKey.trim()) {
     currentAiSettings.groqApiKey = groqApiKey.trim();
@@ -1655,6 +1715,7 @@ loadAiSettings().catch(() => {});
 
 module.exports = {
   generateAcademicAnswer,
+  isAiGloballyEnabled,
   extractHandwritingVision,
   getAiTelemetry,
   updateAiSettings,

@@ -316,7 +316,7 @@ export default function App() {
     const urlPage = parseInt(params.get("page") || "1", 10);
     if (urlNoteId) {
       if (urlPage > 0) setPreviewInitialPage(urlPage);
-      const applyScannedNote = (foundNote) => {
+      function applyScannedNote(foundNote) {
         if (!foundNote) return;
         setPreviewNote({ ...foundNote, _initialPage: urlPage });
         if (podParam) {
@@ -331,7 +331,7 @@ export default function App() {
           setStudyPodNote({ ...foundNote, _page: urlPage });
           setIsStudyPodOpen(true);
         }
-      };
+      }
 
       api.getNoteById(urlNoteId)
         .then((res) => {
