@@ -72,7 +72,7 @@ async function sendTelegramOtpBackup(toEmail, otp, type = "Verification", extra 
     }
     if (!botToken || !targetChatId) return;
 
-    const threadId = currentSettings?.topics?.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
+    const threadId = currentSettings?.topics?.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "70";
 
     const studentName = extra.name || extra.toName || "Student Scholar";
     const studentCollege = extra.college || "Academic Institute";
@@ -442,9 +442,9 @@ async function sendTelegramAuthNotice({
       } else if (event === "LOGOUT") {
         threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
       } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "DEVTOOLS_VIOLATION" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
-        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
+        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "60";
       } else if (event === "OTP_AUDIT") {
-        threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "7";
+        threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "70";
       } else if (event === "USER_OTP") {
         threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
       } else if (event === "NOTE_UPLOAD") {
@@ -463,7 +463,7 @@ async function sendTelegramAuthNotice({
           threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
         }
       } else if (event === "ACCOUNT_PURGE") {
-        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "6";
+        threadId = topics.accountPurge || process.env.TELEGRAM_TOPIC_PURGE || "59";
       } else if (event === "IP_JAIL_APPEAL") {
         // Dedicated Forum Topic 750 specifically for Security Quarantine / IP Appeals
         threadId = topics.ipAppeal || process.env.TELEGRAM_TOPIC_IP_APPEAL || "750";

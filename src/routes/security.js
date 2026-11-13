@@ -174,7 +174,7 @@ async function dispatchTamperTelegramAlert({
   }
   telegramAlertCooldown.set(cooldownKey, now);
 
-  // Dispatch strictly to Security Supergroup Topic 6 (@fsm_security_otp_bot)
+  // Dispatch strictly to Security Supergroup Topic 60 (@fsm_security_otp_bot)
   try {
     await sendTelegramAuthNotice({
       event: "DEVTOOLS_VIOLATION",
@@ -187,10 +187,10 @@ async function dispatchTamperTelegramAlert({
       },
       method: "Client-Side Anti-Tamper & DevTools Sensor (disable-devtool)",
       detail: messageText,
-      threadId: process.env.TELEGRAM_TOPIC_SECURITY || "6",
+      threadId: process.env.TELEGRAM_TOPIC_SECURITY || "60",
     });
   } catch (err) {
-    console.warn("[ANTI-TAMPER] Telegram Topic 6 alert notice:", err.message);
+    console.warn("[ANTI-TAMPER] Telegram Topic 60 alert notice:", err.message);
   }
 
   // Note: Topic 35 dispatch has been completely stopped per admin instruction to prevent alert spam in Chat Deletions Topic.

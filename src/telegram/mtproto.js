@@ -400,7 +400,7 @@ function setupChannelSyncListeners(c) {
       // Extract dynamic academic metadata from filename & caption
       const meta = extractAcademicMetadata({ fileName: originalName, caption, threadTitle });
       let { title, subject, branch, course, year } = meta;
-      if (threadTitle) {
+      if (!subject && threadTitle) {
         subject = threadTitle;
       }
       const fileHash = crypto.createHash("sha256").update(`${originalName}_${fileSize}`).digest("hex");

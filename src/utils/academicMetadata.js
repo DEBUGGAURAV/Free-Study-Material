@@ -42,7 +42,7 @@ const SUBJECT_PATTERNS = [
 
   // Mathematics & Logic
   { regex: /\b(DSTL|DISCRETE\s*(STRUCTURES?|MATH(EMATICS)?|LOGIC))\b/i, name: "Discrete Structures & Theory of Logic (DSTL)" },
-  { regex: /\b(ENG(INEERING)?\s*MATH(EMATICS)?|MATHS?(\s*[1-4IVX]+)?)\b/i, name: "Engineering Mathematics" },
+  { regex: /\b((ENG(INEERING)?\s*)?MATH(EMATICS|S)?(\s*[1-4IVX]+)?)\b/i, name: "Engineering Mathematics" },
 
   // Energy, Environmental & Open Electives
   { regex: /\b(RENEWABLE(\s*ENERGY(\s*RESOURCES?)?)?|ENERGY\s*RESOURCES?|NON[\s\-]*CONVENTIONAL\s*ENERGY)\b/i, name: "Renewable Energy Resources" },
@@ -99,7 +99,7 @@ function normalizeAcademicYear(raw = "") {
  */
 function resolveDynamicCseSubject(text = "") {
   if (!text) return null;
-  const clean = text.trim();
+  const clean = text.replace(/[_.\-]+/g, " ").trim();
   for (const item of SUBJECT_PATTERNS) {
     if (item.regex.test(clean)) {
       return item.name;
@@ -141,33 +141,34 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
 
   // 2. Resolve Subject if not explicitly set in caption
   if (!subject) {
-    // A. Priority to Subgroup / Forum Topic Title
-    if (threadTitle && !/^(General|Chat|Group|Notes|Files|ABC)$/i.test(threadTitle.trim())) {
+    // A. Direct Subject Pattern Match in Topic / Subgroup Name
+    if (threadTitle) {
       const topicSubject = resolveDynamicCseSubject(threadTitle);
-      if (topicSubject) {
-        subject = topicSubject;
-      } else {
-        subject = threadTitle.trim();
-      }
+      if (topicSubject) subject = topicSubject;
     }
 
-    // B. Check Filename
+    // B. Direct Subject Pattern Match in Filename
     if (!subject) {
       const fileSubject = resolveDynamicCseSubject(fileName);
-      if (fileSubject) {
-        subject = fileSubject;
-      }
+      if (fileSubject) subject = fileSubject;
     }
 
-    // C. Check Caption
+    // C. Direct Subject Pattern Match in Caption
     if (!subject && caption) {
       const capSubject = resolveDynamicCseSubject(caption);
-      if (capSubject) {
-        subject = capSubject;
-      }
+      if (capSubject) subject = capSubject;
     }
 
-    // D. Check Chat / Group Title
+    // D. Forum Topic Title fallback (if meaningful and not broad/generic)
+    if (
+      !subject &&
+      threadTitle &&
+      !/^(General|Chat|Group|Notes|Files|ABC|All\s*Years?|B\.?Tech|CSE?|IT|Computer\s*Science|\d+(st|nd|rd|th)?\s*(Year|Yr|Sem|Semester)?)$/i.test(threadTitle.trim())
+    ) {
+      subject = threadTitle.trim();
+    }
+
+    // E. Check Chat / Group Title
     if (!subject && chatTitle && !/^(General|Chat|Group|Notes|Files)$/i.test(chatTitle.trim())) {
       const chatSubject = resolveDynamicCseSubject(chatTitle);
       if (chatSubject) {

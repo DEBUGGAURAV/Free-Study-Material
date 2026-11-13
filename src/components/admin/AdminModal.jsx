@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
-import { X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe, Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock, LayoutGrid, Search, ChevronDown } from "lucide-react";
+import {
+  X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe,
+  Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock,
+  LayoutGrid, Search, ChevronDown, BookOpen, Users, HelpCircle, Bell, Server,
+  Rocket, Activity, Database, RotateCcw, MessageSquare, Bot, Sparkles, Terminal,
+  CheckCircle, AlertTriangle, Layers, Radio
+} from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";
 import { getNotePdfFileName } from "../../utils/formatUtils";
@@ -26,11 +32,40 @@ const TabWebSecurity = lazy(() => import("./tabs/TabWebSecurity"));
 const TabNotices = lazy(() => import("./tabs/TabNotices"));
 const TabAiEngine = lazy(() => import("./tabs/TabAiEngine"));
 
-function AdminModuleFallback({ label = "Loading module..." }) {
+function AdminModuleFallback({ label = "Loading module telemetry..." }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", padding: "48px 20px", color: "#94a3b8", fontSize: "0.86rem", fontWeight: 600 }}>
-      <RefreshCw size={16} className="spin" style={{ color: "#38bdf8" }} />
-      <span>{label}</span>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "14px",
+        padding: "64px 20px",
+        color: "#cbd5e1",
+        fontSize: "0.88rem",
+        fontWeight: 600,
+      }}
+    >
+      <div
+        style={{
+          width: "48px",
+          height: "48px",
+          borderRadius: "14px",
+          background: "linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18))",
+          border: "1.5px solid rgba(56, 189, 248, 0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 0 24px rgba(56, 189, 248, 0.28)",
+        }}
+      >
+        <RefreshCw size={22} className="spin" style={{ color: "#38bdf8" }} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", textAlign: "center" }}>
+        <span style={{ color: "#ffffff", fontWeight: 750, fontSize: "0.95rem" }}>{label}</span>
+        <span style={{ fontSize: "0.76rem", color: "#94a3b8" }}>Streaming secure telemetry from edge cluster...</span>
+      </div>
     </div>
   );
 }
@@ -63,24 +98,24 @@ export default function AdminModal({
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const [maintenanceFeedback, setMaintenanceFeedback] = useState("");
 
-  // Dashboard Modules Catalog (Clean, Unnumbered & Grouped by Function)
+  // Dashboard Modules Catalog (Clean, Unnumbered & Grouped by Function with Dedicated Lucide Vector Icons)
   const DASHBOARD_TABS = [
-    { id: "notes", group: "Core Workspace", accent: "#22d3ee", label: "📚 Notes Vault", title: "Notes Vault" },
-    { id: "students", group: "Core Workspace", accent: "#818cf8", label: "👥 Student Registry", title: "Student Registry" },
-    { id: "help_desk", group: "Core Workspace", accent: "#34d399", label: "🎫 Support Desk", title: "Help & Support Tickets Desk" },
-    { id: "notices_board", group: "Core Workspace", accent: "#fbbf24", label: "📢 Notice Board & Alerts", title: "Notice Board & Global Broadcast Studio" },
-    { id: "hardware", group: "Cloud & Infra", accent: "#2dd4bf", label: "🖥️ Server Hardware", title: "Server Hardware" },
-    { id: "software", group: "Cloud & Infra", accent: "#60a5fa", label: maintenanceMode ? "🛠️ Software & Maint. (PAUSED)" : "💻 Software & Maintenance", title: "Software Infrastructure & Server Maintenance" },
-    { id: "pipeline", group: "Cloud & Infra", accent: "#22d3ee", label: "🚀 Upload Pipeline", title: "Upload Pipeline" },
-    { id: "performance", group: "Cloud & Infra", accent: "#facc15", label: "⚡ CDN & Performance", title: "CDN & Performance" },
-    { id: "database", group: "Data & Realtime", accent: "#38bdf8", label: isHalfAdmin ? "🔒 Database (Restricted)" : "🗄️ Database Studio", title: "Database Studio" },
-    { id: "turso", group: "Data & Realtime", accent: "#38bdf8", label: "⚡ Turso Database", title: "Turso LibSQL Edge Database" },
-    { id: "recycle_bin", group: "Data & Realtime", accent: "#fbbf24", label: "♻️ Restore Vault", title: "Restore Vault" },
-    { id: "community_chat", group: "Data & Realtime", accent: "#10b981", label: "💬 Community Chat", title: "Live Community Chat & Moderation Hub" },
-    { id: "security_bot", group: "Security & AI", accent: "#c084fc", label: "🤖 Security Bot", title: "Security Bot Controls" },
-    { id: "web_security", group: "Security & AI", accent: "#f43f5e", label: "🛡️ Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub" },
-    { id: "tech_nexus", group: "Security & AI", accent: "#ec4899", label: maintenanceMode ? "🧬 Tech Nexus (PAUSED)" : "🧬 Next-Gen Tech", title: "Next-Gen Tech Nexus" },
-    { id: "ai_engine", group: "Security & AI", accent: "#a78bfa", label: "🤖 AI Studio (Groq / Gemini)", title: "AI Studio (Groq LPU + Gemini 2.0 Failover)" },
+    { id: "notes", group: "Core Workspace", accent: "#38bdf8", icon: BookOpen, label: "Notes Vault", title: "Notes Vault & Academic Catalog", desc: "Manage study materials, syllabus units, OCR tags & student access permissions" },
+    { id: "students", group: "Core Workspace", accent: "#818cf8", icon: Users, label: "Student Registry", title: "Student Registry & Directory", desc: "Directory of enrolled learners, academic branches, verification & roles" },
+    { id: "help_desk", group: "Core Workspace", accent: "#34d399", icon: HelpCircle, label: "Support Desk", title: "Help & Support Tickets Desk", desc: "Resolve student inquiries, exam help queries & academic feedback" },
+    { id: "notices_board", group: "Core Workspace", accent: "#fbbf24", icon: Bell, label: "Notice Board & Alerts", title: "Global Notice Board & Broadcast Studio", desc: "Publish priority announcements, exam schedules & real-time student alerts" },
+    { id: "hardware", group: "Cloud & Infra", accent: "#2dd4bf", icon: Server, label: "Server Hardware", title: "Server Hardware & Core Telemetry", desc: "CPU load, RAM allocation, core temperature & virtualization metrics" },
+    { id: "software", group: "Cloud & Infra", accent: "#60a5fa", icon: Sliders, label: maintenanceMode ? "Software & Maint. (PAUSED)" : "Software & Maintenance", title: "Software Infrastructure & Server Maintenance", desc: "Control live platform upgrades, runtime dependencies & maintenance locks" },
+    { id: "pipeline", group: "Cloud & Infra", accent: "#22d3ee", icon: Rocket, label: "Upload Pipeline", title: "Upload Pipeline & Document Processing", desc: "Multi-stage upload queues, PDF compression, OCR extraction & CDN mirrors" },
+    { id: "performance", group: "Cloud & Infra", accent: "#facc15", icon: Activity, label: "CDN & Performance", title: "Edge CDN & Acceleration Network", desc: "Global edge hit ratio, bandwidth offload, cache TTL & Cloudflare workers" },
+    { id: "database", group: "Data & Realtime", accent: "#38bdf8", icon: Database, label: isHalfAdmin ? "Database (Restricted)" : "Database Studio", title: "Database Studio & Collections Inspector", desc: "Direct collection inspector, record viewer, retention policies & indexes" },
+    { id: "turso", group: "Data & Realtime", accent: "#06b6d4", icon: Zap, label: "Turso Database", title: "Turso LibSQL Edge Database", desc: "Sub-5ms SQLite edge replicas, sync logs & distributed query engine" },
+    { id: "recycle_bin", group: "Data & Realtime", accent: "#fbbf24", icon: RotateCcw, label: "Restore Vault", title: "Restore Vault & Recycle Bin", desc: "Restore deleted study materials, undo mistakes & purge expired documents" },
+    { id: "community_chat", group: "Data & Realtime", accent: "#10b981", icon: MessageSquare, label: "Community Chat", title: "Live Community Chat & Moderation Hub", desc: "Monitor real-time study discussions, active peers & chatroom telemetry" },
+    { id: "security_bot", group: "Security & AI", accent: "#c084fc", icon: Bot, label: "Security Bot", title: "AI Sentinel & Security Bot Controls", desc: "Telegram bridge alerts, rate-limit enforcement & bot countermeasures" },
+    { id: "web_security", group: "Security & AI", accent: "#f43f5e", icon: ShieldAlert, label: "Web Security & IP Jail", title: "Real-Time Web Security & IP Jail Defense Hub", desc: "Live threat defense, IP quarantine jail, DDoS mitigation & strike logs" },
+    { id: "tech_nexus", group: "Security & AI", accent: "#ec4899", icon: Sparkles, label: maintenanceMode ? "Tech Nexus (PAUSED)" : "Next-Gen Tech", title: "Next-Gen Tech Nexus", desc: "Toggle WebRTC P2P Mesh, Mermaid diagrams, Canvas Cards & VAPID Push" },
+    { id: "ai_engine", group: "Security & AI", accent: "#a78bfa", icon: Cpu, label: "AI Studio (Groq / Gemini)", title: "AI Studio (Groq LPU + Gemini 2.0 Failover)", desc: "Configure LLM failover, API keys, student quiz prompts & tokens quota" },
   ];
 
   const [quickJumpOpen, setQuickJumpOpen] = useState(false);
