@@ -6,8 +6,8 @@
 // CSE and Core Engineering Comprehensive Subject Directory
 const SUBJECT_PATTERNS = [
   // Algorithms & Programming
-  { regex: /\b(DAA|ALGORITHMS?|DESIGN\s*(AND|&)\s*ANALYSIS\s*OF\s*ALGORITHMS?)\b/i, name: "Design & Analysis of Algorithms (DAA)" },
-  { regex: /\b(DSA|DATA\s*STRUCTURES?(\s*(AND|&)\s*ALGORITHMS?)?)\b/i, name: "Data Structures & Algorithms (DSA)" },
+  { regex: /\b(DSA|DATA\s*STRUCTURES?(\s*(AND|&)\s*ALGORITHMS?)?|BINARY\s*(SEARCH\s*)?TREES?|BST|LINKED\s*LISTS?)\b/i, name: "Data Structures & Algorithms (DSA)" },
+  { regex: /\b(DAA|DESIGN\s*(AND|&)\s*ANALYSIS\s*OF\s*ALGORITHMS?|ANALYSIS\s*(AND|&)\s*DESIGN\s*OF\s*ALGORITHMS?|ALGORITHMS?)\b/i, name: "Design & Analysis of Algorithms (DAA)" },
   { regex: /\b(PYTHON(\s*PROGRAMMING)?)\b/i, name: "Python Programming" },
   { regex: /\b(JAVA(\s*PROGRAMMING)?)\b/i, name: "Java Programming" },
   { regex: /\b(C\s*\+\+|CPP|C\s*PROGRAMMING)\b/i, name: "C / C++ Programming" },
@@ -109,16 +109,157 @@ function resolveDynamicCseSubject(text = "") {
 }
 
 /**
+ * Resolves Academic Year from Syllabus Subject heuristics (Universal across universities)
+ */
+function resolveYearFromSubject(subject = "", contextText = "") {
+  if (!subject) return "";
+  const s = String(subject).toUpperCase();
+  const c = String(contextText || "").toUpperCase();
+
+  if (
+    s.includes("DISTRIBUTED SYSTEMS") ||
+    s.includes("BLOCKCHAIN") ||
+    s.includes("RENEWABLE ENERGY") ||
+    s.includes("NLP") ||
+    s.includes("NATURAL LANGUAGE")
+  ) {
+    return "4th Year";
+  }
+
+  if (s.includes("CLOUD") || s.includes("DEEP LEARNING")) {
+    if (/[478]|FINAL/i.test(c)) return "4th Year";
+    return "3rd Year";
+  }
+
+  if (
+    s.includes("DSA") ||
+    s.includes("DATA STRUCTURE") ||
+    s.includes("DISCRETE") ||
+    s.includes("COA") ||
+    s.includes("COMPUTER ORGANIZATION") ||
+    s.includes("DAA") ||
+    s.includes("ALGORITHMS") ||
+    s.includes("OPERATING SYSTEM") ||
+    s.includes("DBMS") ||
+    s.includes("DATABASE")
+  ) {
+    return "2nd Year";
+  }
+
+  if (
+    s.includes("WEB TECH") ||
+    s.includes("CNS") ||
+    s.includes("CRYPTOGRAPHY") ||
+    s.includes("COMPILER") ||
+    s.includes("COMPUTER NETWORK") ||
+    s.includes("ARTIFICIAL INTELLIGENCE") ||
+    s.includes("MACHINE LEARNING") ||
+    s.includes("DATA SCIENCE")
+  ) {
+    return "3rd Year";
+  }
+
+  if (
+    s.includes("ENGINEERING MATHEMATICS") ||
+    s.includes("MATH") ||
+    s.includes("HUMAN VALUES") ||
+    s.includes("UHV") ||
+    s.includes("ENVIRONMENTAL") ||
+    s.includes("EVS") ||
+    s.includes("CONSTITUTION")
+  ) {
+    return "1st Year";
+  }
+
+  return "";
+}
+
+/**
+ * Extracts Year and Subject directly from a Telegram Forum Topic title
+ */
+function parseTopicMetadata(threadTitle = "") {
+  const raw = String(threadTitle || "").trim();
+  if (!raw) return { year: "", subject: "" };
+
+  let year = "";
+  // 1. Detect Year / Semester in topic title
+  if (
+    /\b(4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/i.test(raw) ||
+    /\bYEAR\s*4\b/i.test(raw) ||
+    /\b(SEM|SEMESTER)\s*[78]\b/i.test(raw) ||
+    /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(raw)
+  ) {
+    year = "4th Year";
+  } else if (
+    /\b(3RD|THIRD)\s*(YEAR|YR|YER)?\b/i.test(raw) ||
+    /\bYEAR\s*3\b/i.test(raw) ||
+    /\b(SEM|SEMESTER)\s*[56]\b/i.test(raw) ||
+    /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(raw)
+  ) {
+    year = "3rd Year";
+  } else if (
+    /\b(2ND|SECOND)\s*(YEAR|YR|YER)?\b/i.test(raw) ||
+    /\bYEAR\s*2\b/i.test(raw) ||
+    /\b(SEM|SEMESTER)\s*[34]\b/i.test(raw) ||
+    /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(raw)
+  ) {
+    year = "2nd Year";
+  } else if (
+    /\b(1ST|FIRST)\s*(YEAR|YR|YER)?\b/i.test(raw) ||
+    /\bYEAR\s*1\b/i.test(raw) ||
+    /\b(SEM|SEMESTER)\s*[12]\b/i.test(raw) ||
+    /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(raw)
+  ) {
+    year = "1st Year";
+  }
+
+  // 2. Extract Subject from topic title
+  // A. Check canonical dictionary on raw topic
+  let subject = resolveDynamicCseSubject(raw) || "";
+
+  // B. If not found, strip Year, Semester, Course, and Noise to find subject
+  if (!subject) {
+    let clean = raw
+      .replace(/[-_]+/g, " ")
+      .replace(/\b(1ST|FIRST|2ND|SECOND|3RD|THIRD|4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/gi, "")
+      .replace(/\bYEAR\s*[1-4]\b/gi, "")
+      .replace(/\b(SEM|SEMESTER)\s*[1-8]\b/gi, "")
+      .replace(/\b[1-8](ST|ND|RD|TH)?\s*(SEM|SEMESTER)\b/gi, "")
+      .replace(/\b(B\.?TECH|M\.?TECH|BCA|MCA|DIPLOMA|CSE?|IT|DEPARTMENT|BRANCH|SECTION|NOTES?|VAULT|MATERIALS?|FILES?|STUDY)\b/gi, "")
+      .replace(/[():\-–—|/]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (clean) {
+      subject = resolveDynamicCseSubject(clean) || "";
+      // If still not in directory, keep clean string as subject (min 3 chars, not generic noise)
+      if (!subject && clean.length >= 3 && !/^(General|Chat|Group|Uploads|Misc|Folder)$/i.test(clean)) {
+        subject = clean;
+      }
+    }
+  }
+
+  // 3. If year wasn't explicitly stated in topic, but topic provided a clear subject, infer year from syllabus!
+  if (!year && subject) {
+    year = resolveYearFromSubject(subject, raw);
+  }
+
+  return { year, subject };
+}
+
+/**
  * Extract Academic Metadata with intelligent priority:
  * 1. Caption overrides
- * 2. Topic/Subgroup name (highest weight for subject)
- * 3. Filename patterns (CSE subject matching)
+ * 2. Forum Topic name (determines Year & Subject cleanly)
+ * 3. Filename patterns (universal subject matching without university-specific codes)
  * 4. Group / Chat title
  */
 function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", threadTitle = "" }) {
-  // 1. Sanitize file name for title (remove (1), [1], _LePic, etc.)
+  // 1. Sanitize file name for title (remove (1), [1], _LePic, and any subject code)
   let title = fileName.replace(/\.[^/.]+$/, "").trim() || "Academic Study Material";
   title = title.replace(/\s*\(\d+\)\s*$/, "").replace(/\s*\[\d+\]\s*$/, "");
+  // Strip university-specific subject/course codes (e.g. KCS-501, CS301, BCS-301, KOE074, etc.)
+  title = title.replace(/\b[A-Z]{2,5}\s*[-_]?\s*0?\d{2,4}[A-Z]?\b/gi, " ").trim();
   title = title.replace(/[_\-]+/g, " ").replace(/\bLePic\b/gi, "").replace(/\s+/g, " ").trim();
 
   let subject = "";
@@ -139,36 +280,29 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
     }
   }
 
+  // Parse Forum Topic metadata if threadTitle is provided
+  const topicMeta = parseTopicMetadata(threadTitle);
+
   // 2. Resolve Subject if not explicitly set in caption
   if (!subject) {
-    // A. Direct Subject Pattern Match in Topic / Subgroup Name
-    if (threadTitle) {
-      const topicSubject = resolveDynamicCseSubject(threadTitle);
-      if (topicSubject) subject = topicSubject;
+    // A. Priority 1: Subject from Forum Topic Name
+    if (topicMeta.subject) {
+      subject = topicMeta.subject;
     }
 
-    // B. Direct Subject Pattern Match in Filename
+    // B. Priority 2: Direct Subject Pattern Match in Filename
     if (!subject) {
       const fileSubject = resolveDynamicCseSubject(fileName);
       if (fileSubject) subject = fileSubject;
     }
 
-    // C. Direct Subject Pattern Match in Caption
+    // C. Priority 3: Direct Subject Pattern Match in Caption
     if (!subject && caption) {
       const capSubject = resolveDynamicCseSubject(caption);
       if (capSubject) subject = capSubject;
     }
 
-    // D. Forum Topic Title fallback (if meaningful and not broad/generic)
-    if (
-      !subject &&
-      threadTitle &&
-      !/^(General|Chat|Group|Notes|Files|ABC|All\s*Years?|B\.?Tech|CSE?|IT|Computer\s*Science|\d+(st|nd|rd|th)?\s*(Year|Yr|Sem|Semester)?)$/i.test(threadTitle.trim())
-    ) {
-      subject = threadTitle.trim();
-    }
-
-    // E. Check Chat / Group Title
+    // D. Priority 4: Check Chat / Group Title
     if (!subject && chatTitle && !/^(General|Chat|Group|Notes|Files)$/i.test(chatTitle.trim())) {
       const chatSubject = resolveDynamicCseSubject(chatTitle);
       if (chatSubject) {
@@ -218,119 +352,79 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
   // 5. Resolve Academic Year
   const normalizedExplicit = normalizeAcademicYear(explicitYear);
   if (normalizedExplicit) {
+    // Priority 1: Explicit Year from caption
     year = normalizedExplicit;
+  } else if (topicMeta.year) {
+    // Priority 2: Direct Year extracted from Topic Name!
+    year = topicMeta.year;
   } else {
-    // Check closest document indicators first (filename + caption)
+    // Priority 3: Check closest document indicators (filename + caption) - without subject codes!
     const docSpecific = `${fileName} ${caption}`.toUpperCase().replace(/[-_]+/g, " ");
     const normCombined = combined.replace(/[-_]+/g, " ");
 
-    // Priority 1: Check document-specific text FIRST for 4th Year / Final Year / 3rd / 2nd / 1st
-    // (Evaluating 4th Year first prevents "3rd Year" chat/topic titles from corrupting 4th year uploads)
     if (
       /\b(4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
       /\bYEAR\s*4\b/i.test(docSpecific) ||
       /\b(SEM|SEMESTER)\s*[78]\b/i.test(docSpecific) ||
-      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[78]\d{1,2}\b/i.test(docSpecific)
+      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific)
     ) {
       year = "4th Year";
     } else if (
       /\b(3RD|THIRD)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
       /\bYEAR\s*3\b/i.test(docSpecific) ||
       /\b(SEM|SEMESTER)\s*[56]\b/i.test(docSpecific) ||
-      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[56]\d{1,2}\b/i.test(docSpecific)
+      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific)
     ) {
       year = "3rd Year";
     } else if (
       /\b(2ND|SECOND)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
       /\bYEAR\s*2\b/i.test(docSpecific) ||
       /\b(SEM|SEMESTER)\s*[34]\b/i.test(docSpecific) ||
-      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[34]\d{1,2}\b/i.test(docSpecific)
+      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(docSpecific)
     ) {
       year = "2nd Year";
     } else if (
       /\b(1ST|FIRST)\s*(YEAR|YR|YER)?\b/i.test(docSpecific) ||
       /\bYEAR\s*1\b/i.test(docSpecific) ||
       /\b(SEM|SEMESTER)\s*[12]\b/i.test(docSpecific) ||
-      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(docSpecific) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[12]\d{1,2}\b/i.test(docSpecific)
+      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(docSpecific)
     ) {
       year = "1st Year";
     }
-    // Priority 2: Check full combined string (forum topic / supergroup title)
+    // Priority 4: Check full combined string (group / channel title) - without subject codes!
     else if (
       /\b(4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
       /\bYEAR\s*4\b/i.test(normCombined) ||
       /\b(SEM|SEMESTER)\s*[78]\b/i.test(normCombined) ||
-      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[78]\d{1,2}\b/i.test(normCombined)
+      /\b[78](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined)
     ) {
       year = "4th Year";
     } else if (
       /\b(3RD|THIRD)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
       /\bYEAR\s*3\b/i.test(normCombined) ||
       /\b(SEM|SEMESTER)\s*[56]\b/i.test(normCombined) ||
-      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[56]\d{1,2}\b/i.test(normCombined)
+      /\b[56](TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined)
     ) {
       year = "3rd Year";
     } else if (
       /\b(2ND|SECOND)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
       /\bYEAR\s*2\b/i.test(normCombined) ||
       /\b(SEM|SEMESTER)\s*[34]\b/i.test(normCombined) ||
-      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[34]\d{1,2}\b/i.test(normCombined)
+      /\b[34](RD|TH)?\s*(SEM|SEMESTER)\b/i.test(normCombined)
     ) {
       year = "2nd Year";
     } else if (
       /\b(1ST|FIRST)\s*(YEAR|YR|YER)?\b/i.test(normCombined) ||
       /\bYEAR\s*1\b/i.test(normCombined) ||
       /\b(SEM|SEMESTER)\s*[12]\b/i.test(normCombined) ||
-      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(normCombined) ||
-      /\b(KCS|BCS|BAS|KAS|KOE|KIT|KEC|KME|KHU|BHU|BOE)\s*0?[12]\d{1,2}\b/i.test(normCombined)
+      /\b[12](ST|ND)?\s*(SEM|SEMESTER)\b/i.test(normCombined)
     ) {
       year = "1st Year";
     } else {
-      // Priority 3: Intelligent heuristic based on syllabus subject curriculum
-      if (
-        subject.includes("Distributed Systems") ||
-        subject.includes("Blockchain") ||
-        subject.includes("Renewable Energy") ||
-        subject.includes("NLP") ||
-        subject.includes("Natural Language")
-      ) {
-        year = "4th Year";
-      } else if (
-        subject.includes("Cloud") ||
-        subject.includes("Deep Learning")
-      ) {
-        if (/[478]|FINAL/i.test(normCombined)) {
-          year = "4th Year";
-        } else {
-          year = "3rd Year";
-        }
-      } else if (
-        subject.includes("DSA") ||
-        subject.includes("Discrete") ||
-        subject.includes("COA") ||
-        subject.includes("DAA") ||
-        subject.includes("Operating Systems") ||
-        subject.includes("DBMS")
-      ) {
-        year = "2nd Year";
-      } else if (
-        subject.includes("Web Tech") ||
-        subject.includes("CNS") ||
-        subject.includes("Cryptography") ||
-        subject.includes("Compiler") ||
-        subject.includes("Computer Networks") ||
-        subject.includes("Artificial Intelligence") ||
-        subject.includes("Machine Learning") ||
-        subject.includes("Data Science")
-      ) {
-        year = "3rd Year";
+      // Priority 5: Intelligent heuristic based on syllabus subject curriculum
+      const inferred = resolveYearFromSubject(subject, normCombined);
+      if (inferred) {
+        year = inferred;
       }
     }
   }
@@ -340,6 +434,9 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
 
 module.exports = {
   SUBJECT_PATTERNS,
+  normalizeAcademicYear,
   resolveDynamicCseSubject,
+  resolveYearFromSubject,
+  parseTopicMetadata,
   extractAcademicMetadata,
 };

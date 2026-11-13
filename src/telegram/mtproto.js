@@ -865,8 +865,17 @@ async function syncTelegramChannel() {
         const caption = msg.message || "";
         const docSize = Number(doc.size || 0);
 
-        // Comprehensive duplicate prevention check (title extracted via utility)
-        const metaRec = extractAcademicMetadata({ fileName: originalName, caption });
+        // Comprehensive duplicate prevention check (title extracted via utility with topic intelligence)
+        const recTopicId = msg.replyTo?.replyToTopId || msg.replyTo?.replyToMsgId || null;
+        let recThreadTitle = "";
+        if (recTopicId) {
+          try {
+            const { getSubjectFromThreadId } = require("../services/emailService");
+            const matched = await getSubjectFromThreadId(recTopicId);
+            if (matched) recThreadTitle = matched;
+          } catch (_) {}
+        }
+        const metaRec = extractAcademicMetadata({ fileName: originalName, caption, threadTitle: recThreadTitle });
         const { title, subject, branch, course, year } = metaRec;
         const fileHash = crypto.createHash("sha256").update(`${originalName}_${docSize}`).digest("hex");
 
