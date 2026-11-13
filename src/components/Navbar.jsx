@@ -391,7 +391,7 @@ export default function Navbar({
                   marginLeft: "4px",
                   boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
                 }}
-                title="✨ AI Study Studio: Conversational Tutor, Flashcards & Summary"
+                title="AI Study: Conversational Tutor, Flashcards & Summary"
               >
                 <Sparkles size={12} color="#38bdf8" />
                 <span>AI Study</span>

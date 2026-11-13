@@ -4332,7 +4332,7 @@ export default function VirtualPdfReader({
             }}
           >
             <Sparkles size={13} style={{ filter: "drop-shadow(0 0 2px rgba(255,255,255,0.7))" }} />
-            <span>✨ AI Study Studio</span>
+            <span>AI Study</span>
           </button>
 
           {/* AI Query */}
@@ -6374,10 +6374,10 @@ export default function VirtualPdfReader({
               boxShadow: "0 4px 16px rgba(99, 102, 241, 0.45), 0 0 12px rgba(6, 182, 212, 0.25)",
               transition: "all 0.2s ease",
             }}
-            title="✨ Open AI Study Studio (Tutor Chat, 3D Flashcards & Summary)"
+            title="Open AI Study (Tutor Chat, 3D Flashcards & Summary)"
           >
             <Sparkles size={13} style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.8))" }} />
-            <span>✨ AI Study Studio</span>
+            <span>AI Study</span>
           </button>
 
           {enableDiscussionBridge && (

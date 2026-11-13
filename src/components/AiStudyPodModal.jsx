@@ -166,6 +166,19 @@ export default function AiStudyPodModal({
         }
       );
 
+      if (res?.disabled) {
+        const disabledMsg = {
+          id: `a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          role: "assistant",
+          content: "⚠️ **AI Study Engine is currently turned OFF by the Administrator.**\n\nAll AI engines are paused right now. Please study from your downloaded course notes or check back once the Administrator re-enables AI.",
+          disabled: true,
+          timestamp: Date.now(),
+        };
+        setChatMessages((prev) => [...prev, disabledMsg]);
+        setIsAiTyping(false);
+        return;
+      }
+
       const aiAnswer = res?.answer || "No answer returned.";
       const aiMsg = {
         id: `a_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -535,7 +548,7 @@ export default function AiStudyPodModal({
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span>AI Study Studio</span>
+                  <span>AI Study</span>
                 </h3>
                 <span
                   style={{

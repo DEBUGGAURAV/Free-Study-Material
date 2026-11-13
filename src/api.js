@@ -1589,9 +1589,32 @@ export const api = {
   submitJailAppeal: (payload) => request("/security/jail-appeal", { method: "POST", body: JSON.stringify(payload) }),
 
   // 🤖 Dual Groq LPU + Gemini AI Engine & Edge Proxy Controls
-  getAiTelemetry: () => request("/ai/admin/telemetry"),
-  updateAiToggle: (provider, enabled) =>
-    request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) }),
+  getAiTelemetry: async () => {
+    const res = await request("/ai/admin/telemetry");
+    if (res && res.settings) {
+      try {
+        if (res.settings.isAiGloballyEnabled === false || res.settings.masterAiEnabled === false) {
+          localStorage.setItem("fsm_ai_globally_disabled", "true");
+        } else {
+          localStorage.removeItem("fsm_ai_globally_disabled");
+        }
+      } catch (_) {}
+    }
+    return res;
+  },
+  updateAiToggle: async (provider, enabled) => {
+    const res = await request("/ai/admin/toggle", { method: "POST", body: JSON.stringify({ provider, enabled }) });
+    if (res && res.telemetry?.settings) {
+      try {
+        if (res.telemetry.settings.isAiGloballyEnabled === false || res.telemetry.settings.masterAiEnabled === false) {
+          localStorage.setItem("fsm_ai_globally_disabled", "true");
+        } else {
+          localStorage.removeItem("fsm_ai_globally_disabled");
+        }
+      } catch (_) {}
+    }
+    return res;
+  },
   updateCircleSearchConfig: (config) =>
     request("/ai/admin/circle-config", { method: "POST", body: JSON.stringify(config) }),
   updateCloudflareAiConfig: (config) =>
@@ -1615,8 +1638,11 @@ export const api = {
       } : null,
     };
 
-    // 1. Attempt Cloudflare Edge AI Worker first (0% Render Server Load)
-    const cfAiWorkerUrl = (
+    // Check if Administrator has turned off AI engines
+    const isAiDisabledLocally = typeof window !== "undefined" && localStorage.getItem("fsm_ai_globally_disabled") === "true";
+
+    // 1. Attempt Cloudflare Edge AI Worker first (Only if AI is not paused by Administrator)
+    const cfAiWorkerUrl = !isAiDisabledLocally && (
       (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_AI_WORKER_URL) ||
       (typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_CHAT_WORKER_URL ? import.meta.env.VITE_CF_CHAT_WORKER_URL.replace("fsm-chat-edge", "fsm-ai-edge") : "") ||
       "https://fsm-ai-edge.jnplotus.workers.dev"
@@ -1636,7 +1662,12 @@ export const api = {
           signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined,
         });
         if (edgeRes && edgeRes.ok) {
-          return await edgeRes.json();
+          const edgeData = await edgeRes.json();
+          if (edgeData && edgeData.disabled) {
+            try { localStorage.setItem("fsm_ai_globally_disabled", "true"); } catch (_) {}
+            return edgeData;
+          }
+          return edgeData;
         }
       } catch (edgeErr) {
         console.warn("[AI] Edge AI Worker timed out or failed, falling back to cluster backends:", edgeErr.message);
@@ -1661,8 +1692,15 @@ export const api = {
           body: JSON.stringify(payload),
           signal: AbortSignal.timeout ? AbortSignal.timeout(25000) : undefined,
         });
-        if (directRes && directRes.ok) {
-          return await directRes.json();
+        if (directRes) {
+          const directData = await directRes.json();
+          if (directData && directData.disabled) {
+            try { localStorage.setItem("fsm_ai_globally_disabled", "true"); } catch (_) {}
+            return directData;
+          }
+          if (directRes.ok) {
+            return directData;
+          }
         }
       } catch (_) {}
     }

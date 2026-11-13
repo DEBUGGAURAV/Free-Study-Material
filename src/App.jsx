@@ -2618,7 +2618,7 @@ export default function App() {
           }}
         >
           <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 5px rgba(255,255,255,0.9))" }} />
-          <span className="floating-action-text">✨ AI Study Studio</span>
+          <span className="floating-action-text">AI Study</span>
         </button>
 
         {/* ⭕ Circle to Search Floating Capsule (Instant Freehand Pencil!) */}

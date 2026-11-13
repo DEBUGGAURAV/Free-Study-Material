@@ -172,7 +172,7 @@ export default function TabAiEngine() {
   const handleToggle = async (provider, currentState) => {
     try {
       const nextState = !currentState;
-      const label = provider === "circle" ? "CIRCLE TO SEARCH" : provider.toUpperCase();
+      const label = provider === "master" ? "GLOBAL MASTER AI" : provider === "circle" ? "CIRCLE TO SEARCH" : provider.toUpperCase();
       showNotice(`Updating ${label} state...`, "info");
       const res = await api.updateAiToggle(provider, nextState);
       if (res && res.success) {
@@ -321,6 +321,7 @@ export default function TabAiEngine() {
   };
 
   const settings = telemetry?.settings || {
+    masterAiEnabled: true,
     groqEnabled: true,
     geminiEnabled: true,
     cloudflareAiEnabled: true,
@@ -339,6 +340,18 @@ export default function TabAiEngine() {
     openRouterEnabled: true,
     openRouterConfigured: false,
   };
+
+  const activeEnginesCount = [
+    settings.groqEnabled,
+    settings.geminiEnabled,
+    settings.cloudflareAiEnabled !== false,
+    settings.nvidiaEnabled !== false,
+    settings.githubModelsEnabled !== false,
+    settings.openRouterEnabled !== false,
+    settings.circleSearchEnabled !== false,
+    settings.edgeProxyEnabled,
+  ].filter(Boolean).length;
+  const isGlobalAiActive = activeEnginesCount > 0 && settings.masterAiEnabled !== false;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -557,14 +570,111 @@ export default function TabAiEngine() {
         </div>
       </div>
 
+      {/* 🔴 GLOBAL MASTER AI KILL-SWITCH BANNER */}
+      <div
+        style={{
+          background: isGlobalAiActive
+            ? "linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.08) 100%)"
+            : "linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(185, 28, 28, 0.12) 100%)",
+          border: isGlobalAiActive
+            ? "1.5px solid rgba(16, 185, 129, 0.45)"
+            : "1.5px solid rgba(239, 68, 68, 0.55)",
+          borderRadius: "16px",
+          padding: "16px 20px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "14px",
+          boxShadow: isGlobalAiActive
+            ? "0 10px 30px rgba(16, 185, 129, 0.15)"
+            : "0 10px 30px rgba(239, 68, 68, 0.25)",
+          backdropFilter: "blur(14px)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div
+            style={{
+              width: "44px",
+              height: "44px",
+              borderRadius: "12px",
+              background: isGlobalAiActive
+                ? "linear-gradient(135deg, #10b981, #06b6d4)"
+                : "linear-gradient(135deg, #ef4444, #b91c1c)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: isGlobalAiActive
+                ? "0 4px 18px rgba(16, 185, 129, 0.4)"
+                : "0 4px 18px rgba(239, 68, 68, 0.4)",
+              flexShrink: 0,
+            }}
+          >
+            <Power size={22} color="#ffffff" />
+          </div>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#ffffff", margin: 0 }}>
+                Global Master AI Kill-Switch (सारे AI का मुख्य स्विच)
+              </h3>
+              <span
+                style={{
+                  fontSize: "0.72rem",
+                  padding: "3px 9px",
+                  borderRadius: "999px",
+                  background: isGlobalAiActive ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)",
+                  color: isGlobalAiActive ? "#34d399" : "#fca5a5",
+                  fontWeight: 800,
+                  border: isGlobalAiActive ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
+                }}
+              >
+                {isGlobalAiActive ? `🟢 ${activeEnginesCount} / 8 Engines ONLINE` : "🔴 ALL 8 ENGINES PAUSED (OFF)"}
+              </span>
+            </div>
+            <p style={{ margin: "4px 0 0", fontSize: "0.76rem", color: isGlobalAiActive ? "#cbd5e1" : "#fca5a5", lineHeight: 1.4 }}>
+              {isGlobalAiActive
+                ? "Click to immediately shut down ALL AI engines across the entire website. Zero queries will be answered."
+                : "⚠️ All AI responses are completely paused. Students will see that AI is disabled by Admin."}
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => handleToggle("master", isGlobalAiActive)}
+          style={{
+            background: isGlobalAiActive
+              ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+              : "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "12px",
+            padding: "10px 20px",
+            fontSize: "0.84rem",
+            fontWeight: 800,
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "8px",
+            boxShadow: isGlobalAiActive
+              ? "0 4px 16px rgba(16, 185, 129, 0.45)"
+              : "0 4px 16px rgba(239, 68, 68, 0.45)",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Power size={16} />
+          <span>{isGlobalAiActive ? "⚡ SHUT DOWN ALL AI (सब बंद करें)" : "⚡ ACTIVATE ALL AI (सब चालू करें)"}</span>
+        </button>
+      </div>
+
       {/* Engine Fleet Filter Tabs & Interactive Switcher */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginTop: "2px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
             <span>⚡ Multi-Tier AI Engine Fleet</span>
           </h4>
-          <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", fontWeight: 700, border: "1px solid rgba(56, 189, 248, 0.3)" }}>
-            7 Active Providers
+          <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: isGlobalAiActive ? "rgba(56, 189, 248, 0.15)" : "rgba(239, 68, 68, 0.2)", color: isGlobalAiActive ? "#38bdf8" : "#fca5a5", fontWeight: 700, border: isGlobalAiActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)" }}>
+            {activeEnginesCount} Active Providers
           </span>
         </div>
 
