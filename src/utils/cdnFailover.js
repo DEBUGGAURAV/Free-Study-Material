@@ -322,7 +322,8 @@ export async function acquireNoteDocument(noteId, {
     } catch {}
   }
 
-  let cleanName = (fileName || note?.originalName || note?.fileName || note?.title || `Document_${cleanId}`)
+  const candidateRaw = (note?.originalName || note?.fileName || fileName || note?.title || `Document_${cleanId}`);
+  let cleanName = String(candidateRaw)
     .replace(/[/\\?%*:|"<>]/g, "_")
     .trim();
   if (!cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";

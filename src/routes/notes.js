@@ -1921,7 +1921,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
           qToken = jwt.sign({ id: requestingUser.id, role: requestingUser.role || "student" }, JWT_SECRET, { expiresIn: "10m" });
         } catch (_) {}
       }
-      const dlUrl = `${cfWorkerUrl}/api/notes/${id}/stream.pdf?download=1${qToken ? `&token=${encodeURIComponent(qToken)}` : ""}${req.query.filename ? `&filename=${encodeURIComponent(req.query.filename)}` : ""}`;
+      const realDlName = (note.originalName || note.fileName || req.query.filename || "").trim();
+      const dlUrl = `${cfWorkerUrl}/api/notes/${id}/stream.pdf?download=1${qToken ? `&token=${encodeURIComponent(qToken)}` : ""}${realDlName ? `&filename=${encodeURIComponent(realDlName)}` : ""}`;
       return res.redirect(302, dlUrl);
     }
     const isExplicitPreview = req.query.preview === "1" || req.query.view === "1";
@@ -1972,12 +1973,12 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     ];
 
     let candidateName = "";
-    if (queryFilename && !genericNames.includes(queryFilename.toLowerCase())) {
+    const realOriginalName = (note.originalName || note.fileName || "").trim();
+    if (realOriginalName && !genericNames.includes(realOriginalName.toLowerCase())) {
+      // 1. Highest priority: The actual REAL file name stored in the database!
+      candidateName = realOriginalName;
+    } else if (queryFilename && !genericNames.includes(queryFilename.toLowerCase())) {
       candidateName = queryFilename;
-    } else if (note.originalName && !genericNames.includes(note.originalName.toLowerCase().trim())) {
-      candidateName = note.originalName.trim();
-    } else if (note.fileName && !genericNames.includes(note.fileName.toLowerCase().trim())) {
-      candidateName = note.fileName.trim();
     } else if (note.title && !genericNames.includes(note.title.toLowerCase().trim())) {
       candidateName = note.title.trim();
     } else if (note.subject && note.subject !== "General Academic") {
