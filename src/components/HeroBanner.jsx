@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles, Zap, Award } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles, Zap, Award, Flame } from "lucide-react";
 import { playPop } from "../utils/soundEffects";
 
-export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenUpload, onBrowsePapers, onOpenAiStudy }) {
+export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenUpload, onBrowsePapers, onOpenAiStudy, onOpenSwipeToRevise }) {
   const browseMaterials = () => {
     playPop();
     document.getElementById("study-materials")?.scrollIntoView({
@@ -75,7 +75,37 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
             Curated university lecture notes, solved previous question papers, and instant AI study tools. Read directly in your browser or save 100% offline.
           </p>
 
-          <div className="hero-actions" style={{ marginTop: "24px" }}>
+          <div className="hero-actions" style={{ marginTop: "24px", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="btn-3d-swipe-hero"
+              onClick={onOpenSwipeToRevise}
+              style={{
+                background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+                border: "2px solid #fde68a",
+                color: "#92400e",
+                borderRadius: "14px",
+                padding: "10px 18px",
+                fontSize: "0.88rem",
+                fontWeight: 800,
+                boxShadow: "0 8px 20px -2px rgba(245, 158, 11, 0.35), inset 0 2px 2px #ffffff",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+              title="Study Tinder: Swipe-to-Revise"
+            >
+              <div className="icon-3d-amber" style={{ width: "24px", height: "24px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                <Flame size={15} color="#d97706" fill="#f59e0b" />
+              </div>
+              <span>Swipe-to-Revise</span>
+              <span style={{ fontSize: "0.68rem", fontWeight: 800, background: "linear-gradient(135deg, #f59e0b, #ef4444)", color: "#ffffff", padding: "1px 7px", borderRadius: "999px" }}>
+                🔥 Study Tinder
+              </span>
+            </button>
+
             <button
               type="button"
               className="btn-primary"

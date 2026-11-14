@@ -20,6 +20,7 @@ import {
   BookOpen,
   LayoutGrid,
   X,
+  Flame,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
@@ -39,6 +40,7 @@ export default function Navbar({
   onOpenHelp,
   onOpenStudyPod,
   onOpenAirDrop,
+  onOpenSwipeToRevise,
   onOpenAiStudyPod,
   onOpenCircleSearch,
   currentUser,
@@ -279,6 +281,31 @@ export default function Navbar({
                 </button>
               )}
 
+              <button
+                type="button"
+                className="btn-swipe-mobile-compact"
+                onClick={onOpenSwipeToRevise}
+                style={{
+                  background: "linear-gradient(135deg, #fffbeb, #fef3c7)",
+                  border: "1.5px solid #fde68a",
+                  color: "#92400e",
+                  borderRadius: "999px",
+                  padding: "4px 10px",
+                  fontSize: "0.74rem",
+                  fontWeight: 800,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  cursor: "pointer",
+                  boxShadow: "0 3px 12px rgba(245, 158, 11, 0.28)",
+                  flexShrink: 0,
+                }}
+                title="Study Tinder: Swipe-to-Revise"
+              >
+                <Flame size={14} color="#f59e0b" fill="#f59e0b" />
+                <span>Revise</span>
+              </button>
+
               {currentUser && (
                 <button
                   type="button"
@@ -501,14 +528,48 @@ export default function Navbar({
         {/* DECK 2: SUSPENDED HOLOGRAPHIC FEATURE LAUNCHPAD (Desktop & Tablet)
             Every feature shows BOTH Icon + Explicit Label — super easy to find! */}
         {currentUser && <nav className="nav-feature-launchpad" aria-label="Academic Tools & Live Features">
+          {/* 3D Swipe-to-Revise (Study Tinder) Pill */}
+          <button
+            type="button"
+            className="launchpad-pill pill-3d-swipe"
+            onClick={onOpenSwipeToRevise}
+            style={{
+              background: "linear-gradient(135deg, #fffbeb, #ffffff) padding-box, linear-gradient(135deg, #f59e0b, #ec4899, #6366f1) border-box",
+              border: "1.5px solid transparent",
+              color: "#0f172a",
+              boxShadow: "0 6px 18px -2px rgba(245, 158, 11, 0.3), 0 2px 5px rgba(0, 0, 0, 0.05)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
+            title="Study Tinder: Swipe-to-Revise Dopamine Flashcards"
+          >
+            <div className="icon-3d-amber" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <Flame size={14} color="#d97706" fill="#f59e0b" />
+            </div>
+            <span>Swipe Revise</span>
+            <span style={{ fontSize: "0.65rem", fontWeight: 800, background: "linear-gradient(135deg, #f59e0b, #ef4444)", color: "#ffffff", padding: "1px 6px", borderRadius: "999px", boxShadow: "0 2px 6px rgba(239, 68, 68, 0.35)" }}>
+              HOT
+            </span>
+          </button>
+
           <button
             type="button"
             className="launchpad-pill pill-airdrop"
             onClick={onOpenAirDrop}
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid #bae6fd",
+              color: "#0369a1",
+              boxShadow: "0 4px 14px -2px rgba(2, 132, 199, 0.22)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
             title="Campus AirDrop: Peer-to-Peer offline note transfer via QR Mesh"
           >
-            <Zap size={15} strokeWidth={2.2} />
-            <span>AirDrop</span>
+            <div className="icon-3d-cyan" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <Zap size={14} color="#0284c7" />
+            </div>
+            <span>Hostel AirDrop</span>
           </button>
 
           <span className="launchpad-divider" aria-hidden="true" />
@@ -527,7 +588,9 @@ export default function Navbar({
             }}
             title="Student Chat Hub & Live Study Discussions"
           >
-            <MessageSquare size={15} color="#2563eb" strokeWidth={2.25} />
+            <div className="icon-3d-indigo" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <MessageSquare size={14} color="#2563eb" />
+            </div>
             <span style={{ color: "#0f172a" }}>Chat Hub</span>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
@@ -536,9 +599,19 @@ export default function Navbar({
             type="button"
             className="launchpad-pill pill-studypod"
             onClick={onOpenStudyPod}
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid #ddd6fe",
+              color: "#5b21b6",
+              boxShadow: "0 4px 14px -2px rgba(124, 58, 237, 0.2)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
             title="Collaborative Live Study Pod"
           >
-            <Users size={15} strokeWidth={2.2} />
+            <div className="icon-3d-violet" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <Users size={14} color="#7c3aed" />
+            </div>
             <span>Study Pod</span>
             <span className="live-pill">LIVE</span>
           </button>
@@ -549,9 +622,19 @@ export default function Navbar({
             type="button"
             className="launchpad-pill pill-notices"
             onClick={onOpenNotices}
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid #fde68a",
+              color: "#92400e",
+              boxShadow: "0 4px 14px -2px rgba(245, 158, 11, 0.2)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
             title="University Notice Board & Announcements"
           >
-            <Bell size={15} strokeWidth={2.2} />
+            <div className="icon-3d-amber" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <Bell size={14} color="#d97706" />
+            </div>
             <span>Notices</span>
             {noticeCount > 0 && (
               <span className="launchpad-count-badge">
@@ -574,7 +657,9 @@ export default function Navbar({
             }}
             title="24/7 Student Help & Support Desk"
           >
-            <HelpCircle size={15} color="#059669" strokeWidth={2.25} />
+            <div className="icon-3d-emerald" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+              <HelpCircle size={14} color="#059669" />
+            </div>
             <span style={{ color: "#0f172a" }}>Help Desk</span>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
@@ -720,6 +805,31 @@ export default function Navbar({
                 </div>
 
                 <div className="mobile-more-grid">
+                  {/* Swipe to Revise */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenSwipeToRevise();
+                    }}
+                    style={{
+                      background: "linear-gradient(135deg, #fffbeb, #ffffff)",
+                      border: "1.5px solid #fde68a",
+                    }}
+                  >
+                    <div className="icon-3d-amber" style={{ width: "36px", height: "36px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Flame size={20} color="#d97706" fill="#f59e0b" />
+                    </div>
+                    <div className="more-card-info">
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <strong style={{ color: "#92400e" }}>Swipe-to-Revise</strong>
+                        <span style={{ fontSize: "0.62rem", padding: "1px 6px", borderRadius: "999px", background: "linear-gradient(135deg, #f59e0b, #ef4444)", color: "#ffffff", fontWeight: 800 }}>HOT</span>
+                      </div>
+                      <small>Study Tinder dopamine flashcards</small>
+                    </div>
+                  </button>
+
                   {/* AirDrop */}
                   <button
                     type="button"

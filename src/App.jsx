@@ -68,6 +68,7 @@ const HelpCenterModal = lazyWithRetry(() => import("./components/HelpCenterModal
 const StudentChatModal = lazyWithRetry(() => import("./components/StudentChatModal"));
 const StudyPodModal = lazyWithRetry(() => import("./components/StudyPodModal"));
 const CampusAirdropModal = lazyWithRetry(() => import("./components/CampusAirdropModal"));
+const SwipeToReviseModal = lazyWithRetry(() => import("./components/SwipeToReviseModal"));
 const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
 const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal"));
 const CircleSearchModal = lazyWithRetry(() => import("./components/CircleSearchModal"));
@@ -170,6 +171,7 @@ export default function App() {
   const [isAirdropOpen, setIsAirdropOpen] = useState(false);
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
   const [airdropInitialMode, setAirdropInitialMode] = useState("qr");
+  const [isSwipeToReviseOpen, setIsSwipeToReviseOpen] = useState(false);
 
   // 🌟 Home Page AI Study Pod State (Conversational Chatbox First + Flashcards & Summary)
   const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
@@ -1468,6 +1470,7 @@ export default function App() {
           setAirdropInitialMode("qr");
           setIsAirdropOpen(true);
         }}
+        onOpenSwipeToRevise={() => setIsSwipeToReviseOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenAuth={(mode) => openAuth(mode || "signin")}
         onOpenProfile={() => setIsProfileOpen(true)}
@@ -2075,6 +2078,7 @@ export default function App() {
               totalNotes={notes.length}
               currentUser={currentUser}
               onBrowsePapers={() => setSelectedCourse("Question Papers")}
+              onOpenSwipeToRevise={() => setIsSwipeToReviseOpen(true)}
               onOpenAiStudy={() => {
                 setHomeAiPodNote(null);
                 setHomeAiPodInitialTab("chat");
@@ -2573,6 +2577,16 @@ export default function App() {
                   }
                 }
               }}
+            />
+          </ModalErrorBoundary>
+        )}
+
+        {/* 🃏 Swipe-to-Revise / Study Tinder Dopamine Flashcards */}
+        {isSwipeToReviseOpen && (
+          <ModalErrorBoundary onClose={() => setIsSwipeToReviseOpen(false)}>
+            <SwipeToReviseModal
+              isOpen={isSwipeToReviseOpen}
+              onClose={() => setIsSwipeToReviseOpen(false)}
             />
           </ModalErrorBoundary>
         )}

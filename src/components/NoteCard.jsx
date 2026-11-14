@@ -473,8 +473,8 @@ function NoteCard({
                 </span>
               </div>
               <div className="showcase-doc-row">
-                <div className="showcase-doc-icon">
-                  <FileText size={22} color="#2563eb" strokeWidth={2.2} />
+                <div className="showcase-doc-icon notecard-pdf-3d">
+                  <FileText size={22} color="#dc2626" strokeWidth={2.4} />
                 </div>
                 <div className="showcase-text-body">
                   <h3 className="note-title" title={note.title}>
@@ -657,7 +657,7 @@ function NoteCard({
               <button
                 type="button"
                 onClick={handleTrackedDownload}
-                className="btn-action-download"
+                className="btn-action-download btn-download-3d"
                 title="Download note via Local Server"
                 disabled={downloading}
               >
