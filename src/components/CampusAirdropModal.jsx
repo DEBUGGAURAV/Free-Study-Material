@@ -656,17 +656,19 @@ export default function CampusAirdropModal({
             style={{
               margin: "12px 16px 0",
               padding: "10px 14px",
-              borderRadius: "8px",
-              background: "rgba(239, 68, 68, 0.15)",
-              border: "1px solid rgba(239, 68, 68, 0.35)",
-              color: "#fca5a5",
-              fontSize: "0.78rem",
+              borderRadius: "10px",
+              background: "#fef2f2",
+              border: "1.5px solid #f87171",
+              color: "#991b1b",
+              fontSize: "0.82rem",
+              fontWeight: 700,
               display: "flex",
               alignItems: "center",
               gap: "8px",
+              boxShadow: "0 2px 8px rgba(220, 38, 38, 0.15)",
             }}
           >
-            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <AlertTriangle size={16} color="#dc2626" strokeWidth={2.2} style={{ flexShrink: 0 }} />
             <span>{errorMsg}</span>
           </div>
         )}

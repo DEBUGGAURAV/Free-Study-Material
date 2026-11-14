@@ -649,20 +649,25 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
         {msg && (
           <div
             style={{
-              background: msg.type === "error" ? "#fff1f2" : "#ecfdf5",
-              border: msg.type === "error" ? "1px solid #fda4af" : "1px solid #6ee7b7",
-              color: msg.type === "error" ? "#be123c" : "#047857",
+              background: msg.type === "error" ? "#fef2f2" : "#f0fdf4",
+              border: msg.type === "error" ? "1.5px solid #f87171" : "1.5px solid #86efac",
+              color: msg.type === "error" ? "#991b1b" : "#166534",
               padding: "10px 14px",
               borderRadius: "var(--radius-md)",
               marginBottom: "16px",
               fontSize: "0.85rem",
-              fontWeight: 600,
+              fontWeight: 700,
               display: "flex",
               alignItems: "center",
               gap: "8px",
+              boxShadow: msg.type === "error" ? "0 2px 8px rgba(220, 38, 38, 0.15)" : "0 2px 8px rgba(22, 163, 74, 0.15)",
             }}
           >
-            {msg.type === "error" ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+            {msg.type === "error" ? (
+              <AlertCircle size={17} color="#dc2626" strokeWidth={2.2} style={{ flexShrink: 0 }} />
+            ) : (
+              <CheckCircle2 size={17} color="#16a34a" strokeWidth={2.2} style={{ flexShrink: 0 }} />
+            )}
             <span>{msg.text}</span>
           </div>
         )}

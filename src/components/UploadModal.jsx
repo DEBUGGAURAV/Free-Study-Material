@@ -259,19 +259,21 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
             {error && (
               <div
                 style={{
-                  background: "rgba(244, 63, 94, 0.1)",
-                  border: "1px solid rgba(244, 63, 94, 0.3)",
-                  color: "#f43f5e",
+                  background: "#fef2f2",
+                  border: "1.5px solid #f87171",
+                  color: "#991b1b",
                   padding: "10px 14px",
                   borderRadius: "var(--radius-md)",
                   marginBottom: "16px",
                   fontSize: "0.85rem",
+                  fontWeight: 700,
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
+                  boxShadow: "0 2px 8px rgba(220, 38, 38, 0.15)",
                 }}
               >
-                <AlertCircle size={16} />
+                <AlertCircle size={17} color="#dc2626" strokeWidth={2.2} style={{ flexShrink: 0 }} />
                 <span>{error}</span>
               </div>
             )}

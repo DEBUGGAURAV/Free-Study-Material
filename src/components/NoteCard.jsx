@@ -474,7 +474,7 @@ function NoteCard({
               </div>
               <div className="showcase-doc-row">
                 <div className="showcase-doc-icon">
-                  <FileText size={20} />
+                  <FileText size={22} color="#2563eb" strokeWidth={2.2} />
                 </div>
                 <div className="showcase-text-body">
                   <h3 className="note-title" title={note.title}>
@@ -625,7 +625,7 @@ function NoteCard({
               onClick={handleDocumentPreviewClick}
               title="Open full document in Online Reader"
             >
-              <Eye size={14} />
+              <Eye size={15} strokeWidth={2.2} />
               <span>Read Online</span>
             </button>
 
@@ -650,7 +650,7 @@ function NoteCard({
                     : "Downloads paused by administrator. Online Reader is active."
                 }
               >
-                <Download size={14} style={{ opacity: 0.85 }} />
+                <Download size={15} strokeWidth={2.2} style={{ opacity: 0.85 }} />
                 <span>{isSingleNoteDisabled ? "🔒 Read-Only" : "🔒 Paused"}</span>
               </button>
             ) : (
@@ -668,7 +668,7 @@ function NoteCard({
                   </>
                 ) : (
                   <>
-                    <Download size={14} />
+                    <Download size={15} strokeWidth={2.2} />
                     <span>Download</span>
                   </>
                 )}
@@ -693,7 +693,7 @@ function NoteCard({
                 }}
                 title="✨ AI Study: Instant 3D Flashcards & Summary for this note"
               >
-                <Sparkles size={13} color="#a855f7" />
+                <Sparkles size={14} color="#9333ea" strokeWidth={2.2} />
                 <span>AI Study</span>
               </button>
             )}
@@ -709,9 +709,9 @@ function NoteCard({
               }
             >
               {sharedToChat ? (
-                <Check size={13} style={{ color: "#34d399" }} />
+                <Check size={14} strokeWidth={2.2} style={{ color: "#16a34a" }} />
               ) : (
-                <MessageCircle size={13} />
+                <MessageCircle size={14} strokeWidth={2.2} />
               )}
               <span>{sharedToChat ? "Sent" : "Chat"}</span>
             </button>
@@ -730,7 +730,7 @@ function NoteCard({
               }}
               title="AirDrop: Beam note offline via 1-Tap QR Mesh"
             >
-              <Zap size={13} />
+              <Zap size={14} strokeWidth={2.2} />
               <span>AirDrop</span>
             </button>
 
@@ -748,9 +748,9 @@ function NoteCard({
               {sharingStory ? (
                 <div className="spinner" style={{ width: "12px", height: "12px", borderWidth: "1.5px" }} />
               ) : copied ? (
-                <Check size={13} style={{ color: "#34d399" }} />
+                <Check size={14} strokeWidth={2.2} style={{ color: "#16a34a" }} />
               ) : (
-                <Share2 size={13} />
+                <Share2 size={14} strokeWidth={2.2} />
               )}
               <span>{sharingStory ? "Poster..." : copied ? "Saved!" : "Story"}</span>
             </button>

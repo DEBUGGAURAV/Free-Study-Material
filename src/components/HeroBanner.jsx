@@ -71,7 +71,7 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
             </span>
           </h1>
 
-          <p className="hero-subtitle" style={{ fontSize: "1.05rem", lineHeight: 1.6, color: "#94a3b8" }}>
+          <p className="hero-subtitle" style={{ fontSize: "1.05rem", lineHeight: 1.6, color: "#334155", fontWeight: 500 }}>
             Curated university lecture notes, solved previous question papers, and instant AI study tools. Read directly in your browser or save 100% offline.
           </p>
 
@@ -90,7 +90,7 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
               }}
             >
               <span>Explore Study Materials</span>
-              <ArrowRight size={17} />
+              <ArrowRight size={17} strokeWidth={2.2} />
             </button>
             <button
               type="button"
@@ -99,8 +99,8 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
               style={{
                 background: "#ffffff",
                 border: "1.5px solid #dce4ef",
-                color: "#1e293b",
-                fontWeight: 750,
+                color: "#0f172a",
+                fontWeight: 800,
                 boxShadow: "0 4px 14px rgba(0, 0, 0, 0.05)",
                 display: "inline-flex",
                 alignItems: "center",
@@ -111,8 +111,8 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
             </button>
           </div>
 
-          <p className="hero-reassurance" style={{ marginTop: "16px", color: "#64748b", fontSize: "0.82rem" }}>
-            <ShieldCheck size={15} color="#34d399" />
+          <p className="hero-reassurance" style={{ marginTop: "16px", color: "#475569", fontSize: "0.84rem", fontWeight: 600 }}>
+            <ShieldCheck size={16} color="#10b981" strokeWidth={2.2} />
             <span>Curated by students</span>
             <span aria-hidden="true">·</span>
             <span>0ms Instant Reader</span>
@@ -151,7 +151,7 @@ export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenU
             }}
           >
             <strong style={{ fontSize: "1.5rem", color: "#38bdf8" }}>{totalNotes.toLocaleString()}</strong>
-            <span style={{ color: "#94a3b8" }}>{totalNotes === 1 ? "verified academic resource" : "verified academic resources"}</span>
+            <span style={{ color: "#e2e8f0", fontWeight: 500 }}>{totalNotes === 1 ? "verified academic resource" : "verified academic resources"}</span>
           </div>
 
           <div className="hero-library-list">

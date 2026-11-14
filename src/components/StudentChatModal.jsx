@@ -2140,21 +2140,24 @@ export default function StudentChatModal({
 
         /* Instagram Gradient for Sent Messages */
         .scm-bubble-content.mine {
-          background: linear-gradient(135deg, #0284c7 0%, #3b82f6 50%, #6366f1 100%);
+          background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
           border-radius: 20px 20px 4px 20px;
-          color: #ffffff;
-          box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
-          border: 1px solid rgba(255, 255, 255, 0.18);
+          color: #ffffff !important;
+          box-shadow: 0 4px 16px rgba(2, 132, 199, 0.3);
+          border: 1.5px solid rgba(255, 255, 255, 0.25);
+          font-size: 0.88rem;
+          font-weight: 500;
         }
 
         /* Dark Glass for Received Messages */
         .scm-bubble-content.theirs {
-          background: rgba(30, 41, 59, 0.85);
-          backdrop-filter: blur(8px);
+          background: #1e293b;
           border-radius: 20px 20px 20px 4px;
-          color: #f8fafc;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+          color: #ffffff !important;
+          border: 1.5px solid rgba(255, 255, 255, 0.14);
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+          font-size: 0.88rem;
+          font-weight: 500;
         }
 
         /* Hover Reaction Bar */
@@ -3817,20 +3820,21 @@ export default function StudentChatModal({
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "flex-end",
-                                  gap: "4px",
-                                  marginTop: "3px",
-                                  fontSize: "0.66rem",
-                                  color: isMine ? "rgba(255, 255, 255, 0.75)" : "var(--text-dim)",
+                                  gap: "5px",
+                                  marginTop: "4px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  color: isMine ? "#e0f2fe" : "#cbd5e1",
                                 }}
                               >
-                                {msg.isEdited && <span style={{ fontStyle: "italic" }}>(edited)</span>}
+                                {msg.isEdited && <span style={{ fontStyle: "italic", opacity: 0.85 }}>(edited)</span>}
                                 <span>{formatMessageTime(msg.createdAt)}</span>
                                 {isMine && !msg.isDeleted && (
                                   <span
                                     style={{
-                                      color: msg.status === "read" ? "#38bdf8" : "rgba(255, 255, 255, 0.7)",
-                                      fontWeight: 800,
-                                      fontSize: "0.72rem",
+                                      color: msg.status === "read" ? "#38bdf8" : "#cbd5e1",
+                                      fontWeight: 900,
+                                      fontSize: "0.78rem",
                                       letterSpacing: "-1px",
                                     }}
                                     title={

@@ -260,7 +260,7 @@ export default function Navbar({
                   style={{
                     background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
                     border: "1.5px solid transparent",
-                    color: "#1e293b",
+                    color: "#0f172a",
                     borderRadius: "999px",
                     padding: "4px 11px",
                     fontSize: "0.74rem",
@@ -269,13 +269,13 @@ export default function Navbar({
                     alignItems: "center",
                     gap: "5px",
                     cursor: "pointer",
-                    boxShadow: "0 3px 12px rgba(124, 58, 237, 0.22)",
+                    boxShadow: "0 3px 12px rgba(124, 58, 237, 0.25)",
                     flexShrink: 0,
                   }}
                   title="Admin Studio Control Panel"
                 >
-                  <ShieldCheck size={14} color="#7c3aed" />
-                  <span style={{ color: "#1e293b" }}>Admin</span>
+                  <ShieldCheck size={15} color="#7c3aed" strokeWidth={2.25} />
+                  <span style={{ color: "#0f172a" }}>Admin</span>
                 </button>
               )}
 
@@ -438,15 +438,15 @@ export default function Navbar({
                 style={{
                   background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
                   border: "1.5px solid transparent",
-                  color: "#1e293b",
-                  boxShadow: "0 4px 16px -2px rgba(124, 58, 237, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
+                  color: "#0f172a",
+                  boxShadow: "0 4px 16px -2px rgba(124, 58, 237, 0.28), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
                   fontWeight: 800,
                   borderRadius: "999px",
                 }}
                 title="Admin Security Studio: Notes, Telemetry & Vault Management"
               >
-                <ShieldCheck size={15} color="#7c3aed" />
-                <span style={{ color: "#1e293b" }}>Admin Studio</span>
+                <ShieldCheck size={16} color="#7c3aed" strokeWidth={2.25} />
+                <span style={{ color: "#0f172a" }}>Admin Studio</span>
               </button>
             )}
 
@@ -507,7 +507,7 @@ export default function Navbar({
             onClick={onOpenAirDrop}
             title="Campus AirDrop: Peer-to-Peer offline note transfer via QR Mesh"
           >
-            <Zap size={14} />
+            <Zap size={15} strokeWidth={2.2} />
             <span>AirDrop</span>
           </button>
 
@@ -520,16 +520,16 @@ export default function Navbar({
             style={{
               background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #0284c7, #2563eb, #6366f1) border-box",
               border: "1.5px solid transparent",
-              color: "#1e293b",
-              boxShadow: "0 4px 16px -2px rgba(37, 99, 235, 0.22), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
+              color: "#0f172a",
+              boxShadow: "0 4px 16px -2px rgba(37, 99, 235, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
               fontWeight: 800,
               borderRadius: "999px",
             }}
             title="Student Chat Hub & Live Study Discussions"
           >
-            <MessageSquare size={14} color="#2563eb" />
-            <span style={{ color: "#1e293b" }}>Chat Hub</span>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
+            <MessageSquare size={15} color="#2563eb" strokeWidth={2.25} />
+            <span style={{ color: "#0f172a" }}>Chat Hub</span>
+            <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
           <button
@@ -538,7 +538,7 @@ export default function Navbar({
             onClick={onOpenStudyPod}
             title="Collaborative Live Study Pod"
           >
-            <Users size={14} />
+            <Users size={15} strokeWidth={2.2} />
             <span>Study Pod</span>
             <span className="live-pill">LIVE</span>
           </button>
@@ -551,7 +551,7 @@ export default function Navbar({
             onClick={onOpenNotices}
             title="University Notice Board & Announcements"
           >
-            <Bell size={14} />
+            <Bell size={15} strokeWidth={2.2} />
             <span>Notices</span>
             {noticeCount > 0 && (
               <span className="launchpad-count-badge">
@@ -567,16 +567,16 @@ export default function Navbar({
             style={{
               background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #059669, #10b981, #06b6d4) border-box",
               border: "1.5px solid transparent",
-              color: "#1e293b",
-              boxShadow: "0 4px 16px -2px rgba(16, 185, 129, 0.22), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
+              color: "#0f172a",
+              boxShadow: "0 4px 16px -2px rgba(16, 185, 129, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
               fontWeight: 800,
               borderRadius: "999px",
             }}
             title="24/7 Student Help & Support Desk"
           >
-            <HelpCircle size={14} color="#059669" />
-            <span style={{ color: "#1e293b" }}>Help Desk</span>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
+            <HelpCircle size={15} color="#059669" strokeWidth={2.25} />
+            <span style={{ color: "#0f172a" }}>Help Desk</span>
+            <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
           {enableWebPush && pushStatus.supported && (

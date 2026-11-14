@@ -651,31 +651,33 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               }}
               style={{
                 cursor: "pointer",
-                padding: "10px 14px",
+                padding: "12px 16px",
                 marginBottom: "16px",
-                borderRadius: "10px",
+                borderRadius: "12px",
                 background: myTickets.some((t) => t.status === "answered")
-                  ? "rgba(16, 185, 129, 0.12)"
-                  : "rgba(245, 158, 11, 0.12)",
+                  ? "#ecfdf5"
+                  : "#fffbeb",
                 border: myTickets.some((t) => t.status === "answered")
-                  ? "1px solid rgba(16, 185, 129, 0.35)"
-                  : "1px solid rgba(245, 158, 11, 0.35)",
+                  ? "1.5px solid #10b981"
+                  : "1.5px solid #f59e0b",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                fontSize: "0.82rem",
-                color: myTickets.some((t) => t.status === "answered") ? "#6ee7b7" : "#fde68a",
+                fontSize: "0.85rem",
+                fontWeight: 650,
+                color: myTickets.some((t) => t.status === "answered") ? "#065f46" : "#92400e",
+                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span>{myTickets.some((t) => t.status === "answered") ? "🎉" : "⚡"}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ fontSize: "1.1rem" }}>{myTickets.some((t) => t.status === "answered") ? "🎉" : "⚡"}</span>
                 <span>
                   {myTickets.some((t) => t.status === "answered")
                     ? "Admin has replied to your ticket! Tap here to read answer and reply."
                     : `You have ${myTickets.filter((t) => t.status === "active").length} active ticket(s) in progress.`}
                 </span>
               </div>
-              <span style={{ fontSize: "0.78rem", fontWeight: 700, textDecoration: "underline" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 800, textDecoration: "underline", color: myTickets.some((t) => t.status === "answered") ? "#047857" : "#b45309" }}>
                 View Ticket &rarr;
               </span>
             </div>

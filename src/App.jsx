@@ -1504,14 +1504,14 @@ export default function App() {
             style={{
               margin: "16px 0 14px",
               padding: "14px 18px",
-              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(185, 28, 28, 0.08) 100%)",
-              border: "1px solid rgba(239, 68, 68, 0.35)",
+              background: "#fef2f2",
+              border: "1.5px solid #f87171",
               borderRadius: "var(--radius-md)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               gap: "14px",
-              boxShadow: "0 4px 20px rgba(239, 68, 68, 0.15)",
+              boxShadow: "0 6px 20px -4px rgba(220, 38, 38, 0.22)",
               backdropFilter: "blur(10px)",
               animation: "fadeIn 0.3s ease",
             }}
@@ -1519,27 +1519,27 @@ export default function App() {
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "38px",
+                  height: "38px",
                   borderRadius: "50%",
-                  background: "rgba(239, 68, 68, 0.2)",
-                  border: "1px solid rgba(239, 68, 68, 0.4)",
+                  background: "#fee2e2",
+                  border: "1.5px solid #fca5a5",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   flexShrink: 0,
                 }}
               >
-                <Clock size={18} style={{ color: "#ef4444" }} />
+                <Clock size={20} style={{ color: "#dc2626", strokeWidth: 2.2 }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fca5a5", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#991b1b", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                   <span>Session Auto-Terminated (30 Min Inactivity)</span>
-                  <span style={{ fontSize: "0.7rem", background: "rgba(239, 68, 68, 0.25)", border: "1px solid rgba(239, 68, 68, 0.35)", padding: "1px 7px", borderRadius: "10px", color: "#fca5a5" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 800, background: "#fee2e2", border: "1px solid #fca5a5", padding: "1px 8px", borderRadius: "10px", color: "#b91c1c" }}>
                     Security Bot Notice Sent ⏱️
                   </span>
                 </div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "3px" }}>
+                <div style={{ fontSize: "0.82rem", color: "#7f1d1d", fontWeight: 500, marginTop: "3px" }}>
                   Logged out automatically at <strong>{autoLogoutNotice.time}</strong> due to 30 minutes of web inactivity. Your academic vault session and credentials remain safeguarded.
                 </div>
               </div>

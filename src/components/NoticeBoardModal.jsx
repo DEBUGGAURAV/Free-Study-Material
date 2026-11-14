@@ -526,12 +526,12 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                               <Pin size={10} /> PINNED
                             </span>
                           )}
-                          <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-main)", margin: 0 }}>
+                          <h4 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                             {n.title}
                           </h4>
                         </div>
 
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", fontSize: "0.76rem", color: "#475569", marginTop: "4px" }}>
                           <span>
                             Posted on {new Date(n.createdAt).toLocaleDateString()} at{" "}
                             {new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
@@ -539,12 +539,12 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
 
                           {/* Retention / Expiry Info */}
                           {n.retentionDays === -1 ? (
-                            <span style={{ color: "#059669", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                              <Sparkles size={11} /> Never Expires
+                            <span style={{ color: "#059669", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <Sparkles size={13} strokeWidth={2.2} /> Never Expires
                             </span>
                           ) : n.expiresAt ? (
-                            <span style={{ color: isExpiring ? "#dc2626" : "var(--text-dim)", display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                              <Clock size={11} /> Auto-removes: {new Date(n.expiresAt).toLocaleDateString()}
+                            <span style={{ color: isExpiring ? "#dc2626" : "#475569", fontWeight: 650, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <Clock size={13} strokeWidth={2.2} /> Auto-removes: {new Date(n.expiresAt).toLocaleDateString()}
                             </span>
                           ) : null}
                         </div>
@@ -554,11 +554,11 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                         <div style={{ display: "flex", gap: "6px" }}>
                           <button
                             className="btn-icon"
-                            style={{ width: "30px", height: "30px" }}
+                            style={{ width: "30px", height: "30px", color: "#7c3aed" }}
                             onClick={() => handleEdit(n)}
                             title="Edit Notice"
                           >
-                            <Edit3 size={13} />
+                            <Edit3 size={14} strokeWidth={2.2} />
                           </button>
                           <button
                             className="btn-icon"
@@ -566,7 +566,7 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                             onClick={() => handleDelete(n.id)}
                             title="Delete Notice"
                           >
-                            <Trash2 size={13} />
+                            <Trash2 size={14} strokeWidth={2.2} />
                           </button>
                         </div>
                       )}
@@ -575,9 +575,10 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
                     {n.content && (
                       <p
                         style={{
-                          fontSize: "0.85rem",
-                          color: "var(--text-muted)",
-                          lineHeight: "1.5",
+                          fontSize: "0.88rem",
+                          color: "#1e293b",
+                          fontWeight: 500,
+                          lineHeight: "1.55",
                           marginTop: "10px",
                           whiteSpace: "pre-wrap",
                         }}
