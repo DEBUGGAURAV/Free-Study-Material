@@ -258,23 +258,23 @@ export default function Navbar({
                   className="btn-admin-mobile-header"
                   onClick={onOpenAdmin}
                   style={{
-                    background: "#ffffff",
-                    border: "1.5px solid #e0e7ff",
+                    background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
+                    border: "1.5px solid transparent",
                     color: "#1e293b",
                     borderRadius: "999px",
-                    padding: "4px 10px",
+                    padding: "4px 11px",
                     fontSize: "0.74rem",
                     fontWeight: 800,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
                     cursor: "pointer",
-                    boxShadow: "0 2px 10px rgba(79, 70, 229, 0.16)",
+                    boxShadow: "0 3px 12px rgba(124, 58, 237, 0.22)",
                     flexShrink: 0,
                   }}
                   title="Admin Studio Control Panel"
                 >
-                  <ShieldCheck size={14} color="#4f46e5" />
+                  <ShieldCheck size={14} color="#7c3aed" />
                   <span style={{ color: "#1e293b" }}>Admin</span>
                 </button>
               )}
@@ -436,16 +436,16 @@ export default function Navbar({
                 className="nav-capsule-btn btn-admin"
                 onClick={onOpenAdmin}
                 style={{
-                  background: "#ffffff",
-                  border: "1.5px solid #e0e7ff",
+                  background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
+                  border: "1.5px solid transparent",
                   color: "#1e293b",
-                  boxShadow: "0 4px 14px -3px rgba(79, 70, 229, 0.18), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+                  boxShadow: "0 4px 16px -2px rgba(124, 58, 237, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
                   fontWeight: 800,
                   borderRadius: "999px",
                 }}
                 title="Admin Security Studio: Notes, Telemetry & Vault Management"
               >
-                <ShieldCheck size={15} color="#4f46e5" />
+                <ShieldCheck size={15} color="#7c3aed" />
                 <span style={{ color: "#1e293b" }}>Admin Studio</span>
               </button>
             )}
@@ -518,10 +518,10 @@ export default function Navbar({
             className="launchpad-pill pill-chat"
             onClick={onOpenChat}
             style={{
-              background: "#ffffff",
-              border: "1.5px solid #dbeafe",
+              background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #0284c7, #2563eb, #6366f1) border-box",
+              border: "1.5px solid transparent",
               color: "#1e293b",
-              boxShadow: "0 4px 14px -3px rgba(37, 99, 235, 0.16), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+              boxShadow: "0 4px 16px -2px rgba(37, 99, 235, 0.22), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
               fontWeight: 800,
               borderRadius: "999px",
             }}
@@ -529,7 +529,7 @@ export default function Navbar({
           >
             <MessageSquare size={14} color="#2563eb" />
             <span style={{ color: "#1e293b" }}>Chat Hub</span>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981", display: "inline-block" }} />
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
           </button>
 
           <button
@@ -565,10 +565,10 @@ export default function Navbar({
             className="launchpad-pill pill-help"
             onClick={onOpenHelp}
             style={{
-              background: "#ffffff",
-              border: "1.5px solid #d1fae5",
+              background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #059669, #10b981, #06b6d4) border-box",
+              border: "1.5px solid transparent",
               color: "#1e293b",
-              boxShadow: "0 4px 14px -3px rgba(16, 185, 129, 0.16), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+              boxShadow: "0 4px 16px -2px rgba(16, 185, 129, 0.22), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
               fontWeight: 800,
               borderRadius: "999px",
             }}
@@ -576,7 +576,7 @@ export default function Navbar({
           >
             <HelpCircle size={14} color="#059669" />
             <span style={{ color: "#1e293b" }}>Help Desk</span>
-            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981", display: "inline-block" }} />
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
           </button>
 
           {enableWebPush && pushStatus.supported && (

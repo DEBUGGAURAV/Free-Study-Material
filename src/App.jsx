@@ -2649,7 +2649,7 @@ export default function App() {
         )}
       </React.Suspense>
 
-      {/* Floating 2-Way Help & Support Desk Trigger (Creative Modern Pure White Card) */}
+      {/* Floating 2-Way Help & Support Desk Trigger (Radiant Gradient Border on Pure White Card) */}
       <button
         type="button"
         onClick={() => setIsHelpOpen(true)}
@@ -2660,24 +2660,24 @@ export default function App() {
           bottom: activeJob ? "82px" : "24px",
           left: "20px",
           zIndex: 140,
-          background: "#ffffff",
+          background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #059669, #10b981, #06b6d4) border-box",
+          border: "2px solid transparent",
           color: "#0f172a",
-          border: "1.5px solid #d1fae5",
           borderRadius: "999px",
           padding: "9px 18px",
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          boxShadow: "0 10px 28px -4px rgba(16, 185, 129, 0.22), 0 4px 12px rgba(0, 0, 0, 0.08)",
+          boxShadow: "0 12px 32px -4px rgba(16, 185, 129, 0.28), 0 4px 12px rgba(0, 0, 0, 0.08)",
           cursor: "pointer",
           fontWeight: 800,
           fontSize: "0.85rem",
           transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
-        <HelpCircle size={18} color="#059669" />
+        <HelpCircle size={18} color="#059669" style={{ filter: "drop-shadow(0 1px 4px rgba(16, 185, 129, 0.4))" }} />
         <span style={{ fontWeight: 800, color: "#0f172a" }}>Need Help?</span>
-        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981", display: "inline-block" }} />
+        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
       </button>
 
       {/* 🚀 Persistent Floating Side Action Dock (AI Study Pod & Circle to Search) — ONLY VISIBLE AFTER LOGIN */}
