@@ -16,6 +16,9 @@ import {
   Users,
   Zap,
   Sparkles,
+  BookOpen,
+  LayoutGrid,
+  X,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
@@ -41,6 +44,7 @@ export default function Navbar({
   noticeCount = 0,
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [showMobileMoreSheet, setShowMobileMoreSheet] = useState(false);
   const searchInputRef = useRef(null);
   const { enableWebPush } = useTechFlags();
   const [pushStatus, setPushStatus] = useState({ supported: false, subscribed: false });
@@ -571,112 +575,261 @@ export default function Navbar({
       </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MOBILE FLOATING BOTTOM DOCK (1-Tap Thumb Reach with Clear Labels)
+          MOBILE FLOATING BOTTOM DOCK (Streamlined 5-Tab Golden Ratio)
           ══════════════════════════════════════════════════════════════════════ */}
-      {currentUser && <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Tools">
-        {/* ✨ AI Study Popup */}
-        <button
-          type="button"
-          className="dock-item dock-ai"
-          onClick={onOpenAiStudyPod}
-          style={{ color: "#a855f7" }}
-          title="AI Study (Flashcards, Summary, Notes Filter)"
-        >
-          <Sparkles size={17} color="#a855f7" style={{ filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))" }} />
-          <span style={{ fontWeight: 750, color: "#e0e7ff" }}>AI Study</span>
-        </button>
+      {currentUser && (
+        <>
+          <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Navigation">
+            {/* 1. 📚 Notes / Home */}
+            <button
+              type="button"
+              className="dock-item dock-notes"
+              onClick={() => {
+                const el = document.getElementById("study-materials");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth" });
+                } else {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+              title="Explore Study Notes & Papers"
+            >
+              <BookOpen size={18} />
+              <span>Notes</span>
+            </button>
 
-        {/* ♊ Circle to Search & Solve */}
-        <button
-          type="button"
-          className="dock-item dock-circle"
-          onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
-          style={{ color: "#3552c5" }}
-          title="Circle to Search: Ask Question or Diagram with Gemini AI"
-        >
-          <GeminiIcon size={17} withRing ringColor="#3552c5" color="#0f8b7e" />
-          <span>Circle</span>
-        </button>
+            {/* 2. ✨ AI Study */}
+            <button
+              type="button"
+              className="dock-item dock-ai"
+              onClick={onOpenAiStudyPod}
+              style={{ color: "#a855f7" }}
+              title="AI Study (Flashcards, Summary, Notes Filter)"
+            >
+              <Sparkles size={18} color="#a855f7" style={{ filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))" }} />
+              <span style={{ fontWeight: 750, color: "#e0e7ff" }}>AI Study</span>
+            </button>
 
-        {isAdminOrManager && (
-          <button
-            type="button"
-            className="dock-item dock-admin"
-            onClick={onOpenAdmin}
-            style={{
-              color: "#3552c5",
-              background: "#edf2ff",
-              border: "1px solid #dce5fa",
-              borderRadius: "12px",
-            }}
-            title="Admin Studio Control Panel"
-          >
-            <Shield size={17} color="#3552c5" />
-            <span style={{ color: "#3552c5", fontWeight: 800 }}>Admin</span>
-          </button>
-        )}
+            {/* 3. ♊ Circle to Search & Solve (Elevated Center Hub) */}
+            <button
+              type="button"
+              className="dock-item dock-circle dock-center-circle"
+              onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
+              style={{ color: "#3552c5" }}
+              title="Circle to Search: Ask Question or Diagram with Gemini AI"
+            >
+              <div className="dock-gemini-orb">
+                <GeminiIcon size={18} withRing ringColor="#3552c5" color="#0f8b7e" />
+              </div>
+              <span style={{ fontWeight: 750 }}>Circle</span>
+            </button>
 
-        <button
-          type="button"
-          className="dock-item dock-airdrop"
-          onClick={onOpenAirDrop}
-        >
-          <Zap size={17} />
-          <span>AirDrop</span>
-        </button>
+            {/* 4. 💬 Student Chat */}
+            <button
+              type="button"
+              className="dock-item dock-chat"
+              onClick={onOpenChat}
+              title="Student Study Chat"
+            >
+              <MessageSquare size={18} />
+              <span>Chat</span>
+            </button>
 
-        <button
-          type="button"
-          className="dock-item dock-chat"
-          onClick={onOpenChat}
-        >
-          <MessageSquare size={17} />
-          <span>Chat</span>
-        </button>
+            {/* 5. ⚡ More Hub (Drawer) */}
+            <button
+              type="button"
+              className="dock-item dock-more"
+              onClick={() => setShowMobileMoreSheet(true)}
+              title="More Academic Tools (AirDrop, Pod, Notices, Admin)"
+            >
+              <div style={{ position: "relative", display: "inline-flex" }}>
+                <LayoutGrid size={18} />
+                {noticeCount > 0 && (
+                  <span className="dock-notice-dot">{noticeCount > 9 ? "9+" : noticeCount}</span>
+                )}
+              </div>
+              <span>More</span>
+            </button>
+          </nav>
 
-        <button
-          type="button"
-          className="dock-item dock-pod"
-          onClick={onOpenStudyPod}
-        >
-          <Users size={17} />
-          <span>Pod</span>
-        </button>
+          {/* ══════════════════════════════════════════════════════════════════════
+              MOBILE 'MORE' ACTION DRAWER / SHEET
+              ══════════════════════════════════════════════════════════════════════ */}
+          {showMobileMoreSheet && (
+            <div
+              className="mobile-more-backdrop"
+              onClick={() => setShowMobileMoreSheet(false)}
+            >
+              <div
+                className="mobile-more-sheet"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mobile-sheet-drag-handle" />
+                <div className="mobile-sheet-header">
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <LayoutGrid size={17} color="#0284c7" />
+                    <span style={{ fontWeight: 800, fontSize: "0.96rem", color: "#1e293b" }}>
+                      Academic Studio &amp; Tools
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="mobile-sheet-close"
+                    onClick={() => setShowMobileMoreSheet(false)}
+                    title="Close"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
 
-        <button
-          type="button"
-          className="dock-item dock-notice"
-          onClick={onOpenNotices}
-        >
-          <div style={{ position: "relative", display: "inline-flex" }}>
-            <Bell size={17} />
-            {noticeCount > 0 && (
-              <span className="dock-notice-dot">{noticeCount > 9 ? "9+" : noticeCount}</span>
-            )}
-          </div>
-          <span>Notices</span>
-        </button>
+                <div className="mobile-more-grid">
+                  {/* AirDrop */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenAirDrop();
+                    }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(56, 189, 248, 0.12)", color: "#0284c7" }}>
+                      <Zap size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong>Campus AirDrop</strong>
+                      <small>Offline P2P QR Mesh note transfer</small>
+                    </div>
+                  </button>
 
-        <button
-          type="button"
-          className="dock-item dock-help"
-          onClick={onOpenHelp}
-        >
-          <HelpCircle size={17} />
-          <span>Help</span>
-        </button>
+                  {/* Study Pod */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenStudyPod();
+                    }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#6366f1" }}>
+                      <Users size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <strong>Live Study Pod</strong>
+                        <span className="live-pill" style={{ fontSize: "0.62rem", padding: "1px 5px" }}>LIVE</span>
+                      </div>
+                      <small>Study room with peers</small>
+                    </div>
+                  </button>
 
-        {!isInstalled && (
-          <button
-            type="button"
-            className="dock-item dock-install"
-            onClick={handleInstallClick}
-          >
-            <Smartphone size={17} />
-            <span>Install</span>
-          </button>
-        )}
-      </nav>}
+                  {/* Notices */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenNotices();
+                    }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(245, 158, 11, 0.12)", color: "#d97706" }}>
+                      <Bell size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <strong>University Notices</strong>
+                        {noticeCount > 0 && (
+                          <span className="launchpad-count-badge" style={{ position: "static" }}>
+                            {noticeCount > 9 ? "9+" : noticeCount}
+                          </span>
+                        )}
+                      </div>
+                      <small>Exam dates, timetables &amp; announcements</small>
+                    </div>
+                  </button>
+
+                  {/* Admin Studio */}
+                  {isAdminOrManager && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        setShowMobileMoreSheet(false);
+                        onOpenAdmin();
+                      }}
+                    >
+                      <div className="more-card-icon" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#dc2626" }}>
+                        <Shield size={20} />
+                      </div>
+                      <div className="more-card-info">
+                        <strong>Admin Studio</strong>
+                        <small>Security, notes, vault &amp; telemetry</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Help Desk */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenHelp();
+                    }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
+                      <HelpCircle size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong>Student Help Desk</strong>
+                      <small>24/7 technical &amp; syllabus assistance</small>
+                    </div>
+                  </button>
+
+                  {/* Install App */}
+                  {!isInstalled && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        setShowMobileMoreSheet(false);
+                        handleInstallClick();
+                      }}
+                    >
+                      <div className="more-card-icon" style={{ background: "rgba(139, 92, 246, 0.12)", color: "#7c3aed" }}>
+                        <Smartphone size={20} />
+                      </div>
+                      <div className="more-card-info">
+                        <strong>Install Offline App</strong>
+                        <small>Add PWA to home screen for 0ms launch</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Push Alerts */}
+                  {enableWebPush && pushStatus.supported && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        handleToggleWebPush();
+                      }}
+                      disabled={pushBusy}
+                    >
+                      <div className="more-card-icon" style={{ background: pushStatus.subscribed ? "rgba(16, 185, 129, 0.12)" : "rgba(100, 116, 139, 0.12)", color: pushStatus.subscribed ? "#059669" : "#475569" }}>
+                        <BellRing size={20} />
+                      </div>
+                      <div className="more-card-info">
+                        <strong>Push Notifications</strong>
+                        <small>{pushBusy ? "Updating..." : pushStatus.subscribed ? "Alerts Active (Tap to mute)" : "Tap to enable exam alerts"}</small>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </>
   );
 }

@@ -515,7 +515,7 @@ function NoteCard({
           </div>
         )}
 
-        {/* ANCHORED ACTION MATRIX (All 6 Buttons Cleanly Balanced) */}
+        {/* STREAMLINED ACTION MATRIX (2 Compact Balanced Tiers) */}
         <div className="card-action-matrix">
           {/* Primary Row: Read Online + Download */}
           <div className="action-row-dual">
@@ -576,11 +576,35 @@ function NoteCard({
             )}
           </div>
 
-          {/* Secondary Row: Drop in Chat + Share Link */}
-          <div className="action-row-dual">
+          {/* Secondary Row: Sleek 4-Pill Micro Action Ribbon */}
+          <div className="action-row-ribbon">
             <button
               type="button"
-              className="btn-action-chat"
+              className="btn-card-micro btn-card-ai"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!currentUser) {
+                  if (typeof onRequireAuth === "function") {
+                    onRequireAuth("signin");
+                  }
+                  return;
+                }
+                window.dispatchEvent(
+                  new CustomEvent("open_ai_study_pod", {
+                    detail: { note, tab: "flashcards" },
+                  })
+                );
+              }}
+              title="✨ AI Study: Instant 3D Flashcards & Summary for this note"
+            >
+              <Sparkles size={13} color="#a855f7" />
+              <span>AI Study</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-card-micro btn-card-chat"
               onClick={handleShareToChat}
               title={
                 sharedToChat
@@ -589,16 +613,34 @@ function NoteCard({
               }
             >
               {sharedToChat ? (
-                <Check size={14} style={{ color: "#34d399" }} />
+                <Check size={13} style={{ color: "#34d399" }} />
               ) : (
-                <MessageCircle size={14} />
+                <MessageCircle size={13} />
               )}
-              <span>{sharedToChat ? "Dropped!" : "Drop in Chat"}</span>
+              <span>{sharedToChat ? "Sent" : "Chat"}</span>
             </button>
 
             <button
               type="button"
-              className="btn-action-share"
+              className="btn-card-micro btn-card-airdrop"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(
+                  new CustomEvent("open_campus_airdrop", {
+                    detail: { note, initialMode: "qr" },
+                  })
+                );
+              }}
+              title="AirDrop: Beam note offline via 1-Tap QR Mesh"
+            >
+              <Zap size={13} />
+              <span>AirDrop</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn-card-micro btn-card-share"
               onClick={handleShareNote}
               title={
                 copied
@@ -607,68 +649,13 @@ function NoteCard({
               }
             >
               {copied ? (
-                <Check size={14} style={{ color: "#34d399" }} />
+                <Check size={13} style={{ color: "#34d399" }} />
               ) : (
-                <Share2 size={14} />
+                <Share2 size={13} />
               )}
-              <span>{copied ? "Copied!" : "Share Link"}</span>
+              <span>{copied ? "Copied" : "Share"}</span>
             </button>
           </div>
-
-          {/* Tertiary Row: Campus AirDrop (1-Tap QR Mesh) */}
-          <button
-            type="button"
-            className="btn-mesh-pill btn-mesh-airdrop"
-            style={{ width: "100%", justifyContent: "center" }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              window.dispatchEvent(
-                new CustomEvent("open_campus_airdrop", {
-                  detail: { note, initialMode: "qr" },
-                })
-              );
-            }}
-            title="AirDrop: Beam note offline via 1-Tap QR Mesh"
-          >
-            <Zap size={14} />
-            <span>Campus AirDrop (1-Tap QR)</span>
-          </button>
-
-          {/* 🌟 Quaternary Row: AI Study (3D Flashcards & Executive Summary) */}
-          <button
-            type="button"
-            className="btn-mesh-pill"
-            style={{
-              width: "100%",
-              justifyContent: "center",
-              background: "linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2))",
-              border: "1px solid rgba(139, 92, 246, 0.45)",
-              color: "#c084fc",
-              fontWeight: 700,
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (!currentUser) {
-                if (typeof onRequireAuth === "function") {
-                  onRequireAuth("signin");
-                }
-                return;
-              }
-              window.dispatchEvent(
-                new CustomEvent("open_ai_study_pod", {
-                  detail: { note, tab: "flashcards" },
-                })
-              );
-            }}
-            title="✨ AI Study: Instant 3D Flashcards & Structured Summary for this note"
-          >
-            <Sparkles size={14} color="#a855f7" />
-            <span>✨ AI Flashcards & Summary</span>
-          </button>
         </div>
       </div>
     </article>

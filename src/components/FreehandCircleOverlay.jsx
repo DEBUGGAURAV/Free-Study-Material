@@ -511,13 +511,6 @@ export default function FreehandCircleOverlay({
           <span className="pencil-btn-text">Exit</span>
         </button>
       </div>
-            gap: "4px",
-          }}
-        >
-          <X size={13} />
-          <span>Exit</span>
-        </button>
-      </div>
 
       {/* Subtle grid guide when Clean Sketch Pad is enabled */}
       {padMode && strokes.length === 0 && !currentStroke && (

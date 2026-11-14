@@ -68,13 +68,17 @@ export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePaper
             </button>
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary hero-btn-secondary"
               onClick={onOpenUpload}
               style={{
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
-                color: "#e2e8f0",
-                fontWeight: 700,
+                background: "#ffffff",
+                border: "1.5px solid #dce4ef",
+                color: "#1e293b",
+                fontWeight: 750,
+                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.05)",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
               }}
             >
               Share Your Notes
