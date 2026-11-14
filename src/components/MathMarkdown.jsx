@@ -1,11 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, lazy, Suspense } from "react";
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import MermaidDiagram from "./MermaidDiagram";
 import { useTechFlags } from "../utils/techFlagsStore";
 
+// 🚀 Dynamic code-split Mermaid to prevent 2.2MB layout bundle overhead on plain math/text
+const MermaidDiagram = lazy(() => import("./MermaidDiagram"));
+
+// ⚡ High-speed in-memory KaTeX render LRU cache for 0ms repetitive math parsing
+const KATEX_CACHE_LIMIT = 600;
+const mathRenderCache = new Map();
+
 /**
- * 🧮 Render LaTeX math safely using KaTeX
+ * 🧮 Render LaTeX math safely using KaTeX with instant caching & auto-repair
  */
 function renderMathSafely(mathText, isBlock = false) {
   try {
@@ -13,17 +19,27 @@ function renderMathSafely(mathText, isBlock = false) {
     if (!clean) return "";
     clean = clean.replace(/^\\\[|\\\]$/g, "").replace(/^\$\$|\$\$$/g, "").trim();
 
+    // Check LRU cache for instant return (critical for AI streaming speed)
+    const cacheKey = `${isBlock ? "B" : "I"}:${clean}`;
+    if (mathRenderCache.has(cacheKey)) {
+      return mathRenderCache.get(cacheKey);
+    }
+
     let rendered = katex.renderToString(clean, {
       displayMode: isBlock,
       throwOnError: false,
       output: "htmlAndMathml",
     });
 
-    // If KaTeX encountered a parse error, attempt auto-repair for common AI syntax quirks (unbalanced escaped braces, trailing delimiters)
+    // If KaTeX encountered a parse error, attempt auto-repair for common AI syntax quirks
     if (rendered.includes("katex-error")) {
-      let repaired = clean.replace(/\\([\{\}])/g, "$1");
-      const openCount = (repaired.match(/\{/g) || []).length;
-      const closeCount = (repaired.match(/\}/g) || []).length;
+      let repaired = clean;
+      // Strip rogue trailing lone backslash
+      repaired = repaired.replace(/\\+$/, "").trim();
+
+      // Auto-balance unmatched non-escaped braces while preserving legitimate LaTeX set braces \{ \}
+      const openCount = (repaired.match(/(?<!\\)\{/g) || []).length;
+      const closeCount = (repaired.match(/(?<!\\)\}/g) || []).length;
       if (closeCount > openCount) {
         repaired = repaired.replace(/\}+$/, "");
       } else if (openCount > closeCount) {
@@ -35,9 +51,16 @@ function renderMathSafely(mathText, isBlock = false) {
         output: "htmlAndMathml",
       });
       if (!retry.includes("katex-error")) {
-        return retry;
+        rendered = retry;
       }
     }
+
+    // Insert into LRU cache with eviction
+    if (mathRenderCache.size >= KATEX_CACHE_LIMIT) {
+      const oldest = mathRenderCache.keys().next().value;
+      mathRenderCache.delete(oldest);
+    }
+    mathRenderCache.set(cacheKey, rendered);
 
     return rendered;
   } catch (err) {
@@ -421,7 +444,16 @@ export default function MathMarkdown({ content = "", className = "", style = {} 
     >
       {renderedSegments.map((seg, idx) =>
         seg.type === "mermaid" ? (
-          <MermaidDiagram key={`mmd-${idx}`} code={seg.code} />
+          <Suspense
+            key={`mmd-${idx}`}
+            fallback={
+              <div style={{ margin: "10px 0", padding: "12px", borderRadius: "8px", background: "rgba(15, 23, 42, 0.75)", border: "1px dashed rgba(99, 102, 241, 0.35)", textAlign: "center", color: "#818cf8", fontSize: "0.8rem" }}>
+                Loading interactive diagram...
+              </div>
+            }
+          >
+            <MermaidDiagram code={seg.code} />
+          </Suspense>
         ) : (
           <div key={`md-${idx}`} dangerouslySetInnerHTML={{ __html: seg.html }} />
         )

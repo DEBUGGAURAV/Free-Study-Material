@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from "react";
 import Navbar from "./components/Navbar";
 import HeroBanner from "./components/HeroBanner";
 import CategoryFilter from "./components/CategoryFilter";
@@ -146,6 +146,7 @@ export default function App() {
     return true;
   });
   const [searchTerm, setSearchTerm] = useState("");
+  const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedCourse, setSelectedCourse] = useState("All Courses");
   const [selectedYear, setSelectedYear] = useState("All Years");
   const [selectedBranch, setSelectedBranch] = useState("All");
@@ -909,11 +910,11 @@ export default function App() {
     fetchNotes(currentUserRef.current, false);
   }, [isUserSignedIn]);
 
-  // ⚡ Zero-Firestore-Read Local MiniSearch + Facet Filtering (<1ms per keystroke / tab click)
+  // ⚡ Zero-Firestore-Read Local MiniSearch + Facet Filtering (<1ms non-blocking deferred query)
   useEffect(() => {
     if (hasLocalCatalogReady() || allCatalogNotesRef.current.length > 0) {
       const filtered = searchNotesCatalogLocally({
-        query: searchTerm,
+        query: deferredSearchTerm,
         branch: selectedBranch,
         course: selectedCourse,
         year: selectedYear,
@@ -921,7 +922,7 @@ export default function App() {
       });
       setNotes(filtered);
     }
-  }, [selectedCourse, selectedYear, selectedBranch, searchTerm]);
+  }, [selectedCourse, selectedYear, selectedBranch, deferredSearchTerm]);
 
   const fetchBranches = async () => {
     try {
@@ -2124,14 +2125,12 @@ export default function App() {
                       <NoteCard
                         key={note.id}
                         note={note}
-                        onPreview={(n) => setPreviewNote(n)}
+                        onPreview={setPreviewNote}
                         currentUser={currentUser}
                         allowNotesDownload={allowNotesDownload}
                         downloadDisabledReason={downloadDisabledReason}
                         onToggleNoteDownload={handleQuickToggleNoteDownload}
-                        onRequireAuth={(mode) => {
-                          openAuth(mode || "signin");
-                        }}
+                        onRequireAuth={openAuth}
                       />
                     ))}
                   </div>

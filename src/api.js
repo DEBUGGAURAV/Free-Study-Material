@@ -253,6 +253,14 @@ async function request(endpoint, options = {}) {
   }
 
   if (!res.ok) {
+    // 🔄 Automatic single-retry for idempotent GET requests when server cluster is waking up from sleep
+    const isGet = !options.method || options.method.toUpperCase() === "GET";
+    const isWakingUp = res.status === 503 || res.status === 502 || data?.error === "CLUSTER_WAKING_UP";
+    if (isGet && isWakingUp && !options._isRetry) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return request(endpoint, { ...options, _isRetry: true });
+    }
+
     let errMsg = data.message || data.error || data.details || (typeof data === "string" && data ? data : "");
     if (typeof errMsg === "string" && (errMsg.includes("<") || errMsg.includes("Service Suspended") || errMsg.includes("<!DOCTYPE") || errMsg.includes("html"))) {
       errMsg = "Cloud cluster node is waking up from sleep. Please click refresh in a few seconds.";
