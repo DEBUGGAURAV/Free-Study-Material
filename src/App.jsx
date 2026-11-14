@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, useDeferredValue } from "react";
 import Navbar from "./components/Navbar";
 import HeroBanner from "./components/HeroBanner";
+import StudentCommandCenter from "./components/StudentCommandCenter";
 import CategoryFilter from "./components/CategoryFilter";
 import NoteCard from "./components/NoteCard";
 import "./components/GlobalErrorBoundary";
@@ -2073,25 +2074,54 @@ export default function App() {
               </div>
             )}
 
-            {/* Hero Banner with Tech Architecture */}
-            <HeroBanner
-              totalNotes={notes.length}
-              currentUser={currentUser}
-              onBrowsePapers={() => setSelectedCourse("Question Papers")}
-              onOpenSwipeToRevise={() => setIsSwipeToReviseOpen(true)}
-              onOpenAiStudy={() => {
-                setHomeAiPodNote(null);
-                setHomeAiPodInitialTab("chat");
-                setIsHomeAiPodOpen(true);
-              }}
-              onOpenUpload={() => {
-                if (!currentUser) {
-                  openAuth("signup");
-                } else {
-                  setIsUploadOpen(true);
-                }
-              }}
-            />
+            {/* Header: Student Command Center (Logged-In) or Hero Banner (Guest) */}
+            {currentUser ? (
+              <StudentCommandCenter
+                currentUser={currentUser}
+                notes={notes}
+                onOpenSwipeToRevise={() => setIsSwipeToReviseOpen(true)}
+                onOpenAirDrop={() => {
+                  setAirdropTargetNote(null);
+                  setAirdropInitialMode("qr");
+                  setIsAirdropOpen(true);
+                }}
+                onOpenPreview={(note, page = 1) => {
+                  setPreviewInitialPage(page);
+                  setPreviewNote(note);
+                }}
+                onOpenAiStudyPod={(targetTab = "chat", note = null) => {
+                  setHomeAiPodNote(note && note.id ? note : null);
+                  setHomeAiPodInitialTab(targetTab || "chat");
+                  setIsHomeAiPodOpen(true);
+                }}
+                onOpenUpload={() => setIsUploadOpen(true)}
+                onBrowseMaterials={() => {
+                  document.getElementById("study-materials")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }}
+              />
+            ) : (
+              <HeroBanner
+                totalNotes={notes.length}
+                currentUser={currentUser}
+                onBrowsePapers={() => setSelectedCourse("Question Papers")}
+                onOpenSwipeToRevise={() => setIsSwipeToReviseOpen(true)}
+                onOpenAiStudy={() => {
+                  setHomeAiPodNote(null);
+                  setHomeAiPodInitialTab("chat");
+                  setIsHomeAiPodOpen(true);
+                }}
+                onOpenUpload={() => {
+                  if (!currentUser) {
+                    openAuth("signup");
+                  } else {
+                    setIsUploadOpen(true);
+                  }
+                }}
+              />
+            )}
 
             {/* Filter Bar (With Dynamic Custom Branches & View Switcher) */}
             <CategoryFilter

@@ -4773,5 +4773,49 @@ svg.lucide {
   filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.4));
 }
 
+/* ==========================================================================
+   🎓 AFTER-LOGIN STUDENT COMMAND CENTER & ORBIT ANIMATIONS
+   ========================================================================== */
+
+@keyframes orbitSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.command-center-card {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.command-center-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 18px 40px -10px rgba(15, 23, 42, 0.12), inset 0 1px 1px #ffffff !important;
+}
+
+.telemetry-tile:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+}
+
+@media (max-width: 768px) {
+  .command-matrix-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .command-header-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  .command-telemetry-dock {
+    width: 100% !important;
+    justify-content: space-between !important;
+  }
+  .telemetry-tile {
+    flex: 1 1 100% !important;
+  }
+}
+
+
 
 
