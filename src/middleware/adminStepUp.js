@@ -36,7 +36,7 @@ function requireStepUpAuth(req, res, next) {
 
   if (stepUpToken) {
     try {
-      const decoded = jwt.verify(stepUpToken, JWT_SECRET);
+      const decoded = jwt.verify(stepUpToken, JWT_SECRET, { algorithms: ["HS256"] });
       if (decoded && decoded.stepUp) {
         req.stepUpAuth = decoded;
         return next();

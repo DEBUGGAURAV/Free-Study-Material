@@ -1741,7 +1741,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       const token = cookieToken || headerToken;
       if (token) {
         try {
-          requestingUser = jwt.verify(token, JWT_SECRET);
+          requestingUser = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
         } catch {}
       }
     }
@@ -1767,7 +1767,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
 
       try {
-        requestingUser = jwt.verify(queryToken, JWT_SECRET);
+        requestingUser = jwt.verify(queryToken, JWT_SECRET, { algorithms: ["HS256"] });
       } catch {}
     }
 

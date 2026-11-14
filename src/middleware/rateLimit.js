@@ -50,7 +50,7 @@ function getClientIp(req) {
         return true;
       });
       if (publicIp) return publicIp;
-      if (ips[0]) return ips[0];
+      // Note: If only private IPs exist in X-Forwarded-For, do not trust client header to prevent rate-limit immunity spoofing; fall through to req.ip / socket
     }
 
     // 4. Express proxy-verified client IP (Respects app.set("trust proxy", true))
@@ -91,7 +91,7 @@ function isUserAdmin(req) {
       (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null);
 
     if (token && JWT_SECRET) {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
       if (
         decoded.role === "admin" ||
         decoded.role === "half_admin" ||

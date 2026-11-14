@@ -14,6 +14,35 @@ const BACKEND_ORIGINS = [
 const unhealthyOrigins = new Map();
 const UNHEALTHY_COOLDOWN_MS = 60000;
 
+const TRUSTED_ORIGINS = new Set([
+  "https://freestudymaterial.pages.dev",
+  "https://freestudymaterial.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+  "https://fsm-edge.jnplotus.workers.dev",
+]);
+
+function isTrustedOrigin(origin) {
+  if (!origin || origin === "null") return false;
+  if (TRUSTED_ORIGINS.has(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "freestudymaterial.pages.dev" ||
+      host === "freestudymaterial.onrender.com" ||
+      host === "freestudymaterial1.onrender.com" ||
+      host === "freestudymaterial2.onrender.com" ||
+      host === "fsm-edge.jnplotus.workers.dev" ||
+      host === "localhost" ||
+      host === "127.0.0.1"
+    ) {
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
 export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
@@ -26,7 +55,7 @@ export async function onRequest(context) {
       "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control, X-Admin-Bypass, X-Cluster-Sync, X-Direct-Origin, Range",
       "Access-Control-Max-Age": "86400",
     };
-    if (reqOrigin) {
+    if (reqOrigin && isTrustedOrigin(reqOrigin)) {
       corsHeaders["Access-Control-Allow-Origin"] = reqOrigin;
       corsHeaders["Access-Control-Allow-Credentials"] = "true";
     } else {
@@ -52,7 +81,7 @@ export async function onRequest(context) {
         cHeaders.set("X-Edge-Cache", "HIT");
         cHeaders.set("X-Real-Source", "CLOUDFLARE_WORKER");
         cHeaders.set("X-Data-Source", "cdn");
-        if (reqOrigin) {
+        if (reqOrigin && isTrustedOrigin(reqOrigin)) {
           cHeaders.set("Access-Control-Allow-Origin", reqOrigin);
           cHeaders.set("Access-Control-Allow-Credentials", "true");
         } else {
@@ -126,6 +155,7 @@ export async function onRequest(context) {
           continue; // Seamless failover to next backend
         }
         // If all backends failed or last one is down/HTML/suspended -> NEVER return raw HTML to an /api/* endpoint!
+        const isTrusted = reqOrigin && isTrustedOrigin(reqOrigin);
         return new Response(
           JSON.stringify({
             success: false,
@@ -136,8 +166,8 @@ export async function onRequest(context) {
             status: 503,
             headers: {
               "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-              "Access-Control-Allow-Credentials": "true",
+              "Access-Control-Allow-Origin": isTrusted ? reqOrigin : "*",
+              ...(isTrusted ? { "Access-Control-Allow-Credentials": "true" } : {}),
             },
           }
         );
@@ -164,7 +194,7 @@ export async function onRequest(context) {
         if (rawCookies) resHeaders.set("set-cookie", rawCookies);
       }
 
-      if (reqOrigin) {
+      if (reqOrigin && isTrustedOrigin(reqOrigin)) {
         resHeaders.set("Access-Control-Allow-Origin", reqOrigin);
         resHeaders.set("Access-Control-Allow-Credentials", "true");
       } else {

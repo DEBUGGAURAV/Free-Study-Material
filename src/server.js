@@ -177,21 +177,31 @@ const allowedOrigins = [
     : []),
 ].filter(Boolean);
 
+const TRUSTED_CORS_ORIGINS = new Set([
+  "https://freestudymaterial.pages.dev",
+  "https://freestudymaterial.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+  "https://fsm-edge.jnplotus.workers.dev",
+]);
+
+const TRUSTED_DOMAIN_REGEX = /^https:\/\/(freestudymaterial[12]?\.onrender\.com|freestudymaterial\.pages\.dev|fsm-edge\.jnplotus\.workers\.dev)$/i;
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin or "null" (direct browser navigation, privacy browsers, mobile WebViews, curl, PWA)
       if (!origin || origin === "null") return callback(null, true);
       const cfWorkerUrl = (process.env.CF_WORKER_URL || "").trim();
-      if (
+      const isTrusted =
         allowedOrigins.includes(origin) ||
         (cfWorkerUrl && origin === cfWorkerUrl) ||
-        origin.endsWith(".workers.dev") ||
-        origin.endsWith(".pages.dev") ||
-        origin.endsWith(".onrender.com") ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1")
-      ) {
+        TRUSTED_CORS_ORIGINS.has(origin) ||
+        TRUSTED_DOMAIN_REGEX.test(origin) ||
+        (process.env.NODE_ENV !== "production" &&
+          (origin.includes("localhost") || origin.includes("127.0.0.1")));
+
+      if (isTrusted) {
         return callback(null, true);
       }
       // Dynamic host match (allows custom domain immediately upon deployment)

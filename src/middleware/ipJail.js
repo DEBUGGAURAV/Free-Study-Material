@@ -234,7 +234,7 @@ function isWhitelistedIp(req, ip) {
         let decoded = null;
         try {
           const { JWT_SECRET } = require("./auth");
-          decoded = jwt.verify(decodeURIComponent(rawToken), JWT_SECRET);
+          decoded = jwt.verify(decodeURIComponent(rawToken), JWT_SECRET, { algorithms: ["HS256"] });
         } catch (_) {}
         if (
           decoded &&
@@ -262,8 +262,9 @@ function isWhitelistedIp(req, ip) {
       return true;
     }
 
-    // 4. Cloudflare Worker Edge request
-    if (req.headers?.["x-worker-origin"] || (req.headers?.["host"] && req.headers["host"].includes("workers.dev"))) {
+    // 4. Cloudflare Worker Edge request (Secured: requires configured edge secret)
+    const edgeSecret = (process.env.CF_WORKER_SECRET || bypassKey || "").trim();
+    if (edgeSecret && req.headers?.["x-worker-origin"] === edgeSecret) {
       return true;
     }
   }

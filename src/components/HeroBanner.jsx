@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles, Zap, Award } from "lucide-react";
 import { playPop } from "../utils/soundEffects";
 
-export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePapers, onOpenAiStudy }) {
+export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenUpload, onBrowsePapers, onOpenAiStudy }) {
   const browseMaterials = () => {
     playPop();
     document.getElementById("study-materials")?.scrollIntoView({
@@ -21,7 +21,7 @@ export default function HeroBanner({ totalNotes = 0, onOpenUpload, onBrowsePaper
   const libraryLinks = [
     [FileText, "Class notes", "Review lecture notes & solved PYQs at your pace", browseMaterials],
     [Search, "Previous papers", "Find previous semester papers with solutions", () => { playPop(); onBrowsePapers(); browseMaterials(); }],
-    [Sparkles, "AI Study", "Interactive 3D Flashcards, Mind-Maps & Tutor", () => { playPop(); onOpenAiStudy(); }],
+    ...(currentUser ? [[Sparkles, "AI Study", "Interactive 3D Flashcards, Mind-Maps & Tutor", () => { playPop(); onOpenAiStudy(); }]] : []),
   ];
 
   return (

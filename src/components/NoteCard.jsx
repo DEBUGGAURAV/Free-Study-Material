@@ -678,29 +678,25 @@ function NoteCard({
 
           {/* Secondary Row: Sleek 4-Pill Micro Action Ribbon */}
           <div className="action-row-ribbon">
-            <button
-              type="button"
-              className="btn-card-micro btn-card-ai"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!currentUser) {
-                  if (typeof onRequireAuth === "function") {
-                    onRequireAuth("signin");
-                  }
-                  return;
-                }
-                window.dispatchEvent(
-                  new CustomEvent("open_ai_study_pod", {
-                    detail: { note, tab: "flashcards" },
-                  })
-                );
-              }}
-              title="✨ AI Study: Instant 3D Flashcards & Summary for this note"
-            >
-              <Sparkles size={13} color="#a855f7" />
-              <span>AI Study</span>
-            </button>
+            {currentUser && (
+              <button
+                type="button"
+                className="btn-card-micro btn-card-ai"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  window.dispatchEvent(
+                    new CustomEvent("open_ai_study_pod", {
+                      detail: { note, tab: "flashcards" },
+                    })
+                  );
+                }}
+                title="✨ AI Study: Instant 3D Flashcards & Summary for this note"
+              >
+                <Sparkles size={13} color="#a855f7" />
+                <span>AI Study</span>
+              </button>
+            )}
 
             <button
               type="button"

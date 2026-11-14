@@ -216,7 +216,7 @@ router.post("/tamper-alert", apiLimiter, async (req, res) => {
         req.cookies?.token ||
         req.cookies?.vault_token;
       if (token) {
-        authUser = jwt.verify(token, JWT_SECRET);
+        authUser = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
         userId = authUser.id;
       }
     } catch (_) {}

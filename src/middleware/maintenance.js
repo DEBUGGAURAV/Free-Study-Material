@@ -75,7 +75,7 @@ function isUserAdmin(req) {
       req.headers["authorization"]?.split(" ")[1];
 
     if (token) {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
       if (
         decoded.role === "admin" ||
         decoded.role === "half_admin" ||

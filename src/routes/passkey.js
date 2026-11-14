@@ -39,15 +39,23 @@ setInterval(() => {
 
 const { getSiteUrl } = require("../config/siteConfig");
 
+const TRUSTED_PASSKEY_ORIGINS = [
+  "https://freestudymaterial.pages.dev",
+  "https://freestudymaterial.onrender.com",
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+];
+
 /**
  * Determine dynamic Relying Party ID and Expected Origin
  */
 function getRpInfo(req) {
+  const forwardedHost = req.get("x-forwarded-host");
   const originHeader = req.get("origin") || req.get("referer");
   let origin = originHeader;
 
   if (!origin) {
-    const host = req.get("host");
+    const host = forwardedHost || req.get("host");
     if (host) {
       const proto = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
       origin = `${proto}://${host}`;
@@ -58,7 +66,7 @@ function getRpInfo(req) {
 
   try {
     const url = new URL(origin);
-    const rpID = url.hostname; // e.g. "localhost", "studyvault.in", or "freestudymaterial.onrender.com"
+    const rpID = url.hostname; // e.g. "localhost", "freestudymaterial.pages.dev", or "freestudymaterial.onrender.com"
     const expectedOrigin = url.origin;
     return { rpID, expectedOrigin };
   } catch (_) {
@@ -247,11 +255,12 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);
+    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(Boolean);
 
     const verification = await verifyRegistrationResponse({
       response: credential,
       expectedChallenge: stored.challenge,
-      expectedOrigin: expectedOrigin,
+      expectedOrigin: allowedOrigins,
       expectedRPID: rpID,
       requireUserVerification: false,
     });
@@ -496,11 +505,12 @@ router.post("/login-verify", async (req, res) => {
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);
+    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(Boolean);
 
     const verification = await verifyAuthenticationResponse({
       response: credential,
       expectedChallenge: stored.challenge,
-      expectedOrigin: expectedOrigin,
+      expectedOrigin: allowedOrigins,
       expectedRPID: rpID,
       credential: {
         id: passkeyRecord.id,

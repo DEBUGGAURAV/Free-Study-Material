@@ -4,6 +4,7 @@ import {
   Search,
   UploadCloud,
   Shield,
+  ShieldCheck,
   LogOut,
   Bell,
   BellRing,
@@ -257,24 +258,24 @@ export default function Navbar({
                   className="btn-admin-mobile-header"
                   onClick={onOpenAdmin}
                   style={{
-                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.35))",
-                    border: "1.5px solid rgba(56, 189, 248, 0.6)",
-                    color: "#38bdf8",
+                    background: "#ffffff",
+                    border: "1.5px solid #e0e7ff",
+                    color: "#1e293b",
                     borderRadius: "999px",
-                    padding: "4px 9px",
-                    fontSize: "0.72rem",
+                    padding: "4px 10px",
+                    fontSize: "0.74rem",
                     fontWeight: 800,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "5px",
                     cursor: "pointer",
-                    boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
+                    boxShadow: "0 2px 10px rgba(79, 70, 229, 0.16)",
                     flexShrink: 0,
                   }}
                   title="Admin Studio Control Panel"
                 >
-                  <Shield size={13} color="#38bdf8" />
-                  <span>Admin</span>
+                  <ShieldCheck size={14} color="#4f46e5" />
+                  <span style={{ color: "#1e293b" }}>Admin</span>
                 </button>
               )}
 
@@ -434,10 +435,18 @@ export default function Navbar({
                 type="button"
                 className="nav-capsule-btn btn-admin"
                 onClick={onOpenAdmin}
+                style={{
+                  background: "#ffffff",
+                  border: "1.5px solid #e0e7ff",
+                  color: "#1e293b",
+                  boxShadow: "0 4px 14px -3px rgba(79, 70, 229, 0.18), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+                  fontWeight: 800,
+                  borderRadius: "999px",
+                }}
                 title="Admin Security Studio: Notes, Telemetry & Vault Management"
               >
-                <Shield size={14} />
-                <span>Admin Studio</span>
+                <ShieldCheck size={15} color="#4f46e5" />
+                <span style={{ color: "#1e293b" }}>Admin Studio</span>
               </button>
             )}
 
@@ -508,10 +517,19 @@ export default function Navbar({
             type="button"
             className="launchpad-pill pill-chat"
             onClick={onOpenChat}
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid #dbeafe",
+              color: "#1e293b",
+              boxShadow: "0 4px 14px -3px rgba(37, 99, 235, 0.16), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
             title="Student Chat Hub & Live Study Discussions"
           >
-            <MessageSquare size={14} />
-            <span>Chat Hub</span>
+            <MessageSquare size={14} color="#2563eb" />
+            <span style={{ color: "#1e293b" }}>Chat Hub</span>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981", display: "inline-block" }} />
           </button>
 
           <button
@@ -546,10 +564,19 @@ export default function Navbar({
             type="button"
             className="launchpad-pill pill-help"
             onClick={onOpenHelp}
+            style={{
+              background: "#ffffff",
+              border: "1.5px solid #d1fae5",
+              color: "#1e293b",
+              boxShadow: "0 4px 14px -3px rgba(16, 185, 129, 0.16), 0 2px 6px -2px rgba(15, 23, 42, 0.06)",
+              fontWeight: 800,
+              borderRadius: "999px",
+            }}
             title="24/7 Student Help & Support Desk"
           >
-            <HelpCircle size={14} />
-            <span>Help Desk</span>
+            <HelpCircle size={14} color="#059669" />
+            <span style={{ color: "#1e293b" }}>Help Desk</span>
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981", display: "inline-block" }} />
           </button>
 
           {enableWebPush && pushStatus.supported && (
@@ -766,12 +793,13 @@ export default function Navbar({
                         setShowMobileMoreSheet(false);
                         onOpenAdmin();
                       }}
+                      style={{ background: "#ffffff", border: "1.5px solid #e0e7ff", boxShadow: "0 4px 14px rgba(79, 70, 229, 0.08)" }}
                     >
-                      <div className="more-card-icon" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#dc2626" }}>
-                        <Shield size={20} />
+                      <div className="more-card-icon" style={{ background: "rgba(79, 70, 229, 0.12)", color: "#4f46e5" }}>
+                        <ShieldCheck size={20} />
                       </div>
                       <div className="more-card-info">
-                        <strong>Admin Studio</strong>
+                        <strong style={{ color: "#1e293b" }}>Admin Studio</strong>
                         <small>Security, notes, vault &amp; telemetry</small>
                       </div>
                     </button>
@@ -785,12 +813,13 @@ export default function Navbar({
                       setShowMobileMoreSheet(false);
                       onOpenHelp();
                     }}
+                    style={{ background: "#ffffff", border: "1.5px solid #d1fae5", boxShadow: "0 4px 14px rgba(16, 185, 129, 0.08)" }}
                   >
                     <div className="more-card-icon" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
                       <HelpCircle size={20} />
                     </div>
                     <div className="more-card-info">
-                      <strong>Student Help Desk</strong>
+                      <strong style={{ color: "#1e293b" }}>Student Help Desk</strong>
                       <small>24/7 technical &amp; syllabus assistance</small>
                     </div>
                   </button>
