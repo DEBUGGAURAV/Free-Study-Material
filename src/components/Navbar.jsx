@@ -586,12 +586,12 @@ export default function Navbar({
               fontWeight: 800,
               borderRadius: "999px",
             }}
-            title="Student Chat Hub & Live Study Discussions"
+            title="Student Chat & Live Study Discussions"
           >
             <div className="icon-3d-indigo" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               <MessageSquare size={14} color="#2563eb" />
             </div>
-            <span style={{ color: "#0f172a" }}>Chat Hub</span>
+            <span style={{ color: "#0f172a" }}>Chat</span>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
