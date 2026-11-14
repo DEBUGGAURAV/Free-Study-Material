@@ -296,7 +296,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
       setRegisteringPasskey(true);
       setMsg(null);
       const res = await registerDevicePasskey();
-      setMsg({ type: "success", text: res.message || "Passkey registered successfully! Saved securely in Firebase." });
+      setMsg({ type: "success", text: res.message || "Passkey registered successfully! Saved securely in Academic Vault." });
       await loadPasskeys();
     } catch (err) {
       if (err.message && !err.message.includes("cancelled")) {
@@ -1319,7 +1319,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               {loadingPasskeys ? (
                 <div style={{ textAlign: "center", padding: "20px", color: "#475569", fontSize: "0.82rem" }}>
-                  Loading passkeys from Firebase...
+                  Loading passkeys...
                 </div>
               ) : passkeys.length === 0 ? (
                 <div
@@ -1370,7 +1370,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             {p.deviceName}
                           </div>
                           <div style={{ fontSize: "0.72rem", color: "#475569" }}>
-                            Added: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "Active"} • Secure in Firebase
+                            Added: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "Active"} • Encrypted &amp; Secure
                           </div>
                         </div>
                       </div>
@@ -1416,7 +1416,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             >
               <CheckCircle2 size={16} style={{ flexShrink: 0, color: "#059669" }} />
               <span>
-                <strong>100% Phishing Resistant:</strong> Passkey private keys never leave your device sensor. Protected by Firebase Cloud Storage.
+                <strong>100% Phishing Resistant:</strong> Passkey private keys never leave your device sensor. Protected by Academic Vault Security.
               </span>
             </div>
           </div>
@@ -1546,10 +1546,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       gap: "5px",
                       boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
                     }}
-                    title="Open Hostel AirDrop to transfer or receive offline notes without internet"
+                    title="Open Campus AirDrop to transfer or receive offline notes without internet"
                   >
                     <Zap size={12} />
-                    <span>Hostel AirDrop</span>
+                    <span>Campus AirDrop</span>
                   </button>
                   <button
                     type="button"
@@ -1670,7 +1670,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                                 })
                               );
                             }}
-                            title="Hostel AirDrop: Beam this note directly to a classmate via 1-tap QR mesh without internet"
+                            title="Campus AirDrop: Beam this note directly to a classmate via 1-tap QR mesh without internet"
                             style={{
                               background: "#eff6ff",
                               border: "1px solid #93c5fd",

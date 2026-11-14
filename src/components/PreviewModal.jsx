@@ -59,9 +59,9 @@ export default function PreviewModal({
           padding: "0",
           overflow: "hidden",
           borderRadius: "14px",
-          border: "1px solid rgba(255, 255, 255, 0.15)",
-          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.8), 0 0 40px rgba(99, 102, 241, 0.15)",
-          background: "#0b0f19",
+          border: "1.5px solid #e2e8f0",
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.12), 0 0 40px rgba(99, 102, 241, 0.08)",
+          background: "#ffffff",
         }}
         onClick={(e) => e.stopPropagation()}
       >

@@ -1354,7 +1354,7 @@ export default function App() {
           >
             <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "#34d399" }}>
               <CheckCircle size={15} style={{ flexShrink: 0 }} />
-              <span>Server &amp; Cloudflare CDN Nodes 100% Online &amp; Hosted</span>
+              <span>Server Nodes 100% Online &amp; Hosted</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.82rem", color: "#34d399" }}>
               <CheckCircle size={15} style={{ flexShrink: 0 }} />
@@ -1838,7 +1838,7 @@ export default function App() {
                     <strong style={{ fontSize: "0.95rem", color: "#fff" }}>WebRTC P2P Mesh Network</strong>
                   </div>
                   <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>
-                    Direct 100 MB/s peer-to-peer file transfer between students on the same hostel or campus Wi-Fi without server bandwidth limits.
+                    Direct 100 MB/s peer-to-peer file transfer between students on the same campus Wi-Fi without server bandwidth limits.
                   </p>
                 </div>
 
@@ -2446,7 +2446,7 @@ export default function App() {
           </div>
 
           <div>
-            100% Free Lifetime Academic Cloud • High-Speed Distributed Storage • Cloudflare CDN LRU
+            100% Free Lifetime Academic Cloud • High-Speed Distributed Storage
           </div>
         </div>
       </footer>

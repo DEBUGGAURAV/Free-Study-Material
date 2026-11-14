@@ -703,7 +703,7 @@ export default function VirtualPdfReader({
   const [showSearchInline, setShowSearchInline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pageRendering, setPageRendering] = useState(false);
-  const [nightMode, setNightMode] = useState(true); // Default to eye-care Dark Mode
+  const [nightMode, setNightMode] = useState(false); // Default to clean Pure White Light Mode
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);
@@ -1527,9 +1527,9 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(100);
               setRealSourceInfo({
                 id: "worker",
-                label: "⚡ Tier 2: Edge CDN (Cloudflare Global)",
-                short: "Tier 2: Edge CDN (1ms)",
-                details: "Cloudflare Edge CDN Cache Hit • 1ms Latency Global Stream",
+                label: "⚡ Tier 2: High-Speed Edge Stream",
+                short: "Tier 2: Edge Stream (1ms)",
+                details: "High-Speed Edge Cache Hit • 1ms Latency Global Stream",
                 colo: "Edge",
                 icon: "⚡",
                 color: "#38bdf8",

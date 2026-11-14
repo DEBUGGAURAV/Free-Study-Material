@@ -495,7 +495,7 @@ export default function StudentCommandCenter({
                   {activeHostelPeers} Peers Active
                 </div>
                 <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#047857" }}>
-                  Hostel P2P Mesh • 0 KB Data
+                  AirDrop P2P Mesh • 0 KB Data
                 </div>
               </div>
             </div>
@@ -513,7 +513,7 @@ export default function StudentCommandCenter({
                 border: "1.5px solid #99f6e4",
                 boxShadow: "0 6px 18px -2px rgba(13, 148, 136, 0.2), inset 0 2px 2px #ffffff",
               }}
-              title="Cloudflare Edge + 3-Node Triple Failover Active"
+              title="Global Edge + 3-Node Triple Failover Active"
             >
               <div
                 className="icon-3d-cyan"
@@ -530,7 +530,7 @@ export default function StudentCommandCenter({
               </div>
               <div>
                 <div style={{ fontSize: "0.86rem", fontWeight: 900, color: "#115e59", lineHeight: 1.2 }}>
-                  3-Node Cloud CDN
+                  3-Node Global Edge
                 </div>
                 <div style={{ fontSize: "0.7rem", fontWeight: 700, color: "#0f766e" }}>
                   0.4ms Edge Latency • 100% Up
@@ -898,7 +898,7 @@ export default function StudentCommandCenter({
                   }}
                 >
                   <Timer size={13} color="#6366f1" />
-                  <span>HOSTEL STUDY POD • 25M FOCUS</span>
+                  <span>CAMPUS STUDY POD • 25M FOCUS</span>
                 </span>
 
                 {/* Social indicator */}

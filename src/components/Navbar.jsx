@@ -569,7 +569,7 @@ export default function Navbar({
             <div className="icon-3d-cyan" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               <Zap size={14} color="#0284c7" />
             </div>
-            <span>Hostel AirDrop</span>
+            <span>Campus AirDrop</span>
           </button>
 
           <span className="launchpad-divider" aria-hidden="true" />
