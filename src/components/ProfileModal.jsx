@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers, Zap } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -1479,32 +1479,63 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
             {/* Stored Offline Notes Section */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
                   <FileText size={15} style={{ color: "#0284c7" }} />
                   <span>Stored Offline Notes Vault ({storedNotes.length})</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={loadStoredNotes}
-                  disabled={loadingStoredNotes}
-                  style={{
-                    background: "#ffffff",
-                    border: "1px solid #cbd5e1",
-                    borderRadius: "6px",
-                    color: "#334155",
-                    padding: "4px 9px",
-                    cursor: "pointer",
-                    fontSize: "0.7rem",
-                    fontWeight: 600,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  <RefreshCw size={11} className={loadingStoredNotes ? "spin" : ""} />
-                  Refresh List
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(
+                        new CustomEvent("open_campus_airdrop", {
+                          detail: { initialMode: "qr" },
+                        })
+                      );
+                    }}
+                    style={{
+                      background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                      border: "none",
+                      borderRadius: "6px",
+                      color: "#ffffff",
+                      padding: "4px 10px",
+                      cursor: "pointer",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      boxShadow: "0 2px 8px rgba(37, 99, 235, 0.25)",
+                    }}
+                    title="Open Hostel AirDrop to transfer or receive offline notes without internet"
+                  >
+                    <Zap size={12} />
+                    <span>Hostel AirDrop</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={loadStoredNotes}
+                    disabled={loadingStoredNotes}
+                    style={{
+                      background: "#ffffff",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: "6px",
+                      color: "#334155",
+                      padding: "4px 9px",
+                      cursor: "pointer",
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <RefreshCw size={11} className={loadingStoredNotes ? "spin" : ""} />
+                    Refresh
+                  </button>
+                </div>
               </div>
 
               {/* Dynamic Device LRU & 48h Auto-Delete Banner */}
@@ -1592,6 +1623,34 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                           <span style={{ fontSize: "0.7rem", color: "#0369a1", background: "#e0f2fe", border: "1px solid #bae6fd", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
                             {n.sizeMB && Number(n.sizeMB) > 0 ? `${n.sizeMB} MB` : "Cached"}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              window.dispatchEvent(
+                                new CustomEvent("open_campus_airdrop", {
+                                  detail: { note: n, initialMode: "qr" },
+                                })
+                              );
+                            }}
+                            title="Hostel AirDrop: Beam this note directly to a classmate via 1-tap QR mesh without internet"
+                            style={{
+                              background: "#eff6ff",
+                              border: "1px solid #93c5fd",
+                              color: "#1d4ed8",
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "0.68rem",
+                              fontWeight: 700,
+                            }}
+                          >
+                            <Zap size={11} color="#2563eb" />
+                            <span>AirDrop</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleTogglePin(n.id, n.title)}
@@ -1830,6 +1889,39 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                             </div>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                            {cn.type === "flashcard" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  window.dispatchEvent(
+                                    new CustomEvent("open_ai_study_pod", {
+                                      detail: {
+                                        note: { id: cn.noteId, title: cn.subject || "Study Notes" },
+                                        tab: "flashcards",
+                                      },
+                                    })
+                                  );
+                                }}
+                                title="Open in Study Tinder Swipe Mode"
+                                style={{
+                                  background: "linear-gradient(135deg, #8b5cf6, #6366f1)",
+                                  border: "none",
+                                  color: "#ffffff",
+                                  padding: "5px 10px",
+                                  borderRadius: "7px",
+                                  cursor: "pointer",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 700,
+                                  boxShadow: "0 2px 6px rgba(139, 92, 246, 0.3)",
+                                }}
+                              >
+                                <span>🃏 Tinder</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setViewingCircleAnswer(cn)}

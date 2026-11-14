@@ -10,6 +10,7 @@ import MathMarkdown from "./MathMarkdown";
 import GeminiIcon from "./GeminiIcon";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
+import StudyTinderSwipeDeck from "./StudyTinderSwipeDeck";
 
 export default function AiStudyPodModal({
   isOpen,
@@ -245,6 +246,7 @@ export default function AiStudyPodModal({
   const [loadingCards, setLoadingCards] = useState(false);
   const [cardSource, setCardSource] = useState(null);
   const [masteredCards, setMasteredCards] = useState(new Set());
+  const [flashcardMode, setFlashcardMode] = useState("tinder"); // 'tinder' (Swipe-to-Revise) | 'classic' (Traditional 3D)
 
   // Summary state
   const [summary, setSummary] = useState("");
@@ -1470,6 +1472,58 @@ export default function AiStudyPodModal({
                 </div>
 
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {/* 🃏 Tinder vs Classic Mode Switcher */}
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      background: "rgba(255, 255, 255, 0.06)",
+                      borderRadius: "8px",
+                      padding: "2px",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setFlashcardMode("tinder")}
+                      style={{
+                        background: flashcardMode === "tinder" ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "transparent",
+                        color: flashcardMode === "tinder" ? "#fff" : "#94a3b8",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "4px 9px",
+                        fontSize: "0.7rem",
+                        fontWeight: 750,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                      title="Dopamine Swipe Mode: Swipe 👉 Master, 👈 Revise, 👆 Star"
+                    >
+                      <span>🃏 Swipe Tinder</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFlashcardMode("classic")}
+                      style={{
+                        background: flashcardMode === "classic" ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "transparent",
+                        color: flashcardMode === "classic" ? "#fff" : "#94a3b8",
+                        border: "none",
+                        borderRadius: "6px",
+                        padding: "4px 9px",
+                        fontSize: "0.7rem",
+                        fontWeight: 750,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                      title="Traditional 3D Flip Card View"
+                    >
+                      <span>🗂️ Classic 3D</span>
+                    </button>
+                  </div>
+
                   {onOpenNote && currentNoteId && (
                     <button
                       type="button"
@@ -1604,6 +1658,33 @@ export default function AiStudyPodModal({
                       ⚡ Generate 8 Flashcards
                     </button>
                   </div>
+                ) : flashcardMode === "tinder" ? (
+                  /* 🃏 Study Tinder Swipe-to-Revise Deck */
+                  <StudyTinderSwipeDeck
+                    cards={flashcards}
+                    title={currentTitle}
+                    subject={currentSubject}
+                    onMasterCard={(card) => {
+                      const idx = flashcards.findIndex((c) => (c.id || c.question) === (card.id || card.question));
+                      if (idx !== -1) handleToggleMastered(idx);
+                    }}
+                    onBookmarkCard={(card) => {
+                      const bookmarkKey = `ai_starred_${currentNoteId || Date.now()}`;
+                      saveIndexedDbCircleCache(bookmarkKey, {
+                        key: bookmarkKey,
+                        query: `⭐ Exam Star: ${card.question || card.front || "Concept"}`,
+                        answer: card.answer || card.back || "",
+                        subject: currentSubject || "High-Yield",
+                        noteId: currentNoteId || "",
+                        type: "flashcard",
+                        savedAt: Date.now(),
+                        isPinned: true,
+                      }).catch(() => {});
+                    }}
+                    onResetDeck={() => {
+                      setCurrentCardIndex(0);
+                    }}
+                  />
                 ) : (
                   <div
                     onClick={() => setIsFlipped(!isFlipped)}
@@ -1702,8 +1783,8 @@ export default function AiStudyPodModal({
                 )}
               </div>
 
-              {/* Navigation Controls Bar */}
-              {flashcards.length > 0 && (
+              {/* Classic Navigation Controls Bar */}
+              {flashcards.length > 0 && flashcardMode === "classic" && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
                   <button
                     type="button"

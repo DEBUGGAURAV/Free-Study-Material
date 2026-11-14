@@ -292,6 +292,7 @@ export default function App() {
     window.addEventListener("open_help_desk", handleOpenHelp);
     window.addEventListener("open_study_pod", handleOpenPod);
     window.addEventListener("open_campus_airdrop", handleOpenAirdrop);
+    window.addEventListener("open_airdrop", handleOpenAirdrop);
     window.addEventListener("open_ai_study_pod", handleOpenAiPod);
     window.addEventListener("open_circle_search", handleOpenCircleSearchEvent);
     window.addEventListener("open_auth_modal", handleOpenAuthModal);
@@ -354,6 +355,7 @@ export default function App() {
       window.removeEventListener("open_help_desk", handleOpenHelp);
       window.removeEventListener("open_study_pod", handleOpenPod);
       window.removeEventListener("open_campus_airdrop", handleOpenAirdrop);
+      window.removeEventListener("open_airdrop", handleOpenAirdrop);
       window.removeEventListener("open_ai_study_pod", handleOpenAiPod);
       window.removeEventListener("open_circle_search", handleOpenCircleSearchEvent);
       window.removeEventListener("open_auth_modal", handleOpenAuthModal);

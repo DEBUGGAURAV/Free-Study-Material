@@ -3964,3 +3964,170 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   🌌 AMBIENT AURORA MESH & 🎴 3D SPECULAR CARD PHYSICS & 🤝 RADAR
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Ambient Glowing Aurora Mesh Background */
+.ambient-aurora-mesh {
+  position: absolute;
+  top: -60px;
+  left: 0;
+  right: 0;
+  height: 480px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.aurora-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(85px);
+  opacity: 0.42;
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+.aurora-orb-cyan {
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.9) 0%, rgba(56, 189, 248, 0) 70%);
+  top: -80px;
+  left: 5%;
+  animation: auroraFloat1 18s ease-in-out infinite alternate;
+}
+
+.aurora-orb-indigo {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(129, 140, 248, 0.85) 0%, rgba(129, 140, 248, 0) 70%);
+  top: -50px;
+  right: 10%;
+  animation: auroraFloat2 22s ease-in-out infinite alternate;
+}
+
+.aurora-orb-emerald {
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(52, 211, 153, 0.8) 0%, rgba(52, 211, 153, 0) 70%);
+  top: 120px;
+  left: 45%;
+  animation: auroraFloat3 26s ease-in-out infinite alternate;
+}
+
+@keyframes auroraFloat1 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(45px, 35px, 0) scale(1.1); }
+  100% { transform: translate3d(-35px, 20px, 0) scale(0.95); }
+}
+
+@keyframes auroraFloat2 {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-50px, 30px, 0) scale(1.08); }
+  100% { transform: translate3d(40px, -25px, 0) scale(0.92); }
+}
+
+@keyframes auroraFloat3 {
+  0% { transform: translate3d(0, 0, 0) scale(0.92); }
+  50% { transform: translate3d(25px, -35px, 0) scale(1.15); }
+  100% { transform: translate3d(-30px, 20px, 0) scale(1); }
+}
+
+/* 🤝 Live Study Buddy Radar Badges */
+.hero-campus-radar {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #065f46;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.hero-campus-radar strong {
+  color: #047857;
+}
+
+.study-buddy-radar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 8px;
+  font-size: 0.71rem;
+  color: #047857;
+  font-weight: 600;
+  margin: 6px 0 2px 0;
+  width: fit-content;
+}
+
+.study-buddy-radar strong {
+  font-weight: 800;
+  color: #065f46;
+}
+
+.pulse-dot-green {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  animation: pulseGreenRadar 2s infinite;
+  flex-shrink: 0;
+}
+
+@keyframes pulseGreenRadar {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+/* 🎴 3D NoteCard Physics & Specular Glare */
+.note-card {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.card-specular-glare {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 0.25s ease;
+}
+
+@media (max-width: 768px) {
+  .ambient-aurora-mesh {
+    height: 380px;
+    opacity: 0.35;
+  }
+  .aurora-orb-cyan {
+    width: 280px;
+    height: 280px;
+  }
+  .aurora-orb-indigo {
+    width: 260px;
+    height: 260px;
+  }
+  .aurora-orb-emerald {
+    width: 220px;
+    height: 220px;
+  }
+}
