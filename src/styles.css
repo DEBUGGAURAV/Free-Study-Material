@@ -1776,15 +1776,15 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 }
 
 .btn-action-read {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #e2e8f0;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
 }
 
 .btn-action-read:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.28);
+  background: #f8fafc;
+  color: #0284c7;
+  border-color: #0284c7;
   transform: translateY(-1px);
 }
 
@@ -3086,15 +3086,15 @@ select option,
 }
 
 .btn-action-read {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(203, 213, 225, 0.18);
-  color: #e6edf7;
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #1e293b;
 }
 
 .btn-action-read:hover {
-  background: rgba(124, 108, 255, 0.16);
-  border-color: rgba(167, 156, 255, 0.42);
-  color: #fff;
+  background: #f8fafc;
+  border-color: #0284c7;
+  color: #0284c7;
 }
 
 .btn-action-download {
@@ -3198,10 +3198,10 @@ select option,
    ========================================================================== */
 
 .auth-3d-scene {
-  perspective: 1200px;
+  perspective: 850px;
   perspective-origin: center center;
   width: 100%;
-  max-width: 440px;
+  max-width: 380px !important;
   margin: auto;
   position: relative;
   background: transparent !important;
@@ -3235,18 +3235,19 @@ select option,
   width: 100%;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  border-radius: 26px;
-  background: linear-gradient(145deg, #ffffff 0%, #f9fafb 45%, #f1f5f9 100%);
-  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 22px;
+  border: 1.5px solid transparent;
+  background: 
+    linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) padding-box,
+    radial-gradient(circle 260px at var(--mx, 50%) var(--my, 50%), #2563eb 0%, #38bdf8 35%, #818cf8 65%, #cbd5e1 100%) border-box;
   box-shadow: 
-    0 30px 80px -20px rgba(15, 23, 42, 0.28),
-    0 15px 35px -12px rgba(15, 23, 42, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+    0 20px 45px -10px rgba(15, 23, 42, 0.35),
+    0 0 35px -5px rgba(37, 99, 235, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
-  padding: clamp(20px, 4vw, 28px);
+  padding: 16px 20px;
   color: #0f172a;
 }
 
@@ -3269,19 +3270,25 @@ select option,
 
 .auth-card-back {
   transform: rotateY(180deg);
+  background: 
+    linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) padding-box,
+    radial-gradient(circle 260px at var(--back-mx, 50%) var(--my, 50%), #4f46e5 0%, #a855f7 35%, #38bdf8 65%, #cbd5e1 100%) border-box;
+  box-shadow: 
+    0 20px 45px -10px rgba(15, 23, 42, 0.35),
+    0 0 35px -5px rgba(79, 70, 229, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-/* Optical Sapphire Ice Specular Glare */
+/* VIBRANT SAPPHIRE COLOR ILLUMINATION (Clearly visible on mouse move!) */
 .auth-card-front::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle 350px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.92) 0%, rgba(191, 219, 254, 0.38) 32%, transparent 68%);
-  mix-blend-mode: overlay;
-  opacity: 0.85;
-  border-radius: 26px;
-  z-index: 5;
+  background: radial-gradient(circle 240px at var(--mx, 50%) var(--my, 50%), rgba(37, 99, 235, 0.25) 0%, rgba(6, 182, 212, 0.18) 30%, rgba(99, 102, 241, 0.08) 55%, transparent 75%);
+  border-radius: 22px;
+  z-index: 6;
+  transition: opacity 0.2s ease;
 }
 
 .auth-card-back::after {
@@ -3289,21 +3296,20 @@ select option,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle 350px at var(--back-mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.92) 0%, rgba(191, 219, 254, 0.38) 32%, transparent 68%);
-  mix-blend-mode: overlay;
-  opacity: 0.85;
-  border-radius: 26px;
-  z-index: 5;
+  background: radial-gradient(circle 240px at var(--back-mx, 50%) var(--my, 50%), rgba(79, 70, 229, 0.28) 0%, rgba(168, 85, 247, 0.18) 30%, rgba(6, 182, 212, 0.08) 55%, transparent 75%);
+  border-radius: 22px;
+  z-index: 6;
+  transition: opacity 0.2s ease;
 }
 
 /* 3D EMV Microchip */
 .auth-emv-chip {
-  width: 36px;
-  height: 27px;
-  border-radius: 6px;
+  width: 32px;
+  height: 24px;
+  border-radius: 5px;
   background: linear-gradient(135deg, #fbbf24 0%, #fef08a 45%, #d97706 100%);
   border: 1px solid rgba(180, 83, 9, 0.45);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 2px 5px rgba(0, 0, 0, 0.12);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 2px 4px rgba(0, 0, 0, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3315,7 +3321,7 @@ select option,
   width: 100%;
   height: 100%;
   border: 1px solid rgba(180, 83, 9, 0.35);
-  border-radius: 3px;
+  border-radius: 2px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
@@ -3327,13 +3333,13 @@ select option,
 
 /* Laser Scanner Beam */
 @keyframes authLaserScan {
-  0%, 100% { top: 6px; opacity: 0.8; }
-  50% { top: calc(100% - 8px); opacity: 1; }
+  0%, 100% { top: 4px; opacity: 0.85; }
+  50% { top: calc(100% - 6px); opacity: 1; }
 }
 .auth-laser-beam {
   position: absolute;
-  left: 12px;
-  right: 12px;
+  left: 10px;
+  right: 10px;
   height: 2px;
   background: #2563eb;
   box-shadow: 0 0 10px #2563eb, 0 0 18px #60a5fa;
@@ -3345,26 +3351,26 @@ select option,
 /* Capsule Tab Navigation */
 .auth-capsule-tabs {
   display: flex;
-  gap: 6px;
-  padding: 4px;
+  gap: 4px;
+  padding: 3px;
   background: #f1f5f9;
   border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  margin-bottom: 18px;
+  border-radius: 12px;
+  margin-bottom: 12px;
 }
 .auth-capsule-tab {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 12px;
-  font-size: 0.78rem;
+  gap: 5px;
+  padding: 6px 10px;
+  font-size: 0.76rem;
   font-weight: 600;
   color: #64748b;
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -3375,33 +3381,33 @@ select option,
   background: #ffffff;
   color: #1d4ed8;
   font-weight: 750;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
 }
 
 /* Form Styles for White Ceramic Card */
 .auth-card-face .form-group {
-  margin-bottom: 13px;
-  gap: 5px;
+  margin-bottom: 10px;
+  gap: 4px;
 }
 .auth-card-face .form-label {
   display: block;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #334155;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 .auth-card-face .form-input,
 .auth-card-face .form-select,
 .auth-card-face .form-textarea,
 .auth-card-face input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
-  min-height: 42px;
-  padding: 8px 12px;
-  border-radius: 12px;
+  min-height: 38px;
+  padding: 6px 11px;
+  border-radius: 10px;
   border: 1.5px solid #cbd5e1;
   background: #ffffff;
   color: #0f172a;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 500;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
   box-sizing: border-box;
@@ -3416,35 +3422,35 @@ select option,
   outline: none;
 }
 .auth-card-face .btn-primary {
-  min-height: 42px;
-  border-radius: 12px;
+  min-height: 38px;
+  border-radius: 10px;
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
   color: #ffffff;
   font-weight: 750;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   border: none;
-  box-shadow: 0 6px 20px -4px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 16px -3px rgba(37, 99, 235, 0.4);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   width: 100%;
 }
 .auth-card-face .btn-primary:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.52);
+  box-shadow: 0 6px 20px -3px rgba(37, 99, 235, 0.5);
 }
 .auth-card-face .btn-google-auth {
-  min-height: 42px;
-  border-radius: 12px;
+  min-height: 38px;
+  border-radius: 10px;
   background: #ffffff;
   border: 1.5px solid #cbd5e1;
   color: #1e293b;
   font-weight: 700;
-  font-size: 0.84rem;
-  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  font-size: 0.82rem;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
   cursor: pointer;
   transition: all 0.18s ease;
   display: flex;
@@ -3454,25 +3460,25 @@ select option,
 .auth-card-face .btn-google-auth:hover:not(:disabled) {
   border-color: #94a3b8;
   background: #f8fafc;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
 }
 .auth-card-face .passkey-signin-button {
   background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%) !important;
   border: 1.5px solid #bfdbfe !important;
-  box-shadow: 0 4px 16px -4px rgba(37, 99, 235, 0.18) !important;
-  border-radius: 14px;
+  box-shadow: 0 4px 16px -4px rgba(37, 99, 235, 0.15) !important;
+  border-radius: 12px;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .auth-card-face .passkey-signin-button:not(:disabled):hover {
   transform: translateY(-2px);
   border-color: #60a5fa !important;
-  box-shadow: 0 8px 24px -6px rgba(37, 99, 235, 0.28) !important;
+  box-shadow: 0 6px 20px -4px rgba(37, 99, 235, 0.25) !important;
 }
 .auth-card-face .modal-close-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
   color: #64748b;
@@ -4810,15 +4816,23 @@ svg.lucide {
 }
 
 .btn-action-read {
-  background: #0f172a !important;
-  color: #ffffff !important;
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
   font-weight: 800 !important;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05), inset 0 1px 1px #ffffff !important;
+}
+.btn-action-read:hover {
+  background: #f8fafc !important;
+  border-color: #0284c7 !important;
+  color: #0284c7 !important;
+  box-shadow: 0 4px 14px rgba(2, 132, 199, 0.16) !important;
+  transform: translateY(-1px);
 }
 .btn-action-read svg {
-  color: #38bdf8 !important;
+  color: #0284c7 !important;
   stroke-width: 2.25px !important;
-  filter: drop-shadow(0 1px 3px rgba(56, 189, 248, 0.5)) !important;
+  filter: drop-shadow(0 1px 2px rgba(2, 132, 199, 0.3)) !important;
 }
 
 .btn-action-download {

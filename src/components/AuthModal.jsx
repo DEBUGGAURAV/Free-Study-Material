@@ -331,13 +331,13 @@ export default function AuthModal({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const normX = Math.max(-1, Math.min(1, (x - rect.width / 2) / (rect.width / 2)));
-    const normY = Math.max(-1, Math.min(1, (y - rect.height / 2) / (rect.height / 2)));
+    const normX = Math.max(-1.4, Math.min(1.4, (x - rect.width / 2) / (rect.width / 2)));
+    const normY = Math.max(-1.4, Math.min(1.4, (y - rect.height / 2) / (rect.height / 2)));
 
-    const maxTilt = typeof window !== "undefined" && window.innerWidth < 640 ? 3 : 8;
+    const maxTilt = typeof window !== "undefined" && window.innerWidth < 640 ? 4 : 14;
     const state = tiltStateRef.current;
-    state.targetTiltX = -normY * maxTilt;
-    state.targetTiltY = normX * maxTilt;
+    state.targetTiltX = -Math.max(-1, Math.min(1, normY)) * maxTilt;
+    state.targetTiltY = Math.max(-1, Math.min(1, normX)) * maxTilt;
     state.targetMx = Math.max(0, Math.min(100, (x / rect.width) * 100));
     state.targetMy = Math.max(0, Math.min(100, (y / rect.height) * 100));
   };
@@ -1325,6 +1325,8 @@ export default function AuthModal({
   return (
     <div
       className="modal-overlay"
+      onMouseMove={handleSceneMouseMove}
+      onMouseLeave={handleSceneMouseLeave}
       onClick={() => {
         if (showPostRegPasskeyPrompt) {
           handlePostRegSkipPasskey();
@@ -1338,7 +1340,7 @@ export default function AuthModal({
       <div
         ref={sceneRef}
         className="modal-content auth-3d-scene"
-        style={{ maxWidth: "440px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none" }}
+        style={{ maxWidth: "380px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none" }}
         onClick={(e) => e.stopPropagation()}
         onMouseMove={handleSceneMouseMove}
         onMouseLeave={handleSceneMouseLeave}
@@ -1351,16 +1353,16 @@ export default function AuthModal({
                 ================================================================= */}
             <div className={`auth-card-face auth-card-front ${tab !== "signup" ? "face-active" : "face-hidden"}`}>
               {/* Passcard Front Header */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #2563eb, #4f46e5)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.85rem", boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "9px", background: "linear-gradient(135deg, #2563eb, #4f46e5)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.8rem", boxShadow: "0 3px 10px rgba(37, 99, 235, 0.25)" }}>
                     FSM
                   </div>
                   <div>
-                    <div style={{ fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.06em", color: "#2563eb", textTransform: "uppercase" }}>
+                    <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.06em", color: "#2563eb", textTransform: "uppercase" }}>
                       National Academic Passcard
                     </div>
-                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1e293b" }}>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
                       Free Study Material — VIP Vault
                     </div>
                   </div>
@@ -1383,7 +1385,7 @@ export default function AuthModal({
                     type="button"
                     title="Close"
                   >
-                    <X size={18} />
+                    <X size={16} />
                   </button>
                 </div>
               </div>
@@ -2832,7 +2834,7 @@ export default function AuthModal({
 
         {/* Bottom Flip Trigger on Front Face */}
         {tab === "signin" && !isGoogleOnboarding && !showPostRegPasskeyPrompt && (
-          <div style={{ textAlign: "center", marginTop: "16px", fontSize: "0.82rem", color: "#64748b" }}>
+          <div style={{ textAlign: "center", marginTop: "14px", fontSize: "0.82rem", color: "#64748b" }}>
             New student scholar?{" "}
             <button
               type="button"
@@ -2842,7 +2844,7 @@ export default function AuthModal({
                 setTab("signup");
               }}
             >
-              Create Account (180° Flip) ➔
+              Create Account ➔
             </button>
           </div>
         )}
@@ -2853,23 +2855,23 @@ export default function AuthModal({
           ================================================================= */}
       <div className={`auth-card-face auth-card-back ${tab === "signup" ? "face-active" : "face-hidden"}`}>
         {/* Passcard Back Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.85rem", boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "9px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.8rem", boxShadow: "0 3px 10px rgba(79, 70, 229, 0.25)" }}>
               FSM
             </div>
             <div>
-              <div style={{ fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.06em", color: "#4f46e5", textTransform: "uppercase" }}>
+              <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.06em", color: "#4f46e5", textTransform: "uppercase" }}>
                 Scholar Registration
               </div>
-              <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1e293b" }}>
+              <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
                 Enroll for Lifetime Free Academic Pass
               </div>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ padding: "4px 8px", borderRadius: "20px", background: "#eef2ff", border: "1px solid #c7d2fe", color: "#4338ca", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.04em" }}>
+            <div style={{ padding: "3px 7px", borderRadius: "20px", background: "#eef2ff", border: "1px solid #c7d2fe", color: "#4338ca", fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.04em" }}>
               VIP PASS
             </div>
             <button
@@ -2878,7 +2880,7 @@ export default function AuthModal({
               type="button"
               title="Close"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </div>
@@ -3616,7 +3618,7 @@ export default function AuthModal({
 
 
             {/* Back to sign in link */}
-            <div style={{ textAlign: "center", fontSize: "0.82rem", color: "#64748b", marginTop: "16px" }}>
+            <div style={{ textAlign: "center", fontSize: "0.82rem", color: "#64748b", marginTop: "14px" }}>
               Already registered?{" "}
               <button
                 type="button"
@@ -3626,7 +3628,7 @@ export default function AuthModal({
                   setTab("signin");
                 }}
               >
-                Sign In (180° Flip) ➔
+                Sign In ➔
               </button>
             </div>
           </div>
