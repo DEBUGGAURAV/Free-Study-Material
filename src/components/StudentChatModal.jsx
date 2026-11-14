@@ -852,6 +852,16 @@ export default function StudentChatModal({
     return () => window.removeEventListener("share_note_to_chat", handleShareNoteToChat);
   }, []);
 
+  // ⚡ Auto Prefill Note Request Listener from Search Rescue Hub
+  useEffect(() => {
+    const handlePrefill = (e) => {
+      const topic = e.detail?.topic || "Study Notes";
+      setMessageText(`📢 Note Request: Does anyone have notes or solved PYQs for "${topic}"? Please share or upload!`);
+    };
+    window.addEventListener("prefill_student_chat_request", handlePrefill);
+    return () => window.removeEventListener("prefill_student_chat_request", handlePrefill);
+  }, []);
+
   const handleConfirmShareNote = () => {
     if (!shareNoteModal) return;
     const note = shareNoteModal;

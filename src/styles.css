@@ -4131,3 +4131,173 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
     height: 220px;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   🔍 SMART SEARCH RESCUE HUB & 🤝 CAMPUS CONTRIBUTOR BADGES
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* NoteCard Viral Recommendation Pill */
+.note-recommended-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  font-size: 0.71rem;
+  color: #b45309;
+  font-weight: 600;
+}
+
+.note-recommended-badge strong {
+  color: #92400e;
+  font-weight: 800;
+}
+
+/* Smart Academic Rescue Hub (When Search has 0 results) */
+.search-rescue-hub {
+  padding: 40px 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.95));
+  border: 1.5px solid #e2e8f0;
+  border-radius: 20px;
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.06);
+  text-align: center;
+  margin: 20px 0;
+}
+
+.rescue-hub-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  background: rgba(2, 132, 199, 0.08);
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 750;
+  color: #0284c7;
+  margin-bottom: 14px;
+}
+
+.rescue-hub-title {
+  font-size: 1.35rem;
+  font-weight: 850;
+  color: #0f172a;
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
+}
+
+.rescue-hub-desc {
+  font-size: 0.9rem;
+  color: #64748b;
+  max-width: 580px;
+  margin: 0 auto 28px;
+  line-height: 1.55;
+}
+
+.rescue-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  text-align: left;
+}
+
+.rescue-card {
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+}
+
+.rescue-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #cbd5e1;
+}
+
+.rescue-card-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.rescue-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.rescue-card-body strong {
+  font-size: 0.96rem;
+  color: #0f172a;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.rescue-card-body p {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin-bottom: 16px;
+  flex: 1;
+}
+
+.btn-rescue {
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.16s ease;
+}
+
+.btn-rescue-ai {
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+.btn-rescue-ai:hover {
+  background: linear-gradient(135deg, #6d28d9, #4f46e5);
+}
+
+.btn-rescue-chat {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+.btn-rescue-chat:hover {
+  background: #dbeafe;
+}
+
+.btn-rescue-help {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+.btn-rescue-help:hover {
+  background: #d1fae5;
+}
+
+.btn-rescue-upload {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+.btn-rescue-upload:hover {
+  background: #e0f2fe;
+}

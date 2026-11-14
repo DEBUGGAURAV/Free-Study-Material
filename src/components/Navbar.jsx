@@ -24,6 +24,7 @@ import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { getWebPushStatus, subscribeWebPush, unsubscribeWebPush } from "../utils/webPushClient";
+import { getCampusContributionTier } from "../utils/studentStudyContext";
 
 export default function Navbar({
   searchTerm,
@@ -45,7 +46,16 @@ export default function Navbar({
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showMobileMoreSheet, setShowMobileMoreSheet] = useState(false);
+  const [contributionTier, setContributionTier] = useState(() => getCampusContributionTier());
   const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    const handleTierUpdate = () => {
+      setContributionTier(getCampusContributionTier());
+    };
+    window.addEventListener("fsm:campus-contributions-updated", handleTierUpdate);
+    return () => window.removeEventListener("fsm:campus-contributions-updated", handleTierUpdate);
+  }, []);
   const { enableWebPush } = useTechFlags();
   const [pushStatus, setPushStatus] = useState({ supported: false, subscribed: false });
   const [pushBusy, setPushBusy] = useState(false);
@@ -446,7 +456,7 @@ export default function Navbar({
                       {currentUser.name?.split(" ")[0] || currentUser.email?.split("@")[0]}
                     </span>
                     <span className="nav-user-role">
-                      {currentUser.role === "admin" ? "Admin" : "Student"}
+                      {currentUser.role === "admin" ? "Admin" : contributionTier?.badge || "Student"}
                     </span>
                   </div>
                 </div>

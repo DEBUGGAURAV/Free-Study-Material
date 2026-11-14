@@ -6,7 +6,8 @@ import NoteCard from "./components/NoteCard";
 import "./components/GlobalErrorBoundary";
 import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser, getAuthToken, restoreAuthSessionFromStorage } from "./api";
-import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint, UploadCloud } from "lucide-react";
+import { playPop } from "./utils/soundEffects";
 import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
 import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
@@ -2263,25 +2264,130 @@ export default function App() {
                 )}
               </>
             ) : (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "70px 20px",
-                  background: "var(--bg-glass-card)",
-                  border: "1px dashed var(--border-subtle)",
-                  borderRadius: "var(--radius-lg)",
-                }}
-              >
-                <BookOpen size={48} style={{ color: "var(--accent-indigo)", marginBottom: "16px", opacity: 0.8 }} />
-                <h3 style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "8px" }}>
-                  No study notes found in this filter
+              <div className="search-rescue-hub">
+                <div className="rescue-hub-badge">
+                  <Sparkles size={14} color="#0284c7" />
+                  <span>Smart Academic Rescue</span>
+                </div>
+
+                <h3 className="rescue-hub-title">
+                  {searchTerm
+                    ? `No notes found matching "${searchTerm}"`
+                    : `No study notes found in ${selectedBranch || "this category"} (${selectedYear}) yet`}
                 </h3>
-                <p style={{ color: "var(--text-dim)", fontSize: "0.88rem", maxWidth: "400px", margin: "0 auto 20px" }}>
-                  Be the first student to upload notes for {selectedBranch} ({selectedYear})!
+                <p className="rescue-hub-desc">
+                  Don't leave empty-handed! Free Study Material connects you to 4 instant pathways right now:
                 </p>
-                <button className="btn-primary" onClick={() => setIsUploadOpen(true)}>
-                  Upload First Note
-                </button>
+
+                <div className="rescue-actions-grid">
+                  {/* 1. Instant AI 1-Page Cheat Sheet */}
+                  <div className="rescue-card rescue-ai">
+                    <div className="rescue-card-icon" style={{ background: "rgba(139, 92, 246, 0.12)", color: "#7c3aed" }}>
+                      <Sparkles size={22} />
+                    </div>
+                    <div className="rescue-card-body">
+                      <strong>Instant AI 1-Page Cheat Sheet</strong>
+                      <p>Generate high-yield exam points, key formulas and definitions with Gemini AI immediately.</p>
+                      <button
+                        type="button"
+                        className="btn-rescue btn-rescue-ai"
+                        onClick={() => {
+                          playPop();
+                          const targetTopic = searchTerm || selectedBranch || "Exam Topics";
+                          window.dispatchEvent(
+                            new CustomEvent("open_ai_study_pod", {
+                              detail: {
+                                note: {
+                                  id: "ai-rescue-" + Date.now(),
+                                  title: `Cheat Sheet: ${targetTopic}`,
+                                  subject: selectedBranch || "University Exam",
+                                },
+                                tab: "chat",
+                                initialQuery: `Give me a comprehensive 1-page high-yield exam revision sheet for "${targetTopic}" with core concepts, formulas, diagrams overview, and top 3 university exam questions with answers.`,
+                              },
+                            })
+                          );
+                        }}
+                      >
+                        <Sparkles size={14} />
+                        <span>Generate with AI</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 2. Ask Classmates in Student Chat */}
+                  <div className="rescue-card rescue-chat">
+                    <div className="rescue-card-icon" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5" }}>
+                      <MessageSquare size={22} />
+                    </div>
+                    <div className="rescue-card-body">
+                      <strong>Ask Peers in Campus Chat</strong>
+                      <p>Drop a note request in the live student chat hub so classmates or seniors can share their PDFs.</p>
+                      <button
+                        type="button"
+                        className="btn-rescue btn-rescue-chat"
+                        onClick={() => {
+                          playPop();
+                          setIsChatOpen(true);
+                          setTimeout(() => {
+                            window.dispatchEvent(
+                              new CustomEvent("prefill_student_chat_request", {
+                                detail: { topic: searchTerm || selectedBranch || "Subject Notes" },
+                              })
+                            );
+                          }, 250);
+                        }}
+                      >
+                        <MessageSquare size={14} />
+                        <span>Ask in Student Chat</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3. Official Help Desk Note Request */}
+                  <div className="rescue-card rescue-help">
+                    <div className="rescue-card-icon" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
+                      <HelpCircle size={22} />
+                    </div>
+                    <div className="rescue-card-body">
+                      <strong>Request via Help Desk</strong>
+                      <p>Submit an official note request ticket to our faculty coordinators and syllabus team.</p>
+                      <button
+                        type="button"
+                        className="btn-rescue btn-rescue-help"
+                        onClick={() => {
+                          playPop();
+                          setIsHelpOpen(true);
+                        }}
+                      >
+                        <HelpCircle size={14} />
+                        <span>Submit to Help Desk</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Upload & Earn Contributor Badge */}
+                  <div className="rescue-card rescue-upload">
+                    <div className="rescue-card-icon" style={{ background: "rgba(2, 132, 199, 0.12)", color: "#0284c7" }}>
+                      <UploadCloud size={22} />
+                    </div>
+                    <div className="rescue-card-body">
+                      <strong>Have Notes for This?</strong>
+                      <p>Upload your lecture notes or solved PYQs to earn the "Top Campus Contributor" badge!</p>
+                      <button
+                        type="button"
+                        className="btn-rescue btn-rescue-upload"
+                        onClick={() => {
+                          playPop();
+                          setIsUploadOpen(true);
+                        }}
+                      >
+                        <UploadCloud size={14} />
+                        <span>Upload &amp; Earn Badge</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </>

@@ -1757,7 +1757,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         referer.includes("localhost") ||
         referer.includes("127.0.0.1") ||
         referer.includes("onrender.com") ||
-        referer.includes("workers.dev");
+        referer.includes("workers.dev") ||
+        referer.includes("pages.dev");
 
       // If someone copied the raw query link into another browser / external tool without cookie:
       if (!cookieToken && isDocumentNav && !isSameOriginReferer) {
@@ -1793,15 +1794,16 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         originHeader.includes("localhost") ||
         originHeader.includes("127.0.0.1") ||
         originHeader.includes("workers.dev") ||
+        originHeader.includes("pages.dev") ||
         (hostHeader && originHeader.includes(hostHeader));
 
       const workerSecret = (process.env.CF_WORKER_SECRET || process.env.WORKER_SECRET || "").trim();
       const clientWorkerSig = (req.headers["x-worker-signature"] || req.headers["x-worker-secret"] || "").trim();
       const hasValidWorkerSig = Boolean(workerSecret && clientWorkerSig && clientWorkerSig === workerSecret);
       const isOriginWorkerDev = Boolean(
-        (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev")) ||
-        (req.headers["referer"] && req.headers["referer"].includes("workers.dev")) ||
-        (req.headers["origin"] && req.headers["origin"].includes("workers.dev"))
+        (req.headers["x-forwarded-host"] && (req.headers["x-forwarded-host"].includes("workers.dev") || req.headers["x-forwarded-host"].includes("pages.dev"))) ||
+        (req.headers["referer"] && (req.headers["referer"].includes("workers.dev") || req.headers["referer"].includes("pages.dev"))) ||
+        (req.headers["origin"] && (req.headers["origin"].includes("workers.dev") || req.headers["origin"].includes("pages.dev")))
       );
       const isWorkerProxy = Boolean(
         hasValidWorkerSig ||
@@ -1904,7 +1906,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       req.headers["cf-worker"] ||
       req.headers["x-via-worker"] ||
       req.headers["x-worker-signature"] ||
-      (req.headers["x-forwarded-host"] && req.headers["x-forwarded-host"].includes("workers.dev"))
+      (req.headers["x-forwarded-host"] && (req.headers["x-forwarded-host"].includes("workers.dev") || req.headers["x-forwarded-host"].includes("pages.dev"))) ||
+      (req.headers["referer"] && req.headers["referer"].includes("pages.dev"))
     );
     const isExplicitDirect = req.query.direct === "1" || req.headers["x-direct-origin"] === "1";
     const isFetchOrApi = Boolean(

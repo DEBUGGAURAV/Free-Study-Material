@@ -164,3 +164,37 @@ export function getStudentStudyContext() {
   }
 }
 
+/**
+ * 🌟 Campus Contributor & Sharing Gamification Tracker
+ */
+export function recordCampusShare(note = null) {
+  try {
+    const cur = parseInt(localStorage.getItem("fsm_campus_contributions") || "0", 10) + 1;
+    localStorage.setItem("fsm_campus_contributions", String(cur));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("fsm:campus-contributions-updated", { detail: { count: cur, note } }));
+    }
+    return cur;
+  } catch (_) {
+    return 1;
+  }
+}
+
+export function getCampusContributionTier() {
+  try {
+    const count = parseInt(localStorage.getItem("fsm_campus_contributions") || "0", 10);
+    if (count >= 6) {
+      return { count, level: 3, label: "🌟 Top Campus Contributor", badge: "🌟 Top Contributor", color: "#f59e0b", bg: "#fef3c7" };
+    }
+    if (count >= 3) {
+      return { count, level: 2, label: "⭐ Campus Study Helper", badge: "⭐ Study Helper", color: "#6366f1", bg: "#ede9fe" };
+    }
+    if (count >= 1) {
+      return { count, level: 1, label: "🌱 Campus Sharer", badge: "🌱 Sharer", color: "#10b981", bg: "#d1fae5" };
+    }
+    return { count: 0, level: 0, label: "Student Scholar", badge: null, color: "#64748b", bg: "#f1f5f9" };
+  } catch (_) {
+    return { count: 0, level: 0, label: "Student Scholar", badge: null, color: "#64748b", bg: "#f1f5f9" };
+  }
+}
+

@@ -7,6 +7,7 @@
 function isTrustedOrigin(origin) {
   if (!origin) return false;
   return (
+    origin.includes('pages.dev') ||
     origin.includes('onrender.com') ||
     origin.includes('localhost') ||
     origin.includes('127.0.0.1') ||

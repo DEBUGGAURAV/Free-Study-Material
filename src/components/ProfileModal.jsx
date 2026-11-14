@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers, Zap } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers, Zap, Award } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
 import { getStorageUsage } from "../utils/p2pMesh";
+import { getCampusContributionTier } from "../utils/studentStudyContext";
 import {
   getAllStoredOfflineNotes,
   deleteSingleOfflineNote,
@@ -320,6 +321,16 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
     }
   };
 
+  const [contributionTier, setContributionTier] = useState(() => getCampusContributionTier());
+
+  useEffect(() => {
+    const handleTierUpdate = () => {
+      setContributionTier(getCampusContributionTier());
+    };
+    window.addEventListener("fsm:campus-contributions-updated", handleTierUpdate);
+    return () => window.removeEventListener("fsm:campus-contributions-updated", handleTierUpdate);
+  }, []);
+
   useEffect(() => {
     if (currentUser) {
       setName(currentUser.name || "");
@@ -567,8 +578,29 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
             </div>
             <div>
               <div className="modal-title">My Account Settings</div>
-              <div style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 500 }}>
-                {currentUser.email} • {currentUser.role?.toUpperCase()}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "2px" }}>
+                <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 500 }}>
+                  {currentUser.email} • {currentUser.role?.toUpperCase()}
+                </span>
+                {contributionTier?.badge && (
+                  <span
+                    style={{
+                      fontSize: "0.68rem",
+                      fontWeight: 800,
+                      padding: "2px 8px",
+                      borderRadius: "999px",
+                      background: contributionTier.bg,
+                      color: contributionTier.color,
+                      border: `1px solid ${contributionTier.color}45`,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "3px",
+                    }}
+                    title={`${contributionTier.count} Notes Shared across Campus`}
+                  >
+                    {contributionTier.badge} • {contributionTier.count} Shared
+                  </span>
+                )}
               </div>
             </div>
           </div>
