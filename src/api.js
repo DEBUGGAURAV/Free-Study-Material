@@ -204,6 +204,7 @@ async function request(endpoint, options = {}) {
     const clusterBackends = [
       "https://freestudymaterial1.onrender.com",
       "https://freestudymaterial2.onrender.com",
+      "https://freestudymaterial.onrender.com",
     ];
     for (const clusterOrigin of clusterBackends) {
       try {
@@ -1681,6 +1682,7 @@ export const api = {
     const clusterBackends = [
       "https://freestudymaterial1.onrender.com",
       "https://freestudymaterial2.onrender.com",
+      "https://freestudymaterial.onrender.com",
     ];
 
     for (const origin of clusterBackends) {

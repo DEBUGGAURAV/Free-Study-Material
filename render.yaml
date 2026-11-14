@@ -20,9 +20,9 @@ services:
       - key: APP_URL
         value: https://freestudymaterial.pages.dev
       - key: BACKEND_CLUSTER_URLS
-        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com,https://freestudymaterial.onrender.com
       - key: VITE_BACKEND_CLUSTER_URLS
-        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com,https://freestudymaterial.onrender.com
       - key: CLUSTER_SYNC_SECRET
         sync: false
       - key: GROQ_MODEL

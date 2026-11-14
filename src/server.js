@@ -188,6 +188,7 @@ app.use(
         (cfWorkerUrl && origin === cfWorkerUrl) ||
         origin.endsWith(".workers.dev") ||
         origin.endsWith(".pages.dev") ||
+        origin.endsWith(".onrender.com") ||
         origin.includes("localhost") ||
         origin.includes("127.0.0.1")
       ) {

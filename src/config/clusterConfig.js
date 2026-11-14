@@ -1,13 +1,13 @@
 const DEFAULT_CLUSTER_URLS = [
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
+  "https://freestudymaterial.onrender.com",
 ];
 
 function normalizeOrigin(value) {
   try {
     const url = new URL(String(value || "").trim());
     if (url.protocol !== "http:" && url.protocol !== "https:") return "";
-    if (url.hostname === "freestudymaterial.onrender.com") return "";
     return url.origin;
   } catch {
     return "";
@@ -20,7 +20,7 @@ function getBackendClusterUrls() {
     .map(normalizeOrigin)
     .filter(Boolean);
 
-  if (configuredUrls.length >= 2) return [...new Set(configuredUrls)];
+  if (configuredUrls.length >= 3) return [...new Set(configuredUrls)];
 
   const fallbackUrl =
     process.env.CLIENT_URL ||
@@ -39,12 +39,12 @@ function getBackendClusterUrls() {
   }
 
   for (const def of DEFAULT_CLUSTER_URLS) {
-    if (!result.includes(def) && result.length < 2) {
+    if (!result.includes(def) && result.length < 3) {
       result.push(def);
     }
   }
 
-  return result.length >= 2 ? result : DEFAULT_CLUSTER_URLS;
+  return result.length >= 3 ? result : DEFAULT_CLUSTER_URLS;
 }
 
 module.exports = { getBackendClusterUrls, DEFAULT_CLUSTER_URLS };

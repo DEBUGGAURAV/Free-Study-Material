@@ -25,6 +25,7 @@ export const SITE_DESCRIPTION =
 export const DEFAULT_CLUSTER_URLS = [
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
+  "https://freestudymaterial.onrender.com",
 ];
 
 export const BACKEND_CLUSTER_URLS = (() => {
@@ -38,16 +39,16 @@ export const BACKEND_CLUSTER_URLS = (() => {
         return "";
       }
     })
-    .filter((url, index, urls) => url && urls.indexOf(url) === index && !url.includes("freestudymaterial.onrender.com"));
+    .filter((url, index, urls) => url && urls.indexOf(url) === index);
 
-  if (envUrls.length >= 2) return envUrls;
+  if (envUrls.length >= 3) return envUrls;
   const merged = [...envUrls];
   for (const def of DEFAULT_CLUSTER_URLS) {
-    if (!merged.includes(def) && merged.length < 2) {
+    if (!merged.includes(def) && merged.length < 3) {
       merged.push(def);
     }
   }
-  return merged.length >= 2 ? merged : DEFAULT_CLUSTER_URLS;
+  return merged.length >= 3 ? merged : DEFAULT_CLUSTER_URLS;
 })();
 
 /**
