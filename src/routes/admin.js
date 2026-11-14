@@ -277,11 +277,26 @@ function checkAdminOrPermission(permissionKey) {
   };
 }
 
+// In-memory stats cache for sub-millisecond Admin Dashboard opening
+let adminStatsCache = null;
+let adminStatsCachedAt = 0;
+const ADMIN_STATS_TTL_MS = 20000;
+
 /**
  * GET /api/admin/stats
  */
 router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
+    const now = Date.now();
+    if (adminStatsCache && now - adminStatsCachedAt < ADMIN_STATS_TTL_MS && !req.query.force) {
+      return res.json({
+        success: true,
+        stats: adminStatsCache,
+        lastSync: getLastSyncState(),
+        cached: true,
+      });
+    }
+
     if (!db) return res.json({ success: true, stats: {} });
 
     const [notesSnap, usersSnap] = await Promise.all([
@@ -318,19 +333,24 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
       ? (totalSavedBytes / (1024 * 1024 * 1024)).toFixed(2) + " GB"
       : (totalSavedBytes / (1024 * 1024)).toFixed(2) + " MB";
 
+    const statsResult = {
+      totalNotes,
+      totalStudents: usersSnap.size,
+      totalDownloads,
+      totalDuplicates,
+      totalOriginalBytes,
+      totalCompressedBytes,
+      totalSavedBytes,
+      formattedSaved,
+      formattedOriginal: (totalOriginalBytes / (1024 * 1024)).toFixed(2) + " MB",
+    };
+
+    adminStatsCache = statsResult;
+    adminStatsCachedAt = Date.now();
+
     return res.json({
       success: true,
-      stats: {
-        totalNotes,
-        totalStudents: usersSnap.size,
-        totalDownloads,
-        totalDuplicates,
-        totalOriginalBytes,
-        totalCompressedBytes,
-        totalSavedBytes,
-        formattedSaved,
-        formattedOriginal: (totalOriginalBytes / (1024 * 1024)).toFixed(2) + " MB",
-      },
+      stats: statsResult,
       lastSync: getLastSyncState(),
     });
   } catch (err) {

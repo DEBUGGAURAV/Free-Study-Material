@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers, Zap, Award } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
@@ -23,7 +23,7 @@ import {
 } from "../utils/circleSearchEngine";
 import { getStudySessionHistory } from "../utils/studentSessionHistory";
 import GeminiIcon from "./GeminiIcon";
-import MathMarkdown from "./MathMarkdown";
+const MathMarkdown = lazy(() => import("./MathMarkdown"));
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -2214,7 +2214,9 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       boxShadow: "inset 0 2px 10px rgba(0, 0, 0, 0.6)",
                     }}
                   >
-                    <MathMarkdown content={viewingCircleAnswer.answer} />
+                    <Suspense fallback={<div style={{ padding: "20px", color: "#94a3b8", textAlign: "center" }}>Rendering math &amp; solution...</div>}>
+                      <MathMarkdown content={viewingCircleAnswer.answer} />
+                    </Suspense>
                   </div>
                 </div>
               </div>

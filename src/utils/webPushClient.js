@@ -29,16 +29,31 @@ export async function getWebPushStatus() {
     return { supported: false, subscribed: false, permission: "unsupported" };
   }
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
+    // Resilient timeout race so we never hang indefinitely on SW ready
+    const swRegPromise = (async () => {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) return reg;
+      } catch (_) {}
+      return navigator.serviceWorker.ready;
+    })();
+
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 1200));
+    const reg = await Promise.race([swRegPromise, timeoutPromise]);
+
+    if (!reg || !reg.pushManager) {
+      return { supported: true, subscribed: false, permission: Notification?.permission || "default" };
+    }
+
+    const sub = await reg.pushManager.getSubscription().catch(() => null);
     return {
       supported: true,
       subscribed: Boolean(sub),
-      permission: Notification.permission,
+      permission: Notification?.permission || "default",
       endpoint: sub?.endpoint || null,
     };
   } catch {
-    return { supported: true, subscribed: false, permission: Notification.permission };
+    return { supported: true, subscribed: false, permission: Notification?.permission || "default" };
   }
 }
 
@@ -61,7 +76,18 @@ export async function subscribeWebPush() {
     throw new Error("Push notifications are currently disabled by the Administrator.");
   }
 
-  const reg = await navigator.serviceWorker.ready;
+  let reg = null;
+  try {
+    reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      reg = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => null);
+    }
+  } catch (_) {}
+
+  if (!reg) {
+    reg = await navigator.serviceWorker.ready;
+  }
+
   let subscription = await reg.pushManager.getSubscription();
   if (!subscription) {
     subscription = await reg.pushManager.subscribe({

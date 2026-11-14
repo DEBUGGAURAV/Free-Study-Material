@@ -71,6 +71,13 @@ export default function Navbar({
     return () => { mounted = false; };
   }, [currentUser]);
 
+  const handlePrefetchProfile = () => {
+    try { import("./ProfileModal"); } catch (_) {}
+  };
+  const handlePrefetchAdmin = () => {
+    try { import("./admin/AdminModal"); } catch (_) {}
+  };
+
   const handleToggleWebPush = async () => {
     if (pushBusy) return;
     setPushBusy(true);
@@ -259,6 +266,8 @@ export default function Navbar({
                   type="button"
                   className="btn-admin-mobile-header"
                   onClick={onOpenAdmin}
+                  onMouseEnter={handlePrefetchAdmin}
+                  onTouchStart={handlePrefetchAdmin}
                   style={{
                     background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
                     border: "1.5px solid transparent",
@@ -324,6 +333,8 @@ export default function Navbar({
                     type="button"
                     className="mobile-profile-pill"
                     onClick={onOpenProfile}
+                    onMouseEnter={handlePrefetchProfile}
+                    onTouchStart={handlePrefetchProfile}
                     title="My Profile"
                   >
                     <span className="nav-avatar-circle" style={{ width: "22px", height: "22px", fontSize: "0.68rem" }}>
@@ -462,6 +473,7 @@ export default function Navbar({
                 type="button"
                 className="nav-capsule-btn btn-admin"
                 onClick={onOpenAdmin}
+                onMouseEnter={handlePrefetchAdmin}
                 style={{
                   background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #6366f1, #a855f7, #ec4899) border-box",
                   border: "1.5px solid transparent",
@@ -482,6 +494,7 @@ export default function Navbar({
                 <div
                   className="nav-user-chip"
                   onClick={onOpenProfile}
+                  onMouseEnter={handlePrefetchProfile}
                   title="Edit My Profile & Account Settings"
                 >
                   <div className="nav-avatar-circle">
@@ -664,21 +677,36 @@ export default function Navbar({
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
-          {enableWebPush && pushStatus.supported && (
+          {enableWebPush && (
             <button
               type="button"
-              className="launchpad-pill"
+              className="launchpad-pill pill-push"
               onClick={handleToggleWebPush}
               disabled={pushBusy}
               style={{
-                borderColor: pushStatus.subscribed ? "#a7f3d0" : "#bfdbfe",
-                color: pushStatus.subscribed ? "#065f46" : "#1d4ed8",
-                background: pushStatus.subscribed ? "#d1fae5" : "#eff6ff",
+                background: pushStatus.subscribed
+                  ? "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #059669, #10b981) border-box"
+                  : "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #0284c7, #2563eb) border-box",
+                border: "1.5px solid transparent",
+                color: "#0f172a",
+                boxShadow: pushStatus.subscribed
+                  ? "0 4px 16px -2px rgba(16, 185, 129, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)"
+                  : "0 4px 16px -2px rgba(2, 132, 199, 0.25), 0 2px 6px -1px rgba(0, 0, 0, 0.05)",
+                fontWeight: 800,
+                borderRadius: "999px",
               }}
-              title={pushStatus.subscribed ? "Web Push Alerts Active (Click to mute)" : "Get instant browser notifications for new PYQs, notes & notices"}
+              title={pushStatus.subscribed ? "Push Alerts Active (Click to mute)" : "Enable instant exam & note push alerts"}
             >
-              <BellRing size={14} />
-              <span>{pushBusy ? "Saving..." : pushStatus.subscribed ? "Alerts On" : "Push Alerts"}</span>
+              <div
+                className={pushStatus.subscribed ? "icon-3d-emerald" : "icon-3d-cyan"}
+                style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+              >
+                <BellRing size={14} color={pushStatus.subscribed ? "#059669" : "#0284c7"} />
+              </div>
+              <span style={{ color: "#0f172a" }}>{pushBusy ? "Saving..." : pushStatus.subscribed ? "Alerts On" : "Push Alerts"}</span>
+              {pushStatus.subscribed && (
+                <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
+              )}
             </button>
           )}
 

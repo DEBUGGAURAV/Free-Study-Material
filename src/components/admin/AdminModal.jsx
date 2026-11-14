@@ -447,13 +447,9 @@ export default function AdminModal({
 
   const isMainAdmin = isMasterAdminUser(currentUser);
 
-  // Data Loading Lifecycle
+  // Data Loading Lifecycle (Lazy Tab-Scoped for 0ms Studio Opening)
   useEffect(() => {
     if (isOpen && isAdminOrManager) {
-      loadStats();
-      loadRecycleBinItems();
-      loadCdnStats();
-
       if (activeTab === "notes") {
         loadStats();
       } else if (activeTab === "students") {

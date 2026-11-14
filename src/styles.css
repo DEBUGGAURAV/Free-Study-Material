@@ -3208,9 +3208,30 @@ select option,
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
   --mx: 50%;
   --my: 50%;
   --back-mx: 50%;
+}
+
+.auth-modal-overlay {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.auth-modal-overlay::-webkit-scrollbar,
+.auth-3d-scene::-webkit-scrollbar,
+.auth-3d-scene *::-webkit-scrollbar,
+.auth-card-face::-webkit-scrollbar,
+.auth-card-face *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .auth-3d-tilt {
@@ -3246,6 +3267,8 @@ select option,
     inset 0 1px 0 rgba(255, 255, 255, 1);
   position: relative;
   overflow: hidden;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
   box-sizing: border-box;
   padding: 16px 20px;
   color: #0f172a;

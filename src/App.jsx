@@ -367,6 +367,26 @@ export default function App() {
     };
   }, []);
 
+  // ⚡ 0ms Instant Modal Opening: Background idle prefetching for Profile & Admin modals
+  useEffect(() => {
+    const prefetchKeyModals = () => {
+      try {
+        import("./components/ProfileModal");
+        if (currentUser?.role === "admin" || currentUser?.role === "half_admin" || currentUser?.isMainAdmin) {
+          import("./components/admin/AdminModal");
+        }
+      } catch (_) {}
+    };
+
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(prefetchKeyModals, { timeout: 2000 });
+      } else {
+        setTimeout(prefetchKeyModals, 1800);
+      }
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     try {
       const match = document.cookie.match(/fsm_security_detained=([^;]+)/);
