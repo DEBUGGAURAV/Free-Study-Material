@@ -301,49 +301,53 @@ export default function FreehandCircleOverlay({
       {/* Top Floating Pencil Control Capsule */}
       <div
         data-pencil-toolbar="true"
+        className="pencil-overlay-toolbar"
         onPointerDown={(e) => e.stopPropagation()}
         style={{
           position: "fixed",
-          top: "18px",
+          top: "14px",
           left: "50%",
           transform: "translateX(-50%)",
           zIndex: 100000,
-          background: "rgba(15, 23, 42, 0.95)",
-          backdropFilter: "blur(16px)",
-          border: "1.5px solid rgba(56, 189, 248, 0.65)",
-          boxShadow: "0 12px 36px rgba(0, 0, 0, 0.75), 0 0 24px rgba(56, 189, 248, 0.35)",
-          borderRadius: "999px",
-          padding: "7px 14px",
+          background: "rgba(15, 23, 42, 0.94)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1.5px solid rgba(56, 189, 248, 0.55)",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(56, 189, 248, 0.25)",
+          borderRadius: "14px",
+          padding: "6px 10px",
           display: "flex",
           alignItems: "center",
-          gap: "8px",
-          flexWrap: "wrap",
-          justifyContent: "center",
-          maxWidth: "95vw",
+          gap: "6px",
+          flexWrap: "nowrap",
+          width: "max-content",
+          maxWidth: "calc(100vw - 20px)",
+          overflowX: "auto",
+          whiteSpace: "nowrap",
+          scrollbarWidth: "none",
           color: "#ffffff",
-          fontSize: "0.79rem",
+          fontSize: "0.78rem",
           fontWeight: 600,
         }}
       >
-        <div style={{ display: "inline-flex", alignItems: "center", gap: "7px", paddingLeft: "4px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: "6px", paddingLeft: "2px", flexShrink: 0 }}>
           <span
             style={{
-              width: "26px",
-              height: "26px",
+              width: "24px",
+              height: "24px",
               borderRadius: "50%",
               background: "linear-gradient(135deg, #0284c7, #6366f1)",
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 0 12px rgba(56, 189, 248, 0.6)",
+              boxShadow: "0 0 10px rgba(56, 189, 248, 0.6)",
+              flexShrink: 0,
             }}
           >
-            <Pencil size={13} color="#fff" />
+            <Pencil size={12} color="#fff" />
           </span>
-          <span>
-            {padMode
-              ? "✏️ Sketch Pad: Draw any structure, diagram or formula freely"
-              : "✏️ Pencil Active: Draw any shape/line on screen OR sketch any structure"}
+          <span className="pencil-toolbar-title" style={{ fontWeight: 750, color: "#f8fafc", letterSpacing: "-0.2px" }}>
+            {padMode ? "Sketch Pad" : "Pencil Active"}
           </span>
         </div>
 
@@ -359,24 +363,25 @@ export default function FreehandCircleOverlay({
             background: padMode ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "rgba(255, 255, 255, 0.09)",
             border: "1px solid rgba(255, 255, 255, 0.2)",
             color: "#fff",
-            borderRadius: "999px",
-            padding: "4px 11px",
+            borderRadius: "10px",
+            padding: "5px 9px",
             fontSize: "0.73rem",
             fontWeight: 700,
             cursor: "pointer",
             display: "inline-flex",
             alignItems: "center",
-            gap: "5px",
+            gap: "4px",
+            flexShrink: 0,
           }}
           title="Switch between drawing over live screen vs clean sketch pad"
         >
           <Palette size={12} />
-          <span>{padMode ? "Live Screen" : "Clean Pad"}</span>
+          <span className="pencil-btn-text">{padMode ? "Screen" : "Clean Pad"}</span>
         </button>
 
         {/* Color Dots when in Sketch Pad */}
         {padMode && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", flexShrink: 0 }}>
             {["#38bdf8", "#a855f7", "#34d399", "#f59e0b"].map((c) => (
               <button
                 key={c}
@@ -390,6 +395,7 @@ export default function FreehandCircleOverlay({
                   border: inkColor === c ? "2px solid #fff" : "1px solid rgba(255,255,255,0.3)",
                   cursor: "pointer",
                   padding: 0,
+                  flexShrink: 0,
                 }}
               />
             ))}
@@ -408,19 +414,20 @@ export default function FreehandCircleOverlay({
                 background: "rgba(255, 255, 255, 0.08)",
                 border: "1px solid rgba(255, 255, 255, 0.16)",
                 color: "#cbd5e1",
-                borderRadius: "999px",
-                padding: "4px 9px",
+                borderRadius: "10px",
+                padding: "5px 8px",
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
+                flexShrink: 0,
               }}
               title="Undo last stroke"
             >
               <Undo2 size={12} />
-              <span>Undo</span>
+              <span className="pencil-btn-text">Undo</span>
             </button>
             <button
               type="button"
@@ -432,19 +439,20 @@ export default function FreehandCircleOverlay({
                 background: "rgba(244, 63, 94, 0.16)",
                 border: "1px solid rgba(244, 63, 94, 0.35)",
                 color: "#fda4af",
-                borderRadius: "999px",
-                padding: "4px 9px",
+                borderRadius: "10px",
+                padding: "5px 8px",
                 fontSize: "0.72rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
+                flexShrink: 0,
               }}
               title="Clear drawing"
             >
               <Trash2 size={12} />
-              <span>Clear</span>
+              <span className="pencil-btn-text">Clear</span>
             </button>
           </>
         )}
@@ -460,19 +468,20 @@ export default function FreehandCircleOverlay({
               background: "rgba(56, 189, 248, 0.14)",
               border: "1px solid rgba(56, 189, 248, 0.35)",
               color: "#7dd3fc",
-              borderRadius: "999px",
-              padding: "4px 10px",
+              borderRadius: "10px",
+              padding: "5px 9px",
               fontSize: "0.73rem",
               fontWeight: 700,
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
+              flexShrink: 0,
             }}
             title="Open Circle Search Chat & Upload Modal directly"
           >
             <Keyboard size={12} />
-            <span>Ask / Upload</span>
+            <span className="pencil-btn-text">Ask</span>
           </button>
         )}
 
@@ -486,13 +495,22 @@ export default function FreehandCircleOverlay({
             background: "rgba(244, 63, 94, 0.25)",
             color: "#fecdd3",
             border: "1px solid rgba(244, 63, 94, 0.5)",
-            borderRadius: "999px",
-            padding: "4px 11px",
+            borderRadius: "10px",
+            padding: "5px 9px",
             fontSize: "0.73rem",
             cursor: "pointer",
             fontWeight: 700,
             display: "inline-flex",
             alignItems: "center",
+            gap: "3px",
+            flexShrink: 0,
+          }}
+          title="Exit Pencil Mode"
+        >
+          <X size={12} />
+          <span className="pencil-btn-text">Exit</span>
+        </button>
+      </div>
             gap: "4px",
           }}
         >

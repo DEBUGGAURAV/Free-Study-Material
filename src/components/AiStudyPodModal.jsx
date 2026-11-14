@@ -5,6 +5,7 @@ import {
   getStudySessionHistory,
   addStudySessionItem,
 } from "../utils/studentSessionHistory";
+import { saveIndexedDbCircleCache } from "../utils/circleSearchEngine";
 import MathMarkdown from "./MathMarkdown";
 import GeminiIcon from "./GeminiIcon";
 import { useTechFlags } from "../utils/techFlagsStore";
@@ -202,6 +203,21 @@ export default function AiStudyPodModal({
         cached: res?.cached,
       });
       setSessionHistory(updatedHist);
+
+      // 💾 Auto-save to Offline AI Vault for Profile -> Offline Storage
+      const aiOfflineKey = `ai_chat_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      saveIndexedDbCircleCache(aiOfflineKey, {
+        key: aiOfflineKey,
+        query: cleanText || (attachedImage ? "📷 Diagram / Formula Question" : "AI Study Tutor Question"),
+        answer: aiAnswer,
+        subject: currentSubject || (currentNoteId ? currentTitle : "AI Study Studio"),
+        noteId: currentNoteId || "",
+        provider: res?.provider || "AI Tutor",
+        model: res?.model || "",
+        type: "chat",
+        savedAt: Date.now(),
+        isPinned: true,
+      }).catch(() => {});
     } catch (err) {
       const rawMsg = err.message || "Please try again.";
       const displayMsg = rawMsg.includes("port 5000")
@@ -308,6 +324,25 @@ export default function AiStudyPodModal({
           cached: res.cached,
         });
         setSessionHistory(updated);
+
+        // 💾 Auto-save Flashcard deck to Offline AI Vault
+        const cardsKey = `ai_cards_${currentNoteId || Date.now()}`;
+        const formattedCards = res.flashcards
+          .map((c, idx) => `### 🗂️ Card ${idx + 1}: ${c.front || c.question}\n\n**Answer / Key Formula:**\n${c.back || c.answer}`)
+          .join("\n\n---\n\n");
+        saveIndexedDbCircleCache(cardsKey, {
+          key: cardsKey,
+          query: `🗂️ Flashcards: ${currentTitle || "Study Notes"} (${res.flashcards.length} cards)`,
+          answer: formattedCards,
+          subject: currentSubject || "Flashcard Deck",
+          noteId: currentNoteId || "",
+          provider: res.provider || "AI Study",
+          model: res.model || "",
+          type: "flashcard",
+          data: res.flashcards,
+          savedAt: Date.now(),
+          isPinned: true,
+        }).catch(() => {});
       }
     } catch (err) {
       console.warn("[STUDY-POD] Flashcard generation notice:", err.message);
@@ -348,6 +383,23 @@ export default function AiStudyPodModal({
           cached: res.cached,
         });
         setSessionHistory(updated);
+
+        // 💾 Auto-save Chapter Summary to Offline AI Vault
+        const summaryKey = `ai_summary_${currentNoteId || Date.now()}`;
+        const summaryText = typeof res.summary === "string" ? res.summary : JSON.stringify(res.summary);
+        saveIndexedDbCircleCache(summaryKey, {
+          key: summaryKey,
+          query: `📌 Summary: ${currentTitle || "Chapter Overview"}`,
+          answer: summaryText,
+          subject: currentSubject || "AI Summary",
+          noteId: currentNoteId || "",
+          provider: res.provider || "AI Study",
+          model: res.model || "",
+          type: "summary",
+          data: res.summary,
+          savedAt: Date.now(),
+          isPinned: true,
+        }).catch(() => {});
       }
     } catch (err) {
       console.warn("[STUDY-POD] Summary generation notice:", err.message);

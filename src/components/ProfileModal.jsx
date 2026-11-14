@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check } from "lucide-react";
+import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers } from "lucide-react";
 import { api } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
@@ -18,8 +18,11 @@ import {
   deleteSingleCircleNote,
   togglePinCircleNote,
   clearAllStoredCircleNotes,
+  saveIndexedDbCircleCache,
 } from "../utils/circleSearchEngine";
+import { getStudySessionHistory } from "../utils/studentSessionHistory";
 import GeminiIcon from "./GeminiIcon";
+import MathMarkdown from "./MathMarkdown";
 
 const RESERVED_NAMES = [
   "admin", "administrator", "root", "staff", "mod", "moderator",
@@ -78,6 +81,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const [deletingCircleKey, setDeletingCircleKey] = useState(null);
   const [viewingCircleAnswer, setViewingCircleAnswer] = useState(null);
   const [copiedCircleAnswer, setCopiedCircleAnswer] = useState(false);
+  const [aiFilter, setAiFilter] = useState("all");
 
   const fetchStorageInfo = async () => {
     try {
@@ -105,6 +109,38 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   const loadStoredCircleNotes = async () => {
     try {
       setLoadingCircleNotes(true);
+      // Auto-migrate any in-session AI items from sessionStorage into offline vault
+      try {
+        const sessionItems = getStudySessionHistory();
+        for (const s of sessionItems) {
+          if (s && s.id && (s.query || s.title)) {
+            const key = `ai_session_${s.id}`;
+            let ans = "";
+            if (s.type === "chat" && Array.isArray(s.data)) {
+              const lastAi = [...s.data].reverse().find((m) => m.role === "assistant");
+              ans = lastAi ? lastAi.content : "";
+            } else if (s.type === "flashcard" && Array.isArray(s.data)) {
+              ans = s.data.map((c, i) => `### 🗂️ Card ${i + 1}: ${c.front || c.question}\n\n**Answer:**\n${c.back || c.answer}`).join("\n\n---\n\n");
+            } else if (s.type === "summary") {
+              ans = typeof s.data === "string" ? s.data : JSON.stringify(s.data);
+            }
+            if (ans) {
+              await saveIndexedDbCircleCache(key, {
+                key,
+                query: s.query || s.title || "AI Study Item",
+                answer: ans,
+                subject: s.title || "Study Notes",
+                noteId: s.noteId || "",
+                provider: s.provider || "AI Engine",
+                type: s.type || "chat",
+                savedAt: s.timestamp || Date.now(),
+                isPinned: true,
+              });
+            }
+          }
+        }
+      } catch (_) {}
+
       const list = await getAllStoredCircleNotes();
       setStoredCircleNotes(list || []);
     } catch (_) {
@@ -156,12 +192,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
   };
 
   useEffect(() => {
-    if (tab === "storage") {
+    if (tab === "storage" && isOpen) {
       fetchStorageInfo();
       loadStoredNotes();
       loadStoredCircleNotes();
     }
-  }, [tab]);
+  }, [tab, isOpen]);
 
   // Lock background body scroll while ProfileModal is active
   useEffect(() => {
@@ -1607,12 +1643,12 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
               )}
             </div>
 
-            {/* Circled AI Q&A Notes Section (48h Auto-Evict) */}
+            {/* 🤖 Stored Offline AI Study & Q&A Vault Section */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.84rem", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Sparkles size={15} style={{ color: "#0284c7" }} />
-                  <span>Circled AI Q&amp;A Notes ({storedCircleNotes.length})</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Sparkles size={16} style={{ color: "#6366f1" }} />
+                  <span>Stored Offline AI Study &amp; Q&amp;A Vault ({storedCircleNotes.length})</span>
                 </div>
                 <button
                   type="button"
@@ -1623,10 +1659,10 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                     border: "1px solid #cbd5e1",
                     borderRadius: "6px",
                     color: "#334155",
-                    padding: "4px 9px",
+                    padding: "4px 10px",
                     cursor: "pointer",
-                    fontSize: "0.7rem",
-                    fontWeight: 600,
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
                     display: "flex",
                     alignItems: "center",
                     gap: "4px",
@@ -1637,160 +1673,231 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </button>
               </div>
 
-              {/* 48h Default Auto-Expire Banner */}
+              {/* Quick AI Category Filter Pills */}
+              {storedCircleNotes.length > 0 && (
+                <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
+                  {[
+                    { id: "all", label: `All (${storedCircleNotes.length})` },
+                    { id: "chat", label: `💬 AI Tutor (${storedCircleNotes.filter((c) => c.type === "chat").length})` },
+                    { id: "circle", label: `⭕ Circle Solve (${storedCircleNotes.filter((c) => !c.type || c.type === "circle").length})` },
+                    { id: "flashcard", label: `🗂️ Flashcards (${storedCircleNotes.filter((c) => c.type === "flashcard").length})` },
+                    { id: "summary", label: `📌 Summaries (${storedCircleNotes.filter((c) => c.type === "summary").length})` },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setAiFilter(f.id)}
+                      style={{
+                        padding: "3px 10px",
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        borderRadius: "999px",
+                        border: aiFilter === f.id ? "1px solid #6366f1" : "1px solid #e2e8f0",
+                        background: aiFilter === f.id ? "#6366f1" : "#ffffff",
+                        color: aiFilter === f.id ? "#ffffff" : "#475569",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 48h Default Auto-Expire / Pinned Retention Banner */}
               <div
                 style={{
-                  background: "#f0f9ff",
-                  border: "1px solid #bae6fd",
-                  borderRadius: "8px",
-                  padding: "8px 12px",
-                  fontSize: "0.72rem",
-                  color: "#0369a1",
+                  background: "linear-gradient(135deg, rgba(238, 242, 255, 0.9), rgba(240, 249, 255, 0.9))",
+                  border: "1px solid #c7d2fe",
+                  borderRadius: "10px",
+                  padding: "9px 13px",
+                  fontSize: "0.73rem",
+                  color: "#3730a3",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   flexWrap: "wrap",
                   gap: "6px",
-                  lineHeight: 1.4,
+                  lineHeight: 1.45,
                 }}
               >
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                  <GeminiIcon size={14} withRing />
-                  <span><strong>Circle to Search:</strong> AI answers saved offline</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <Sparkles size={14} style={{ color: "#6366f1" }} />
+                  <span><strong>100% Offline AI Access:</strong> Study Tutor answers, Flashcards &amp; Circled solutions device par saved hain.</span>
                 </span>
-                <span>🕒 <strong>48h Auto-Expire:</strong> Active by default (Pin to Keep Forever)</span>
+                <span style={{ fontSize: "0.69rem", color: "#4f46e5", fontWeight: 700 }}>
+                  📌 Pinned notes never expire
+                </span>
               </div>
 
               {loadingCircleNotes ? (
-                <div style={{ padding: "14px", textAlign: "center", color: "#475569", fontSize: "0.76rem" }}>
-                  Scanning device IndexedDB for circled solutions...
+                <div style={{ padding: "16px", textAlign: "center", color: "#475569", fontSize: "0.78rem" }}>
+                  Scanning device IndexedDB &amp; LocalStorage for offline AI solutions...
                 </div>
               ) : storedCircleNotes.length === 0 ? (
                 <div
                   style={{
                     background: "#f8fafc",
                     border: "1px dashed #cbd5e1",
-                    borderRadius: "10px",
-                    padding: "16px",
+                    borderRadius: "12px",
+                    padding: "22px 16px",
                     textAlign: "center",
                     color: "#475569",
-                    fontSize: "0.76rem",
+                    fontSize: "0.78rem",
                     lineHeight: 1.5,
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "6px" }}>
-                    <GeminiIcon size={26} withRing />
+                  <div style={{ display: "flex", justifyContent: "center", marginBottom: "8px" }}>
+                    <div style={{ width: "44px", height: "44px", borderRadius: "14px", background: "linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(6, 182, 212, 0.15))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Sparkles size={22} style={{ color: "#6366f1" }} />
+                    </div>
                   </div>
-                  <div style={{ color: "#0f172a", fontWeight: 700, marginBottom: "2px" }}>No Circled AI Notes Saved</div>
-                  <div>Circle any question, diagram, or formula in the Virtual PDF Reader to solve it and save answers offline here.</div>
+                  <div style={{ color: "#0f172a", fontWeight: 800, fontSize: "0.9rem", marginBottom: "4px" }}>
+                    No Offline AI Study Notes Saved Yet
+                  </div>
+                  <div style={{ maxWidth: "440px", margin: "0 auto", color: "#64748b", fontSize: "0.74rem" }}>
+                    Jab aap <strong>AI Study Studio</strong> me sawal puchenge, <strong>Flashcards</strong> ya <strong>Summaries</strong> generate karenge, ya <strong>Circle to Search</strong> se formula solve karenge — wo sabhi yahan 100% offline access ke liye automatic save ho jayenge.
+                  </div>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {storedCircleNotes.map((cn) => {
-                    const isPinned = Boolean(cn.isPinned);
-                    const ageHours = cn.savedAt ? Math.floor((Date.now() - Number(cn.savedAt)) / (3600 * 1000)) : 0;
-                    const remainingHours = Math.max(1, 48 - ageHours);
+                  {storedCircleNotes
+                    .filter((cn) => {
+                      if (aiFilter === "all") return true;
+                      if (aiFilter === "circle") return !cn.type || cn.type === "circle";
+                      return cn.type === aiFilter;
+                    })
+                    .map((cn) => {
+                      const isPinned = Boolean(cn.isPinned);
+                      const ageHours = cn.savedAt ? Math.floor((Date.now() - Number(cn.savedAt)) / (3600 * 1000)) : 0;
+                      const remainingHours = Math.max(1, 48 - ageHours);
 
-                    return (
-                      <div
-                        key={cn.key}
-                        style={{
-                          background: isPinned ? "#ecfdf5" : "#f8fafc",
-                          border: `1px solid ${isPinned ? "#a7f3d0" : "#e2e8f0"}`,
-                          borderRadius: "8px",
-                          padding: "10px 12px",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          gap: "10px",
-                        }}
-                      >
-                        <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => setViewingCircleAnswer(cn)}>
-                          <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.8rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {cn.query ? (cn.query.length > 55 ? `${cn.query.slice(0, 55)}...` : cn.query) : "Circled Question"}
+                      const itemType = cn.type || "circle";
+                      const typeBadge =
+                        itemType === "chat" ? (
+                          <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 7px", borderRadius: "999px", background: "#ede9fe", color: "#6d28d9", border: "1px solid #ddd6fe", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <MessageSquare size={10} /> AI Tutor
+                          </span>
+                        ) : itemType === "flashcard" ? (
+                          <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 7px", borderRadius: "999px", background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <Layers size={10} /> Flashcards
+                          </span>
+                        ) : itemType === "summary" ? (
+                          <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 7px", borderRadius: "999px", background: "#d1fae5", color: "#047857", border: "1px solid #a7f3d0", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <FileText size={10} /> Summary
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 7px", borderRadius: "999px", background: "#e0f2fe", color: "#0284c7", border: "1px solid #bae6fd", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                            <GeminiIcon size={11} withRing /> Circle Solve
+                          </span>
+                        );
+
+                      return (
+                        <div
+                          key={cn.key}
+                          style={{
+                            background: isPinned ? "#fbfcfe" : "#f8fafc",
+                            border: `1px solid ${isPinned ? "rgba(99, 102, 241, 0.35)" : "#e2e8f0"}`,
+                            borderRadius: "10px",
+                            padding: "11px 14px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            gap: "12px",
+                            boxShadow: isPinned ? "0 2px 8px rgba(99, 102, 241, 0.08)" : "none",
+                          }}
+                        >
+                          <div style={{ minWidth: 0, flex: 1, cursor: "pointer" }} onClick={() => setViewingCircleAnswer(cn)}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "3px" }}>
+                              {typeBadge}
+                              <span style={{ fontWeight: 750, color: "#0f172a", fontSize: "0.82rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {cn.query ? (cn.query.length > 60 ? `${cn.query.slice(0, 60)}...` : cn.query) : "Offline AI Solution"}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "#475569", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                              <span>📖 {cn.subject || "Study Notes"}</span>
+                              {isPinned ? (
+                                <span style={{ color: "#047857", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#d1fae5", border: "1px solid #6ee7b7", padding: "1px 6px", borderRadius: "4px" }}>
+                                  <Pin size={10} /> Kept Forever
+                                </span>
+                              ) : (
+                                <span style={{ color: "#b45309", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 6px", borderRadius: "4px" }}>
+                                  <Clock size={10} /> Auto-expires in {remainingHours}h
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "#475569", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
-                            <span>📖 {cn.subject || "Study Notes"}</span>
-                            {isPinned ? (
-                              <span style={{ color: "#047857", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#d1fae5", border: "1px solid #6ee7b7", padding: "1px 6px", borderRadius: "4px" }}>
-                                <Pin size={10} /> Kept Forever
-                              </span>
-                            ) : (
-                              <span style={{ color: "#b45309", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 6px", borderRadius: "4px" }}>
-                                <Clock size={10} /> Auto-expires in {remainingHours}h
-                              </span>
-                            )}
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                            <button
+                              type="button"
+                              onClick={() => setViewingCircleAnswer(cn)}
+                              title="View step-by-step AI solution"
+                              style={{
+                                background: "#ede9fe",
+                                border: "1px solid #c4b5fd",
+                                color: "#6d28d9",
+                                padding: "5px 10px",
+                                borderRadius: "7px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Eye size={12} />
+                              View
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePinCircle(cn.key, cn.query)}
+                              title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion)"}
+                              style={{
+                                background: isPinned ? "#d1fae5" : "#ffffff",
+                                border: `1px solid ${isPinned ? "#6ee7b7" : "#cbd5e1"}`,
+                                color: isPinned ? "#047857" : "#334155",
+                                padding: "5px 9px",
+                                borderRadius: "7px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Pin size={12} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
+                              {isPinned ? "Pinned" : "Keep"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSingleCircleNote(cn.key, cn.query)}
+                              disabled={deletingCircleKey === cn.key}
+                              title="Delete this solution from local storage"
+                              style={{
+                                background: "#fff1f2",
+                                border: "1px solid #fda4af",
+                                color: "#be123c",
+                                padding: "5px 9px",
+                                borderRadius: "7px",
+                                cursor: deletingCircleKey === cn.key ? "not-allowed" : "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Trash2 size={12} />
+                              {deletingCircleKey === cn.key ? "..." : "Delete"}
+                            </button>
                           </div>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-                          <button
-                            type="button"
-                            onClick={() => setViewingCircleAnswer(cn)}
-                            title="View step-by-step AI solution"
-                            style={{
-                              background: "#e0f2fe",
-                              border: "1px solid #7dd3fc",
-                              color: "#0369a1",
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              fontSize: "0.68rem",
-                              fontWeight: 600,
-                            }}
-                          >
-                            <Eye size={11} />
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleTogglePinCircle(cn.key, cn.query)}
-                            title={isPinned ? "Click to set 48h auto-expire" : "Click to keep forever (exempt from 48h deletion)"}
-                            style={{
-                              background: isPinned ? "#d1fae5" : "#ffffff",
-                              border: `1px solid ${isPinned ? "#6ee7b7" : "#cbd5e1"}`,
-                              color: isPinned ? "#047857" : "#334155",
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              fontSize: "0.68rem",
-                              fontWeight: 600,
-                            }}
-                          >
-                            <Pin size={11} style={{ transform: isPinned ? "rotate(-45deg)" : "none" }} />
-                            {isPinned ? "Pinned" : "Keep"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSingleCircleNote(cn.key, cn.query)}
-                            disabled={deletingCircleKey === cn.key}
-                            title="Delete this circled solution from local storage"
-                            style={{
-                              background: "#fff1f2",
-                              border: "1px solid #fda4af",
-                              color: "#be123c",
-                              padding: "4px 8px",
-                              borderRadius: "6px",
-                              cursor: deletingCircleKey === cn.key ? "not-allowed" : "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              fontSize: "0.68rem",
-                              fontWeight: 600,
-                            }}
-                          >
-                            <Trash2 size={11} />
-                            {deletingCircleKey === cn.key ? "..." : "Delete"}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               )}
             </div>
@@ -1909,18 +2016,33 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   }}
                 >
                   <div style={{ fontSize: "0.7rem", color: "#475569", fontWeight: 700, marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    Circled Text / Question:
+                    {viewingCircleAnswer.type === "chat"
+                      ? "💬 AI Tutor Question:"
+                      : viewingCircleAnswer.type === "flashcard"
+                      ? "🗂️ Flashcards Topic:"
+                      : viewingCircleAnswer.type === "summary"
+                      ? "📌 Summary Topic:"
+                      : "⭕ Circled Question / Topic:"}
                   </div>
-                  <div style={{ fontSize: "0.82rem", color: "#0f172a", fontStyle: "italic", lineHeight: 1.4 }}>
+                  <div style={{ fontSize: "0.84rem", color: "#0f172a", fontWeight: 700, lineHeight: 1.4 }}>
                     "{viewingCircleAnswer.query}"
                   </div>
                 </div>
 
                 {/* AI Answer */}
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.72rem", color: "#0369a1", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      ✨ Step-by-Step AI Solution:
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <span style={{ fontSize: "0.74rem", color: "#4f46e5", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                      <Sparkles size={13} style={{ color: "#6366f1" }} />
+                      <span>
+                        {viewingCircleAnswer.type === "chat"
+                          ? "AI Tutor Explanation & Solution"
+                          : viewingCircleAnswer.type === "flashcard"
+                          ? "Flashcards Cards & Answers"
+                          : viewingCircleAnswer.type === "summary"
+                          ? "Executive Chapter Summary"
+                          : "Step-by-Step AI Solution"}
+                      </span>
                     </span>
                     <button
                       type="button"
@@ -1951,20 +2073,19 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   </div>
                   <div
                     style={{
-                      background: "#f8fafc",
-                      border: "1px solid #cbd5e1",
-                      borderRadius: "8px",
-                      padding: "12px 14px",
-                      fontSize: "0.82rem",
-                      color: "#0f172a",
-                      lineHeight: 1.6,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      maxHeight: "340px",
+                      background: "radial-gradient(ellipse at top left, #121829 0%, #080c16 100%)",
+                      border: "1px solid rgba(139, 92, 246, 0.35)",
+                      borderRadius: "12px",
+                      padding: "16px 18px",
+                      fontSize: "0.86rem",
+                      color: "#f8fafc",
+                      lineHeight: 1.7,
+                      maxHeight: "380px",
                       overflowY: "auto",
+                      boxShadow: "inset 0 2px 10px rgba(0, 0, 0, 0.6)",
                     }}
                   >
-                    {viewingCircleAnswer.answer}
+                    <MathMarkdown content={viewingCircleAnswer.answer} />
                   </div>
                 </div>
               </div>

@@ -763,8 +763,9 @@ export default function CircleSearchModal({
       >
         {/* Modal Header */}
         <div
+          className="circle-search-header"
           style={{
-            padding: "14px 18px",
+            padding: "12px 16px",
             borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
             display: "flex",
             alignItems: "center",
@@ -774,11 +775,11 @@ export default function CircleSearchModal({
             background: "linear-gradient(135deg, rgba(2, 132, 199, 0.18), rgba(99, 102, 241, 0.18))",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
             <div
               style={{
-                width: "36px",
-                height: "36px",
+                width: "34px",
+                height: "34px",
                 borderRadius: "50%",
                 background: "linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(99, 102, 241, 0.35))",
                 border: "1.5px solid rgba(56, 189, 248, 0.5)",
@@ -788,22 +789,43 @@ export default function CircleSearchModal({
                 flexShrink: 0,
               }}
             >
-              <GeminiIcon size={20} withRing />
+              <GeminiIcon size={18} withRing />
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 800, fontSize: "1.02rem", color: "#f8fafc", letterSpacing: "-0.2px" }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                className="circle-modal-title"
+                style={{
+                  fontWeight: 800,
+                  fontSize: "0.98rem",
+                  color: "#f8fafc",
+                  letterSpacing: "-0.2px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 Pencil &amp; Circle Search AI
               </div>
-              <div style={{ fontSize: "0.72rem", color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                Draw Any Structure with Pencil, Select Screen Content &amp; Ask Follow-Up Questions
+              <div
+                className="circle-modal-sub"
+                style={{
+                  fontSize: "0.71rem",
+                  color: "#94a3b8",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                Draw Any Structure with Pencil, Select Screen Content &amp; Ask AI
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
             {onRedrawWithPencil && (
               <button
                 type="button"
+                className="circle-header-btn"
                 onClick={() => {
                   onClose();
                   onRedrawWithPencil();
@@ -812,8 +834,8 @@ export default function CircleSearchModal({
                   background: "linear-gradient(135deg, #0284c7, #6366f1)",
                   border: "1px solid rgba(255,255,255,0.25)",
                   color: "#fff",
-                  borderRadius: "999px",
-                  padding: "6px 12px",
+                  borderRadius: "10px",
+                  padding: "6px 10px",
                   fontSize: "0.74rem",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -824,19 +846,20 @@ export default function CircleSearchModal({
                 title="Activate Freehand Pencil directly on the screen / PDF"
               >
                 <Pencil size={13} />
-                <span>✏️ Screen Pencil</span>
+                <span className="circle-btn-text">Screen Pencil</span>
               </button>
             )}
 
             <button
               type="button"
+              className="circle-header-btn"
               onClick={() => setShowTopInputPanel((v) => !v)}
               style={{
                 background: showTopInputPanel ? "rgba(56, 189, 248, 0.22)" : "rgba(255, 255, 255, 0.08)",
                 border: "1px solid rgba(56, 189, 248, 0.35)",
                 color: "#7dd3fc",
-                borderRadius: "999px",
-                padding: "6px 11px",
+                borderRadius: "10px",
+                padding: "6px 10px",
                 fontSize: "0.73rem",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -847,7 +870,7 @@ export default function CircleSearchModal({
               title="Toggle Pencil Sketch Pad / Image Upload"
             >
               <Pencil size={12} />
-              <span>{showTopInputPanel ? "Hide Pad" : "Pencil Pad / Photo"}</span>
+              <span className="circle-btn-text">{showTopInputPanel ? "Hide Pad" : "Pad / Photo"}</span>
             </button>
 
             <button
@@ -858,15 +881,15 @@ export default function CircleSearchModal({
                 color: "#94a3b8",
                 cursor: "pointer",
                 borderRadius: "50%",
-                width: "32px",
-                height: "32px",
+                width: "30px",
+                height: "30px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
               title="Close (ESC)"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
           </div>
         </div>

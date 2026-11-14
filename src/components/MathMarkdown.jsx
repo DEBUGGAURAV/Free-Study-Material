@@ -9,13 +9,37 @@ import { useTechFlags } from "../utils/techFlagsStore";
  */
 function renderMathSafely(mathText, isBlock = false) {
   try {
-    const clean = String(mathText || "").trim();
+    let clean = String(mathText || "").trim();
     if (!clean) return "";
-    return katex.renderToString(clean, {
+    clean = clean.replace(/^\\\[|\\\]$/g, "").replace(/^\$\$|\$\$$/g, "").trim();
+
+    let rendered = katex.renderToString(clean, {
       displayMode: isBlock,
       throwOnError: false,
       output: "htmlAndMathml",
     });
+
+    // If KaTeX encountered a parse error, attempt auto-repair for common AI syntax quirks (unbalanced escaped braces, trailing delimiters)
+    if (rendered.includes("katex-error")) {
+      let repaired = clean.replace(/\\([\{\}])/g, "$1");
+      const openCount = (repaired.match(/\{/g) || []).length;
+      const closeCount = (repaired.match(/\}/g) || []).length;
+      if (closeCount > openCount) {
+        repaired = repaired.replace(/\}+$/, "");
+      } else if (openCount > closeCount) {
+        repaired += "}".repeat(openCount - closeCount);
+      }
+      const retry = katex.renderToString(repaired, {
+        displayMode: isBlock,
+        throwOnError: false,
+        output: "htmlAndMathml",
+      });
+      if (!retry.includes("katex-error")) {
+        return retry;
+      }
+    }
+
+    return rendered;
   } catch (err) {
     return `<code class="math-fallback">${escapeHtml(mathText)}</code>`;
   }
@@ -63,9 +87,10 @@ function formatInlineMarkdown(text) {
     return `%%%MATH_HOLDER_${idx}%%%`;
   });
 
-  // Extract inline math $ ... $ (ignoring currency numbers like $50 or $100)
+  // Extract inline math $ ... $ (ignoring pure currency numbers like $50 or $100, but allowing formulas like $50-60\text{ Hz}$, $1.2\text{ A}$, $5.0\text{V}$)
   safeText = safeText.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, eq) => {
-    if (/^\s*\d/.test(eq)) return match;
+    const isPureCurrency = /^\s*[\d,]+(?:\.\d{1,2})?\s*$/.test(eq);
+    if (isPureCurrency) return match;
     const clean = eq.trim();
     if (!clean) return prefix;
     const idx = mathPlaceholders.length;
@@ -130,8 +155,11 @@ function renderMarkdownBlockToHtml(content = "") {
 
   const blockPlaceholders = [];
 
+  // Normalize newlines
+  let preprocessed = String(content).replace(/\r\n/g, "\n");
+
   // Step 1: Pre-extract multi-line Block Math $$...$$ BEFORE line splitting
-  let preprocessed = String(content).replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
+  preprocessed = preprocessed.replace(/\$\$([\s\S]*?)\$\$/g, (_, eq) => {
     const clean = eq.trim();
     if (!clean) return "";
     const idx = blockPlaceholders.length;
@@ -157,9 +185,8 @@ function renderMarkdownBlockToHtml(content = "") {
     return `\n\n%%%MATH_BLOCK_${idx}%%%\n\n`;
   });
 
-  // Step 4: Discard orphan delimiters on isolated lines
-  preprocessed = preprocessed.replace(/^\s*\\\]\s*$/gm, "");
-  preprocessed = preprocessed.replace(/^\s*\\\[\s*$/gm, "");
+  // Step 4: Discard orphan delimiters anywhere in the text so rogue \[ or \] are never printed
+  preprocessed = preprocessed.replace(/\\\]/g, "").replace(/\\\[/g, "");
 
   const lines = preprocessed.split("\n");
   const blocks = [];

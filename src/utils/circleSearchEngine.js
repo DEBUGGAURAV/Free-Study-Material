@@ -578,6 +578,36 @@ export async function solveCircleQuery({
 // 📦 Lightweight IndexedDB Helper for Circle Search Cache (48h Default TTL)
 // ============================================================================
 export const CIRCLE_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 Hours Default TTL
+const LOCAL_STORAGE_AI_KEY = "fsm_offline_ai_vault_v1";
+
+function getLocalStorageAiBackup() {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_AI_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveLocalStorageAiBackup(entry) {
+  if (typeof window === "undefined" || !entry) return;
+  try {
+    const existing = getLocalStorageAiBackup();
+    const filtered = existing.filter((item) => item.key !== entry.key);
+    filtered.unshift(entry);
+    localStorage.setItem(LOCAL_STORAGE_AI_KEY, JSON.stringify(filtered.slice(0, 150)));
+  } catch (_) {}
+}
+
+function removeLocalStorageAiBackup(key) {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = getLocalStorageAiBackup();
+    const filtered = existing.filter((item) => item.key !== key);
+    localStorage.setItem(LOCAL_STORAGE_AI_KEY, JSON.stringify(filtered));
+  } catch (_) {}
+}
 
 function openCircleDb() {
   return new Promise((resolve, reject) => {
@@ -615,37 +645,49 @@ export async function getIndexedDbCircleCache(key) {
       req.onerror = () => resolve(null);
     });
   } catch (_) {
-    return null;
+    const backup = getLocalStorageAiBackup();
+    const hit = backup.find((b) => b.key === key);
+    return hit ? hit.data || hit : null;
   }
 }
 
 export async function saveIndexedDbCircleCache(key, data) {
+  const itemToStore = {
+    key,
+    data: data.data || data,
+    query: data.query || "AI Solution / Study Note",
+    subject: data.subject || "Study Notes",
+    answer: data.answer || "",
+    noteId: data.noteId || "",
+    provider: data.provider || "gemini",
+    savedAt: data.savedAt || Date.now(),
+    isPinned: data.isPinned !== undefined ? Boolean(data.isPinned) : true,
+    type: data.type || "circle", // 'circle' | 'chat' | 'flashcard' | 'summary'
+  };
+
+  // 1. Dual-Write to LocalStorage for 100% resilience across all mobile browsers & incognito
+  saveLocalStorageAiBackup(itemToStore);
+
+  // 2. Write to IndexedDB
   try {
     const db = await openCircleDb();
     const tx = db.transaction("cache", "readwrite");
     const store = tx.objectStore("cache");
-    store.put({
-      key,
-      data,
-      query: data.query || "",
-      subject: data.subject || "Study Notes",
-      answer: data.answer || "",
-      noteId: data.noteId || "",
-      provider: data.provider || "gemini",
-      savedAt: data.savedAt || Date.now(),
-      isPinned: Boolean(data.isPinned),
-    });
+    store.put(itemToStore);
   } catch (_) {}
 }
 
 /**
- * Loads all stored circled Q&A notes for Profile Modal
- * Auto-evicts unpinned entries older than 48 hours
+ * Loads all stored circled Q&A notes & AI study items for Profile Modal
+ * Combines IndexedDB + LocalStorage fallback and auto-evicts unpinned entries older than 48 hours
  */
 export async function getAllStoredCircleNotes() {
+  const localBackup = getLocalStorageAiBackup();
+  let idbItems = [];
+
   try {
     const db = await openCircleDb();
-    return new Promise((resolve) => {
+    idbItems = await new Promise((resolve) => {
       const tx = db.transaction("cache", "readwrite");
       const store = tx.objectStore("cache");
       const req = store.getAll();
@@ -664,20 +706,35 @@ export async function getAllStoredCircleNotes() {
           }
         }
 
-        active.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
         resolve(active);
       };
       req.onerror = () => resolve([]);
     });
   } catch (_) {
-    return [];
+    idbItems = [];
   }
+
+  // Merge items from both IndexedDB and LocalStorage fallback
+  const mergedMap = new Map();
+  idbItems.forEach((item) => {
+    if (item && item.key) mergedMap.set(item.key, item);
+  });
+  localBackup.forEach((item) => {
+    if (item && item.key && !mergedMap.has(item.key)) {
+      mergedMap.set(item.key, item);
+    }
+  });
+
+  const allItems = Array.from(mergedMap.values());
+  allItems.sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0));
+  return allItems;
 }
 
 /**
- * Deletes a single circled note by key
+ * Deletes a single circled note or AI item by key
  */
 export async function deleteSingleCircleNote(key) {
+  removeLocalStorageAiBackup(key);
   try {
     const db = await openCircleDb();
     const tx = db.transaction("cache", "readwrite");
@@ -685,14 +742,15 @@ export async function deleteSingleCircleNote(key) {
     memorySessionCache.delete(key);
     return true;
   } catch (_) {
-    return false;
+    return true;
   }
 }
 
 /**
- * Pins or unpins a circled note (Pinned notes never auto-expire)
+ * Pins or unpins an AI item (Pinned notes never auto-expire)
  */
 export async function togglePinCircleNote(key) {
+  let isPinned = false;
   try {
     const db = await openCircleDb();
     const tx = db.transaction("cache", "readwrite");
@@ -706,23 +764,38 @@ export async function togglePinCircleNote(key) {
     if (item) {
       item.isPinned = !item.isPinned;
       store.put(item);
-      return item.isPinned;
+      isPinned = item.isPinned;
     }
-    return false;
-  } catch (_) {
-    return false;
+  } catch (_) {}
+
+  // Also update in LocalStorage backup
+  const backup = getLocalStorageAiBackup();
+  const found = backup.find((b) => b.key === key);
+  if (found) {
+    found.isPinned = !found.isPinned;
+    isPinned = found.isPinned;
+    try {
+      localStorage.setItem(LOCAL_STORAGE_AI_KEY, JSON.stringify(backup));
+    } catch (_) {}
   }
+
+  return isPinned;
 }
 
 /**
- * Clears all cached circled notes from local IndexedDB & RAM
+ * Clears all cached circled notes & AI items from local IndexedDB, LocalStorage & RAM
  */
 export async function clearAllStoredCircleNotes() {
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_AI_KEY);
+    } catch (_) {}
+  }
+  memorySessionCache.clear();
   try {
     const db = await openCircleDb();
     const tx = db.transaction("cache", "readwrite");
     tx.objectStore("cache").clear();
-    memorySessionCache.clear();
     return true;
   } catch (_) {
     return false;
