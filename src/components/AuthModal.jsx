@@ -1324,7 +1324,7 @@ export default function AuthModal({
 
   return (
     <div
-      className="modal-overlay"
+      className="modal-overlay auth-modal-overlay"
       onMouseMove={handleSceneMouseMove}
       onMouseLeave={handleSceneMouseLeave}
       onClick={() => {
@@ -1340,7 +1340,7 @@ export default function AuthModal({
       <div
         ref={sceneRef}
         className="modal-content auth-3d-scene"
-        style={{ maxWidth: "380px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none" }}
+        style={{ maxWidth: "380px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none", overflow: "visible", maxHeight: "none" }}
         onClick={(e) => e.stopPropagation()}
         onMouseMove={handleSceneMouseMove}
         onMouseLeave={handleSceneMouseLeave}
@@ -1991,10 +1991,10 @@ export default function AuthModal({
                       alignItems: "center",
                       justifyContent: "flex-start",
                       gap: "14px",
-                      padding: "12px 16px",
+                      padding: "10px 14px",
                       borderRadius: "14px",
                       cursor: "pointer",
-                      marginBottom: "16px",
+                      marginBottom: "10px",
                       position: "relative",
                       overflow: "hidden",
                     }}
@@ -2002,8 +2002,8 @@ export default function AuthModal({
                     <div className="auth-laser-beam"></div>
                     <div
                       style={{
-                        width: "38px",
-                        height: "38px",
+                        width: "36px",
+                        height: "36px",
                         borderRadius: "10px",
                         background: "linear-gradient(135deg, #2563eb, #4f46e5)",
                         display: "flex",
@@ -2013,14 +2013,14 @@ export default function AuthModal({
                         boxShadow: "0 2px 8px rgba(37, 99, 235, 0.28)",
                       }}
                     >
-                      <Fingerprint size={22} color="#ffffff" />
+                      <Fingerprint size={20} color="#ffffff" />
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left" }}>
-                      <span style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.2px" }}>
+                      <span style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.2px" }}>
                         {passkeyLoading ? "Authenticating with Biometrics..." : "One-Touch Biometric Sign In"}
                       </span>
-                      <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px", fontWeight: 600 }}>
+                      <span style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px", fontWeight: 600 }}>
                         Fast Face ID / Fingerprint / Passkey
                       </span>
                     </div>
@@ -2038,29 +2038,29 @@ export default function AuthModal({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "10px",
-                    padding: "11px 16px",
+                    padding: "9px 14px",
                     background: "#ffffff",
                     color: "#1f2937",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "var(--radius-md)",
-                    fontSize: "0.9rem",
+                    border: "1.5px solid #cbd5e1",
+                    borderRadius: "10px",
+                    fontSize: "0.86rem",
                     fontWeight: 600,
                     cursor: "pointer",
                     transition: "all 0.2s ease",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                    marginBottom: "16px",
+                    boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+                    marginBottom: "10px",
                   }}
                 >
                   <GoogleIcon />
                   <span>Continue with Google</span>
                 </button>
 
-                <div style={{ display: "flex", alignItems: "center", margin: "16px 0", gap: "10px" }}>
-                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
-                  <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <div style={{ display: "flex", alignItems: "center", margin: "10px 0", gap: "10px" }}>
+                  <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
+                  <span style={{ fontSize: "0.72rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
                     or sign in with password
                   </span>
-                  <div style={{ flex: 1, height: "1px", background: "rgba(255, 255, 255, 0.1)" }} />
+                  <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
                 </div>
 
                 <form onSubmit={handleSignIn} autoComplete="off">
@@ -2255,7 +2255,7 @@ export default function AuthModal({
               type="submit"
               className="btn-primary"
               disabled={loading}
-              style={{ width: "100%", justifyContent: "center", marginTop: "16px" }}
+              style={{ width: "100%", justifyContent: "center", marginTop: "12px" }}
             >
               {loading ? (
                 <>
@@ -2270,40 +2270,8 @@ export default function AuthModal({
               )}
             </button>
 
-            {!isMaintenanceMode && (
-              <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "16px", marginBottom: "8px" }}>
-                New student?{" "}
-                <span
-                  className="auth-light-link"
-                  style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
-                  onClick={() => {
-                    resetAllFormFields();
-                    setTab("signup");
-                  }}
-                >
-                  Create Account
-                </span>
-              </p>
-            )}
-
-            <div
-              style={{
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.06)",
-                borderRadius: "8px",
-                padding: "8px 12px",
-                fontSize: "0.72rem",
-                color: "var(--text-dim)",
-                marginTop: "10px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              <span style={{ fontSize: "0.9rem" }}>ℹ️</span>
-              <span>
-                <strong>Account Retention:</strong> Inactive student accounts (90+ days without login) are safely deleted.
-              </span>
+            <div style={{ textAlign: "center", fontSize: "0.68rem", color: "#94a3b8", marginTop: "8px", fontWeight: 500 }}>
+              🔒 Inactive student accounts (90+ days) are safely purged.
             </div>
           </form>
         </div>
@@ -2834,7 +2802,7 @@ export default function AuthModal({
 
         {/* Bottom Flip Trigger on Front Face */}
         {tab === "signin" && !isGoogleOnboarding && !showPostRegPasskeyPrompt && (
-          <div style={{ textAlign: "center", marginTop: "14px", fontSize: "0.82rem", color: "#64748b" }}>
+          <div style={{ textAlign: "center", marginTop: "10px", fontSize: "0.82rem", color: "#64748b" }}>
             New student scholar?{" "}
             <button
               type="button"
