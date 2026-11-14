@@ -622,7 +622,11 @@ export default function AdminModal({
       setStudents(res?.users || []);
       setStudentsTotal(res?.totalCount || 0);
     } catch (err) {
-      setStudentsError(err.message || "Failed to load student registry");
+      let rawMsg = err.message || "Failed to load student registry";
+      if (typeof rawMsg === "string" && (rawMsg.includes("<") || rawMsg.includes("Suspended") || rawMsg.includes("DOCTYPE") || rawMsg.includes("html"))) {
+        rawMsg = "Backend cluster node is waking up from sleep. Click Refresh below to load students.";
+      }
+      setStudentsError(rawMsg);
     } finally {
       setStudentsLoading(false);
     }
@@ -2187,25 +2191,27 @@ export default function AdminModal({
             Server #2 CONNECTED
           </span>
 
-          {/* Server #3 Connected */}
-          <span
-            style={{
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.45)",
-              color: "#34d399",
-              padding: "4px 10px",
-              borderRadius: "6px",
-              fontSize: "0.72rem",
-              fontWeight: 800,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-            }}
-            title={`${BACKEND_CLUSTER_URLS[2] || "Backend 3"} is connected to Maintenance Mode`}
-          >
-            <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
-            Server #3 CONNECTED
-          </span>
+          {/* Server #3 Connected (if 3-node cluster) */}
+          {BACKEND_CLUSTER_URLS[2] && (
+            <span
+              style={{
+                background: "rgba(16, 185, 129, 0.15)",
+                border: "1px solid rgba(16, 185, 129, 0.45)",
+                color: "#34d399",
+                padding: "4px 10px",
+                borderRadius: "6px",
+                fontSize: "0.72rem",
+                fontWeight: 800,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+              title={`${BACKEND_CLUSTER_URLS[2] || "Backend 3"} is connected to Maintenance Mode`}
+            >
+              <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }}></span>
+              Server #3 CONNECTED
+            </span>
+          )}
         </div>
       </div>
 

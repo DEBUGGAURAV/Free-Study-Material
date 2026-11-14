@@ -1527,10 +1527,10 @@ export default function VirtualPdfReader({
               setCdnTransferPercent(100);
               setRealSourceInfo({
                 id: "worker",
-                label: "⚡ Tier 2: Local Server",
-                short: "Tier 2: Local Server",
-                details: "3.5s Fast Timeout / HIT • Instant 0ms Save / Open",
-                colo: "Local",
+                label: "⚡ Tier 2: Edge CDN (Cloudflare Global)",
+                short: "Tier 2: Edge CDN (1ms)",
+                details: "Cloudflare Edge CDN Cache Hit • 1ms Latency Global Stream",
+                colo: "Edge",
                 icon: "⚡",
                 color: "#38bdf8",
                 bgColor: "rgba(56, 189, 248, 0.14)",

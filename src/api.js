@@ -240,11 +240,11 @@ async function request(endpoint, options = {}) {
     data = JSON.parse(rawText);
   } catch (_) {
     // Sanitize any raw HTML or error pages (e.g. Render 503 / Service Suspended)
-    if (rawText && (rawText.includes("<!DOCTYPE") || rawText.includes("<html") || rawText.includes("Service Suspended") || rawText.includes("<body"))) {
+    if (rawText && (rawText.includes("<") || rawText.includes("<!DOCTYPE") || rawText.includes("<html") || rawText.includes("Service Suspended") || rawText.includes("<body"))) {
       data = {
         success: false,
         error: "CLUSTER_WAKING_UP",
-        message: "Cloud server is waking up. Please click refresh in a few seconds.",
+        message: "Cloud cluster node is waking up from sleep. Please click refresh in a few seconds.",
       };
     } else if (rawText && rawText.length < 500) {
       data = { message: rawText.trim() };
@@ -253,6 +253,9 @@ async function request(endpoint, options = {}) {
 
   if (!res.ok) {
     let errMsg = data.message || data.error || data.details || (typeof data === "string" && data ? data : "");
+    if (typeof errMsg === "string" && (errMsg.includes("<") || errMsg.includes("Service Suspended") || errMsg.includes("<!DOCTYPE") || errMsg.includes("html"))) {
+      errMsg = "Cloud cluster node is waking up from sleep. Please click refresh in a few seconds.";
+    }
     if (!errMsg) {
       if (res.status === 500) {
         errMsg = "Backend server error (Status 500). Please verify your backend server is running on port 5000 (`npm start`).";

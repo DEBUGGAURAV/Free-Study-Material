@@ -104,7 +104,6 @@ function createInitialNode(id, name, url, role, defaults = {}) {
 }
 
 const DEFAULT_CLUSTER_URLS = [
-  "https://freestudymaterial.onrender.com",
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
 ];
@@ -112,21 +111,9 @@ const DEFAULT_CLUSTER_URLS = [
 const clusterNodes = [
   createInitialNode(
     "backend_1",
-    "Backend #1 (Old Backend Server)",
+    "Backend #1 (Active Node #1)",
     backendClusterUrls[0] || DEFAULT_CLUSTER_URLS[0],
-    "Old Backend Server (Position #1)",
-    {
-      status: "CHECKING",
-      httpCode: 0,
-      latencyMs: 0,
-      isHealthy: false,
-    }
-  ),
-  createInitialNode(
-    "backend_2",
-    "Backend #2 (Active Node #2)",
-    backendClusterUrls[1] || DEFAULT_CLUSTER_URLS[1],
-    "Active Production Node #2",
+    "Active Production Node #1",
     {
       status: "ONLINE",
       httpCode: 200,
@@ -135,10 +122,10 @@ const clusterNodes = [
     }
   ),
   createInitialNode(
-    "backend_3",
-    "Backend #3 (Active Node #3)",
-    backendClusterUrls[2] || DEFAULT_CLUSTER_URLS[2],
-    "Active Production Node #3",
+    "backend_2",
+    "Backend #2 (Active Node #2)",
+    backendClusterUrls[1] || DEFAULT_CLUSTER_URLS[1],
+    "Active Production Node #2",
     {
       status: "ONLINE",
       httpCode: 200,

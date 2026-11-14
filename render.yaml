@@ -16,13 +16,13 @@ services:
       - key: NODE_ENV
         value: production
       - key: CLIENT_URL
-        value: https://freestudymaterial.onrender.com
+        value: https://freestudymaterial.pages.dev
       - key: APP_URL
-        value: https://freestudymaterial.onrender.com
+        value: https://freestudymaterial.pages.dev
       - key: BACKEND_CLUSTER_URLS
-        value: https://freestudymaterial.onrender.com,https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
       - key: VITE_BACKEND_CLUSTER_URLS
-        value: https://freestudymaterial.onrender.com,https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
+        value: https://freestudymaterial1.onrender.com,https://freestudymaterial2.onrender.com
       - key: CLUSTER_SYNC_SECRET
         sync: false
       - key: GROQ_MODEL

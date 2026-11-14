@@ -542,7 +542,7 @@ function NoteCard({
                   title={downloadProgress.tierLabel || "Waterfall Pipeline"}
                 >
                   {downloadProgress.icon || "⚡"}{" "}
-                  {downloadProgress.tierLabel || (downloadProgress.source === "storage" ? "Cloud Vault" : "Local Server")}
+                  {downloadProgress.tierLabel || (downloadProgress.tier === 1 ? "Client Cache (0ms)" : downloadProgress.tier === 2 ? "Edge CDN (1ms)" : downloadProgress.tier === 3 ? "Server SSD (100ms)" : "Cloud Vault")}
                 </span>
               </span>
 

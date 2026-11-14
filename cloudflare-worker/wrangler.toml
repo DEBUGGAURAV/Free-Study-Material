@@ -13,8 +13,8 @@ crons = ["*/12 * * * *"]
 [vars]
 ORIGIN_URL = "https://freestudymaterial1.onrender.com"
 BACKUP_ORIGIN_URL_1 = "https://freestudymaterial2.onrender.com"
-BACKUP_ORIGIN_URL_2 = "https://freestudymaterial.onrender.com"
-APP_URL = "https://freestudymaterial.onrender.com"
+BACKUP_ORIGIN_URL_2 = "https://freestudymaterial1.onrender.com"
+APP_URL = "https://freestudymaterial.pages.dev"
 GROQ_MODEL = "openai/gpt-oss-20b"
 GROQ_VISION_MODELS = "meta-llama/llama-4-scout-17b-16e-instruct,meta-llama/llama-4-maverick-17b-128e-instruct"
 GEMINI_MODEL = "gemini-flash-lite-latest"

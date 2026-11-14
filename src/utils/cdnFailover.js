@@ -375,14 +375,14 @@ export async function acquireNoteDocument(noteId, {
   }
 
   // =========================================================================
-  // TIER 2: Local Server - Strict 3.5s Timeout
+  // TIER 2: Edge CDN (Cloudflare Global Edge Cache • 1ms)
   // =========================================================================
   if (CF_WORKER) {
     onProgress({
       tier: 2,
-      tierLabel: "Tier 2: Local Server",
+      tierLabel: "Tier 2: Edge CDN (Cloudflare Global)",
       percent: 15,
-      speed: "3.5s Fast Timeout / HIT...",
+      speed: "Edge CDN Cache Check (1ms)...",
       loadedMB: "0",
       totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
       timeRemaining: "Estimating...",
@@ -396,7 +396,7 @@ export async function acquireNoteDocument(noteId, {
       }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
 
       const workerController = new AbortController();
-      const workerTimeout = setTimeout(() => workerController.abort(), 3500); // 3.5s strict timeout
+      const workerTimeout = setTimeout(() => workerController.abort(), 1800); // 1.8s fast timeout for edge worker
       if (signal) {
         signal.addEventListener("abort", () => workerController.abort(), { once: true });
       }
@@ -419,7 +419,7 @@ export async function acquireNoteDocument(noteId, {
         const buffer = await streamResponseBody(workerRes, {
           onProgress,
           tier: 2,
-          tierLabel: "Tier 2: Local Server (HIT)",
+          tierLabel: "Tier 2: Edge CDN (HIT • 1ms)",
           icon: "⚡",
           source: "worker",
           expectedSize: note?.compressedSize || note?.fileSize || 0,
@@ -512,23 +512,53 @@ export async function acquireNoteDocument(noteId, {
     throw new Error(errMsg);
   }
 
-  const realSource = serverRes.headers.get("x-real-source") || "";
-  const isServerSsd = realSource === "DISK_CACHE" || realSource === "RAM_BUFFER";
-  const tierNum = isServerSsd ? 3 : 4;
-  const tierLabel = isServerSsd
-    ? "Tier 3: Server SSD Disk (Zero-Copy 100ms)"
-    : "Tier 4: Cloud Storage";
-  const tierIcon = isServerSsd ? "💽" : "☁️";
+  const realSource = (serverRes.headers.get("x-real-source") || "").toUpperCase();
+  const cfCache = (serverRes.headers.get("cf-cache-status") || "").toUpperCase();
+  const edgeCache = (serverRes.headers.get("x-edge-cache") || "").toUpperCase();
+  const dataSource = (serverRes.headers.get("x-data-source") || "").toLowerCase();
+
+  const isEdgeCdn =
+    cfCache === "HIT" ||
+    edgeCache === "HIT" ||
+    realSource === "CLOUDFLARE_WORKER" ||
+    dataSource === "cdn";
+
+  const isServerSsd =
+    realSource === "DISK_CACHE" ||
+    realSource === "RAM_BUFFER" ||
+    dataSource === "disk" ||
+    dataSource === "ram";
+
+  let tierNum = 4;
+  let tierLabel = "Tier 4: Cloud Storage Vault";
+  let tierIcon = "☁️";
+  let tierSource = "telegram";
+
+  if (isEdgeCdn) {
+    tierNum = 2;
+    tierLabel = "Tier 2: Edge CDN (Cloudflare 1ms)";
+    tierIcon = "⚡";
+    tierSource = "worker";
+  } else if (isServerSsd) {
+    tierNum = 3;
+    tierLabel = "Tier 3: Server SSD Disk (Zero-Copy 100ms)";
+    tierIcon = "💽";
+    tierSource = "disk";
+  }
 
   onProgress({
     tier: tierNum,
     tierLabel: `Streaming from ${tierLabel}...`,
     percent: 35,
-    speed: isServerSsd ? "Zero-Copy SSD Stream (100ms)" : "Stream Chunks + Auto-Save to SSD",
+    speed: isEdgeCdn
+      ? "Edge CDN Stream (1ms)"
+      : isServerSsd
+      ? "Zero-Copy SSD Stream (100ms)"
+      : "Stream Chunks + Auto-Save to SSD",
     loadedMB: "0",
     totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
     timeRemaining: "Streaming...",
-    source: isServerSsd ? "disk" : "telegram",
+    source: tierSource,
     icon: tierIcon,
   });
 
@@ -537,7 +567,7 @@ export async function acquireNoteDocument(noteId, {
     tier: tierNum,
     tierLabel,
     icon: tierIcon,
-    source: isServerSsd ? "disk" : "telegram",
+    source: tierSource,
     expectedSize: note?.compressedSize || note?.fileSize || 0,
     signal,
   });

@@ -23,7 +23,6 @@ export const SITE_DESCRIPTION =
   `${SITE_NAME} — High performance university study notes, engineering blueprints, and cloud lecture archives.`;
 
 export const DEFAULT_CLUSTER_URLS = [
-  "https://freestudymaterial.onrender.com",
   "https://freestudymaterial1.onrender.com",
   "https://freestudymaterial2.onrender.com",
 ];
@@ -39,16 +38,16 @@ export const BACKEND_CLUSTER_URLS = (() => {
         return "";
       }
     })
-    .filter((url, index, urls) => url && urls.indexOf(url) === index);
+    .filter((url, index, urls) => url && urls.indexOf(url) === index && !url.includes("freestudymaterial.onrender.com"));
 
-  if (envUrls.length >= 3) return envUrls;
+  if (envUrls.length >= 2) return envUrls;
   const merged = [...envUrls];
   for (const def of DEFAULT_CLUSTER_URLS) {
-    if (!merged.includes(def) && merged.length < 3) {
+    if (!merged.includes(def) && merged.length < 2) {
       merged.push(def);
     }
   }
-  return merged.length >= 3 ? merged : DEFAULT_CLUSTER_URLS;
+  return merged.length >= 2 ? merged : DEFAULT_CLUSTER_URLS;
 })();
 
 /**

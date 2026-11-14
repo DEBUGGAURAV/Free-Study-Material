@@ -18,17 +18,51 @@ export async function onRequest(context) {
   const url = new URL(request.url);
 
   // 1. Handle CORS Preflight OPTIONS
+  const reqOrigin = request.headers.get("Origin");
   if (request.method === "OPTIONS") {
+    const corsHeaders = {
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control, X-Admin-Bypass, X-Cluster-Sync, X-Direct-Origin, Range",
+      "Access-Control-Max-Age": "86400",
+    };
+    if (reqOrigin) {
+      corsHeaders["Access-Control-Allow-Origin"] = reqOrigin;
+      corsHeaders["Access-Control-Allow-Credentials"] = "true";
+    } else {
+      corsHeaders["Access-Control-Allow-Origin"] = "*";
+    }
     return new Response(null, {
       status: 204,
-      headers: {
-        "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control, X-Admin-Bypass, X-Cluster-Sync",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400",
-      },
+      headers: corsHeaders,
     });
+  }
+
+  // 1.1 Cloudflare Edge CDN Cache Check (Tier 2: 1ms Instant Hit for PDF streams)
+  const isStreamRequest = request.method === "GET" && url.pathname.includes("/stream");
+  const edgeCache = typeof caches !== "undefined" ? caches.default : null;
+  const cacheKey = isStreamRequest ? new Request(url.origin + url.pathname, { method: "GET" }) : null;
+
+  if (isStreamRequest && edgeCache && cacheKey) {
+    try {
+      const cached = await edgeCache.match(cacheKey);
+      if (cached) {
+        const cHeaders = new Headers(cached.headers);
+        cHeaders.set("CF-Cache-Status", "HIT");
+        cHeaders.set("X-Edge-Cache", "HIT");
+        cHeaders.set("X-Real-Source", "CLOUDFLARE_WORKER");
+        cHeaders.set("X-Data-Source", "cdn");
+        if (reqOrigin) {
+          cHeaders.set("Access-Control-Allow-Origin", reqOrigin);
+          cHeaders.set("Access-Control-Allow-Credentials", "true");
+        } else {
+          cHeaders.set("Access-Control-Allow-Origin", "*");
+        }
+        return new Response(cached.body, {
+          status: cached.status,
+          headers: cHeaders,
+        });
+      }
+    } catch (_) {}
   }
 
   // 2. Multi-Origin Failover Proxy with Circuit-Breaker Sorting
@@ -129,10 +163,40 @@ export async function onRequest(context) {
         if (rawCookies) resHeaders.set("set-cookie", rawCookies);
       }
 
-      resHeaders.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
-      resHeaders.set("Access-Control-Allow-Credentials", "true");
+      if (reqOrigin) {
+        resHeaders.set("Access-Control-Allow-Origin", reqOrigin);
+        resHeaders.set("Access-Control-Allow-Credentials", "true");
+      } else {
+        resHeaders.set("Access-Control-Allow-Origin", "*");
+      }
       resHeaders.set("X-Load-Balancer", "Cloudflare Edge Intelligent Failover");
       resHeaders.set("X-Served-By", origin);
+
+      // Save streamed document into Cloudflare Edge Cache (Tier 2)
+      if (isStreamRequest && edgeCache && cacheKey && response.status === 200 && response.body) {
+        try {
+          const cacheHeaders = new Headers(resHeaders);
+          cacheHeaders.set("Cache-Control", "public, max-age=604800, s-maxage=604800, immutable");
+          cacheHeaders.set("CF-Cache-Status", "HIT");
+          cacheHeaders.set("X-Edge-Cache", "HIT");
+          cacheHeaders.set("X-Real-Source", "CLOUDFLARE_WORKER");
+          cacheHeaders.set("X-Data-Source", "cdn");
+          const [clientBody, cacheBody] = response.body.tee();
+          const toCache = new Response(cacheBody, {
+            status: 200,
+            headers: cacheHeaders,
+          });
+          if (typeof context.waitUntil === "function") {
+            context.waitUntil(edgeCache.put(cacheKey, toCache));
+          } else {
+            edgeCache.put(cacheKey, toCache).catch(() => {});
+          }
+          return new Response(clientBody, {
+            status: 200,
+            headers: resHeaders,
+          });
+        } catch (_) {}
+      }
 
       return new Response(response.body, {
         status: response.status,

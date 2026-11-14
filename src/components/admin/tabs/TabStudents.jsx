@@ -318,7 +318,7 @@ export default function TabStudents(props) {
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "1.1rem" }}>⚠️</span>
             <span>
-              {String(studentsError).includes("<") || String(studentsError).includes("Suspended")
+              {String(studentsError).includes("<") || String(studentsError).includes("Suspended") || String(studentsError).includes("DOCTYPE") || String(studentsError).includes("html")
                 ? "Backend cluster node is waking up from sleep. Click Refresh below to load students."
                 : studentsError}
             </span>
