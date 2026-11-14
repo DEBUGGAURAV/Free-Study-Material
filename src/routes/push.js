@@ -6,6 +6,10 @@
 const express = require("express");
 const router = express.Router();
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { apiLimiter } = require("../middleware/rateLimit");
+
+// 🛡️ Protect push subscription endpoints against high-volume bot flooding
+router.use(apiLimiter);
 const {
   getPublicVapidKey,
   subscribeDevice,

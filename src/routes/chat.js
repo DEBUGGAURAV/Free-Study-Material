@@ -7,7 +7,7 @@ const { WebSocketServer, WebSocket } = require("ws");
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { authenticateToken, requireAuth, JWT_SECRET, setAuthCookie } = require("../middleware/auth");
-const { getClientIp } = require("../middleware/rateLimit");
+const { getClientIp, authLimiter } = require("../middleware/rateLimit");
 const { getSiteUrl } = require("../config/siteConfig");
 const {
   savePrivateRoomAudit,
@@ -1303,9 +1303,24 @@ function initChatWebSocket(server) {
           // Other admins (half_admin, sub_admin) and normal users MUST provide the exact secretCode!
           const isMain = isMainAdmin(user);
           if (room.isPrivate && !isMain) {
+            if (ws.passcodeLockoutUntil && Date.now() < ws.passcodeLockoutUntil) {
+              const waitSec = Math.max(1, Math.ceil((ws.passcodeLockoutUntil - Date.now()) / 1000));
+              return ws.send(
+                JSON.stringify({
+                  type: "error",
+                  message: `🔒 Too many failed passcode attempts. Please wait ${waitSec} seconds before trying again.`,
+                })
+              );
+            }
+
             const cleanCode = (room.secretCode || "").trim();
             const providedCode = (secretCode || "").trim();
             if (cleanCode && cleanCode !== providedCode) {
+              ws.failedPasscodeAttempts = (ws.failedPasscodeAttempts || 0) + 1;
+              if (ws.failedPasscodeAttempts >= 5) {
+                ws.passcodeLockoutUntil = Date.now() + 30000;
+                ws.failedPasscodeAttempts = 0;
+              }
               return ws.send(
                 JSON.stringify({
                   type: "error",
@@ -1313,6 +1328,8 @@ function initChatWebSocket(server) {
                 })
               );
             }
+            ws.failedPasscodeAttempts = 0;
+            ws.passcodeLockoutUntil = null;
           }
 
           // Leave previous room if any
@@ -3137,7 +3154,7 @@ router.post("/rooms/leave", authenticateToken, requireAuth, async (req, res) => 
  * POST /api/chat/rooms/join
  * Verifies secretCode and returns room details
  */
-router.post("/rooms/join", authenticateToken, requireAuth, async (req, res) => {
+router.post("/rooms/join", authLimiter, authenticateToken, requireAuth, async (req, res) => {
   try {
     const user = req.user;
     const { secretCode, roomId } = req.body || {};

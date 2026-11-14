@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { authenticateToken, requireAdmin, requireAuth } = require("../middleware/auth");
 const { db } = require("../firebase");
 
 // Authenticate token on all AI routes so req.user is accurately populated
@@ -83,7 +83,7 @@ function studentAiLimiter(req, res, next) {
  * 🎓 POST /api/ai/ask
  * Primary student endpoint to ask questions about lecture notes (Dual Waterfall Engine + Turso Cloud Caching)
  */
-router.post("/ask", studentAiLimiter, async (req, res) => {
+router.post("/ask", studentAiLimiter, requireAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     if (!isAiGloballyEnabled()) {
@@ -180,7 +180,7 @@ router.post("/ask", studentAiLimiter, async (req, res) => {
  * ⭕ POST /api/ai/circle-search
  * Circle to Search Solver with Instant Turso L2 & RAM L1 Caching
  */
-router.post("/circle-search", studentAiLimiter, async (req, res) => {
+router.post("/circle-search", studentAiLimiter, requireAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const { query, context, noteId, subject, imageBase64, imageMimeType } = req.body;
@@ -294,7 +294,7 @@ router.post("/circle-search", studentAiLimiter, async (req, res) => {
  * Ultra-fast (~0.45s) Multimodal Vision Handwriting & Math Extractor for Circle to Search
  * Uses separate burst limiter key so circling & immediately clicking "Solve" never triggers 429!
  */
-router.post("/ocr-handwriting", async (req, res) => {
+router.post("/ocr-handwriting", requireAuth, async (req, res) => {
   try {
     const isAdmin = req.user?.role === "admin" || req.user?.role === "half_admin" || req.user?.isMainAdmin;
     if (!isAdmin) {
@@ -455,7 +455,7 @@ async function getNoteFullContext(noteId, clientContext = "") {
  * 🗂️ POST /api/ai/flashcards
  * Generates or retrieves cached study flashcards for a note/PDF (0ms Turso Cache)
  */
-router.post("/flashcards", studentAiLimiter, async (req, res) => {
+router.post("/flashcards", studentAiLimiter, requireAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const { noteId, title = "Lecture Note", context = "", subject = "", forceFresh = false } = req.body;
@@ -570,7 +570,7 @@ Return ONLY a valid JSON array of objects with this exact structure without mark
  * 📄 POST /api/ai/summary
  * Generates or retrieves cached Executive Summary for a note/PDF (0ms Turso Cache)
  */
-router.post("/summary", studentAiLimiter, async (req, res) => {
+router.post("/summary", studentAiLimiter, requireAuth, async (req, res) => {
   const startTime = Date.now();
   try {
     const { noteId, title = "Lecture Note", context = "", subject = "", forceFresh = false } = req.body;

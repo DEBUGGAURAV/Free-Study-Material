@@ -16,10 +16,25 @@
  * 0.00% Render CPU Load • 0.00% Render RAM Usage • 100% Mobile Optimized
  */
 
+function isTrustedOrigin(origin) {
+  if (!origin) return false;
+  return (
+    origin.includes("pages.dev") ||
+    origin.includes("onrender.com") ||
+    origin.includes("localhost") ||
+    origin.includes("127.0.0.1") ||
+    origin.includes("workers.dev")
+  );
+}
+
 function applyCors(headers, req) {
   const o = req ? req.headers.get("Origin") : null;
-  headers.set("Access-Control-Allow-Origin", o || "*");
-  headers.set("Access-Control-Allow-Credentials", "true");
+  if (o && isTrustedOrigin(o)) {
+    headers.set("Access-Control-Allow-Origin", o);
+    headers.set("Access-Control-Allow-Credentials", "true");
+  } else {
+    headers.set("Access-Control-Allow-Origin", "*");
+  }
   headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
   headers.set("Access-Control-Allow-Headers", "*");
   headers.set(
@@ -751,14 +766,29 @@ export default {
                 const b64 = jwtPart.replace(/-/g, "+").replace(/_/g, "/");
                 const jsonStr = atob(b64);
                 const decoded = JSON.parse(jsonStr);
-                user = {
-                  name: decoded.name || decoded.userName || "Student Scholar",
-                  email: decoded.email || "anonymous@student.edu",
-                  mobile: decoded.mobile || decoded.phone || "N/A",
-                };
+                if (decoded && (decoded.id || decoded.email)) {
+                  user = {
+                    id: decoded.id,
+                    name: decoded.name || decoded.userName || "Student Scholar",
+                    email: decoded.email || "student@freestudymaterial.edu",
+                    mobile: decoded.mobile || decoded.phone || "N/A",
+                  };
+                }
               }
             } catch (_) {}
           }
+        }
+
+        if (!user) {
+          const unauthHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(unauthHeaders, request);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              message: "Authentication required: Please sign in to access AI study assistance.",
+            }),
+            { status: 401, headers: unauthHeaders }
+          );
         }
 
         const cleanQuery = (query || "").trim();

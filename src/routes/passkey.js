@@ -46,6 +46,25 @@ const TRUSTED_PASSKEY_ORIGINS = [
   "https://freestudymaterial2.onrender.com",
 ];
 
+function isTrustedPasskeyOrigin(candidateOrigin) {
+  if (!candidateOrigin) return false;
+  try {
+    const url = new URL(candidateOrigin);
+    const host = url.hostname.toLowerCase();
+    if (host === "localhost" || host === "127.0.0.1") return true;
+    if (host.endsWith(".pages.dev") || host.endsWith(".onrender.com") || host.endsWith(".workers.dev")) return true;
+    return TRUSTED_PASSKEY_ORIGINS.some((t) => {
+      try {
+        return new URL(t).hostname.toLowerCase() === host;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Determine dynamic Relying Party ID and Expected Origin
  */
@@ -54,13 +73,18 @@ function getRpInfo(req) {
   const originHeader = req.get("origin") || req.get("referer");
   let origin = originHeader;
 
-  if (!origin) {
+  if (!origin || !isTrustedPasskeyOrigin(origin)) {
     const host = forwardedHost || req.get("host");
     if (host) {
       const proto = req.secure || req.headers["x-forwarded-proto"] === "https" ? "https" : "http";
-      origin = `${proto}://${host}`;
+      const candidate = `${proto}://${host}`;
+      if (isTrustedPasskeyOrigin(candidate)) {
+        origin = candidate;
+      } else {
+        origin = TRUSTED_PASSKEY_ORIGINS[0];
+      }
     } else {
-      origin = getSiteUrl(req);
+      origin = getSiteUrl(req) || TRUSTED_PASSKEY_ORIGINS[0];
     }
   }
 
@@ -255,7 +279,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);
-    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(Boolean);
+    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(isTrustedPasskeyOrigin);
 
     const verification = await verifyRegistrationResponse({
       response: credential,
@@ -505,7 +529,7 @@ router.post("/login-verify", async (req, res) => {
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);
-    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(Boolean);
+    const allowedOrigins = Array.from(new Set([expectedOrigin, ...TRUSTED_PASSKEY_ORIGINS])).filter(isTrustedPasskeyOrigin);
 
     const verification = await verifyAuthenticationResponse({
       response: credential,
