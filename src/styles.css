@@ -3193,6 +3193,314 @@ select option,
   background: linear-gradient(140deg, #7565ef 0%, #4b9ed1 55%, #45d6bd 100%);
 }
 
+/* ==========================================================================
+   Apple-Grade 3D Ceramic Passcard & 180° Flip Physics
+   ========================================================================== */
+
+.auth-3d-scene {
+  perspective: 1200px;
+  perspective-origin: center center;
+  width: 100%;
+  max-width: 440px;
+  margin: auto;
+  position: relative;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  --mx: 50%;
+  --my: 50%;
+  --back-mx: 50%;
+}
+
+.auth-3d-tilt {
+  transform-style: preserve-3d;
+  will-change: transform;
+  width: 100%;
+}
+
+.auth-3d-flipper {
+  position: relative;
+  width: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.75s cubic-bezier(0.34, 1.35, 0.64, 1);
+  will-change: transform;
+}
+
+.auth-3d-flipper.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.auth-card-face {
+  width: 100%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 26px;
+  background: linear-gradient(145deg, #ffffff 0%, #f9fafb 45%, #f1f5f9 100%);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 
+    0 30px 80px -20px rgba(15, 23, 42, 0.28),
+    0 15px 35px -12px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: clamp(20px, 4vw, 28px);
+  color: #0f172a;
+}
+
+.auth-card-face.face-active {
+  position: relative;
+  pointer-events: auto;
+}
+
+.auth-card-face.face-hidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+
+.auth-card-front {
+  transform: rotateY(0deg);
+}
+
+.auth-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Optical Sapphire Ice Specular Glare */
+.auth-card-front::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle 350px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.92) 0%, rgba(191, 219, 254, 0.38) 32%, transparent 68%);
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+  border-radius: 26px;
+  z-index: 5;
+}
+
+.auth-card-back::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle 350px at var(--back-mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.92) 0%, rgba(191, 219, 254, 0.38) 32%, transparent 68%);
+  mix-blend-mode: overlay;
+  opacity: 0.85;
+  border-radius: 26px;
+  z-index: 5;
+}
+
+/* 3D EMV Microchip */
+.auth-emv-chip {
+  width: 36px;
+  height: 27px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #fbbf24 0%, #fef08a 45%, #d97706 100%);
+  border: 1px solid rgba(180, 83, 9, 0.45);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 2px 5px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.auth-emv-chip-inner {
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(180, 83, 9, 0.35);
+  border-radius: 3px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+}
+.auth-emv-chip-inner div {
+  border: 0.5px solid rgba(180, 83, 9, 0.25);
+}
+
+/* Laser Scanner Beam */
+@keyframes authLaserScan {
+  0%, 100% { top: 6px; opacity: 0.8; }
+  50% { top: calc(100% - 8px); opacity: 1; }
+}
+.auth-laser-beam {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  background: #2563eb;
+  box-shadow: 0 0 10px #2563eb, 0 0 18px #60a5fa;
+  animation: authLaserScan 1.8s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Capsule Tab Navigation */
+.auth-capsule-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  margin-bottom: 18px;
+}
+.auth-capsule-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.auth-capsule-tab:hover {
+  color: #0f172a;
+}
+.auth-capsule-tab.active {
+  background: #ffffff;
+  color: #1d4ed8;
+  font-weight: 750;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+/* Form Styles for White Ceramic Card */
+.auth-card-face .form-group {
+  margin-bottom: 13px;
+  gap: 5px;
+}
+.auth-card-face .form-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 5px;
+}
+.auth-card-face .form-input,
+.auth-card-face .form-select,
+.auth-card-face .form-textarea,
+.auth-card-face input:not([type="checkbox"]):not([type="radio"]) {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.86rem;
+  font-weight: 500;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-sizing: border-box;
+}
+.auth-card-face .form-input:focus,
+.auth-card-face .form-select:focus,
+.auth-card-face .form-textarea:focus,
+.auth-card-face input:not([type="checkbox"]):not([type="radio"]):focus {
+  border-color: #2563eb !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14) !important;
+  outline: none;
+}
+.auth-card-face .btn-primary {
+  min-height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: #ffffff;
+  font-weight: 750;
+  font-size: 0.86rem;
+  border: none;
+  box-shadow: 0 6px 20px -4px rgba(37, 99, 235, 0.4);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.auth-card-face .btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.52);
+}
+.auth-card-face .btn-google-auth {
+  min-height: 42px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 0.84rem;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-card-face .btn-google-auth:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+.auth-card-face .passkey-signin-button {
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%) !important;
+  border: 1.5px solid #bfdbfe !important;
+  box-shadow: 0 4px 16px -4px rgba(37, 99, 235, 0.18) !important;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.auth-card-face .passkey-signin-button:not(:disabled):hover {
+  transform: translateY(-2px);
+  border-color: #60a5fa !important;
+  box-shadow: 0 8px 24px -6px rgba(37, 99, 235, 0.28) !important;
+}
+.auth-card-face .modal-close-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.auth-card-face .modal-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+.auth-card-face .auth-flip-trigger-btn {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-weight: 750;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.15s ease;
+}
+.auth-card-face .auth-flip-trigger-btn:hover {
+  color: #1d4ed8;
+}
+
 .auth-modal-content {
   max-width: min(460px, calc(100vw - 24px)) !important;
   padding: clamp(20px, 4vw, 30px) !important;
@@ -4797,6 +5105,30 @@ svg.lucide {
 
 .telemetry-tile:hover {
   transform: translateY(-2px) scale(1.02) !important;
+}
+
+/* Audio wave animation */
+@keyframes audioPulse {
+  0%, 100% { height: 6px; }
+  50% { height: 18px; }
+}
+
+.audio-bar-anim {
+  animation: audioPulse 1.2s ease-in-out infinite;
+}
+
+.potd-option-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.potd-option-btn:hover {
+  transform: translateY(-2px);
+  border-color: #6366f1 !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.15) !important;
+}
+
+.potd-option-btn:active {
+  transform: scale(0.98);
 }
 
 @media (max-width: 768px) {
