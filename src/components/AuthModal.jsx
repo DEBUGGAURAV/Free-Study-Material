@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, UserPlus, LogIn, AlertCircle, CheckCircle2, Send, KeyRound, ShieldCheck, ArrowLeft, RefreshCw, Mail, Eye, EyeOff, Fingerprint, Sparkles } from "lucide-react";
 import { api } from "../api";
 import { loginWithPasskey, registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
@@ -216,20 +216,20 @@ export default function AuthModal({
           display: "flex",
           alignItems: "center",
           gap: "8px",
-          background: "rgba(239, 68, 68, 0.16)",
+          background: "#fef2f2",
           border: "1.5px solid #ef4444",
-          color: "#fca5a5",
+          color: "#b91c1c",
           padding: "7px 12px",
-          borderRadius: "6px",
+          borderRadius: "8px",
           fontSize: "0.8rem",
           fontWeight: 700,
           marginBottom: "8px",
           marginTop: "4px",
-          boxShadow: "0 2px 10px rgba(239, 68, 68, 0.25)",
+          boxShadow: "0 2px 10px rgba(239, 68, 68, 0.12)",
           animation: "fadeIn 0.2s ease",
         }}
       >
-        <AlertCircle size={15} style={{ flexShrink: 0, color: "#f87171" }} />
+        <AlertCircle size={15} style={{ flexShrink: 0, color: "#dc2626" }} />
         <span style={{ lineHeight: 1.35 }}>{msg}</span>
       </div>
     );
@@ -278,6 +278,77 @@ export default function AuthModal({
       ensureGoogleScript(8000).catch(() => {});
     }
   }, [isOpen]);
+
+  // 💎 3D Luxury Tilt & Mouse Glare Physics (Zero-lag, 60fps RAF Lerp)
+  const sceneRef = useRef(null);
+  const tiltRef = useRef(null);
+  const rafRef = useRef(null);
+  const tiltStateRef = useRef({
+    targetTiltX: 0,
+    targetTiltY: 0,
+    currentTiltX: 0,
+    currentTiltY: 0,
+    targetMx: 50,
+    targetMy: 50,
+    currentMx: 50,
+    currentMy: 50,
+  });
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const animLoop = () => {
+      const state = tiltStateRef.current;
+      const k = 0.16; // Responsive spring factor
+
+      state.currentTiltX += (state.targetTiltX - state.currentTiltX) * k;
+      state.currentTiltY += (state.targetTiltY - state.currentTiltY) * k;
+      state.currentMx += (state.targetMx - state.currentMx) * k;
+      state.currentMy += (state.targetMy - state.currentMy) * k;
+
+      if (tiltRef.current) {
+        tiltRef.current.style.transform = `rotateX(${state.currentTiltX.toFixed(2)}deg) rotateY(${state.currentTiltY.toFixed(2)}deg)`;
+      }
+      if (sceneRef.current) {
+        sceneRef.current.style.setProperty("--mx", `${state.currentMx.toFixed(1)}%`);
+        sceneRef.current.style.setProperty("--my", `${state.currentMy.toFixed(1)}%`);
+        sceneRef.current.style.setProperty("--back-mx", `${(100 - state.currentMx).toFixed(1)}%`);
+      }
+
+      rafRef.current = requestAnimationFrame(animLoop);
+    };
+
+    rafRef.current = requestAnimationFrame(animLoop);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isOpen]);
+
+  const handleSceneMouseMove = (e) => {
+    if (!sceneRef.current) return;
+    const rect = sceneRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const normX = Math.max(-1, Math.min(1, (x - rect.width / 2) / (rect.width / 2)));
+    const normY = Math.max(-1, Math.min(1, (y - rect.height / 2) / (rect.height / 2)));
+
+    const maxTilt = typeof window !== "undefined" && window.innerWidth < 640 ? 3 : 8;
+    const state = tiltStateRef.current;
+    state.targetTiltX = -normY * maxTilt;
+    state.targetTiltY = normX * maxTilt;
+    state.targetMx = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    state.targetMy = Math.max(0, Math.min(100, (y / rect.height) * 100));
+  };
+
+  const handleSceneMouseLeave = () => {
+    const state = tiltStateRef.current;
+    state.targetTiltX = 0;
+    state.targetTiltY = 0;
+    state.targetMx = 50;
+    state.targetMy = 50;
+  };
 
   const handlePasskeySignIn = async () => {
     try {
@@ -1265,72 +1336,95 @@ export default function AuthModal({
       }}
     >
       <div
-        className="modal-content auth-modal-content"
-        style={{ maxWidth: "415px", width: "100%" }}
+        ref={sceneRef}
+        className="modal-content auth-3d-scene"
+        style={{ maxWidth: "440px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none" }}
         onClick={(e) => e.stopPropagation()}
+        onMouseMove={handleSceneMouseMove}
+        onMouseLeave={handleSceneMouseLeave}
       >
-        {/* Modal Header */}
-        <div className="modal-header">
-          {showPostRegPasskeyPrompt ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#1d2b42", fontSize: "0.95rem" }}>
-              <Fingerprint size={18} color="#3552c5" />
-              <span>Biometric Passkey Setup</span>
-            </div>
-          ) : isMaintenanceMode ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700, color: "#38bdf8", fontSize: "0.95rem" }}>
-              <ShieldCheck size={18} color="#38bdf8" />
-              <span>Administrator Access Only</span>
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              <button
-                className={`filter-tab ${tab === "signin" ? "active" : ""}`}
-                onClick={() => {
-                  resetAllFormFields();
-                  setTab("signin");
-                }}
-                type="button"
-              >
-                <LogIn size={15} style={{ marginRight: "4px" }} />
-                Sign In
-              </button>
-              <button
-                className={`filter-tab ${tab === "signup" ? "active" : ""}`}
-                onClick={() => {
-                  resetAllFormFields();
-                  setTab("signup");
-                }}
-                type="button"
-              >
-                <UserPlus size={15} style={{ marginRight: "4px" }} />
-                Student Sign Up
-              </button>
-              {!showPostRegPasskeyPrompt && tab === "forgot" && (
-                <button
-                  className="filter-tab active"
-                  style={{ background: "rgba(139, 92, 246, 0.2)", borderColor: "rgba(139, 92, 246, 0.4)", color: "#a78bfa" }}
-                  type="button"
-                >
-                  <KeyRound size={15} style={{ marginRight: "4px" }} />
-                  Recovery
-                </button>
-              )}
-            </div>
-          )}
+        <div ref={tiltRef} className="auth-3d-tilt">
+          <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
 
-          <button
-            className="modal-close-btn"
-            onClick={() => {
-              if (showPostRegPasskeyPrompt) {
-                handlePostRegSkipPasskey();
-              } else {
-                onClose();
-              }
-            }}
-          >
-            <X size={20} />
-          </button>
-        </div>
+            {/* =================================================================
+                FRONT FACE (Sign In, Recovery, Google Onboarding, Passkey Setup)
+                ================================================================= */}
+            <div className={`auth-card-face auth-card-front ${tab !== "signup" ? "face-active" : "face-hidden"}`}>
+              {/* Passcard Front Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #2563eb, #4f46e5)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.85rem", boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)" }}>
+                    FSM
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.06em", color: "#2563eb", textTransform: "uppercase" }}>
+                      National Academic Passcard
+                    </div>
+                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1e293b" }}>
+                      Free Study Material — VIP Vault
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {/* 3D Gold EMV Microchip */}
+                  <div className="auth-emv-chip" title="Academic Vault Encrypted Chip">
+                    <div className="auth-emv-chip-inner">
+                      <div></div><div></div><div></div><div></div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="modal-close-btn"
+                    onClick={() => {
+                      if (showPostRegPasskeyPrompt) handlePostRegSkipPasskey();
+                      else onClose();
+                    }}
+                    type="button"
+                    title="Close"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Capsule Navigation Tabs on Front Face */}
+              {!isMaintenanceMode && !showPostRegPasskeyPrompt && (
+                <div className="auth-capsule-tabs">
+                  <button
+                    className={`auth-capsule-tab ${tab === "signin" ? "active" : ""}`}
+                    onClick={() => {
+                      resetAllFormFields();
+                      setTab("signin");
+                    }}
+                    type="button"
+                  >
+                    <LogIn size={14} />
+                    <span>Sign In</span>
+                  </button>
+                  <button
+                    className={`auth-capsule-tab ${tab === "signup" ? "active" : ""}`}
+                    onClick={() => {
+                      resetAllFormFields();
+                      setTab("signup");
+                    }}
+                    type="button"
+                  >
+                    <UserPlus size={14} />
+                    <span>Student Sign Up</span>
+                  </button>
+                  {tab === "forgot" && (
+                    <button
+                      className="auth-capsule-tab active"
+                      style={{ background: "#ede9fe", color: "#6d28d9" }}
+                      type="button"
+                    >
+                      <KeyRound size={14} />
+                      <span>Recovery</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
         {/* Inactive Account Purged Notice Box */}
         {purgedAccountNotice && (
@@ -1765,35 +1859,38 @@ export default function AuthModal({
                 {/* Hero Biometric Card */}
                 <div
                   style={{
-                    background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08), rgba(99, 102, 241, 0.1))",
-                    border: "1px solid rgba(56, 189, 248, 0.35)",
-                    borderRadius: "12px",
-                    padding: "18px 16px",
+                    background: "linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%)",
+                    border: "1.5px solid #bfdbfe",
+                    borderRadius: "16px",
+                    padding: "20px 16px",
                     textAlign: "center",
                     marginBottom: "14px",
+                    position: "relative",
+                    overflow: "hidden",
+                    boxShadow: "0 4px 16px -4px rgba(37, 99, 235, 0.12)",
                   }}
                 >
+                  <div className="auth-laser-beam"></div>
                   <div
                     style={{
                       width: "56px",
                       height: "56px",
                       borderRadius: "50%",
-                      background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(99, 102, 241, 0.25))",
-                      border: "1px solid rgba(56, 189, 248, 0.4)",
+                      background: "linear-gradient(135deg, #2563eb, #4f46e5)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       margin: "0 auto 12px auto",
-                      boxShadow: "0 0 16px rgba(56, 189, 248, 0.2)",
+                      boxShadow: "0 4px 14px rgba(37, 99, 235, 0.28)",
                     }}
                   >
-                    <Fingerprint size={30} color="#38bdf8" />
+                    <Fingerprint size={30} color="#ffffff" />
                   </div>
 
-                  <h4 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>
+                  <h4 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
                     Biometric Passkey Sign In
                   </h4>
-                  <p style={{ fontSize: "0.82rem", color: "rgba(224, 242, 254, 0.8)", marginBottom: "18px", lineHeight: 1.5, maxWidth: "340px", margin: "0 auto 18px" }}>
+                  <p style={{ fontSize: "0.82rem", color: "#64748b", marginBottom: "18px", lineHeight: 1.5, maxWidth: "340px", margin: "0 auto 18px", fontWeight: 500 }}>
                     Touch your fingerprint sensor, look at Face ID, or use Windows Hello PIN to sign in securely.
                   </p>
 
@@ -1890,10 +1987,9 @@ export default function AuthModal({
                       width: "100%",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       gap: "14px",
-                      padding: "14px 18px",
-                      background: "linear-gradient(120deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.2) 52%, rgba(168, 85, 247, 0.22))",
+                      padding: "12px 16px",
                       borderRadius: "14px",
                       cursor: "pointer",
                       marginBottom: "16px",
@@ -1901,29 +1997,29 @@ export default function AuthModal({
                       overflow: "hidden",
                     }}
                   >
+                    <div className="auth-laser-beam"></div>
                     <div
                       style={{
                         width: "38px",
                         height: "38px",
                         borderRadius: "10px",
-                        background: "linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(99, 102, 241, 0.35))",
-                        border: "1px solid rgba(56, 189, 248, 0.6)",
+                        background: "linear-gradient(135deg, #2563eb, #4f46e5)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
-                        boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
+                        boxShadow: "0 2px 8px rgba(37, 99, 235, 0.28)",
                       }}
                     >
-                      <Fingerprint size={22} color="#38bdf8" />
+                      <Fingerprint size={22} color="#ffffff" />
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
-                      <span style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", letterSpacing: "0.2px" }}>
-                        {passkeyLoading ? "Authenticating with Biometrics..." : "Sign In with Passkey / Biometrics"}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", textAlign: "left" }}>
+                      <span style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a", letterSpacing: "0.2px" }}>
+                        {passkeyLoading ? "Authenticating with Biometrics..." : "One-Touch Biometric Sign In"}
                       </span>
-                      <span style={{ fontSize: "0.75rem", color: "rgba(224, 242, 254, 0.8)", marginTop: "2px" }}>
-                        Face ID, Fingerprint, or Windows Hello PIN
+                      <span style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px", fontWeight: 600 }}>
+                        Fast Face ID / Fingerprint / Passkey
                       </span>
                     </div>
                   </button>
@@ -2734,6 +2830,113 @@ export default function AuthModal({
           </div>
         )}
 
+        {/* Bottom Flip Trigger on Front Face */}
+        {tab === "signin" && !isGoogleOnboarding && !showPostRegPasskeyPrompt && (
+          <div style={{ textAlign: "center", marginTop: "16px", fontSize: "0.82rem", color: "#64748b" }}>
+            New student scholar?{" "}
+            <button
+              type="button"
+              className="auth-flip-trigger-btn"
+              onClick={() => {
+                resetAllFormFields();
+                setTab("signup");
+              }}
+            >
+              Create Account (180° Flip) ➔
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* =================================================================
+          BACK FACE (Student Sign Up)
+          ================================================================= */}
+      <div className={`auth-card-face auth-card-back ${tab === "signup" ? "face-active" : "face-hidden"}`}>
+        {/* Passcard Back Header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "linear-gradient(135deg, #4f46e5, #7c3aed)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.85rem", boxShadow: "0 4px 12px rgba(79, 70, 229, 0.25)" }}>
+              FSM
+            </div>
+            <div>
+              <div style={{ fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.06em", color: "#4f46e5", textTransform: "uppercase" }}>
+                Scholar Registration
+              </div>
+              <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#1e293b" }}>
+                Enroll for Lifetime Free Academic Pass
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ padding: "4px 8px", borderRadius: "20px", background: "#eef2ff", border: "1px solid #c7d2fe", color: "#4338ca", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.04em" }}>
+              VIP PASS
+            </div>
+            <button
+              className="modal-close-btn"
+              onClick={onClose}
+              type="button"
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Capsule Navigation Tabs on Back Face */}
+        {!isMaintenanceMode && (
+          <div className="auth-capsule-tabs">
+            <button
+              className={`auth-capsule-tab ${tab === "signin" ? "active" : ""}`}
+              onClick={() => {
+                resetAllFormFields();
+                setTab("signin");
+              }}
+              type="button"
+            >
+              <LogIn size={14} />
+              <span>Sign In</span>
+            </button>
+            <button
+              className={`auth-capsule-tab ${tab === "signup" ? "active" : ""}`}
+              onClick={() => {
+                resetAllFormFields();
+                setTab("signup");
+              }}
+              type="button"
+            >
+              <UserPlus size={14} />
+              <span>Student Sign Up</span>
+            </button>
+          </div>
+        )}
+
+        {/* Regular Error Alert Box on Back Face */}
+        {error && tab === "signup" && !purgedAccountNotice && Object.keys(fieldErrors).length === 0 && (
+          <div
+            id="auth-back-top-error-banner"
+            className="auth-error-banner"
+            style={{
+              background: "#fef2f2",
+              border: "1.5px solid #ef4444",
+              color: "#b91c1c",
+              padding: "12px 14px",
+              borderRadius: "12px",
+              marginBottom: "14px",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "10px",
+            }}
+          >
+            <AlertCircle size={18} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, color: "#dc2626", marginBottom: "3px" }}>Authentication Alert</div>
+              <div style={{ lineHeight: "1.45" }}>{error}</div>
+            </div>
+          </div>
+        )}
+
         {/* ================= TAB 3: SIGN UP ================= */}
         {!showPostRegPasskeyPrompt && tab === "signup" && !isGoogleOnboarding && (
           <div>
@@ -3413,20 +3616,25 @@ export default function AuthModal({
 
 
             {/* Back to sign in link */}
-            <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "16px" }}>
+            <div style={{ textAlign: "center", fontSize: "0.82rem", color: "#64748b", marginTop: "16px" }}>
               Already registered?{" "}
-              <span
-                style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
+              <button
+                type="button"
+                className="auth-flip-trigger-btn"
                 onClick={() => {
                   resetAllFormFields();
                   setTab("signin");
                 }}
               >
-                Sign In
-              </span>
-            </p>
+                Sign In (180° Flip) ➔
+              </button>
+            </div>
           </div>
         )}
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
   );
