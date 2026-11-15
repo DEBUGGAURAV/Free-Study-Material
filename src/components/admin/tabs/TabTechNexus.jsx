@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X, Trash2, Search, Clock, Save, RefreshCw, Database, Cpu, HardDrive, Globe, Zap, ShieldCheck, Flame, Check, Share2, Wifi, Sparkles, FileText, Sliders, Layers, Scissors, RotateCcw, QrCode, Camera, BellRing, Send, Brain } from "lucide-react";
 import { api } from "../../../api";
-import { detectClientHardwareProfile } from "../../../utils/hardwareAdaptiveEngine";
+import { detectClientHardwareProfile, DEFAULT_TECH_SETTINGS } from "../../../utils/hardwareAdaptiveEngine";
 import { broadcastTechFlagsUpdate } from "../../../utils/techFlagsStore";
 
 export default function TabTechNexus(props) {
@@ -197,37 +197,7 @@ export default function TabTechNexus(props) {
                   <button
                     onClick={() => {
                       const hw = detectClientHardwareProfile();
-                      const autoProfile = {
-                        enableCdnAutoPrewarm: true,
-                        cdnMaxRamItems: "auto",
-                        enableP2pAirDrop: true,
-                        p2pMaxPeers: "auto",
-                        autoP2pHardwareGuard: true,
-                        enableClientAi: true,
-                        aiQuantization: "auto",
-                        aiMaxContextChunks: "auto",
-                        enableClientOcr: true,
-                        ocrMaxPages: "auto",
-                        ocrBinarization: true,
-                        enableClientCompression: true,
-                        compressionQuality: "auto",
-                        autoNetworkAdaptive: true,
-                        removeUnusedXrefs: true,
-                        enableOfflineQueue: true,
-                        inactivityTimeoutMinutes: "auto",
-                        enableInactivityWarning: true,
-                        enableDbWriteShield: true,
-                        dbWriteShieldMode: "auto",
-                        enableFormulaClipper: true,
-                        enableStudyRoom: true,
-                        studyRoomMaxUsers: "auto",
-                        enableSmartDeduplication: true,
-                        dedupMaxVarianceMB: 3,
-                        dedupMaxVarianceBytes: 3 * 1024 * 1024,
-                        enableAiMermaid: true,
-                        enableWebPush: true,
-                        enableShareRevisionCard: true,
-                      };
+                      const autoProfile = { ...DEFAULT_TECH_SETTINGS };
 
                       setTechSettings((prev) => ({
                         ...prev,
