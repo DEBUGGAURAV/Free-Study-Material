@@ -29,6 +29,7 @@ import {
   Timer,
 } from "lucide-react";
 import { playPop, playSuccess } from "../utils/soundEffects";
+import { formatClock } from "../utils/formatUtils";
 
 // Offline Web Audio Synthesizer for Deep Study Focus (Pink Noise Gentle Rain)
 function createAmbientAudio() {
@@ -204,11 +205,7 @@ export default function StudentCommandCenter({
   };
 
   // Format seconds to MM:SS
-  const formatTime = (secs) => {
-    const mins = Math.floor(secs / 60);
-    const remSecs = secs % 60;
-    return `${String(mins).padStart(2, "0")}:${String(remSecs).padStart(2, "0")}`;
-  };
+  const formatTime = formatClock;
 
   // Compute student level from XP
   const studentLevel = useMemo(() => {

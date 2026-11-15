@@ -24,7 +24,8 @@ import {
 } from "../utils/readerStudyStore";
 import { api, getAuthToken, getCurrentUser } from "../api";
 import { acquireNoteDocument } from "../utils/cdnFailover";
-import { getNotePdfFileName } from "../utils/formatUtils";
+import { getNotePdfFileName, formatClock } from "../utils/formatUtils";
+import { playChime } from "../utils/soundEffects";
 import { smartPrecacheConditionNotes } from "../utils/intelligentNoteCacher";
 import GeminiIcon from "./GeminiIcon";
 import CircleSearchModal from "./CircleSearchModal";
@@ -751,24 +752,7 @@ export default function VirtualPdfReader({
   const [showPomodoroPopover, setShowPomodoroPopover] = useState(false);
 
   const playPomodoroChime = useCallback(() => {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const now = ctx.currentTime;
-      [523.25, 659.25, 783.99].forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(freq, now + idx * 0.14);
-        gain.gain.setValueAtTime(0.08, now + idx * 0.14);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.14 + 0.35);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(now + idx * 0.14);
-        osc.stop(now + idx * 0.14 + 0.36);
-      });
-    } catch (_) {}
+    playChime();
   }, []);
 
   // Load saved reading progress, annotations, and daily Pomodoro stats from IndexedDB (0 Firestore reads)
@@ -888,11 +872,7 @@ export default function VirtualPdfReader({
     if (Array.isArray(updated)) setAnnotations(updated);
   };
 
-  const formatTimerClock = (sec) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-  };
+  const formatTimerClock = formatClock;
 
   // 📐 Auto-Fit Scale Engine: Computes exact scale so 100% of the page fits on screen with ZERO cut-off
   const calculateFitScale = useCallback(async (targetMode = fitMode, targetPage = currentPage) => {
