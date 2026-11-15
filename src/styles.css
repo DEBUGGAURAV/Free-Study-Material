@@ -5307,13 +5307,44 @@ svg.lucide {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-/* Mobile Responsiveness */
+/* Mobile Responsiveness: Pure Compact 3D Round Floating Orbs (Icon-Only) */
 @media (max-width: 640px) {
+  .movable-3d-widget {
+    touch-action: none !important;
+  }
   .movable-3d-inner {
-    padding: 7px 11px;
-    font-size: 0.74rem;
-    gap: 5px;
-    border-radius: 20px;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    max-width: 44px !important;
+    max-height: 44px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0 !important;
+    box-sizing: border-box !important;
+    touch-action: none !important;
+  }
+  .movable-3d-label {
+    display: none !important;
+  }
+  .movable-3d-grip {
+    display: none !important;
+  }
+  .movable-3d-icon-wrap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+  }
+  .movable-3d-icon-wrap svg {
+    width: 20px !important;
+    height: 20px !important;
   }
 }
 

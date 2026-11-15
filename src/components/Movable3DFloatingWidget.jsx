@@ -3,11 +3,12 @@ import { GripVertical } from "lucide-react";
 
 /**
  * 🛸 Movable 3D Floating Action Widget
+ * - Mobile: Ultra-sleek, compact 44px round 3D icon orb (icon-only, no clutter)
+ * - Desktop: Sleek 3D tactile pill with grip handle and label
  * - 100% Draggable (Touch on Mobile + Mouse on Desktop)
  * - Anti-overflow Viewport Clamping (Guaranteed NEVER cuts off on right/left/top/bottom)
  * - Dock Clearance: Strictly prevents bottom widgets from hiding behind mobile dock
  * - Intelligent Drag vs Tap threshold (moved > 4px = drag, else click)
- * - Visual 3D tactile grip handle so users instantly know it is movable
  * - Continuous 3D floating animation & physics when idle
  * - Position saved to localStorage per widget ID with safe boundary sanitization
  * - Safe z-index (1055 default, 1070 while dragging) floating above mobile dock
@@ -38,6 +39,7 @@ export default function Movable3DFloatingWidget({
     hasMoved: false,
   });
   const cleanupListenersRef = useRef(null);
+  const lastTouchTimeRef = useRef(0);
 
   const defRight = defaultPos?.right;
   const defLeft = defaultPos?.left;
@@ -64,15 +66,13 @@ export default function Movable3DFloatingWidget({
     const h = window.innerHeight;
     const isMobile = w < 640;
 
-    // Accurate estimation: icon(18) + grip(12) + gap(12) + padding(24) + label text length
-    const estimatedW = label
-      ? isMobile
-        ? Math.max(115, label.length * 8.5 + 48)
-        : Math.max(130, label.length * 9.5 + 58)
-      : isMobile
-      ? 48
+    // Mobile: 44px round icon button | Desktop: pill with icon + grip + label
+    const estimatedW = isMobile
+      ? 44
+      : label
+      ? Math.max(130, label.length * 9.5 + 58)
       : 54;
-    const estimatedH = isMobile ? 40 : 44;
+    const estimatedH = 44;
 
     const minX = 12;
     const maxX = Math.max(10, w - estimatedW - 14);
@@ -82,17 +82,14 @@ export default function Movable3DFloatingWidget({
       ? Math.max(10, h - estimatedH - 76)
       : Math.max(10, h - estimatedH - 14);
 
-    // Retrieve saved position (with upgrade check from v1)
+    // Retrieve saved position
     let saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) {
       const oldSaved = localStorage.getItem(`fsm_widget_pos_${id}`);
       if (oldSaved) {
         try {
           const parsed = JSON.parse(oldSaved);
-          // If old help position was left-aligned (< 60px), ignore to use right stack
-          if (id === "help" && parsed.x < 60) {
-            saved = null;
-          } else {
+          if (typeof parsed.x === "number" && typeof parsed.y === "number") {
             saved = oldSaved;
           }
         } catch (_) {}
@@ -168,9 +165,9 @@ export default function Movable3DFloatingWidget({
       setPos((prev) => {
         if (!prev) return prev;
         const rect = widgetRef.current?.getBoundingClientRect();
-        const currentW = rect?.width || 135;
-        const currentH = rect?.height || 44;
         const isMobile = window.innerWidth < 640;
+        const currentW = rect?.width || (isMobile ? 44 : 135);
+        const currentH = rect?.height || 44;
         const maxX = Math.max(10, window.innerWidth - currentW - 14);
         const maxY = isMobile
           ? Math.max(10, window.innerHeight - currentH - 76)
@@ -191,6 +188,8 @@ export default function Movable3DFloatingWidget({
 
   // 4. Mouse Drag Handler (Desktop)
   const handleMouseDown = (e) => {
+    // Avoid simulated mouse event right after touch
+    if (Date.now() - lastTouchTimeRef.current < 600) return;
     if (e.button !== 0) return; // Only left-click
     e.stopPropagation();
 
@@ -216,8 +215,8 @@ export default function Movable3DFloatingWidget({
 
       if (info.hasMoved) {
         moveEvent.preventDefault();
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 135, height: 44 };
         const isMobile = window.innerWidth < 640;
+        const rect = widgetRef.current?.getBoundingClientRect() || (isMobile ? { width: 44, height: 44 } : { width: 135, height: 44 });
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
         const maxY = isMobile
           ? Math.max(10, window.innerHeight - rect.height - 76)
@@ -236,13 +235,16 @@ export default function Movable3DFloatingWidget({
       cleanupListenersRef.current = null;
 
       if (info.hasMoved) {
-        setTimeout(() => setIsDragging(false), 50);
         setPos((currentPos) => {
           if (currentPos) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPos));
           }
           return currentPos;
         });
+        setTimeout(() => {
+          setIsDragging(false);
+          info.hasMoved = false;
+        }, 120);
       } else {
         setIsDragging(false);
       }
@@ -260,12 +262,14 @@ export default function Movable3DFloatingWidget({
   // 5. Touch Drag Handler (Phone & Tablet)
   const handleTouchStart = (e) => {
     if (!e.touches || !e.touches[0]) return;
-    const touch = e.touches[0];
+    lastTouchTimeRef.current = Date.now();
+    e.stopPropagation();
 
     if (cleanupListenersRef.current) {
       cleanupListenersRef.current();
     }
 
+    const touch = e.touches[0];
     const info = dragInfoRef.current;
     info.startX = touch.clientX;
     info.startY = touch.clientY;
@@ -289,8 +293,8 @@ export default function Movable3DFloatingWidget({
       }
 
       if (info.hasMoved) {
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 125, height: 42 };
         const isMobile = window.innerWidth < 640;
+        const rect = widgetRef.current?.getBoundingClientRect() || { width: 44, height: 44 };
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
         const maxY = isMobile
           ? Math.max(10, window.innerHeight - rect.height - 76)
@@ -310,13 +314,16 @@ export default function Movable3DFloatingWidget({
       cleanupListenersRef.current = null;
 
       if (info.hasMoved) {
-        setTimeout(() => setIsDragging(false), 50);
         setPos((currentPos) => {
           if (currentPos) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPos));
           }
           return currentPos;
         });
+        setTimeout(() => {
+          setIsDragging(false);
+          info.hasMoved = false;
+        }, 120);
       } else {
         setIsDragging(false);
       }

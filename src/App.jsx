@@ -2799,7 +2799,7 @@ export default function App() {
       <Movable3DFloatingWidget
         id="help"
         animIndex={1}
-        defaultPos={{ bottom: activeJob ? 80 : 24, right: 16 }}
+        defaultPos={{ bottom: activeJob ? 80 : 24, left: 16 }}
         onClick={() => setIsHelpOpen(true)}
         title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
         icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
@@ -2807,7 +2807,7 @@ export default function App() {
         bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
         glowColor="rgba(234, 88, 12, 0.48)"
         borderGradient="rgba(254, 215, 170, 0.55)"
-        badge={<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff", display: "inline-block", marginLeft: "2px" }} />}
+        badge={<span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff" }} />}
       />
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
