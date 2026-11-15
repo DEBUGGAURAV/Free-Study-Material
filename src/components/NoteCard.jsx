@@ -53,7 +53,6 @@ function NoteCard({
   // Device Dynamic LRU & 48h Cache State
   const [isCachedOffline, setIsCachedOffline] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
-  const [sharingStory, setSharingStory] = useState(false);
 
   // 🎴 3D Interactive Card Tilt & Specular Physics
   const [tiltTransform, setTiltTransform] = useState("");
@@ -165,7 +164,7 @@ function NoteCard({
     isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false"
   );
 
-  // 1. Direct Device Native Share: PNG Image Attached + Link in Caption + Direct OS Share Sheet
+  // 1. Direct Device Native Share: PNG Image Attached + Clean Text & Link + Direct OS Share Sheet
   const handleShareNote = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -177,33 +176,12 @@ function NoteCard({
     // Directly open device's native share option with PNG poster + clean text & single link
     try {
       const res = await shareWhatsAppStoryCard(note, noteUrl);
-      if (res?.method === "shared" || res?.method === "downloaded") {
+      if (res?.method === "shared" || res?.method === "copied") {
         setCopied(true);
         setTimeout(() => setCopied(false), 2500);
       }
     } catch (err) {
       console.warn("[SHARE] Direct device share error:", err);
-    }
-  };
-
-  // 1b. 📲 1-Tap Viral WhatsApp Status & Story Card Generator
-  const handleShareStory = async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (sharingStory) return;
-    setSharingStory(true);
-    playSuccess();
-    recordCampusShare(note);
-    try {
-      const res = await shareWhatsAppStoryCard(note);
-      if (res?.method === "downloaded" || res?.method === "shared") {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2200);
-      }
-    } catch (_) {
-      handleShareNote(e);
-    } finally {
-      setSharingStory(false);
     }
   };
 
@@ -720,12 +698,20 @@ function NoteCard({
 
             <button
               type="button"
-              className="btn-card-micro btn-card-share"
+              className={`btn-card-micro btn-card-share ${
+                copied
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                  : ""
+              }`}
               onClick={handleShareNote}
               title="Share Note: PNG Poster, Copy Link & Device Share Option"
             >
-              <Share2 size={14} strokeWidth={2.2} />
-              <span>Share</span>
+              {copied ? (
+                <Check size={14} strokeWidth={2.4} className="text-emerald-400" />
+              ) : (
+                <Share2 size={14} strokeWidth={2.2} />
+              )}
+              <span>{copied ? "Shared" : "Share"}</span>
             </button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { api } from "../../../api";
 import "../../../utils/formatUtils";
 import "../../../utils/hardwareAdaptiveEngine";
 import "../../VirtualPdfReader";
+import AdminSubModal from "../AdminSubModal";
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 const isMasterAdminStudent = (student) => {
@@ -695,50 +696,30 @@ export default function TabStudents(props) {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 👁️ MODAL 1: VIEW STUDENT COMPLETE PROFILE DETAILS                        */}
-      {/* ========================================================================= */}
-      {viewingStudent && (
-        <div className="modal-overlay" onClick={() => setViewingStudent(null)} style={{ zIndex: 1250 }}>
-          <div
-            className="modal-content"
-            style={{ maxWidth: "600px", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "14px", padding: "20px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "50%", background: "rgba(6, 182, 212, 0.15)", border: "1px solid rgba(6, 182, 212, 0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem" }}>
-                  🎓
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#fff" }}>
-                    {viewingStudent.name || "Student Profile"}
-                  </h3>
-                  <div style={{ fontSize: "0.78rem", color: "var(--accent-cyan)" }}>
-                    {viewingStudent.email}
-                  </div>
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setViewingStudent(null)}
-                style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
+      {/* 👁️ MODAL 1: VIEW STUDENT COMPLETE PROFILE DETAILS */}
+      <AdminSubModal
+        isOpen={Boolean(viewingStudent)}
+        onClose={() => setViewingStudent(null)}
+        title={viewingStudent?.name || "Student Profile"}
+        subtitle={viewingStudent?.email || ""}
+        icon={UserCheck}
+        accentColor="#4f46e5"
+        maxWidth="600px"
+        zIndex={1250}
+      >
+        {viewingStudent && (
+          <div>
             {/* Badges Row */}
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "16px" }}>
               <span
                 style={{
                   fontSize: "0.74rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   padding: "3px 10px",
                   borderRadius: "6px",
-                  background: isMasterAdminStudent(viewingStudent) ? "rgba(245, 158, 11, 0.2)" : viewingStudent.role === "admin" ? "rgba(245, 158, 11, 0.15)" : viewingStudent.role === "half_admin" ? "rgba(168, 85, 247, 0.15)" : "rgba(255, 255, 255, 0.06)",
-                  color: isMasterAdminStudent(viewingStudent) ? "#f59e0b" : viewingStudent.role === "admin" ? "#fbbf24" : viewingStudent.role === "half_admin" ? "#c084fc" : "#94a3b8",
-                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: isMasterAdminStudent(viewingStudent) ? "#fef3c7" : viewingStudent.role === "admin" ? "#fef3c7" : viewingStudent.role === "half_admin" ? "#f3e8ff" : "#eff6ff",
+                  color: isMasterAdminStudent(viewingStudent) ? "#92400e" : viewingStudent.role === "admin" ? "#92400e" : viewingStudent.role === "half_admin" ? "#7e22ce" : "#1d4ed8",
+                  border: `1px solid ${isMasterAdminStudent(viewingStudent) ? "#fde68a" : viewingStudent.role === "admin" ? "#fde68a" : viewingStudent.role === "half_admin" ? "#d8b4fe" : "#bfdbfe"}`,
                 }}
               >
                 {isMasterAdminStudent(viewingStudent) ? "👑 MASTER ADMIN" : viewingStudent.role === "admin" ? "👑 FULL ADMIN" : viewingStudent.role === "half_admin" ? "⚡ HALF ADMIN" : "🎓 STUDENT"}
@@ -750,9 +731,9 @@ export default function TabStudents(props) {
                   fontWeight: 700,
                   padding: "3px 10px",
                   borderRadius: "6px",
-                  background: viewingStudent.isBlocked ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                  color: viewingStudent.isBlocked ? "#f87171" : "#34d399",
-                  border: `1px solid ${viewingStudent.isBlocked ? "rgba(239, 68, 68, 0.3)" : "rgba(16, 185, 129, 0.3)"}`,
+                  background: viewingStudent.isBlocked ? "#fef2f2" : "#ecfdf5",
+                  color: viewingStudent.isBlocked ? "#dc2626" : "#059669",
+                  border: `1px solid ${viewingStudent.isBlocked ? "#fecaca" : "#a7f3d0"}`,
                 }}
               >
                 {viewingStudent.isBlocked ? "🚫 Account Blocked" : "✅ Account Active"}
@@ -764,9 +745,9 @@ export default function TabStudents(props) {
                   fontWeight: 700,
                   padding: "3px 10px",
                   borderRadius: "6px",
-                  background: viewingStudent.neverPurge ? "rgba(52, 211, 153, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                  color: viewingStudent.neverPurge ? "#34d399" : "#fbbf24",
-                  border: `1px solid ${viewingStudent.neverPurge ? "rgba(52, 211, 153, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                  background: viewingStudent.neverPurge ? "#ecfdf5" : "#fffbeb",
+                  color: viewingStudent.neverPurge ? "#059669" : "#d97706",
+                  border: `1px solid ${viewingStudent.neverPurge ? "#a7f3d0" : "#fde68a"}`,
                 }}
               >
                 {viewingStudent.neverPurge ? "🛡️ Immunity Shield (Never Purged)" : `⏳ ${viewingStudent.daysRemaining != null ? viewingStudent.daysRemaining : 90}d to Auto-Purge`}
@@ -774,60 +755,60 @@ export default function TabStudents(props) {
             </div>
 
             {/* Profile Information Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "10px", padding: "14px", marginBottom: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "14px", marginBottom: "16px" }}>
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Mobile Number</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#38bdf8", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Mobile Number</div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 750, color: "#0284c7", marginTop: "2px" }}>
                   {viewingStudent.mobile && !viewingStudent.mobile.startsWith("enc_gcm:") ? viewingStudent.mobile : "Not Set"}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>College / University</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>College / University</div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
                   {viewingStudent.college || "General University"}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Branch / Department</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Branch / Department</div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
                   {viewingStudent.branch || "General / Not Specified"}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Academic Year</div>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#fff", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Academic Year</div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>
                   {viewingStudent.year || "Year N/A"}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Account UID</div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", fontFamily: "monospace", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Account UID</div>
+                <div style={{ fontSize: "0.78rem", color: "#64748b", fontFamily: "monospace", marginTop: "2px" }}>
                   {viewingStudent.id}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Registered Date</div>
-                <div style={{ fontSize: "0.8rem", color: "#e2e8f0", marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Registered Date</div>
+                <div style={{ fontSize: "0.8rem", color: "#334155", marginTop: "2px" }}>
                   {viewingStudent.createdAt ? new Date(viewingStudent.createdAt).toLocaleString("en-IN") : "N/A"}
                 </div>
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Last Active / Login</div>
-                <div style={{ fontSize: "0.8rem", color: "#34d399", fontWeight: 600, marginTop: "2px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Last Active / Login</div>
+                <div style={{ fontSize: "0.8rem", color: "#059669", fontWeight: 700, marginTop: "2px" }}>
                   {viewingStudent.lastLoginAt ? new Date(viewingStudent.lastLoginAt).toLocaleString("en-IN") : "Never Logged In"}
                 </div>
               </div>
 
               {viewingStudent.deviceSpecs && (
-                <div style={{ gridColumn: "1 / -1", borderTop: "1px solid rgba(255, 255, 255, 0.05)", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase" }}>Hardware Specs Profile</div>
-                  <div style={{ fontSize: "0.8rem", color: "#38bdf8", fontWeight: 600, marginTop: "2px" }}>
+                <div style={{ gridColumn: "1 / -1", borderTop: "1.5px solid #e2e8f0", paddingTop: "8px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Hardware Specs Profile</div>
+                  <div style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 700, marginTop: "2px" }}>
                     💻 {viewingStudent.deviceSpecs.label || `${viewingStudent.deviceSpecs.cores} CPU Cores • ${viewingStudent.deviceSpecs.memoryGB} GB RAM Memory`}
                   </div>
                 </div>
@@ -835,7 +816,7 @@ export default function TabStudents(props) {
             </div>
 
             {/* Modal Bottom Actions */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap", borderTop: "1.5px solid #f1f5f9", paddingTop: "14px" }}>
               <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   type="button"
@@ -844,10 +825,9 @@ export default function TabStudents(props) {
                     setViewingStudent(null);
                     handleOpenStudentLogs(st);
                   }}
-                  className="btn-secondary"
-                  style={{ fontSize: "0.8rem", padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  className="adm-btn-pill"
                 >
-                  <Activity size={13} color="var(--accent-cyan)" />
+                  <Activity size={13} style={{ color: "#0284c7" }} />
                   <span>Activity &amp; Devices</span>
                 </button>
 
@@ -858,8 +838,7 @@ export default function TabStudents(props) {
                     setViewingStudent(null);
                     setEditingStudent(st);
                   }}
-                  className="btn-secondary"
-                  style={{ fontSize: "0.8rem", padding: "7px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                  className="adm-btn-pill"
                 >
                   <Edit3 size={13} />
                   <span>Edit Profile</span>
@@ -868,67 +847,67 @@ export default function TabStudents(props) {
 
               <button
                 type="button"
-                className="btn-primary"
+                className="adm-btn-pill primary"
                 onClick={() => setViewingStudent(null)}
-                style={{ fontSize: "0.8rem", padding: "7px 16px" }}
               >
                 Close
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </AdminSubModal>
 
-      {/* ========================================================================= */}
-      {/* 📊 MODAL 2: QUICK STUDENT ACTIVITY, SECURITY & SESSIONS INSPECTOR        */}
-      {/* ========================================================================= */}
-      {logStudent && (
-        <div className="modal-overlay" onClick={() => setLogStudent(null)} style={{ zIndex: 1250 }}>
-          <div
-            className="modal-content"
-            style={{ maxWidth: "700px", background: "#0f172a", border: "1px solid rgba(255, 255, 255, 0.15)", borderRadius: "14px", padding: "20px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px", marginBottom: "14px" }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Activity size={16} color="var(--accent-cyan)" />
-                  <span>Activity Logs &amp; Live Devices:</span>
-                  <span style={{ color: "var(--accent-cyan)" }}>{logStudent.name}</span>
-                </h3>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                  {logStudent.email}
-                </div>
-              </div>
-              <button
-                className="modal-close-btn"
-                onClick={() => setLogStudent(null)}
-                style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
+      {/* 📊 MODAL 2: QUICK STUDENT ACTIVITY, SECURITY & SESSIONS INSPECTOR */}
+      <AdminSubModal
+        isOpen={Boolean(logStudent)}
+        onClose={() => setLogStudent(null)}
+        title={logStudent ? `Activity & Devices: ${logStudent.name}` : "Activity Logs"}
+        subtitle={logStudent?.email || ""}
+        icon={Activity}
+        accentColor="#0284c7"
+        maxWidth="700px"
+        zIndex={1250}
+      >
+        {logStudent && (
+          <div>
             {/* Sub-Tab Navigation Bar */}
-            <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "10px", marginBottom: "14px" }}>
+            <div style={{ display: "flex", gap: "8px", borderBottom: "1.5px solid #f1f5f9", paddingBottom: "10px", marginBottom: "14px" }}>
               <button
+                type="button"
                 onClick={() => setActiveLogSubTab("sessions")}
-                className={`filter-tab ${activeLogSubTab === "sessions" ? "active" : ""}`}
-                style={{ fontSize: "0.78rem", padding: "5px 12px" }}
+                className="adm-btn-pill"
+                style={{
+                  background: activeLogSubTab === "sessions" ? "#eff6ff" : "#ffffff",
+                  borderColor: activeLogSubTab === "sessions" ? "#2563eb" : "#cbd5e1",
+                  color: activeLogSubTab === "sessions" ? "#1d4ed8" : "#475569",
+                  padding: "4px 10px",
+                }}
               >
                 📱 Active Devices ({studentLogs.sessions.length})
               </button>
               <button
+                type="button"
                 onClick={() => setActiveLogSubTab("security")}
-                className={`filter-tab ${activeLogSubTab === "security" ? "active" : ""}`}
-                style={{ fontSize: "0.78rem", padding: "5px 12px" }}
+                className="adm-btn-pill"
+                style={{
+                  background: activeLogSubTab === "security" ? "#eff6ff" : "#ffffff",
+                  borderColor: activeLogSubTab === "security" ? "#2563eb" : "#cbd5e1",
+                  color: activeLogSubTab === "security" ? "#1d4ed8" : "#475569",
+                  padding: "4px 10px",
+                }}
               >
                 🛡️ Security Events ({studentLogs.securityLogs.length})
               </button>
               <button
+                type="button"
                 onClick={() => setActiveLogSubTab("activities")}
-                className={`filter-tab ${activeLogSubTab === "activities" ? "active" : ""}`}
-                style={{ fontSize: "0.78rem", padding: "5px 12px" }}
+                className="adm-btn-pill"
+                style={{
+                  background: activeLogSubTab === "activities" ? "#eff6ff" : "#ffffff",
+                  borderColor: activeLogSubTab === "activities" ? "#2563eb" : "#cbd5e1",
+                  color: activeLogSubTab === "activities" ? "#1d4ed8" : "#475569",
+                  padding: "4px 10px",
+                }}
               >
                 📚 Academic Trail ({studentLogs.activities.length})
               </button>
@@ -936,7 +915,7 @@ export default function TabStudents(props) {
 
             {/* Sub-Tab Body */}
             {studentLogsLoading ? (
-              <div style={{ textAlign: "center", padding: "40px", color: "var(--text-dim)" }}>
+              <div style={{ textAlign: "center", padding: "40px", color: "#64748b" }}>
                 <div className="spinner" style={{ width: "22px", height: "22px", margin: "0 auto 8px" }} />
                 Loading student telemetry...
               </div>
@@ -946,7 +925,7 @@ export default function TabStudents(props) {
                 {activeLogSubTab === "sessions" && (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                      <span style={{ fontSize: "0.76rem", color: "var(--text-dim)" }}>
+                      <span style={{ fontSize: "0.76rem", color: "#64748b" }}>
                         Current active sessions and connected phones/PCs
                       </span>
                       {studentLogs.sessions.length > 0 && (
@@ -954,7 +933,7 @@ export default function TabStudents(props) {
                           type="button"
                           onClick={handleTerminateQuickAll}
                           disabled={terminatingAll}
-                          className="btn-danger"
+                          className="adm-btn-pill danger"
                           style={{ padding: "4px 10px", fontSize: "0.74rem" }}
                         >
                           Logout All Devices
@@ -963,7 +942,7 @@ export default function TabStudents(props) {
                     </div>
 
                     {studentLogs.sessions.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "30px", color: "var(--text-dim)", fontSize: "0.8rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+                      <div style={{ textAlign: "center", padding: "30px", color: "#64748b", fontSize: "0.8rem", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "8px" }}>
                         No active device sessions found. Student is logged out.
                       </div>
                     ) : (
@@ -971,15 +950,15 @@ export default function TabStudents(props) {
                         {studentLogs.sessions.map((sess) => (
                           <div
                             key={sess.sessionId}
-                            style={{ background: "rgba(255, 255, 255, 0.03)", border: "1px solid rgba(255, 255, 255, 0.08)", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                            style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "8px", padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                               {getDeviceIcon(sess.deviceType)}
                               <div>
-                                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#fff" }}>
+                                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
                                   {sess.deviceName || "Student Device"}
                                 </div>
-                                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", display: "flex", gap: "8px", marginTop: "2px" }}>
+                                <div style={{ fontSize: "0.7rem", color: "#64748b", display: "flex", gap: "8px", marginTop: "2px" }}>
                                   <span>🌐 {sess.ipAddress || "Active IP"}</span>
                                   {sess.location && <span>📍 {sess.location}</span>}
                                   <span>• Logged in: {sess.createdAt ? new Date(sess.createdAt).toLocaleDateString() : "Active"}</span>
@@ -991,8 +970,8 @@ export default function TabStudents(props) {
                               type="button"
                               disabled={terminatingSessionId === sess.sessionId}
                               onClick={() => handleTerminateQuickSingle(sess.sessionId, sess.deviceName)}
-                              className="btn-danger"
-                              style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+                              className="adm-btn-pill danger"
+                              style={{ padding: "3px 8px", fontSize: "0.7rem" }}
                             >
                               Disconnect
                             </button>
@@ -1007,7 +986,7 @@ export default function TabStudents(props) {
                 {activeLogSubTab === "security" && (
                   <div>
                     {studentLogs.securityLogs.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "30px", color: "var(--text-dim)", fontSize: "0.8rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+                      <div style={{ textAlign: "center", padding: "30px", color: "#64748b", fontSize: "0.8rem", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "8px" }}>
                         No security logs recorded yet for this student.
                       </div>
                     ) : (
@@ -1015,15 +994,15 @@ export default function TabStudents(props) {
                         {studentLogs.securityLogs.slice(0, 15).map((log) => (
                           <div
                             key={log.id}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: "6px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.05)", fontSize: "0.75rem" }}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: "6px", background: "#ffffff", border: "1.5px solid #e2e8f0", fontSize: "0.75rem" }}
                           >
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ padding: "2px 6px", borderRadius: "4px", background: log.action === "LOGIN" ? "rgba(16, 185, 129, 0.15)" : log.action.includes("TERMINATE") ? "rgba(239, 68, 68, 0.15)" : "rgba(56, 189, 248, 0.15)", color: log.action === "LOGIN" ? "#34d399" : log.action.includes("TERMINATE") ? "#fca5a5" : "#38bdf8", fontWeight: 700, fontSize: "0.68rem" }}>
+                              <span style={{ padding: "2px 6px", borderRadius: "4px", background: log.action === "LOGIN" ? "#ecfdf5" : log.action.includes("TERMINATE") ? "#fef2f2" : "#eff6ff", color: log.action === "LOGIN" ? "#059669" : log.action.includes("TERMINATE") ? "#dc2626" : "#2563eb", fontWeight: 750, fontSize: "0.68rem" }}>
                                 {log.action}
                               </span>
-                              <span style={{ color: "#e2e8f0" }}>{log.details || log.deviceName}</span>
+                              <span style={{ color: "#334155" }}>{log.details || log.deviceName}</span>
                             </div>
-                            <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }}>
+                            <span style={{ color: "#64748b", fontSize: "0.7rem" }}>
                               {log.createdAt ? new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Recent"}
                             </span>
                           </div>
@@ -1037,7 +1016,7 @@ export default function TabStudents(props) {
                 {activeLogSubTab === "activities" && (
                   <div>
                     {studentLogs.activities.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "30px", color: "var(--text-dim)", fontSize: "0.8rem", background: "rgba(255,255,255,0.02)", borderRadius: "8px" }}>
+                      <div style={{ textAlign: "center", padding: "30px", color: "#64748b", fontSize: "0.8rem", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "8px" }}>
                         No academic activities recorded yet for this student.
                       </div>
                     ) : (
@@ -1045,13 +1024,13 @@ export default function TabStudents(props) {
                         {studentLogs.activities.slice(0, 25).map((act, idx) => (
                           <div
                             key={act.id || idx}
-                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: "6px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.05)", fontSize: "0.75rem" }}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", borderRadius: "6px", background: "#ffffff", border: "1.5px solid #e2e8f0", fontSize: "0.75rem" }}
                           >
                             <div>
-                              <span style={{ fontWeight: 600, color: "#fff" }}>{act.action || act.type || "Action"}: </span>
-                              <span style={{ color: "#38bdf8" }}>{act.noteTitle || act.subject || act.details || "Academic item"}</span>
+                              <span style={{ fontWeight: 700, color: "#0f172a" }}>{act.action || act.type || "Action"}: </span>
+                              <span style={{ color: "#0284c7" }}>{act.noteTitle || act.subject || act.details || "Academic item"}</span>
                             </div>
-                            <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }}>
+                            <span style={{ color: "#64748b", fontSize: "0.7rem" }}>
                               {act.timestamp ? new Date(act.timestamp).toLocaleDateString() : ""}
                             </span>
                           </div>
@@ -1064,7 +1043,7 @@ export default function TabStudents(props) {
             )}
 
             {/* Bottom Actions */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "12px", marginTop: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1.5px solid #f1f5f9", paddingTop: "12px", marginTop: "14px" }}>
               <button
                 type="button"
                 onClick={() => {
@@ -1072,8 +1051,7 @@ export default function TabStudents(props) {
                   setLogStudent(null);
                   loadStudentActivities(target);
                 }}
-                className="btn-secondary"
-                style={{ fontSize: "0.78rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                className="adm-btn-pill"
               >
                 <span>Full Activity Studio →</span>
               </button>
@@ -1081,15 +1059,14 @@ export default function TabStudents(props) {
               <button
                 type="button"
                 onClick={() => setLogStudent(null)}
-                className="btn-primary"
-                style={{ fontSize: "0.78rem", padding: "6px 16px" }}
+                className="adm-btn-pill primary"
               >
                 Done
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </AdminSubModal>
     </div>
   );
 }

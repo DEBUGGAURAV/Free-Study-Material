@@ -12,6 +12,7 @@ import { getNotePdfFileName } from "../../utils/formatUtils";
 import "../../utils/hardwareAdaptiveEngine";
 
 const VirtualPdfReader = lazy(() => import("../VirtualPdfReader"));
+import AdminSubModal from "./AdminSubModal";
 
 // Modular Tab Components (Code-split via React.lazy for faster Admin Studio startup)
 const TabNotes = lazy(() => import("./tabs/TabNotes"));
@@ -70,6 +71,23 @@ function AdminModuleFallback({ label = "Loading module telemetry..." }) {
   );
 }
 
+
+function AdminStatCard({ label, badge, badgeBg, badgeColor, val, valColor = "#0f172a", icon: Icon, iconBg, iconBorder, iconColor }) {
+  return (
+    <div className="adm-stat-card">
+      <div>
+        <div className="adm-stat-meta">
+          <span className="adm-stat-label">{label}</span>
+          {badge && <span className="adm-stat-badge" style={{ background: badgeBg, color: badgeColor }}>{badge}</span>}
+        </div>
+        <div className="adm-stat-val" style={{ color: valColor }}>{val}</div>
+      </div>
+      <div className="adm-stat-icon-wrap" style={{ background: iconBg, border: `1.5px solid ${iconBorder}`, color: iconColor }}>
+        <Icon size={18} />
+      </div>
+    </div>
+  );
+}
 
 export default function AdminModal({
   isOpen,
@@ -2917,99 +2935,67 @@ export default function AdminModal({
           </div>
         </div>
 
-        {/* Global KPIs Bar (Pure White Studio Telemetry Cards) */}
-        <div
-          className="admin-kpis-strip"
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
-            gap: "10px",
-            padding: "12px 22px",
-            background: "#f8fafc",
-            borderBottom: "1.5px solid #e2e8f0",
-          }}
-        >
-          {/* Card 1: Vault Materials */}
-          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#eef2ff", color: "#4f46e5" }}>CATALOG</span>
-              </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#0f172a", marginTop: "2px", letterSpacing: "-0.02em" }}>
-                {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
-              </div>
-            </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#eef2ff", border: "1.5px solid #c7d2fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#4f46e5", flexShrink: 0 }}>
-              <BookOpen size={18} />
-            </div>
-          </div>
-
-          {/* Card 2: Verified Students */}
-          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#e0f2fe", color: "#0284c7" }}>LEARNERS</span>
-              </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#0284c7", marginTop: "2px", letterSpacing: "-0.02em" }}>
-                {studentsTotal || stats?.totalStudents || 0}
-              </div>
-            </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#e0f2fe", border: "1.5px solid #bae6fd", display: "flex", alignItems: "center", justifyContent: "center", color: "#0284c7", flexShrink: 0 }}>
-              <Users size={18} />
-            </div>
-          </div>
-
-          {/* Card 3: Bandwidth Saved */}
-          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#ecfdf5", color: "#059669" }}>ZERO-COST</span>
-              </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#059669", marginTop: "2px", letterSpacing: "-0.02em" }}>
-                {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
-                  ? stats.formattedSaved
-                  : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
-              </div>
-            </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669", flexShrink: 0 }}>
-              <Zap size={18} />
-            </div>
-          </div>
-
-          {/* Card 4: RAM Consumption */}
-          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#fffbeb", color: "#d97706" }}>1MS CACHE</span>
-              </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#d97706", marginTop: "2px", letterSpacing: "-0.02em" }}>
-                {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
-              </div>
-            </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#fffbeb", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", color: "#d97706", flexShrink: 0 }}>
-              <Cpu size={18} />
-            </div>
-          </div>
-
-          {/* Card 5: Edge CDN Hit Ratio */}
-          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#f5f3ff", color: "#7c3aed" }}>HIT RATIO</span>
-              </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#7c3aed", marginTop: "2px", letterSpacing: "-0.02em" }}>
-                {cdnStats?.hitRatio || "99.4%"}
-              </div>
-            </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#f5f3ff", border: "1.5px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#7c3aed", flexShrink: 0 }}>
-              <Globe size={18} />
-            </div>
-          </div>
+        {/* Global KPIs Bar (Compact Pure White Studio Telemetry Cards) */}
+        <div className="adm-stat-grid">
+          <AdminStatCard
+            label="Vault Materials"
+            badge="CATALOG"
+            badgeBg="#eef2ff"
+            badgeColor="#4f46e5"
+            val={notes.filter((n) => !deletedNoteIds.has(n.id)).length}
+            icon={BookOpen}
+            iconBg="#eef2ff"
+            iconBorder="#c7d2fe"
+            iconColor="#4f46e5"
+          />
+          <AdminStatCard
+            label="Verified Students"
+            badge="LEARNERS"
+            badgeBg="#e0f2fe"
+            badgeColor="#0284c7"
+            val={studentsTotal || stats?.totalStudents || 0}
+            valColor="#0284c7"
+            icon={Users}
+            iconBg="#e0f2fe"
+            iconBorder="#bae6fd"
+            iconColor="#0284c7"
+          />
+          <AdminStatCard
+            label="Bandwidth Saved"
+            badge="ZERO-COST"
+            badgeBg="#ecfdf5"
+            badgeColor="#059669"
+            val={stats?.formattedSaved && stats.formattedSaved !== "0.00 MB" ? stats.formattedSaved : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
+            valColor="#059669"
+            icon={Zap}
+            iconBg="#ecfdf5"
+            iconBorder="#a7f3d0"
+            iconColor="#059669"
+          />
+          <AdminStatCard
+            label="RAM Consumption"
+            badge="1MS CACHE"
+            badgeBg="#fffbeb"
+            badgeColor="#d97706"
+            val={hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
+            valColor="#d97706"
+            icon={Cpu}
+            iconBg="#fffbeb"
+            iconBorder="#fde68a"
+            iconColor="#d97706"
+          />
+          <AdminStatCard
+            label="Edge CDN Cache"
+            badge="HIT RATIO"
+            badgeBg="#f5f3ff"
+            badgeColor="#7c3aed"
+            val={cdnStats?.hitRatio || "99.4%"}
+            valColor="#7c3aed"
+            icon={Globe}
+            iconBg="#f5f3ff"
+            iconBorder="#ddd6fe"
+            iconColor="#7c3aed"
+          />
         </div>
 
         {/* Tab Navigation Strip + Command Launcher Dock */}
@@ -3654,173 +3640,161 @@ export default function AdminModal({
         )}
 
         {/* SUB-MODAL 2: Edit Note Modal */}
-        {editingNote && (
-          <div className="modal-overlay" onClick={() => setEditingNote(null)} style={{ zIndex: 1200 }}>
-            <div className="modal-content" style={{ maxWidth: "560px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="modal-title">Edit Document Metadata</div>
-                <button className="modal-close-btn" onClick={() => setEditingNote(null)}>
-                  <X size={20} />
+        <AdminSubModal
+          isOpen={Boolean(editingNote)}
+          onClose={() => setEditingNote(null)}
+          title="Edit Document Metadata"
+          subtitle="Update note titles, subject category, branch and download permissions"
+          icon={BookOpen}
+          accentColor="#2563eb"
+          maxWidth="560px"
+        >
+          <form onSubmit={handleSaveNoteEdit} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div className="adm-form-group">
+              <label className="adm-form-label">Document Title</label>
+              <input
+                type="text"
+                className="adm-form-input"
+                value={noteForm.title}
+                onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="adm-form-group">
+              <label className="adm-form-label">Academic Subject</label>
+              <input
+                type="text"
+                className="adm-form-input"
+                value={noteForm.subject}
+                onChange={(e) => setNoteForm({ ...noteForm, subject: e.target.value })}
+                required
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div className="adm-form-group">
+                <label className="adm-form-label">Branch</label>
+                <input
+                  type="text"
+                  className="adm-form-input"
+                  value={noteForm.branch}
+                  onChange={(e) => setNoteForm({ ...noteForm, branch: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="adm-form-group">
+                <label className="adm-form-label">Course / Degree</label>
+                <input
+                  type="text"
+                  className="adm-form-input"
+                  value={noteForm.course}
+                  onChange={(e) => setNoteForm({ ...noteForm, course: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="adm-form-group">
+              <label className="adm-form-label">Year / Semester</label>
+              <input
+                type="text"
+                className="adm-form-input"
+                value={noteForm.year}
+                onChange={(e) => setNoteForm({ ...noteForm, year: e.target.value })}
+              />
+            </div>
+
+            <div className="adm-form-group">
+              <label className="adm-form-label">Description / Tags</label>
+              <textarea
+                className="adm-form-input"
+                rows={3}
+                value={noteForm.description}
+                onChange={(e) => setNoteForm({ ...noteForm, description: e.target.value })}
+              />
+            </div>
+
+            {/* Single Note Download Permissions Toggle */}
+            <div
+              style={{
+                padding: "12px",
+                borderRadius: "10px",
+                background: noteForm.allowDownload ? "#ecfdf5" : "#fef2f2",
+                border: `1.5px solid ${noteForm.allowDownload ? "#a7f3d0" : "#fecaca"}`,
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: "0.84rem", color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
+                    {noteForm.allowDownload ? (
+                      <>
+                        <Download size={15} style={{ color: "#059669" }} />
+                        <span>Student PDF Downloads: Enabled</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock size={15} style={{ color: "#dc2626" }} />
+                        <span>Student PDF Downloads: Locked / Read-Only</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "2px" }}>
+                    {noteForm.allowDownload
+                      ? "Students can download the original PDF file."
+                      : "Direct PDF download is locked. Students can only read via the Online Reader."}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setNoteForm((prev) => ({ ...prev, allowDownload: !prev.allowDownload }))}
+                  className={`adm-btn-pill ${noteForm.allowDownload ? "danger" : "primary"}`}
+                >
+                  {noteForm.allowDownload ? "🔒 Pause Downloads" : "🟢 Enable Downloads"}
                 </button>
               </div>
 
-              <form onSubmit={handleSaveNoteEdit} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
-                <div className="form-group">
-                  <label className="form-label">Document Title</label>
+              {!noteForm.allowDownload && (
+                <div className="adm-form-group" style={{ marginTop: "4px" }}>
+                  <label className="adm-form-label" style={{ fontSize: "0.72rem", color: "#dc2626" }}>
+                    Notice / Reason Shown to Students (Optional)
+                  </label>
                   <input
                     type="text"
-                    className="form-input"
-                    value={noteForm.title}
-                    onChange={(e) => setNoteForm({ ...noteForm, title: e.target.value })}
-                    required
+                    className="adm-form-input"
+                    placeholder="e.g., Downloads paused for this document. Online preview is active."
+                    value={noteForm.downloadDisabledReason || ""}
+                    onChange={(e) => setNoteForm((prev) => ({ ...prev, downloadDisabledReason: e.target.value }))}
                   />
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label">Academic Subject</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={noteForm.subject}
-                    onChange={(e) => setNoteForm({ ...noteForm, subject: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div className="form-group">
-                    <label className="form-label">Branch</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={noteForm.branch}
-                      onChange={(e) => setNoteForm({ ...noteForm, branch: e.target.value })}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Course / Degree</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={noteForm.course}
-                      onChange={(e) => setNoteForm({ ...noteForm, course: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Year / Semester</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={noteForm.year}
-                    onChange={(e) => setNoteForm({ ...noteForm, year: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Description / Tags</label>
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    value={noteForm.description}
-                    onChange={(e) => setNoteForm({ ...noteForm, description: e.target.value })}
-                  />
-                </div>
-
-                {/* Single Note Download Permissions Toggle */}
-                <div
-                  style={{
-                    padding: "12px",
-                    borderRadius: "var(--radius-md)",
-                    background: noteForm.allowDownload ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
-                    border: `1px solid ${noteForm.allowDownload ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
-                        {noteForm.allowDownload ? (
-                          <>
-                            <Download size={15} style={{ color: "#34d399" }} />
-                            <span>Student PDF Downloads: Enabled</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock size={15} style={{ color: "#f87171" }} />
-                            <span>Student PDF Downloads: Locked / Read-Only</span>
-                          </>
-                        )}
-                      </div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        {noteForm.allowDownload
-                          ? "Students can download the original PDF file."
-                          : "Direct PDF download is locked. Students can only read via the Online Reader."}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setNoteForm((prev) => ({ ...prev, allowDownload: !prev.allowDownload }))}
-                      style={{
-                        padding: "6px 14px",
-                        borderRadius: "6px",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        border: noteForm.allowDownload ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
-                        background: noteForm.allowDownload ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                        color: noteForm.allowDownload ? "#fca5a5" : "#6ee7b7",
-                      }}
-                    >
-                      {noteForm.allowDownload ? "🔒 Pause Downloads" : "🟢 Enable Downloads"}
-                    </button>
-                  </div>
-
-                  {!noteForm.allowDownload && (
-                    <div className="form-group" style={{ marginTop: "4px" }}>
-                      <label className="form-label" style={{ fontSize: "0.75rem", color: "#fca5a5" }}>
-                        Notice / Reason Shown to Students (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g., Downloads paused for this document. Online preview is active."
-                        value={noteForm.downloadDisabledReason || ""}
-                        onChange={(e) => setNoteForm((prev) => ({ ...prev, downloadDisabledReason: e.target.value }))}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                  <button type="button" className="btn-secondary" onClick={() => setEditingNote(null)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn-primary">
-                    Save Changes
-                  </button>
-                </div>
-              </form>
+              )}
             </div>
-          </div>
-        )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
+              <button type="button" className="adm-btn-pill" onClick={() => setEditingNote(null)}>
+                Cancel
+              </button>
+              <button type="submit" className="adm-btn-pill primary">
+                Save Changes
+              </button>
+            </div>
+          </form>
+        </AdminSubModal>
 
         {/* SUB-MODAL 3: Edit Student Modal */}
-        {editingStudent && (
-          <div className="modal-overlay" onClick={() => setEditingStudent(null)} style={{ zIndex: 1200 }}>
-            <div className="modal-content" style={{ maxWidth: "540px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="modal-title">Edit Student Profile</div>
-                <button className="modal-close-btn" onClick={() => setEditingStudent(null)}>
-                  <X size={20} />
-                </button>
-              </div>
+        <AdminSubModal
+          isOpen={Boolean(editingStudent)}
+          onClose={() => setEditingStudent(null)}
+          title="Edit Student Profile"
+          subtitle="Modify learner details, academic department, and security roles"
+          icon={UserCheck}
+          accentColor="#4f46e5"
+          maxWidth="540px"
+        >
 
               <form onSubmit={handleSaveStudentEdit} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
                 <div className="form-group">
@@ -4141,66 +4115,60 @@ export default function AdminModal({
                 </div>
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                  <button type="button" className="btn-secondary" onClick={() => setEditingStudent(null)}>
+                  <button type="button" className="adm-btn-pill" onClick={() => setEditingStudent(null)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
+                  <button type="submit" className="adm-btn-pill primary">
                     Save Profile
                   </button>
                 </div>
               </form>
-            </div>
-          </div>
-        )}
+        </AdminSubModal>
 
         {/* SUB-MODAL 4: Delete All Notes Password Confirmation */}
-        {showDeleteAllModal && (
-          <div className="modal-overlay" onClick={() => setShowDeleteAllModal(false)} style={{ zIndex: 1250 }}>
-            <div className="modal-content" style={{ maxWidth: "460px" }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="modal-title" style={{ color: "#f43f5e" }}>
-                  ⚠️ Move All Notes to Restore Vault
-                </div>
-                <button className="modal-close-btn" onClick={() => setShowDeleteAllModal(false)}>
-                  <X size={20} />
-                </button>
+        <AdminSubModal
+          isOpen={showDeleteAllModal}
+          onClose={() => setShowDeleteAllModal(false)}
+          title="Move All Notes to Restore Vault"
+          subtitle="Safely soft-delete notes with instant undo restore capability"
+          icon={AlertTriangle}
+          accentColor="#ef4444"
+          maxWidth="460px"
+          zIndex={1250}
+        >
+          <form onSubmit={handleDeleteAllNotesSubmit}>
+            <p style={{ fontSize: "0.84rem", color: "#64748b", lineHeight: 1.5, margin: "0 0 14px 0" }}>
+              This will safely move all <strong>{notes.length}</strong> study notes to the Restore Vault. They can be restored anytime with zero data loss. Please enter your Administrator password to confirm:
+            </p>
+
+            {deleteAllError && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", color: "#b91c1c", padding: "8px 12px", borderRadius: "8px", marginBottom: "12px", fontSize: "0.82rem" }}>
+                {deleteAllError}
               </div>
+            )}
 
-              <form onSubmit={handleDeleteAllNotesSubmit} style={{ marginTop: "14px" }}>
-                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", lineHeight: 1.5, marginBottom: "16px" }}>
-                  This will safely move all <strong>{notes.length}</strong> study notes to the Restore Vault. They can be restored anytime with zero data loss. Please enter your Administrator password to confirm:
-                </p>
-
-                {deleteAllError && (
-                  <div style={{ background: "rgba(244, 63, 94, 0.1)", border: "1px solid rgba(244, 63, 94, 0.3)", color: "#f43f5e", padding: "10px 14px", borderRadius: "var(--radius-md)", marginBottom: "14px", fontSize: "0.85rem" }}>
-                    {deleteAllError}
-                  </div>
-                )}
-
-                <div className="form-group">
-                  <label className="form-label">Admin Password</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    placeholder="Enter Admin password..."
-                    value={deleteAllPassword}
-                    onChange={(e) => setDeleteAllPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
-                  <button type="button" className="btn-secondary" onClick={() => setShowDeleteAllModal(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn-danger" disabled={deleteAllLoading}>
-                    {deleteAllLoading ? "Authorizing..." : "Confirm & Move All"}
-                  </button>
-                </div>
-              </form>
+            <div className="adm-form-group">
+              <label className="adm-form-label">Admin Password</label>
+              <input
+                type="password"
+                className="adm-form-input"
+                placeholder="Enter Admin password..."
+                value={deleteAllPassword}
+                onChange={(e) => setDeleteAllPassword(e.target.value)}
+                required
+              />
             </div>
-          </div>
-        )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+              <button type="button" className="adm-btn-pill" onClick={() => setShowDeleteAllModal(false)}>
+                Cancel
+              </button>
+              <button type="submit" className="adm-btn-pill danger" disabled={deleteAllLoading}>
+                {deleteAllLoading ? "Authorizing..." : "Confirm & Move All"}
+              </button>
+            </div>
+          </form>
+        </AdminSubModal>
       </div>
     </div>
   );

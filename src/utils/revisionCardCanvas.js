@@ -244,10 +244,26 @@ export async function shareOrDownloadRevisionCard(options = {}) {
 }
 
 /**
- * 📲 1-Tap WhatsApp Status & Story Card Generator (1080x1920 9:16 Vertical HD)
- * Generates an aesthetic, viral academic poster with scannable QR Code and share trigger.
+ * Convert Canvas to File object synchronously (0ms delay, preserves browser user-activation)
  */
-export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
+export function canvasToFile(canvas, fileName = "study-story.png") {
+  const dataUrl = canvas.toDataURL("image/png");
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)?.[1] || "image/png";
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], fileName, { type: mime });
+}
+
+/**
+ * 📲 1-Tap WhatsApp Status & Story Card Canvas (1080x1920 9:16 Vertical HD)
+ * Synchronous generation with scannable QR Code and Free Study Material branding.
+ */
+export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
   const WIDTH = 1080;
   const HEIGHT = 1920;
   const PAD = 80;
@@ -364,7 +380,6 @@ export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
   // 7. Centerpiece Scannable QR Code Hub
   const qrBoxY = curY + featureBoxH + 48;
   const qrBoxH = 550;
-  ctx.fillStyle = "linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9))";
   ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
   ctx.strokeStyle = "rgba(56, 189, 248, 0.45)";
   ctx.lineWidth = 2.5;
@@ -382,32 +397,40 @@ export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
   ctx.fillStyle = "#38bdf8";
   ctx.fillText("Instant 0ms Reader • Zero Login Required to Read", WIDTH / 2, qrBoxY + 108);
 
-  // Scannable QR Code
+  // Synchronous Scannable QR Code
   const qrTargetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
   try {
-    const qrDataUrl = await QRCode.toDataURL(qrTargetUrl, {
-      width: 270,
-      margin: 1,
-      color: { dark: "#0f172a", light: "#ffffff" },
-    });
-    const qrImg = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = qrDataUrl;
-    });
-
+    const qr = QRCode.create(qrTargetUrl, { errorCorrectionLevel: "M" });
+    const numModules = qr.modules.size;
     const qrSize = 270;
     const qrX = (WIDTH - qrSize) / 2;
     const qrY = qrBoxY + 144;
+    const cell = qrSize / numModules;
 
+    // Draw clean white background with rounded corners
     ctx.fillStyle = "#ffffff";
-    drawRoundedRect(ctx, qrX - 14, qrY - 14, qrSize + 28, qrSize + 28, 22);
+    drawRoundedRect(ctx, qrX - 16, qrY - 16, qrSize + 32, qrSize + 32, 22);
     ctx.fill();
-    ctx.drawImage(qrImg, qrX, qrY, qrSize, qrSize);
-  } catch (_) {}
+
+    // Draw dark modules
+    ctx.fillStyle = "#0f172a";
+    for (let r = 0; r < numModules; r++) {
+      const y1 = Math.round(qrY + r * cell);
+      const y2 = Math.round(qrY + (r + 1) * cell);
+      for (let c = 0; c < numModules; c++) {
+        if (qr.modules.get(r, c)) {
+          const x1 = Math.round(qrX + c * cell);
+          const x2 = Math.round(qrX + (c + 1) * cell);
+          ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[CANVAS] QR draw error:", err);
+  }
 
   // Scannable URL text
+  ctx.textAlign = "center";
   ctx.font = "700 24px 'JetBrains Mono', Consolas, monospace";
   ctx.fillStyle = "#94a3b8";
   ctx.fillText("freestudymaterial.pages.dev", WIDTH / 2, qrBoxY + 494);
@@ -418,20 +441,34 @@ export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
   ctx.fillText("Shared from Free Study Material Cloud • 100% Free Lifetime Academic Vault", WIDTH / 2, HEIGHT - 80);
 
   ctx.textAlign = "left"; // reset alignment
+  return canvas;
+}
 
-  return await new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error("Story canvas generation failed"));
-    }, "image/png");
-  });
+export function generateWhatsAppStoryCardFile(note = {}, shareUrl = "", customFileName = "") {
+  const canvas = generateWhatsAppStoryCardCanvas(note, shareUrl);
+  const cleanTitle = String(note.title || "study-note")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 32) || "study-note";
+  const fileName = customFileName || `${cleanTitle}-whatsapp-story.png`;
+  return canvasToFile(canvas, fileName);
+}
+
+export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
+  return generateWhatsAppStoryCardFile(note, shareUrl);
 }
 
 /**
- * 📲 Share or Download 9:16 WhatsApp Status / Story Card
+ * 📲 Direct Device Native Share:
+ * - Direct OS share options dialog (Android, iOS, Windows, macOS)
+ * - PNG image card attached when device supports file sharing
+ * - Clean title, course details, and single clickable link
+ * - NEVER automatically downloads files on clicking share ("download nhi")
  */
 export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
-  const targetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
+  const targetUrl =
+    shareUrl ||
+    `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
 
   const cleanTitle = String(note.title || "Study Note").trim();
   const cleanSubject = note.subject && note.subject !== "General" ? String(note.subject).trim() : "";
@@ -442,61 +479,82 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
     ? `📚 ${cleanTitle} (${details})`
     : `📚 ${cleanTitle}`;
 
-  // Clear text + single clean clickable link (never duplicated, no %0A)
+  // Clean text + single clickable URL (clean, no duplicate URLs, no %0A encoding)
   const shareText = `${clearText}\n${targetUrl}`;
 
-  // 1. Auto-copy clean share text to clipboard
-  try {
-    await navigator.clipboard.writeText(shareText);
-  } catch (_) {}
-
-  const blob = await generateWhatsAppStoryCardBlob(note, targetUrl);
-  const safeName = String(note.title || "study-note")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .slice(0, 32) || "study-note";
+  const safeName =
+    String(cleanTitle)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .slice(0, 32) || "study-note";
   const fileName = `${safeName}-whatsapp-story.png`;
-  const file = new File([blob], fileName, { type: "image/png" });
 
-  // 2. Direct Native Share with PNG image file attached + clean text + single clickable link
-  // Note: We do NOT pass url property because mobile OS concats url to text causing duplicate links!
-  if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({
+  // Generate PNG image File 100% synchronously (<5ms) to preserve browser user gesture!
+  let file = null;
+  try {
+    file = generateWhatsAppStoryCardFile(note, targetUrl, fileName);
+  } catch (err) {
+    console.warn("[SHARE] Synchronous image card generation failed:", err);
+  }
+
+  // 1. Native Device System Share Dialog (Runs immediately on user click gesture)
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    // A. Device/OS supports sharing image file + text together (e.g. Android Chrome, iOS Safari)
+    if (file && typeof navigator.canShare === "function") {
+      const shareDataWithFile = {
         title: cleanTitle,
         text: shareText,
         files: [file],
-      });
-      return { method: "shared", fileName };
-    } catch (err) {
-      if (err?.name === "AbortError") return { method: "cancelled", fileName };
-      console.warn("[SHARE] File share failed, falling back to text:", err);
-    }
-  }
+      };
 
-  // 3. Fallback: Native System Share with Clean Text + Single Clickable Link
-  if (typeof navigator !== "undefined" && navigator.share) {
+      if (navigator.canShare(shareDataWithFile)) {
+        try {
+          await navigator.share(shareDataWithFile);
+          try { await navigator.clipboard.writeText(shareText); } catch (_) {}
+          return { method: "shared", fileName };
+        } catch (err) {
+          if (err?.name === "AbortError") {
+            // User dismissed/cancelled the OS share window
+            return { method: "cancelled", fileName };
+          }
+          console.warn("[SHARE] File share rejected, falling back to text:", err);
+        }
+      }
+    }
+
+    // B. Native System Share with Clean Text + Single Clickable Link
+    // (Used on Windows 10/11 / macOS / desktop browsers where files cannot be shared directly)
     try {
-      await navigator.share({
+      const shareDataText = {
         title: cleanTitle,
-        text: shareText,
-      });
+        text: clearText,
+        url: targetUrl,
+      };
+
+      await navigator.share(shareDataText);
+      try { await navigator.clipboard.writeText(shareText); } catch (_) {}
       return { method: "shared", fileName };
     } catch (err) {
-      if (err?.name === "AbortError") return { method: "cancelled", fileName };
-      console.warn("[SHARE] Standard share failed:", err);
+      if (err?.name === "AbortError") {
+        return { method: "cancelled", fileName };
+      }
+      console.warn("[SHARE] System text share failed:", err);
     }
   }
 
-  // 4. Fallback for Desktop browsers without Web Share: Download PNG poster + copy link
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1500);
+  // 2. Fallback for browsers without Web Share API (e.g. desktop Firefox or insecure context):
+  // Copy clean text & link to clipboard, and open WhatsApp Web (NO file download!)
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareText);
+    }
+  } catch (_) {}
 
-  return { method: "downloaded", fileName };
+  // Open WhatsApp Web share with clean pre-filled text
+  try {
+    const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  } catch (_) {}
+
+  return { method: "copied", fileName };
 }
