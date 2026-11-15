@@ -73,7 +73,6 @@ const SwipeToReviseModal = lazyWithRetry(() => import("./components/SwipeToRevis
 const AdminModal = lazyWithRetry(() => import("./components/admin/AdminModal"));
 const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal"));
 const CircleSearchModal = lazyWithRetry(() => import("./components/CircleSearchModal"));
-const ShareNoteModal = lazyWithRetry(() => import("./components/ShareNoteModal"));
 import FreehandCircleOverlay from "./components/FreehandCircleOverlay";
 import Movable3DFloatingWidget from "./components/Movable3DFloatingWidget";
 
@@ -175,9 +174,6 @@ export default function App() {
   const [airdropTargetNote, setAirdropTargetNote] = useState(null);
   const [airdropInitialMode, setAirdropInitialMode] = useState("qr");
   const [isSwipeToReviseOpen, setIsSwipeToReviseOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [shareModalNote, setShareModalNote] = useState(null);
-  const [shareModalInitialCopied, setShareModalInitialCopied] = useState(false);
 
   // 🌟 Home Page AI Study Pod State (Conversational Chatbox First + Flashcards & Summary)
   const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
@@ -298,11 +294,6 @@ export default function App() {
     const handleOpenAuthModal = (e) => {
       openAuth(e?.detail?.mode || "signin");
     };
-    const handleOpenShareModal = (e) => {
-      setShareModalNote(e?.detail?.note || null);
-      setShareModalInitialCopied(Boolean(e?.detail?.initialCopied));
-      setIsShareModalOpen(true);
-    };
     window.addEventListener("open_student_chat", handleOpenChat);
     window.addEventListener("open_help_desk", handleOpenHelp);
     window.addEventListener("open_study_pod", handleOpenPod);
@@ -311,7 +302,6 @@ export default function App() {
     window.addEventListener("open_ai_study_pod", handleOpenAiPod);
     window.addEventListener("open_circle_search", handleOpenCircleSearchEvent);
     window.addEventListener("open_auth_modal", handleOpenAuthModal);
-    window.addEventListener("open_share_modal", handleOpenShareModal);
 
     // Auto-open chat, help, study pod, or specific note page if URL has matching parameter
     const params = new URLSearchParams(window.location.search);
@@ -375,7 +365,6 @@ export default function App() {
       window.removeEventListener("open_ai_study_pod", handleOpenAiPod);
       window.removeEventListener("open_circle_search", handleOpenCircleSearchEvent);
       window.removeEventListener("open_auth_modal", handleOpenAuthModal);
-      window.removeEventListener("open_share_modal", handleOpenShareModal);
     };
   }, []);
 
@@ -2724,28 +2713,7 @@ export default function App() {
           />
         )}
 
-        {/* 🚀 Unified Share & HD Poster Modal (System Share + Live Scannable QR Poster) */}
-        {isShareModalOpen && shareModalNote && (
-          <ModalErrorBoundary
-            onClose={() => {
-              setIsShareModalOpen(false);
-              setShareModalNote(null);
-            }}
-          >
-            <ShareNoteModal
-              isOpen={isShareModalOpen}
-              onClose={() => {
-                setIsShareModalOpen(false);
-                setShareModalNote(null);
-                setShareModalInitialCopied(false);
-              }}
-              note={shareModalNote}
-              initialCopied={shareModalInitialCopied}
-              currentUser={currentUser}
-              onRequireAuth={openAuth}
-            />
-          </ModalErrorBoundary>
-        )}
+
       </React.Suspense>
 
       {/* 🛸 4 Movable 3D Floating Action Widgets (Help, AI Study, Circle Search, Chat) */}

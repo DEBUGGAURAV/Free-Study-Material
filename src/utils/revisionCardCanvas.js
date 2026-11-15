@@ -446,15 +446,15 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   const fileName = `${safeName}-whatsapp-story.png`;
   const file = new File([blob], fileName, { type: "image/png" });
 
-  const shareText = `📚 *${note.title || "Study Note"}*\nSubject: ${note.subject || "Engineering"}\nRead Online & Download 100% Free:\n🔗 ${targetUrl}`;
+  const cleanTitle = (note.title || "Study Note").trim();
+  const shareText = `📚 ${cleanTitle}\n${targetUrl}`;
 
-  // 2. Direct Native Share with PNG image file attached + link in caption
+  // 2. Direct Native Share with PNG image file attached + clean single clickable link
   if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
-        title: `${note.title || "Study Note"} — Free Study Material`,
+        title: cleanTitle,
         text: shareText,
-        url: targetUrl,
         files: [file],
       });
       return { method: "shared", fileName };
@@ -464,13 +464,12 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
     }
   }
 
-  // 3. Fallback: Native System Share with Text + Link (Triggers OS Share Dialog!)
+  // 3. Fallback: Native System Share with Clean Text + Single Clickable Link
   if (typeof navigator !== "undefined" && navigator.share) {
     try {
       await navigator.share({
-        title: `${note.title || "Study Note"} — Free Study Material`,
+        title: cleanTitle,
         text: shareText,
-        url: targetUrl,
       });
       return { method: "shared", fileName };
     } catch (err) {

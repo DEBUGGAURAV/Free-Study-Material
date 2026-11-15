@@ -6,6 +6,7 @@ import React, { useState, useEffect, useRef } from "react";
  * - Intelligent Drag vs Tap threshold (moved > 6px = drag, else click)
  * - Continuous 3D floating animation & physics on mobile & desktop
  * - Persistent position saved to localStorage with viewport boundary clamping
+ * - Performance optimized: primitive deps & unmount listener cleanup
  */
 export default function Movable3DFloatingWidget({
   id,
@@ -32,6 +33,23 @@ export default function Movable3DFloatingWidget({
     elemStartY: 0,
     hasMoved: false,
   });
+  const cleanupListenersRef = useRef(null);
+
+  // Destructure primitive values so inline object literal doesn't re-trigger effect on every parent render
+  const defRight = defaultPos?.right;
+  const defLeft = defaultPos?.left;
+  const defBottom = defaultPos?.bottom;
+  const defTop = defaultPos?.top;
+
+  // Cleanup any active dragging listeners on unmount to prevent leaks
+  useEffect(() => {
+    return () => {
+      if (cleanupListenersRef.current) {
+        cleanupListenersRef.current();
+        cleanupListenersRef.current = null;
+      }
+    };
+  }, []);
 
   // 1. Initialize position from localStorage or calculate default coordinates
   useEffect(() => {
@@ -62,23 +80,23 @@ export default function Movable3DFloatingWidget({
     let initX = 16;
     let initY = h - 68;
 
-    if (defaultPos?.right != null) {
-      initX = w - (defaultPos.right + elemW);
-    } else if (defaultPos?.left != null) {
-      initX = defaultPos.left;
+    if (defRight != null) {
+      initX = w - (defRight + elemW);
+    } else if (defLeft != null) {
+      initX = defLeft;
     }
 
-    if (defaultPos?.bottom != null) {
-      initY = h - (defaultPos.bottom + elemH);
-    } else if (defaultPos?.top != null) {
-      initY = defaultPos.top;
+    if (defBottom != null) {
+      initY = h - (defBottom + elemH);
+    } else if (defTop != null) {
+      initY = defTop;
     }
 
     setPos({
       x: Math.max(8, Math.min(w - elemW - 8, initX)),
       y: Math.max(8, Math.min(h - elemH - 8, initY)),
     });
-  }, [id, defaultPos]);
+  }, [id, defRight, defLeft, defBottom, defTop]);
 
   // 2. Keep within viewport bounds on screen resize or orientation change
   useEffect(() => {
@@ -102,6 +120,10 @@ export default function Movable3DFloatingWidget({
   const handleMouseDown = (e) => {
     if (e.button !== 0) return; // Only primary mouse button
     e.stopPropagation();
+
+    if (cleanupListenersRef.current) {
+      cleanupListenersRef.current();
+    }
 
     const info = dragInfoRef.current;
     info.startX = e.clientX;
@@ -135,6 +157,7 @@ export default function Movable3DFloatingWidget({
     const handleMouseUp = () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      cleanupListenersRef.current = null;
 
       if (info.hasMoved) {
         setTimeout(() => setIsDragging(false), 50);
@@ -149,6 +172,11 @@ export default function Movable3DFloatingWidget({
       }
     };
 
+    cleanupListenersRef.current = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
   };
@@ -157,6 +185,10 @@ export default function Movable3DFloatingWidget({
   const handleTouchStart = (e) => {
     if (!e.touches || !e.touches[0]) return;
     const touch = e.touches[0];
+
+    if (cleanupListenersRef.current) {
+      cleanupListenersRef.current();
+    }
 
     const info = dragInfoRef.current;
     info.startX = touch.clientX;
@@ -192,6 +224,7 @@ export default function Movable3DFloatingWidget({
     const handleTouchEnd = () => {
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
+      cleanupListenersRef.current = null;
 
       if (info.hasMoved) {
         setTimeout(() => setIsDragging(false), 50);
@@ -204,6 +237,11 @@ export default function Movable3DFloatingWidget({
       } else {
         setIsDragging(false);
       }
+    };
+
+    cleanupListenersRef.current = () => {
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
     };
 
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
