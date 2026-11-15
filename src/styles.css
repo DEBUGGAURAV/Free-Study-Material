@@ -2078,7 +2078,7 @@ select option,
   /* Prevent floating bottom island dock from overlapping bottom page elements */
   body, .app-container {
     padding-top: 4px !important;
-    padding-bottom: calc(130px + env(safe-area-inset-bottom, 12px)) !important;
+    padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .desktop-nav-matrix {
@@ -2351,20 +2351,7 @@ select option,
     z-index: 1040 !important;
   }
 
-  .mobile-floating-island-dock {
-    display: flex !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    scrollbar-width: none !important;
-    justify-content: flex-start !important;
-    gap: 4px !important;
-    padding: 6px 10px !important;
-  }
 
-  .mobile-floating-island-dock .dock-item {
-    flex: 0 0 auto !important;
-    min-width: 44px !important;
-  }
 }
 
 @media (max-width: 640px) {
@@ -3804,7 +3791,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 
 /* Floating 3D movable widgets are persistent and fully interactive across all screen sizes */
 @media (max-width: 768px) {
-  .app-shell.authenticated, .app-shell.authenticated .app-container, .app-shell.guest, .app-shell.guest .app-container { padding-bottom: calc(115px + env(safe-area-inset-bottom, 0px)) !important; }
+  .app-shell.authenticated, .app-shell.authenticated .app-container, .app-shell.guest, .app-shell.guest .app-container { padding-bottom: calc(75px + env(safe-area-inset-bottom, 0px)) !important; }
   .hero-section { padding: 12px 0 6px; }
   .hero-layout { gap: 14px; }
   .hero-title { max-width: 100%; font-size: clamp(1.85rem, 6.5vw, 2.5rem); line-height: 1.08; }
@@ -4187,23 +4174,26 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   }
 }
 
-/* Mobile Floating Dock 5-Tab Optimization (Zero Hidden / Zero Gesture Bar Overlap) */
+/* Mobile Floating Dock 5-Tab Optimization (Compact, Zero Excess Space Inside or Outside) */
 @media (max-width: 768px) {
   .mobile-floating-island-dock {
     justify-content: space-around !important;
+    align-items: center !important;
     gap: 0 !important;
-    bottom: calc(14px + env(safe-area-inset-bottom, 12px)) !important;
-    padding: 6px 4px calc(8px + env(safe-area-inset-bottom, 8px)) !important;
-    min-height: 56px !important;
+    bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 4px 6px !important;
+    min-height: 0 !important;
+    height: auto !important;
     background: rgba(255, 255, 255, 0.98) !important;
     border: 1.5px solid #cbd5e1 !important;
-    box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.18) !important;
+    box-shadow: 0 6px 20px -3px rgba(15, 23, 42, 0.16) !important;
     z-index: 1050 !important;
+    border-radius: 999px !important;
   }
   .mobile-floating-island-dock .dock-item {
     flex: 1 1 0 !important;
     min-width: 0 !important;
-    padding: 3px 2px 2px !important;
+    padding: 3px 2px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -4221,7 +4211,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1px;
+    padding: 0;
     border-radius: 50%;
   }
 }

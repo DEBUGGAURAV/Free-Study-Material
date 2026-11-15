@@ -79,7 +79,7 @@ export default function Movable3DFloatingWidget({
     const minY = 12;
     // On mobile, strictly keep clear of the bottom navigation dock (~76px)
     const maxY = isMobile
-      ? Math.max(10, h - estimatedH - 76)
+      ? Math.max(10, h - estimatedH - 62)
       : Math.max(10, h - estimatedH - 14);
 
     // Retrieve saved position
@@ -120,7 +120,7 @@ export default function Movable3DFloatingWidget({
     }
 
     // On mobile screens, elevate bottom default position so it clears the mobile bottom dock (~76px)
-    const mobileBottomOffset = isMobile ? 64 : 0;
+    const mobileBottomOffset = isMobile ? 50 : 0;
     if (defBottom != null) {
       const effectiveBottom = defBottom + mobileBottomOffset;
       initY = h - (effectiveBottom + estimatedH);
@@ -146,7 +146,7 @@ export default function Movable3DFloatingWidget({
       if (!prev) return prev;
       const maxX = Math.max(10, window.innerWidth - actualWidth - 14);
       const maxY = isMobile
-        ? Math.max(10, window.innerHeight - actualHeight - 76)
+        ? Math.max(10, window.innerHeight - actualHeight - 62)
         : Math.max(10, window.innerHeight - actualHeight - 14);
 
       const clampedX = Math.max(12, Math.min(maxX, prev.x));
@@ -170,7 +170,7 @@ export default function Movable3DFloatingWidget({
         const currentH = rect?.height || 44;
         const maxX = Math.max(10, window.innerWidth - currentW - 14);
         const maxY = isMobile
-          ? Math.max(10, window.innerHeight - currentH - 76)
+          ? Math.max(10, window.innerHeight - currentH - 62)
           : Math.max(10, window.innerHeight - currentH - 14);
         return {
           x: Math.max(12, Math.min(maxX, prev.x)),
@@ -219,7 +219,7 @@ export default function Movable3DFloatingWidget({
         const rect = widgetRef.current?.getBoundingClientRect() || (isMobile ? { width: 44, height: 44 } : { width: 135, height: 44 });
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
         const maxY = isMobile
-          ? Math.max(10, window.innerHeight - rect.height - 76)
+          ? Math.max(10, window.innerHeight - rect.height - 62)
           : Math.max(10, window.innerHeight - rect.height - 14);
 
         const newX = Math.max(12, Math.min(maxX, info.elemStartX + dx));
@@ -297,7 +297,7 @@ export default function Movable3DFloatingWidget({
         const rect = widgetRef.current?.getBoundingClientRect() || { width: 44, height: 44 };
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
         const maxY = isMobile
-          ? Math.max(10, window.innerHeight - rect.height - 76)
+          ? Math.max(10, window.innerHeight - rect.height - 62)
           : Math.max(10, window.innerHeight - rect.height - 14);
 
         const newX = Math.max(12, Math.min(maxX, info.elemStartX + dx));
