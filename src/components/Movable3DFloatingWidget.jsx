@@ -5,10 +5,11 @@ import { GripVertical } from "lucide-react";
  * 🛸 Movable 3D Floating Action Widget
  * - 100% Draggable (Touch on Mobile + Mouse on Desktop)
  * - Anti-overflow Viewport Clamping (Guaranteed NEVER cuts off on right/left/top/bottom)
+ * - Dock Clearance: Strictly prevents bottom widgets from hiding behind mobile dock
  * - Intelligent Drag vs Tap threshold (moved > 4px = drag, else click)
  * - Visual 3D tactile grip handle so users instantly know it is movable
  * - Continuous 3D floating animation & physics when idle
- * - Position saved to localStorage per widget ID with safe sanitization
+ * - Position saved to localStorage per widget ID with safe boundary sanitization
  * - Safe z-index (1055 default, 1070 while dragging) floating above mobile dock
  */
 export default function Movable3DFloatingWidget({
@@ -43,6 +44,8 @@ export default function Movable3DFloatingWidget({
   const defBottom = defaultPos?.bottom;
   const defTop = defaultPos?.top;
 
+  const STORAGE_KEY = `fsm_widget_pos_v2_${id}`;
+
   // Cleanup listeners on unmount
   useEffect(() => {
     return () => {
@@ -71,17 +74,38 @@ export default function Movable3DFloatingWidget({
       : 54;
     const estimatedH = isMobile ? 40 : 44;
 
-    // Check localStorage with strict boundary sanitization
-    const saved = localStorage.getItem(`fsm_widget_pos_${id}`);
+    const minX = 12;
+    const maxX = Math.max(10, w - estimatedW - 14);
+    const minY = 12;
+    // On mobile, strictly keep clear of the bottom navigation dock (~76px)
+    const maxY = isMobile
+      ? Math.max(10, h - estimatedH - 76)
+      : Math.max(10, h - estimatedH - 14);
+
+    // Retrieve saved position (with upgrade check from v1)
+    let saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) {
+      const oldSaved = localStorage.getItem(`fsm_widget_pos_${id}`);
+      if (oldSaved) {
+        try {
+          const parsed = JSON.parse(oldSaved);
+          // If old help position was left-aligned (< 60px), ignore to use right stack
+          if (id === "help" && parsed.x < 60) {
+            saved = null;
+          } else {
+            saved = oldSaved;
+          }
+        } catch (_) {}
+      }
+    }
+
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          const maxX = Math.max(10, w - estimatedW - 14);
-          const maxY = Math.max(10, h - estimatedH - 14);
           setPos({
-            x: Math.max(10, Math.min(maxX, parsed.x)),
-            y: Math.max(10, Math.min(maxY, parsed.y)),
+            x: Math.max(minX, Math.min(maxX, parsed.x)),
+            y: Math.max(minY, Math.min(maxY, parsed.y)),
           });
           return;
         }
@@ -98,8 +122,8 @@ export default function Movable3DFloatingWidget({
       initX = defLeft;
     }
 
-    // On mobile screens, elevate bottom default position so it clears the mobile bottom dock (~74px)
-    const mobileBottomOffset = isMobile ? 54 : 0;
+    // On mobile screens, elevate bottom default position so it clears the mobile bottom dock (~76px)
+    const mobileBottomOffset = isMobile ? 64 : 0;
     if (defBottom != null) {
       const effectiveBottom = defBottom + mobileBottomOffset;
       initY = h - (effectiveBottom + estimatedH);
@@ -107,12 +131,9 @@ export default function Movable3DFloatingWidget({
       initY = defTop;
     }
 
-    const maxX = Math.max(10, w - estimatedW - 14);
-    const maxY = Math.max(10, h - estimatedH - 14);
-
     setPos({
-      x: Math.max(10, Math.min(maxX, initX)),
-      y: Math.max(10, Math.min(maxY, initY)),
+      x: Math.max(minX, Math.min(maxX, initX)),
+      y: Math.max(minY, Math.min(maxY, initY)),
     });
   }, [id, defRight, defLeft, defBottom, defTop, label]);
 
@@ -122,14 +143,17 @@ export default function Movable3DFloatingWidget({
     const rect = widgetRef.current.getBoundingClientRect();
     const actualWidth = rect.width;
     const actualHeight = rect.height;
+    const isMobile = window.innerWidth < 640;
 
     setPos((prev) => {
       if (!prev) return prev;
       const maxX = Math.max(10, window.innerWidth - actualWidth - 14);
-      const maxY = Math.max(10, window.innerHeight - actualHeight - 14);
+      const maxY = isMobile
+        ? Math.max(10, window.innerHeight - actualHeight - 76)
+        : Math.max(10, window.innerHeight - actualHeight - 14);
 
-      const clampedX = Math.max(10, Math.min(maxX, prev.x));
-      const clampedY = Math.max(10, Math.min(maxY, prev.y));
+      const clampedX = Math.max(12, Math.min(maxX, prev.x));
+      const clampedY = Math.max(12, Math.min(maxY, prev.y));
 
       if (clampedX !== prev.x || clampedY !== prev.y) {
         return { x: clampedX, y: clampedY };
@@ -146,11 +170,14 @@ export default function Movable3DFloatingWidget({
         const rect = widgetRef.current?.getBoundingClientRect();
         const currentW = rect?.width || 135;
         const currentH = rect?.height || 44;
+        const isMobile = window.innerWidth < 640;
         const maxX = Math.max(10, window.innerWidth - currentW - 14);
-        const maxY = Math.max(10, window.innerHeight - currentH - 14);
+        const maxY = isMobile
+          ? Math.max(10, window.innerHeight - currentH - 76)
+          : Math.max(10, window.innerHeight - currentH - 14);
         return {
-          x: Math.max(10, Math.min(maxX, prev.x)),
-          y: Math.max(10, Math.min(maxY, prev.y)),
+          x: Math.max(12, Math.min(maxX, prev.x)),
+          y: Math.max(12, Math.min(maxY, prev.y)),
         };
       });
     };
@@ -190,11 +217,14 @@ export default function Movable3DFloatingWidget({
       if (info.hasMoved) {
         moveEvent.preventDefault();
         const rect = widgetRef.current?.getBoundingClientRect() || { width: 135, height: 44 };
+        const isMobile = window.innerWidth < 640;
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
-        const maxY = Math.max(10, window.innerHeight - rect.height - 14);
+        const maxY = isMobile
+          ? Math.max(10, window.innerHeight - rect.height - 76)
+          : Math.max(10, window.innerHeight - rect.height - 14);
 
-        const newX = Math.max(10, Math.min(maxX, info.elemStartX + dx));
-        const newY = Math.max(10, Math.min(maxY, info.elemStartY + dy));
+        const newX = Math.max(12, Math.min(maxX, info.elemStartX + dx));
+        const newY = Math.max(12, Math.min(maxY, info.elemStartY + dy));
 
         setPos({ x: newX, y: newY });
       }
@@ -209,7 +239,7 @@ export default function Movable3DFloatingWidget({
         setTimeout(() => setIsDragging(false), 50);
         setPos((currentPos) => {
           if (currentPos) {
-            localStorage.setItem(`fsm_widget_pos_${id}`, JSON.stringify(currentPos));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPos));
           }
           return currentPos;
         });
@@ -260,11 +290,14 @@ export default function Movable3DFloatingWidget({
 
       if (info.hasMoved) {
         const rect = widgetRef.current?.getBoundingClientRect() || { width: 125, height: 42 };
+        const isMobile = window.innerWidth < 640;
         const maxX = Math.max(10, window.innerWidth - rect.width - 14);
-        const maxY = Math.max(10, window.innerHeight - rect.height - 14);
+        const maxY = isMobile
+          ? Math.max(10, window.innerHeight - rect.height - 76)
+          : Math.max(10, window.innerHeight - rect.height - 14);
 
-        const newX = Math.max(10, Math.min(maxX, info.elemStartX + dx));
-        const newY = Math.max(10, Math.min(maxY, info.elemStartY + dy));
+        const newX = Math.max(12, Math.min(maxX, info.elemStartX + dx));
+        const newY = Math.max(12, Math.min(maxY, info.elemStartY + dy));
 
         setPos({ x: newX, y: newY });
       }
@@ -280,7 +313,7 @@ export default function Movable3DFloatingWidget({
         setTimeout(() => setIsDragging(false), 50);
         setPos((currentPos) => {
           if (currentPos) {
-            localStorage.setItem(`fsm_widget_pos_${id}`, JSON.stringify(currentPos));
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentPos));
           }
           return currentPos;
         });

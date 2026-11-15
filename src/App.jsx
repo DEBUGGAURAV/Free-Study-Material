@@ -2716,27 +2716,12 @@ export default function App() {
 
       </React.Suspense>
 
-      {/* 🛸 4 Movable 3D Floating Action Widgets (Help, AI Study, Circle Search, Chat) */}
-      {/* 1. ❓ Need Help? (Movable 3D Sunset Amber Glow) */}
-      <Movable3DFloatingWidget
-        id="help"
-        animIndex={1}
-        defaultPos={{ bottom: activeJob ? 82 : 24, left: 16 }}
-        onClick={() => setIsHelpOpen(true)}
-        title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
-        icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
-        label="Need Help?"
-        bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
-        glowColor="rgba(234, 88, 12, 0.48)"
-        borderGradient="rgba(254, 215, 170, 0.55)"
-        badge={<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff", display: "inline-block", marginLeft: "2px" }} />}
-      />
-
-      {/* 2. ✨ AI Study (Movable 3D Cyberpunk Violet-Magenta) */}
+      {/* 🛸 4 Movable 3D Floating Action Widgets (AI Study, Circle Search, Chat, Need Help) */}
+      {/* 1. ✨ AI Study (Movable 3D Cyberpunk Violet-Magenta) */}
       <Movable3DFloatingWidget
         id="ai"
         animIndex={2}
-        defaultPos={{ bottom: activeJob ? 194 : 136, right: 16 }}
+        defaultPos={{ bottom: activeJob ? 248 : 192, right: 16 }}
         onClick={() => {
           if (!currentUser) {
             openAuth("signin");
@@ -2754,11 +2739,11 @@ export default function App() {
         borderGradient="rgba(244, 114, 182, 0.55)"
       />
 
-      {/* 3. ⭕ Circle Search (Movable 3D Emerald Aurora & Cyan) */}
+      {/* 2. ⭕ Circle Search (Movable 3D Emerald Aurora & Cyan) */}
       <Movable3DFloatingWidget
         id="circle"
         animIndex={3}
-        defaultPos={{ bottom: activeJob ? 138 : 80, right: 16 }}
+        defaultPos={{ bottom: activeJob ? 192 : 136, right: 16 }}
         onClick={() => {
           if (!currentUser) {
             openAuth("signin");
@@ -2774,12 +2759,12 @@ export default function App() {
         borderGradient="rgba(103, 232, 249, 0.55)"
       />
 
-      {/* 4. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
+      {/* 3. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
       {!isChatOpen && (
         <Movable3DFloatingWidget
           id="chat"
           animIndex={4}
-          defaultPos={{ bottom: activeJob ? 82 : 24, right: 16 }}
+          defaultPos={{ bottom: activeJob ? 136 : 80, right: 16 }}
           onClick={() => {
             if (!currentUser) {
               openAuth("signin");
@@ -2809,6 +2794,21 @@ export default function App() {
           }
         />
       )}
+
+      {/* 4. ❓ Need Help? (Movable 3D Sunset Amber Glow) */}
+      <Movable3DFloatingWidget
+        id="help"
+        animIndex={1}
+        defaultPos={{ bottom: activeJob ? 80 : 24, right: 16 }}
+        onClick={() => setIsHelpOpen(true)}
+        title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
+        icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
+        label="Need Help?"
+        bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
+        glowColor="rgba(234, 88, 12, 0.48)"
+        borderGradient="rgba(254, 215, 170, 0.55)"
+        badge={<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff", display: "inline-block", marginLeft: "2px" }} />}
+      />
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
       <FreehandCircleOverlay
