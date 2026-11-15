@@ -273,19 +273,19 @@ export default function Navbar({
                     border: "1.5px solid transparent",
                     color: "#0f172a",
                     borderRadius: "999px",
-                    padding: "4px 11px",
-                    fontSize: "0.74rem",
+                    padding: "4px 9px",
+                    fontSize: "0.72rem",
                     fontWeight: 800,
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "5px",
+                    gap: "4px",
                     cursor: "pointer",
-                    boxShadow: "0 3px 12px rgba(124, 58, 237, 0.25)",
+                    boxShadow: "0 2px 8px rgba(124, 58, 237, 0.2)",
                     flexShrink: 0,
                   }}
                   title="Admin Studio Control Panel"
                 >
-                  <ShieldCheck size={15} color="#7c3aed" strokeWidth={2.25} />
+                  <ShieldCheck size={14} color="#7c3aed" strokeWidth={2.25} />
                   <span style={{ color: "#0f172a" }}>Admin</span>
                 </button>
               )}
@@ -299,61 +299,67 @@ export default function Navbar({
                   border: "1.5px solid #fde68a",
                   color: "#92400e",
                   borderRadius: "999px",
-                  padding: "4px 10px",
-                  fontSize: "0.74rem",
+                  padding: "4px 9px",
+                  fontSize: "0.72rem",
                   fontWeight: 800,
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
                   cursor: "pointer",
-                  boxShadow: "0 3px 12px rgba(245, 158, 11, 0.28)",
+                  boxShadow: "0 2px 8px rgba(245, 158, 11, 0.2)",
                   flexShrink: 0,
                 }}
                 title="Study Tinder: Swipe-to-Revise"
               >
-                <Flame size={14} color="#f59e0b" fill="#f59e0b" />
+                <Flame size={13} color="#f59e0b" fill="#f59e0b" />
                 <span>Revise</span>
               </button>
 
-              {currentUser && (
+              {currentUser && !isAdminOrManager && (
                 <button
                   type="button"
                   className="btn-upload-mobile-compact"
                   onClick={onOpenUpload}
                   title="Upload Notes"
+                  style={{
+                    padding: "4px 9px",
+                    fontSize: "0.72rem",
+                    flexShrink: 0,
+                  }}
                 >
-                  <UploadCloud size={14} />
+                  <UploadCloud size={13} />
                   <span>Upload</span>
                 </button>
               )}
 
               {currentUser ? (
-                <div className="mobile-user-cluster">
-                  <button
-                    type="button"
-                    className="mobile-profile-pill"
-                    onClick={onOpenProfile}
-                    onMouseEnter={handlePrefetchProfile}
-                    onTouchStart={handlePrefetchProfile}
-                    title="My Profile"
-                  >
-                    <span className="nav-avatar-circle" style={{ width: "22px", height: "22px", fontSize: "0.68rem" }}>
-                      {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
-                    </span>
-                    <span className="mobile-profile-name">
-                      {currentUser.name?.split(" ")[0] || "Profile"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="mobile-logout-pill"
-                    onClick={onLogout}
-                    title="Log Out"
-                  >
-                    <LogOut size={13} />
-                    <span>Exit</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="mobile-profile-avatar-pill"
+                  onClick={onOpenProfile}
+                  onMouseEnter={handlePrefetchProfile}
+                  onTouchStart={handlePrefetchProfile}
+                  title={`Logged in as ${currentUser.name || "Student"} • Tap to View Profile & Settings`}
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
+                    border: "2px solid #ffffff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ffffff",
+                    fontWeight: 900,
+                    fontSize: "0.8rem",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
+                    flexShrink: 0,
+                    padding: 0,
+                  }}
+                >
+                  {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+                </button>
               ) : (
                 <div className="nav-auth-actions nav-auth-actions-mobile">
                   <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
@@ -405,9 +411,9 @@ export default function Navbar({
                 className="search-circle-btn"
                 onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
                 style={{
-                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(99, 102, 241, 0.28))",
+                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(99, 102, 241, 0.12))",
                   border: "1px solid rgba(56, 189, 248, 0.45)",
-                  color: "#38bdf8",
+                  color: "#0284c7",
                   borderRadius: "6px",
                   padding: "2px 7px",
                   fontSize: "0.72rem",
@@ -421,7 +427,7 @@ export default function Navbar({
                 title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
               >
                 <GeminiIcon size={14} withRing ringColor="#3552c5" color="#0f8b7e" />
-                <span>Circle</span>
+                <span className="search-tool-label">Circle</span>
               </button>
 
               {/* ✨ AI Study Pod Popup Button */}
@@ -447,7 +453,7 @@ export default function Navbar({
                 title="AI Study: Conversational Tutor, Flashcards & Summary"
               >
                 <Sparkles size={12} color="#38bdf8" />
-                <span>AI Study</span>
+                <span className="search-tool-label">AI Study</span>
               </button>
 
               <kbd className="search-kbd-shortcut">⌘K</kbd>
@@ -753,11 +759,11 @@ export default function Navbar({
               type="button"
               className="dock-item dock-ai"
               onClick={onOpenAiStudyPod}
-              style={{ color: "#a855f7" }}
+              style={{ color: "#7c3aed" }}
               title="AI Study (Flashcards, Summary, Notes Filter)"
             >
-              <Sparkles size={18} color="#a855f7" style={{ filter: "drop-shadow(0 0 6px rgba(168, 85, 247, 0.6))" }} />
-              <span style={{ fontWeight: 750, color: "#e0e7ff" }}>AI Study</span>
+              <Sparkles size={18} color="#7c3aed" style={{ filter: "drop-shadow(0 0 6px rgba(124, 58, 237, 0.45))" }} />
+              <span style={{ fontWeight: 800, color: "#6d28d9" }}>AI Study</span>
             </button>
 
             {/* 3. ♊ Circle to Search & Solve (Elevated Center Hub) */}
@@ -998,6 +1004,69 @@ export default function Navbar({
                       <div className="more-card-info">
                         <strong>Push Notifications</strong>
                         <small>{pushBusy ? "Updating..." : pushStatus.subscribed ? "Alerts Active (Tap to mute)" : "Tap to enable exam alerts"}</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Upload Class Notes */}
+                  {currentUser && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        setShowMobileMoreSheet(false);
+                        onOpenUpload();
+                      }}
+                      style={{ background: "#ffffff", border: "1.5px solid #e0e7ff" }}
+                    >
+                      <div className="more-card-icon" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5" }}>
+                        <UploadCloud size={20} />
+                      </div>
+                      <div className="more-card-info">
+                        <strong style={{ color: "#1e293b" }}>Upload Class Notes</strong>
+                        <small>Contribute PDFs, formulas &amp; PYQ solutions</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* My Profile & Settings */}
+                  {currentUser && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        setShowMobileMoreSheet(false);
+                        onOpenProfile();
+                      }}
+                      style={{ background: "#ffffff", border: "1.5px solid #dbeafe" }}
+                    >
+                      <div className="more-card-icon" style={{ background: "linear-gradient(135deg, #4f46e5, #06b6d4)", color: "#ffffff", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: "0.82rem" }}>
+                        {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+                      </div>
+                      <div className="more-card-info">
+                        <strong style={{ color: "#1e293b" }}>{currentUser.name || "Student Profile"}</strong>
+                        <small>{currentUser.year || "View Level, XP & Account Settings"}</small>
+                      </div>
+                    </button>
+                  )}
+
+                  {/* Sign Out */}
+                  {currentUser && (
+                    <button
+                      type="button"
+                      className="mobile-more-card"
+                      onClick={() => {
+                        setShowMobileMoreSheet(false);
+                        onLogout();
+                      }}
+                      style={{ background: "#fef2f2", border: "1.5px solid #fecaca" }}
+                    >
+                      <div className="more-card-icon" style={{ background: "rgba(239, 68, 68, 0.12)", color: "#dc2626" }}>
+                        <LogOut size={20} />
+                      </div>
+                      <div className="more-card-info">
+                        <strong style={{ color: "#991b1b" }}>Sign Out</strong>
+                        <small>Safely end current device session</small>
                       </div>
                     </button>
                   )}

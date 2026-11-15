@@ -2121,7 +2121,7 @@ select option,
 @media (max-width: 768px) {
   /* Prevent floating bottom island dock from overlapping bottom page elements */
   body, .app-container {
-    padding-bottom: 84px !important;
+    padding-bottom: calc(115px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .desktop-nav-matrix {
@@ -2147,17 +2147,27 @@ select option,
   .navbar-wrapper {
     top: 6px;
     padding: 0 8px;
+    gap: 6px;
   }
 
   .navbar-content {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 12px;
-    border-radius: var(--radius-full);
-    height: 48px;
-    box-sizing: border-box;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    padding: 8px 12px 10px !important;
+    border-radius: 20px !important;
+    height: auto !important;
+    min-height: 48px !important;
+    box-sizing: border-box !important;
+  }
+
+  .nav-brand-row {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    flex-shrink: 0 !important;
   }
 
   .brand-section {
@@ -2188,27 +2198,33 @@ select option,
   }
 
   .search-wrapper {
-    max-width: none;
-    min-width: 0;
-    flex: 1;
-    margin: 0 4px;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    flex: 1 1 auto !important;
   }
 
   .search-input {
-    padding: 6px 44px 6px 28px;
-    font-size: 0.78rem;
-    height: 32px;
+    width: 100% !important;
+    padding: 7px 80px 7px 34px !important;
+    font-size: 0.8rem !important;
+    height: 36px !important;
+    border-radius: 999px !important;
+    background: #f8fafc !important;
+    border: 1.5px solid #cbd5e1 !important;
+    color: #0f172a !important;
   }
 
   .search-icon {
-    left: 8px;
-    width: 12px;
-    height: 12px;
+    left: 11px !important;
+    width: 14px !important;
+    height: 14px !important;
   }
 
   .search-right-tools {
-    right: 5px;
-    gap: 2px;
+    right: 6px !important;
+    gap: 4px !important;
   }
 
   .search-kbd-shortcut {
@@ -4070,7 +4086,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   .floating-side-action-dock, .floating-chat-trigger, .floating-help-trigger.authenticated { display: none !important; }
 }
 @media (max-width: 768px) {
-  .app-shell.authenticated, .app-shell.authenticated .app-container, .app-shell.guest, .app-shell.guest .app-container { padding-bottom: 84px !important; }
+  .app-shell.authenticated, .app-shell.authenticated .app-container, .app-shell.guest, .app-shell.guest .app-container { padding-bottom: calc(115px + env(safe-area-inset-bottom, 0px)) !important; }
   .hero-section { padding: 12px 0 6px; }
   .hero-layout { gap: 14px; }
   .hero-title { max-width: 100%; font-size: clamp(1.85rem, 6.5vw, 2.5rem); line-height: 1.08; }
@@ -5169,20 +5185,68 @@ svg.lucide {
 }
 
 @media (max-width: 768px) {
-  .command-matrix-grid {
+  .command-matrix-grid,
+  .command-radar-grid {
     grid-template-columns: 1fr !important;
   }
   .command-header-row {
     flex-direction: column !important;
     align-items: flex-start !important;
+    gap: 14px !important;
+  }
+  .student-avatar-orbit-3d {
+    width: 58px !important;
+    height: 58px !important;
   }
   .command-telemetry-dock {
     width: 100% !important;
-    justify-content: space-between !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 8px !important;
   }
   .telemetry-tile {
+    width: 100% !important;
     flex: 1 1 100% !important;
+    box-sizing: border-box !important;
+    padding: 9px 14px !important;
   }
+  .command-center-card {
+    padding: 16px 14px !important;
+    border-radius: 20px !important;
+  }
+  .notice-ticker {
+    margin: 12px 0 10px !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-tool-label {
+    display: none !important;
+  }
+  .search-input {
+    padding-right: 70px !important;
+  }
+}
+
+.dock-notice-dot {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.58rem;
+  font-weight: 900;
+  border-radius: 9999px;
+  padding: 1px 4px;
+  min-width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+  border: 1.5px solid #ffffff;
 }
 
 
