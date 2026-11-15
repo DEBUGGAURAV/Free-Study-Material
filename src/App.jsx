@@ -176,6 +176,7 @@ export default function App() {
   const [isSwipeToReviseOpen, setIsSwipeToReviseOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareModalNote, setShareModalNote] = useState(null);
+  const [shareModalInitialCopied, setShareModalInitialCopied] = useState(false);
 
   // 🌟 Home Page AI Study Pod State (Conversational Chatbox First + Flashcards & Summary)
   const [isHomeAiPodOpen, setIsHomeAiPodOpen] = useState(false);
@@ -298,6 +299,7 @@ export default function App() {
     };
     const handleOpenShareModal = (e) => {
       setShareModalNote(e?.detail?.note || null);
+      setShareModalInitialCopied(Boolean(e?.detail?.initialCopied));
       setIsShareModalOpen(true);
     };
     window.addEventListener("open_student_chat", handleOpenChat);
@@ -2734,8 +2736,10 @@ export default function App() {
               onClose={() => {
                 setIsShareModalOpen(false);
                 setShareModalNote(null);
+                setShareModalInitialCopied(false);
               }}
               note={shareModalNote}
+              initialCopied={shareModalInitialCopied}
               currentUser={currentUser}
               onRequireAuth={openAuth}
             />

@@ -42,7 +42,7 @@ function AdminModuleFallback({ label = "Loading module telemetry..." }) {
         justifyContent: "center",
         gap: "14px",
         padding: "64px 20px",
-        color: "#cbd5e1",
+        color: "#475569",
         fontSize: "0.88rem",
         fontWeight: 600,
       }}
@@ -52,19 +52,19 @@ function AdminModuleFallback({ label = "Loading module telemetry..." }) {
           width: "48px",
           height: "48px",
           borderRadius: "14px",
-          background: "linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18))",
-          border: "1.5px solid rgba(56, 189, 248, 0.4)",
+          background: "#f1f5f9",
+          border: "1.5px solid #cbd5e1",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 0 24px rgba(56, 189, 248, 0.28)",
+          boxShadow: "0 2px 10px rgba(15, 23, 42, 0.06)",
         }}
       >
-        <RefreshCw size={22} className="spin" style={{ color: "#38bdf8" }} />
+        <RefreshCw size={22} className="spin" style={{ color: "#2563eb" }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", textAlign: "center" }}>
-        <span style={{ color: "#ffffff", fontWeight: 750, fontSize: "0.95rem" }}>{label}</span>
-        <span style={{ fontSize: "0.76rem", color: "#94a3b8" }}>Streaming secure telemetry from edge cluster...</span>
+        <span style={{ color: "#0f172a", fontWeight: 750, fontSize: "0.95rem" }}>{label}</span>
+        <span style={{ fontSize: "0.76rem", color: "#64748b" }}>Streaming secure telemetry from edge cluster...</span>
       </div>
     </div>
   );
@@ -2789,9 +2789,9 @@ export default function AdminModal({
           padding: "0",
           overflow: "hidden",
           borderRadius: "18px",
-          background: "radial-gradient(ellipse at 50% 0%, #0d1527 0%, #060913 100%)",
-          border: "1px solid rgba(99, 102, 241, 0.4)",
-          boxShadow: "0 32px 90px rgba(0, 0, 0, 0.9), 0 0 60px rgba(99, 102, 241, 0.2)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
+          boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.16)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -2800,9 +2800,8 @@ export default function AdminModal({
           className="admin-modal-header"
           style={{
             padding: "14px 24px",
-            background: "linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(10, 16, 31, 0.92) 100%)",
-            borderBottom: "1px solid rgba(56, 189, 248, 0.18)",
-            backdropFilter: "blur(20px)",
+            background: "#ffffff",
+            borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -2822,7 +2821,7 @@ export default function AdminModal({
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#fff",
-                boxShadow: "0 0 24px rgba(6, 182, 212, 0.4)",
+                boxShadow: "0 4px 14px rgba(79, 70, 229, 0.3)",
                 flexShrink: 0,
               }}
             >
@@ -2830,14 +2829,14 @@ export default function AdminModal({
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-                <h2 style={{ fontSize: "1.22rem", fontWeight: 800, color: "#ffffff", margin: 0, letterSpacing: "-0.02em" }}>
+                <h2 style={{ fontSize: "1.22rem", fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
                   Academic Cloud Studio &amp; Control Center
                 </h2>
                 <span
                   style={{
-                    background: "rgba(16, 185, 129, 0.16)",
-                    border: "1px solid rgba(16, 185, 129, 0.5)",
-                    color: "#34d399",
+                    background: "#ecfdf5",
+                    border: "1px solid #a7f3d0",
+                    color: "#059669",
                     fontSize: "0.68rem",
                     fontWeight: 750,
                     padding: "2px 9px",
@@ -2845,22 +2844,21 @@ export default function AdminModal({
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    boxShadow: "0 0 12px rgba(16, 185, 129, 0.25)",
                   }}
                 >
                   <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
                   {health?.status === "online" ? "LIVE ENGINE v3.2 • ZERO-LATENCY EDGE" : "ONLINE • EDGE SHIELD ACTIVE"}
                 </span>
               </div>
-              <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: "3px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <span>Signed in as: <strong style={{ color: "#ffffff", fontWeight: 700 }}>{currentUser?.name || currentUser?.email}</strong></span>
+              <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span>Signed in as: <strong style={{ color: "#0f172a", fontWeight: 700 }}>{currentUser?.name || currentUser?.email}</strong></span>
                 {isMainAdmin && (
-                  <span style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(217, 119, 6, 0.15))", color: "#fbbf24", padding: "1px 8px", borderRadius: "6px", fontWeight: 800, fontSize: "0.7rem", border: "1px solid rgba(245, 158, 11, 0.5)", boxShadow: "0 0 10px rgba(245, 158, 11, 0.25)" }}>
+                  <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 8px", borderRadius: "6px", fontWeight: 800, fontSize: "0.7rem", border: "1px solid #fde68a" }}>
                     👑 MASTER ADMIN
                   </span>
                 )}
                 {isHalfAdmin && (
-                  <span style={{ background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", padding: "1px 8px", borderRadius: "6px", fontWeight: 700, fontSize: "0.7rem", border: "1px solid rgba(168, 85, 247, 0.4)" }}>
+                  <span style={{ background: "#f3e8ff", color: "#6b21a8", padding: "1px 8px", borderRadius: "6px", fontWeight: 700, fontSize: "0.7rem", border: "1px solid #e9d5ff" }}>
                     ⚡ MODERATOR ADMIN
                   </span>
                 )}
@@ -2889,10 +2887,10 @@ export default function AdminModal({
               style={{
                 width: "38px",
                 height: "38px",
-                background: "rgba(255, 255, 255, 0.05)",
+                background: "#f8fafc",
                 borderRadius: "9px",
-                border: "1px solid rgba(56, 189, 248, 0.28)",
-                color: "#38bdf8",
+                border: "1.5px solid #cbd5e1",
+                color: "#0284c7",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
@@ -2907,9 +2905,9 @@ export default function AdminModal({
                 width: "38px",
                 height: "38px",
                 borderRadius: "9px",
-                border: "1px solid rgba(239, 68, 68, 0.35)",
-                background: "rgba(239, 68, 68, 0.12)",
-                color: "#fca5a5",
+                border: "1.5px solid #fecaca",
+                background: "#fef2f2",
+                color: "#ef4444",
                 cursor: "pointer",
               }}
               title="Close Admin Studio"
@@ -2919,7 +2917,7 @@ export default function AdminModal({
           </div>
         </div>
 
-        {/* Global KPIs Bar (Vibrant Cyber Telemetry Cards) */}
+        {/* Global KPIs Bar (Pure White Studio Telemetry Cards) */}
         <div
           className="admin-kpis-strip"
           style={{
@@ -2927,89 +2925,88 @@ export default function AdminModal({
             gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
             gap: "10px",
             padding: "12px 22px",
-            background: "rgba(8, 12, 22, 0.88)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
-            backdropFilter: "blur(14px)",
+            background: "#f8fafc",
+            borderBottom: "1.5px solid #e2e8f0",
           }}
         >
           {/* Card 1: Vault Materials */}
-          <div style={{ background: "linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(99, 102, 241, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(99, 102, 241, 0.2)" }}>
+          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(99, 102, 241, 0.2)", color: "#818cf8" }}>CATALOG</span>
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Vault Materials</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#eef2ff", color: "#4f46e5" }}>CATALOG</span>
               </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#ffffff", marginTop: "2px", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#0f172a", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {notes.filter((n) => !deletedNoteIds.has(n.id)).length}
               </div>
             </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(99, 102, 241, 0.2)", border: "1px solid rgba(99, 102, 241, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#818cf8", flexShrink: 0 }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#eef2ff", border: "1.5px solid #c7d2fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#4f46e5", flexShrink: 0 }}>
               <BookOpen size={18} />
             </div>
           </div>
 
           {/* Card 2: Verified Students */}
-          <div style={{ background: "linear-gradient(135deg, rgba(6, 182, 212, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(6, 182, 212, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(6, 182, 212, 0.2)" }}>
+          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(6, 182, 212, 0.2)", color: "#22d3ee" }}>LEARNERS</span>
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Verified Students</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#e0f2fe", color: "#0284c7" }}>LEARNERS</span>
               </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#22d3ee", marginTop: "2px", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#0284c7", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {studentsTotal || stats?.totalStudents || 0}
               </div>
             </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(6, 182, 212, 0.2)", border: "1px solid rgba(6, 182, 212, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#22d3ee", flexShrink: 0 }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#e0f2fe", border: "1.5px solid #bae6fd", display: "flex", alignItems: "center", justifyContent: "center", color: "#0284c7", flexShrink: 0 }}>
               <Users size={18} />
             </div>
           </div>
 
           {/* Card 3: Bandwidth Saved */}
-          <div style={{ background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(16, 185, 129, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(16, 185, 129, 0.2)" }}>
+          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399" }}>ZERO-COST</span>
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Bandwidth Saved</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#ecfdf5", color: "#059669" }}>ZERO-COST</span>
               </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#34d399", marginTop: "2px", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#059669", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {stats?.formattedSaved && stats.formattedSaved !== "0.00 MB"
                   ? stats.formattedSaved
                   : (cdnStats?.edgeCdn?.totalBandwidthSaved || stats?.formattedSaved || "0.00 MB")}
               </div>
             </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.2)", border: "1px solid rgba(16, 185, 129, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#34d399", flexShrink: 0 }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ecfdf5", border: "1.5px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669", flexShrink: 0 }}>
               <Zap size={18} />
             </div>
           </div>
 
           {/* Card 4: RAM Consumption */}
-          <div style={{ background: "linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(245, 158, 11, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(245, 158, 11, 0.2)" }}>
+          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" }}>1MS CACHE</span>
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>RAM Consumption</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#fffbeb", color: "#d97706" }}>1MS CACHE</span>
               </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#fbbf24", marginTop: "2px", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#d97706", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
               </div>
             </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(245, 158, 11, 0.2)", border: "1px solid rgba(245, 158, 11, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fbbf24", flexShrink: 0 }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#fffbeb", border: "1.5px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", color: "#d97706", flexShrink: 0 }}>
               <Cpu size={18} />
             </div>
           </div>
 
           {/* Card 5: Edge CDN Hit Ratio */}
-          <div style={{ background: "linear-gradient(135deg, rgba(167, 139, 250, 0.08) 0%, rgba(15, 23, 42, 0.6) 100%)", border: "1px solid rgba(167, 139, 250, 0.28)", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 4px 18px -6px rgba(167, 139, 250, 0.2)" }}>
+          <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</span>
-                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "rgba(167, 139, 250, 0.2)", color: "#c084fc" }}>HIT RATIO</span>
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>Edge CDN Cache</span>
+                <span style={{ fontSize: "0.6rem", fontWeight: 800, padding: "1px 5px", borderRadius: "4px", background: "#f5f3ff", color: "#7c3aed" }}>HIT RATIO</span>
               </div>
-              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#c084fc", marginTop: "2px", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: "1.32rem", fontWeight: 850, color: "#7c3aed", marginTop: "2px", letterSpacing: "-0.02em" }}>
                 {cdnStats?.hitRatio || "99.4%"}
               </div>
             </div>
-            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(167, 139, 250, 0.2)", border: "1px solid rgba(167, 139, 250, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", color: "#c084fc", flexShrink: 0 }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#f5f3ff", border: "1.5px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center", color: "#7c3aed", flexShrink: 0 }}>
               <Globe size={18} />
             </div>
           </div>
@@ -3023,8 +3020,8 @@ export default function AdminModal({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "rgba(7, 10, 18, 0.98)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            background: "#ffffff",
+            borderBottom: "1.5px solid #e2e8f0",
             padding: "8px 16px",
             gap: "12px",
             flexWrap: "nowrap",
@@ -3047,7 +3044,7 @@ export default function AdminModal({
             {VISIBLE_TABS.map((tab) => {
               const isSelected = activeTab === tab.id;
               const badgeText = getTabBadgeText(tab.id);
-              const accentColor = tab.accent || "#38bdf8";
+              const accentColor = tab.accent || "#2563eb";
               const TabIcon = tab.icon || BookOpen;
 
               return (
@@ -3070,12 +3067,12 @@ export default function AdminModal({
                     gap: "7px",
                     border: isSelected
                       ? `1.5px solid ${accentColor}`
-                      : "1px solid rgba(255, 255, 255, 0.1)",
+                      : "1px solid #e2e8f0",
                     background: isSelected
-                      ? `linear-gradient(135deg, ${accentColor}33, rgba(15, 23, 42, 0.95))`
-                      : "rgba(255, 255, 255, 0.035)",
-                    color: isSelected ? "#ffffff" : "#cbd5e1",
-                    boxShadow: isSelected ? `0 0 20px -4px ${accentColor}66` : "none",
+                      ? "#ffffff"
+                      : "#f8fafc",
+                    color: isSelected ? "#0f172a" : "#475569",
+                    boxShadow: isSelected ? `0 2px 10px ${accentColor}25` : "none",
                     transition: "all 0.16s ease",
                     cursor: "pointer",
                   }}
@@ -3086,12 +3083,12 @@ export default function AdminModal({
                       width: "20px",
                       height: "20px",
                       borderRadius: "6px",
-                      background: isSelected ? accentColor : `${accentColor}25`,
+                      background: isSelected ? accentColor : `${accentColor}18`,
                       color: isSelected ? "#ffffff" : accentColor,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: isSelected ? `0 0 10px ${accentColor}` : "none",
+                      boxShadow: isSelected ? `0 2px 8px ${accentColor}44` : "none",
                       flexShrink: 0,
                     }}
                   >
@@ -3105,9 +3102,9 @@ export default function AdminModal({
                         fontWeight: 800,
                         padding: "1px 6px",
                         borderRadius: "999px",
-                        background: isSelected ? `${accentColor}40` : "rgba(255, 255, 255, 0.08)",
-                        color: isSelected ? "#ffffff" : accentColor,
-                        border: `1px solid ${isSelected ? accentColor : "rgba(255, 255, 255, 0.12)"}`,
+                        background: isSelected ? `${accentColor}18` : "#f1f5f9",
+                        color: isSelected ? accentColor : "#64748b",
+                        border: `1px solid ${isSelected ? accentColor : "#cbd5e1"}`,
                       }}
                     >
                       {badgeText}
@@ -3127,7 +3124,9 @@ export default function AdminModal({
                   fontSize: "0.78rem",
                   padding: "6px 12px",
                   borderRadius: "10px",
-                  color: "#f8fafc",
+                  color: "#0f172a",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
                 }}
               >
                 📊 Activity: {selectedStudentForActivity.name}
@@ -3142,11 +3141,11 @@ export default function AdminModal({
               alignItems: "center",
               gap: "4px",
               flexShrink: 0,
-              background: "rgba(15, 23, 42, 0.92)",
+              background: "#ffffff",
               padding: "3px",
               borderRadius: "11px",
-              border: "1px solid rgba(56, 189, 248, 0.25)",
-              boxShadow: "0 6px 20px -10px rgba(6, 182, 212, 0.45)",
+              border: "1.5px solid #cbd5e1",
+              boxShadow: "0 2px 8px rgba(15, 23, 42, 0.06)",
             }}
           >
             <button
@@ -3155,7 +3154,7 @@ export default function AdminModal({
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#cbd5e1",
+                color: "#475569",
                 cursor: "pointer",
                 padding: "5px 6px",
                 display: "flex",
@@ -3176,11 +3175,11 @@ export default function AdminModal({
                 gap: "7px",
                 padding: "5px 10px",
                 borderRadius: "8px",
-                border: `1px solid ${quickJumpOpen ? "#38bdf8" : "rgba(56, 189, 248, 0.3)"}`,
+                border: `1.5px solid ${quickJumpOpen ? "#2563eb" : "#e2e8f0"}`,
                 background: quickJumpOpen
-                  ? "linear-gradient(135deg, rgba(6, 182, 212, 0.28), rgba(79, 70, 229, 0.32))"
-                  : "linear-gradient(135deg, rgba(6, 182, 212, 0.14), rgba(99, 102, 241, 0.16))",
-                color: "#f8fafc",
+                  ? "#eff6ff"
+                  : "#f8fafc",
+                color: "#0f172a",
                 cursor: "pointer",
                 fontSize: "0.74rem",
                 fontWeight: 700,
@@ -3188,15 +3187,15 @@ export default function AdminModal({
               }}
               title="Open Quick-Jump Module Grid (Ctrl+K or /)"
             >
-              <LayoutGrid size={14} style={{ color: activeTabMeta?.accent || "#38bdf8" }} />
+              <LayoutGrid size={14} style={{ color: activeTabMeta?.accent || "#2563eb" }} />
               <span>Quick Jump</span>
               <span
                 style={{
                   fontSize: "0.62rem",
                   padding: "1px 5px",
                   borderRadius: "4px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  color: "#94a3b8",
+                  background: "#e2e8f0",
+                  color: "#475569",
                   fontFamily: "var(--font-mono)",
                 }}
               >
@@ -3205,7 +3204,7 @@ export default function AdminModal({
               <ChevronDown
                 size={13}
                 style={{
-                  color: "#94a3b8",
+                  color: "#64748b",
                   transform: quickJumpOpen ? "rotate(180deg)" : "none",
                   transition: "transform 0.15s ease",
                 }}
@@ -3218,7 +3217,7 @@ export default function AdminModal({
               style={{
                 background: "transparent",
                 border: "none",
-                color: "#cbd5e1",
+                color: "#475569",
                 cursor: "pointer",
                 padding: "5px 6px",
                 display: "flex",
@@ -3253,11 +3252,11 @@ export default function AdminModal({
                   maxWidth: "960px",
                   marginLeft: "auto",
                   zIndex: 100,
-                  background: "linear-gradient(160deg, rgba(13, 21, 39, 0.99), rgba(7, 11, 22, 0.99))",
-                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                  background: "#ffffff",
+                  border: "1.5px solid #cbd5e1",
                   borderRadius: "16px",
                   padding: "14px",
-                  boxShadow: "0 28px 65px rgba(0, 0, 0, 0.85), 0 0 36px rgba(56, 189, 248, 0.16)",
+                  boxShadow: "0 25px 60px rgba(15, 23, 42, 0.2)",
                   backdropFilter: "blur(20px)",
                   maxHeight: "min(68vh, 520px)",
                   overflowY: "auto",
@@ -3271,12 +3270,12 @@ export default function AdminModal({
                     gap: "10px",
                     padding: "8px 12px",
                     borderRadius: "10px",
-                    background: "rgba(255, 255, 255, 0.04)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    background: "#f8fafc",
+                    border: "1.5px solid #cbd5e1",
                     marginBottom: "12px",
                   }}
                 >
-                  <Search size={15} style={{ color: "#38bdf8", flexShrink: 0 }} />
+                  <Search size={15} style={{ color: "#2563eb", flexShrink: 0 }} />
                   <input
                     ref={quickJumpInputRef}
                     type="text"
@@ -3293,7 +3292,7 @@ export default function AdminModal({
                       background: "transparent",
                       border: "none",
                       outline: "none",
-                      color: "#f8fafc",
+                      color: "#0f172a",
                       fontSize: "0.84rem",
                     }}
                   />
@@ -3302,10 +3301,10 @@ export default function AdminModal({
                       type="button"
                       onClick={() => setQuickJumpQuery("")}
                       style={{
-                        background: "rgba(255, 255, 255, 0.08)",
+                        background: "#e2e8f0",
                         border: "none",
                         borderRadius: "6px",
-                        color: "#cbd5e1",
+                        color: "#475569",
                         fontSize: "0.7rem",
                         padding: "2px 7px",
                         cursor: "pointer",
@@ -3321,7 +3320,7 @@ export default function AdminModal({
 
                 {/* Categorized Grid */}
                 {quickJumpGroups.length === 0 ? (
-                  <div style={{ padding: "20px", textAlign: "center", color: "#94a3b8", fontSize: "0.82rem" }}>
+                  <div style={{ padding: "20px", textAlign: "center", color: "#64748b", fontSize: "0.82rem" }}>
                     No matching modules for "{quickJumpQuery}".
                   </div>
                 ) : (
@@ -3336,13 +3335,14 @@ export default function AdminModal({
                       <div
                         key={groupName}
                         style={{
-                          background: "rgba(255, 255, 255, 0.025)",
-                          border: "1px solid rgba(255, 255, 255, 0.07)",
+                          background: "#ffffff",
+                          border: "1.5px solid #e2e8f0",
                           borderRadius: "12px",
                           padding: "10px",
                           display: "flex",
                           flexDirection: "column",
                           gap: "6px",
+                          boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                         }}
                       >
                         <div
@@ -3351,9 +3351,9 @@ export default function AdminModal({
                             fontWeight: 800,
                             textTransform: "uppercase",
                             letterSpacing: "0.6px",
-                            color: "#94a3b8",
+                            color: "#475569",
                             padding: "0 4px 4px",
-                            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                            borderBottom: "1px solid #e2e8f0",
                           }}
                         >
                           {groupName}
@@ -3362,7 +3362,7 @@ export default function AdminModal({
                         {items.map((tab) => {
                           const isSelected = activeTab === tab.id;
                           const badgeText = getTabBadgeText(tab.id);
-                          const accentColor = tab.accent || "#38bdf8";
+                          const accentColor = tab.accent || "#2563eb";
                           const TabIcon = tab.icon || BookOpen;
 
                           return (
@@ -3381,12 +3381,12 @@ export default function AdminModal({
                                 borderRadius: "9px",
                                 border: isSelected
                                   ? `1.5px solid ${accentColor}`
-                                  : "1px solid rgba(255, 255, 255, 0.07)",
+                                  : "1px solid #e2e8f0",
                                 borderLeft: `3.5px solid ${accentColor}`,
                                 background: isSelected
-                                  ? `linear-gradient(135deg, ${accentColor}25, rgba(15, 23, 42, 0.95))`
-                                  : "rgba(15, 23, 42, 0.75)",
-                                color: isSelected ? "#ffffff" : "#e2e8f0",
+                                  ? "#eff6ff"
+                                  : "#f8fafc",
+                                color: isSelected ? "#0f172a" : "#334155",
                                 fontSize: "0.79rem",
                                 fontWeight: isSelected ? 800 : 600,
                                 cursor: "pointer",
@@ -3399,12 +3399,12 @@ export default function AdminModal({
                                     width: "26px",
                                     height: "26px",
                                     borderRadius: "7px",
-                                    background: isSelected ? accentColor : `${accentColor}22`,
+                                    background: isSelected ? accentColor : `${accentColor}18`,
                                     color: isSelected ? "#ffffff" : accentColor,
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    boxShadow: isSelected ? `0 0 10px ${accentColor}` : "none",
+                                    boxShadow: isSelected ? `0 2px 8px ${accentColor}44` : "none",
                                     flexShrink: 0,
                                   }}
                                 >
@@ -3421,7 +3421,7 @@ export default function AdminModal({
                                     fontWeight: 800,
                                     padding: "2px 7px",
                                     borderRadius: "999px",
-                                    background: `${accentColor}25`,
+                                    background: `${accentColor}18`,
                                     color: accentColor,
                                     border: `1px solid ${accentColor}55`,
                                     flexShrink: 0,
@@ -3449,9 +3449,10 @@ export default function AdminModal({
             style={{
               padding: "14px 18px",
               borderRadius: "14px",
-              background: `linear-gradient(135deg, ${activeTabMeta?.accent || "#38bdf8"}18 0%, rgba(15, 23, 42, 0.75) 100%)`,
-              border: `1px solid ${activeTabMeta?.accent || "#38bdf8"}44`,
-              boxShadow: `0 10px 28px -12px ${activeTabMeta?.accent || "#38bdf8"}35`,
+              background: "#ffffff",
+              border: "1.5px solid #e2e8f0",
+              borderLeft: `4px solid ${activeTabMeta?.accent || "#2563eb"}`,
+              boxShadow: "0 2px 10px rgba(15, 23, 42, 0.04)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -3466,13 +3467,13 @@ export default function AdminModal({
                   width: "42px",
                   height: "42px",
                   borderRadius: "12px",
-                  background: `linear-gradient(135deg, ${activeTabMeta?.accent || "#38bdf8"}38, ${activeTabMeta?.accent || "#38bdf8"}15)`,
-                  border: `1.5px solid ${activeTabMeta?.accent || "#38bdf8"}77`,
+                  background: `${activeTabMeta?.accent || "#2563eb"}15`,
+                  border: `1.5px solid ${activeTabMeta?.accent || "#2563eb"}44`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: activeTabMeta?.accent || "#38bdf8",
-                  boxShadow: `0 0 18px ${activeTabMeta?.accent || "#38bdf8"}44`,
+                  color: activeTabMeta?.accent || "#2563eb",
+                  boxShadow: `0 2px 10px ${activeTabMeta?.accent || "#2563eb"}25`,
                   flexShrink: 0,
                 }}
               >
@@ -3483,7 +3484,7 @@ export default function AdminModal({
               </div>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                  <h3 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#ffffff", letterSpacing: "-0.01em" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.08rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.01em" }}>
                     {activeTabMeta?.title || activeTabMeta?.label}
                   </h3>
                   <span
@@ -3494,15 +3495,15 @@ export default function AdminModal({
                       letterSpacing: "0.6px",
                       padding: "2px 8px",
                       borderRadius: "6px",
-                      background: `${activeTabMeta?.accent || "#38bdf8"}25`,
-                      color: activeTabMeta?.accent || "#38bdf8",
-                      border: `1px solid ${activeTabMeta?.accent || "#38bdf8"}55`,
+                      background: `${activeTabMeta?.accent || "#2563eb"}18`,
+                      color: activeTabMeta?.accent || "#2563eb",
+                      border: `1px solid ${activeTabMeta?.accent || "#2563eb"}55`,
                     }}
                   >
                     {activeTabMeta?.group || "SYSTEM MODULE"}
                   </span>
                 </div>
-                <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#64748b", lineHeight: 1.4 }}>
                   {activeTabMeta?.desc || "Active enterprise telemetry and control surface"}
                 </p>
               </div>
@@ -3532,9 +3533,9 @@ export default function AdminModal({
                   gap: "6px",
                   padding: "7px 13px",
                   borderRadius: "8px",
-                  background: "rgba(255, 255, 255, 0.06)",
-                  border: "1px solid rgba(255, 255, 255, 0.14)",
-                  color: "#f8fafc",
+                  background: "#f8fafc",
+                  border: "1.5px solid #cbd5e1",
+                  color: "#0f172a",
                   fontSize: "0.76rem",
                   fontWeight: 700,
                   cursor: "pointer",
@@ -3542,7 +3543,7 @@ export default function AdminModal({
                 }}
                 title="Refresh Current Module Telemetry"
               >
-                <RefreshCw size={13} style={{ color: activeTabMeta?.accent || "#38bdf8" }} />
+                <RefreshCw size={13} style={{ color: activeTabMeta?.accent || "#2563eb" }} />
                 <span>Refresh Module</span>
               </button>
 
@@ -3555,16 +3556,16 @@ export default function AdminModal({
                   gap: "6px",
                   padding: "7px 12px",
                   borderRadius: "8px",
-                  background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.22))",
-                  border: "1px solid rgba(56, 189, 248, 0.4)",
-                  color: "#ffffff",
+                  background: "#eff6ff",
+                  border: "1.5px solid #bfdbfe",
+                  color: "#1d4ed8",
                   fontSize: "0.75rem",
                   fontWeight: 750,
                   cursor: "pointer",
                 }}
                 title="Quick Switch Module (Ctrl+K or /)"
               >
-                <Search size={13} style={{ color: "#38bdf8" }} />
+                <Search size={13} style={{ color: "#2563eb" }} />
                 <span>Quick Jump (⌘K)</span>
               </button>
             </div>
@@ -3592,7 +3593,7 @@ export default function AdminModal({
               ) : (
                 <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
                   <div style={{ fontSize: "2rem", marginBottom: "12px" }}>📊</div>
-                  <h4 style={{ color: "#fff", marginBottom: "8px" }}>Student Activity & Session Inspector</h4>
+                  <h4 style={{ color: "#0f172a", marginBottom: "8px" }}>Student Activity & Session Inspector</h4>
                   <p style={{ fontSize: "0.85rem", maxWidth: "460px", margin: "0 auto 16px auto" }}>
                     Please select a student from the <strong>Students</strong> tab (click the ⚡ Activity icon on any student row) to inspect their active devices, termination options, and security history.
                   </p>

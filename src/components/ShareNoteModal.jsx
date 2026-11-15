@@ -18,12 +18,12 @@ import { generateWhatsAppStoryCardBlob, shareWhatsAppStoryCard } from "../utils/
 import { playSuccess, playPop } from "../utils/soundEffects";
 import { recordCampusShare } from "../utils/studentStudyContext";
 
-export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onRequireAuth }) {
+export default function ShareNoteModal({ isOpen, onClose, note, initialCopied = false, currentUser, onRequireAuth }) {
   const [posterUrl, setPosterUrl] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState("");
   const [isGeneratingPoster, setIsGeneratingPoster] = useState(false);
   const [isDownloadingPoster, setIsDownloadingPoster] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(initialCopied);
   const [sharedToChat, setSharedToChat] = useState(false);
   const [systemShareError, setSystemShareError] = useState("");
 
@@ -33,7 +33,16 @@ export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onR
     ? window.location.origin
     : "https://freestudymaterial.pages.dev";
 
-  const shareText = `📚 *Free Study Material Vault*\nDownload "${note?.title || "Study Note"}" for ${note?.subject || "General"} (${note?.course || "B.Tech"}):\n${noteUrl}`;
+  const shareText = `📚 *Free Study Material Vault*\nDownload "${note?.title || "Study Note"}" for ${note?.subject || "General"} (${note?.course || "B.Tech"}):\n🔗 ${noteUrl}`;
+
+  // Sync initialCopied prop when modal opens
+  useEffect(() => {
+    if (initialCopied && isOpen) {
+      setLinkCopied(true);
+      const timer = setTimeout(() => setLinkCopied(false), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [initialCopied, isOpen]);
 
   // Generate QR Code and HD Poster preview when modal opens
   useEffect(() => {
@@ -83,10 +92,37 @@ export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onR
 
     const shareData = {
       title: `${note.title || "Study Note"} — Free Study Material`,
-      text: `📚 Free Study Material Vault:\nDownload "${note.title}" for ${note.subject || "General"} (${note.course || "B.Tech"}):`,
+      text: `📚 Free Study Material Vault:\nDownload "${note.title}" for ${note.subject || "General"} (${note.course || "B.Tech"}):\n🔗 ${noteUrl}`,
       url: noteUrl,
     };
 
+    // 1. Try sharing actual HD PNG image file if ready & supported by device
+    if (posterUrl && typeof navigator !== "undefined" && navigator.canShare) {
+      try {
+        const response = await fetch(posterUrl);
+        const blob = await response.blob();
+        const safeName = String(note.title || "study-note")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .slice(0, 32) || "study-note";
+        const file = new File([blob], `${safeName}-poster.png`, { type: "image/png" });
+
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            ...shareData,
+            files: [file],
+          });
+          setLinkCopied(true);
+          setTimeout(() => setLinkCopied(false), 2200);
+          return;
+        }
+      } catch (err) {
+        if (err.name === "AbortError") return;
+        console.warn("[SYSTEM-SHARE] File share error, falling back to text:", err);
+      }
+    }
+
+    // 2. Standard native system share (text + url)
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
@@ -99,14 +135,14 @@ export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onR
       }
     }
 
-    // Fallback: Copy link and inform user
+    // 3. Fallback: Copy link and inform user
     try {
-      await navigator.clipboard.writeText(`${shareData.text} ${noteUrl}`);
+      await navigator.clipboard.writeText(noteUrl);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);
     } catch (_) {
       window.open(
-        `https://api.whatsapp.com/send?text=${encodeURIComponent(shareData.text + " " + noteUrl)}`,
+        `https://api.whatsapp.com/send?text=${encodeURIComponent(shareData.text)}`,
         "_blank"
       );
     }
@@ -352,11 +388,110 @@ export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onR
               )}
             </div>
 
-            {/* Poster Actions */}
+            {/* 🔗 Direct Link Attached Directly Below PNG Image (Jo copy ho sake) */}
+            <div
+              style={{
+                maxWidth: "340px",
+                margin: "0 auto",
+                width: "100%",
+                background: "rgba(15, 23, 42, 0.85)",
+                border: `1.5px solid ${linkCopied ? "rgba(52, 211, 153, 0.6)" : "rgba(56, 189, 248, 0.4)"}`,
+                borderRadius: "14px",
+                padding: "8px 10px",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxShadow: "0 4px 16px rgba(0, 0, 0, 0.45)",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: "0.85rem" }}>🔗</span>
+                <input
+                  type="text"
+                  readOnly
+                  value={noteUrl}
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: "0.78rem",
+                    fontFamily: "'JetBrains Mono', Consolas, monospace",
+                    color: linkCopied ? "#34d399" : "#93c5fd",
+                    background: "transparent",
+                    border: "none",
+                    outline: "none",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  onFocus={(e) => e.target.select()}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                title="Copy note link to clipboard"
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: "10px",
+                  background: linkCopied ? "#059669" : "linear-gradient(135deg, #0284c7, #2563eb)",
+                  border: "none",
+                  color: "#ffffff",
+                  fontSize: "0.78rem",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  flexShrink: 0,
+                  boxShadow: linkCopied ? "0 2px 8px rgba(5, 150, 105, 0.4)" : "0 2px 8px rgba(2, 132, 199, 0.35)",
+                  transition: "all 0.18s ease",
+                }}
+              >
+                {linkCopied ? (
+                  <>
+                    <Check size={14} />
+                    <span>Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Poster Actions (Device Share & Save Poster) */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px", maxWidth: "340px", margin: "0 auto", width: "100%" }}>
+              {/* 📱 Device Native Share Button */}
               <button
                 type="button"
                 className="btn-primary"
+                onClick={handleNativeSystemShare}
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  padding: "12px 16px",
+                  borderRadius: "14px",
+                  fontSize: "0.88rem",
+                  fontWeight: 800,
+                  background: "linear-gradient(135deg, #0284c7 0%, #4f46e5 100%)",
+                  border: "1.5px solid rgba(56, 189, 248, 0.4)",
+                  boxShadow: "0 6px 20px -2px rgba(2, 132, 199, 0.45)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "9px",
+                  cursor: "pointer",
+                }}
+              >
+                <Share2 size={18} />
+                <span>📱 Open Device Share Option</span>
+              </button>
+
+              {/* 💾 Save / Download HD Poster */}
+              <button
+                type="button"
                 onClick={handleDownloadPoster}
                 disabled={isDownloadingPoster || isGeneratingPoster}
                 style={{
@@ -364,23 +499,26 @@ export default function ShareNoteModal({ isOpen, onClose, note, currentUser, onR
                   justifyContent: "center",
                   padding: "10px 16px",
                   borderRadius: "12px",
-                  fontSize: "0.85rem",
-                  fontWeight: 800,
-                  background: "linear-gradient(135deg, #0284c7 0%, #2563eb 100%)",
-                  boxShadow: "0 4px 16px rgba(2, 132, 199, 0.35)",
+                  fontSize: "0.82rem",
+                  fontWeight: 750,
+                  background: "rgba(255, 255, 255, 0.06)",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                  color: "#cbd5e1",
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
+                  cursor: "pointer",
+                  transition: "all 0.18s ease",
                 }}
               >
                 {isDownloadingPoster ? (
                   <>
-                    <div className="spinner" style={{ width: "14px", height: "14px" }} />
+                    <div className="spinner" style={{ width: "13px", height: "13px" }} />
                     <span>Preparing Download...</span>
                   </>
                 ) : (
                   <>
-                    <Download size={16} />
+                    <Download size={15} />
                     <span>Save / Download HD Poster (PNG)</span>
                   </>
                 )}

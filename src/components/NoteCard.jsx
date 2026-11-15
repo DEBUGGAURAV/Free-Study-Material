@@ -165,7 +165,7 @@ function NoteCard({
     isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false"
   );
 
-  // 1. One-Tap Native Web Share API (WhatsApp/Telegram/System Sheet)
+  // 1. One-Tap Share: Attached Link Copied + HD Poster Modal + Device Share Option Opened
   const handleShareNote = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -173,32 +173,36 @@ function NoteCard({
     recordCampusShare(note);
 
     const noteUrl = `${window.location.origin}/?note=${note.id}`;
+    const shareText = `📚 *${note.title || "Study Note"}*\nSubject: ${note.subject || "Engineering"} (${note.course || "B.Tech"})\nRead Online & Download 100% Free:\n🔗 ${noteUrl}`;
+
+    // 1. Copy link automatically so it's ready to paste ("jo copy ho sake")
+    try {
+      await navigator.clipboard.writeText(noteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch (_) {}
+
+    // 2. Open Share Modal showing the PNG image with link attached below
+    window.dispatchEvent(
+      new CustomEvent("open_share_modal", {
+        detail: { note, initialCopied: true },
+      })
+    );
+
+    // 3. Immediately trigger device's native share option ("uske baad device ka share option khul jaye")
     const shareData = {
-      title: note.title,
-      text: `📚 Free Study Material Vault:\nDownload "${note.title}" for ${note.subject || "General"} (${note.course || "B.Tech"}):`,
+      title: `${note.title || "Study Note"} — Free Study Material`,
+      text: shareText,
       url: noteUrl,
     };
 
-    if (navigator.share) {
+    if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        return;
       } catch (err) {
-        if (err.name === "AbortError") return;
+        if (err.name === "AbortError") return; // User closed share sheet
+        console.warn("[SHARE] System share dismiss/error:", err);
       }
-    }
-
-    try {
-      await navigator.clipboard.writeText(`${shareData.text} ${noteUrl}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (_) {
-      window.open(
-        `https://api.whatsapp.com/send?text=${encodeURIComponent(shareData.text + " " + noteUrl)}`,
-        "_blank"
-      );
     }
   };
 
@@ -737,16 +741,8 @@ function NoteCard({
             <button
               type="button"
               className="btn-card-micro btn-card-share"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.dispatchEvent(
-                  new CustomEvent("open_share_modal", {
-                    detail: { note },
-                  })
-                );
-              }}
-              title="Share Note: System Share Dialog & HD Poster with Scannable QR Code"
+              onClick={handleShareNote}
+              title="Share Note: PNG Poster, Copy Link & Device Share Option"
             >
               <Share2 size={14} strokeWidth={2.2} />
               <span>Share</span>

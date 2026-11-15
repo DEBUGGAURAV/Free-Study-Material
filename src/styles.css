@@ -4130,10 +4130,9 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 
 /* ==========================================================================
-   DARK MODAL SCOPE OVERRIDES (Prevents Light :root variables inside dark studio/feature modals)
+   DARK MODAL SCOPE OVERRIDES (Prevents Light :root variables inside dark feature modals)
    ========================================================================== */
 .dark-modal-surface,
-.admin-modal-container,
 .help-center-modal-content {
   --bg-primary: #060913;
   --bg-surface: #0f172a;
@@ -4148,10 +4147,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 
 .dark-modal-surface .form-input,
 .dark-modal-surface .form-select,
-.dark-modal-surface .form-textarea,
-.admin-modal-container .form-input,
-.admin-modal-container .form-select,
-.admin-modal-container .form-textarea {
+.dark-modal-surface .form-textarea {
   background: rgba(15, 23, 42, 0.88);
   border-color: rgba(148, 163, 184, 0.3);
   color: #f8fafc;
@@ -4159,41 +4155,201 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 
 .dark-modal-surface .form-input::placeholder,
-.dark-modal-surface .form-textarea::placeholder,
-.admin-modal-container .form-input::placeholder,
-.admin-modal-container .form-textarea::placeholder {
+.dark-modal-surface .form-textarea::placeholder {
   color: #94a3b8;
 }
 
 .dark-modal-surface .form-input:focus,
 .dark-modal-surface .form-select:focus,
-.dark-modal-surface .form-textarea:focus,
-.admin-modal-container .form-input:focus,
-.admin-modal-container .form-select:focus,
-.admin-modal-container .form-textarea:focus {
+.dark-modal-surface .form-textarea:focus {
   background: rgba(15, 23, 42, 0.98);
   border-color: #38bdf8;
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
 }
 
-.dark-modal-surface select option,
-.admin-modal-container select option {
+.dark-modal-surface select option {
   background: #0f172a !important;
   color: #f8fafc !important;
 }
 
-.dark-modal-surface .btn-secondary,
-.admin-modal-container .btn-secondary {
+.dark-modal-surface .btn-secondary {
   background: rgba(30, 41, 59, 0.85);
   border-color: rgba(148, 163, 184, 0.3);
   color: #e2e8f0;
 }
 
-.dark-modal-surface .btn-secondary:hover,
-.admin-modal-container .btn-secondary:hover {
+.dark-modal-surface .btn-secondary:hover {
   background: rgba(51, 65, 85, 0.95);
   border-color: #38bdf8;
   color: #ffffff;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   🏛️ PURE WHITE STUDIO THEME FOR ADMIN CONTROL CENTER & TABS
+   ══════════════════════════════════════════════════════════════════════ */
+.admin-modal-container {
+  --bg-primary: #ffffff !important;
+  --bg-surface: #ffffff !important;
+  --bg-surface-elevated: #f8fafc !important;
+  --bg-glass-card: #ffffff !important;
+  --border-subtle: #e2e8f0 !important;
+  --text-main: #0f172a !important;
+  --text-muted: #475569 !important;
+  --text-dim: #64748b !important;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.16) !important;
+}
+
+.admin-modal-container .admin-modal-header {
+  background: #ffffff !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+.admin-modal-container .admin-kpis-strip {
+  background: #f8fafc !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+.admin-modal-container .admin-tab-nav-strip {
+  background: #ffffff !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+.admin-modal-container .admin-tab-body {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Universal Card, Grid & Table Surface Reset to Pure White */
+.admin-modal-container div[style*="rgba(15, 23, 42"],
+.admin-modal-container div[style*="rgba(30, 41, 59"],
+.admin-modal-container div[style*="rgba(8, 12, 22"],
+.admin-modal-container div[style*="rgba(7, 10, 18"],
+.admin-modal-container div[style*="rgba(10, 16, 31"],
+.admin-modal-container div[style*="rgba(11, 19, 43"],
+.admin-modal-container div[style*="rgba(13, 21, 39"],
+.admin-modal-container div[style*="rgba(2, 6, 23"],
+.admin-modal-container div[style*="rgba(255, 255, 255, 0.02"],
+.admin-modal-container div[style*="rgba(255, 255, 255, 0.03"],
+.admin-modal-container div[style*="rgba(255, 255, 255, 0.04"],
+.admin-modal-container div[style*="rgba(255, 255, 255, 0.05"],
+.admin-modal-container div[style*="#0f172a"],
+.admin-modal-container div[style*="#0d1527"],
+.admin-modal-container div[style*="#060913"] {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+}
+
+.admin-modal-container span[style*="#cbd5e1"],
+.admin-modal-container span[style*="#94a3b8"],
+.admin-modal-container div[style*="#94a3b8"],
+.admin-modal-container p[style*="#94a3b8"],
+.admin-modal-container small[style*="#94a3b8"],
+.admin-modal-container span[style*="#64748b"],
+.admin-modal-container div[style*="#64748b"],
+.admin-modal-container p[style*="#64748b"] {
+  color: #64748b !important;
+}
+
+.admin-modal-container h1,
+.admin-modal-container h2,
+.admin-modal-container h3,
+.admin-modal-container h4,
+.admin-modal-container h5,
+.admin-modal-container h6,
+.admin-modal-container strong[style*="#ffffff"],
+.admin-modal-container strong[style*="#fff"],
+.admin-modal-container span[style*="#ffffff"]:not(button *),
+.admin-modal-container span[style*="#fff"]:not(button *),
+.admin-modal-container div[style*="#ffffff"]:not(button *),
+.admin-modal-container div[style*="#fff"]:not(button *),
+.admin-modal-container p[style*="#ffffff"],
+.admin-modal-container p[style*="#fff"],
+.admin-modal-container label[style*="#ffffff"],
+.admin-modal-container label[style*="#fff"] {
+  color: #0f172a !important;
+}
+
+.admin-modal-container pre,
+.admin-modal-container code {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* Tables inside Admin Control Center */
+.admin-modal-container table {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.admin-modal-container th {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  font-weight: 800 !important;
+  border-bottom: 1.5px solid #cbd5e1 !important;
+}
+
+.admin-modal-container tr {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.admin-modal-container tr:hover {
+  background: #f8fafc !important;
+}
+
+.admin-modal-container td {
+  color: #1e293b !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+/* Forms, Inputs & Selects inside Admin */
+.admin-modal-container input,
+.admin-modal-container select,
+.admin-modal-container textarea,
+.admin-modal-container .form-input,
+.admin-modal-container .form-select,
+.admin-modal-container .form-textarea {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  color-scheme: light !important;
+}
+
+.admin-modal-container input::placeholder,
+.admin-modal-container textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.admin-modal-container input:focus,
+.admin-modal-container select:focus,
+.admin-modal-container textarea:focus {
+  background: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+.admin-modal-container select option {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Secondary Buttons inside Admin */
+.admin-modal-container .btn-secondary {
+  background: #f8fafc !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.admin-modal-container .btn-secondary:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f172a !important;
 }
 
 /* ══════════════════════════════════════════════════════════════════════
