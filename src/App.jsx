@@ -2739,7 +2739,7 @@ export default function App() {
         borderGradient="rgba(244, 114, 182, 0.55)"
       />
 
-      {/* 2. ⭕ Circle Search (Movable 3D Emerald Aurora & Cyan) */}
+      {/* 2. ⭕ Circle Search (Movable 3D Gemini Galaxy AI: Indigo, Cyan & Emerald Mint) */}
       <Movable3DFloatingWidget
         id="circle"
         animIndex={3}
@@ -2754,9 +2754,9 @@ export default function App() {
         title="Pencil & Circle Search: Draw any shape with Pencil to get instant AI search"
         icon={<GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />}
         label="Circle Search"
-        bgGradient="linear-gradient(135deg, #059669 0%, #0d9488 50%, #06b6d4 100%)"
-        glowColor="rgba(5, 150, 105, 0.5)"
-        borderGradient="rgba(103, 232, 249, 0.55)"
+        bgGradient="linear-gradient(135deg, #4f46e5 0%, #06b6d4 50%, #10b981 100%)"
+        glowColor="rgba(6, 182, 212, 0.55)"
+        borderGradient="rgba(165, 243, 252, 0.65)"
       />
 
       {/* 3. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
