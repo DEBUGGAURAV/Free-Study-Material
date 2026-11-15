@@ -5206,6 +5206,7 @@ svg.lucide {
   transition: transform 0.15s ease-out;
   box-sizing: border-box;
   max-width: calc(100vw - 18px);
+  z-index: 1210;
 }
 
 .movable-3d-widget,
@@ -5234,7 +5235,7 @@ svg.lucide {
 .movable-3d-widget.is-dragging {
   animation: none !important;
   transform: scale(1.08) !important;
-  z-index: 1070 !important;
+  z-index: 1260 !important;
 }
 
 .movable-3d-inner {

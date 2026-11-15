@@ -1152,6 +1152,28 @@ export default function VirtualPdfReader({
   const [voiceSpeed, setVoiceSpeed] = useState(1.0); // 0.8 | 1.0 | 1.25 | 1.5
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const voiceMenuRef = useRef(null);
+  const voicesListRef = useRef([]);
+
+  // Pre-fetch and cache speech synthesis voices immediately on mount
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const updateVoices = () => {
+      try {
+        const v = window.speechSynthesis.getVoices();
+        if (v && v.length > 0) {
+          voicesListRef.current = v;
+        }
+      } catch (_) {}
+    };
+    updateVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", updateVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", updateVoices);
+      try {
+        window.speechSynthesis.cancel();
+      } catch (_) {}
+    };
+  }, []);
 
   // Restore voice reader preferences from localStorage
   useEffect(() => {
@@ -2470,13 +2492,13 @@ export default function VirtualPdfReader({
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setOcrStatusText("Speech Synthesis is not supported in this browser.");
       setTimeout(() => setOcrStatusText(""), 3000);
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
       return;
     }
 
-    stopSpeech();
-
     // Clean text of non-printable / markdown / formatting noise
-    const cleanText = fullText
+    const cleanText = (fullText || "")
       .replace(/[*_#`~[\]()]/g, " ")
       .replace(/https?:\/\/\S+/g, " link ")
       .replace(/\s+/g, " ")
@@ -2485,6 +2507,8 @@ export default function VirtualPdfReader({
     if (!cleanText) {
       setOcrStatusText("ℹ️ No readable words found on this page.");
       setTimeout(() => setOcrStatusText(""), 3000);
+      setIsSpeaking(false);
+      isSpeakingRef.current = false;
       return;
     }
 
@@ -2511,39 +2535,32 @@ export default function VirtualPdfReader({
     isSpeakingRef.current = true;
     setIsSpeaking(true);
 
-    let voices = window.speechSynthesis.getVoices() || [];
-    if (voices.length === 0) {
-      await new Promise((resolve) => {
-        let timer;
-        const handler = () => {
-          clearTimeout(timer);
-          window.speechSynthesis.removeEventListener("voiceschanged", handler);
-          resolve();
-        };
-        window.speechSynthesis.addEventListener("voiceschanged", handler);
-        timer = setTimeout(() => {
-          window.speechSynthesis.removeEventListener("voiceschanged", handler);
-          resolve();
-        }, 300);
-      });
+    let voices = voicesListRef.current;
+    if (!voices || voices.length === 0) {
       voices = window.speechSynthesis.getVoices() || [];
+      if (voices.length > 0) voicesListRef.current = voices;
     }
 
     const preferredVoice = getMatchingVoice(voices, voiceLang, voiceGender);
-    // Pitch shift guarantees distinct male/female delivery on all platforms
-    const basePitch = voiceGender === "male" ? 0.82 : 1.25;
+    const basePitch = voiceGender === "male" ? 0.9 : 1.15;
     const playbackRate = voiceSpeed || 1.0;
 
     let currentIdx = 0;
 
-    // Chrome keep-alive interval: Chrome cancels speech after 14 seconds without resume()
+    if (speechTimerRef.current) {
+      clearInterval(speechTimerRef.current);
+    }
+    // Chrome keep-alive interval: Chrome pauses speech after 14 seconds without pause/resume cycle
     speechTimerRef.current = setInterval(() => {
       if (typeof window !== "undefined" && "speechSynthesis" in window && isSpeakingRef.current) {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
+        try {
+          if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          }
+        } catch (_) {}
       }
-    }, 4000);
+    }, 8000);
 
     const speakNext = () => {
       if (!isSpeakingRef.current || currentIdx >= chunks.length) {
@@ -2553,12 +2570,16 @@ export default function VirtualPdfReader({
 
       const textChunk = chunks[currentIdx++];
       const utterance = new SpeechSynthesisUtterance(textChunk);
-      if (preferredVoice) utterance.voice = preferredVoice;
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        utterance.lang = preferredVoice.lang;
+      } else {
+        utterance.lang = voiceLang === "hi-IN" ? "hi-IN" : (navigator.language || "en-US");
+      }
       utterance.rate = playbackRate;
       utterance.pitch = basePitch;
-      utterance.lang = preferredVoice?.lang || (voiceLang === "hi-IN" ? "hi-IN" : "en-IN");
 
-      // Persistent reference to prevent Chromium garbage collection
+      // Global reference prevents Chromium GC from discarding utterance mid-speech
       activeUtteranceRef.current = utterance;
       window._activeSpeechUtterance = utterance;
 
@@ -2596,16 +2617,16 @@ export default function VirtualPdfReader({
     // 1. Check if RAG index already has this page cached from earlier scan
     if (ragIndexRef.current?.pageTextMap?.has(pageNum)) {
       const cached = ragIndexRef.current.pageTextMap.get(pageNum);
-      if (cached && cached.trim().length > 5) return cached;
+      if (cached && cached.trim().length >= 3) return cached;
     }
 
-    // 2. Check if PDF has embedded digital text
+    // 2. Check if PDF has embedded digital text (fast path)
     if (pdfDoc) {
       try {
         const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent();
         const digital = textContent?.items?.map((i) => i.str).join(" ").replace(/\s+/g, " ").trim();
-        if (digital && digital.length >= 25) {
+        if (digital && digital.length >= 3) {
           ragIndexRef.current.addOcrText(pageNum, digital);
           return digital;
         }
@@ -2613,7 +2634,6 @@ export default function VirtualPdfReader({
     }
 
     // 3. Handwritten Scanned Page:
-    // Fast & Safe Snapshot: If scanning the currently viewed page, snapshot canvasRef directly (0ms, zero duplicate render lock!)
     onProgress(10, `Preparing scan for Page ${pageNum}...`);
     let ocrCanvas = null;
 
@@ -2660,15 +2680,17 @@ export default function VirtualPdfReader({
       }
     }
 
-    if (!ocrCanvas) {
-      throw new Error("Page canvas not ready yet. Please wait a moment and retry.");
-    }
-
-    // 4. Run Tesseract OCR with adaptive handwriting binarization & progress
-    const scanned = await recognizeCanvasText(ocrCanvas, onProgress);
-    if (scanned && scanned.length > 3) {
-      ragIndexRef.current.addOcrText(pageNum, scanned);
-      return scanned;
+    if (ocrCanvas) {
+      try {
+        // 4. Run Tesseract OCR with adaptive handwriting binarization & progress
+        const scanned = await recognizeCanvasText(ocrCanvas, onProgress);
+        if (scanned && scanned.length >= 3) {
+          ragIndexRef.current.addOcrText(pageNum, scanned);
+          return scanned;
+        }
+      } catch (ocrErr) {
+        console.warn("[OCR] Recognition error:", ocrErr);
+      }
     }
 
     return "";
@@ -2703,7 +2725,7 @@ export default function VirtualPdfReader({
     }
   };
 
-  // 3. Web Speech API (Audio Reader) with Auto-OCR for Handwritten Notes
+  // 3. Web Speech API (Audio Reader) with Auto-OCR & Zero-Lag Gesture Activation
   const handleToggleSpeech = async () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setOcrStatusText("Speech Synthesis is not supported in this browser.");
@@ -2713,15 +2735,26 @@ export default function VirtualPdfReader({
 
     if (isSpeaking) {
       stopSpeech();
+      setOcrStatusText("⏹️ Audio playback stopped.");
+      setTimeout(() => setOcrStatusText(""), 2000);
       return;
     }
 
+    // ⚡ CRITICAL: Prime speech engine synchronously within user gesture
     try {
-      // Check if user has selected specific text with their mouse
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+    } catch (_) {}
+
+    setIsSpeaking(true);
+    isSpeakingRef.current = true;
+
+    try {
+      // 1. Check if user has selected specific text with their mouse
       const selectedText = window.getSelection()?.toString()?.trim();
-      if (selectedText && selectedText.length > 5) {
-        const langLabel = voiceLang === "hi-IN" ? "Hindi" : "Indian English";
-        const genderLabel = voiceGender === "male" ? "Men" : "Women";
+      if (selectedText && selectedText.length > 2) {
+        const langLabel = voiceLang === "hi-IN" ? "Hindi" : "English";
+        const genderLabel = voiceGender === "male" ? "Male" : "Female";
         setOcrStatusText(`🎧 Reading selected text (${langLabel} • ${genderLabel})...`);
         speakChunks(selectedText);
         return;
@@ -2729,19 +2762,19 @@ export default function VirtualPdfReader({
 
       setOcrStatusText("🎙️ Reading page content...");
 
-      // Extract page text (digital or auto-OCR for handwritten notes)
-      const pageText = await extractPageText(currentPage, (pct, status) => {
+      // 2. Extract page text (digital fast path or auto-OCR)
+      let pageText = await extractPageText(currentPage, (pct, status) => {
         setOcrStatusText(status);
       });
 
-      if (!pageText || pageText.trim().length < 5) {
-        setOcrStatusText("ℹ️ No readable text detected on this page. Try clicking [🔍 OCR Page] first.");
-        setTimeout(() => setOcrStatusText(""), 4500);
-        return;
+      // 3. Resilient Audible Fallback: If no text on diagram/image page, explain clearly via voice!
+      if (!pageText || pageText.trim().length < 3) {
+        const noteHeading = title ? title.replace(/\.[^/.]+$/, "") : "Study Note";
+        pageText = `Page ${currentPage} of ${noteHeading}. This page does not contain selectable digital text. You can click OCR Page in study tools to scan handwritten content.`;
       }
 
-      const langLabel = voiceLang === "hi-IN" ? "Hindi" : "Indian English";
-      const genderLabel = voiceGender === "male" ? "Men" : "Women";
+      const langLabel = voiceLang === "hi-IN" ? "Hindi" : "English";
+      const genderLabel = voiceGender === "male" ? "Male" : "Female";
       setOcrStatusText(`🎧 Reading Page ${currentPage} (${langLabel} • ${genderLabel})...`);
       speakChunks(pageText);
       setTimeout(() => setOcrStatusText(""), 3500);
@@ -4769,14 +4802,15 @@ export default function VirtualPdfReader({
               fontWeight: 600,
               borderRadius: "6px",
               background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
-              color: isSpeaking ? "#f87171" : (nightMode ? "#cbd5e1" : "#334155"),
-              border: isSpeaking ? "1px solid #ef4444" : "1px solid rgba(255, 255, 255, 0.12)",
+              color: isSpeaking ? "#ef4444" : (nightMode ? "#cbd5e1" : "#1e293b"),
+              border: isSpeaking ? "1px solid #ef4444" : (nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid #cbd5e1"),
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
               gap: "4px",
               whiteSpace: "nowrap",
             }}
+            title={isSpeaking ? "Stop Audio Playback" : "Listen to Page Audio (Text to Speech)"}
           >
             {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
             <span>{isSpeaking ? "Stop Audio" : "🔊 Listen"}</span>
@@ -4806,19 +4840,49 @@ export default function VirtualPdfReader({
             <span>{isOcrScanning ? "Scanning..." : "📄 OCR"}</span>
           </button>
 
-          {/* Engine: Streamer vs Native */}
-          <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#fff", padding: "2px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.12)", marginLeft: "auto" }}>
+          {/* Engine: Streamer vs Native - FIXED Invisible Text Bug */}
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0",
+            padding: "2px",
+            borderRadius: "6px",
+            border: nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1",
+            marginLeft: "auto"
+          }}>
             <button
               type="button"
               onClick={() => { setError(null); setUseNativeViewer(false); }}
-              style={{ padding: "3px 8px", fontSize: "0.7rem", fontWeight: !useNativeViewer ? 700 : 500, border: "none", borderRadius: "4px", background: !useNativeViewer ? "#4f46e5" : "transparent", color: "#fff", cursor: "pointer" }}
+              style={{
+                padding: "3px 8px",
+                fontSize: "0.7rem",
+                fontWeight: !useNativeViewer ? 700 : 600,
+                border: "none",
+                borderRadius: "4px",
+                background: !useNativeViewer ? "#4f46e5" : "transparent",
+                color: !useNativeViewer ? "#ffffff" : (nightMode ? "#cbd5e1" : "#1e293b"),
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Switch to Interactive Streamer Engine"
             >
               🚀 Streamer
             </button>
             <button
               type="button"
               onClick={handleSwitchToNative}
-              style={{ padding: "3px 8px", fontSize: "0.7rem", fontWeight: useNativeViewer ? 700 : 500, border: "none", borderRadius: "4px", background: useNativeViewer ? "#2563eb" : "transparent", color: "#fff", cursor: "pointer" }}
+              style={{
+                padding: "3px 8px",
+                fontSize: "0.7rem",
+                fontWeight: useNativeViewer ? 700 : 600,
+                border: "none",
+                borderRadius: "4px",
+                background: useNativeViewer ? "#2563eb" : "transparent",
+                color: useNativeViewer ? "#ffffff" : (nightMode ? "#cbd5e1" : "#1e293b"),
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title="Switch to Clean Web Reader"
             >
               📖 Web Reader
             </button>
@@ -5667,6 +5731,28 @@ export default function VirtualPdfReader({
                   title="Toggle Night Mode"
                 >
                   {nightMode ? "☀️ Light" : "🌙 Dark"}
+                </button>
+                <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)" }} />
+                <button
+                  type="button"
+                  onClick={handleToggleSpeech}
+                  style={{
+                    padding: "4px 9px",
+                    fontSize: "0.74rem",
+                    fontWeight: 600,
+                    borderRadius: "6px",
+                    background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"),
+                    color: isSpeaking ? "#ef4444" : (nightMode ? "#e2e8f0" : "#1e293b"),
+                    border: isSpeaking ? "1px solid #ef4444" : (nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1"),
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title={isSpeaking ? "Stop Audio" : "Listen to Page Audio"}
+                >
+                  {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                  <span>{isSpeaking ? "Stop" : "🔊 Listen"}</span>
                 </button>
                 <button
                   type="button"

@@ -2727,7 +2727,7 @@ export default function App() {
             openAuth("signin");
             return;
           }
-          setHomeAiPodNote(null);
+          setHomeAiPodNote(previewNote || null);
           setHomeAiPodInitialTab("chat");
           setIsHomeAiPodOpen(true);
         }}
@@ -2799,7 +2799,7 @@ export default function App() {
       <Movable3DFloatingWidget
         id="help"
         animIndex={1}
-        defaultPos={{ bottom: activeJob ? 80 : 24, left: 16 }}
+        defaultPos={{ bottom: activeJob ? 80 : 24, right: 16 }}
         onClick={() => setIsHelpOpen(true)}
         title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
         icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}

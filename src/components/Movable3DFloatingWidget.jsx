@@ -271,9 +271,9 @@ export default function Movable3DFloatingWidget({
   };
 
   const handleClick = (e) => {
+    e.stopPropagation();
     if (dragInfoRef.current.hasMoved) {
       e.preventDefault();
-      e.stopPropagation();
       return;
     }
     if (onClick) onClick(e);
@@ -300,7 +300,7 @@ export default function Movable3DFloatingWidget({
       className={`movable-3d-widget movable-3d-anim-${animIndex} ${isDragging ? "is-dragging" : ""} ${className}`}
       style={{
         ...positioningStyles,
-        zIndex: isDragging ? 1070 : 1055,
+        zIndex: isDragging ? 1260 : 1210,
         touchAction: "none",
         cursor: isDragging ? "grabbing" : "grab",
         ...style,
