@@ -1363,7 +1363,7 @@ export default function AuthModal({
                       National Academic Passcard
                     </div>
                     <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
-                      Free Study Material — VIP Vault
+                      Free Study Material — Academic Vault
                     </div>
                   </div>
                 </div>
@@ -1449,7 +1449,7 @@ export default function AuthModal({
                   Account Safely Deleted (90 Days Inactivity)
                 </div>
                 <div style={{ fontSize: "0.8rem", color: "#fca5a5", marginTop: "4px", lineHeight: "1.45" }}>
-                  Your old account was safely and successfully deleted due to 90 days of inactivity. Any study notes you uploaded remain preserved for student scholars. Please create a new account to continue.
+                  Your old account was safely and successfully deleted due to 90 days of inactivity. Any study notes you uploaded remain preserved for students. Please create a new account to continue.
                 </div>
               </div>
             </div>
@@ -1694,7 +1694,7 @@ export default function AuthModal({
                 Complete Student Profile
               </h3>
               <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-dim)" }}>
-                Welcome, <strong>{googleUser?.name || "Scholar"}</strong>! Please provide your phone &amp; college details to activate your student account.
+                Welcome, <strong>{googleUser?.name || "Student"}</strong>! Please provide your phone &amp; college details to activate your student account.
               </p>
             </div>
 
@@ -2830,18 +2830,15 @@ export default function AuthModal({
             </div>
             <div>
               <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.06em", color: "#4f46e5", textTransform: "uppercase" }}>
-                Scholar Registration
+                Student Registration
               </div>
               <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
-                Enroll for Lifetime Free Academic Pass
+                Enroll for Lifetime Free Access
               </div>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ padding: "3px 7px", borderRadius: "20px", background: "#eef2ff", border: "1px solid #c7d2fe", color: "#4338ca", fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.04em" }}>
-              VIP PASS
-            </div>
             <button
               className="modal-close-btn"
               onClick={onClose}
