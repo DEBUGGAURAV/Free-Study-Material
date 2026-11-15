@@ -304,8 +304,8 @@ function ContinuousPage({
       renderPage();
     }
 
-    // Always eagerly render the first 2 pages immediately on mount
-    if (pageNum <= 2) {
+    // Always eagerly render the first 3 pages immediately on mount so Page 2 & 3 never show blank box
+    if (pageNum <= 3) {
       renderPage();
     }
 
@@ -325,14 +325,14 @@ function ContinuousPage({
       ref={containerRef}
       id={`continuous-page-${pageNum}`}
       style={{
-        margin: "0 auto 20px auto",
+        margin: "0 auto 12px auto",
         position: "relative",
-        boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
+        boxShadow: rendered ? (nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)") : "none",
         borderRadius: "4px",
-        background: nightMode ? "#0b0f19" : "#ffffff",
+        background: nightMode ? "#0b0f19" : (rendered ? "#ffffff" : "transparent"),
         width: pageDimensions ? `${pageDimensions.width}px` : "100%",
         maxWidth: "100%",
-        minHeight: pageDimensions ? `${pageDimensions.height}px` : "500px",
+        minHeight: pageDimensions ? `${pageDimensions.height}px` : (rendered ? "400px" : "80px"),
         aspectRatio: pageDimensions ? undefined : "1 / 1.414",
         display: "flex",
         alignItems: "center",
@@ -699,7 +699,7 @@ export default function VirtualPdfReader({
   });
   const [numPages, setNumPages] = useState(0);
   const [scale, setScale] = useState(1.0);
-  const [fitMode, setFitMode] = useState("page"); // "page" | "width" | "custom"
+  const [fitMode, setFitMode] = useState("width"); // "width" by default for full-bleed sharp reading | "page" | "custom"
   const [showToolsDrawer, setShowToolsDrawer] = useState(false);
   const [showSearchInline, setShowSearchInline] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -733,6 +733,12 @@ export default function VirtualPdfReader({
     !isTouchOrMobileDevice;
   const canUseNativePdfViewer = hasNativePdfium;
 
+    const [isMobileScreen, setIsMobileScreen] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
+  useEffect(() => {
+    const handleResize = () => setIsMobileScreen(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
   const [scrollMode, setScrollMode] = useState(() => (isTouchOrMobileDevice ? "continuous" : "single"));
   const loadGenerationRef = useRef(0);
 
@@ -881,8 +887,9 @@ export default function VirtualPdfReader({
       const page = await pdfDoc.getPage(targetPage);
       const unscaled = page.getViewport({ scale: 1.0 });
       const container = mainScrollRef.current;
-      const availableWidth = container.clientWidth - (isTouchOrMobileDevice ? 16 : 40);
-      const availableHeight = container.clientHeight - (isTouchOrMobileDevice ? 16 : 40);
+      const isMobileScreen = typeof window !== "undefined" && window.innerWidth < 768;
+      const availableWidth = container.clientWidth - (isMobileScreen ? 8 : (isTouchOrMobileDevice ? 12 : 36));
+      const availableHeight = container.clientHeight - (isMobileScreen ? 8 : (isTouchOrMobileDevice ? 12 : 36));
 
       if (availableWidth <= 50 || availableHeight <= 50) return;
 
@@ -3712,274 +3719,627 @@ export default function VirtualPdfReader({
           </div>
         </>
       )}
-      {/* 🌟 Unified Clean Header Bar (~46px Height, Zero Wrap, Maximum Reading Space) */}
+      {/* 🌟 Unified Clean Header Bar (Responsive: 2-Row Sleek on Mobile, Single-Row on Desktop) */}
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "6px 14px",
+          flexDirection: "column",
           background: nightMode ? "rgba(15, 23, 42, 0.96)" : "rgba(255, 255, 255, 0.98)",
           borderBottom: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.08)",
           backdropFilter: "blur(16px)",
-          gap: "8px",
           zIndex: 40,
           flexShrink: 0,
         }}
       >
-        {/* Left: Document Title, Subject & Compact Page Stepper */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: "0 1 auto" }}>
-          <div
-            style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "6px",
-              background: "rgba(99, 102, 241, 0.15)",
-              color: "var(--accent-indigo)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <FileText size={16} />
-          </div>
-
-          <div style={{ overflow: "hidden", display: "flex", alignItems: "center", gap: "6px" }}>
-            <span
+        {/* Row 1: Primary Bar (Title, Stepper & Critical Actions) */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: isMobileScreen ? "5px 8px" : "6px 14px",
+            gap: "8px",
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          {/* Left: Document Title, Subject & Compact Page Stepper */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, flex: "0 1 auto" }}>
+            <div
               style={{
-                fontWeight: 700,
-                fontSize: "0.85rem",
-                color: nightMode ? "#fff" : "#0f172a",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "220px",
+                width: "26px",
+                height: "26px",
+                borderRadius: "6px",
+                background: "rgba(99, 102, 241, 0.15)",
+                color: "var(--accent-indigo)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
               }}
-              title={title}
             >
-              {title}
-            </span>
-            {subject && (
+              <FileText size={15} />
+            </div>
+
+            <div style={{ overflow: "hidden", display: "flex", alignItems: "center", gap: "6px" }}>
               <span
                 style={{
-                  fontSize: "0.66rem",
-                  padding: "1px 6px",
-                  borderRadius: "4px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  color: "#38bdf8",
                   fontWeight: 700,
+                  fontSize: isMobileScreen ? "0.8rem" : "0.85rem",
+                  color: nightMode ? "#fff" : "#0f172a",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  maxWidth: isMobileScreen ? "130px" : "220px",
+                }}
+                title={title}
+              >
+                {title}
+              </span>
+              {subject && !isMobileScreen && (
+                <span
+                  style={{
+                    fontSize: "0.66rem",
+                    padding: "1px 6px",
+                    borderRadius: "4px",
+                    background: "rgba(56, 189, 248, 0.15)",
+                    color: "#38bdf8",
+                    fontWeight: 700,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {subject}
+                </span>
+              )}
+            </div>
+
+            <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 1px" }} />
+
+            {/* Page Navigator Stepper */}
+            <div style={{ display: "flex", alignItems: "center", gap: "2px", flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => changePage(currentPage - 1)}
+                disabled={currentPage <= 1 || loading}
+                style={{
+                  padding: "2px 6px",
+                  borderRadius: "5px",
+                  border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
+                  background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
+                  color: nightMode ? "#fff" : "#0f172a",
+                  cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+                  opacity: currentPage <= 1 ? 0.4 : 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                }}
+                title="Previous Page (Left Arrow)"
+              >
+                <ChevronLeft size={13} />
+              </button>
+
+              <span
+                style={{
+                  padding: "2px 6px",
+                  borderRadius: "5px",
+                  background: nightMode ? "rgba(255,255,255,0.08)" : "#fff",
+                  border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: isMobileScreen ? "0.7rem" : "0.76rem",
+                  fontWeight: 700,
+                  color: nightMode ? "#fff" : "#0f172a",
                   whiteSpace: "nowrap",
                 }}
               >
-                {subject}
+                {currentPage} / {numPages || "..."}
               </span>
-            )}
+
+              <button
+                type="button"
+                onClick={() => changePage(currentPage + 1)}
+                disabled={currentPage >= numPages || loading}
+                style={{
+                  padding: "2px 6px",
+                  borderRadius: "5px",
+                  border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
+                  background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
+                  color: nightMode ? "#fff" : "#0f172a",
+                  cursor: currentPage >= numPages ? "not-allowed" : "pointer",
+                  opacity: currentPage >= numPages ? 0.4 : 1,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                }}
+                title="Next Page (Right Arrow)"
+              >
+                <ChevronRight size={13} />
+              </button>
+            </div>
           </div>
 
-          <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
+          {/* Desktop Center: Auto-Fit & Zoom Controls */}
+          {!isMobileScreen && (
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* ↔️ Fit Width */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode("width");
+                  calculateFitScale("width");
+                }}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: fitMode === "width" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+                  border: fitMode === "width" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                  color: fitMode === "width" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+                  boxShadow: fitMode === "width" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+                title="Fit page width to container"
+              >
+                <span>↔️ Fit Width</span>
+              </button>
 
-          {/* Page Navigator Stepper */}
-          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              {/* 📐 Fit to Entire Page */}
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode("page");
+                  calculateFitScale("page");
+                }}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: fitMode === "page" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+                  border: fitMode === "page" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                  color: fitMode === "page" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+                  boxShadow: fitMode === "page" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+                title="Fit whole page on screen"
+              >
+                <span>📐 Fit Page</span>
+              </button>
+
+              {/* Zoom Stepper */}
+              <div style={{ display: "flex", alignItems: "center", gap: "2px", background: nightMode ? "rgba(255,255,255,0.05)" : "#f1f5f9", borderRadius: "6px", padding: "2px 4px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFitMode("custom");
+                    setScale((s) => Math.max(0.35, Number((s - 0.15).toFixed(2))));
+                  }}
+                  style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  title="Zoom Out (-)"
+                >
+                  <ZoomOut size={13} />
+                </button>
+                <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: nightMode ? "#cbd5e1" : "#1e293b", minWidth: "36px", textAlign: "center" }}>
+                  {Math.round(scale * 100)}%
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFitMode("custom");
+                    setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))));
+                  }}
+                  style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                  title="Zoom In (+)"
+                >
+                  <ZoomIn size={13} />
+                </button>
+              </div>
+
+              {/* Reading Mode Switcher */}
+              <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#f1f5f9", padding: "2px", borderRadius: "6px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
+                <button
+                  type="button"
+                  onClick={() => setScrollMode("single")}
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: "0.72rem",
+                    fontWeight: scrollMode === "single" ? 700 : 500,
+                    border: "none",
+                    borderRadius: "4px",
+                    background: scrollMode === "single" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                    color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                    cursor: "pointer",
+                  }}
+                  title="Single Page Mode"
+                >
+                  📄 Page
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScrollMode("continuous")}
+                  style={{
+                    padding: "3px 8px",
+                    fontSize: "0.72rem",
+                    fontWeight: scrollMode === "continuous" ? 700 : 500,
+                    border: "none",
+                    borderRadius: "4px",
+                    background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                    color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                    cursor: "pointer",
+                  }}
+                  title="Continuous Vertical Scroll Mode"
+                >
+                  📜 Scroll
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Right: Study Tools, Night Mode, Search & Close Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobileScreen ? "4px" : "6px", flexShrink: 0 }}>
+            {/* 🔍 Search Toggle Button */}
             <button
               type="button"
-              onClick={() => changePage(currentPage - 1)}
-              disabled={currentPage <= 1 || loading}
+              onClick={() => setShowSearchInline((prev) => !prev)}
               style={{
-                padding: "3px 8px",
-                borderRadius: "5px",
-                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
-                background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
-                color: nightMode ? "#fff" : "#0f172a",
-                cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-                opacity: currentPage <= 1 ? 0.4 : 1,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "2px",
+                padding: isMobileScreen ? "4px 7px" : "5px 9px",
+                borderRadius: "6px",
                 fontSize: "0.74rem",
                 fontWeight: 600,
+                background: showSearchInline ? "rgba(56, 189, 248, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                border: showSearchInline ? "1px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: showSearchInline ? "#38bdf8" : (nightMode ? "#cbd5e1" : "#475569"),
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
               }}
-              title="Previous Page (Left Arrow)"
+              title="Search inside PDF text"
             >
-              <ChevronLeft size={13} />
+              <Search size={13} />
+              {!isMobileScreen && <span>Search</span>}
             </button>
 
-            <span
+            {/* ✨ Study Tools Drawer Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowToolsDrawer((prev) => !prev)}
               style={{
-                padding: "2px 8px",
-                borderRadius: "5px",
-                background: nightMode ? "rgba(255,255,255,0.08)" : "#fff",
-                border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
-                fontFamily: "var(--font-mono)",
-                fontSize: "0.76rem",
+                padding: isMobileScreen ? "4px 8px" : "5px 11px",
+                borderRadius: "6px",
+                fontSize: isMobileScreen ? "0.7rem" : "0.74rem",
                 fontWeight: 700,
-                color: nightMode ? "#fff" : "#0f172a",
+                background: showToolsDrawer ? "linear-gradient(135deg, #8b5cf6, #06b6d4)" : "rgba(139, 92, 246, 0.18)",
+                border: showToolsDrawer ? "1px solid #a855f7" : "1px solid rgba(139, 92, 246, 0.4)",
+                color: showToolsDrawer ? "#fff" : "#c084fc",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                boxShadow: showToolsDrawer ? "0 0 12px rgba(139, 92, 246, 0.45)" : "none",
+                transition: "all 0.15s ease",
                 whiteSpace: "nowrap",
               }}
+              title="Toggle AI Study Tools"
             >
-              {currentPage} / {numPages || "..."}
-            </span>
+              <Sparkles size={12} />
+              <span>{isMobileScreen ? "Tools" : (showToolsDrawer ? "Tools ▲" : "Study Tools ▼")}</span>
+            </button>
 
+            {/* 🌙 Night Mode Toggle */}
             <button
               type="button"
-              onClick={() => changePage(currentPage + 1)}
-              disabled={currentPage >= numPages || loading}
+              onClick={() => setNightMode((prev) => !prev)}
+              style={{
+                padding: isMobileScreen ? "4px 7px" : "5px 9px",
+                borderRadius: "6px",
+                fontSize: "0.74rem",
+                background: nightMode ? "rgba(99, 102, 241, 0.15)" : "rgba(251, 191, 36, 0.15)",
+                color: nightMode ? "#818cf8" : "#d97706",
+                border: `1px solid ${nightMode ? "rgba(99, 102, 241, 0.3)" : "rgba(251, 191, 36, 0.3)"}`,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+              title={nightMode ? "Switch to Day Mode" : "Switch to Night Mode"}
+            >
+              {nightMode ? <Moon size={13} /> : <Sun size={13} />}
+            </button>
+
+            {/* Desktop Only Extra Tools: Pomodoro, Bookmark, Marks, Save */}
+            {!isMobileScreen && (
+              <>
+                {/* ⏱️ Pomodoro Focus Timer Pill */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowPomodoroPopover((prev) => !prev)}
+                    style={{
+                      padding: "5px 9px",
+                      borderRadius: "6px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      fontFamily: "var(--font-mono)",
+                      background: pomodoroRunning
+                        ? (pomodoroMode === "focus" ? "rgba(244, 63, 94, 0.2)" : "rgba(16, 185, 129, 0.2)")
+                        : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                      border: pomodoroRunning
+                        ? `1px solid ${pomodoroMode === "focus" ? "#f43f5e" : "#10b981"}`
+                        : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                      color: pomodoroRunning
+                        ? (pomodoroMode === "focus" ? "#fda4af" : "#6ee7b7")
+                        : (nightMode ? "#cbd5e1" : "#475569"),
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title="Pomodoro Focus Timer"
+                  >
+                    <Timer size={13} />
+                    <span>{formatTimerClock(pomodoroSeconds)}</span>
+                  </button>
+                </div>
+
+                {/* 🔖 Quick Bookmark */}
+                <button
+                  type="button"
+                  onClick={handleToggleCurrentBookmark}
+                  style={{
+                    padding: "5px 8px",
+                    borderRadius: "6px",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    background: isCurrentPageBookmarked ? "rgba(245, 158, 11, 0.22)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                    border: isCurrentPageBookmarked ? "1px solid #f59e0b" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                    color: isCurrentPageBookmarked ? "#fbbf24" : (nightMode ? "#cbd5e1" : "#475569"),
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title={isCurrentPageBookmarked ? `Remove Bookmark (Page ${currentPage})` : `Bookmark Page ${currentPage}`}
+                >
+                  <Bookmark size={13} fill={isCurrentPageBookmarked ? "#fbbf24" : "none"} />
+                </button>
+
+                {/* 🖍️ Highlights & Bookmarks Drawer Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowBookmarksPanel((prev) => !prev)}
+                  style={{
+                    padding: "5px 9px",
+                    borderRadius: "6px",
+                    fontSize: "0.74rem",
+                    fontWeight: 700,
+                    background: showBookmarksPanel ? "rgba(250, 204, 21, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                    border: showBookmarksPanel ? "1px solid #eab308" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                    color: showBookmarksPanel ? "#fde047" : (nightMode ? "#cbd5e1" : "#475569"),
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title="Bookmarks & Highlights"
+                >
+                  <Highlighter size={13} />
+                  <span>Marks{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
+                </button>
+
+                {/* 💾 Save (Download) */}
+                {(onDownload || noteId) && !isBlocked && (
+                  <button
+                    type="button"
+                    onClick={handleInternalDownload}
+                    disabled={isDownloadingPdf}
+                    style={{
+                      padding: "5px 11px",
+                      borderRadius: "6px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      background: "rgba(16, 185, 129, 0.18)",
+                      border: "1px solid rgba(16, 185, 129, 0.45)",
+                      color: "#34d399",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title="Save Document"
+                  >
+                    <Download size={13} />
+                    <span>Save</span>
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* ✕ Close Button (Always visible on BOTH Mobile and Desktop!) */}
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  padding: isMobileScreen ? "4px 9px" : "5px 12px",
+                  borderRadius: "6px",
+                  fontSize: isMobileScreen ? "0.74rem" : "0.78rem",
+                  fontWeight: 800,
+                  background: "rgba(239, 68, 68, 0.18)",
+                  border: "1px solid rgba(239, 68, 68, 0.45)",
+                  color: "#f87171",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.15s ease",
+                  flexShrink: 0,
+                }}
+                title="Close Reader (Esc)"
+              >
+                <X size={14} />
+                <span>Close</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Mobile Row 2: Touch-Scrollable Controls Strip (Fit Width, Fit Page, Zoom, Scroll/Page, Timer, Bookmarks) */}
+        {isMobileScreen && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "3px 8px 5px",
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "none",
+              borderTop: nightMode ? "1px solid rgba(255,255,255,0.05)" : "1px solid rgba(0,0,0,0.04)",
+              boxSizing: "border-box",
+            }}
+          >
+            {/* ↔️ Fit Width (The #1 Mobile Preferred Reading Mode!) */}
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode("width");
+                calculateFitScale("width");
+              }}
               style={{
                 padding: "3px 8px",
                 borderRadius: "5px",
-                border: nightMode ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.15)",
-                background: nightMode ? "rgba(255,255,255,0.06)" : "#fff",
-                color: nightMode ? "#fff" : "#0f172a",
-                cursor: currentPage >= numPages ? "not-allowed" : "pointer",
-                opacity: currentPage >= numPages ? 0.4 : 1,
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "2px",
-                fontSize: "0.74rem",
-                fontWeight: 600,
+                gap: "3px",
+                background: fitMode === "width" ? "rgba(56, 189, 248, 0.24)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+                border: fitMode === "width" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: fitMode === "width" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
-              title="Next Page (Right Arrow)"
+              title="Fit page width to screen"
             >
-              <ChevronRight size={13} />
+              <span>↔️ Fit Width</span>
             </button>
-          </div>
-        </div>
 
-        {/* Center: Auto-Fit & Zoom Controls (The Student Favorite!) */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {/* 📐 Fit to Entire Page (Zero Cut-Off) */}
-          <button
-            type="button"
-            onClick={() => {
-              setFitMode("page");
-              calculateFitScale("page");
-            }}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: fitMode === "page" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-              border: fitMode === "page" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
-              color: fitMode === "page" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
-              boxShadow: fitMode === "page" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
-              transition: "all 0.15s ease",
-            }}
-            title="Fit whole page on screen (Zero cut-off, full slide visible top-to-bottom)"
-          >
-            <span>📐 Fit Page</span>
-          </button>
-
-          {/* ↔️ Fit Width */}
-          <button
-            type="button"
-            onClick={() => {
-              setFitMode("width");
-              calculateFitScale("width");
-            }}
-            style={{
-              padding: "4px 10px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              background: fitMode === "width" ? "rgba(56, 189, 248, 0.22)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
-              border: fitMode === "width" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
-              color: fitMode === "width" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
-              boxShadow: fitMode === "width" ? "0 0 10px rgba(56, 189, 248, 0.3)" : "none",
-              transition: "all 0.15s ease",
-            }}
-            title="Fit page width to container"
-          >
-            <span>↔️ Fit Width</span>
-          </button>
-
-          {/* Zoom Stepper */}
-          <div style={{ display: "flex", alignItems: "center", gap: "2px", background: nightMode ? "rgba(255,255,255,0.05)" : "#f1f5f9", borderRadius: "6px", padding: "2px 4px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
+            {/* 📐 Fit Page */}
             <button
               type="button"
               onClick={() => {
-                setFitMode("custom");
-                setScale((s) => Math.max(0.35, Number((s - 0.15).toFixed(2))));
+                setFitMode("page");
+                calculateFitScale("page");
               }}
-              style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-              title="Zoom Out (-)"
-            >
-              <ZoomOut size={13} />
-            </button>
-            <span style={{ fontSize: "0.72rem", fontFamily: "var(--font-mono)", color: nightMode ? "#cbd5e1" : "#1e293b", minWidth: "36px", textAlign: "center" }}>
-              {Math.round(scale * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setFitMode("custom");
-                setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))));
-              }}
-              style={{ width: "22px", height: "22px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
-              title="Zoom In (+)"
-            >
-              <ZoomIn size={13} />
-            </button>
-          </div>
-
-          {/* Reading Mode Switcher: Page vs Scroll */}
-          <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#f1f5f9", padding: "2px", borderRadius: "6px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)" }}>
-            <button
-              type="button"
-              onClick={() => setScrollMode("single")}
               style={{
                 padding: "3px 8px",
-                fontSize: "0.72rem",
-                fontWeight: scrollMode === "single" ? 700 : 500,
-                border: "none",
-                borderRadius: "4px",
-                background: scrollMode === "single" ? (nightMode ? "#334155" : "#fff") : "transparent",
-                color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                borderRadius: "5px",
+                fontSize: "0.7rem",
+                fontWeight: 700,
                 cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "3px",
+                background: fitMode === "page" ? "rgba(56, 189, 248, 0.24)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+                border: fitMode === "page" ? "1.5px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: fitMode === "page" ? "#38bdf8" : (nightMode ? "#94a3b8" : "#64748b"),
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
-              title="Single Page Mode (Touch swipe or arrows to turn pages)"
+              title="Fit whole page"
             >
-              📄 Page
+              <span>📐 Fit Page</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setScrollMode("continuous")}
-              style={{
-                padding: "3px 8px",
-                fontSize: "0.72rem",
-                fontWeight: scrollMode === "continuous" ? 700 : 500,
-                border: "none",
-                borderRadius: "4px",
-                background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#fff") : "transparent",
-                color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
-                cursor: "pointer",
-              }}
-              title="Continuous Vertical Scroll Mode"
-            >
-              📜 Scroll
-            </button>
-          </div>
-        </div>
 
-        {/* Right: Search, Bookmarks/Highlights, Focus Timer, Tools Toggle, Night Mode, Download, Close */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          {/* ⏱️ Pomodoro Focus Timer Pill */}
-          <div style={{ position: "relative" }}>
+            {/* Zoom Stepper */}
+            <div style={{ display: "flex", alignItems: "center", gap: "2px", background: nightMode ? "rgba(255,255,255,0.05)" : "#f1f5f9", borderRadius: "5px", padding: "2px 4px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)", flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode("custom");
+                  setScale((s) => Math.max(0.35, Number((s - 0.15).toFixed(2))));
+                }}
+                style={{ width: "20px", height: "20px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                title="Zoom Out (-)"
+              >
+                <ZoomOut size={12} />
+              </button>
+              <span style={{ fontSize: "0.68rem", fontFamily: "var(--font-mono)", color: nightMode ? "#cbd5e1" : "#1e293b", minWidth: "32px", textAlign: "center" }}>
+                {Math.round(scale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFitMode("custom");
+                  setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))));
+                }}
+                style={{ width: "20px", height: "20px", background: "transparent", border: "none", color: nightMode ? "#94a3b8" : "#64748b", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+                title="Zoom In (+)"
+              >
+                <ZoomIn size={12} />
+              </button>
+            </div>
+
+            {/* Reading Mode Switcher */}
+            <div style={{ display: "inline-flex", background: nightMode ? "rgba(255,255,255,0.06)" : "#f1f5f9", padding: "2px", borderRadius: "5px", border: nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.1)", flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setScrollMode("continuous")}
+                style={{
+                  padding: "2px 6px",
+                  fontSize: "0.68rem",
+                  fontWeight: scrollMode === "continuous" ? 700 : 500,
+                  border: "none",
+                  borderRadius: "4px",
+                  background: scrollMode === "continuous" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                  color: scrollMode === "continuous" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+                title="Continuous Scroll Mode"
+              >
+                📜 Scroll
+              </button>
+              <button
+                type="button"
+                onClick={() => setScrollMode("single")}
+                style={{
+                  padding: "2px 6px",
+                  fontSize: "0.68rem",
+                  fontWeight: scrollMode === "single" ? 700 : 500,
+                  border: "none",
+                  borderRadius: "4px",
+                  background: scrollMode === "single" ? (nightMode ? "#334155" : "#fff") : "transparent",
+                  color: scrollMode === "single" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#94a3b8" : "#64748b"),
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+                title="Single Page Mode"
+              >
+                📄 Page
+              </button>
+            </div>
+
+            {/* ⏱️ Pomodoro Timer */}
             <button
               type="button"
               onClick={() => setShowPomodoroPopover((prev) => !prev)}
               style={{
-                padding: "5px 9px",
-                borderRadius: "6px",
-                fontSize: "0.74rem",
+                padding: "3px 7px",
+                borderRadius: "5px",
+                fontSize: "0.68rem",
                 fontWeight: 700,
                 fontFamily: "var(--font-mono)",
                 background: pomodoroRunning
@@ -3994,181 +4354,94 @@ export default function VirtualPdfReader({
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "3px",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
-              title="Pomodoro Focus Timer (0 DB Cost • Local Browser)"
+              title="Pomodoro Focus Timer"
             >
-              <Timer size={13} />
+              <Timer size={11} />
               <span>{formatTimerClock(pomodoroSeconds)}</span>
             </button>
-          </div>
 
-          {/* 🔖 Quick Bookmark Current Page Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleCurrentBookmark}
-            style={{
-              padding: "5px 8px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              background: isCurrentPageBookmarked ? "rgba(245, 158, 11, 0.22)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
-              border: isCurrentPageBookmarked ? "1px solid #f59e0b" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
-              color: isCurrentPageBookmarked ? "#fbbf24" : (nightMode ? "#cbd5e1" : "#475569"),
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-            title={isCurrentPageBookmarked ? `Remove Bookmark (Page ${currentPage})` : `Bookmark Page ${currentPage}`}
-          >
-            <Bookmark size={13} fill={isCurrentPageBookmarked ? "#fbbf24" : "none"} />
-          </button>
-
-          {/* 🖍️ Highlights & Bookmarks Drawer Toggle */}
-          <button
-            type="button"
-            onClick={() => setShowBookmarksPanel((prev) => !prev)}
-            style={{
-              padding: "5px 9px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              background: showBookmarksPanel ? "rgba(250, 204, 21, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
-              border: showBookmarksPanel ? "1px solid #eab308" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
-              color: showBookmarksPanel ? "#fde047" : (nightMode ? "#cbd5e1" : "#475569"),
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-            title="Bookmarks & Highlighted Notes (Saved Offline)"
-          >
-            <Highlighter size={13} />
-            <span>Marks{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
-          </button>
-
-          {/* 🔍 Search Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setShowSearchInline((prev) => !prev)}
-            style={{
-              padding: "5px 9px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 600,
-              background: showSearchInline ? "rgba(56, 189, 248, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
-              border: showSearchInline ? "1px solid #38bdf8" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
-              color: showSearchInline ? "#38bdf8" : (nightMode ? "#cbd5e1" : "#475569"),
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-            title="Search inside PDF text"
-          >
-            <Search size={13} />
-            <span>Search</span>
-          </button>
-
-          {/* ✨ Study & AI Tools Drawer Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setShowToolsDrawer((prev) => !prev)}
-            style={{
-              padding: "5px 11px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              fontWeight: 700,
-              background: showToolsDrawer ? "linear-gradient(135deg, #8b5cf6, #06b6d4)" : "rgba(139, 92, 246, 0.18)",
-              border: showToolsDrawer ? "1px solid #a855f7" : "1px solid rgba(139, 92, 246, 0.4)",
-              color: showToolsDrawer ? "#fff" : "#c084fc",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              boxShadow: showToolsDrawer ? "0 0 12px rgba(139, 92, 246, 0.45)" : "none",
-              transition: "all 0.15s ease",
-            }}
-            title="Toggle AI Study Tools & Advanced Features (Flashcards, Summary, AI Query, Circle, Clipper, Room, AirDrop)"
-          >
-            <Sparkles size={13} />
-            <span>Study Tools {showToolsDrawer ? "▲" : "▼"}</span>
-          </button>
-
-          {/* 🌙 Night Mode Toggle */}
-          <button
-            type="button"
-            onClick={() => setNightMode((prev) => !prev)}
-            style={{
-              padding: "5px 9px",
-              borderRadius: "6px",
-              fontSize: "0.74rem",
-              background: nightMode ? "rgba(99, 102, 241, 0.15)" : "rgba(251, 191, 36, 0.15)",
-              color: nightMode ? "#818cf8" : "#d97706",
-              border: `1px solid ${nightMode ? "rgba(99, 102, 241, 0.3)" : "rgba(251, 191, 36, 0.3)"}`,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-            }}
-            title={nightMode ? "Switch to Day Mode" : "Switch to Night Mode"}
-          >
-            {nightMode ? <Moon size={13} /> : <Sun size={13} />}
-          </button>
-
-          {/* 💾 Save (Download) */}
-          {(onDownload || noteId) && !isBlocked && (
+            {/* 🔖 Bookmark Current Page */}
             <button
               type="button"
-              onClick={handleInternalDownload}
-              disabled={isDownloadingPdf}
+              onClick={handleToggleCurrentBookmark}
               style={{
-                padding: "5px 11px",
-                borderRadius: "6px",
-                fontSize: "0.74rem",
+                padding: "3px 6px",
+                borderRadius: "5px",
+                fontSize: "0.68rem",
                 fontWeight: 700,
-                background: "rgba(16, 185, 129, 0.18)",
-                border: "1px solid rgba(16, 185, 129, 0.45)",
-                color: "#34d399",
+                background: isCurrentPageBookmarked ? "rgba(245, 158, 11, 0.22)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                border: isCurrentPageBookmarked ? "1px solid #f59e0b" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: isCurrentPageBookmarked ? "#fbbf24" : (nightMode ? "#cbd5e1" : "#475569"),
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "3px",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
-              title="Save Document"
+              title={isCurrentPageBookmarked ? "Remove Bookmark" : "Bookmark Page"}
             >
-              <Download size={13} />
-              <span>Save</span>
+              <Bookmark size={11} fill={isCurrentPageBookmarked ? "#fbbf24" : "none"} />
             </button>
-          )}
 
-          {/* ✕ Close (Esc) */}
-          {onClose && (
+            {/* 🖍️ Marks */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => setShowBookmarksPanel((prev) => !prev)}
               style={{
-                padding: "5px 12px",
-                borderRadius: "6px",
-                fontSize: "0.78rem",
-                fontWeight: 800,
-                background: "rgba(239, 68, 68, 0.18)",
-                border: "1px solid rgba(239, 68, 68, 0.45)",
-                color: "#f87171",
+                padding: "3px 7px",
+                borderRadius: "5px",
+                fontSize: "0.68rem",
+                fontWeight: 700,
+                background: showBookmarksPanel ? "rgba(250, 204, 21, 0.2)" : (nightMode ? "rgba(255,255,255,0.06)" : "#f8fafc"),
+                border: showBookmarksPanel ? "1px solid #eab308" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                color: showBookmarksPanel ? "#fde047" : (nightMode ? "#cbd5e1" : "#475569"),
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
-                transition: "all 0.15s ease",
+                gap: "3px",
+                whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
-              title="Close Reader (Esc)"
+              title="Marks & Bookmarks"
             >
-              <X size={14} />
-              <span>Close</span>
+              <Highlighter size={11} />
+              <span>Marks{annotations.length > 0 ? ` (${annotations.length})` : ""}</span>
             </button>
-          )}
-        </div>
+
+            {/* 💾 Save Document */}
+            {(onDownload || noteId) && !isBlocked && (
+              <button
+                type="button"
+                onClick={handleInternalDownload}
+                disabled={isDownloadingPdf}
+                style={{
+                  padding: "3px 7px",
+                  borderRadius: "5px",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  background: "rgba(16, 185, 129, 0.18)",
+                  border: "1px solid rgba(16, 185, 129, 0.45)",
+                  color: "#34d399",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                }}
+                title="Save Document"
+              >
+                <Download size={11} />
+                <span>Save</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 🔍 Inline Search Toolbar (Row 2A - Shown when Search is toggled) */}
@@ -5267,7 +5540,7 @@ export default function VirtualPdfReader({
           flexDirection: scrollMode === "continuous" && !useNativeViewer ? "column" : "row",
           justifyContent: scrollMode === "continuous" && !useNativeViewer ? "flex-start" : "center",
           alignItems: useNativeViewer ? "stretch" : (scrollMode === "continuous" ? "center" : "flex-start"),
-          padding: useNativeViewer ? "0" : (isTouchOrMobileDevice ? "12px 6px" : "24px"),
+          padding: useNativeViewer ? "0" : (isTouchOrMobileDevice ? "8px 4px" : "20px"),
           background: nightMode ? "#060911" : "#e2e8f0",
           position: "relative",
           height: "100%",
@@ -6316,26 +6589,31 @@ export default function VirtualPdfReader({
       <div
         style={{
           display: "flex",
-          justifyContent: "space-between",
+          justifyContent: isTouchOrMobileDevice ? "center" : "space-between",
           alignItems: "center",
-          padding: "5px 14px",
+          padding: isTouchOrMobileDevice ? "5px 8px" : "5px 14px",
           background: nightMode ? "rgba(9, 13, 22, 0.95)" : "#f8fafc",
           borderTop: nightMode ? "1px solid rgba(255, 255, 255, 0.06)" : "1px solid rgba(0, 0, 0, 0.06)",
           fontSize: "0.72rem",
           color: "var(--text-dim)",
           flexShrink: 0,
           zIndex: 30,
+          whiteSpace: "nowrap",
+          overflowX: "auto",
+          scrollbarWidth: "none",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ display: "flex", alignItems: "center", gap: "5px", color: "#38bdf8", fontWeight: 600 }}>
-            <Sparkles size={12} style={{ color: "var(--accent-cyan)" }} />
-            <span>Virtual Engine • On-demand 64KB Byte Streaming</span>
-          </span>
-        </div>
+        {!isTouchOrMobileDevice && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: "5px", color: "#38bdf8", fontWeight: 600 }}>
+              <Sparkles size={12} style={{ color: "var(--accent-cyan)" }} />
+              <span>Virtual Engine • On-demand 64KB Byte Streaming</span>
+            </span>
+          </div>
+        )}
 
         {/* Docked AI Study Pod & Discussion Capsule (Cleanly outside canvas, zero blocking of notes!) */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isTouchOrMobileDevice ? "6px" : "8px", flexShrink: 0 }}>
           <button
             type="button"
             onClick={handleOpenAiStudy}
@@ -6344,19 +6622,19 @@ export default function VirtualPdfReader({
               color: "#fff",
               border: "1px solid rgba(255, 255, 255, 0.35)",
               borderRadius: "999px",
-              padding: "5px 14px",
-              fontSize: "0.74rem",
+              padding: isTouchOrMobileDevice ? "4px 10px" : "5px 14px",
+              fontSize: isTouchOrMobileDevice ? "0.7rem" : "0.74rem",
               fontWeight: 800,
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "5px",
               boxShadow: "0 4px 16px rgba(99, 102, 241, 0.45), 0 0 12px rgba(6, 182, 212, 0.25)",
               transition: "all 0.2s ease",
             }}
             title="Open AI Study (Tutor Chat, 3D Flashcards & Summary)"
           >
-            <Sparkles size={13} style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.8))" }} />
+            <Sparkles size={12} style={{ filter: "drop-shadow(0 0 3px rgba(255,255,255,0.8))" }} />
             <span>AI Study</span>
           </button>
 
@@ -6365,11 +6643,11 @@ export default function VirtualPdfReader({
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "4px",
+                gap: "3px",
                 background: "rgba(6, 182, 212, 0.14)",
                 border: "1px solid rgba(6, 182, 212, 0.38)",
                 borderRadius: "999px",
-                padding: "2px 4px 2px 10px",
+                padding: "2px 4px 2px 8px",
               }}
             >
               <button
@@ -6379,24 +6657,25 @@ export default function VirtualPdfReader({
                   background: "transparent",
                   border: "none",
                   color: nightMode ? "#38bdf8" : "#0284c7",
-                  fontSize: "0.72rem",
+                  fontSize: isTouchOrMobileDevice ? "0.68rem" : "0.72rem",
                   fontWeight: 700,
                   padding: "1px 4px 1px 0",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "4px",
+                  gap: "3px",
+                  whiteSpace: "nowrap",
                 }}
                 title={'Open Live Study Pod discussion for Page ' + currentPage}
               >
-                <MessageSquare size={12} color="#06b6d4" />
+                <MessageSquare size={11} color="#06b6d4" />
                 <span>Pg {currentPage} • Discuss</span>
               </button>
 
               <div
                 style={{
                   width: "1px",
-                  height: "13px",
+                  height: "12px",
                   background: nightMode ? "rgba(56, 189, 248, 0.3)" : "rgba(2, 132, 199, 0.25)",
                 }}
               />
@@ -6408,18 +6687,18 @@ export default function VirtualPdfReader({
                   background: "rgba(6, 182, 212, 0.22)",
                   border: "1px solid rgba(6, 182, 212, 0.45)",
                   color: nightMode ? "#67e8f9" : "#0891b2",
-                  fontSize: "0.7rem",
+                  fontSize: "0.68rem",
                   fontWeight: 800,
                   borderRadius: "999px",
-                  padding: "2px 8px",
+                  padding: "2px 6px",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
-                  gap: "3px",
+                  gap: "2px",
                 }}
-                title={'Show Page ' + currentPage + ' QR code so friends can scan & discuss this exact page'}
+                title={'Show Page ' + currentPage + ' QR code'}
               >
-                <QrCode size={12} />
+                <QrCode size={11} />
                 <span>QR</span>
               </button>
             </div>
@@ -6427,8 +6706,8 @@ export default function VirtualPdfReader({
 
           <div style={{ width: "1px", height: "14px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)", margin: "0 2px" }} />
 
-          <span>
-            Page {currentPage} of {numPages} • Night Mode {nightMode ? "Active 🌙" : "Off ☀️"}
+          <span style={{ whiteSpace: "nowrap", fontWeight: 700, fontSize: isTouchOrMobileDevice ? "0.7rem" : "0.72rem" }}>
+            {isTouchOrMobileDevice ? `Pg ${currentPage}/${numPages}` : `Page ${currentPage} of ${numPages} • Night Mode ${nightMode ? "Active 🌙" : "Off ☀️"}`}
           </span>
         </div>
       </div>
