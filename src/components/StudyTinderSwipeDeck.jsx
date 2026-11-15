@@ -17,6 +17,7 @@ import {
   Zap,
 } from "lucide-react";
 import MathMarkdown from "./MathMarkdown";
+import { playSwipeCardSound } from "../utils/soundEffects";
 
 /**
  * 🎊 Zero-dependency 60fps Canvas Confetti
@@ -80,52 +81,9 @@ function triggerConfetti(canvasRef, count = 45, isGold = false) {
 }
 
 /**
- * 🔊 Zero-cost Web Audio API Synth Chimes
+ * 🔊 Zero-cost Web Audio API Synth Chimes (Shared AudioContext)
  */
-function playSynthSound(type = "success") {
-  if (typeof window === "undefined") return;
-  try {
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-    if (type === "success") {
-      // Pleasant high-arpeggio chime
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(587.33, now); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, now + 0.12); // A5
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
-      osc.start(now);
-      osc.stop(now + 0.25);
-    } else if (type === "gold") {
-      // Shimmering triple tone
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.setValueAtTime(659.25, now + 0.08); // E5
-      osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.18); // C6
-      gain.gain.setValueAtTime(0.15, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc.start(now);
-      osc.stop(now + 0.35);
-    } else if (type === "flip") {
-      // Subtle wooden click/whoosh
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(320, now);
-      osc.frequency.exponentialRampToValueAtTime(160, now + 0.08);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
-      osc.start(now);
-      osc.stop(now + 0.1);
-    }
-  } catch (_) {}
-}
+const playSynthSound = playSwipeCardSound;
 
 export default function StudyTinderSwipeDeck({
   cards = [],

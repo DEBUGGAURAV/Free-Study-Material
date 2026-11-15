@@ -3,6 +3,7 @@ import { X, Send, Paperclip, Smile, Shield, Crown, Lock, Globe, Plus, Key, Users
 import { api, getAuthToken } from "../api";
 import { formatFileSize } from "../utils/formatUtils";
 import { wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
+import { playChatSound } from "../utils/soundEffects";
 
 // Deterministic vibrant color for student names (Modern Messenger style)
 const getUsernameColor = (userId, name) => {
@@ -60,54 +61,8 @@ const formatDateSeparator = (dateStr) => {
 // Popular Emojis for quick reactions and picker
 const POPULAR_EMOJIS = ["❤️", "😂", "🔥", "👍", "📚", "💡", "🚀", "🎓", "✨", "💯", "👏", "🎯", "⚡", "🙏", "🧠", "📖"];
 
-// 🎵 Synthesize Web Audio API sound effects (Zero external files, 0ms latency)
-const playChime = (type = "receive") => {
-  try {
-    const isMuted = localStorage.getItem("study_chat_mute") === "true";
-    if (isMuted) return;
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const ctx = new AudioContext();
-    if (ctx.state === "suspended") {
-      ctx.resume();
-    }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-    if (type === "send") {
-      // Pleasant upward whoosh-chime
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(420, now);
-      osc.frequency.exponentialRampToValueAtTime(840, now + 0.12);
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-      osc.start(now);
-      osc.stop(now + 0.12);
-    } else if (type === "receive") {
-      // Crisp subtle pop / ding
-      osc.type = "triangle";
-      osc.frequency.setValueAtTime(680, now);
-      osc.frequency.exponentialRampToValueAtTime(1020, now + 0.08);
-      osc.frequency.exponentialRampToValueAtTime(550, now + 0.18);
-      gain.gain.setValueAtTime(0.16, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-      osc.start(now);
-      osc.stop(now + 0.18);
-    } else if (type === "heart") {
-      // Warm double-tap heart pop
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(523.25, now);
-      osc.frequency.exponentialRampToValueAtTime(659.25, now + 0.15);
-      gain.gain.setValueAtTime(0.18, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-      osc.start(now);
-      osc.stop(now + 0.15);
-    }
-  } catch (_) {}
-};
+// 🎵 Synthesize Web Audio API sound effects (Shared singleton, 0ms latency)
+const playChime = playChatSound;
 
 // 🎙️ Sleek Audio Waveform Message Player (Instagram / WhatsApp Voice Note)
 function AudioMessagePlayer({ fileUrl, duration, isMine }) {

@@ -13,6 +13,38 @@
 
 import { detectClientNetworkProfile } from "./clientCompressor";
 
+export const DEFAULT_TECH_SETTINGS = {
+  enableCdnAutoPrewarm: true,
+  cdnMaxRamItems: "auto",
+  enableP2pAirDrop: true,
+  p2pMaxPeers: "auto",
+  autoP2pHardwareGuard: true,
+  enableClientAi: true,
+  aiQuantization: "auto",
+  aiMaxContextChunks: "auto",
+  enableClientOcr: true,
+  ocrMaxPages: "auto",
+  ocrBinarization: true,
+  enableClientCompression: true,
+  compressionQuality: "auto",
+  autoNetworkAdaptive: true,
+  removeUnusedXrefs: true,
+  enableOfflineQueue: true,
+  inactivityTimeoutMinutes: "auto",
+  enableInactivityWarning: true,
+  enableDbWriteShield: true,
+  dbWriteShieldMode: "auto",
+  enableFormulaClipper: true,
+  enableStudyRoom: true,
+  studyRoomMaxUsers: "auto",
+  enableSmartDeduplication: true,
+  dedupMaxVarianceMB: 3,
+  dedupMaxVarianceBytes: 3 * 1024 * 1024,
+  enableAiMermaid: true,
+  enableWebPush: true,
+  enableShareRevisionCard: true,
+};
+
 /**
  * Detect client hardware specifications and performance tier
  */
