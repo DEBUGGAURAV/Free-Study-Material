@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
 import QRCode from "qrcode";
@@ -1147,12 +1147,36 @@ export default function VirtualPdfReader({
   const speechTimerRef = useRef(null);
   const recognitionRef = useRef(null);
   const [isListening, setIsListening] = useState(false);
-  const [voiceLang, setVoiceLang] = useState("en-IN"); // 'en-IN' (Indian English) | 'hi-IN' (Hindi)
-  const [voiceGender, setVoiceGender] = useState("female"); // 'female' | 'male'
-  const [voiceSpeed, setVoiceSpeed] = useState(1.0); // 0.8 | 1.0 | 1.25 | 1.5
+  const [voiceLang, setVoiceLang] = useState(() => {
+    try {
+      return localStorage.getItem("doc_voice_lang") || "en-IN";
+    } catch (_) {
+      return "en-IN";
+    }
+  }); // 'en-IN' (Indian English) | 'hi-IN' (Hindi)
+  const [voiceGender, setVoiceGender] = useState(() => {
+    try {
+      return localStorage.getItem("doc_voice_gender") || "female";
+    } catch (_) {
+      return "female";
+    }
+  }); // 'female' | 'male'
+  const [voiceSpeed, setVoiceSpeed] = useState(() => {
+    try {
+      return parseFloat(localStorage.getItem("doc_voice_speed")) || 1.0;
+    } catch (_) {
+      return 1.0;
+    }
+  }); // 0.8 | 1.0 | 1.25 | 1.5
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const voiceMenuRef = useRef(null);
   const voicesListRef = useRef([]);
+  const voiceLangRef = useRef(voiceLang);
+  const voiceGenderRef = useRef(voiceGender);
+  const voiceSpeedRef = useRef(voiceSpeed);
+  voiceLangRef.current = voiceLang;
+  voiceGenderRef.current = voiceGender;
+  voiceSpeedRef.current = voiceSpeed;
 
   // Pre-fetch and cache speech synthesis voices immediately on mount
   useEffect(() => {
@@ -2541,9 +2565,13 @@ export default function VirtualPdfReader({
       if (voices.length > 0) voicesListRef.current = voices;
     }
 
-    const preferredVoice = getMatchingVoice(voices, voiceLang, voiceGender);
-    const basePitch = voiceGender === "male" ? 0.9 : 1.15;
-    const playbackRate = voiceSpeed || 1.0;
+    const activeLang = voiceLangRef.current || voiceLang;
+    const activeGender = voiceGenderRef.current || voiceGender;
+    const activeSpeed = voiceSpeedRef.current || voiceSpeed || 1.0;
+
+    const preferredVoice = getMatchingVoice(voices, activeLang, activeGender);
+    const basePitch = activeGender === "male" ? 0.9 : 1.15;
+    const playbackRate = activeSpeed;
 
     let currentIdx = 0;
 
@@ -2773,8 +2801,10 @@ export default function VirtualPdfReader({
         pageText = `Page ${currentPage} of ${noteHeading}. This page does not contain selectable digital text. You can click OCR Page in study tools to scan handwritten content.`;
       }
 
-      const langLabel = voiceLang === "hi-IN" ? "Hindi" : "English";
-      const genderLabel = voiceGender === "male" ? "Male" : "Female";
+      const activeLang = voiceLangRef.current || voiceLang;
+      const activeGender = voiceGenderRef.current || voiceGender;
+      const langLabel = activeLang === "hi-IN" ? "Hindi" : "English";
+      const genderLabel = activeGender === "male" ? "Male" : "Female";
       setOcrStatusText(`🎧 Reading Page ${currentPage} (${langLabel} • ${genderLabel})...`);
       speakChunks(pageText);
       setTimeout(() => setOcrStatusText(""), 3500);
@@ -2782,6 +2812,37 @@ export default function VirtualPdfReader({
       console.warn("[TTS] Speech error:", err);
       setOcrStatusText(`Speech Notice: ${err.message || "Could not read page."}`);
       stopSpeech();
+    }
+  };
+
+  // Immediate Voice Setting Switcher (Gender, Language, Speed)
+  const updateVoiceSetting = (type, val) => {
+    if (type === "gender") {
+      setVoiceGender(val);
+      voiceGenderRef.current = val;
+      try {
+        localStorage.setItem("doc_voice_gender", val);
+      } catch (_) {}
+    } else if (type === "lang") {
+      setVoiceLang(val);
+      voiceLangRef.current = val;
+      try {
+        localStorage.setItem("doc_voice_lang", val);
+      } catch (_) {}
+    } else if (type === "speed") {
+      const numVal = parseFloat(val) || 1.0;
+      setVoiceSpeed(numVal);
+      voiceSpeedRef.current = numVal;
+      try {
+        localStorage.setItem("doc_voice_speed", String(numVal));
+      } catch (_) {}
+    }
+
+    if (isSpeakingRef.current) {
+      stopSpeech();
+      setTimeout(() => {
+        handleToggleSpeech();
+      }, 150);
     }
   };
 
@@ -4792,29 +4853,261 @@ export default function VirtualPdfReader({
             <span>{wakeLockActive ? "Awake ON" : "Awake"}</span>
           </button>
 
-          {/* Listen (TTS) */}
-          <button
-            type="button"
-            onClick={handleToggleSpeech}
-            style={{
-              padding: "4px 10px",
-              fontSize: "0.74rem",
-              fontWeight: 600,
-              borderRadius: "6px",
-              background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
-              color: isSpeaking ? "#ef4444" : (nightMode ? "#cbd5e1" : "#1e293b"),
-              border: isSpeaking ? "1px solid #ef4444" : (nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid #cbd5e1"),
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              whiteSpace: "nowrap",
-            }}
-            title={isSpeaking ? "Stop Audio Playback" : "Listen to Page Audio (Text to Speech)"}
-          >
-            {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
-            <span>{isSpeaking ? "Stop Audio" : "🔊 Listen"}</span>
-          </button>
+          {/* Listen (TTS) with Integrated Man/Woman & Indian English/Hindi Selector */}
+          <div ref={voiceMenuRef} style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                borderRadius: "6px",
+                border: isSpeaking
+                  ? "1px solid #ef4444"
+                  : (nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1"),
+                background: isSpeaking
+                  ? "rgba(239, 68, 68, 0.25)"
+                  : (nightMode ? "rgba(255, 255, 255, 0.06)" : "#fff"),
+              }}
+            >
+              {/* Primary Listen / Stop Action */}
+              <button
+                type="button"
+                onClick={handleToggleSpeech}
+                style={{
+                  padding: "4px 8px",
+                  fontSize: "0.74rem",
+                  fontWeight: 600,
+                  background: "transparent",
+                  color: isSpeaking ? "#ef4444" : (nightMode ? "#cbd5e1" : "#1e293b"),
+                  border: "none",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  whiteSpace: "nowrap",
+                }}
+                title={isSpeaking ? "Stop Audio Playback" : "Listen to Page Audio (Text to Speech)"}
+              >
+                {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                <span>{isSpeaking ? "Stop Audio" : "🔊 Listen"}</span>
+              </button>
+
+              {/* Vertical Divider */}
+              <div
+                style={{
+                  width: "1px",
+                  height: "14px",
+                  background: isSpeaking
+                    ? "rgba(239, 68, 68, 0.4)"
+                    : (nightMode ? "rgba(255, 255, 255, 0.15)" : "#e2e8f0"),
+                }}
+              />
+
+              {/* Voice Options Selector Pill */}
+              <button
+                type="button"
+                onClick={() => setShowVoiceMenu((prev) => !prev)}
+                style={{
+                  padding: "4px 7px",
+                  fontSize: "0.72rem",
+                  fontWeight: 600,
+                  background: showVoiceMenu
+                    ? (nightMode ? "rgba(99, 102, 241, 0.3)" : "#e0e7ff")
+                    : "transparent",
+                  color: showVoiceMenu ? "#6366f1" : (nightMode ? "#94a3b8" : "#475569"),
+                  border: "none",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  whiteSpace: "nowrap",
+                }}
+                title="Voice Settings: Man / Woman, Indian English / Hindi, Speed"
+              >
+                <span>{voiceGender === "female" ? "👩" : "👨"}</span>
+                <span>{voiceLang === "hi-IN" ? "हिंदी" : "EN"}</span>
+                <ChevronDown
+                  size={12}
+                  style={{
+                    transform: showVoiceMenu ? "rotate(180deg)" : "none",
+                    transition: "transform 0.15s ease",
+                  }}
+                />
+              </button>
+            </div>
+
+            {/* Voice Settings Popover Menu */}
+            {showVoiceMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  left: 0,
+                  zIndex: 2200,
+                  width: "250px",
+                  background: nightMode ? "#0f172a" : "#ffffff",
+                  border: nightMode ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  boxShadow: nightMode
+                    ? "0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 0 1px 1px rgba(255, 255, 255, 0.1)"
+                    : "0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 0 1px 1px rgba(0, 0, 0, 0.05)",
+                  padding: "12px",
+                  color: nightMode ? "#f1f5f9" : "#0f172a",
+                  fontSize: "0.76rem",
+                  backdropFilter: "blur(12px)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "0.78rem", letterSpacing: "0.3px", display: "flex", alignItems: "center", gap: "5px" }}>
+                    🎙️ Voice & Audio Settings
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceMenu(false)}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: nightMode ? "#94a3b8" : "#64748b",
+                      padding: "2px",
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+
+                {/* 1. Voice Gender Selection */}
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: nightMode ? "#94a3b8" : "#64748b", textTransform: "uppercase", marginBottom: "5px" }}>
+                    Voice Gender / आवाज़
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => updateVoiceSetting("gender", "female")}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: voiceGender === "female" ? "1.5px solid #6366f1" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0"),
+                        background: voiceGender === "female" ? "rgba(99, 102, 241, 0.15)" : (nightMode ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+                        color: voiceGender === "female" ? (nightMode ? "#818cf8" : "#4f46e5") : (nightMode ? "#cbd5e1" : "#475569"),
+                        fontWeight: voiceGender === "female" ? 700 : 500,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      <span>👩</span>
+                      <span>Woman (महिला)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateVoiceSetting("gender", "male")}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: voiceGender === "male" ? "1.5px solid #6366f1" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0"),
+                        background: voiceGender === "male" ? "rgba(99, 102, 241, 0.15)" : (nightMode ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+                        color: voiceGender === "male" ? (nightMode ? "#818cf8" : "#4f46e5") : (nightMode ? "#cbd5e1" : "#475569"),
+                        fontWeight: voiceGender === "male" ? 700 : 500,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      <span>👨</span>
+                      <span>Man (पुरुष)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Language Accent Selection */}
+                <div style={{ marginBottom: "10px" }}>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: nightMode ? "#94a3b8" : "#64748b", textTransform: "uppercase", marginBottom: "5px" }}>
+                    Language / भाषा
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                    <button
+                      type="button"
+                      onClick={() => updateVoiceSetting("lang", "en-IN")}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: voiceLang === "en-IN" ? "1.5px solid #06b6d4" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0"),
+                        background: voiceLang === "en-IN" ? "rgba(6, 182, 212, 0.15)" : (nightMode ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+                        color: voiceLang === "en-IN" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#cbd5e1" : "#475569"),
+                        fontWeight: voiceLang === "en-IN" ? 700 : 500,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      <span>🇮🇳</span>
+                      <span>Indian English</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateVoiceSetting("lang", "hi-IN")}
+                      style={{
+                        padding: "6px 8px",
+                        borderRadius: "6px",
+                        border: voiceLang === "hi-IN" ? "1.5px solid #06b6d4" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0"),
+                        background: voiceLang === "hi-IN" ? "rgba(6, 182, 212, 0.15)" : (nightMode ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+                        color: voiceLang === "hi-IN" ? (nightMode ? "#38bdf8" : "#0284c7") : (nightMode ? "#cbd5e1" : "#475569"),
+                        fontWeight: voiceLang === "hi-IN" ? 700 : 500,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      <span>🇮🇳</span>
+                      <span>हिंदी (Hindi)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. Playback Speed Selection */}
+                <div>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: nightMode ? "#94a3b8" : "#64748b", textTransform: "uppercase", marginBottom: "5px" }}>
+                    Playback Speed / गति
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
+                    {[0.8, 1.0, 1.25, 1.5].map((spd) => (
+                      <button
+                        key={spd}
+                        type="button"
+                        onClick={() => updateVoiceSetting("speed", spd)}
+                        style={{
+                          padding: "4px 0",
+                          borderRadius: "5px",
+                          border: voiceSpeed === spd ? "1.5px solid #10b981" : (nightMode ? "1px solid rgba(255,255,255,0.1)" : "1px solid #e2e8f0"),
+                          background: voiceSpeed === spd ? "rgba(16, 185, 129, 0.15)" : (nightMode ? "rgba(255,255,255,0.03)" : "#f8fafc"),
+                          color: voiceSpeed === spd ? (nightMode ? "#34d399" : "#059669") : (nightMode ? "#cbd5e1" : "#475569"),
+                          fontWeight: voiceSpeed === spd ? 700 : 500,
+                          cursor: "pointer",
+                          fontSize: "0.72rem",
+                          textAlign: "center",
+                        }}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* OCR Page */}
           <button
@@ -5733,27 +6026,51 @@ export default function VirtualPdfReader({
                   {nightMode ? "☀️ Light" : "🌙 Dark"}
                 </button>
                 <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)" }} />
-                <button
-                  type="button"
-                  onClick={handleToggleSpeech}
-                  style={{
-                    padding: "4px 9px",
-                    fontSize: "0.74rem",
-                    fontWeight: 600,
-                    borderRadius: "6px",
-                    background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"),
-                    color: isSpeaking ? "#ef4444" : (nightMode ? "#e2e8f0" : "#1e293b"),
-                    border: isSpeaking ? "1px solid #ef4444" : (nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1"),
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                  title={isSpeaking ? "Stop Audio" : "Listen to Page Audio"}
-                >
-                  {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
-                  <span>{isSpeaking ? "Stop" : "🔊 Listen"}</span>
-                </button>
+                <div style={{ display: "inline-flex", alignItems: "center", borderRadius: "6px", overflow: "hidden", border: isSpeaking ? "1px solid #ef4444" : (nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid #cbd5e1") }}>
+                  <button
+                    type="button"
+                    onClick={handleToggleSpeech}
+                    style={{
+                      padding: "4px 8px",
+                      fontSize: "0.74rem",
+                      fontWeight: 600,
+                      background: isSpeaking ? "rgba(239, 68, 68, 0.25)" : (nightMode ? "rgba(255, 255, 255, 0.08)" : "#e2e8f0"),
+                      color: isSpeaking ? "#ef4444" : (nightMode ? "#e2e8f0" : "#1e293b"),
+                      border: "none",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                    title={isSpeaking ? "Stop Audio" : "Listen to Page Audio"}
+                  >
+                    {isSpeaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+                    <span>{isSpeaking ? "Stop" : "🔊 Listen"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowVoiceMenu((v) => !v)}
+                    style={{
+                      padding: "4px 6px",
+                      fontSize: "0.72rem",
+                      fontWeight: 600,
+                      borderLeft: nightMode ? "1px solid rgba(255,255,255,0.15)" : "1px solid #cbd5e1",
+                      borderRight: "none",
+                      borderTop: "none",
+                      borderBottom: "none",
+                      background: nightMode ? "rgba(255, 255, 255, 0.12)" : "#e2e8f0",
+                      color: nightMode ? "#94a3b8" : "#475569",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "2px",
+                    }}
+                    title="Change Voice (Man/Woman, Indian English/Hindi)"
+                  >
+                    <span>{voiceGender === "female" ? "👩" : "👨"}</span>
+                    <span>{voiceLang === "hi-IN" ? "हिंदी" : "EN"}</span>
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
