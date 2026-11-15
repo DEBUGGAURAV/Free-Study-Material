@@ -88,4 +88,16 @@ export function getNotePdfFileName(note) {
   return clean;
 }
 
+/**
+ * Formats a count of seconds into a standard digital clock display (MM:SS).
+ * Shared across Pomodoro timers, study clocks, and audio readers.
+ */
+export function formatClock(totalSeconds) {
+  const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const m = Math.floor(s / 60);
+  const remaining = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
+}
+
+
 
