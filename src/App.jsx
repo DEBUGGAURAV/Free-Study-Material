@@ -75,6 +75,7 @@ const AiStudyPodModal = lazyWithRetry(() => import("./components/AiStudyPodModal
 const CircleSearchModal = lazyWithRetry(() => import("./components/CircleSearchModal"));
 const ShareNoteModal = lazyWithRetry(() => import("./components/ShareNoteModal"));
 import FreehandCircleOverlay from "./components/FreehandCircleOverlay";
+import Movable3DFloatingWidget from "./components/Movable3DFloatingWidget";
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 export const isMasterAdminUser = (user) => {
@@ -2747,113 +2748,98 @@ export default function App() {
         )}
       </React.Suspense>
 
-      {/* Floating 2-Way Help & Support Desk Trigger (Radiant Gradient Border on Pure White Card) */}
-      <button
-        type="button"
+      {/* 🛸 4 Movable 3D Floating Action Widgets (Help, AI Study, Circle Search, Chat) */}
+      {/* 1. ❓ Need Help? (Movable 3D Sunset Amber Glow) */}
+      <Movable3DFloatingWidget
+        id="help"
+        animIndex={1}
+        defaultPos={{ bottom: activeJob ? 82 : 24, left: 16 }}
         onClick={() => setIsHelpOpen(true)}
-        className={`floating-help-trigger ${currentUser ? "authenticated" : "guest"}`}
         title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
-        style={{
-          position: "fixed",
-          bottom: activeJob ? "82px" : "24px",
-          left: "20px",
-          zIndex: 140,
-          background: "linear-gradient(#ffffff, #ffffff) padding-box, linear-gradient(135deg, #059669, #10b981, #06b6d4) border-box",
-          border: "2px solid transparent",
-          color: "#0f172a",
-          borderRadius: "999px",
-          padding: "9px 18px",
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          boxShadow: "0 12px 32px -4px rgba(16, 185, 129, 0.28), 0 4px 12px rgba(0, 0, 0, 0.08)",
-          cursor: "pointer",
-          fontWeight: 800,
-          fontSize: "0.85rem",
-          transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
+        label="Need Help?"
+        bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
+        glowColor="rgba(234, 88, 12, 0.48)"
+        borderGradient="rgba(254, 215, 170, 0.55)"
+        badge={<span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff", display: "inline-block", marginLeft: "2px" }} />}
+      />
+
+      {/* 2. ✨ AI Study (Movable 3D Cyberpunk Violet-Magenta) */}
+      <Movable3DFloatingWidget
+        id="ai"
+        animIndex={2}
+        defaultPos={{ bottom: activeJob ? 194 : 136, right: 16 }}
+        onClick={() => {
+          if (!currentUser) {
+            openAuth("signin");
+            return;
+          }
+          setHomeAiPodNote(null);
+          setHomeAiPodInitialTab("chat");
+          setIsHomeAiPodOpen(true);
         }}
-      >
-        <HelpCircle size={18} color="#059669" style={{ filter: "drop-shadow(0 1px 4px rgba(16, 185, 129, 0.4))" }} />
-        <span style={{ fontWeight: 800, color: "#0f172a" }}>Need Help?</span>
-        <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 8px #10b981", display: "inline-block" }} />
-      </button>
+        title="Open AI Study Chatbox, 3D Flashcards & Summary"
+        icon={<Sparkles size={17} color="#ffffff" style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.9))" }} />}
+        label="AI Study"
+        bgGradient="linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%)"
+        glowColor="rgba(168, 85, 247, 0.5)"
+        borderGradient="rgba(244, 114, 182, 0.55)"
+      />
 
-      {/* 🚀 Persistent Floating Side Action Dock (AI Study Pod & Circle to Search) — ONLY VISIBLE AFTER LOGIN */}
-      {currentUser && (
-        <div
-          className="floating-side-action-dock"
-          style={{
-            position: "fixed",
-            right: "20px",
-            bottom: activeJob ? "142px" : "84px",
-            zIndex: 140,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            gap: "10px",
-            pointerEvents: "auto",
+      {/* 3. ⭕ Circle Search (Movable 3D Emerald Aurora & Cyan) */}
+      <Movable3DFloatingWidget
+        id="circle"
+        animIndex={3}
+        defaultPos={{ bottom: activeJob ? 138 : 80, right: 16 }}
+        onClick={() => {
+          if (!currentUser) {
+            openAuth("signin");
+            return;
+          }
+          setIsScreenPencilActive(true);
+        }}
+        title="Pencil & Circle Search: Draw any shape with Pencil to get instant AI search"
+        icon={<GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />}
+        label="Circle Search"
+        bgGradient="linear-gradient(135deg, #059669 0%, #0d9488 50%, #06b6d4 100%)"
+        glowColor="rgba(5, 150, 105, 0.5)"
+        borderGradient="rgba(103, 232, 249, 0.55)"
+      />
+
+      {/* 4. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
+      {!isChatOpen && (
+        <Movable3DFloatingWidget
+          id="chat"
+          animIndex={4}
+          defaultPos={{ bottom: activeJob ? 82 : 24, right: 16 }}
+          onClick={() => {
+            if (!currentUser) {
+              openAuth("signin");
+            } else {
+              setIsChatOpen(true);
+            }
           }}
-        >
-          {/* ✨ AI Study Floating Capsule */}
-          <button
-            type="button"
-            onClick={() => {
-              setHomeAiPodNote(null);
-              setHomeAiPodInitialTab("chat");
-              setIsHomeAiPodOpen(true);
-            }}
-            className="floating-ai-pod-trigger"
-            title="Open AI Study Chatbox, 3D Flashcards & Summary"
-            style={{
-              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%)",
-              color: "#ffffff",
-              border: "1.5px solid rgba(255, 255, 255, 0.4)",
-              borderRadius: "999px",
-              padding: "9px 18px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              boxShadow: "0 8px 30px rgba(99, 102, 241, 0.55), 0 0 20px rgba(6, 182, 212, 0.35)",
-              cursor: "pointer",
-              fontWeight: 800,
-              fontSize: "0.84rem",
-              backdropFilter: "blur(14px)",
-              transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 5px rgba(255,255,255,0.9))" }} />
-            <span className="floating-action-text">AI Study</span>
-          </button>
-
-          {/* ⭕ Circle to Search Floating Capsule (Instant Freehand Pencil!) */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsScreenPencilActive(true);
-            }}
-            className="floating-circle-trigger"
-            title="Pencil & Circle Search: Click to draw any shape/structure with Pencil and get instant AI result"
-            style={{
-              background: "linear-gradient(135deg, rgba(2, 132, 199, 0.95), rgba(56, 189, 248, 0.95))",
-              color: "#ffffff",
-              border: "1.5px solid rgba(255, 255, 255, 0.3)",
-              borderRadius: "999px",
-              padding: "9px 16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "7px",
-              boxShadow: "0 8px 25px rgba(2, 132, 199, 0.45), 0 0 15px rgba(56, 189, 248, 0.25)",
-              cursor: "pointer",
-              fontWeight: 800,
-              fontSize: "0.82rem",
-              backdropFilter: "blur(12px)",
-              transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-            }}
-          >
-            <GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />
-            <span className="floating-action-text">Circle Search</span>
-          </button>
-        </div>
+          title="Open Live Student Chat Hub & Study Pods"
+          icon={<MessageSquare size={17} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
+          label="Chat"
+          bgGradient="linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%)"
+          glowColor="rgba(37, 99, 235, 0.52)"
+          borderGradient="rgba(147, 197, 253, 0.55)"
+          badge={
+            <span
+              style={{
+                position: "absolute",
+                top: "-3px",
+                right: "-3px",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#10b981",
+                boxShadow: "0 0 7px #10b981",
+              }}
+            />
+          }
+        />
       )}
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
@@ -2872,57 +2858,6 @@ export default function App() {
           setIsCircleSearchOpen(true);
         }}
       />
-
-      {/* Floating Instant Chat Hub Trigger (WhatsApp / Instagram Style) */}
-      {currentUser && !isChatOpen && (
-        <button
-          onClick={() => {
-            if (!currentUser) {
-              openAuth("signin");
-            } else {
-              setIsChatOpen(true);
-            }
-          }}
-          className="floating-chat-trigger"
-          title="Open Live Student Chat Hub & Study Pods"
-          style={{
-            position: "fixed",
-            bottom: activeJob ? "82px" : "24px",
-            right: "20px",
-            zIndex: 140,
-            background: "linear-gradient(135deg, #0284c7 0%, #3b82f6 50%, #6366f1 100%)",
-            color: "#fff",
-            border: "1px solid rgba(255, 255, 255, 0.25)",
-            borderRadius: "999px",
-            padding: "10px 18px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            boxShadow: "0 10px 28px rgba(2, 132, 199, 0.4), 0 0 20px rgba(99, 102, 241, 0.25)",
-            cursor: "pointer",
-            fontWeight: 700,
-            fontSize: "0.85rem",
-            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-          }}
-        >
-          <span style={{ position: "relative", display: "flex", alignItems: "center" }}>
-            <MessageSquare size={18} />
-            <span
-              style={{
-                position: "absolute",
-                top: "-2px",
-                right: "-2px",
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 6px #10b981",
-              }}
-            />
-          </span>
-          <span className="floating-chat-text">Chat Hub</span>
-        </button>
-      )}
 
       <QueueStatusPill
         activeJob={activeJob}
