@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { GripVertical } from "lucide-react";
 
 /**
  * 🛸 Movable 3D Floating Action Widget
- * - Fully Draggable (Mouse + Touch on Mobile)
- * - Intelligent Drag vs Tap threshold (moved > 6px = drag, else click)
- * - Continuous 3D floating animation & physics on mobile & desktop
- * - Persistent position saved to localStorage with viewport boundary clamping
- * - Performance optimized: primitive deps & unmount listener cleanup
+ * - 100% Draggable (Touch on Mobile + Mouse on Desktop)
+ * - Anti-overflow Viewport Clamping (Guaranteed NEVER cuts off on right/left/top/bottom)
+ * - Intelligent Drag vs Tap threshold (moved > 4px = drag, else click)
+ * - Visual 3D tactile grip handle so users instantly know it is movable
+ * - Continuous 3D floating animation & physics when idle
+ * - Position saved to localStorage per widget ID with safe sanitization
+ * - Safe z-index (1055 default, 1070 while dragging) floating above mobile dock
  */
 export default function Movable3DFloatingWidget({
   id,
@@ -35,13 +38,12 @@ export default function Movable3DFloatingWidget({
   });
   const cleanupListenersRef = useRef(null);
 
-  // Destructure primitive values so inline object literal doesn't re-trigger effect on every parent render
   const defRight = defaultPos?.right;
   const defLeft = defaultPos?.left;
   const defBottom = defaultPos?.bottom;
   const defTop = defaultPos?.top;
 
-  // Cleanup any active dragging listeners on unmount to prevent leaks
+  // Cleanup listeners on unmount
   useEffect(() => {
     return () => {
       if (cleanupListenersRef.current) {
@@ -51,74 +53,118 @@ export default function Movable3DFloatingWidget({
     };
   }, []);
 
-  // 1. Initialize position from localStorage or calculate default coordinates
+  // 1. Initialize position with accurate content width estimation and safe edge bounds
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const isMobile = w < 640;
+
+    // Accurate estimation: icon(18) + grip(12) + gap(12) + padding(24) + label text length
+    const estimatedW = label
+      ? isMobile
+        ? Math.max(115, label.length * 8.5 + 48)
+        : Math.max(130, label.length * 9.5 + 58)
+      : isMobile
+      ? 48
+      : 54;
+    const estimatedH = isMobile ? 40 : 44;
+
+    // Check localStorage with strict boundary sanitization
     const saved = localStorage.getItem(`fsm_widget_pos_${id}`);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
         if (typeof parsed.x === "number" && typeof parsed.y === "number") {
-          const maxX = Math.max(10, window.innerWidth - 65);
-          const maxY = Math.max(10, window.innerHeight - 55);
+          const maxX = Math.max(10, w - estimatedW - 14);
+          const maxY = Math.max(10, h - estimatedH - 14);
           setPos({
-            x: Math.max(8, Math.min(maxX, parsed.x)),
-            y: Math.max(8, Math.min(maxY, parsed.y)),
+            x: Math.max(10, Math.min(maxX, parsed.x)),
+            y: Math.max(10, Math.min(maxY, parsed.y)),
           });
           return;
         }
       } catch (_) {}
     }
 
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const isMobile = w < 640;
-    const elemW = isMobile ? 105 : 130;
-    const elemH = 44;
-
-    let initX = 16;
-    let initY = h - 68;
+    // Default coordinates calculation
+    let initX = 14;
+    let initY = h - estimatedH - 24;
 
     if (defRight != null) {
-      initX = w - (defRight + elemW);
+      initX = w - (defRight + estimatedW);
     } else if (defLeft != null) {
       initX = defLeft;
     }
 
+    // On mobile screens, elevate bottom default position so it clears the mobile bottom dock (~74px)
+    const mobileBottomOffset = isMobile ? 54 : 0;
     if (defBottom != null) {
-      initY = h - (defBottom + elemH);
+      const effectiveBottom = defBottom + mobileBottomOffset;
+      initY = h - (effectiveBottom + estimatedH);
     } else if (defTop != null) {
       initY = defTop;
     }
 
-    setPos({
-      x: Math.max(8, Math.min(w - elemW - 8, initX)),
-      y: Math.max(8, Math.min(h - elemH - 8, initY)),
-    });
-  }, [id, defRight, defLeft, defBottom, defTop]);
+    const maxX = Math.max(10, w - estimatedW - 14);
+    const maxY = Math.max(10, h - estimatedH - 14);
 
-  // 2. Keep within viewport bounds on screen resize or orientation change
+    setPos({
+      x: Math.max(10, Math.min(maxX, initX)),
+      y: Math.max(10, Math.min(maxY, initY)),
+    });
+  }, [id, defRight, defLeft, defBottom, defTop, label]);
+
+  // 2. Exact DOM post-mount clamp: dynamically measures rendered DOM width/height
+  useLayoutEffect(() => {
+    if (!widgetRef.current) return;
+    const rect = widgetRef.current.getBoundingClientRect();
+    const actualWidth = rect.width;
+    const actualHeight = rect.height;
+
+    setPos((prev) => {
+      if (!prev) return prev;
+      const maxX = Math.max(10, window.innerWidth - actualWidth - 14);
+      const maxY = Math.max(10, window.innerHeight - actualHeight - 14);
+
+      const clampedX = Math.max(10, Math.min(maxX, prev.x));
+      const clampedY = Math.max(10, Math.min(maxY, prev.y));
+
+      if (clampedX !== prev.x || clampedY !== prev.y) {
+        return { x: clampedX, y: clampedY };
+      }
+      return prev;
+    });
+  }, [label]);
+
+  // 3. Keep within viewport on resize or orientation change
   useEffect(() => {
     const handleResize = () => {
       setPos((prev) => {
         if (!prev) return prev;
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 110, height: 44 };
-        const maxX = Math.max(8, window.innerWidth - rect.width - 8);
-        const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+        const rect = widgetRef.current?.getBoundingClientRect();
+        const currentW = rect?.width || 135;
+        const currentH = rect?.height || 44;
+        const maxX = Math.max(10, window.innerWidth - currentW - 14);
+        const maxY = Math.max(10, window.innerHeight - currentH - 14);
         return {
-          x: Math.max(8, Math.min(maxX, prev.x)),
-          y: Math.max(8, Math.min(maxY, prev.y)),
+          x: Math.max(10, Math.min(maxX, prev.x)),
+          y: Math.max(10, Math.min(maxY, prev.y)),
         };
       });
     };
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
   }, []);
 
-  // 3. Mouse Drag Handler
+  // 4. Mouse Drag Handler (Desktop)
   const handleMouseDown = (e) => {
-    if (e.button !== 0) return; // Only primary mouse button
+    if (e.button !== 0) return; // Only left-click
     e.stopPropagation();
 
     if (cleanupListenersRef.current) {
@@ -136,19 +182,19 @@ export default function Movable3DFloatingWidget({
       const dx = moveEvent.clientX - info.startX;
       const dy = moveEvent.clientY - info.startY;
 
-      if (!info.hasMoved && Math.hypot(dx, dy) > 5) {
+      if (!info.hasMoved && Math.hypot(dx, dy) > 4) {
         info.hasMoved = true;
         setIsDragging(true);
       }
 
       if (info.hasMoved) {
         moveEvent.preventDefault();
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 120, height: 44 };
-        const maxX = Math.max(8, window.innerWidth - rect.width - 8);
-        const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+        const rect = widgetRef.current?.getBoundingClientRect() || { width: 135, height: 44 };
+        const maxX = Math.max(10, window.innerWidth - rect.width - 14);
+        const maxY = Math.max(10, window.innerHeight - rect.height - 14);
 
-        const newX = Math.max(8, Math.min(maxX, info.elemStartX + dx));
-        const newY = Math.max(8, Math.min(maxY, info.elemStartY + dy));
+        const newX = Math.max(10, Math.min(maxX, info.elemStartX + dx));
+        const newY = Math.max(10, Math.min(maxY, info.elemStartY + dy));
 
         setPos({ x: newX, y: newY });
       }
@@ -181,7 +227,7 @@ export default function Movable3DFloatingWidget({
     window.addEventListener("mouseup", handleMouseUp);
   };
 
-  // 4. Touch Drag Handler (Phone & Tablet)
+  // 5. Touch Drag Handler (Phone & Tablet)
   const handleTouchStart = (e) => {
     if (!e.touches || !e.touches[0]) return;
     const touch = e.touches[0];
@@ -199,23 +245,26 @@ export default function Movable3DFloatingWidget({
 
     const handleTouchMove = (moveEvent) => {
       if (!moveEvent.touches || !moveEvent.touches[0]) return;
+      if (moveEvent.cancelable) {
+        moveEvent.preventDefault(); // Stop screen scrolling while dragging widget!
+      }
+
       const t = moveEvent.touches[0];
       const dx = t.clientX - info.startX;
       const dy = t.clientY - info.startY;
 
-      if (!info.hasMoved && Math.hypot(dx, dy) > 6) {
+      if (!info.hasMoved && Math.hypot(dx, dy) > 4) {
         info.hasMoved = true;
         setIsDragging(true);
       }
 
       if (info.hasMoved) {
-        moveEvent.preventDefault();
-        const rect = widgetRef.current?.getBoundingClientRect() || { width: 105, height: 44 };
-        const maxX = Math.max(8, window.innerWidth - rect.width - 8);
-        const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+        const rect = widgetRef.current?.getBoundingClientRect() || { width: 125, height: 42 };
+        const maxX = Math.max(10, window.innerWidth - rect.width - 14);
+        const maxY = Math.max(10, window.innerHeight - rect.height - 14);
 
-        const newX = Math.max(8, Math.min(maxX, info.elemStartX + dx));
-        const newY = Math.max(8, Math.min(maxY, info.elemStartY + dy));
+        const newX = Math.max(10, Math.min(maxX, info.elemStartX + dx));
+        const newY = Math.max(10, Math.min(maxY, info.elemStartY + dy));
 
         setPos({ x: newX, y: newY });
       }
@@ -224,6 +273,7 @@ export default function Movable3DFloatingWidget({
     const handleTouchEnd = () => {
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
       cleanupListenersRef.current = null;
 
       if (info.hasMoved) {
@@ -242,10 +292,12 @@ export default function Movable3DFloatingWidget({
     cleanupListenersRef.current = () => {
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchEnd);
     };
 
     window.addEventListener("touchmove", handleTouchMove, { passive: false });
     window.addEventListener("touchend", handleTouchEnd);
+    window.addEventListener("touchcancel", handleTouchEnd);
   };
 
   const handleClick = (e) => {
@@ -267,7 +319,7 @@ export default function Movable3DFloatingWidget({
         position: "fixed",
         left: `${pos.x}px`,
         top: `${pos.y}px`,
-        zIndex: 1040,
+        zIndex: isDragging ? 1070 : 1055,
         touchAction: "none",
         cursor: isDragging ? "grabbing" : "grab",
         ...style,
@@ -281,10 +333,15 @@ export default function Movable3DFloatingWidget({
         className="movable-3d-inner"
         style={{
           background: bgGradient,
-          boxShadow: `0 10px 28px -4px ${glowColor}, inset 0 1.5px 1.5px rgba(255, 255, 255, 0.6), inset 0 -2px 5px rgba(0, 0, 0, 0.25)`,
+          boxShadow: isDragging
+            ? `0 18px 36px -4px ${glowColor}, 0 8px 18px rgba(0, 0, 0, 0.28), inset 0 1.5px 1.5px rgba(255, 255, 255, 0.75)`
+            : `0 10px 28px -4px ${glowColor}, inset 0 1.5px 1.5px rgba(255, 255, 255, 0.6), inset 0 -2px 5px rgba(0, 0, 0, 0.25)`,
           border: `1.5px solid ${borderGradient}`,
         }}
       >
+        <span className="movable-3d-grip" title="Drag to move widget">
+          <GripVertical size={13} style={{ opacity: 0.8, flexShrink: 0 }} />
+        </span>
         <div className="movable-3d-icon-wrap">
           {icon}
           {badge}
