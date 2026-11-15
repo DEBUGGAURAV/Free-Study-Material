@@ -9,7 +9,7 @@ import {
 import { api, getAuthToken } from "../../api";
 import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";
 import { getNotePdfFileName } from "../../utils/formatUtils";
-import "../../utils/hardwareAdaptiveEngine";
+import { DEFAULT_TECH_SETTINGS } from "../../utils/hardwareAdaptiveEngine";
 
 const VirtualPdfReader = lazy(() => import("../VirtualPdfReader"));
 import AdminSubModal from "./AdminSubModal";
@@ -349,31 +349,7 @@ export default function AdminModal({
   const [botSaveMessage, setBotSaveMessage] = useState(null);
 
   // Next-Gen Technology Nexus Controller State
-  const [techSettings, setTechSettings] = useState({
-    enableCdnAutoPrewarm: true,
-    cdnMaxRamItems: "auto",
-    enableP2pAirDrop: true,
-    p2pMaxPeers: "auto",
-    autoP2pHardwareGuard: true,
-    enableClientAi: true,
-    aiMaxContextChunks: "auto",
-    aiQuantization: "auto",
-    enableClientOcr: true,
-    ocrMaxPages: "auto",
-    ocrBinarization: true,
-    enableClientCompression: true,
-    compressionQuality: "auto",
-    autoNetworkAdaptive: true,
-    removeUnusedXrefs: true,
-    enableOfflineQueue: true,
-    inactivityTimeoutMinutes: "auto",
-    enableInactivityWarning: true,
-    enableDbWriteShield: true,
-    dbWriteShieldMode: "auto",
-    enableFormulaClipper: true,
-    enableStudyRoom: true,
-    studyRoomMaxUsers: "auto",
-  });
+  const [techSettings, setTechSettings] = useState(DEFAULT_TECH_SETTINGS);
   const [techTelemetry, setTechTelemetry] = useState(null);
   const [techLoading, setTechLoading] = useState(false);
   const [techSaving, setTechSaving] = useState(false);
