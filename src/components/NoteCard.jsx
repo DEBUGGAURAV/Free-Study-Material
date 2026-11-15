@@ -165,7 +165,7 @@ function NoteCard({
     isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false"
   );
 
-  // 1. One-Tap Share: Attached Link Copied + HD Poster Modal + Device Share Option Opened
+  // 1. Direct Device Native Share: PNG Image Attached + Link in Caption + Direct OS Share Sheet
   const handleShareNote = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -173,36 +173,23 @@ function NoteCard({
     recordCampusShare(note);
 
     const noteUrl = `${window.location.origin}/?note=${note.id}`;
-    const shareText = `📚 *${note.title || "Study Note"}*\nSubject: ${note.subject || "Engineering"} (${note.course || "B.Tech"})\nRead Online & Download 100% Free:\n🔗 ${noteUrl}`;
 
     // 1. Copy link automatically so it's ready to paste ("jo copy ho sake")
     try {
       await navigator.clipboard.writeText(noteUrl);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2200);
+      setTimeout(() => setCopied(false), 2500);
     } catch (_) {}
 
-    // 2. Open Share Modal showing the PNG image with link attached below
-    window.dispatchEvent(
-      new CustomEvent("open_share_modal", {
-        detail: { note, initialCopied: true },
-      })
-    );
-
-    // 3. Immediately trigger device's native share option ("uske baad device ka share option khul jaye")
-    const shareData = {
-      title: `${note.title || "Study Note"} — Free Study Material`,
-      text: shareText,
-      url: noteUrl,
-    };
-
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        if (err.name === "AbortError") return; // User closed share sheet
-        console.warn("[SHARE] System share dismiss/error:", err);
+    // 2. Directly open device's native share option with PNG poster + link attached!
+    try {
+      const res = await shareWhatsAppStoryCard(note, noteUrl);
+      if (res?.method === "shared" || res?.method === "downloaded") {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
       }
+    } catch (err) {
+      console.warn("[SHARE] Direct device share error:", err);
     }
   };
 

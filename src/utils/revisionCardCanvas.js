@@ -432,6 +432,12 @@ export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
  */
 export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   const targetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
+  
+  // 1. Auto-copy link to clipboard immediately ("jo copy ho sake")
+  try {
+    await navigator.clipboard.writeText(targetUrl);
+  } catch (_) {}
+
   const blob = await generateWhatsAppStoryCardBlob(note, targetUrl);
   const safeName = String(note.title || "study-note")
     .toLowerCase()
@@ -440,23 +446,40 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   const fileName = `${safeName}-whatsapp-story.png`;
   const file = new File([blob], fileName, { type: "image/png" });
 
-  const shareText = `📚 *${note.title || "Study Note"}*\nSubject: ${note.subject || "Engineering"}\nRead Online & Download 100% Free: ${targetUrl}`;
+  const shareText = `📚 *${note.title || "Study Note"}*\nSubject: ${note.subject || "Engineering"}\nRead Online & Download 100% Free:\n🔗 ${targetUrl}`;
 
-  // Try Native Share on mobile
+  // 2. Direct Native Share with PNG image file attached + link in caption
   if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         title: `${note.title || "Study Note"} — Free Study Material`,
         text: shareText,
+        url: targetUrl,
         files: [file],
       });
       return { method: "shared", fileName };
     } catch (err) {
       if (err?.name === "AbortError") return { method: "cancelled", fileName };
+      console.warn("[SHARE] File share failed, falling back to text:", err);
     }
   }
 
-  // Fallback / Desktop: Download PNG image + Copy Link
+  // 3. Fallback: Native System Share with Text + Link (Triggers OS Share Dialog!)
+  if (typeof navigator !== "undefined" && navigator.share) {
+    try {
+      await navigator.share({
+        title: `${note.title || "Study Note"} — Free Study Material`,
+        text: shareText,
+        url: targetUrl,
+      });
+      return { method: "shared", fileName };
+    } catch (err) {
+      if (err?.name === "AbortError") return { method: "cancelled", fileName };
+      console.warn("[SHARE] Standard share failed:", err);
+    }
+  }
+
+  // 4. Fallback for Desktop browsers without Web Share: Download PNG poster + copy link
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -465,10 +488,6 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 1500);
-
-  try {
-    await navigator.clipboard.writeText(shareText);
-  } catch (_) {}
 
   return { method: "downloaded", fileName };
 }
