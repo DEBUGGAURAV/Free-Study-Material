@@ -3771,7 +3771,7 @@ export default function AdminModal({
           accentColor="#4f46e5"
           maxWidth="540px"
         >
-
+          {editingStudent && (
               <form onSubmit={handleSaveStudentEdit} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "14px" }}>
                 <div className="form-group">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
@@ -3781,7 +3781,7 @@ export default function AdminModal({
                   <input
                     type="email"
                     className="form-input"
-                    value={editingStudent.email || ""}
+                    value={editingStudent?.email || ""}
                     disabled
                     style={{ opacity: 0.85, cursor: "not-allowed", background: "rgba(255, 255, 255, 0.03)" }}
                   />
@@ -3792,7 +3792,7 @@ export default function AdminModal({
                   <input
                     type="text"
                     className="form-input"
-                    value={editingStudent.name || ""}
+                    value={editingStudent?.name || ""}
                     onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })}
                     required
                   />
@@ -3804,7 +3804,7 @@ export default function AdminModal({
                     <input
                       type="text"
                       className="form-input"
-                      value={editingStudent.mobile && !editingStudent.mobile.startsWith("enc_gcm:") && editingStudent.mobile !== "N/A" ? editingStudent.mobile : ""}
+                      value={editingStudent?.mobile && !editingStudent.mobile.startsWith("enc_gcm:") && editingStudent.mobile !== "N/A" ? editingStudent.mobile : ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, mobile: e.target.value })}
                       placeholder="10-digit mobile number"
                     />
@@ -3815,7 +3815,7 @@ export default function AdminModal({
                     <input
                       type="text"
                       className="form-input"
-                      value={editingStudent.college || ""}
+                      value={editingStudent?.college || ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, college: e.target.value })}
                       placeholder="College or University"
                     />
@@ -3828,7 +3828,7 @@ export default function AdminModal({
                     <input
                       type="text"
                       className="form-input"
-                      value={editingStudent.branch || ""}
+                      value={editingStudent?.branch || ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, branch: e.target.value })}
                       placeholder="e.g. CSE, IT, ME, EE"
                     />
@@ -3839,7 +3839,7 @@ export default function AdminModal({
                     <input
                       type="text"
                       className="form-input"
-                      value={editingStudent.year || ""}
+                      value={editingStudent?.year || ""}
                       onChange={(e) => setEditingStudent({ ...editingStudent, year: e.target.value })}
                       placeholder="e.g. 1st Year, 2nd Year, 3rd Year"
                     />
@@ -3857,7 +3857,7 @@ export default function AdminModal({
                   </div>
                   <select
                     className="form-input"
-                    value={editingStudent.role || "student"}
+                    value={editingStudent?.role || "student"}
                     disabled={isMasterAdminUser(editingStudent) || isHalfAdmin}
                     onChange={(e) => {
                       const newRole = e.target.value;
@@ -3883,15 +3883,15 @@ export default function AdminModal({
                     }}
                     style={{
                       borderColor:
-                        editingStudent.role === "admin"
+                        editingStudent?.role === "admin"
                           ? "rgba(245, 158, 11, 0.5)"
-                          : editingStudent.role === "half_admin"
+                          : editingStudent?.role === "half_admin"
                           ? "rgba(168, 85, 247, 0.5)"
                           : "rgba(255, 255, 255, 0.15)",
                       background:
-                        editingStudent.role === "admin"
+                        editingStudent?.role === "admin"
                           ? "rgba(245, 158, 11, 0.08)"
-                          : editingStudent.role === "half_admin"
+                          : editingStudent?.role === "half_admin"
                           ? "rgba(168, 85, 247, 0.08)"
                           : "rgba(255, 255, 255, 0.03)",
                     }}
@@ -3903,11 +3903,11 @@ export default function AdminModal({
 
                   {/* Dynamic Role Capability Legend */}
                   <div style={{ marginTop: "8px", fontSize: "0.75rem", lineHeight: 1.45, padding: "8px 12px", borderRadius: "8px", background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
-                    {editingStudent.role === "admin" ? (
+                    {editingStudent?.role === "admin" ? (
                       <span style={{ color: "#fbbf24" }}>
                         👑 <strong>Full Administrator:</strong> Complete platform control. All 8 tabs, direct Google Firestore Database Studio (Tab 7), DB JSON export, and permanent database purge.
                       </span>
-                    ) : editingStudent.role === "half_admin" ? (
+                    ) : editingStudent?.role === "half_admin" ? (
                       <span style={{ color: "#c084fc" }}>
                         ⚡ <strong>Half Admin (Sub-Admin):</strong> Can edit/manage notes, student accounts, block/unblock, and view telemetry. <strong>Database Studio (Tab 7) is 100% blocked</strong> to protect raw data.
                       </span>
@@ -3919,7 +3919,7 @@ export default function AdminModal({
                   </div>
 
                   {/* 🛡️ Admin Tab Access Control Checkbox Panel */}
-                  {(editingStudent.role === "admin" || editingStudent.role === "half_admin") && (
+                  {(editingStudent?.role === "admin" || editingStudent?.role === "half_admin") && (
                     <div
                       style={{
                         marginTop: "12px",
@@ -3992,7 +3992,7 @@ export default function AdminModal({
                         }}
                       >
                         {DASHBOARD_TABS.map((tab) => {
-                          const currentAllowed = Array.isArray(editingStudent.allowedTabs)
+                          const currentAllowed = Array.isArray(editingStudent?.allowedTabs)
                             ? editingStudent.allowedTabs
                             : DASHBOARD_TABS.map((t) => t.id);
                           const isChecked = currentAllowed.includes(tab.id);
@@ -4043,7 +4043,7 @@ export default function AdminModal({
                     <label style={{ fontSize: "0.72rem", color: "#34d399", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontWeight: 700 }}>
                       <input
                         type="checkbox"
-                        checked={Boolean(editingStudent.neverPurge || editingStudent.customInactivityDays >= 9999)}
+                        checked={Boolean(editingStudent?.neverPurge || (editingStudent?.customInactivityDays && editingStudent.customInactivityDays >= 9999))}
                         onChange={(e) => {
                           const immune = e.target.checked;
                           setEditingStudent((prev) => ({
@@ -4060,8 +4060,8 @@ export default function AdminModal({
                     <input
                       type="number"
                       className="form-input"
-                      disabled={editingStudent.neverPurge || editingStudent.customInactivityDays >= 9999}
-                      value={editingStudent.neverPurge ? 9999 : (editingStudent.customInactivityDays || 90)}
+                      disabled={Boolean(editingStudent?.neverPurge || (editingStudent?.customInactivityDays && editingStudent.customInactivityDays >= 9999))}
+                      value={editingStudent?.neverPurge ? 9999 : (editingStudent?.customInactivityDays || 90)}
                       onChange={(e) => setEditingStudent((prev) => ({ ...prev, customInactivityDays: Number(e.target.value) || 90 }))}
                       style={{ width: "90px" }}
                     />
@@ -4070,8 +4070,8 @@ export default function AdminModal({
                       type="button"
                       className="btn-secondary"
                       style={{ padding: "5px 10px", fontSize: "0.74rem" }}
-                      disabled={editingStudent.neverPurge}
-                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: (prev.customInactivityDays || 90) + 15 }))}
+                      disabled={Boolean(editingStudent?.neverPurge)}
+                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: (prev?.customInactivityDays || 90) + 15 }))}
                     >
                       +15 Days
                     </button>
@@ -4079,8 +4079,8 @@ export default function AdminModal({
                       type="button"
                       className="btn-secondary"
                       style={{ padding: "5px 10px", fontSize: "0.74rem" }}
-                      disabled={editingStudent.neverPurge}
-                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: Math.max(1, (prev.customInactivityDays || 90) - 15) }))}
+                      disabled={Boolean(editingStudent?.neverPurge)}
+                      onClick={() => setEditingStudent((prev) => ({ ...prev, customInactivityDays: Math.max(1, (prev?.customInactivityDays || 90) - 15) }))}
                     >
                       -15 Days
                     </button>
@@ -4099,6 +4099,7 @@ export default function AdminModal({
                   </button>
                 </div>
               </form>
+          )}
         </AdminSubModal>
 
         {/* SUB-MODAL 4: Delete All Notes Password Confirmation */}
