@@ -1962,7 +1962,7 @@ export default function AuthModal({
                 </button>
 
                 <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "14px", marginBottom: "8px" }}>
-                  New student?{" "}
+                  New user?{" "}
                   <span
                     className="auth-light-link"
                     style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
@@ -2803,7 +2803,7 @@ export default function AuthModal({
         {/* Bottom Flip Trigger on Front Face */}
         {tab === "signin" && !isGoogleOnboarding && !showPostRegPasskeyPrompt && (
           <div style={{ textAlign: "center", marginTop: "10px", fontSize: "0.82rem", color: "#64748b" }}>
-            New student scholar?{" "}
+            New user?{" "}
             <button
               type="button"
               className="auth-flip-trigger-btn"
