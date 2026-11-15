@@ -5240,8 +5240,8 @@ svg.lucide {
 .movable-3d-inner {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 8px 16px;
   border-radius: 999px;
   color: #ffffff;
   font-weight: 800;
@@ -5255,25 +5255,11 @@ svg.lucide {
   white-space: nowrap;
 }
 
-.movable-3d-grip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: -1px;
-  color: rgba(255, 255, 255, 0.82);
-  cursor: grab;
-  flex-shrink: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.movable-3d-widget:hover .movable-3d-grip {
-  opacity: 1;
-}
-
-.movable-3d-widget.is-dragging .movable-3d-grip {
-  cursor: grabbing;
-  opacity: 1;
-  transform: scale(1.15);
+@media (min-width: 641px) {
+  .movable-3d-inner {
+    min-width: 146px;
+    justify-content: flex-start;
+  }
 }
 
 .movable-3d-widget:hover .movable-3d-inner {
@@ -5319,9 +5305,6 @@ svg.lucide {
     touch-action: none !important;
   }
   .movable-3d-label {
-    display: none !important;
-  }
-  .movable-3d-grip {
     display: none !important;
   }
   .movable-3d-icon-wrap {
