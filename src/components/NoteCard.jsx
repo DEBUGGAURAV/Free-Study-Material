@@ -737,22 +737,19 @@ function NoteCard({
             <button
               type="button"
               className="btn-card-micro btn-card-share"
-              onClick={handleShareStory}
-              title={
-                copied
-                  ? "WhatsApp Story Poster Saved & Link Copied!"
-                  : "Share to WhatsApp Story: Creates viral 9:16 HD study poster with scannable QR Code"
-              }
-              disabled={sharingStory}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.dispatchEvent(
+                  new CustomEvent("open_share_modal", {
+                    detail: { note },
+                  })
+                );
+              }}
+              title="Share Note: System Share Dialog & HD Poster with Scannable QR Code"
             >
-              {sharingStory ? (
-                <div className="spinner" style={{ width: "12px", height: "12px", borderWidth: "1.5px" }} />
-              ) : copied ? (
-                <Check size={14} strokeWidth={2.2} style={{ color: "#16a34a" }} />
-              ) : (
-                <Share2 size={14} strokeWidth={2.2} />
-              )}
-              <span>{sharingStory ? "Poster..." : copied ? "Saved!" : "Story"}</span>
+              <Share2 size={14} strokeWidth={2.2} />
+              <span>Share</span>
             </button>
           </div>
         </div>
