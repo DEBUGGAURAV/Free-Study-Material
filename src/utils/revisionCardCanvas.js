@@ -432,10 +432,22 @@ export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
  */
 export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   const targetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
-  
-  // 1. Auto-copy link to clipboard immediately ("jo copy ho sake")
+
+  const cleanTitle = String(note.title || "Study Note").trim();
+  const cleanSubject = note.subject && note.subject !== "General" ? String(note.subject).trim() : "";
+  const cleanCourse = note.course ? String(note.course).trim() : "";
+  const details = [cleanSubject, cleanCourse].filter(Boolean).join(" • ");
+
+  const clearText = details
+    ? `📚 ${cleanTitle} (${details})`
+    : `📚 ${cleanTitle}`;
+
+  // Clear text + single clean clickable link (never duplicated, no %0A)
+  const shareText = `${clearText}\n${targetUrl}`;
+
+  // 1. Auto-copy clean share text to clipboard
   try {
-    await navigator.clipboard.writeText(targetUrl);
+    await navigator.clipboard.writeText(shareText);
   } catch (_) {}
 
   const blob = await generateWhatsAppStoryCardBlob(note, targetUrl);
@@ -446,10 +458,8 @@ export async function shareWhatsAppStoryCard(note = {}, shareUrl = "") {
   const fileName = `${safeName}-whatsapp-story.png`;
   const file = new File([blob], fileName, { type: "image/png" });
 
-  const cleanTitle = (note.title || "Study Note").trim();
-  const shareText = `📚 ${cleanTitle}\n${targetUrl}`;
-
-  // 2. Direct Native Share with PNG image file attached + clean single clickable link
+  // 2. Direct Native Share with PNG image file attached + clean text + single clickable link
+  // Note: We do NOT pass url property because mobile OS concats url to text causing duplicate links!
   if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({

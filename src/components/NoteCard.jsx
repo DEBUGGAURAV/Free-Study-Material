@@ -174,14 +174,7 @@ function NoteCard({
 
     const noteUrl = `${window.location.origin}/?note=${note.id}`;
 
-    // 1. Copy link automatically so it's ready to paste ("jo copy ho sake")
-    try {
-      await navigator.clipboard.writeText(noteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (_) {}
-
-    // 2. Directly open device's native share option with PNG poster + link attached!
+    // Directly open device's native share option with PNG poster + clean text & single link
     try {
       const res = await shareWhatsAppStoryCard(note, noteUrl);
       if (res?.method === "shared" || res?.method === "downloaded") {
