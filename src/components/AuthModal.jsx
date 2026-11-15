@@ -325,6 +325,36 @@ export default function AuthModal({
     };
   }, [isOpen]);
 
+  // 📱 Mobile Gyroscope / Physical Device Tilt Support
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOrientation = (e) => {
+      if (e.gamma == null || e.beta == null) return;
+      // Clamp gamma (-25 to +25) and beta (15 to 65 normalized to neutral 40)
+      const gamma = Math.max(-25, Math.min(25, e.gamma));
+      const betaNorm = Math.max(-25, Math.min(25, e.beta - 40));
+
+      const maxTilt = 14;
+      const state = tiltStateRef.current;
+      state.targetTiltY = (gamma / 25) * maxTilt;
+      state.targetTiltX = -(betaNorm / 25) * maxTilt;
+
+      state.targetMx = Math.max(10, Math.min(90, 50 + (gamma / 25) * 40));
+      state.targetMy = Math.max(10, Math.min(90, 50 + (betaNorm / 25) * 40));
+    };
+
+    if (typeof window !== "undefined" && window.DeviceOrientationEvent) {
+      window.addEventListener("deviceorientation", handleOrientation, { passive: true });
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("deviceorientation", handleOrientation);
+      }
+    };
+  }, [isOpen]);
+
   const handleSceneMouseMove = (e) => {
     if (!sceneRef.current) return;
     const rect = sceneRef.current.getBoundingClientRect();
@@ -334,7 +364,26 @@ export default function AuthModal({
     const normX = Math.max(-1.4, Math.min(1.4, (x - rect.width / 2) / (rect.width / 2)));
     const normY = Math.max(-1.4, Math.min(1.4, (y - rect.height / 2) / (rect.height / 2)));
 
-    const maxTilt = typeof window !== "undefined" && window.innerWidth < 640 ? 4 : 14;
+    const maxTilt = 14;
+    const state = tiltStateRef.current;
+    state.targetTiltX = -Math.max(-1, Math.min(1, normY)) * maxTilt;
+    state.targetTiltY = Math.max(-1, Math.min(1, normX)) * maxTilt;
+    state.targetMx = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    state.targetMy = Math.max(0, Math.min(100, (y / rect.height) * 100));
+  };
+
+  // 📱 Mobile Touch 3D Tracking (Same dynamic 14° tilt and neon light follow as desktop)
+  const handleSceneTouchMove = (e) => {
+    if (!sceneRef.current || !e.touches || !e.touches[0]) return;
+    const touch = e.touches[0];
+    const rect = sceneRef.current.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    const normX = Math.max(-1.4, Math.min(1.4, (x - rect.width / 2) / (rect.width / 2)));
+    const normY = Math.max(-1.4, Math.min(1.4, (y - rect.height / 2) / (rect.height / 2)));
+
+    const maxTilt = 14;
     const state = tiltStateRef.current;
     state.targetTiltX = -Math.max(-1, Math.min(1, normY)) * maxTilt;
     state.targetTiltY = Math.max(-1, Math.min(1, normX)) * maxTilt;
@@ -1327,6 +1376,9 @@ export default function AuthModal({
       className="modal-overlay auth-modal-overlay"
       onMouseMove={handleSceneMouseMove}
       onMouseLeave={handleSceneMouseLeave}
+      onTouchStart={handleSceneTouchMove}
+      onTouchMove={handleSceneTouchMove}
+      onTouchEnd={handleSceneMouseLeave}
       onClick={() => {
         if (showPostRegPasskeyPrompt) {
           handlePostRegSkipPasskey();
@@ -1344,6 +1396,9 @@ export default function AuthModal({
         onClick={(e) => e.stopPropagation()}
         onMouseMove={handleSceneMouseMove}
         onMouseLeave={handleSceneMouseLeave}
+        onTouchStart={handleSceneTouchMove}
+        onTouchMove={handleSceneTouchMove}
+        onTouchEnd={handleSceneMouseLeave}
       >
         <div ref={tiltRef} className="auth-3d-tilt">
           <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
@@ -1369,13 +1424,6 @@ export default function AuthModal({
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  {/* 3D Gold EMV Microchip */}
-                  <div className="auth-emv-chip" title="Academic Vault Encrypted Chip">
-                    <div className="auth-emv-chip-inner">
-                      <div></div><div></div><div></div><div></div>
-                    </div>
-                  </div>
-
                   <button
                     className="modal-close-btn"
                     onClick={() => {

@@ -3250,6 +3250,20 @@ select option,
   height: 0 !important;
 }
 
+/* 🛡️ Eliminate Browser Native Double-Icons on Password Inputs */
+.auth-card-face input[type="password"]::-ms-reveal,
+.auth-card-face input[type="password"]::-ms-clear,
+.auth-card-face input::-ms-reveal,
+.auth-card-face input::-ms-clear,
+.auth-card-face input::-webkit-contacts-auto-fill-button,
+.auth-card-face input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 .auth-3d-tilt {
   transform-style: preserve-3d;
   will-change: transform;
