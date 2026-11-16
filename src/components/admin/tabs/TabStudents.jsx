@@ -403,33 +403,33 @@ export default function TabStudents(props) {
               </tr>
             ) : (
               filteredStudents.map((student) => (
-                <tr key={student.id} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
+                <tr key={student.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                   <td style={{ padding: "12px 16px" }}>
                     <div
-                      style={{ fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                      style={{ fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
                       onClick={() => setViewingStudent(student)}
                       title="Click to view complete student profile and details"
                     >
-                      <span style={{ textDecoration: "underline", textDecorationColor: "rgba(255, 255, 255, 0.2)" }}>
+                      <span style={{ color: "#0f172a", textDecoration: "underline", textDecorationColor: "#94a3b8" }}>
                         {student.name || "Student"}
                       </span>
                       {isMasterAdminStudent(student) && (
-                        <span style={{ color: "#fbbf24", fontSize: "0.7rem", fontWeight: 800 }}>👑 Master Admin</span>
+                        <span style={{ color: "#92400e", background: "#fef3c7", border: "1px solid #fcd34d", padding: "1px 6px", borderRadius: "4px", fontSize: "0.7rem", fontWeight: 800 }}>👑 Master Admin</span>
                       )}
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--accent-cyan)", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <span>{student.email}</span>
+                    <div style={{ fontSize: "0.75rem", color: "#0284c7", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", fontWeight: 600 }}>
+                      <span style={{ color: "#0284c7" }}>{student.email}</span>
                       <span
                         onClick={() => setEditingStudent && setEditingStudent(student)}
                         title="Click to view or update student mobile number"
                         style={{
-                          color: student.mobile && !student.mobile.startsWith("enc_gcm:") && student.mobile !== "N/A" && student.mobile !== "Not Set" ? "#38bdf8" : "#fbbf24",
-                          fontWeight: 600,
+                          color: student.mobile && !student.mobile.startsWith("enc_gcm:") && student.mobile !== "N/A" && student.mobile !== "Not Set" ? "#0369a1" : "#92400e",
+                          fontWeight: 700,
                           cursor: "pointer",
-                          background: "rgba(56, 189, 248, 0.08)",
+                          background: student.mobile && !student.mobile.startsWith("enc_gcm:") && student.mobile !== "N/A" && student.mobile !== "Not Set" ? "#f0f9ff" : "#fffbeb",
                           padding: "1px 6px",
                           borderRadius: "4px",
-                          border: "1px solid rgba(56, 189, 248, 0.2)",
+                          border: `1px solid ${student.mobile && !student.mobile.startsWith("enc_gcm:") && student.mobile !== "N/A" && student.mobile !== "Not Set" ? "#bae6fd" : "#fde68a"}`,
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "3px",
@@ -441,12 +441,12 @@ export default function TabStudents(props) {
                         <span
                           style={{
                             fontSize: "0.68rem",
-                            color: "#38bdf8",
-                            background: "rgba(6, 182, 212, 0.12)",
-                            border: "1px solid rgba(6, 182, 212, 0.25)",
+                            color: "#0369a1",
+                            background: "#e0f2fe",
+                            border: "1px solid #7dd3fc",
                             padding: "0 5px",
                             borderRadius: "4px",
-                            fontWeight: 600,
+                            fontWeight: 700,
                           }}
                           title={student.deviceSpecs.label || `${student.deviceSpecs.cores} Cores, ${student.deviceSpecs.memoryGB}GB RAM`}
                         >
@@ -461,27 +461,27 @@ export default function TabStudents(props) {
                           fontWeight: 700,
                           padding: "1px 6px",
                           borderRadius: "4px",
-                          background: student.neverPurge ? "rgba(52, 211, 153, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                          color: student.neverPurge ? "#34d399" : "#fbbf24",
-                          border: `1px solid ${student.neverPurge ? "rgba(52, 211, 153, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
+                          background: student.neverPurge ? "#ecfdf5" : "#fffbeb",
+                          color: student.neverPurge ? "#047857" : "#b45309",
+                          border: `1px solid ${student.neverPurge ? "#a7f3d0" : "#fde68a"}`,
                         }}
                       >
                         ⏳ {student.neverPurge ? "🛡️ Immune (Never Purged)" : `${student.daysRemaining != null ? student.daysRemaining : (dbRetentionDays || 90)}d to purge`}
                       </span>
                       {!student.neverPurge && student.scheduledPurgeDate && (
-                        <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                        <span style={{ fontSize: "0.68rem", color: "#475569", fontWeight: 500 }}>
                           • Scheduled: {student.scheduledPurgeDate}
                         </span>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
-                    <div style={{ fontWeight: 600, color: "#334155" }}>{student.college || "General University"}</div>
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  <td style={{ padding: "12px 16px" }}>
+                    <div style={{ fontWeight: 700, color: "#0f172a" }}>{student.college || "General University"}</div>
+                    <div style={{ fontSize: "0.74rem", color: "#334155", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap", fontWeight: 500 }}>
                       {student.branch && (
-                        <span style={{ color: "#38bdf8", fontWeight: 600 }}>{student.branch}</span>
+                        <span style={{ color: "#0284c7", fontWeight: 700 }}>{student.branch}</span>
                       )}
-                      <span>{student.year || "Year N/A"}</span>
+                      <span style={{ color: "#475569", fontWeight: 600 }}>{student.year || "Year N/A"}</span>
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px" }}>
@@ -490,31 +490,31 @@ export default function TabStudents(props) {
                         padding: "3px 9px",
                         borderRadius: "6px",
                         fontSize: "0.72rem",
-                        fontWeight: 700,
+                        fontWeight: 800,
                         background:
                           isMasterAdminStudent(student)
-                            ? "rgba(245, 158, 11, 0.25)"
+                            ? "#fef3c7"
                             : student.role === "admin"
-                            ? "rgba(245, 158, 11, 0.15)"
+                            ? "#fffbeb"
                             : student.role === "half_admin"
-                            ? "rgba(168, 85, 247, 0.18)"
-                            : "rgba(255, 255, 255, 0.05)",
+                            ? "#ede9fe"
+                            : "#f1f5f9",
                         color:
                           isMasterAdminStudent(student)
-                            ? "#f59e0b"
+                            ? "#92400e"
                             : student.role === "admin"
-                            ? "#fbbf24"
+                            ? "#b45309"
                             : student.role === "half_admin"
-                            ? "#c084fc"
-                            : "var(--text-dim)",
+                            ? "#6d28d9"
+                            : "#1e293b",
                         border: `1px solid ${
                           isMasterAdminStudent(student)
-                            ? "rgba(245, 158, 11, 0.5)"
+                            ? "#fcd34d"
                             : student.role === "admin"
-                            ? "rgba(245, 158, 11, 0.3)"
+                            ? "#fde68a"
                             : student.role === "half_admin"
-                            ? "rgba(168, 85, 247, 0.35)"
-                            : "rgba(255, 255, 255, 0.1)"
+                            ? "#c4b5fd"
+                            : "#cbd5e1"
                         }`,
                       }}
                     >
@@ -529,11 +529,11 @@ export default function TabStudents(props) {
                   </td>
                   <td style={{ padding: "12px 16px" }}>
                     {student.isBlocked ? (
-                      <span style={{ color: "#f87171", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ color: "#b91c1c", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                         <UserX size={14} /> Blocked
                       </span>
                     ) : (
-                      <span style={{ color: "#34d399", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ color: "#047857", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                         <UserCheck size={14} /> Active
                       </span>
                     )}

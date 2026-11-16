@@ -788,8 +788,8 @@ export default function TabWebSecurity(props) {
                         </div>
                       </td>
                       <td style={{ padding: "10px 12px", verticalAlign: "top" }}>
-                        <div style={{ fontWeight: 700, color: "#fff" }}>{a.name || "Student Visitor"}</div>
-                        <div style={{ color: "#38bdf8", fontSize: "0.72rem" }}>{a.email || "No email"}</div>
+                        <div style={{ fontWeight: 800, color: "#0f172a" }}>{a.name || "Student Visitor"}</div>
+                        <div style={{ color: "#0284c7", fontSize: "0.72rem", fontWeight: 600 }}>{a.email || "No email"}</div>
                         {a.mobile && a.mobile !== "N/A" && (
                           <div style={{ color: "#94a3b8", fontSize: "0.7rem" }}>📱 {a.mobile}</div>
                         )}

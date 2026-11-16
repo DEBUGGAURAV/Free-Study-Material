@@ -4145,9 +4145,13 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 
 /* 🛡️ Universal Text Contrast: Force Invisible Off-White to Sharp Dark #0f172a */
 .admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
+.admin-modal-container [style*="#ffffff"] *:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
 .admin-modal-container [style*="#fff"]:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
+.admin-modal-container [style*="#fff"] *:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
 .admin-modal-container [style*="rgb(255, 255, 255)"]:not(button):not(button *):not([class*="btn"]):not([style*="background: rgb(37, 99, 235)"]):not([style*="background: rgb(220, 38, 38)"]):not([style*="background: rgb(16, 185, 129)"]),
+.admin-modal-container [style*="rgb(255, 255, 255)"] *:not(button):not(button *):not([class*="btn"]):not([style*="background: rgb(37, 99, 235)"]):not([style*="background: rgb(220, 38, 38)"]):not([style*="background: rgb(16, 185, 129)"]),
 .admin-modal-container [style*="rgb(255,255,255)"]:not(button):not(button *):not([class*="btn"]):not([style*="background:rgb(37,99,235)"]):not([style*="background:rgb(220,38,38)"]):not([style*="background:rgb(16,185,129)"]),
+.admin-modal-container [style*="rgb(255,255,255)"] *:not(button):not(button *):not([class*="btn"]):not([style*="background:rgb(37,99,235)"]):not([style*="background:rgb(220,38,38)"]):not([style*="background:rgb(16,185,129)"]),
 .admin-modal-container [style*="#e2e8f0"],
 .admin-modal-container [style*="rgb(226, 232, 240)"],
 .admin-modal-container [style*="rgb(226,232,240)"],
@@ -4159,6 +4163,19 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 .admin-modal-container [style*="rgb(248,250,252)"],
 .admin-modal-container [style*="#d1fae5"] {
   color: #0f172a !important;
+}
+
+/* Explicit rule for student name, item title and table cells */
+.admin-modal-container td,
+.admin-modal-container td div,
+.admin-modal-container td span:not([class*="badge"]):not([class*="btn"]) {
+  color: #0f172a;
+}
+
+.admin-modal-container td span[style*="underline"],
+.admin-modal-container span[style*="underline"] {
+  color: #0f172a !important;
+  text-decoration-color: #94a3b8 !important;
 }
 
 /* Secondary & Dim Text Mapped to High-Contrast Slate #334155 */

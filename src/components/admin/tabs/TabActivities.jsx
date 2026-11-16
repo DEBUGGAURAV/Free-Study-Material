@@ -397,7 +397,7 @@ export default function TabActivities(props) {
                     </div>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.82rem", lineHeight: 1.3 }}>
+                      <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.84rem", lineHeight: 1.3 }}>
                         {sess.deviceName || "Student Device"}
                       </div>
 
@@ -610,7 +610,7 @@ export default function TabActivities(props) {
                     <Activity size={14} />
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: "#fff", fontSize: "0.8rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.82rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                       {act.detail || act.type || "Student Action"}
                     </div>
                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
