@@ -37,10 +37,10 @@ export default function TabPerformance(props) {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
                     Cloudflare CDN &amp; Memory Acceleration
                   </h3>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: "0.78rem", color: "#475569", margin: "2px 0 0" }}>
                     Global edge caching, cache invalidation, and memory garbage collection.
                   </p>
                 </div>
@@ -103,15 +103,15 @@ export default function TabPerformance(props) {
               {/* Cloudflare CDN Storage & Retention Policy Cards */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                 {/* Storage Breakdown Card */}
-                <div style={{ background: "rgba(15, 23, 42, 0.5)", border: "1px solid rgba(6, 182, 212, 0.25)", borderRadius: "var(--radius-lg)", padding: "18px" }}>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "18px", boxShadow: "0 2px 10px rgba(15, 23, 42, 0.04)" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#e0f2fe", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
                         <HardDrive size={18} />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>CDN &amp; RAM Storage Breakdown</div>
-                        <div style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 700 }}>Live Capacity Utilization &amp; Allocation</div>
+                        <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>CDN &amp; RAM Storage Breakdown</div>
+                        <div style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 700 }}>Live Capacity Utilization &amp; Allocation</div>
                       </div>
                     </div>
 
@@ -130,15 +130,15 @@ export default function TabPerformance(props) {
                     {/* Server NVMe SSD Disk Cache Pool */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                        <span style={{ color: "var(--text-dim)" }}>Server NVMe SSD Disk Cache:</span>
-                        <span style={{ color: "#4ade80", fontWeight: 700 }}>
+                        <span style={{ color: "#475569", fontWeight: 600 }}>Server NVMe SSD Disk Cache:</span>
+                        <span style={{ color: "#059669", fontWeight: 700 }}>
                           {(ssdDiskStats?.totalMB ?? cdnStats?.ssdDisk?.storageUsedMB ?? "0.0")} MB / 1536 MB ({ssdDiskStats?.quotaPercent ?? cdnStats?.ssdDisk?.quotaUsedPercent ?? 0}% used)
                         </span>
                       </div>
-                      <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: `${Math.min(100, Math.max((ssdDiskStats?.totalBytes ?? 0) > 0 ? 3 : 0, (ssdDiskStats?.quotaPercent ?? cdnStats?.ssdDisk?.quotaUsedPercent ?? 0)))}%`, height: "100%", background: "#22c55e", borderRadius: "999px" }} />
+                      <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
+                        <div style={{ width: `${Math.min(100, Math.max((ssdDiskStats?.totalBytes ?? 0) > 0 ? 3 : 0, (ssdDiskStats?.quotaPercent ?? cdnStats?.ssdDisk?.quotaUsedPercent ?? 0)))}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "3px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#475569", marginTop: "4px" }}>
                         <span>Dedicated 1.5 GB NVMe SSD cache (cache/cdn/) • {ssdDiskStats?.totalFiles ?? cdnStats?.ssdDisk?.cachedFilesCount ?? 0} notes on disk</span>
                         <button
                           onClick={handlePurgeDiskOnly}
@@ -147,7 +147,7 @@ export default function TabPerformance(props) {
                             border: "none",
                             color: "#dc2626",
                             fontWeight: 700,
-                            fontSize: "0.7rem",
+                            fontSize: "0.72rem",
                             cursor: "pointer",
                             textDecoration: "underline",
                             padding: 0
@@ -167,7 +167,7 @@ export default function TabPerformance(props) {
                         return (
                           <>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                              <span style={{ color: "#475569" }}>In-Memory RAM Cache Pool:</span>
+                              <span style={{ color: "#475569", fontWeight: 600 }}>In-Memory RAM Cache Pool:</span>
                               <span style={{ color: "#059669", fontWeight: 700 }}>
                                 {usedMB.toFixed(1)} MB / {poolMaxMB} MB ({percent}% used)
                               </span>
@@ -175,7 +175,7 @@ export default function TabPerformance(props) {
                             <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
                               <div style={{ width: `${percent}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
                             </div>
-                            <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
+                            <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "4px" }}>
                               Dedicated high-speed memory pool for microsecond document streaming without disk access.
                             </div>
                           </>
@@ -186,47 +186,47 @@ export default function TabPerformance(props) {
                     {/* Cloudflare Edge CDN Storage Used */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                        <span style={{ color: "var(--text-dim)" }}>Cloudflare Edge CDN Space Used:</span>
-                        <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>
+                        <span style={{ color: "#475569", fontWeight: 600 }}>Cloudflare Edge CDN Space Used:</span>
+                        <span style={{ color: "#0284c7", fontWeight: 700 }}>
                           {cdnStats?.edgeCdn?.formattedUsed || "0.0 MB"} Cached (Indian Anycast: BOM / DEL)
                         </span>
                       </div>
-                      <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: `${cdnStats?.edgeCdn?.realCachedPercent ? Math.min(100, Math.max(0, cdnStats.edgeCdn.realCachedPercent)) : (cdnStats?.hitRatio ? Math.min(100, Math.max(0, parseFloat(cdnStats.hitRatio))) : 0)}%`, height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", borderRadius: "999px" }} />
+                      <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
+                        <div style={{ width: `${cdnStats?.edgeCdn?.realCachedPercent ? Math.min(100, Math.max(0, cdnStats.edgeCdn.realCachedPercent)) : (cdnStats?.hitRatio ? Math.min(100, Math.max(0, parseFloat(cdnStats.hitRatio))) : 0)}%`, height: "100%", background: "linear-gradient(90deg, #0284c7, #2563eb)", borderRadius: "999px" }} />
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "3px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#475569", marginTop: "4px" }}>
                         <span>Capacity: Unlimited Dynamic NVMe SSD Pool ({cdnStats?.edgeCdn?.pdfCount ?? cdnStats?.edgeCdn?.cachedFilesCount ?? 0} Vault PDFs • {cdnStats?.edgeCdn?.imgCount ?? 0} Images / Media)</span>
-                        <span style={{ color: "#34d399", fontWeight: 700 }}>Bandwidth Offload: {cdnStats?.edgeCdn?.totalBandwidthSaved || "0.00 MB"}</span>
+                        <span style={{ color: "#059669", fontWeight: 700 }}>Bandwidth Offload: {cdnStats?.edgeCdn?.totalBandwidthSaved || "0.00 MB"}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Cache Retention & Purge Policy Card */}
-                <div style={{ background: "rgba(15, 23, 42, 0.5)", border: "1px solid rgba(139, 92, 246, 0.25)", borderRadius: "var(--radius-lg)", padding: "18px" }}>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "18px", boxShadow: "0 2px 10px rgba(15, 23, 42, 0.04)" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                    <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(139, 92, 246, 0.15)", color: "#a78bfa", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#ede9fe", color: "#7c3aed", display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <Clock size={18} />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Retention Policy &amp; Eviction Lifecycle</div>
-                      <div style={{ fontSize: "0.72rem", color: "#a78bfa", fontWeight: 700 }}>Automated &amp; Configurable Cache Lifetime</div>
+                      <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.92rem" }}>Retention Policy &amp; Eviction Lifecycle</div>
+                      <div style={{ fontSize: "0.72rem", color: "#7c3aed", fontWeight: 700 }}>Automated &amp; Configurable Cache Lifetime</div>
                     </div>
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "0.8rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", padding: "8px 10px", borderRadius: "8px" }}>
-                      <span style={{ color: "var(--text-dim)" }}>Automated Retention:</span>
-                      <span style={{ color: "#34d399", fontWeight: 800, background: "rgba(16,185,129,0.15)", padding: "2px 8px", borderRadius: "999px", border: "1px solid rgba(16,185,129,0.3)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "8px 12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                      <span style={{ color: "#334155", fontWeight: 600 }}>Automated Retention:</span>
+                      <span style={{ color: "#065f46", fontWeight: 800, background: "#d1fae5", padding: "3px 10px", borderRadius: "999px", border: "1.5px solid #6ee7b7", fontSize: "0.75rem" }}>
                         365 Days Rolling (1 Year Edge TTL)
                       </span>
                     </div>
 
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                        <span style={{ color: "var(--text-dim)" }}>Configurable Retention Slider:</span>
+                        <span style={{ color: "#334155", fontWeight: 600 }}>Configurable Retention Slider:</span>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ color: "#fbbf24", fontWeight: 800, fontSize: "0.86rem" }}>
+                          <span style={{ color: "#b45309", fontWeight: 800, fontSize: "0.86rem" }}>
                             {retentionDays >= 365
                               ? "365 Days (1 Full Year 🌟)"
                               : retentionDays >= 30
@@ -244,14 +244,14 @@ export default function TabPerformance(props) {
                             }}
                             style={{
                               width: "60px",
-                              padding: "2px 6px",
-                              fontSize: "0.76rem",
-                              fontWeight: 700,
+                              padding: "4px 6px",
+                              fontSize: "0.78rem",
+                              fontWeight: 800,
                               textAlign: "center",
-                              background: "rgba(0,0,0,0.4)",
-                              border: "1px solid rgba(167, 139, 250, 0.4)",
+                              background: "#f8fafc",
+                              border: "1.5px solid #cbd5e1",
                               borderRadius: "6px",
-                              color: "#fbbf24",
+                              color: "#0f172a",
                             }}
                             title="Enter exact retention days (1-365)"
                           />
@@ -265,7 +265,7 @@ export default function TabPerformance(props) {
                           max="365"
                           value={retentionDays}
                           onChange={(e) => setRetentionDays(Number(e.target.value))}
-                          style={{ flex: 1, accentColor: "#a78bfa", cursor: "pointer" }}
+                          style={{ flex: 1, accentColor: "#7c3aed", cursor: "pointer" }}
                         />
                         <button
                           onClick={() => handleSaveRetention()}
@@ -286,7 +286,7 @@ export default function TabPerformance(props) {
 
                       {/* Fast Preset Option Chips */}
                       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px" }}>
-                        <span style={{ fontSize: "0.7rem", color: "#64748b", marginRight: "2px" }}>Quick Presets:</span>
+                        <span style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 600, marginRight: "2px" }}>Quick Presets:</span>
                         {[
                           { days: 7, label: "7 Days" },
                           { days: 30, label: "30 Days (1 Mo)" },
@@ -324,8 +324,8 @@ export default function TabPerformance(props) {
                         })}
                       </div>
 
-                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "8px" }}>
-                        Adjustable from <strong>1 to 365 Days (1 Full Year)</strong>. Recommended: <strong>365 Days</strong> for permanent campus edge persistence, or <strong>7 to 30 Days</strong> for rapid rotation.
+                      <div style={{ fontSize: "0.74rem", color: "#475569", marginTop: "10px", lineHeight: "1.4" }}>
+                        Adjustable from <strong style={{ color: "#0f172a" }}>1 to 365 Days (1 Full Year)</strong>. Recommended: <strong style={{ color: "#0f172a" }}>365 Days</strong> for permanent campus edge persistence, or <strong style={{ color: "#0f172a" }}>7 to 30 Days</strong> for rapid rotation.
                       </div>
                     </div>
                   </div>
@@ -335,43 +335,43 @@ export default function TabPerformance(props) {
               {/* CDN KPIs - 4 Columns Grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "12px", marginBottom: "20px" }}>
                 {/* Edge CDN Storage Used Card */}
-                <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid rgba(6, 182, 212, 0.35)", borderRadius: "var(--radius-md)", padding: "14px" }}>
-                  <div style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase" }}>Edge CDN Space Used</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--accent-cyan)", marginTop: "2px" }}>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "14px", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 700, textTransform: "uppercase" }}>Edge CDN Space Used</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0284c7", marginTop: "2px" }}>
                     {cdnStats?.edgeCdn?.formattedUsed || "0.0 MB"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>
+                  <div style={{ fontSize: "0.72rem", color: "#059669", marginTop: "4px", fontWeight: 700 }}>
                     Bandwidth Saved: {cdnStats?.edgeCdn?.totalBandwidthSaved || "0.00 MB"}
                   </div>
                 </div>
 
-                <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Edge Hit Ratio</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#34d399", marginTop: "2px" }}>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "14px", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 700 }}>Edge Hit Ratio</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#059669", marginTop: "2px" }}>
                     {cdnStats?.hitRatio || "0.0%"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "4px", fontWeight: 600 }}>
                     Hits: {cdnStats?.hits ?? 0} • Misses: {cdnStats?.misses ?? 0}
                   </div>
                 </div>
 
-                <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Cached Vault Documents</div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#a78bfa", marginTop: "2px" }}>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "14px", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 700 }}>Cached Vault Documents</div>
+                  <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#7c3aed", marginTop: "2px" }}>
                     {cdnStats?.edgeCdn?.cachedFilesCount ?? (cdnStats?.edgeCdn?.isPurged ? 0 : cdnFiles.length)}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "4px", fontWeight: 600 }}>
                     Active Across 300+ Edge Cities
                   </div>
                 </div>
 
-                <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Targeted Note Cache Purge</div>
+                <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", padding: "14px", boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)" }}>
+                  <div style={{ fontSize: "0.72rem", color: "#475569", fontWeight: 700 }}>Targeted Note Cache Purge</div>
                   <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
                     <input
                       type="text"
                       className="form-input"
-                      style={{ padding: "6px 10px", fontSize: "0.78rem", flex: 1 }}
+                      style={{ padding: "6px 10px", fontSize: "0.78rem", flex: 1, background: "#f8fafc", border: "1.5px solid #cbd5e1", color: "#0f172a", borderRadius: "6px" }}
                       placeholder="Enter Note ID..."
                       value={manualNoteIdToPurge}
                       onChange={(e) => setManualNoteIdToPurge(e.target.value)}
@@ -382,7 +382,7 @@ export default function TabPerformance(props) {
                         setManualNoteIdToPurge("");
                       }}
                       className="btn-primary"
-                      style={{ padding: "6px 12px", fontSize: "0.78rem" }}
+                      style={{ padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, background: "#2563eb", color: "#ffffff", border: "none", borderRadius: "6px", cursor: "pointer" }}
                     >
                       Purge
                     </button>
@@ -410,16 +410,16 @@ export default function TabPerformance(props) {
                 const displayCdn = showAllCdnFiles ? filteredCdn : filteredCdn.slice(0, 15);
 
                 return (
-                  <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+                  <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", boxShadow: "0 2px 10px rgba(15, 23, 42, 0.04)" }}>
                     {/* Header Bar with Realtime Search & Storage Node Filter Tabs */}
-                    <div style={{ padding: "14px 18px", borderBottom: "1px solid rgba(255, 255, 255, 0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+                    <div style={{ padding: "14px 18px", borderBottom: "1.5px solid #e2e8f0", background: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
                       <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                        <div style={{ fontWeight: 800, fontSize: "0.92rem", color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 800, fontSize: "0.92rem", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                           <span>Stored &amp; Cached Academic Documents</span>
-                          <span style={{ fontSize: "0.72rem", background: "rgba(34, 197, 94, 0.15)", color: "#4ade80", border: "1px solid rgba(34, 197, 94, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
+                          <span style={{ fontSize: "0.72rem", background: "#dcfce7", color: "#15803d", border: "1px solid #86efac", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
                             💽 {ssdCount} on Server SSD
                           </span>
-                          <span style={{ fontSize: "0.72rem", background: "rgba(168, 85, 247, 0.15)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
+                          <span style={{ fontSize: "0.72rem", background: "#f3e8ff", color: "#7e22ce", border: "1px solid #d8b4fe", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
                             🧠 {ramCount} in RAM Buffer
                           </span>
                         </div>
@@ -429,14 +429,15 @@ export default function TabPerformance(props) {
                           <button
                             onClick={() => setStorageFilter("all")}
                             style={{
-                              padding: "3px 10px",
+                              padding: "4px 12px",
                               borderRadius: "6px",
-                              fontSize: "0.72rem",
+                              fontSize: "0.74rem",
                               fontWeight: 700,
                               cursor: "pointer",
-                              background: storageFilter === "all" ? "rgba(6, 182, 212, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                              border: storageFilter === "all" ? "1px solid var(--accent-cyan)" : "1px solid rgba(255, 255, 255, 0.1)",
-                              color: storageFilter === "all" ? "#fff" : "var(--text-dim)",
+                              background: storageFilter === "all" ? "#0284c7" : "#ffffff",
+                              border: storageFilter === "all" ? "1.5px solid #0369a1" : "1.5px solid #cbd5e1",
+                              color: storageFilter === "all" ? "#ffffff" : "#475569",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             🌐 All Cached ({cdnFiles.length})
@@ -444,14 +445,15 @@ export default function TabPerformance(props) {
                           <button
                             onClick={() => setStorageFilter("ssd")}
                             style={{
-                              padding: "3px 10px",
+                              padding: "4px 12px",
                               borderRadius: "6px",
-                              fontSize: "0.72rem",
+                              fontSize: "0.74rem",
                               fontWeight: 700,
                               cursor: "pointer",
-                              background: storageFilter === "ssd" ? "rgba(34, 197, 94, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                              border: storageFilter === "ssd" ? "1px solid #22c55e" : "1px solid rgba(255, 255, 255, 0.1)",
-                              color: storageFilter === "ssd" ? "#4ade80" : "var(--text-dim)",
+                              background: storageFilter === "ssd" ? "#059669" : "#ffffff",
+                              border: storageFilter === "ssd" ? "1.5px solid #047857" : "1.5px solid #cbd5e1",
+                              color: storageFilter === "ssd" ? "#ffffff" : "#475569",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             💽 Stored on Server SSD Only ({ssdCount})
@@ -459,14 +461,15 @@ export default function TabPerformance(props) {
                           <button
                             onClick={() => setStorageFilter("ram")}
                             style={{
-                              padding: "3px 10px",
+                              padding: "4px 12px",
                               borderRadius: "6px",
-                              fontSize: "0.72rem",
+                              fontSize: "0.74rem",
                               fontWeight: 700,
                               cursor: "pointer",
-                              background: storageFilter === "ram" ? "rgba(168, 85, 247, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                              border: storageFilter === "ram" ? "1px solid #a855f7" : "1px solid rgba(255, 255, 255, 0.1)",
-                              color: storageFilter === "ram" ? "#c084fc" : "var(--text-dim)",
+                              background: storageFilter === "ram" ? "#7c3aed" : "#ffffff",
+                              border: storageFilter === "ram" ? "1.5px solid #6d28d9" : "1.5px solid #cbd5e1",
+                              color: storageFilter === "ram" ? "#ffffff" : "#475569",
+                              transition: "all 0.15s ease",
                             }}
                           >
                             🧠 In RAM Buffer Only ({ramCount})
@@ -475,7 +478,7 @@ export default function TabPerformance(props) {
                       </div>
 
                       <div style={{ position: "relative", minWidth: "260px" }}>
-                        <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                        <Search size={14} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                         <input
                           type="text"
                           value={cdnSearch}
@@ -485,9 +488,9 @@ export default function TabPerformance(props) {
                             width: "100%",
                             padding: "6px 12px 6px 32px",
                             borderRadius: "6px",
-                            background: "rgba(0, 0, 0, 0.4)",
-                            border: "1px solid rgba(255, 255, 255, 0.12)",
-                            color: "#fff",
+                            background: "#ffffff",
+                            border: "1.5px solid #cbd5e1",
+                            color: "#0f172a",
                             fontSize: "0.78rem",
                           }}
                         />
@@ -496,19 +499,19 @@ export default function TabPerformance(props) {
 
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", textAlign: "left" }}>
                       <thead>
-                        <tr style={{ background: "rgba(255, 255, 255, 0.03)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
-                          <th style={{ padding: "10px 16px" }}>KEY / NOTE ID</th>
-                          <th style={{ padding: "10px 16px" }}>STORAGE NODE</th>
-                          <th style={{ padding: "10px 16px" }}>TYPE</th>
-                          <th style={{ padding: "10px 16px" }}>DOCUMENT TITLE</th>
-                          <th style={{ padding: "10px 16px" }}>SSD / FILE SIZE</th>
-                          <th style={{ padding: "10px 16px", textAlign: "right" }}>ACTIONS</th>
+                        <tr style={{ background: "#f1f5f9", borderBottom: "1.5px solid #cbd5e1", color: "#334155" }}>
+                          <th style={{ padding: "10px 16px", fontWeight: 800 }}>KEY / NOTE ID</th>
+                          <th style={{ padding: "10px 16px", fontWeight: 800 }}>STORAGE NODE</th>
+                          <th style={{ padding: "10px 16px", fontWeight: 800 }}>TYPE</th>
+                          <th style={{ padding: "10px 16px", fontWeight: 800 }}>DOCUMENT TITLE</th>
+                          <th style={{ padding: "10px 16px", fontWeight: 800 }}>SSD / FILE SIZE</th>
+                          <th style={{ padding: "10px 16px", textAlign: "right", fontWeight: 800 }}>ACTIONS</th>
                         </tr>
                       </thead>
                       <tbody>
                         {displayCdn.length === 0 ? (
                           <tr>
-                            <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                            <td colSpan={6} style={{ padding: "30px", textAlign: "center", color: "#64748b", fontWeight: 600 }}>
                               {cdnSearch.trim()
                                 ? "No stored documents match your search query."
                                 : storageFilter === "ssd"
@@ -518,8 +521,8 @@ export default function TabPerformance(props) {
                           </tr>
                         ) : (
                           displayCdn.map((file) => (
-                            <tr key={file.noteId} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)" }}>
-                              <td style={{ padding: "10px 16px", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontSize: "0.78rem" }}>
+                            <tr key={file.noteId} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                              <td style={{ padding: "10px 16px", color: "#0284c7", fontFamily: "var(--font-mono)", fontSize: "0.78rem", fontWeight: 700 }}>
                                 {file.noteId}
                               </td>
                               <td style={{ padding: "10px 16px" }}>
@@ -530,9 +533,9 @@ export default function TabPerformance(props) {
                                       padding: "2px 7px",
                                       borderRadius: "4px",
                                       fontWeight: 800,
-                                      background: "rgba(34, 197, 94, 0.15)",
-                                      color: "#4ade80",
-                                      border: "1px solid rgba(34, 197, 94, 0.35)",
+                                      background: "#dcfce7",
+                                      color: "#15803d",
+                                      border: "1px solid #86efac",
                                       display: "inline-flex",
                                       alignItems: "center",
                                       gap: "3px",
@@ -547,9 +550,9 @@ export default function TabPerformance(props) {
                                       padding: "2px 7px",
                                       borderRadius: "4px",
                                       fontWeight: 800,
-                                      background: "rgba(168, 85, 247, 0.15)",
-                                      color: "#c084fc",
-                                      border: "1px solid rgba(168, 85, 247, 0.35)",
+                                      background: "#f3e8ff",
+                                      color: "#7e22ce",
+                                      border: "1px solid #d8b4fe",
                                       display: "inline-flex",
                                       alignItems: "center",
                                       gap: "3px",
@@ -564,9 +567,9 @@ export default function TabPerformance(props) {
                                       padding: "2px 7px",
                                       borderRadius: "4px",
                                       fontWeight: 800,
-                                      background: "rgba(6, 182, 212, 0.15)",
-                                      color: "var(--accent-cyan)",
-                                      border: "1px solid rgba(6, 182, 212, 0.35)",
+                                      background: "#e0f2fe",
+                                      color: "#0369a1",
+                                      border: "1px solid #7dd3fc",
                                       display: "inline-flex",
                                       alignItems: "center",
                                       gap: "3px",
@@ -582,10 +585,10 @@ export default function TabPerformance(props) {
                                     fontSize: "0.68rem",
                                     padding: "2px 7px",
                                     borderRadius: "4px",
-                                    fontWeight: 700,
-                                    background: file.fileType === "image" ? "rgba(245, 158, 11, 0.18)" : "rgba(6, 182, 212, 0.18)",
-                                    color: file.fileType === "image" ? "#fbbf24" : "var(--accent-cyan)",
-                                    border: file.fileType === "image" ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(6, 182, 212, 0.35)",
+                                    fontWeight: 800,
+                                    background: file.fileType === "image" ? "#fef3c7" : "#e0f2fe",
+                                    color: file.fileType === "image" ? "#b45309" : "#0284c7",
+                                    border: file.fileType === "image" ? "1px solid #fcd34d" : "1px solid #bae6fd",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "3px",
@@ -594,10 +597,10 @@ export default function TabPerformance(props) {
                                   {file.typeLabel || (file.fileType === "image" ? "🖼️ IMG" : "📄 PDF")}
                                 </span>
                               </td>
-                              <td style={{ padding: "10px 16px", color: "#fff", fontWeight: 600 }}>
+                              <td style={{ padding: "10px 16px", color: "#0f172a", fontWeight: 600 }}>
                                 {file.title || "Academic Material"}
                               </td>
-                              <td style={{ padding: "10px 16px", color: file.onDisk ? "#4ade80" : "var(--text-dim)", fontWeight: file.onDisk ? 700 : 500 }}>
+                              <td style={{ padding: "10px 16px", color: file.onDisk ? "#059669" : "#475569", fontWeight: file.onDisk ? 700 : 600 }}>
                                 {file.diskSize ? `${(file.diskSize / 1048576).toFixed(2)} MB` : file.sizeFormatted || (file.size ? `${(file.size / 1048576).toFixed(2)} MB` : "Dynamic")}
                               </td>
                               <td style={{ padding: "10px 16px", textAlign: "right" }}>
@@ -606,7 +609,7 @@ export default function TabPerformance(props) {
                                     <button
                                       onClick={() => handlePurgeSingleDiskFile(file.noteId)}
                                       className="btn-secondary"
-                                      style={{ padding: "4px 8px", fontSize: "0.72rem", color: "#4ade80", borderColor: "rgba(34, 197, 94, 0.4)" }}
+                                      style={{ padding: "4px 8px", fontSize: "0.72rem", color: "#dc2626", borderColor: "#fecaca", background: "#fef2f2", fontWeight: 700, borderRadius: "6px" }}
                                       title="Delete only from Server NVMe SSD disk cache"
                                     >
                                       💽 Delete SSD
@@ -615,7 +618,7 @@ export default function TabPerformance(props) {
                                   <button
                                     onClick={() => handlePurgeSingleCdnFile(file.noteId)}
                                     className="btn-danger"
-                                    style={{ padding: "4px 8px", fontSize: "0.72rem" }}
+                                    style={{ padding: "4px 10px", fontSize: "0.72rem", background: "#dc2626", color: "#ffffff", border: "1.5px solid #b91c1c", borderRadius: "6px", fontWeight: 700, cursor: "pointer" }}
                                     title="Purge globally across Edge, Worker & RAM"
                                   >
                                     Purge All
@@ -630,14 +633,14 @@ export default function TabPerformance(props) {
 
                     {/* Pagination / Expand Footer (10 Notes Default) */}
                     {filteredCdn.length > 10 && (
-                      <div style={{ padding: "10px 18px", borderTop: "1px solid rgba(255, 255, 255, 0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(0,0,0,0.2)" }}>
-                        <span style={{ fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                      <div style={{ padding: "10px 18px", borderTop: "1.5px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc" }}>
+                        <span style={{ fontSize: "0.74rem", color: "#475569" }}>
                           Showing <strong>{displayCdn.length}</strong> of <strong>{filteredCdn.length}</strong> cached documents
                         </span>
                         <button
                           onClick={() => setShowAllCdnFiles(!showAllCdnFiles)}
                           className="btn-secondary"
-                          style={{ padding: "5px 14px", fontSize: "0.76rem", fontWeight: 700 }}
+                          style={{ padding: "5px 14px", fontSize: "0.76rem", fontWeight: 700, background: "#ffffff", color: "#334155", border: "1.5px solid #cbd5e1", borderRadius: "6px" }}
                         >
                           {showAllCdnFiles ? "▲ Show Top 10 Only" : `▼ Show All (${filteredCdn.length} Cached Notes)`}
                         </button>

@@ -4041,8 +4041,9 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   --bg-glass-card: #ffffff !important;
   --border-subtle: #e2e8f0 !important;
   --text-main: #0f172a !important;
-  --text-muted: #475569 !important;
-  --text-dim: #64748b !important;
+  --text-muted: #334155 !important;
+  --text-dim: #475569 !important;
+  --accent-cyan: #0284c7 !important;
   color: #0f172a !important;
   background: #ffffff !important;
   border: 1.5px solid #cbd5e1 !important;
@@ -4127,8 +4128,8 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 
 /* 🛡️ Universal Text Contrast: Force Invisible Off-White to Sharp Dark #0f172a */
-.admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]),
-.admin-modal-container [style*="#fff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]),
+.admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]),
+.admin-modal-container [style*="#fff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]),
 .admin-modal-container [style*="#e2e8f0"],
 .admin-modal-container [style*="#f1f5f9"],
 .admin-modal-container [style*="#f8fafc"],
@@ -4208,48 +4209,105 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 /* ⚡ Accessible High-Contrast Color Mapping for White Studio ⚡ */
 
 /* Greens: from washed-out light mint to rich dark emerald (#059669) */
-.admin-modal-container [style*="#34d399"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#6ee7b7"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#4ade80"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#86efac"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#2dd4bf"]:not(button):not([style*="background"]) {
+.admin-modal-container [style*="#34d399"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="52, 211, 153"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#6ee7b7"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="110, 231, 183"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#4ade80"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="74, 222, 128"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#86efac"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#2dd4bf"]:not(.btn-primary):not(.btn-danger) {
   color: #059669 !important;
 }
 
 /* Yellows / Ambers: from faint yellow to rich bronze amber (#b45309) */
-.admin-modal-container [style*="#fbbf24"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#facc15"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#fcd34d"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#eab308"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#a3e635"]:not(button):not([style*="background"]) {
+.admin-modal-container [style*="#fbbf24"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="251, 191, 36"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#facc15"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="250, 204, 21"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#fcd34d"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#eab308"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#a3e635"]:not(.btn-primary):not(.btn-danger) {
   color: #b45309 !important;
 }
 
 /* Reds / Corals: from washed-out pink to deep crimson red (#dc2626) */
-.admin-modal-container [style*="#fca5a5"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#f87171"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#fb7185"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#fda4af"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#f472b6"]:not(button):not([style*="background"]) {
+.admin-modal-container [style*="#fca5a5"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="252, 165, 165"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#f87171"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="248, 113, 113"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#fb7185"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#fda4af"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#f472b6"]:not(.btn-primary):not(.btn-danger) {
   color: #dc2626 !important;
 }
 
 /* Cyans / Blues: from washed-out cyan to deep ocean azure (#0284c7) */
-.admin-modal-container [style*="#38bdf8"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#67e8f9"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#7dd3fc"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#bae6fd"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="var(--accent-cyan)"]:not(button):not([style*="background"]) {
+.admin-modal-container [style*="#38bdf8"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="56, 189, 248"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#67e8f9"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="103, 232, 249"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#7dd3fc"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#bae6fd"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="var(--accent-cyan)"]:not(.btn-primary):not(.btn-danger) {
   color: #0284c7 !important;
 }
 
 /* Purples / Violets: from pale violet to deep royal purple (#7c3aed) */
-.admin-modal-container [style*="#c084fc"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#c4b5fd"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#a78bfa"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#a5b4fc"]:not(button):not([style*="background"]),
-.admin-modal-container [style*="#d8b4fe"]:not(button):not([style*="background"]) {
+.admin-modal-container [style*="#c084fc"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="192, 132, 252"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#c4b5fd"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#a78bfa"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="167, 139, 250"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#a5b4fc"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="#d8b4fe"]:not(.btn-primary):not(.btn-danger) {
   color: #7c3aed !important;
+}
+
+/* Translucent Badges & Tags Enhanced to Rich Pastel Backgrounds with Crisp Borders */
+.admin-modal-container [style*="rgba(16, 185, 129, 0.15)"],
+.admin-modal-container [style*="rgba(16,185,129,0.15)"],
+.admin-modal-container [style*="rgba(16, 185, 129, 0.2)"],
+.admin-modal-container [style*="rgba(34, 197, 94, 0.15)"],
+.admin-modal-container [style*="rgba(34,197,94,0.15)"] {
+  background: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+  color: #065f46 !important;
+}
+
+.admin-modal-container [style*="rgba(56, 189, 248, 0.1)"],
+.admin-modal-container [style*="rgba(56, 189, 248, 0.12)"],
+.admin-modal-container [style*="rgba(56, 189, 248, 0.15)"],
+.admin-modal-container [style*="rgba(56, 189, 248, 0.2)"],
+.admin-modal-container [style*="rgba(6, 182, 212, 0.15)"] {
+  background: #e0f2fe !important;
+  border-color: #7dd3fc !important;
+  color: #0369a1 !important;
+}
+
+.admin-modal-container [style*="rgba(168, 85, 247, 0.15)"],
+.admin-modal-container [style*="rgba(168, 85, 247, 0.2)"],
+.admin-modal-container [style*="rgba(139, 92, 246, 0.15)"],
+.admin-modal-container [style*="rgba(139, 92, 246, 0.2)"] {
+  background: #ede9fe !important;
+  border-color: #c4b5fd !important;
+  color: #6d28d9 !important;
+}
+
+.admin-modal-container [style*="rgba(245, 158, 11, 0.12)"],
+.admin-modal-container [style*="rgba(245, 158, 11, 0.15)"],
+.admin-modal-container [style*="rgba(245, 158, 11, 0.18)"],
+.admin-modal-container [style*="rgba(245, 158, 11, 0.2)"] {
+  background: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+.admin-modal-container [style*="rgba(239, 68, 68, 0.15)"],
+.admin-modal-container [style*="rgba(239, 68, 68, 0.2)"] {
+  background: #fee2e2 !important;
+  border-color: #fca5a5 !important;
+  color: #991b1b !important;
 }
 
 .admin-modal-container pre,
