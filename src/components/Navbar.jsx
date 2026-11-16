@@ -21,6 +21,7 @@ import {
   LayoutGrid,
   X,
   Flame,
+  HardDrive,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
@@ -879,6 +880,25 @@ export default function Navbar({
                     <div className="more-card-info">
                       <strong>Campus AirDrop</strong>
                       <small>Offline P2P QR Mesh note transfer</small>
+                    </div>
+                  </button>
+
+                  {/* Offline Notes Vault */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      window.dispatchEvent(new CustomEvent("fsm:toggle-offline-filter"));
+                    }}
+                    style={{ background: "#ffffff", border: "1.5px solid #a7f3d0", boxShadow: "0 4px 14px rgba(16, 185, 129, 0.08)" }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#059669" }}>
+                      <HardDrive size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong style={{ color: "#1e293b" }}>Offline Notes Vault</strong>
+                      <small>View &amp; read cached notes without internet</small>
                     </div>
                   </button>
 

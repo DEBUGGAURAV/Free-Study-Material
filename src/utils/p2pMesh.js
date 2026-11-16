@@ -16,9 +16,84 @@ export function invalidateCachedNoteIdsSet() {
   cachedKeySetPromise = null;
 }
 
+function getOfflineVaultStoreKeys(timeoutMs = 800) {
+  return new Promise((resolve) => {
+    if (typeof window === "undefined" || !window.indexedDB) return resolve([]);
+    let isSettled = false;
+    const timer = setTimeout(() => {
+      if (!isSettled) {
+        isSettled = true;
+        resolve([]);
+      }
+    }, timeoutMs);
+
+    try {
+      const req = window.indexedDB.open("fsm_offline_vault", 1);
+      req.onsuccess = (e) => {
+        try {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains("offline_notes")) {
+            try { db.close(); } catch (_) {}
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              resolve([]);
+            }
+            return;
+          }
+          const tx = db.transaction("offline_notes", "readonly");
+          const keysReq = tx.objectStore("offline_notes").getAllKeys();
+          keysReq.onsuccess = () => {
+            try { db.close(); } catch (_) {}
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              resolve(Array.isArray(keysReq.result) ? keysReq.result : []);
+            }
+          };
+          keysReq.onerror = () => {
+            try { db.close(); } catch (_) {}
+            if (!isSettled) {
+              isSettled = true;
+              clearTimeout(timer);
+              resolve([]);
+            }
+          };
+        } catch (_) {
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timer);
+            resolve([]);
+          }
+        }
+      };
+      req.onerror = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          resolve([]);
+        }
+      };
+      req.onblocked = () => {
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timer);
+          resolve([]);
+        }
+      };
+    } catch (_) {
+      if (!isSettled) {
+        isSettled = true;
+        clearTimeout(timer);
+        resolve([]);
+      }
+    }
+  });
+}
+
 /**
- * Fast O(1)-after-first-scan check returning a Set of noteIds cached in IndexedDB
- * without deserializing multi-MB PDF ArrayBuffers into JS heap.
+ * Fast O(1)-after-first-scan check returning a Set of noteIds cached across
+ * both fsm_p2p_cache_v1 AND fsm_offline_vault without deserializing multi-MB PDF ArrayBuffers into JS heap.
  */
 export async function getCachedNoteIdsSet(forceRefresh = false) {
   if (!forceRefresh && cachedKeySetValue) return cachedKeySetValue;
@@ -27,32 +102,43 @@ export async function getCachedNoteIdsSet(forceRefresh = false) {
   cachedKeySetPromise = (async () => {
     let db = null;
     try {
-      db = await openDB(800);
-      const keys = await new Promise((resolve) => {
-        let settled = false;
-        const timer = setTimeout(() => {
-          if (!settled) { settled = true; resolve([]); }
-        }, 700);
-        try {
-          const tx = db.transaction(STORE_NAME, "readonly");
-          const req = tx.objectStore(STORE_NAME).getAllKeys();
-          req.onsuccess = () => {
-            if (!settled) { settled = true; clearTimeout(timer); resolve(Array.isArray(req.result) ? req.result : []); }
-          };
-          req.onerror = () => {
-            if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
-          };
-        } catch {
-          if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
-        }
-      });
-      const keySet = new Set(keys.map((k) => String(k)));
+      const [p2pKeys, vaultKeys] = await Promise.all([
+        (async () => {
+          try {
+            db = await openDB(800);
+            return await new Promise((resolve) => {
+              let settled = false;
+              const timer = setTimeout(() => {
+                if (!settled) { settled = true; resolve([]); }
+              }, 700);
+              try {
+                const tx = db.transaction(STORE_NAME, "readonly");
+                const req = tx.objectStore(STORE_NAME).getAllKeys();
+                req.onsuccess = () => {
+                  if (!settled) { settled = true; clearTimeout(timer); resolve(Array.isArray(req.result) ? req.result : []); }
+                };
+                req.onerror = () => {
+                  if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
+                };
+              } catch {
+                if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
+              }
+            });
+          } catch {
+            return [];
+          } finally {
+            try { if (db) db.close(); } catch (_) {}
+          }
+        })(),
+        getOfflineVaultStoreKeys(800),
+      ]);
+
+      const keySet = new Set([...p2pKeys, ...vaultKeys].map((k) => String(k)));
       cachedKeySetValue = keySet;
       return keySet;
     } catch {
       return cachedKeySetValue || new Set();
     } finally {
-      try { if (db) db.close(); } catch (_) {}
       cachedKeySetPromise = null;
     }
   })();
@@ -216,11 +302,15 @@ export async function getCachedNoteBuffer(noteId) {
 // Delete a specific cached note buffer from local device storage
 export async function deleteCachedNote(noteId) {
   try {
+    invalidateCachedNoteIdsSet();
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).delete(noteId);
-      tx.oncomplete = () => resolve(true);
+      tx.oncomplete = () => {
+        invalidateCachedNoteIdsSet();
+        resolve(true);
+      };
       tx.onerror = () => resolve(false);
     });
   } catch {
@@ -231,12 +321,14 @@ export async function deleteCachedNote(noteId) {
 // Clear all cached note buffers from local device storage to free phone space
 export async function clearAllCachedNotes() {
   try {
+    invalidateCachedNoteIdsSet();
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       tx.objectStore(STORE_NAME).clear();
       tx.oncomplete = () => {
         try { db.close(); } catch (_) {}
+        invalidateCachedNoteIdsSet();
         resolve(true);
       };
       tx.onerror = () => {

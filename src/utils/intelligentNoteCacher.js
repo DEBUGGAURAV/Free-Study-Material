@@ -97,6 +97,9 @@ async function fetchAndStoreSingleNote(note, conditionTag = "general") {
       // 3. Save to IndexedDB (fsm_offline_vault AND fsm_p2p_cache_v1)
       saveToClientOfflineStorage(noteId, note, buffer);
       precachedIdsInSession.add(noteId);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("fsm:offline-notes-changed", { detail: { noteId } }));
+      }
       console.log(`[SMART-CACHE] 📦 [Condition: ${conditionTag}] Auto-stored into IndexedDB: "${note.title || noteId}" (${(buffer.byteLength / (1024 * 1024)).toFixed(2)} MB)`);
       return true;
     }

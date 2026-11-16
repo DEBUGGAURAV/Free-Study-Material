@@ -28,6 +28,9 @@ export default function CategoryFilter({
   viewMode = "grid",
   setViewMode,
   onOpenCircleSearch,
+  showOnlyOffline = false,
+  setShowOnlyOffline,
+  offlineCount = 0,
 }) {
   const branchList = ["All", ...(branches.length > 0 ? branches : ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"])];
 
@@ -46,11 +49,57 @@ export default function CategoryFilter({
           <GraduationCap size={15} />
           <span>Course:</span>
         </div>
+
+        {/* 📴 Luxury Offline Notes Filter Tab */}
+        <button
+          type="button"
+          className={`filter-tab offline-filter-pill ${showOnlyOffline ? "active" : ""}`}
+          onClick={() => {
+            if (setShowOnlyOffline) {
+              setShowOnlyOffline(!showOnlyOffline);
+            }
+          }}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            background: showOnlyOffline
+              ? "linear-gradient(135deg, #059669, #10b981)"
+              : "linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(6, 182, 212, 0.08))",
+            color: showOnlyOffline ? "#ffffff" : "#059669",
+            border: showOnlyOffline ? "1.5px solid #059669" : "1px solid rgba(16, 185, 129, 0.35)",
+            fontWeight: 750,
+            boxShadow: showOnlyOffline ? "0 4px 14px rgba(16, 185, 129, 0.35)" : "none",
+            flexShrink: 0,
+            cursor: "pointer",
+            transition: "all 0.2s ease",
+          }}
+          title={showOnlyOffline ? "Click to show all notes" : "Click to view notes saved offline on this device (0 MB internet needed)"}
+        >
+          <span style={{ fontSize: "0.95rem" }}>📴</span>
+          <span>Offline Notes</span>
+          <span
+            style={{
+              fontSize: "0.72rem",
+              padding: "1px 6px",
+              borderRadius: "999px",
+              background: showOnlyOffline ? "rgba(255, 255, 255, 0.28)" : "rgba(16, 185, 129, 0.16)",
+              color: showOnlyOffline ? "#ffffff" : "#047857",
+              fontWeight: 800,
+            }}
+          >
+            {offlineCount}
+          </span>
+        </button>
+
         {COURSES.map((course) => (
           <button
             key={course}
-            className={`filter-tab ${selectedCourse === course ? "active" : ""}`}
-            onClick={() => setSelectedCourse(course)}
+            className={`filter-tab ${selectedCourse === course && !showOnlyOffline ? "active" : ""}`}
+            onClick={() => {
+              if (showOnlyOffline && setShowOnlyOffline) setShowOnlyOffline(false);
+              setSelectedCourse(course);
+            }}
           >
             {course}
           </button>
@@ -174,7 +223,13 @@ export default function CategoryFilter({
           )}
 
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", fontWeight: 600 }}>
-            Showing <span style={{ color: "var(--text-main)", fontWeight: 800 }}>{totalCount}</span> notes
+            {showOnlyOffline ? (
+              <span style={{ color: "#059669", fontWeight: 700 }}>
+                Showing <span style={{ color: "var(--text-main)", fontWeight: 800 }}>{totalCount}</span> offline saved notes (0 KB Data)
+              </span>
+            ) : (
+              <>Showing <span style={{ color: "var(--text-main)", fontWeight: 800 }}>{totalCount}</span> notes</>
+            )}
           </div>
         </div>
       </div>

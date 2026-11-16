@@ -51,7 +51,7 @@ function NoteCard({
   });
 
   // Device Dynamic LRU & 48h Cache State
-  const [isCachedOffline, setIsCachedOffline] = useState(false);
+  const [isCachedOffline, setIsCachedOffline] = useState(() => Boolean(note?.isOfflineCached));
   const [isPinned, setIsPinned] = useState(false);
 
   // 🎴 3D Interactive Card Tilt & Specular Physics
@@ -100,10 +100,11 @@ function NoteCard({
   useEffect(() => {
     let active = true;
     if (!note?.id) return;
+    if (note.isOfflineCached) setIsCachedOffline(true);
     setIsPinned(isNotePinnedOffline(note.id));
     getCachedNoteIdsSet()
       .then((keySet) => {
-        if (active) setIsCachedOffline(keySet.has(String(note.id)));
+        if (active) setIsCachedOffline(keySet.has(String(note.id)) || Boolean(note.isOfflineCached));
       })
       .catch(() => {});
 

@@ -9,13 +9,13 @@ import QueueStatusPill from "./components/QueueStatusPill";
 import { api, getCurrentUser, getAuthToken, restoreAuthSessionFromStorage } from "./api";
 import { BookOpen, ChevronDown, ChevronUp, Bell, Lock, ShieldCheck, Zap, Share2, Sparkles, FileText, CheckCircle, ArrowRight, Cpu, Database, X, Clock, MessageSquare, HelpCircle, Fingerprint, UploadCloud } from "lucide-react";
 import { playPop } from "./utils/soundEffects";
-import { startP2PBackgroundSeeder } from "./utils/p2pMesh";
+import { startP2PBackgroundSeeder, getCachedNoteIdsSet } from "./utils/p2pMesh";
 import { formatFileSize, getNotePdfFileName } from "./utils/formatUtils";
 import { initTabLeaderElection } from "./utils/tabLeaderLock";
 import { syncStudentProfileContext } from "./utils/studentStudyContext";
 import { triggerClientLockdown } from "./utils/antiTamperDefense";
 import { SITE_NAME, SITE_VAULT_NAME, SITE_TAGLINE, getClientDomain } from "./config/clientConfig";
-import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage } from "./utils/offlineQueue";
+import { runOfflineVaultAutoMaintenance, wipeAllDeviceOfflineStorage, getAllStoredOfflineNotes } from "./utils/offlineQueue";
 import { triggerIdleCatalogPrecache } from "./utils/intelligentNoteCacher";
 import { clearStudySessionHistory } from "./utils/studentSessionHistory";
 import { broadcastTechFlagsUpdate } from "./utils/techFlagsStore";
@@ -201,6 +201,9 @@ export default function App() {
 
   // 📴 PWA & Village/2G Resilience Offline State
   const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  const [showOnlyOffline, setShowOnlyOffline] = useState(false);
+  const [offlineNotesCount, setOfflineNotesCount] = useState(0);
+  const [cachedOfflineIds, setCachedOfflineIds] = useState(() => new Set());
 
   // 🛠️ Platform Maintenance Mode State (Live Host Pause)
   const [maintenanceState, setMaintenanceState] = useState({
@@ -683,6 +686,38 @@ export default function App() {
     };
   }, []);
 
+  // 📴 Sync Offline Vault Count and Cache IDs (Auto updates on download/delete/precache)
+  const refreshOfflineNotesStats = useCallback(async () => {
+    try {
+      const [stored, keySet] = await Promise.all([
+        getAllStoredOfflineNotes(),
+        getCachedNoteIdsSet(true),
+      ]);
+      const validStored = Array.isArray(stored) ? stored : [];
+      setOfflineNotesCount(validStored.length);
+      const combinedSet = new Set([...keySet, ...validStored.map((s) => String(s.id))]);
+      setCachedOfflineIds(combinedSet);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    refreshOfflineNotesStats();
+    const handleSync = () => refreshOfflineNotesStats();
+    window.addEventListener("fsm:offline-notes-changed", handleSync);
+    window.addEventListener("fsm:pinned-notes-changed", handleSync);
+    const handleToggleFilter = () => {
+      setShowOnlyOffline((prev) => !prev);
+      const el = document.getElementById("study-materials");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    };
+    window.addEventListener("fsm:toggle-offline-filter", handleToggleFilter);
+    return () => {
+      window.removeEventListener("fsm:offline-notes-changed", handleSync);
+      window.removeEventListener("fsm:pinned-notes-changed", handleSync);
+      window.removeEventListener("fsm:toggle-offline-filter", handleToggleFilter);
+    };
+  }, [refreshOfflineNotesStats]);
+
   // Keep ref updated to avoid stale state in async timers
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -936,6 +971,59 @@ export default function App() {
 
   // ⚡ Zero-Firestore-Read Local MiniSearch + Facet Filtering (<1ms non-blocking deferred query)
   useEffect(() => {
+    if (showOnlyOffline) {
+      let active = true;
+      (async () => {
+        try {
+          const stored = await getAllStoredOfflineNotes();
+          if (!active) return;
+          const catalog = allCatalogNotesRef.current || [];
+          const catalogMap = new Map(catalog.map((c) => [String(c.id), c]));
+          const merged = [];
+          for (const item of stored) {
+            const id = String(item.id);
+            const cat = catalogMap.get(id);
+            if (cat) {
+              merged.push({
+                ...cat,
+                isOfflineCached: true,
+                offlineSizeMB: item.sizeMB,
+              });
+            } else {
+              merged.push({
+                id: item.id,
+                title: item.title,
+                subject: item.subject,
+                course: item.course || "B.Tech",
+                branch: item.branch || "General",
+                year: item.year || "All Years",
+                semester: item.semester || "",
+                fileSize: item.sizeBytes,
+                compressedSize: item.sizeBytes,
+                isOfflineCached: true,
+                allowDownload: true,
+                source: item.source,
+              });
+            }
+          }
+          let finalNotes = merged;
+          if (deferredSearchTerm && deferredSearchTerm.trim()) {
+            const q = deferredSearchTerm.trim().toLowerCase();
+            finalNotes = finalNotes.filter((n) =>
+              [n.title, n.subject, n.branch, n.course, n.category].some((f) =>
+                String(f || "").toLowerCase().includes(q)
+              )
+            );
+          }
+          setNotes(finalNotes);
+          setShowAllNotes(true);
+        } catch (_) {
+          if (active) setNotes([]);
+        }
+      })();
+      return () => { active = false; };
+    }
+
     if (hasLocalCatalogReady() || allCatalogNotesRef.current.length > 0) {
       const filtered = searchNotesCatalogLocally({
         query: deferredSearchTerm,
@@ -946,7 +1034,7 @@ export default function App() {
       });
       setNotes(filtered);
     }
-  }, [selectedCourse, selectedYear, selectedBranch, deferredSearchTerm]);
+  }, [selectedCourse, selectedYear, selectedBranch, deferredSearchTerm, showOnlyOffline, cachedOfflineIds]);
 
   const fetchBranches = async () => {
     try {
@@ -1632,7 +1720,32 @@ export default function App() {
                 Reading cached notes from local device storage.
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOnlyOffline(true);
+                  const el = document.getElementById("study-materials");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                style={{
+                  background: showOnlyOffline ? "#059669" : "rgba(16, 185, 129, 0.22)",
+                  color: "#ffffff",
+                  border: "1px solid rgba(16, 185, 129, 0.45)",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                }}
+                title="Filter and show notes saved in local device offline storage"
+              >
+                <span>📴</span>
+                <span>View Offline Notes ({offlineNotesCount})</span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -2156,6 +2269,9 @@ export default function App() {
               totalCount={notes.length}
               viewMode={viewMode}
               setViewMode={setViewMode}
+              showOnlyOffline={showOnlyOffline}
+              setShowOnlyOffline={setShowOnlyOffline}
+              offlineCount={offlineNotesCount}
               onOpenCircleSearch={() => {
                 if (!currentUser) {
                   openAuth("signin");
@@ -2326,12 +2442,16 @@ export default function App() {
                 </div>
 
                 <h3 className="rescue-hub-title">
-                  {searchTerm
+                  {showOnlyOffline
+                    ? "No notes saved in offline storage yet"
+                    : searchTerm
                     ? `No notes found matching "${searchTerm}"`
                     : `No study notes found in ${selectedBranch || "this category"} (${selectedYear}) yet`}
                 </h3>
                 <p className="rescue-hub-desc">
-                  Don't leave empty-handed! Free Study Material connects you to 4 instant pathways right now:
+                  {showOnlyOffline
+                    ? "Click the download or pin button on any note while online to keep it cached for 100% offline reading without internet."
+                    : "Don't leave empty-handed! Free Study Material connects you to 4 instant pathways right now:"}
                 </p>
 
                 <div className="rescue-actions-grid">

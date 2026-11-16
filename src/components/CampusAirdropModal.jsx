@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, Share2, Camera, Copy, Check, RefreshCw, Zap, ShieldCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
-import { getOfflineNotes, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
+import { getOfflineNotes, getAllStoredOfflineNotes, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import { createAirDropSenderSession, completeSenderWithAnswer, createAirDropReceiverSession, cancelAirDropSession } from "../utils/p2pCampusAirdrop";
 
 
@@ -78,7 +78,7 @@ export default function CampusAirdropModal({
       }
 
       // Check IndexedDB for any cached notes so sender can share offline immediately
-      getOfflineNotes().then((list) => {
+      getAllStoredOfflineNotes().then((list) => {
         if (Array.isArray(list) && list.length > 0) {
           setAvailableOfflineNotes(list);
           if (!currentNote?.id && list[0]) {
