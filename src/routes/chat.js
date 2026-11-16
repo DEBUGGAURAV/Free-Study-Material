@@ -542,7 +542,7 @@ async function runInactivityPurge(customDays = null) {
   for (const r of roomsToPurge) {
     try {
       console.log(`[INACTIVITY-GUARDIAN] 🚨 Purging private room "${r.name}" (${r.id}) due to >= ${inactivityDays} days inactivity...`);
-      await archiveAndPurgePrivateRoom(r, "7_day_inactivity_guardian");
+      await archiveAndPurgePrivateRoom(r, `${inactivityDays}_day_inactivity_guardian`);
       purgedCount++;
     } catch (err) {
       console.warn(`[INACTIVITY-GUARDIAN] Purge error for room ${r.id}:`, err.message);
@@ -837,7 +837,9 @@ async function archiveAndPurgePrivateRoom(room, closeReason = "zero_members", cl
 
     // 4. Deletion Mode & Reason Formatting
     const isUserDelete = closeReason === "closed_by_user";
-    const is7DayInactivity = closeReason === "7_day_inactivity_guardian";
+    const isInactivityPurge = String(closeReason || "").includes("inactivity_guardian");
+    const parsedDaysMatch = String(closeReason || "").match(/^(\d+)_day_inactivity_guardian/);
+    const purgeDaysCount = parsedDaysMatch ? parseInt(parsedDaysMatch[1], 10) : 7;
 
     let reportCategoryHeader = "";
     let deletionModeBadge = "";
@@ -847,10 +849,10 @@ async function archiveAndPurgePrivateRoom(room, closeReason = "zero_members", cl
       reportCategoryHeader = `🚨 <b>[USER MANUAL DELETION - PRIVATE GROUP]</b>`;
       deletionModeBadge = `🔴 USER DELETE`;
       closeReasonFormatted = `🔴 USER MANUAL DELETE: Deleted by ${closedByUser?.name || "Participant"} (${closedByUser?.email || "N/A"}${closedByUser?.ip ? ` | 🌐 IP: <code>${closedByUser.ip}</code>` : ""})`;
-    } else if (is7DayInactivity) {
-      reportCategoryHeader = `🚨 <b>[AUTO-PURGE: 7-DAY INACTIVITY EXPIRED]</b>`;
-      deletionModeBadge = `⏰ AUTO DELETE (7-DAY INACTIVITY)`;
-      closeReasonFormatted = `⏰ AUTO-PURGE: Inactive for 7 consecutive days without activity`;
+    } else if (isInactivityPurge) {
+      reportCategoryHeader = `🚨 <b>[AUTO-PURGE: ${purgeDaysCount}-DAY INACTIVITY EXPIRED]</b>`;
+      deletionModeBadge = `⏰ AUTO DELETE (${purgeDaysCount}-DAY INACTIVITY)`;
+      closeReasonFormatted = `⏰ AUTO-PURGE: Inactive for ${purgeDaysCount} consecutive days without activity`;
     } else {
       reportCategoryHeader = `🚨 <b>[AUTO-PURGE: ALL PARTICIPANTS LEFT]</b>`;
       deletionModeBadge = `⏰ AUTO DELETE (0 MEMBERS)`;
@@ -1060,7 +1062,7 @@ async function archiveAndPurgePrivateRoom(room, closeReason = "zero_members", cl
         deletedMsgs,
         participantAvatars,
         chatMediaDir: CHAT_MEDIA_DIR,
-        is7DayInactivity: closeReason === "7_day_inactivity_guardian",
+        is7DayInactivity: isInactivityPurge,
       });
       telegramDelivered = true;
     } catch (auditBotErr) {

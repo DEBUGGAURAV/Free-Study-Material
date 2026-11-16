@@ -15,6 +15,7 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { JWT_SECRET, authenticateToken, setAuthCookie } = require("../middleware/auth");
+const { getClientIp } = require("../middleware/rateLimit");
 const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -98,18 +99,6 @@ function getRpInfo(req) {
   }
 }
 
-function getClientIp(req) {
-  if (!req) return "127.0.0.1";
-  const forwarded = req.headers ? req.headers["x-forwarded-for"] : null;
-  if (forwarded) {
-    const list = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-    return String(list).split(",")[0].trim().replace(/^::ffff:/, "");
-  }
-  const realIp = req.headers ? req.headers["x-real-ip"] : null;
-  if (realIp) return String(realIp).trim().replace(/^::ffff:/, "");
-  const remote = req.socket?.remoteAddress || req.ip || "127.0.0.1";
-  return String(remote).trim().replace(/^::ffff:/, "");
-}
 
 const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
 const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];

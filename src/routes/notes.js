@@ -8,7 +8,7 @@ const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { getAllCachedNotes, getTursoNotesCacheStats } = require("../services/tursoNotesCacheService");
-const { downloadLimiter } = require("../middleware/rateLimit");
+const { downloadLimiter, getClientIp } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel, getDocumentBufferFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAuth, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
@@ -1174,7 +1174,7 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
     if (!user && typeof ticket === "string") {
       const ticketMeta = ephemeralStreamTickets.get(ticket);
       if (ticketMeta && ticketMeta.noteId === req.params.id && ticketMeta.expires > Date.now()) {
-        const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
+        const clientIp = getClientIp(req);
         const isIpMatch = !ticketMeta.ip || ticketMeta.ip === clientIp || clientIp === "127.0.0.1" || clientIp.includes("::1");
         if (isIpMatch) {
           user = { id: ticketMeta.userId, role: ticketMeta.role, email: ticketMeta.email };
@@ -1575,7 +1575,7 @@ function renderDownloadPausedHtml(noteTitle = "Academic Document", noteId = "", 
  */
 router.post("/:id/stream-ticket", authenticateToken, requireAuth, (req, res) => {
   const { id } = req.params;
-  const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
+  const clientIp = getClientIp(req);
   const ticket = crypto.randomBytes(16).toString("hex");
 
   ephemeralStreamTickets.set(ticket, {
@@ -1705,7 +1705,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       ramCache.set(`note_${id}`, note, 3 * 3600);
     }
 
-    const clientIp = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0] || req.ip || "127.0.0.1").trim();
+    const clientIp = getClientIp(req);
 
     // Verify requesting user token (cookie, ephemeral ticket, query token, or auth header)
     let requestingUser = null;

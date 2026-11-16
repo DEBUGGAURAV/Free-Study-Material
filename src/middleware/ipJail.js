@@ -800,6 +800,10 @@ function ipJailFirewall(req, res, next) {
 
   // 4. Track sliding window of requests (Generous 600 requests per 60s window = 10 req/s sustained)
   // Accommodates college Wi-Fi where hundreds of students share a single public IP
+  if (ipRequestHistory.size > 10000) {
+    const oldest = Array.from(ipRequestHistory.keys()).slice(0, 2000);
+    for (const k of oldest) ipRequestHistory.delete(k);
+  }
   let history = ipRequestHistory.get(ip) || [];
   history = history.filter((t) => now - t < 60000);
   history.push(now);

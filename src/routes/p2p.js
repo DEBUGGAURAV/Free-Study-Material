@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { p2pLimiter } = require("../middleware/rateLimit");
+const { p2pLimiter, getClientIp } = require("../middleware/rateLimit");
 
 // Apply rate limiting across all P2P Mesh & AirDrop signaling endpoints
 router.use(p2pLimiter);
@@ -52,7 +52,7 @@ router.post("/announce", (req, res) => {
       return res.status(400).json({ success: false, message: "Identifier exceeds permitted length" });
     }
 
-    const clientIp = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "127.0.0.1";
+    const clientIp = getClientIp(req);
     const subnet = clientIp.split(".").slice(0, 3).join("."); // Group by local subnet / Wi-Fi range
 
     if (!meshSeeders.has(noteId)) {

@@ -2,10 +2,33 @@ const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
 const { JWT_SECRET } = require("./auth");
 
+function cleanIpString(raw) {
+  if (!raw || typeof raw !== "string") return "";
+  let clean = raw.trim().replace(/^::ffff:/, "");
+  // If bracketed IPv6 with optional port e.g. [2001:db8::1]:8080 or [::1]
+  if (clean.startsWith("[") && clean.includes("]")) {
+    const end = clean.indexOf("]");
+    return clean.slice(1, end).trim();
+  }
+  // If IPv4 with port e.g. 192.168.1.1:8080
+  if (clean.includes(".") && clean.includes(":")) {
+    return clean.split(":")[0].trim();
+  }
+  return clean;
+}
+
+function isPrivateIp(ip) {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") return true;
+  if (ip.startsWith("10.") || ip.startsWith("192.168.")) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)) return true;
+  if (ip.startsWith("fc00:") || ip.startsWith("fe80:")) return true;
+  return false;
+}
+
 /**
  * Robust Client IP Extractor
  * Extracts true client IP address behind Cloudflare CDN, Render reverse proxies, and direct TCP sockets.
- * Handles arrays, strings, missing headers, and strips IPv4-mapped IPv6 prefixes (::ffff:).
+ * Handles arrays, strings, missing headers, and properly preserves full IPv6 addresses while stripping ports.
  * Fully try-catch wrapped to guarantee zero exceptions.
  */
 function getClientIp(req) {
@@ -17,20 +40,16 @@ function getClientIp(req) {
     const cfIp = headers["cf-connecting-ip"];
     if (cfIp) {
       const val = Array.isArray(cfIp) ? cfIp[0] : cfIp;
-      if (typeof val === "string" && val.trim()) {
-        const clean = val.trim().replace(/^::ffff:/, "");
-        if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
-      }
+      const clean = cleanIpString(val);
+      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
     }
 
     // 2. Real-IP / True-Client-IP headers (Reverse Proxies & CDNs)
     const realIp = headers["x-real-ip"] || headers["true-client-ip"] || headers["x-client-ip"];
     if (realIp) {
       const val = Array.isArray(realIp) ? realIp[0] : realIp;
-      if (typeof val === "string" && val.trim()) {
-        const clean = val.trim().replace(/^::ffff:/, "");
-        if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
-      }
+      const clean = cleanIpString(val);
+      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
     }
 
     // 3. X-Forwarded-For header (handles array or comma-separated string)
@@ -39,23 +58,18 @@ function getClientIp(req) {
       const fwdStr = Array.isArray(fwd) ? fwd.join(",") : String(fwd);
       const ips = fwdStr
         .split(",")
-        .map((s) => s.trim().replace(/^::ffff:/, "").split(":")[0])
+        .map(cleanIpString)
         .filter(Boolean);
 
       // Prefer the first public, non-private IP
-      const publicIp = ips.find((ip) => {
-        if (!ip || ip === "127.0.0.1" || ip === "::1" || ip === "localhost") return false;
-        if (ip.startsWith("10.") || ip.startsWith("192.168.")) return false;
-        if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)) return false;
-        return true;
-      });
+      const publicIp = ips.find((ip) => !isPrivateIp(ip));
       if (publicIp) return publicIp;
       // Note: If only private IPs exist in X-Forwarded-For, do not trust client header to prevent rate-limit immunity spoofing; fall through to req.ip / socket
     }
 
     // 4. Express proxy-verified client IP (Respects app.set("trust proxy", true))
     if (req.ip && typeof req.ip === "string" && req.ip.trim()) {
-      const clean = req.ip.trim().replace(/^::ffff:/, "");
+      const clean = cleanIpString(req.ip);
       if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
     }
 
@@ -65,7 +79,7 @@ function getClientIp(req) {
       req.socket?.remoteAddress ||
       "127.0.0.1";
 
-    return String(directIp).trim().replace(/^::ffff:/, "");
+    return cleanIpString(directIp) || "127.0.0.1";
   } catch (err) {
     return "127.0.0.1";
   }

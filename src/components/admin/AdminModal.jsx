@@ -749,7 +749,8 @@ export default function AdminModal({
   };
 
   const handleRunInactivityPurge = async () => {
-    if (!window.confirm("Run the 90-day inactive account check now? Any accounts inactive for >90 days will have their full dossier sent to Telegram Topic 8 and be safely removed.")) {
+    const purgeLimit = dbRetentionDays || 90;
+    if (!window.confirm(`Run the ${purgeLimit}-day inactive account check now? Any accounts inactive for >${purgeLimit} days will have their full dossier sent to Telegram Topic 8 and be safely removed.`)) {
       return;
     }
     try {

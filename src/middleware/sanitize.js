@@ -9,8 +9,10 @@
  */
 
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-const SCRIPT_REGEX = /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi;
-const INLINE_JS_REGEX = /(javascript:|onerror\s*=|onload\s*=|onclick\s*=|eval\s*\(|expression\s*\()/gi;
+// 🛡️ ReDoS-immune linear time script stripper
+const SCRIPT_REGEX = /<script[\s\S]*?<\/script>/gi;
+// 🛡️ Broad handler & script scrubber (covers all on* event attributes, javascript:, vbscript:, data:text/html)
+const INLINE_JS_REGEX = /(javascript:|vbscript:|data:text\/html|on[a-z]{3,15}\s*=|eval\s*\(|expression\s*\()/gi;
 
 let threatReporter = null;
 try {

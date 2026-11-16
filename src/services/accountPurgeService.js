@@ -174,6 +174,9 @@ async function purgeInactiveAccounts({ force = false } = {}) {
     return { success: false, message: "Database not connected", purgedCount: 0 };
   }
 
+  // 🔄 Always sync latest admin inactivity threshold from database before running purge
+  await initAccountPurgeSettings();
+
   const now = Date.now();
   const purgedUsers = [];
 
@@ -275,6 +278,7 @@ async function purgeInactiveAccounts({ force = false } = {}) {
 }
 
 module.exports = {
+  initAccountPurgeSettings,
   purgeInactiveAccounts,
   getDefaultInactivityDays,
   setDefaultInactivityDays,

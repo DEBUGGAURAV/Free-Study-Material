@@ -2831,9 +2831,11 @@ async function dispatchChatForensicAudit({
       // 2. Send Full Transcript Document (.txt)
       const cleanRoomName = room.name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
       const isUserManual = teleHtml.includes("USER MANUAL DELETION");
-      const is7Day = teleHtml.includes("7-DAY INACTIVITY");
-      const deletePrefix = isUserManual ? "User_Delete" : is7Day ? "Auto_Purge_7Day" : "Auto_Purge_0Members";
-      const deletionLabel = isUserManual ? "🔴 USER DELETE" : is7Day ? "⏰ AUTO-PURGE (7-Day Limit)" : "⏰ AUTO-PURGE (0 Members)";
+      const inactivityMatch = teleHtml.match(/(\d+)-DAY INACTIVITY/);
+      const isAutoInactivity = Boolean(inactivityMatch || teleHtml.includes("INACTIVITY EXPIRED"));
+      const daysCount = inactivityMatch ? inactivityMatch[1] : (chatBotSettings.privateRoomInactivityDays || 7);
+      const deletePrefix = isUserManual ? "User_Delete" : isAutoInactivity ? `Auto_Purge_${daysCount}Day` : "Auto_Purge_0Members";
+      const deletionLabel = isUserManual ? "🔴 USER DELETE" : isAutoInactivity ? `⏰ AUTO-PURGE (${daysCount}-Day Limit)` : "⏰ AUTO-PURGE (0 Members)";
       const docFilename = `Audit_Pod_${deletePrefix}_${cleanRoomName}_${Date.now()}.txt`;
       const transcriptBuffer = Buffer.from(transcriptText, "utf-8");
 

@@ -863,7 +863,8 @@ router.post("/users/:id/inactivity-days", authenticateToken, checkAdminOrPermiss
  */
 router.get("/inactivity-settings", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
-    const { getDefaultInactivityDays } = require("../services/accountPurgeService");
+    const { initAccountPurgeSettings, getDefaultInactivityDays } = require("../services/accountPurgeService");
+    await initAccountPurgeSettings();
     return res.json({ success: true, defaultInactivityDays: getDefaultInactivityDays() });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
