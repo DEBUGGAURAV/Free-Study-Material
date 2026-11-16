@@ -528,7 +528,7 @@ export default function TabActivities(props) {
                     <span style={{ padding: "2px 7px", borderRadius: "4px", background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: "0.68rem", flexShrink: 0 }}>
                       {log.action}
                     </span>
-                    <span style={{ color: "#e2e8f0", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                    <span style={{ color: "#0f172a", fontWeight: 600, textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                       {log.details || log.deviceName}
                     </span>
                     {log.ipAddress && log.ipAddress !== "Active IP" && log.ipAddress !== "127.0.0.1" && (

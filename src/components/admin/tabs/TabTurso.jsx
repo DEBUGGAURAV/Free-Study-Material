@@ -2304,17 +2304,17 @@ export default function TabTurso(props) {
                                       ID: {a.roomId} {a.secretCode ? `• Code: ${a.secretCode}` : ""}
                                     </div>
                                   </td>
-                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                  <td style={{ padding: "10px", color: "#0f172a" }}>
                                     <div>{a.creatorName || a.createdBy || "Student"}</div>
                                     <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{a.createdBy}</div>
                                   </td>
-                                  <td style={{ padding: "10px", color: "#38bdf8" }}>
+                                  <td style={{ padding: "10px", color: "#0284c7" }}>
                                     {a.durationMins || 0} mins
                                   </td>
-                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                  <td style={{ padding: "10px", color: "#0f172a" }}>
                                     {a.participantsCount || 0} students
                                   </td>
-                                  <td style={{ padding: "10px", color: "#e2e8f0" }}>
+                                  <td style={{ padding: "10px", color: "#0f172a" }}>
                                     <div>{a.messagesCount || 0} msgs</div>
                                     {a.attachmentsCount > 0 && (
                                       <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)" }}>

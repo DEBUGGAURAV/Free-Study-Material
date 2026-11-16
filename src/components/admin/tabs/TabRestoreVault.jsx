@@ -184,7 +184,7 @@ export default function TabRestoreVault(props) {
                                 >
                                   {isNote ? "NOTE" : (item.originalCollection || "ITEM").toUpperCase()}
                                 </span>
-                                <span style={{ fontWeight: 700, color: "#fff" }}>
+                                <span style={{ fontWeight: 700, color: "#0f172a" }}>
                                   {item.title || item.name || item.id}
                                 </span>
                               </div>

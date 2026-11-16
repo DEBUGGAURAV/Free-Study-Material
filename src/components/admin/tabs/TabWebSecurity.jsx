@@ -527,7 +527,7 @@ export default function TabWebSecurity(props) {
             </span>
             <Ban size={16} color="#f87171" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: totalQuarantineCount > 0 ? "#ef4444" : "#f1f5f9", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: totalQuarantineCount > 0 ? "#dc2626" : "#0f172a", marginTop: "4px" }}>
             {totalQuarantineCount}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -544,12 +544,12 @@ export default function TabWebSecurity(props) {
           boxShadow: pendingAppealsCount > 0 ? "0 0 15px rgba(56, 189, 248, 0.2)" : "none",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#38bdf8", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 700, textTransform: "uppercase" }}>
               Appeals Desk (Topic 750)
             </span>
-            <MessageSquare size={16} color="#38bdf8" />
+            <MessageSquare size={16} color="#0284c7" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: pendingAppealsCount > 0 ? "#38bdf8" : "#f1f5f9", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: pendingAppealsCount > 0 ? "#0284c7" : "#0f172a", marginTop: "4px" }}>
             {pendingAppealsCount} Pending
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -566,12 +566,12 @@ export default function TabWebSecurity(props) {
           boxShadow: blockedUsers.length > 0 ? "0 0 15px rgba(239, 68, 68, 0.25)" : "none",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#f87171", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#dc2626", fontWeight: 700, textTransform: "uppercase" }}>
               Blocked Accounts (Security Bans)
             </span>
-            <Ban size={16} color="#ef4444" />
+            <Ban size={16} color="#dc2626" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: blockedUsers.length > 0 ? "#ef4444" : "#f1f5f9", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: blockedUsers.length > 0 ? "#dc2626" : "#0f172a", marginTop: "4px" }}>
             {blockedUsers.length}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -587,12 +587,12 @@ export default function TabWebSecurity(props) {
           padding: "14px 16px",
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.72rem", color: "#fbbf24", fontWeight: 700, textTransform: "uppercase" }}>
+            <span style={{ fontSize: "0.72rem", color: "#b45309", fontWeight: 700, textTransform: "uppercase" }}>
               Locked Accounts (Brute Force)
             </span>
-            <Lock size={16} color="#fbbf24" />
+            <Lock size={16} color="#b45309" />
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: lockedAccounts.length > 0 ? "#f59e0b" : "#f1f5f9", marginTop: "4px" }}>
+          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: lockedAccounts.length > 0 ? "#b45309" : "#0f172a", marginTop: "4px" }}>
             {lockedAccounts.length}
           </div>
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim, #94a3b8)", marginTop: "2px" }}>
@@ -1459,7 +1459,7 @@ export default function TabWebSecurity(props) {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f1f5f9" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
                   {s.icon || "🛡️"} {s.name}
                 </span>
                 <span style={{
@@ -1954,10 +1954,10 @@ export default function TabWebSecurity(props) {
                           {ev.severity || "HIGH"}
                         </span>
                       </td>
-                      <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono, monospace)", color: "#cbd5e1" }}>
+                      <td style={{ padding: "7px 12px", fontFamily: "var(--font-mono, monospace)", color: "#334155" }}>
                         {ev.ip || "Unknown"}
                       </td>
-                      <td style={{ padding: "7px 12px", color: "#f1f5f9" }}>
+                      <td style={{ padding: "7px 12px", color: "#0f172a" }}>
                         {ev.detail || ev.type}
                       </td>
                       <td style={{ padding: "7px 12px", color: "#34d399", fontWeight: 700 }}>

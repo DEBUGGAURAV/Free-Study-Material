@@ -904,7 +904,7 @@ export default function TabSecurityBot(props) {
 
                 {/* Group Chat ID Input */}
                 <div style={{ marginBottom: "16px" }}>
-                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#e2e8f0", display: "block", marginBottom: "6px" }}>
+                  <label style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a", display: "block", marginBottom: "6px" }}>
                     Telegram Supergroup Chat ID (Starts with -100...)
                   </label>
                   <input

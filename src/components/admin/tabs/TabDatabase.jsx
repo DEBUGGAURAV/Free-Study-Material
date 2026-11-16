@@ -631,7 +631,7 @@ export default function TabDatabase(props) {
                             <td style={{ padding: "10px 16px", color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {doc.id}
                             </td>
-                            <td style={{ padding: "10px 16px", color: "#cbd5e1", maxWidth: "450px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "10px 16px", color: "#334155", maxWidth: "450px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               {doc.title || doc.name || doc.email || JSON.stringify(doc)}
                             </td>
                             <td style={{ padding: "10px 16px", textAlign: "right" }}>

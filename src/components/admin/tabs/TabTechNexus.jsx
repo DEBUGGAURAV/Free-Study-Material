@@ -1019,7 +1019,7 @@ export default function TabTechNexus(props) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <Scissors size={15} color="#38bdf8" />
-                        <span style={{ fontSize: "0.78rem", color: "#e2e8f0" }}>1-Click Formula &amp; Diagram Clipper</span>
+                        <span style={{ fontSize: "0.78rem", color: "#0f172a" }}>1-Click Formula &amp; Diagram Clipper</span>
                       </div>
                       <input
                         type="checkbox"
@@ -1033,7 +1033,7 @@ export default function TabTechNexus(props) {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <RotateCcw size={15} color="#10b981" />
-                        <span style={{ fontSize: "0.78rem", color: "#e2e8f0" }}>IndexedDB PWA Offline Queue &amp; Sync</span>
+                        <span style={{ fontSize: "0.78rem", color: "#0f172a" }}>IndexedDB PWA Offline Queue &amp; Sync</span>
                       </div>
                       <input
                         type="checkbox"
@@ -1049,7 +1049,7 @@ export default function TabTechNexus(props) {
                         <QrCode size={16} color="#06b6d4" />
                         <div>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#f8fafc" }}>Page Discussion &amp; QR Bridge (Preview Mode)</span>
+                            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>Page Discussion &amp; QR Bridge (Preview Mode)</span>
                             <span style={{ fontSize: "0.62rem", background: "rgba(6, 182, 212, 0.2)", color: "#67e8f9", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>
                               Preview Only
                             </span>
@@ -1072,7 +1072,7 @@ export default function TabTechNexus(props) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <HardDrive size={16} color="#c084fc" />
-                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#f8fafc" }}>Student Device Cache &amp; Storage Controller</span>
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>Student Device Cache &amp; Storage Controller</span>
                         </div>
                         <span style={{ fontSize: "0.68rem", color: "#34d399", background: "rgba(16, 185, 129, 0.15)", padding: "2px 6px", borderRadius: "4px", fontWeight: 700 }}>
                           ⚡ 0 DB Reads/Writes
@@ -1153,7 +1153,7 @@ export default function TabTechNexus(props) {
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                           <Zap size={15} color="#f59e0b" />
-                          <span style={{ fontSize: "0.78rem", color: "#e2e8f0" }}>WebRTC Collaborative Study Rooms</span>
+                          <span style={{ fontSize: "0.78rem", color: "#0f172a" }}>WebRTC Collaborative Study Rooms</span>
                         </div>
                         <input
                           type="checkbox"
@@ -1492,7 +1492,7 @@ export default function TabTechNexus(props) {
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", marginBottom: "14px" }}>
                   <div>
-                    <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#f8fafc", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
                       <span>✨ Zero-Demerit Student Growth &amp; Revision Controls</span>
                     </div>
                     <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "2px" }}>
@@ -1715,7 +1715,7 @@ export default function TabTechNexus(props) {
                   </div>
                   {techTelemetry?.webPush?.lastBroadcastAt && (
                     <div style={{ marginTop: "8px", fontSize: "0.71rem", color: "#94a3b8" }}>
-                      Last Broadcast: <strong style={{ color: "#e2e8f0" }}>{techTelemetry.webPush.lastBroadcastTitle || "Alert"}</strong> • {new Date(techTelemetry.webPush.lastBroadcastAt).toLocaleString()}
+                      Last Broadcast: <strong style={{ color: "#0f172a" }}>{techTelemetry.webPush.lastBroadcastTitle || "Alert"}</strong> • {new Date(techTelemetry.webPush.lastBroadcastAt).toLocaleString()}
                     </div>
                   )}
                 </div>

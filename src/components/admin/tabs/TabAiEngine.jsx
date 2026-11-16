@@ -1979,7 +1979,7 @@ export default function TabAiEngine() {
               <MessageSquare size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#f8fafc" }}>
+              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#0f172a" }}>
                 Telegram Support Supergroup Sub-Topics
               </h3>
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
@@ -2150,7 +2150,7 @@ export default function TabAiEngine() {
               <Database size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#f8fafc" }}>
+              <h3 style={{ fontSize: "1.02rem", fontWeight: 700, margin: 0, color: "#0f172a" }}>
                 AI Search Logs & Reports (Turso Edge Database)
               </h3>
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "2px 0 0 0" }}>
@@ -2505,7 +2505,7 @@ export default function TabAiEngine() {
                         }}
                       >
                         <td style={{ padding: "10px 12px" }}>
-                          <div style={{ fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
                             <User size={14} color="#38bdf8" />
                             <span>{st.userName || "Student Scholar"}</span>
                           </div>
@@ -2651,7 +2651,7 @@ export default function TabAiEngine() {
                         </td>
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                            <div style={{ fontWeight: 600, color: "#f8fafc" }}>{log.userName || "Student"}</div>
+                            <div style={{ fontWeight: 600, color: "#0f172a" }}>{log.userName || "Student"}</div>
                             <button
                               type="button"
                               onClick={() => {
