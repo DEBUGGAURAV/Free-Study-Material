@@ -2355,7 +2355,7 @@ export default function AdminModal({
       alert(res.message || "Item restored successfully!");
       setDeletedNoteIds((prev) => {
         const next = new Set(prev);
-        const origId = itemId.replace(/^notes_/, "");
+        const origId = itemId.replace(/^(notes_|users_|notices_)/, "");
         next.delete(itemId);
         next.delete(origId);
         return next;
@@ -2375,6 +2375,7 @@ export default function AdminModal({
       const res = await api.deletePermanentItem(itemId);
       alert(res.message || "Item permanently purged from Restore Vault.");
       loadRecycleBinItems();
+      loadDatabaseOverview();
     } catch (err) {
       alert("Failed to purge item: " + err.message);
     }
@@ -2421,12 +2422,19 @@ export default function AdminModal({
     if (selectedRecycleIds.length === 0) return;
     if (!window.confirm(`Restore ${selectedRecycleIds.length} selected items back to live database?`)) return;
     try {
+      let successCount = 0;
       for (const id of selectedRecycleIds) {
-        await api.restoreItem(id).catch(() => {});
+        try {
+          await api.restoreItem(id);
+          successCount++;
+        } catch (_) {}
       }
-      alert(`✅ Restored ${selectedRecycleIds.length} items!`);
+      alert(`✅ Successfully restored ${successCount} of ${selectedRecycleIds.length} items!`);
+      setSelectedRecycleIds([]);
       loadRecycleBinItems();
       if (onRefreshNotes) onRefreshNotes();
+      loadStudents();
+      loadDatabaseOverview();
     } catch (err) {
       alert("Batch restore error: " + err.message);
     }
@@ -2439,8 +2447,10 @@ export default function AdminModal({
       for (const id of selectedRecycleIds) {
         await api.deletePermanentItem(id).catch(() => {});
       }
-      alert(`✅ Purged ${selectedRecycleIds.length} items!`);
+      alert(`🗑️ Permanently purged ${selectedRecycleIds.length} items!`);
+      setSelectedRecycleIds([]);
       loadRecycleBinItems();
+      loadDatabaseOverview();
     } catch (err) {
       alert("Batch purge error: " + err.message);
     }

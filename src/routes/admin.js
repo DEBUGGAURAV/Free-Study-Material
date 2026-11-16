@@ -1471,27 +1471,59 @@ router.get("/recycle-bin/notes", authenticateToken, checkAdminOrPermission("mana
 /**
  * POST /api/admin/recycle-bin/restore/:id
  * Universal Restore: Restores any item back to its original collection (notes, users, notices)
+ * Handles rawId, cleanId, and prefix-stripped IDs with fallback to both deleted_records and deleted_notes.
  */
-router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermission(["manage_notes", "manage_users", "all"]), async (req, res) => {
   try {
-    const { id } = req.params;
+    const rawId = String(req.params.id || "").trim();
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    const cleanId = rawId.replace(/^(notes_|users_|notices_)/, "");
 
-    let recordDoc = await db.collection("deleted_records").doc(id).get();
-    let isFromRecords = true;
+    let recordDoc = null;
+    let foundDocId = null;
+    let isFromRecords = false;
 
-    if (!recordDoc.exists) {
-      recordDoc = await db.collection("deleted_notes").doc(id).get();
-      isFromRecords = false;
+    // 1. Search in deleted_records (supports rawId, prefixed cleanId, or cleanId)
+    const recordsCandidates = [rawId, `notes_${cleanId}`, `users_${cleanId}`, `notices_${cleanId}`, cleanId];
+    for (const cand of recordsCandidates) {
+      if (!cand) continue;
+      const d = await db.collection("deleted_records").doc(cand).get().catch(() => null);
+      if (d && d.exists) {
+        recordDoc = d;
+        foundDocId = cand;
+        isFromRecords = true;
+        break;
+      }
     }
 
-    if (!recordDoc.exists) {
+    // 2. Search in deleted_notes (supports cleanId, rawId, or notes_cleanId)
+    if (!recordDoc) {
+      const notesCandidates = [cleanId, rawId, `notes_${cleanId}`];
+      for (const cand of notesCandidates) {
+        if (!cand) continue;
+        const d = await db.collection("deleted_notes").doc(cand).get().catch(() => null);
+        if (d && d.exists) {
+          recordDoc = d;
+          foundDocId = cand;
+          isFromRecords = false;
+          break;
+        }
+      }
+    }
+
+    if (!recordDoc || !recordDoc.exists) {
       return res.status(404).json({ success: false, message: "Item not found in Restore Vault." });
     }
 
-    const data = recordDoc.data();
-    const targetCollection = data.collectionName || "notes";
-    const originalDocId = data.originalId || id.replace(`${targetCollection}_`, "");
+    const data = recordDoc.data() || {};
+    let targetCollection = data.collectionName || "";
+    if (!targetCollection) {
+      if (foundDocId.startsWith("users_") || data.email || data.rollNumber) targetCollection = "users";
+      else if (foundDocId.startsWith("notices_")) targetCollection = "notices";
+      else targetCollection = "notes";
+    }
+
+    const originalDocId = data.originalId || cleanId || foundDocId.replace(/^(notes_|users_|notices_)/, "");
     const typeLabel = data.typeLabel || (targetCollection === "notes" ? "Note" : targetCollection === "users" ? "Student" : "Notice");
 
     delete data.archivedAt;
@@ -1505,10 +1537,16 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
       updatedAt: new Date().toISOString(),
     });
 
-    if (isFromRecords) {
-      await db.collection("deleted_records").doc(id).delete();
-    }
-    await db.collection("deleted_notes").doc(originalDocId).delete().catch(() => {});
+    // Clean up archive collections across all candidate keys
+    await Promise.all([
+      db.collection("deleted_records").doc(rawId).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`notes_${originalDocId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`users_${originalDocId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`notices_${originalDocId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(originalDocId).delete().catch(() => {}),
+      db.collection("deleted_notes").doc(originalDocId).delete().catch(() => {}),
+      db.collection("deleted_notes").doc(rawId).delete().catch(() => {}),
+    ]);
 
     if (targetCollection === "notes") {
       try {
@@ -1523,6 +1561,7 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
     return res.json({
       success: true,
       message: `${typeLabel} "${data.title || data.name || originalDocId}" restored successfully!`,
+      restoredId: originalDocId,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -1533,7 +1572,7 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
  * POST /api/admin/recycle-bin/restore-all
  * Universal Restore All: Restores every item back to its rightful collection
  */
-router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
+router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermission(["manage_notes", "manage_users", "all"]), async (req, res) => {
   try {
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
 
@@ -1543,11 +1582,20 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
     ]);
 
     let restoredCount = 0;
+    const restoredIds = new Set();
 
     for (const doc of recSnap.docs) {
-      const data = doc.data();
-      const targetCollection = data.collectionName || "notes";
-      const originalDocId = data.originalId || doc.id.replace(`${targetCollection}_`, "");
+      const data = doc.data() || {};
+      let targetCollection = data.collectionName || "";
+      if (!targetCollection) {
+        if (doc.id.startsWith("users_") || data.email || data.rollNumber) targetCollection = "users";
+        else if (doc.id.startsWith("notices_")) targetCollection = "notices";
+        else targetCollection = "notes";
+      }
+      const originalDocId = data.originalId || doc.id.replace(/^(notes_|users_|notices_)/, "");
+      const key = `${targetCollection}_${originalDocId}`;
+      if (restoredIds.has(key)) continue;
+      restoredIds.add(key);
 
       delete data.archivedAt;
       delete data.archivedBy;
@@ -1559,20 +1607,38 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
         ...data,
         updatedAt: new Date().toISOString(),
       });
-      await db.collection("deleted_records").doc(doc.id).delete();
+      await Promise.all([
+        db.collection("deleted_records").doc(doc.id).delete().catch(() => {}),
+        db.collection("deleted_notes").doc(originalDocId).delete().catch(() => {}),
+      ]);
       restoredCount++;
     }
 
     for (const doc of notesSnap.docs) {
-      const data = doc.data();
+      const originalDocId = doc.id.replace(/^notes_/, "");
+      const key = `notes_${originalDocId}`;
+      if (restoredIds.has(key)) {
+        await db.collection("deleted_notes").doc(doc.id).delete().catch(() => {});
+        continue;
+      }
+      restoredIds.add(key);
+
+      const data = doc.data() || {};
       delete data.archivedAt;
       delete data.archivedBy;
+      delete data.collectionName;
+      delete data.typeLabel;
+      delete data.originalId;
 
-      await db.collection("notes").doc(doc.id).set({
+      await db.collection("notes").doc(originalDocId).set({
         ...data,
         updatedAt: new Date().toISOString(),
       });
-      await db.collection("deleted_notes").doc(doc.id).delete();
+      await Promise.all([
+        db.collection("deleted_notes").doc(doc.id).delete().catch(() => {}),
+        db.collection("deleted_records").doc(`notes_${originalDocId}`).delete().catch(() => {}),
+        db.collection("deleted_records").doc(originalDocId).delete().catch(() => {}),
+      ]);
       restoredCount++;
     }
 
@@ -1593,18 +1659,39 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
  */
 router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
-    const { id } = req.params;
+    const rawId = String(req.params.id || "").trim();
     if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    const cleanId = rawId.replace(/^(notes_|users_|notices_)/, "");
 
-    const recDoc = await db.collection("deleted_records").doc(id).get();
-    const noteDoc = await db.collection("deleted_notes").doc(id).get();
-    const data = (recDoc.exists ? recDoc.data() : null) || (noteDoc.exists ? noteDoc.data() : null);
-    if (data?.telegramMessageId && deleteTelegramMessages) {
+    const candidates = [rawId, `notes_${cleanId}`, `users_${cleanId}`, `notices_${cleanId}`, cleanId];
+    let data = null;
+    for (const cand of candidates) {
+      const d1 = await db.collection("deleted_records").doc(cand).get().catch(() => null);
+      if (d1?.exists) {
+        data = d1.data();
+        break;
+      }
+      const d2 = await db.collection("deleted_notes").doc(cand).get().catch(() => null);
+      if (d2?.exists) {
+        data = d2.data();
+        break;
+      }
+    }
+
+    if (data?.telegramMessageId && typeof deleteTelegramMessages === "function") {
       deleteTelegramMessages([data.telegramMessageId]).catch(() => {});
     }
 
-    await db.collection("deleted_records").doc(id).delete();
-    await db.collection("deleted_notes").doc(id).delete();
+    await Promise.all([
+      db.collection("deleted_records").doc(rawId).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`notes_${cleanId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`users_${cleanId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(`notices_${cleanId}`).delete().catch(() => {}),
+      db.collection("deleted_records").doc(cleanId).delete().catch(() => {}),
+      db.collection("deleted_notes").doc(cleanId).delete().catch(() => {}),
+      db.collection("deleted_notes").doc(rawId).delete().catch(() => {}),
+    ]);
+
     return res.json({ success: true, message: "Item permanently purged from Restore Vault." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
