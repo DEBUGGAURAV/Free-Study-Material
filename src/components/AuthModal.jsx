@@ -1415,10 +1415,10 @@ export default function AuthModal({
                   </div>
                   <div>
                     <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.06em", color: "#2563eb", textTransform: "uppercase" }}>
-                      National Academic Passcard
+                      Free Study Material Passcard
                     </div>
                     <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
-                      Free Study Material — Academic Vault
+                      Academic Vault
                     </div>
                   </div>
                 </div>
@@ -2008,20 +2008,6 @@ export default function AuthModal({
                   <KeyRound size={15} color="var(--accent-cyan)" />
                   <span>🔑 Or Sign In with Password instead</span>
                 </button>
-
-                <p style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "14px", marginBottom: "8px" }}>
-                  New user?{" "}
-                  <span
-                    className="auth-light-link"
-                    style={{ color: "var(--accent-cyan)", cursor: "pointer", fontWeight: 600 }}
-                    onClick={() => {
-                      resetAllFormFields();
-                      setTab("signup");
-                    }}
-                  >
-                    Create Account
-                  </span>
-                </p>
               </div>
             ) : (
               /* --- PASSWORD FIRST VIEW --- */

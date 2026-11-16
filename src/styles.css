@@ -2257,67 +2257,223 @@ select option,
     white-space: nowrap;
   }
 
-  /* 📱 Admin Modal Mobile Responsiveness (Zero Hidden Content) */
+  /* 📱 Modal Overlay Fullscreen on Mobile for Admin Studio */
+  .modal-overlay.admin-modal-overlay-wrap,
+  .modal-overlay:has(.admin-modal-container) {
+    padding: 0 !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    overflow: hidden !important;
+  }
+
+  /* 📱 Admin Modal Mobile Responsiveness (Zero Hidden Content & Maximum Scroll Space) */
   .admin-modal-container {
     width: 100vw !important;
     height: 100dvh !important;
+    height: 100vh !important;
     max-width: 100vw !important;
     max-height: 100dvh !important;
     border-radius: 0 !important;
     border: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
   }
 
   .admin-modal-header {
-    padding: 10px 14px !important;
+    padding: 8px 12px !important;
     gap: 8px !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+  }
+
+  .admin-modal-header > div:first-child {
+    gap: 8px !important;
+    min-width: 0 !important;
+    flex: 1 !important;
+  }
+
+  .admin-modal-header > div:first-child > div:first-child {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+  }
+
+  .admin-modal-header > div:first-child > div:first-child svg {
+    width: 17px !important;
+    height: 17px !important;
   }
 
   .admin-modal-header h2 {
-    font-size: 1.02rem !important;
+    font-size: 0.88rem !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 180px !important;
+    line-height: 1.2 !important;
   }
 
+  .admin-modal-header span[style*="LIVE ENGINE"],
+  .admin-modal-header span[style*="ONLINE • EDGE"] {
+    display: none !important;
+  }
+
+  .admin-modal-header .admin-user-info-row {
+    font-size: 0.65rem !important;
+    margin-top: 1px !important;
+    gap: 4px !important;
+  }
+
+  .admin-modal-header .adm-header-actions {
+    flex-shrink: 0 !important;
+    gap: 6px !important;
+  }
+
+  .admin-modal-header button {
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 8px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .admin-modal-header button svg {
+    width: 15px !important;
+    height: 15px !important;
+  }
+
+  /* 📱 KPIs: Sleek 1-Row Touch Scrollable Strip (44px instead of 350px tall vertical block!) */
+  .adm-stat-grid,
   .admin-kpis-strip {
     display: flex !important;
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
-    padding: 8px 12px !important;
-    gap: 8px !important;
+    padding: 5px 8px !important;
+    gap: 6px !important;
     scrollbar-width: none !important;
     -webkit-overflow-scrolling: touch !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+    flex-shrink: 0 !important;
+    background: #f8fafc !important;
   }
 
-  .admin-kpis-strip > div {
-    min-width: 125px !important;
+  .adm-stat-grid::-webkit-scrollbar,
+  .admin-kpis-strip::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .adm-stat-card {
     flex: 0 0 auto !important;
-    padding: 6px 10px !important;
+    min-width: 130px !important;
+    padding: 5px 8px !important;
+    border-radius: 8px !important;
+    gap: 6px !important;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04) !important;
   }
 
+  .adm-stat-card .adm-stat-meta {
+    gap: 3px !important;
+  }
+
+  .adm-stat-card .adm-stat-label {
+    font-size: 0.58rem !important;
+    letter-spacing: 0.2px !important;
+  }
+
+  .adm-stat-card .adm-stat-badge {
+    display: none !important;
+  }
+
+  .adm-stat-card .adm-stat-val {
+    font-size: 1.0rem !important;
+    margin-top: 1px !important;
+    line-height: 1.1 !important;
+  }
+
+  .adm-stat-card .adm-stat-icon-wrap {
+    width: 26px !important;
+    height: 26px !important;
+    border-radius: 6px !important;
+  }
+
+  .adm-stat-card .adm-stat-icon-wrap svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  /* 📱 Tab Navigation Strip */
+  .admin-tab-bar,
   .admin-tab-nav-strip {
-    padding: 6px 10px !important;
+    padding: 5px 8px !important;
     gap: 6px !important;
     flex-wrap: nowrap !important;
+    flex-shrink: 0 !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
   }
 
   .admin-tab-buttons-scroll {
     display: flex !important;
     overflow-x: auto !important;
     flex-wrap: nowrap !important;
-    gap: 6px !important;
+    gap: 5px !important;
     scrollbar-width: none !important;
     -webkit-overflow-scrolling: touch !important;
-    padding-bottom: 2px !important;
+    padding-bottom: 1px !important;
+    flex: 1 !important;
+    min-width: 0 !important;
   }
 
   .admin-tab-buttons-scroll button {
     flex-shrink: 0 !important;
     font-size: 0.72rem !important;
-    padding: 5px 9px !important;
+    padding: 5px 8px !important;
+    border-radius: 8px !important;
   }
 
+  .adm-quickjump-btn {
+    padding: 5px 8px !important;
+    gap: 4px !important;
+    font-size: 0.7rem !important;
+  }
+
+  .adm-quickjump-btn span:nth-of-type(2) {
+    display: none !important; /* Hide ⌘K keyboard badge on phones */
+  }
+
+  /* 📱 Dynamic Tab Body (FULL REMAINING SCREEN HEIGHT FOR SCROLLING) */
   .admin-tab-body {
-    padding: 12px 10px !important;
+    flex: 1 !important;
+    padding: 10px 8px 90px 8px !important;
+    overflow-y: auto !important;
     overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: contain !important;
+    min-height: 0 !important;
+  }
+
+  .adm-hud-banner {
+    padding: 8px 10px !important;
+    margin-bottom: 10px !important;
+    border-radius: 10px !important;
+    gap: 8px !important;
+  }
+
+  .adm-hud-banner h3 {
+    font-size: 0.88rem !important;
+  }
+
+  .adm-hud-banner p {
+    font-size: 0.72rem !important;
+    margin-top: 2px !important;
+  }
+
+  .adm-hud-banner button {
+    padding: 4px 8px !important;
+    font-size: 0.7rem !important;
   }
 
   .admin-tab-body table {

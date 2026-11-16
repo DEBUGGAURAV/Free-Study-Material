@@ -105,6 +105,7 @@ export default function AdminModal({
   onMaintenanceChange,
 }) {
   const [activeTab, setActiveTab] = useState("notes");
+  const [showKpis, setShowKpis] = useState(true);
   const [deletedNoteIds, setDeletedNoteIds] = useState(new Set());
   const isHalfAdmin = currentUser?.role === "half_admin";
 
@@ -2771,7 +2772,7 @@ export default function AdminModal({
     .filter((g) => g.items.length > 0);
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 10000, padding: "8px" }}>
+    <div className="modal-overlay admin-modal-overlay-wrap" onClick={onClose} style={{ zIndex: 10000 }}>
       <div
         className="modal-content admin-modal-container"
         style={{
@@ -2844,7 +2845,7 @@ export default function AdminModal({
                   {health?.status === "online" ? "LIVE ENGINE v3.2 • ZERO-LATENCY EDGE" : "ONLINE • EDGE SHIELD ACTIVE"}
                 </span>
               </div>
-              <div style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <div className="admin-user-info-row" style={{ fontSize: "0.78rem", color: "#64748b", marginTop: "3px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 <span>Signed in as: <strong style={{ color: "#0f172a", fontWeight: 700 }}>{currentUser?.name || currentUser?.email}</strong></span>
                 {isMainAdmin && (
                   <span style={{ background: "#fef3c7", color: "#92400e", padding: "1px 8px", borderRadius: "6px", fontWeight: 800, fontSize: "0.7rem", border: "1px solid #fde68a" }}>
@@ -2860,7 +2861,25 @@ export default function AdminModal({
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="adm-header-actions" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setShowKpis((prev) => !prev)}
+              className="btn-icon"
+              style={{
+                width: "38px",
+                height: "38px",
+                background: showKpis ? "#eff6ff" : "#f8fafc",
+                borderRadius: "9px",
+                border: `1.5px solid ${showKpis ? "#93c5fd" : "#cbd5e1"}`,
+                color: showKpis ? "#2563eb" : "#64748b",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+              title={showKpis ? "Hide KPIs (Maximize Workspace)" : "Show Global KPIs"}
+            >
+              <Activity size={16} />
+            </button>
             <button
               onClick={() => {
                 loadStats();
@@ -2912,7 +2931,8 @@ export default function AdminModal({
         </div>
 
         {/* Global KPIs Bar (Compact Pure White Studio Telemetry Cards) */}
-        <div className="adm-stat-grid">
+        {showKpis && (
+          <div className="adm-stat-grid admin-kpis-strip">
           <AdminStatCard
             label="Vault Materials"
             badge="CATALOG"
@@ -2973,6 +2993,7 @@ export default function AdminModal({
             iconColor="#7c3aed"
           />
         </div>
+        )}
 
         {/* Tab Navigation Strip + Command Launcher Dock */}
         <div
@@ -3130,6 +3151,7 @@ export default function AdminModal({
 
             <button
               type="button"
+              className="adm-quickjump-btn"
               onClick={() => setQuickJumpOpen((prev) => !prev)}
               style={{
                 display: "inline-flex",
@@ -3408,6 +3430,7 @@ export default function AdminModal({
         <div className="admin-tab-body" style={{ flex: 1, overflowY: "auto", padding: "18px 24px", position: "relative" }}>
           {/* Active Module HUD Command Banner */}
           <div
+            className="adm-hud-banner"
             style={{
               padding: "14px 18px",
               borderRadius: "14px",
