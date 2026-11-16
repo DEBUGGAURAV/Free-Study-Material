@@ -182,7 +182,7 @@ export default function TabPerformance(props) {
                         </span>
                       </div>
                       <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: `${(cdnStats?.edgeCdn?.storageUsedMB || 0) > 0 ? "99.4%" : "0%"}`, height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", borderRadius: "999px" }} />
+                        <div style={{ width: `${cdnStats?.edgeCdn?.realCachedPercent ? Math.min(100, Math.max(0, cdnStats.edgeCdn.realCachedPercent)) : (cdnStats?.hitRatio ? Math.min(100, Math.max(0, parseFloat(cdnStats.hitRatio))) : 0)}%`, height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", borderRadius: "999px" }} />
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "3px" }}>
                         <span>Capacity: Unlimited Dynamic NVMe SSD Pool ({cdnStats?.edgeCdn?.pdfCount ?? cdnStats?.edgeCdn?.cachedFilesCount ?? 0} Vault PDFs • {cdnStats?.edgeCdn?.imgCount ?? 0} Images / Media)</span>
@@ -338,7 +338,7 @@ export default function TabPerformance(props) {
                 <div style={{ background: "rgba(15, 23, 42, 0.4)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-md)", padding: "14px" }}>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Edge Hit Ratio</div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#34d399", marginTop: "2px" }}>
-                    {cdnStats?.hitRatio || "99.4%"}
+                    {cdnStats?.hitRatio || "0.0%"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
                     Hits: {cdnStats?.hits ?? 0} • Misses: {cdnStats?.misses ?? 0}

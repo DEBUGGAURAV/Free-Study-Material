@@ -651,7 +651,7 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", marginTop: "6px" }}>
-                    Hit Ratio: {tursoStatus?.cacheStats?.hitRatio || "100%"} | TTL: {tursoStatus?.cacheStats?.ramTtlRemainingSeconds || 0}s
+                    Hit Ratio: {tursoStatus?.cacheStats?.hitRatio || "0.0%"} | TTL: {tursoStatus?.cacheStats?.ramTtlRemainingSeconds || 0}s
                   </div>
                 </div>
 

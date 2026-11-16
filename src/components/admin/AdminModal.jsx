@@ -3001,7 +3001,7 @@ export default function AdminModal({
             badge="HIT RATIO"
             badgeBg="#f5f3ff"
             badgeColor="#7c3aed"
-            val={cdnStats?.hitRatio || "99.4%"}
+            val={cdnStats?.hitRatio ?? "0.0%"}
             valColor="#7c3aed"
             icon={Globe}
             iconBg="#f5f3ff"

@@ -1898,7 +1898,7 @@ router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async
   const totalMisses = Math.max(0, (ramStats.misses || 0));
   const hitRatio = (totalHits + totalMisses > 0)
     ? ((totalHits / (totalHits + totalMisses)) * 100).toFixed(1) + "%"
-    : (cachedFilesCount > 0 ? "99.4%" : "0%");
+    : "0.0%";
 
   return res.json({
     success: true,
