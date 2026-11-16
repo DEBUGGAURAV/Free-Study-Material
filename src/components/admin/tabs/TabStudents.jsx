@@ -466,7 +466,7 @@ export default function TabStudents(props) {
                           border: `1px solid ${student.neverPurge ? "rgba(52, 211, 153, 0.3)" : "rgba(245, 158, 11, 0.3)"}`,
                         }}
                       >
-                        ⏳ {student.neverPurge ? "🛡️ Immune (Never Purged)" : `${student.daysRemaining != null ? student.daysRemaining : 90}d to purge`}
+                        ⏳ {student.neverPurge ? "🛡️ Immune (Never Purged)" : `${student.daysRemaining != null ? student.daysRemaining : (dbRetentionDays || 90)}d to purge`}
                       </span>
                       {!student.neverPurge && student.scheduledPurgeDate && (
                         <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>

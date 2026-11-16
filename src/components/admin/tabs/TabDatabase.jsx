@@ -210,28 +210,51 @@ export default function TabDatabase(props) {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: "12px" }}>
                   {/* Card 1: Student Account Inactivity */}
                   <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "6px" }}>
                       <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#fbbf24" }}>👥 Student Inactivity Purge</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                         <input
                           type="number"
-                          min="7"
+                          min="1"
                           max="3650"
                           value={dbRetentionDays}
-                          onChange={(e) => handleUpdateGlobalInactivityDays(e.target.value)}
+                          onChange={(e) => setDbRetentionDays(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleUpdateGlobalInactivityDays(dbRetentionDays);
+                            }
+                          }}
+                          placeholder="Days"
                           style={{
                             width: "55px",
-                            padding: "3px 6px",
-                            borderRadius: "4px",
+                            padding: "4px 6px",
+                            borderRadius: "6px",
                             background: "rgba(255, 255, 255, 0.08)",
-                            border: "1px solid rgba(255, 255, 255, 0.15)",
+                            border: "1.5px solid rgba(255, 255, 255, 0.2)",
                             color: "#fff",
-                            fontSize: "0.78rem",
+                            fontSize: "0.82rem",
                             textAlign: "center",
-                            fontWeight: 700,
+                            fontWeight: 750,
                           }}
                         />
                         <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>days</span>
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateGlobalInactivityDays(dbRetentionDays)}
+                          style={{
+                            padding: "4px 9px",
+                            fontSize: "0.72rem",
+                            borderRadius: "6px",
+                            background: "linear-gradient(135deg, #2563eb, #06b6d4)",
+                            color: "#fff",
+                            border: "none",
+                            fontWeight: 750,
+                            cursor: "pointer",
+                          }}
+                          title="Save & Enforce this exact limit"
+                        >
+                          💾 Save
+                        </button>
                       </div>
                     </div>
 
@@ -239,25 +262,25 @@ export default function TabDatabase(props) {
                     <div style={{ display: "flex", gap: "4px", marginBottom: "8px", flexWrap: "wrap" }}>
                       <button
                         type="button"
-                        onClick={() => handleUpdateGlobalInactivityDays(Math.max(7, dbRetentionDays - 15))}
-                        title="Reduce global inactivity limit by 15 days"
-                        style={{ padding: "3px 8px", fontSize: "0.68rem", borderRadius: "4px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#fca5a5", cursor: "pointer", fontWeight: 700 }}
+                        onClick={() => handleUpdateGlobalInactivityDays(30)}
+                        title="Set limit to 30 Days"
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: Number(dbRetentionDays) === 30 ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${Number(dbRetentionDays) === 30 ? "#10b981" : "rgba(255, 255, 255, 0.12)"}`, color: Number(dbRetentionDays) === 30 ? "#34d399" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
                       >
-                        -15d
+                        30d
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleUpdateGlobalInactivityDays(Math.min(3650, dbRetentionDays + 15))}
-                        title="Extend global inactivity limit by 15 days"
-                        style={{ padding: "3px 8px", fontSize: "0.68rem", borderRadius: "4px", background: "rgba(34, 197, 94, 0.15)", border: "1px solid rgba(34, 197, 94, 0.3)", color: "#86efac", cursor: "pointer", fontWeight: 700 }}
+                        onClick={() => handleUpdateGlobalInactivityDays(60)}
+                        title="Set limit to 60 Days"
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: Number(dbRetentionDays) === 60 ? "rgba(16, 185, 129, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${Number(dbRetentionDays) === 60 ? "#10b981" : "rgba(255, 255, 255, 0.12)"}`, color: Number(dbRetentionDays) === 60 ? "#34d399" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
                       >
-                        +15d
+                        60d
                       </button>
                       <button
                         type="button"
                         onClick={() => handleUpdateGlobalInactivityDays(90)}
                         title="Reset global threshold to Default 90 Days"
-                        style={{ padding: "3px 8px", fontSize: "0.68rem", borderRadius: "4px", background: dbRetentionDays === 90 ? "rgba(245, 158, 11, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${dbRetentionDays === 90 ? "#f59e0b" : "rgba(255, 255, 255, 0.12)"}`, color: dbRetentionDays === 90 ? "#fbbf24" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: Number(dbRetentionDays) === 90 ? "rgba(245, 158, 11, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${Number(dbRetentionDays) === 90 ? "#f59e0b" : "rgba(255, 255, 255, 0.12)"}`, color: Number(dbRetentionDays) === 90 ? "#fbbf24" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
                       >
                         90d (Default)
                       </button>
@@ -265,9 +288,33 @@ export default function TabDatabase(props) {
                         type="button"
                         onClick={() => handleUpdateGlobalInactivityDays(180)}
                         title="Set global threshold to 180 Days"
-                        style={{ padding: "3px 8px", fontSize: "0.68rem", borderRadius: "4px", background: dbRetentionDays === 180 ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${dbRetentionDays === 180 ? "#38bdf8" : "rgba(255, 255, 255, 0.12)"}`, color: dbRetentionDays === 180 ? "#38bdf8" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: Number(dbRetentionDays) === 180 ? "rgba(56, 189, 248, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${Number(dbRetentionDays) === 180 ? "#38bdf8" : "rgba(255, 255, 255, 0.12)"}`, color: Number(dbRetentionDays) === 180 ? "#38bdf8" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
                       >
                         180d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateGlobalInactivityDays(365)}
+                        title="Set global threshold to 365 Days (1 Year)"
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: Number(dbRetentionDays) === 365 ? "rgba(168, 85, 247, 0.3)" : "rgba(255, 255, 255, 0.06)", border: `1px solid ${Number(dbRetentionDays) === 365 ? "#a855f7" : "rgba(255, 255, 255, 0.12)"}`, color: Number(dbRetentionDays) === 365 ? "#c084fc" : "var(--text-dim)", cursor: "pointer", fontWeight: 700 }}
+                      >
+                        365d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateGlobalInactivityDays(Math.max(1, (parseInt(dbRetentionDays, 10) || 90) - 15))}
+                        title="Reduce global inactivity limit by 15 days"
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#fca5a5", cursor: "pointer", fontWeight: 700 }}
+                      >
+                        -15d
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateGlobalInactivityDays(Math.min(3650, (parseInt(dbRetentionDays, 10) || 90) + 15))}
+                        title="Extend global inactivity limit by 15 days"
+                        style={{ padding: "3px 7px", fontSize: "0.68rem", borderRadius: "5px", background: "rgba(34, 197, 94, 0.15)", border: "1px solid rgba(34, 197, 94, 0.3)", color: "#86efac", cursor: "pointer", fontWeight: 700 }}
+                      >
+                        +15d
                       </button>
                     </div>
 

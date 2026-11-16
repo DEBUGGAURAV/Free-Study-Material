@@ -443,6 +443,17 @@ export default function AdminModal({
   const isMainAdmin = isMasterAdminUser(currentUser);
 
   // Data Loading Lifecycle (Lazy Tab-Scoped for 0ms Studio Opening)
+  // Load global inactivity purge threshold from database immediately on opening Admin Studio
+  useEffect(() => {
+    if (isOpen && isAdminOrManager) {
+      api.getInactivitySettings().then((r) => {
+        if (r?.defaultInactivityDays) {
+          setDbRetentionDays(r.defaultInactivityDays);
+        }
+      }).catch(() => {});
+    }
+  }, [isOpen, isAdminOrManager]);
+
   useEffect(() => {
     if (isOpen && isAdminOrManager) {
       if (activeTab === "notes") {

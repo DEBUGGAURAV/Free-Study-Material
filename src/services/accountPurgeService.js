@@ -38,13 +38,22 @@ function getDefaultInactivityDays() {
 }
 
 async function setDefaultInactivityDays(days) {
-  const cleanDays = Math.max(1, Math.min(3650, parseInt(days, 10) || 90));
+  const parsed = parseInt(days, 10);
+  if (isNaN(parsed) || parsed < 1) {
+    throw new Error("Invalid days: please provide a positive number of days.");
+  }
+  const cleanDays = Math.max(1, Math.min(3650, parsed));
   defaultInactivityDays = cleanDays;
   if (db) {
-    await db.collection("settings").doc("account_purge").set(
-      { defaultInactivityDays: cleanDays, updatedAt: new Date().toISOString() },
-      { merge: true }
-    ).catch(() => {});
+    try {
+      await db.collection("settings").doc("account_purge").set(
+        { defaultInactivityDays: cleanDays, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+      console.log(`[ACCOUNT PURGE] 💾 Persisted inactivity purge limit: ${cleanDays} days to Firestore.`);
+    } catch (err) {
+      console.error("[ACCOUNT PURGE] Database write notice:", err.message);
+    }
   }
   return cleanDays;
 }
