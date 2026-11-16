@@ -4,7 +4,7 @@ const { sendTelegramAuthNotice } = require("./emailService");
 const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
 const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];
 
-let defaultInactivityDays = 7;
+let defaultInactivityDays = 90;
 
 /**
  * Initialize dynamic inactivity days from Firestore settings
@@ -19,6 +19,13 @@ async function initAccountPurgeSettings() {
         defaultInactivityDays = Math.max(1, Math.min(3650, data.defaultInactivityDays));
         console.log(`[ACCOUNT PURGE] 🔄 Loaded custom default inactivity limit: ${defaultInactivityDays} days.`);
       }
+    } else {
+      // Ensure Firestore defaults to 90 days
+      defaultInactivityDays = 90;
+      await db.collection("settings").doc("account_purge").set(
+        { defaultInactivityDays: 90, updatedAt: new Date().toISOString() },
+        { merge: true }
+      ).catch(() => {});
     }
   } catch (err) {
     console.warn("[ACCOUNT PURGE] Could not load account_purge settings from DB:", err.message);
