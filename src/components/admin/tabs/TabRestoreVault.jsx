@@ -5,6 +5,21 @@ import "../../../utils/formatUtils";
 import "../../../utils/hardwareAdaptiveEngine";
 import "../../VirtualPdfReader";
 
+function getRecycleItemType(item) {
+  if (!item) return "notes";
+  const col = (item.collectionName || item.originalCollection || "").toLowerCase();
+  const id = String(item.id || item.originalId || "");
+  const tl = String(item.typeLabel || "").toLowerCase();
+
+  if (col === "users" || col === "students" || id.startsWith("users_") || tl.includes("student") || tl.includes("user") || item.email || item.rollNumber) {
+    return "users";
+  }
+  if (col === "notices" || id.startsWith("notices_") || tl.includes("notice")) {
+    return "notices";
+  }
+  return "notes";
+}
+
 export default function TabRestoreVault(props) {
   const {
     filteredRecycleItems,
@@ -100,24 +115,46 @@ export default function TabRestoreVault(props) {
                 </div>
 
                 <div style={{ display: "flex", gap: "6px" }}>
-                  {["all", "notes", "users", "notices"].map((f) => (
-                    <button
-                      key={f}
-                      onClick={() => setRecycleFilter(f)}
-                      style={{
-                        padding: "6px 12px",
-                        borderRadius: "var(--radius-sm)",
-                        fontSize: "0.78rem",
-                        fontWeight: 700,
-                        background: recycleFilter === f ? "var(--accent-indigo)" : "rgba(255, 255, 255, 0.05)",
-                        color: "#fff",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        cursor: "pointer",
-                      }}
-                    >
-                      {f.toUpperCase()}
-                    </button>
-                  ))}
+                  {["all", "notes", "users", "notices"].map((f) => {
+                    const count = f === "all"
+                      ? (recycleBinItems || []).length
+                      : (recycleBinItems || []).filter((it) => getRecycleItemType(it) === f).length;
+                    const isActive = recycleFilter === f;
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setRecycleFilter(f)}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "var(--radius-sm)",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
+                          background: isActive ? "var(--accent-indigo)" : "rgba(255, 255, 255, 0.05)",
+                          color: "#fff",
+                          border: isActive ? "1px solid #818cf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          boxShadow: isActive ? "0 0 10px rgba(99, 102, 241, 0.35)" : "none",
+                        }}
+                      >
+                        <span>{f.toUpperCase()}</span>
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            padding: "1px 6px",
+                            borderRadius: "10px",
+                            background: isActive ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.1)",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -158,8 +195,40 @@ export default function TabRestoreVault(props) {
                       </tr>
                     ) : (
                       filteredRecycleItems.map((item) => {
-                        const isNote = item.originalCollection === "notes" || item.fileSize || item.compressedSize || item.telegramMessageId;
+                        const itemType = getRecycleItemType(item);
+                        const isNote = itemType === "notes";
+                        const isUser = itemType === "users";
+                        const isNotice = itemType === "notices";
                         const isSelected = selectedRecycleIds.includes(item.id);
+
+                        const badgeBg = isNote
+                          ? "rgba(99, 102, 241, 0.15)"
+                          : isUser
+                          ? "rgba(16, 185, 129, 0.15)"
+                          : "rgba(245, 158, 11, 0.15)";
+                        const badgeColor = isNote
+                          ? "#818cf8"
+                          : isUser
+                          ? "#34d399"
+                          : "#fbbf24";
+                        const badgeLabel = isNote
+                          ? "NOTE"
+                          : isUser
+                          ? "STUDENT"
+                          : isNotice
+                          ? "NOTICE"
+                          : "RECORD";
+
+                        const timeStr = item.archivedAt || item.deletedAt;
+                        const dateFormatted = timeStr
+                          ? new Date(timeStr).toLocaleString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "Recently Archived";
 
                         return (
                           <tr key={item.id} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)", background: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent" }}>
@@ -176,13 +245,14 @@ export default function TabRestoreVault(props) {
                                   style={{
                                     fontSize: "0.68rem",
                                     fontWeight: 700,
-                                    padding: "1px 6px",
+                                    padding: "2px 7px",
                                     borderRadius: "4px",
-                                    background: isNote ? "rgba(99, 102, 241, 0.15)" : "rgba(245, 158, 11, 0.15)",
-                                    color: isNote ? "#818cf8" : "#fbbf24",
+                                    background: badgeBg,
+                                    color: badgeColor,
+                                    letterSpacing: "0.5px",
                                   }}
                                 >
-                                  {isNote ? "NOTE" : (item.originalCollection || "ITEM").toUpperCase()}
+                                  {badgeLabel}
                                 </span>
                                 <span style={{ fontWeight: 700, color: "#0f172a" }}>
                                   {item.title || item.name || item.id}
@@ -193,7 +263,7 @@ export default function TabRestoreVault(props) {
                               {item.subject || item.email || item.branch || "Archived Data"}
                             </td>
                             <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>
-                              {item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "Recently Archived"}
+                              {dateFormatted}
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right" }}>
                               <div style={{ display: "inline-flex", gap: "6px" }}>

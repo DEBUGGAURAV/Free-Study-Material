@@ -49,7 +49,7 @@ export default function TabPerformance(props) {
                   <button
                     onClick={handlePurgeRamOnly}
                     className="btn-secondary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(16, 185, 129, 0.4)", color: "#34d399", fontWeight: 700 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "#a7f3d0", color: "#059669", fontWeight: 700, background: "#ecfdf5" }}
                     title="Purge only Node.js in-memory LRU RAM buffer"
                   >
                     <Trash2 size={13} />
@@ -59,7 +59,7 @@ export default function TabPerformance(props) {
                   <button
                     onClick={handlePurgeDiskOnly}
                     className="btn-secondary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(34, 197, 94, 0.4)", color: "#4ade80", fontWeight: 700, background: "rgba(34, 197, 94, 0.08)" }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "#a7f3d0", color: "#059669", fontWeight: 700, background: "#ecfdf5" }}
                     title="Purge only Server NVMe SSD Disk Cache (cache/cdn/) without touching RAM or Cloudflare Edge"
                   >
                     <HardDrive size={13} />
@@ -69,7 +69,7 @@ export default function TabPerformance(props) {
                   <button
                     onClick={handlePurgeEdgeOnly}
                     className="btn-secondary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(6, 182, 212, 0.4)", color: "var(--accent-cyan)", fontWeight: 700 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "#bae6fd", color: "#0284c7", fontWeight: 700, background: "#f0f9ff" }}
                     title="Purge Cloudflare Edge CDN & Worker cache across all PoPs"
                   >
                     <Zap size={13} />
@@ -79,7 +79,7 @@ export default function TabPerformance(props) {
                   <button
                     onClick={handlePurgeCdn}
                     className="btn-danger"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 14px", fontWeight: 800 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 14px", fontWeight: 800, background: "#dc2626", color: "#ffffff", borderColor: "#b91c1c" }}
                     title="Purge All Keys globally across Server NVMe SSD Disk, Cloudflare Edge & RAM Cache"
                   >
                     <Flame size={14} />
@@ -91,7 +91,7 @@ export default function TabPerformance(props) {
                       setActiveTab("turso");
                     }}
                     className="btn-secondary"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "rgba(239, 68, 68, 0.4)", color: "#fca5a5", fontWeight: 700 }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", padding: "7px 12px", borderColor: "#fecaca", color: "#dc2626", fontWeight: 700, background: "#fef2f2" }}
                     title="Open Turso Cache Delete Controller by Days"
                   >
                     <Trash2 size={13} />
@@ -118,7 +118,7 @@ export default function TabPerformance(props) {
                     <button
                       onClick={handlePurgeCdn}
                       className="btn-danger"
-                      style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.74rem", padding: "5px 10px" }}
+                      style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "0.74rem", padding: "5px 12px", background: "#dc2626", color: "#ffffff", border: "1.5px solid #b91c1c", borderRadius: "6px", fontWeight: 700, cursor: "pointer" }}
                       title="Empty and clear all cache entries immediately"
                     >
                       <Trash2 size={13} />
@@ -145,7 +145,8 @@ export default function TabPerformance(props) {
                           style={{
                             background: "none",
                             border: "none",
-                            color: "#f87171",
+                            color: "#dc2626",
+                            fontWeight: 700,
                             fontSize: "0.7rem",
                             cursor: "pointer",
                             textDecoration: "underline",
@@ -159,18 +160,27 @@ export default function TabPerformance(props) {
 
                     {/* In-Memory RAM Cache */}
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                        <span style={{ color: "var(--text-dim)" }}>In-Memory RAM Cache Pool:</span>
-                        <span style={{ color: "#34d399", fontWeight: 700 }}>
-                          {(cdnStats?.ramUsedMB ?? 0).toFixed(1)} MB / 500 MB ({Math.min(100, Math.round(((cdnStats?.ramUsedMB ?? 0) / 500) * 100))}% used)
-                        </span>
-                      </div>
-                      <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.06)", borderRadius: "999px", overflow: "hidden" }}>
-                        <div style={{ width: `${Math.min(100, Math.max((cdnStats?.ramUsedMB ?? 0) > 0 ? 3 : 0, (((cdnStats?.ramUsedMB ?? 0) / 500) * 100)))}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
-                      </div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Dedicated 500 MB high-speed memory pool for microsecond document streaming without disk access.
-                      </div>
+                      {(() => {
+                        const usedMB = cdnStats?.ramUsedMB ?? 0;
+                        const poolMaxMB = Math.max(1024, Math.ceil((usedMB + 128) / 512) * 512);
+                        const percent = Math.min(100, Math.round((usedMB / poolMaxMB) * 100));
+                        return (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                              <span style={{ color: "#475569" }}>In-Memory RAM Cache Pool:</span>
+                              <span style={{ color: "#059669", fontWeight: 700 }}>
+                                {usedMB.toFixed(1)} MB / {poolMaxMB} MB ({percent}% used)
+                              </span>
+                            </div>
+                            <div style={{ width: "100%", height: "6px", background: "#e2e8f0", borderRadius: "999px", overflow: "hidden" }}>
+                              <div style={{ width: `${percent}%`, height: "100%", background: "#10b981", borderRadius: "999px" }} />
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "2px" }}>
+                              Dedicated high-speed memory pool for microsecond document streaming without disk access.
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* Cloudflare Edge CDN Storage Used */}
@@ -259,15 +269,15 @@ export default function TabPerformance(props) {
                         />
                         <button
                           onClick={() => handleSaveRetention()}
-                          className="btn-secondary"
                           style={{
-                            padding: "5px 14px",
+                            padding: "6px 14px",
                             fontSize: "0.76rem",
                             fontWeight: 700,
-                            background: "rgba(139, 92, 246, 0.2)",
-                            border: "1px solid #8b5cf6",
-                            color: "#fff",
+                            background: "#7c3aed",
+                            border: "1.5px solid #6d28d9",
+                            color: "#ffffff",
                             cursor: "pointer",
+                            borderRadius: "6px",
                           }}
                         >
                           Apply Retention
@@ -276,7 +286,7 @@ export default function TabPerformance(props) {
 
                       {/* Fast Preset Option Chips */}
                       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "6px", marginTop: "10px" }}>
-                        <span style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginRight: "2px" }}>Quick Presets:</span>
+                        <span style={{ fontSize: "0.7rem", color: "#64748b", marginRight: "2px" }}>Quick Presets:</span>
                         {[
                           { days: 7, label: "7 Days" },
                           { days: 30, label: "30 Days (1 Mo)" },
@@ -293,17 +303,17 @@ export default function TabPerformance(props) {
                                 setRetentionDays(preset.days);
                               }}
                               style={{
-                                padding: "3px 9px",
+                                padding: "4px 10px",
                                 fontSize: "0.72rem",
                                 fontWeight: isSelected ? 800 : 600,
                                 borderRadius: "6px",
                                 border: isSelected
-                                  ? "1px solid #a78bfa"
-                                  : "1px solid rgba(255,255,255,0.1)",
+                                  ? "1.5px solid #6d28d9"
+                                  : "1.5px solid #cbd5e1",
                                 background: isSelected
-                                  ? "rgba(167, 139, 250, 0.28)"
-                                  : "rgba(255,255,255,0.04)",
-                                color: isSelected ? "#fff" : "var(--text-dim)",
+                                  ? "#7c3aed"
+                                  : "#f8fafc",
+                                color: isSelected ? "#ffffff" : "#334155",
                                 cursor: "pointer",
                                 transition: "all 0.15s ease",
                               }}

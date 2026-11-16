@@ -4144,6 +4144,35 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   color: #475569 !important;
 }
 
+/* Primary & Danger Buttons in Admin Studio */
+.admin-modal-container .btn-primary {
+  background: #2563eb !important;
+  border: 1.5px solid #1d4ed8 !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+}
+
+.admin-modal-container .btn-primary:hover {
+  background: #1d4ed8 !important;
+  border-color: #1e40af !important;
+  color: #ffffff !important;
+}
+
+.admin-modal-container .btn-danger {
+  background: #dc2626 !important;
+  border: 1.5px solid #b91c1c !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+}
+
+.admin-modal-container .btn-danger:hover {
+  background: #b91c1c !important;
+  border-color: #991b1b !important;
+  color: #ffffff !important;
+}
+
 /* Preserve Crisp White Text on Solid Colored Badges & Buttons */
 .admin-modal-container .btn-primary,
 .admin-modal-container .btn-primary *,

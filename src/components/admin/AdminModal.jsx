@@ -2482,14 +2482,27 @@ export default function AdminModal({
 
   // Filter Recycle Bin Items
   const filteredRecycleItems = recycleBinItems.filter((item) => {
-    if (recycleFilter === "notes" && item.originalCollection !== "notes") return false;
-    if (recycleFilter === "users" && item.originalCollection !== "users") return false;
-    if (recycleFilter === "notices" && item.originalCollection !== "notices") return false;
+    const col = (item.collectionName || item.originalCollection || "").toLowerCase();
+    const id = String(item.id || item.originalId || "");
+    const tl = String(item.typeLabel || "").toLowerCase();
+
+    let itemType = "notes";
+    if (col === "users" || col === "students" || id.startsWith("users_") || tl.includes("student") || tl.includes("user") || item.email || item.rollNumber) {
+      itemType = "users";
+    } else if (col === "notices" || id.startsWith("notices_") || tl.includes("notice")) {
+      itemType = "notices";
+    } else {
+      itemType = "notes";
+    }
+
+    if (recycleFilter === "notes" && itemType !== "notes") return false;
+    if (recycleFilter === "users" && itemType !== "users") return false;
+    if (recycleFilter === "notices" && itemType !== "notices") return false;
 
     const q = recycleSearch.toLowerCase().trim();
     if (!q) return true;
     const name = item.title || item.name || item.originalName || item.id || "";
-    const subject = item.subject || item.email || item.branch || "";
+    const subject = item.subject || item.email || item.branch || item.content || item.description || "";
     return name.toLowerCase().includes(q) || subject.toLowerCase().includes(q);
   });
 
