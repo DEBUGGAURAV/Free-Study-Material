@@ -801,7 +801,7 @@ export default function TabCommunityChat(props) {
                           🤖 Bot Features &amp; Telegram Mirroring
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.75rem" }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#0f172a" }}>
                             <input
                               type="checkbox"
                               checked={Boolean(chatBotSettings.enablePublicChatSync)}
@@ -809,12 +809,12 @@ export default function TabCommunityChat(props) {
                             />
                             <span>
                               Sync Public Hall messages to Telegram (@fsm_chat_bot){" "}
-                              <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: chatBotSettings.enablePublicChatSync ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.15)", color: chatBotSettings.enablePublicChatSync ? "#4ade80" : "#94a3b8" }}>
+                              <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", background: chatBotSettings.enablePublicChatSync ? "rgba(34,197,94,0.2)" : "rgba(148,163,184,0.15)", color: chatBotSettings.enablePublicChatSync ? "#059669" : "#475569" }}>
                                 {chatBotSettings.enablePublicChatSync ? "🟢 Active" : "⏸️ Inactive (Click to Activate)"}
                               </span>
                             </span>
                           </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#0f172a" }}>
                             <input
                               type="checkbox"
                               checked={chatBotSettings.enableChatAudit !== false}
@@ -822,7 +822,7 @@ export default function TabCommunityChat(props) {
                             />
                             <span>Send closed private pod forensic audits</span>
                           </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#0f172a" }}>
                             <input
                               type="checkbox"
                               checked={chatBotSettings.enableMediaVaultUpload !== false}
@@ -830,7 +830,7 @@ export default function TabCommunityChat(props) {
                             />
                             <span>Archive student attachments in Telegram Media Vault</span>
                           </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#e2e8f0" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#0f172a" }}>
                             <input
                               type="checkbox"
                               checked={chatBotSettings.enableDeletedMessageAlerts !== false}
@@ -1103,8 +1103,8 @@ export default function TabCommunityChat(props) {
                   flex: 1,
                   display: "flex",
                   flexDirection: "column",
-                  background: "rgba(7, 10, 19, 0.8)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "#ffffff",
+                  border: "1.5px solid #e2e8f0",
                   borderRadius: "12px",
                   overflow: "hidden",
                   minHeight: "420px",
@@ -1206,7 +1206,7 @@ export default function TabCommunityChat(props) {
                             ) : (
                               <div>
                                 {msg.text && (
-                                  <div style={{ fontSize: "0.86rem", color: "#f8fafc", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                                  <div style={{ fontSize: "0.86rem", color: "#0f172a", lineHeight: 1.45, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                                     {msg.text}
                                   </div>
                                 )}

@@ -94,7 +94,8 @@ export default function TabHelpDesk() {
               rel="noopener noreferrer"
               style={{
                 fontSize: "0.75rem",
-                color: "#e2e8f0",
+                color: "#0284c7",
+                fontWeight: 600,
                 textDecoration: "underline",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -676,7 +677,7 @@ export default function TabHelpDesk() {
                             } catch (_) {}
                             return (
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                <span style={{ fontWeight: 700, color: "#e2e8f0" }}>
+                                <span style={{ fontWeight: 700, color: "#0f172a" }}>
                                   {t.subject || t.category || "General Support"}
                                 </span>
                                 {attList.length > 0 && (
@@ -990,12 +991,12 @@ export default function TabHelpDesk() {
                           style={{
                             alignSelf: isAdmin ? "flex-end" : "flex-start",
                             maxWidth: "88%",
-                            background: isAdmin ? "rgba(16, 185, 129, 0.12)" : "rgba(0, 0, 0, 0.35)",
-                            border: `1px solid ${isAdmin ? "rgba(16, 185, 129, 0.28)" : "rgba(255, 255, 255, 0.08)"}`,
+                            background: isAdmin ? "rgba(16, 185, 129, 0.12)" : "#f8fafc",
+                            border: `1px solid ${isAdmin ? "rgba(16, 185, 129, 0.28)" : "#e2e8f0"}`,
                             borderRadius: "8px",
                             padding: "10px 12px",
                             fontSize: "0.82rem",
-                            color: isAdmin ? "#d1fae5" : "#e2e8f0",
+                            color: isAdmin ? "#065f46" : "#0f172a",
                           }}
                         >
                           <div
@@ -1042,12 +1043,12 @@ export default function TabHelpDesk() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <div
                     style={{
-                      background: "rgba(0, 0, 0, 0.35)",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
+                      background: "#f8fafc",
+                      border: "1.5px solid #e2e8f0",
                       borderRadius: "8px",
                       padding: "12px 14px",
                       fontSize: "0.82rem",
-                      color: "#e2e8f0",
+                      color: "#0f172a",
                       lineHeight: "1.45",
                     }}
                   >
@@ -1178,7 +1179,7 @@ export default function TabHelpDesk() {
                       }}
                     >
                       <Clock size={13} color="#a5b4fc" />
-                      <span style={{ fontSize: "0.74rem", color: "#e2e8f0" }}>
+                      <span style={{ fontSize: "0.74rem", color: "#0f172a" }}>
                         {selectedTicket.purge_at
                           ? `Purges: ${new Date(selectedTicket.purge_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`
                           : "Never Purge"}

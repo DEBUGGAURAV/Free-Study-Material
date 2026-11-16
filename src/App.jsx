@@ -117,37 +117,21 @@ const safeStorage = {
   },
 };
 
+function getCachedArray(key) {
+  try {
+    const raw = safeStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 export default function App() {
-  const [notes, setNotes] = useState(() => {
-    try {
-      const cached = safeStorage.getItem("fsm_cached_notes");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
-  const [branches, setBranches] = useState(() => {
-    try {
-      const cached = safeStorage.getItem("fsm_cached_branches");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (_) {}
-    return [];
-  });
-  const [loading, setLoading] = useState(() => {
-    try {
-      const cached = safeStorage.getItem("fsm_cached_notes");
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return false;
-      }
-    } catch (_) {}
-    return true;
-  });
+  const [notes, setNotes] = useState(() => getCachedArray("fsm_cached_notes"));
+  const [branches, setBranches] = useState(() => getCachedArray("fsm_cached_branches"));
+  const [loading, setLoading] = useState(() => getCachedArray("fsm_cached_notes").length === 0);
   const [searchTerm, setSearchTerm] = useState("");
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [selectedCourse, setSelectedCourse] = useState("All Courses");
@@ -634,14 +618,10 @@ export default function App() {
             } catch (_) {}
           }
         } else {
-          if (typeof navigator !== "undefined" && !navigator.onLine) {
-            setIsOffline(true);
-          }
+          setIsOffline(typeof navigator !== "undefined" ? !navigator.onLine : false);
         }
       } catch (_) {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          setIsOffline(true);
-        }
+        setIsOffline(typeof navigator !== "undefined" ? !navigator.onLine : false);
       }
     };
 
@@ -653,12 +633,8 @@ export default function App() {
 
     // 📡 Listen for Service Worker Offline broadcasts
     const handleSwMessage = (e) => {
-      if (e.data && e.data.type === "FSM_NETWORK_STATUS") {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          setIsOffline(true);
-        } else if (typeof navigator !== "undefined" && navigator.onLine) {
-          setIsOffline(false);
-        }
+      if (e.data?.type === "FSM_NETWORK_STATUS") {
+        setIsOffline(typeof navigator !== "undefined" ? !navigator.onLine : false);
       }
     };
     if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {

@@ -4071,54 +4071,156 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 
 /* Universal Card, Grid & Table Surface Reset to Pure White */
 .admin-modal-container div[style*="rgba(15, 23, 42"],
+.admin-modal-container div[style*="rgba(15,23,42"],
 .admin-modal-container div[style*="rgba(30, 41, 59"],
+.admin-modal-container div[style*="rgba(30,41,59"],
 .admin-modal-container div[style*="rgba(8, 12, 22"],
+.admin-modal-container div[style*="rgba(8,12,22"],
 .admin-modal-container div[style*="rgba(7, 10, 18"],
+.admin-modal-container div[style*="rgba(7, 10, 19"],
+.admin-modal-container div[style*="rgba(7,10,18"],
+.admin-modal-container div[style*="rgba(7,10,19"],
 .admin-modal-container div[style*="rgba(10, 16, 31"],
+.admin-modal-container div[style*="rgba(10,16,31"],
 .admin-modal-container div[style*="rgba(11, 19, 43"],
+.admin-modal-container div[style*="rgba(11,19,43"],
 .admin-modal-container div[style*="rgba(13, 21, 39"],
+.admin-modal-container div[style*="rgba(13,21,39"],
 .admin-modal-container div[style*="rgba(2, 6, 23"],
-.admin-modal-container div[style*="rgba(255, 255, 255, 0.02"],
-.admin-modal-container div[style*="rgba(255, 255, 255, 0.03"],
-.admin-modal-container div[style*="rgba(255, 255, 255, 0.04"],
-.admin-modal-container div[style*="rgba(255, 255, 255, 0.05"],
+.admin-modal-container div[style*="rgba(2,6,23"],
+.admin-modal-container div[style*="rgba(10, 15, 30"],
+.admin-modal-container div[style*="rgba(10,15,30"],
+.admin-modal-container div[style*="rgba(0, 0, 0"],
+.admin-modal-container div[style*="rgba(0,0,0"],
 .admin-modal-container div[style*="#0f172a"],
 .admin-modal-container div[style*="#0d1527"],
-.admin-modal-container div[style*="#060913"] {
+.admin-modal-container div[style*="#060913"],
+.admin-modal-container div[style*="#0b1329"],
+.admin-modal-container div[style*="#0d1322"],
+.admin-modal-container div[style*="#0b0f19"],
+.admin-modal-container div[style*="#080c16"],
+.admin-modal-container div[style*="rgba(255, 255, 255, 0.0"],
+.admin-modal-container div[style*="rgba(255,255,255,0.0"],
+.admin-modal-container div[style*="linear-gradient"][style*="15, 23, 42"],
+.admin-modal-container div[style*="linear-gradient"][style*="30, 41, 59"],
+.admin-modal-container div[style*="linear-gradient"][style*="11, 19, 43"],
+.admin-modal-container div[style*="linear-gradient"][style*="6, 182, 212, 0.1"],
+.admin-modal-container div[style*="linear-gradient"][style*="168, 85, 247, 0.1"],
+.admin-modal-container div[style*="linear-gradient"][style*="56, 189, 248, 0.0"],
+.admin-modal-container div[style*="linear-gradient"][style*="16, 185, 129, 0.0"],
+.admin-modal-container div[style*="linear-gradient"][style*="245, 158, 11, 0.0"],
+.admin-modal-container div[style*="linear-gradient"][style*="52, 211, 153, 0.0"] {
   background: #ffffff !important;
   border-color: #e2e8f0 !important;
   color: #0f172a !important;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
 }
 
-.admin-modal-container span[style*="#cbd5e1"],
-.admin-modal-container span[style*="#94a3b8"],
-.admin-modal-container div[style*="#94a3b8"],
-.admin-modal-container p[style*="#94a3b8"],
-.admin-modal-container small[style*="#94a3b8"],
-.admin-modal-container span[style*="#64748b"],
-.admin-modal-container div[style*="#64748b"],
-.admin-modal-container p[style*="#64748b"] {
-  color: #64748b !important;
-}
-
+/* Headings in Admin Control Center */
 .admin-modal-container h1,
 .admin-modal-container h2,
 .admin-modal-container h3,
 .admin-modal-container h4,
 .admin-modal-container h5,
-.admin-modal-container h6,
-.admin-modal-container strong[style*="#ffffff"],
-.admin-modal-container strong[style*="#fff"],
-.admin-modal-container span[style*="#ffffff"]:not(button *),
-.admin-modal-container span[style*="#fff"]:not(button *),
-.admin-modal-container div[style*="#ffffff"]:not(button *),
-.admin-modal-container div[style*="#fff"]:not(button *),
-.admin-modal-container p[style*="#ffffff"],
-.admin-modal-container p[style*="#fff"],
-.admin-modal-container label[style*="#ffffff"],
-.admin-modal-container label[style*="#fff"] {
+.admin-modal-container h6 {
   color: #0f172a !important;
+}
+
+/* 🛡️ Universal Text Contrast: Force Invisible Off-White to Sharp Dark #0f172a */
+.admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]),
+.admin-modal-container [style*="#fff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]),
+.admin-modal-container [style*="#e2e8f0"],
+.admin-modal-container [style*="#f1f5f9"],
+.admin-modal-container [style*="#f8fafc"],
+.admin-modal-container [style*="#d1fae5"] {
+  color: #0f172a !important;
+}
+
+/* Secondary & Dim Text Mapped to High-Contrast Slate #475569 */
+.admin-modal-container [style*="#cbd5e1"],
+.admin-modal-container [style*="#94a3b8"],
+.admin-modal-container [style*="var(--text-dim)"],
+.admin-modal-container [style*="var(--text-muted)"] {
+  color: #475569 !important;
+}
+
+/* Preserve Crisp White Text on Solid Colored Badges & Buttons */
+.admin-modal-container .btn-primary,
+.admin-modal-container .btn-primary *,
+.admin-modal-container .btn-danger,
+.admin-modal-container .btn-danger *,
+.admin-modal-container button[style*="background: #2563eb"],
+.admin-modal-container button[style*="background: #2563eb"] *,
+.admin-modal-container button[style*="background:#2563eb"],
+.admin-modal-container button[style*="background:#2563eb"] *,
+.admin-modal-container [style*="background: #2563eb"] > *,
+.admin-modal-container [style*="background:#2563eb"] > *,
+.admin-modal-container [style*="background: #1d4ed8"] > *,
+.admin-modal-container [style*="background:#1d4ed8"] > *,
+.admin-modal-container [style*="background: #ef4444"] > *,
+.admin-modal-container [style*="background:#ef4444"] > *,
+.admin-modal-container [style*="background: #dc2626"] > *,
+.admin-modal-container [style*="background:#dc2626"] > *,
+.admin-modal-container [style*="background: #10b981"] > *,
+.admin-modal-container [style*="background:#10b981"] > *,
+.admin-modal-container [style*="background: #059669"] > *,
+.admin-modal-container [style*="background:#059669"] > *,
+.admin-modal-container [style*="background: #7c3aed"] > *,
+.admin-modal-container [style*="background:#7c3aed"] > *,
+.admin-modal-container [style*="linear-gradient(135deg, #ef4444"],
+.admin-modal-container [style*="linear-gradient(135deg, #ef4444"] *,
+.admin-modal-container [style*="linear-gradient(135deg, #2563eb"],
+.admin-modal-container [style*="linear-gradient(135deg, #2563eb"] *,
+.admin-modal-container [style*="linear-gradient(135deg, #10b981"],
+.admin-modal-container [style*="linear-gradient(135deg, #10b981"] * {
+  color: #ffffff !important;
+}
+
+/* ⚡ Accessible High-Contrast Color Mapping for White Studio ⚡ */
+
+/* Greens: from washed-out light mint to rich dark emerald (#059669) */
+.admin-modal-container [style*="#34d399"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#6ee7b7"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#4ade80"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#86efac"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#2dd4bf"]:not(button):not([style*="background"]) {
+  color: #059669 !important;
+}
+
+/* Yellows / Ambers: from faint yellow to rich bronze amber (#b45309) */
+.admin-modal-container [style*="#fbbf24"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#facc15"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#fcd34d"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#eab308"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#a3e635"]:not(button):not([style*="background"]) {
+  color: #b45309 !important;
+}
+
+/* Reds / Corals: from washed-out pink to deep crimson red (#dc2626) */
+.admin-modal-container [style*="#fca5a5"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#f87171"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#fb7185"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#fda4af"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#f472b6"]:not(button):not([style*="background"]) {
+  color: #dc2626 !important;
+}
+
+/* Cyans / Blues: from washed-out cyan to deep ocean azure (#0284c7) */
+.admin-modal-container [style*="#38bdf8"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#67e8f9"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#7dd3fc"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#bae6fd"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="var(--accent-cyan)"]:not(button):not([style*="background"]) {
+  color: #0284c7 !important;
+}
+
+/* Purples / Violets: from pale violet to deep royal purple (#7c3aed) */
+.admin-modal-container [style*="#c084fc"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#c4b5fd"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#a78bfa"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#a5b4fc"]:not(button):not([style*="background"]),
+.admin-modal-container [style*="#d8b4fe"]:not(button):not([style*="background"]) {
+  color: #7c3aed !important;
 }
 
 .admin-modal-container pre,
@@ -4131,7 +4233,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 /* Tables inside Admin Control Center */
 .admin-modal-container table {
   background: #ffffff !important;
-  border-color: #e2e8f0 !important;
+  border: 1.5px solid #e2e8f0 !important;
 }
 
 .admin-modal-container th {
@@ -4151,7 +4253,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 
 .admin-modal-container td {
-  color: #1e293b !important;
+  color: #0f172a !important;
   border-bottom: 1px solid #f1f5f9 !important;
 }
 
@@ -4186,14 +4288,22 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   color: #0f172a !important;
 }
 
-/* Secondary Buttons inside Admin */
-.admin-modal-container .btn-secondary {
+/* Secondary Buttons & Action Pills inside Admin */
+.admin-modal-container .btn-secondary,
+.admin-modal-container button[style*="rgba(255, 255, 255, 0.0"],
+.admin-modal-container button[style*="rgba(255,255,255,0.0"],
+.admin-modal-container button[style*="rgba(15, 23, 42"],
+.admin-modal-container button[style*="rgba(30, 41, 59"] {
   background: #f8fafc !important;
   border: 1.5px solid #cbd5e1 !important;
   color: #0f172a !important;
 }
 
-.admin-modal-container .btn-secondary:hover {
+.admin-modal-container .btn-secondary:hover,
+.admin-modal-container button[style*="rgba(255, 255, 255, 0.0"]:hover,
+.admin-modal-container button[style*="rgba(255,255,255,0.0"]:hover,
+.admin-modal-container button[style*="rgba(15, 23, 42"]:hover,
+.admin-modal-container button[style*="rgba(30, 41, 59"]:hover {
   background: #f1f5f9 !important;
   border-color: #94a3b8 !important;
   color: #0f172a !important;
@@ -5300,7 +5410,7 @@ svg.lucide {
    ══════════════════════════════════════════════════════════════════════ */
 
 /* Continuous 3D Floating Motion Animations (Phone & Desktop) */
-@keyframes float3d_anim_1 {
+@keyframes float3d_anim {
   0%, 100% {
     transform: translateY(0px) rotateZ(0deg) rotateY(0deg);
   }
@@ -5312,45 +5422,6 @@ svg.lucide {
   }
   75% {
     transform: translateY(-3px) rotateZ(0.5deg) rotateY(2deg);
-  }
-}
-
-@keyframes float3d_anim_2 {
-  0%, 100% {
-    transform: translateY(-6px) rotateZ(-1deg) rotateY(-2deg);
-  }
-  30% {
-    transform: translateY(-1px) rotateZ(0.8deg) rotateY(3deg);
-  }
-  60% {
-    transform: translateY(-9px) rotateZ(1.2deg) rotateY(-1deg);
-  }
-  85% {
-    transform: translateY(-3px) rotateZ(-0.5deg) rotateY(1deg);
-  }
-}
-
-@keyframes float3d_anim_3 {
-  0%, 100% {
-    transform: translateY(-2px) rotateZ(0.8deg) rotateY(2deg);
-  }
-  35% {
-    transform: translateY(-8px) rotateZ(-1.2deg) rotateY(-3deg);
-  }
-  70% {
-    transform: translateY(0px) rotateZ(0.5deg) rotateY(1deg);
-  }
-}
-
-@keyframes float3d_anim_4 {
-  0%, 100% {
-    transform: translateY(-5px) rotateZ(1deg) rotateY(-2deg);
-  }
-  40% {
-    transform: translateY(0px) rotateZ(-1deg) rotateY(3deg);
-  }
-  75% {
-    transform: translateY(-8px) rotateZ(0.5deg) rotateY(-1deg);
   }
 }
 
@@ -5372,20 +5443,23 @@ svg.lucide {
   -webkit-touch-callout: none;
 }
 
-.movable-3d-widget.movable-3d-anim-1:not(.is-dragging) {
-  animation: float3d_anim_1 4s ease-in-out infinite;
+.movable-3d-widget:not(.is-dragging) {
+  animation: float3d_anim 4s ease-in-out infinite;
 }
 
 .movable-3d-widget.movable-3d-anim-2:not(.is-dragging) {
-  animation: float3d_anim_2 4.5s ease-in-out infinite;
+  animation-duration: 4.5s;
+  animation-delay: -1.2s;
 }
 
 .movable-3d-widget.movable-3d-anim-3:not(.is-dragging) {
-  animation: float3d_anim_3 3.8s ease-in-out infinite;
+  animation-duration: 3.8s;
+  animation-delay: -2.4s;
 }
 
 .movable-3d-widget.movable-3d-anim-4:not(.is-dragging) {
-  animation: float3d_anim_4 4.2s ease-in-out infinite;
+  animation-duration: 4.2s;
+  animation-delay: -3.1s;
 }
 
 .movable-3d-widget.is-dragging {

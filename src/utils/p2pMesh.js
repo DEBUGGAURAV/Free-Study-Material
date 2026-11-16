@@ -16,77 +16,42 @@ export function invalidateCachedNoteIdsSet() {
   cachedKeySetPromise = null;
 }
 
-function getOfflineVaultStoreKeys(timeoutMs = 800) {
+function getIdbStoreKeys(dbName, storeName, timeoutMs = 800) {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !window.indexedDB) return resolve([]);
-    let isSettled = false;
-    const timer = setTimeout(() => {
-      if (!isSettled) {
-        isSettled = true;
-        resolve([]);
-      }
-    }, timeoutMs);
-
+    const timer = setTimeout(() => resolve([]), timeoutMs);
     try {
-      const req = window.indexedDB.open("fsm_offline_vault", 1);
+      const req = window.indexedDB.open(dbName, 1);
       req.onsuccess = (e) => {
         try {
           const db = e.target.result;
-          if (!db.objectStoreNames.contains("offline_notes")) {
+          if (!db.objectStoreNames.contains(storeName)) {
             try { db.close(); } catch (_) {}
-            if (!isSettled) {
-              isSettled = true;
-              clearTimeout(timer);
-              resolve([]);
-            }
-            return;
+            clearTimeout(timer);
+            return resolve([]);
           }
-          const tx = db.transaction("offline_notes", "readonly");
-          const keysReq = tx.objectStore("offline_notes").getAllKeys();
+          const tx = db.transaction(storeName, "readonly");
+          const keysReq = tx.objectStore(storeName).getAllKeys();
           keysReq.onsuccess = () => {
             try { db.close(); } catch (_) {}
-            if (!isSettled) {
-              isSettled = true;
-              clearTimeout(timer);
-              resolve(Array.isArray(keysReq.result) ? keysReq.result : []);
-            }
+            clearTimeout(timer);
+            resolve(Array.isArray(keysReq.result) ? keysReq.result : []);
           };
           keysReq.onerror = () => {
             try { db.close(); } catch (_) {}
-            if (!isSettled) {
-              isSettled = true;
-              clearTimeout(timer);
-              resolve([]);
-            }
-          };
-        } catch (_) {
-          if (!isSettled) {
-            isSettled = true;
             clearTimeout(timer);
             resolve([]);
-          }
-        }
-      };
-      req.onerror = () => {
-        if (!isSettled) {
-          isSettled = true;
+          };
+        } catch (_) {
           clearTimeout(timer);
           resolve([]);
         }
       };
-      req.onblocked = () => {
-        if (!isSettled) {
-          isSettled = true;
-          clearTimeout(timer);
-          resolve([]);
-        }
-      };
+      req.onerror = () => { clearTimeout(timer); resolve([]); };
+      req.onblocked = () => { clearTimeout(timer); resolve([]); };
     } catch (_) {
-      if (!isSettled) {
-        isSettled = true;
-        clearTimeout(timer);
-        resolve([]);
-      }
+      clearTimeout(timer);
+      resolve([]);
     }
   });
 }
@@ -100,37 +65,10 @@ export async function getCachedNoteIdsSet(forceRefresh = false) {
   if (!forceRefresh && cachedKeySetPromise) return cachedKeySetPromise;
 
   cachedKeySetPromise = (async () => {
-    let db = null;
     try {
       const [p2pKeys, vaultKeys] = await Promise.all([
-        (async () => {
-          try {
-            db = await openDB(800);
-            return await new Promise((resolve) => {
-              let settled = false;
-              const timer = setTimeout(() => {
-                if (!settled) { settled = true; resolve([]); }
-              }, 700);
-              try {
-                const tx = db.transaction(STORE_NAME, "readonly");
-                const req = tx.objectStore(STORE_NAME).getAllKeys();
-                req.onsuccess = () => {
-                  if (!settled) { settled = true; clearTimeout(timer); resolve(Array.isArray(req.result) ? req.result : []); }
-                };
-                req.onerror = () => {
-                  if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
-                };
-              } catch {
-                if (!settled) { settled = true; clearTimeout(timer); resolve([]); }
-              }
-            });
-          } catch {
-            return [];
-          } finally {
-            try { if (db) db.close(); } catch (_) {}
-          }
-        })(),
-        getOfflineVaultStoreKeys(800),
+        getIdbStoreKeys(DB_NAME, STORE_NAME, 800),
+        getIdbStoreKeys("fsm_offline_vault", "offline_notes", 800),
       ]);
 
       const keySet = new Set([...p2pKeys, ...vaultKeys].map((k) => String(k)));

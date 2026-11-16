@@ -1941,7 +1941,7 @@ export default function TabAiEngine() {
               </div>
             </div>
 
-            <div style={{ fontSize: "0.82rem", color: "#e2e8f0", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
               {playAnswer.answer}
             </div>
           </div>
@@ -2397,7 +2397,7 @@ export default function TabAiEngine() {
                           {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
                         </td>
                         <td style={{ padding: "8px 12px", maxWidth: "420px" }}>
-                          <div style={{ color: "#e2e8f0", wordBreak: "break-word", fontWeight: 500 }}>{log.query}</div>
+                          <div style={{ color: "#0f172a", wordBreak: "break-word", fontWeight: 600 }}>{log.query}</div>
                         </td>
                         <td style={{ padding: "8px 12px", whiteSpace: "nowrap" }}>
                           <span
@@ -2512,7 +2512,7 @@ export default function TabAiEngine() {
                           {st.userId && <div style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>ID: {st.userId}</div>}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
-                          <div style={{ fontSize: "0.72rem", color: "#e2e8f0" }}>{st.userEmail || "anonymous"}</div>
+                          <div style={{ fontSize: "0.72rem", color: "#334155" }}>{st.userEmail || "anonymous"}</div>
                           {st.userMobile && <div style={{ fontSize: "0.68rem", color: "#34d399" }}>📱 {st.userMobile}</div>}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
@@ -2685,7 +2685,7 @@ export default function TabAiEngine() {
                           {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>📱 {log.userMobile}</div>}
                         </td>
                         <td style={{ padding: "10px 12px", maxWidth: "300px" }}>
-                          <div style={{ color: "#e2e8f0", wordBreak: "break-word" }}>{log.query}</div>
+                          <div style={{ color: "#0f172a", wordBreak: "break-word", fontWeight: 500 }}>{log.query}</div>
                         </td>
                         <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                           <span

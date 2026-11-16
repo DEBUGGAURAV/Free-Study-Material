@@ -35,6 +35,37 @@ Rules:
 - Output clean LaTeX formulas \\( ... \\).
 - Output ONLY the transcribed formula/text without quotes, markdown code blocks, or preamble. If completely blank, output EMPTY.`;
 
+function buildVisionPrompt(query, context, rawPrompt) {
+  return rawPrompt || `You are an elite academic diagram and formula solver.
+First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
+End with 1-line "💡 Exam Takeaway".
+${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+}
+
+function buildUserTextContent(query, context) {
+  return context && context.trim()
+    ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
+    : `[Student Question]:\n${query}`;
+}
+
+function buildChatMessages(query, context, cleanB64, safeMime, rawPrompt) {
+  if (cleanB64) {
+    return [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: buildVisionPrompt(query, context, rawPrompt) },
+          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
+        ],
+      },
+    ];
+  }
+  return [
+    { role: "system", content: rawPrompt || ACADEMIC_SYSTEM_PROMPT },
+    { role: "user", content: buildUserTextContent(query, context) },
+  ];
+}
+
 /**
  * GitHub Models (Microsoft / Azure USA • GPT-4o-mini Text & Vision)
  */
@@ -48,33 +79,7 @@ async function queryGitHubModels(query, context = "", imageBase64 = null, imageM
 
   const cleanB64 = imageBase64 ? getCleanBase64(imageBase64) : null;
   const safeMime = getSafeMimeType(imageMimeType);
-
-  let messages = [];
-  if (cleanB64) {
-    const promptText = options.rawPrompt || `You are an elite academic tutor.
-First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then solve step-by-step.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: promptText },
-          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-        ],
-      },
-    ];
-  } else {
-    const userContent = context && context.trim()
-      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-      : `[Student Question]:\n${query}`;
-
-    messages = [
-      { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ];
-  }
+  const messages = buildChatMessages(query, context, cleanB64, safeMime, options.rawPrompt);
 
   try {
     const res = await fetch("https://models.github.ai/inference/chat/completions", {
@@ -124,33 +129,7 @@ async function queryOpenRouter(query, context = "", imageBase64 = null, imageMim
   const safeMime = getSafeMimeType(imageMimeType);
   const defaultOr = cleanB64 ? "meta-llama/llama-3.2-11b-vision-instruct:free" : "meta-llama/llama-3.3-70b-instruct:free";
   const model = getConfiguredModel(options.model, cleanB64 ? "OPENROUTER_VISION_MODEL" : "OPENROUTER_MODEL", defaultOr);
-
-  let messages = [];
-  if (cleanB64) {
-    const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
-First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: promptText },
-          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-        ],
-      },
-    ];
-  } else {
-    const userContent = context && context.trim()
-      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3500)}\n\n[Student Question]:\n${query}`
-      : `[Student Question]:\n${query}`;
-
-    messages = [
-      { role: "system", content: options.rawPrompt ? options.rawPrompt : ACADEMIC_SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ];
-  }
+  const messages = buildChatMessages(query, context, cleanB64, safeMime, options.rawPrompt);
 
   const payload = {
     messages,
@@ -263,11 +242,7 @@ async function queryNvidiaVision(query, context = "", imageBase64, imageMimeType
   const cleanB64 = getCleanBase64(imageBase64);
   const safeMime = getSafeMimeType(imageMimeType);
   const model = getConfiguredModel(options.model, "NVIDIA_VISION_MODEL", "nvidia/nemotron-3.5-super-vl-120b-a12b");
-
-  const promptText = options.rawPrompt || `You are an elite academic diagram and formula solver.
-First write **📝 Extracted Text / Formula:** in standard LaTeX \\( ... \\), then provide a step-by-step academic solution.
-End with 1-line "💡 Exam Takeaway".
-${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
+  const messages = buildChatMessages(query, context, cleanB64, safeMime, options.rawPrompt);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 12000);
@@ -282,15 +257,7 @@ ${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Questio
       },
       body: JSON.stringify({
         model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: promptText },
-              { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-            ],
-          },
-        ],
+        messages,
         temperature: typeof options.temperature === "number" ? options.temperature : 0.15,
         max_tokens: options.maxTokens || 700,
         chat_template_kwargs: { enable_thinking: false },

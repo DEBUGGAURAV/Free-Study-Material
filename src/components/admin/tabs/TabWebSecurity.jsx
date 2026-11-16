@@ -380,7 +380,7 @@ export default function TabWebSecurity(props) {
   const isElevated = threatLevel.includes("DEFCON 2") || threatLevel.includes("DEFCON 4");
 
   return (
-    <div style={{ color: "#e2e8f0", fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
+    <div style={{ color: "#0f172a", fontFamily: "var(--font-sans, system-ui, sans-serif)" }}>
       {/* Toast Notification */}
       {toastMsg && (
         <div style={{
@@ -797,7 +797,7 @@ export default function TabWebSecurity(props) {
                           IP: {a.ip || "unknown"}
                         </div>
                       </td>
-                      <td style={{ padding: "10px 12px", color: "#cbd5e1", maxWidth: "260px", verticalAlign: "top" }}>
+                      <td style={{ padding: "10px 12px", color: "#334155", maxWidth: "260px", verticalAlign: "top" }}>
                         <div style={{ fontStyle: "italic", lineHeight: "1.4" }}>
                           "{a.message || a.reason || "Student requested connection pardon."}"
                         </div>
@@ -1606,7 +1606,7 @@ export default function TabWebSecurity(props) {
               {(props.securityScanReport.checks || []).map((check, cIdx) => (
                 <div key={check.id || cIdx} style={{ background: "rgba(255, 255, 255, 0.02)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "6px", padding: "8px 10px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "3px" }}>
-                    <span style={{ fontWeight: 600, color: "#e2e8f0", fontSize: "0.76rem" }}>{check.name}</span>
+                    <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.76rem" }}>{check.name}</span>
                     <span style={{ fontSize: "0.65rem", fontWeight: 800, padding: "1px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399" }}>
                       {check.status || "PASS"}
                     </span>

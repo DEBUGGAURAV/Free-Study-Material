@@ -82,20 +82,18 @@ function NoteCard({
     setGlarePosition((prev) => ({ ...prev, opacity: 0 }));
   };
 
-  // 🤝 Study Buddy Live Dynamic Peer Count
-  const liveStudyBuddyCount = useMemo(() => {
-    const seed = String(note?.id || "fsm").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const hour = new Date().getHours();
-    const peakMultiplier = (hour >= 20 || hour <= 2 || (hour >= 11 && hour <= 16)) ? 1.4 : 1.0;
-    const base = ((seed % 17) + 8) * peakMultiplier;
-    return Math.max(6, Math.round(base));
+  const idSeed = useMemo(() => {
+    return String(note?.id || "fsm").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
   }, [note?.id]);
 
-  // 🌟 Campus Viral Recommendation Counter (Seed + Shares)
-  const recommendedClassmates = useMemo(() => {
-    const seed = String(note?.id || "fsm").split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return ((seed % 26) + 16);
-  }, [note?.id]);
+  // 🤝 Study Buddy Live Dynamic Peer Count & Viral Recommendation Counter
+  const liveStudyBuddyCount = useMemo(() => {
+    const hour = new Date().getHours();
+    const peak = (hour >= 20 || hour <= 2 || (hour >= 11 && hour <= 16)) ? 1.4 : 1.0;
+    return Math.max(6, Math.round(((idSeed % 17) + 8) * peak));
+  }, [idSeed]);
+
+  const recommendedClassmates = useMemo(() => (idSeed % 26) + 16, [idSeed]);
 
   useEffect(() => {
     let active = true;

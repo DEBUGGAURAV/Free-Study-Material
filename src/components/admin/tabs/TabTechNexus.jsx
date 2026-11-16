@@ -607,7 +607,7 @@ export default function TabTechNexus(props) {
                   </div>
 
                   <div style={{ marginTop: "10px", padding: "8px 10px", background: "rgba(168, 85, 247, 0.06)", borderRadius: "8px", border: "1px solid rgba(168, 85, 247, 0.15)" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#e2e8f0" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#0f172a" }}>
                       <input
                         type="checkbox"
                         checked={techSettings.autoP2pHardwareGuard !== false}
@@ -805,7 +805,7 @@ export default function TabTechNexus(props) {
                     </div>
 
                     <div style={{ padding: "10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px", display: "flex", alignItems: "center" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#e2e8f0" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#0f172a" }}>
                         <input
                           type="checkbox"
                           checked={Boolean(techSettings.ocrBinarization)}
@@ -864,7 +864,7 @@ export default function TabTechNexus(props) {
                     </div>
 
                     <div style={{ padding: "10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#e2e8f0" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#0f172a" }}>
                         <input
                           type="checkbox"
                           checked={Boolean(techSettings.removeUnusedXrefs)}
@@ -927,7 +927,7 @@ export default function TabTechNexus(props) {
                     </div>
 
                     <div style={{ padding: "10px", background: "rgba(255, 255, 255, 0.03)", borderRadius: "8px", display: "flex", alignItems: "center" }}>
-                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#e2e8f0" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "0.76rem", color: "#0f172a" }}>
                         <input
                           type="checkbox"
                           checked={Boolean(techSettings.enableInactivityWarning)}

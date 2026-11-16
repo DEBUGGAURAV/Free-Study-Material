@@ -405,18 +405,18 @@ export default function TabHardware(props) {
                         <AlertTriangle size={14} />
                         <span>Node Status Notice</span>
                       </div>
-                      <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
+                      <div style={{ color: "#0f172a", lineHeight: "1.4" }}>
                         <strong>{failoverSummary.backend1DownReason}</strong>
                       </div>
                     </div>
                   )}
 
                   <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "10px 14px", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
-                    <div style={{ color: "#34d399", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <div style={{ color: "#059669", fontWeight: 700, marginBottom: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <CheckCircle size={14} />
                       <span>Active Traffic Distribution</span>
                     </div>
-                    <div style={{ color: "#e2e8f0", lineHeight: "1.4" }}>
+                    <div style={{ color: "#0f172a", lineHeight: "1.4" }}>
                       Cloudflare Edge Load Balancer automatically balances active students across:
                       <div style={{ color: "#34d399", fontWeight: 800, marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                         <ArrowRight size={14} />
@@ -683,12 +683,12 @@ export default function TabHardware(props) {
                     {/* CPU Row + Bar */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                        <span style={{ color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }} title={hw.cpuModel}>
-                          CPU: <strong style={{ color: "#e2e8f0" }}>{hw.cpuCores} Cores</strong> ({hw.cpuModel})
+                        <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "70%" }} title={hw.cpuModel}>
+                          CPU: <strong style={{ color: "#0f172a" }}>{hw.cpuCores} Cores</strong> ({hw.cpuModel})
                         </span>
                         <span style={{ color: cpuBarColor, fontWeight: 800 }}>{cpuPct}%</span>
                       </div>
-                      <div style={{ width: "100%", height: "5px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
+                      <div style={{ width: "100%", height: "5px", background: "rgba(15, 23, 42, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
                         <div style={{ width: `${cpuPct}%`, height: "100%", background: cpuBarColor, borderRadius: "99px", transition: "width 0.3s ease" }} />
                       </div>
                     </div>
@@ -696,22 +696,22 @@ export default function TabHardware(props) {
                     {/* RAM Row + Bar */}
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                        <span style={{ color: "#94a3b8" }}>
-                          RAM: <strong style={{ color: "#e2e8f0" }}>{hw.rssMB} MB</strong> RSS / {hw.ramUsedGB} / {hw.ramTotalGB} GB
+                        <span style={{ color: "#475569" }}>
+                          RAM: <strong style={{ color: "#0f172a" }}>{hw.rssMB} MB</strong> RSS / {hw.ramUsedGB} / {hw.ramTotalGB} GB
                         </span>
                         <span style={{ color: ramBarColor, fontWeight: 800 }}>{ramPct}%</span>
                       </div>
-                      <div style={{ width: "100%", height: "5px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
+                      <div style={{ width: "100%", height: "5px", background: "rgba(15, 23, 42, 0.08)", borderRadius: "99px", overflow: "hidden" }}>
                         <div style={{ width: `${ramPct}%`, height: "100%", background: ramBarColor, borderRadius: "99px", transition: "width 0.3s ease" }} />
                       </div>
                     </div>
 
                     {/* OS / Heap / Region / PID compact grid */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px", fontSize: "0.69rem", color: "#94a3b8", paddingTop: "2px" }}>
-                      <div>Heap: <strong style={{ color: "#38bdf8" }}>{hw.heapUsedMB}/{hw.heapTotalMB} MB</strong></div>
-                      <div>Region: <strong style={{ color: "#e2e8f0" }}>{node.region || "singapore"}</strong></div>
-                      <div>OS: <strong style={{ color: "#e2e8f0" }}>{hw.osPlatform} ({hw.arch})</strong></div>
-                      <div>Node: <strong style={{ color: "#cbd5e1" }}>{hw.nodeVersion} • #{hw.pid}</strong></div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 10px", fontSize: "0.69rem", color: "#475569", paddingTop: "2px" }}>
+                      <div>Heap: <strong style={{ color: "#0284c7" }}>{hw.heapUsedMB}/{hw.heapTotalMB} MB</strong></div>
+                      <div>Region: <strong style={{ color: "#0f172a" }}>{node.region || "singapore"}</strong></div>
+                      <div>OS: <strong style={{ color: "#0f172a" }}>{hw.osPlatform} ({hw.arch})</strong></div>
+                      <div>Node: <strong style={{ color: "#475569" }}>{hw.nodeVersion} • #{hw.pid}</strong></div>
                     </div>
                   </div>
                 ) : (

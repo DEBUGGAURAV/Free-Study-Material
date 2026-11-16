@@ -144,63 +144,18 @@ export async function getOfflineNoteBuffer(noteId) {
   try {
     db = await openDatabase(800);
     return await new Promise((resolve) => {
-      let settled = false;
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          try { if (db) db.close(); } catch (_) {}
-          resolve(null);
-        }
-      }, 700);
-
       const tx = db.transaction([STORE_NOTES], 'readonly');
       tx.oncomplete = () => { try { if (db) db.close(); } catch (_) {} };
-      tx.onerror = () => {
-        try { if (db) db.close(); } catch (_) {}
-        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
-      };
-      tx.onabort = () => {
-        try { if (db) db.close(); } catch (_) {}
-        if (!settled) { settled = true; clearTimeout(timeout); resolve(null); }
-      };
-
+      tx.onerror = () => { try { if (db) db.close(); } catch (_) {} resolve(null); };
       const store = tx.objectStore(STORE_NOTES);
       const req = store.get(noteId);
       req.onsuccess = () => {
-        if (settled) return;
-        const item = req.result;
-        if (item && item.buffer && item.buffer.byteLength > 0) {
-          settled = true;
-          clearTimeout(timeout);
-          try { if (db) db.close(); } catch (_) {}
-          return resolve(item.buffer);
-        }
-        // Fallback: search all offline saved notes for string match
-        const allReq = store.getAll();
-        allReq.onsuccess = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          try { if (db) db.close(); } catch (_) {}
-          const list = allReq.result || [];
-          const match = list.find((n) => String(n.id) === sId);
-          resolve(match?.buffer || null);
-        };
-        allReq.onerror = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          try { if (db) db.close(); } catch (_) {}
-          resolve(null);
-        };
+        if (req.result?.buffer?.byteLength > 0) return resolve(req.result.buffer);
+        const reqStr = store.get(sId);
+        reqStr.onsuccess = () => resolve(reqStr.result?.buffer?.byteLength > 0 ? reqStr.result.buffer : null);
+        reqStr.onerror = () => resolve(null);
       };
-      req.onerror = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        try { if (db) db.close(); } catch (_) {}
-        resolve(null);
-      };
+      req.onerror = () => resolve(null);
     });
   } catch (_) {
     try { if (db) db.close(); } catch (_) {}
@@ -287,8 +242,8 @@ export async function deleteOfflineNote(noteId) {
     return new Promise((resolve) => {
       const tx = db.transaction([STORE_NOTES], 'readwrite');
       tx.objectStore(STORE_NOTES).delete(noteId);
-      tx.oncomplete = () => resolve(true);
-      tx.onerror = () => resolve(false);
+      tx.oncomplete = () => { try { db.close(); } catch (_) {} resolve(true); };
+      tx.onerror = () => { try { db.close(); } catch (_) {} resolve(false); };
     });
   } catch {
     return false;
@@ -509,6 +464,27 @@ function getCatalogLookupMap() {
   return map;
 }
 
+function formatStoredNote(id, rawItem, cat, source) {
+  const sizeBytes = rawItem?.buffer?.byteLength || rawItem?.sizeBytes || cat?.compressedSize || cat?.fileSize || 0;
+  return {
+    id: String(id),
+    title: (rawItem?.title && !rawItem.title.startsWith("Note #") && !rawItem.title.startsWith("Cached Study Note #"))
+      ? rawItem.title
+      : (cat?.title || rawItem?.title || `Note #${id}`),
+    subject: (rawItem?.subject && rawItem.subject !== "General Notes" && !rawItem.subject.includes("Mesh"))
+      ? rawItem.subject
+      : (cat?.subject || rawItem?.subject || "General Notes"),
+    course: (rawItem?.course && rawItem.course !== "B.Tech") ? rawItem.course : (cat?.course || rawItem?.course || "B.Tech"),
+    branch: (rawItem?.branch && rawItem.branch !== "All Branches" && rawItem.branch !== "General") ? rawItem.branch : (cat?.branch || rawItem?.branch || "All Branches"),
+    year: cat?.year || rawItem?.year || "All Years",
+    semester: cat?.semester || rawItem?.semester || "",
+    savedAt: rawItem?.savedAt || new Date().toISOString(),
+    sizeBytes,
+    sizeMB: (sizeBytes / (1024 * 1024)).toFixed(2),
+    source,
+  };
+}
+
 /**
  * Retrieves all stored offline notes from both fsm_offline_vault and fsm_p2p_cache_v1
  * Returns unified array with id, title, subject, course, branch, savedAt, sizeBytes, sizeMB
@@ -524,21 +500,7 @@ export async function getAllStoredOfflineNotes() {
       for (const item of offlineList) {
         if (!item || !item.id) continue;
         const id = String(item.id);
-        const cat = catalogMap.get(id);
-        const sizeBytes = item.buffer && item.buffer.byteLength ? item.buffer.byteLength : (cat?.compressedSize || cat?.fileSize || 0);
-        notesMap.set(id, {
-          id,
-          title: item.title && !item.title.startsWith("Note #") ? item.title : (cat?.title || item.title || `Note #${id}`),
-          subject: item.subject && item.subject !== "General Notes" ? item.subject : (cat?.subject || item.subject || "General Notes"),
-          course: item.course && item.course !== "B.Tech" ? item.course : (cat?.course || item.course || "B.Tech"),
-          branch: item.branch && item.branch !== "All Branches" ? item.branch : (cat?.branch || item.branch || "All Branches"),
-          year: cat?.year || item.year || "All Years",
-          semester: cat?.semester || item.semester || "",
-          savedAt: item.savedAt || new Date().toISOString(),
-          sizeBytes,
-          sizeMB: (sizeBytes / (1024 * 1024)).toFixed(2),
-          source: "offline_vault",
-        });
+        notesMap.set(id, formatStoredNote(id, item, catalogMap.get(id), "offline_vault"));
       }
     }
   } catch (err) {
@@ -551,49 +513,14 @@ export async function getAllStoredOfflineNotes() {
     if (Array.isArray(chunks)) {
       for (const ch of chunks) {
         const id = String(ch.noteId);
-        const cat = catalogMap.get(id);
         if (notesMap.has(id)) {
           const existing = notesMap.get(id);
           if ((!existing.sizeBytes || existing.sizeBytes === 0) && ch.sizeBytes) {
             existing.sizeBytes = ch.sizeBytes;
             existing.sizeMB = ch.sizeMB;
           }
-          if (cat) {
-            if (existing.title.startsWith("Note #") || existing.title.startsWith("Cached Study Note #")) {
-              existing.title = cat.title || existing.title;
-            }
-            if (existing.subject === "General Notes" || existing.subject.includes("Mesh")) {
-              existing.subject = cat.subject || existing.subject;
-            }
-            if (existing.branch === "All Branches" || existing.branch === "General") {
-              existing.branch = cat.branch || existing.branch;
-            }
-            if (existing.course === "B.Tech" && cat.course) {
-              existing.course = cat.course;
-            }
-          }
         } else {
-          // If title isn't stored in p2p cache, infer from catalog
-          const title = cat?.title || `Cached Study Note #${id}`;
-          const subject = cat?.subject || "Campus Mesh / Background Pre-cache";
-          const branch = cat?.branch || "General";
-          const course = cat?.course || "B.Tech";
-          const year = cat?.year || "All Years";
-          const semester = cat?.semester || "";
-
-          notesMap.set(id, {
-            id,
-            title,
-            subject,
-            course,
-            branch,
-            year,
-            semester,
-            savedAt: new Date().toISOString(),
-            sizeBytes: ch.sizeBytes || (cat?.compressedSize || cat?.fileSize || 0),
-            sizeMB: ch.sizeMB || ((cat?.compressedSize || cat?.fileSize || 0) / (1024 * 1024)).toFixed(2),
-            source: "p2p_cache",
-          });
+          notesMap.set(id, formatStoredNote(id, ch, catalogMap.get(id), "p2p_cache"));
         }
       }
     }

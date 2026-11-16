@@ -295,7 +295,7 @@ export default function TabNotices({ currentUser }) {
   }).length;
 
   return (
-    <div style={{ color: "#fff", padding: "4px" }}>
+    <div style={{ color: "#0f172a", padding: "4px" }}>
       {/* Feedback Banner */}
       {statusFeedback && (
         <div

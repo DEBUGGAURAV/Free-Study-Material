@@ -476,7 +476,7 @@ export default function TabStudents(props) {
                     </div>
                   </td>
                   <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
-                    <div style={{ fontWeight: 600, color: "#e2e8f0" }}>{student.college || "General University"}</div>
+                    <div style={{ fontWeight: 600, color: "#334155" }}>{student.college || "General University"}</div>
                     <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
                       {student.branch && (
                         <span style={{ color: "#38bdf8", fontWeight: 600 }}>{student.branch}</span>
