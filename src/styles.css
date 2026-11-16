@@ -4039,10 +4039,10 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   --bg-surface: #ffffff !important;
   --bg-surface-elevated: #f8fafc !important;
   --bg-glass-card: #ffffff !important;
-  --border-subtle: #e2e8f0 !important;
+  --border-subtle: #cbd5e1 !important;
   --text-main: #0f172a !important;
-  --text-muted: #334155 !important;
-  --text-dim: #475569 !important;
+  --text-muted: #1e293b !important;
+  --text-dim: #334155 !important;
   --accent-cyan: #0284c7 !important;
   color: #0f172a !important;
   background: #ffffff !important;
@@ -4117,7 +4117,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
 }
 
-/* Headings in Admin Control Center */
+/* Headings & Text in Admin Control Center */
 .admin-modal-container h1,
 .admin-modal-container h2,
 .admin-modal-container h3,
@@ -4125,24 +4125,56 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 .admin-modal-container h5,
 .admin-modal-container h6 {
   color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+.admin-modal-container p {
+  color: #334155 !important;
+  font-weight: 500 !important;
+}
+
+.admin-modal-container label {
+  color: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+.admin-modal-container small {
+  color: #475569 !important;
+  font-weight: 500 !important;
 }
 
 /* 🛡️ Universal Text Contrast: Force Invisible Off-White to Sharp Dark #0f172a */
-.admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]),
-.admin-modal-container [style*="#fff"]:not(button):not(button *):not([style*="background: #"]):not([style*="background:#"]):not([style*="background: rgb"]):not([style*="background:rgb"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]),
+.admin-modal-container [style*="#ffffff"]:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
+.admin-modal-container [style*="#fff"]:not(button):not(button *):not([class*="btn"]):not([style*="background: #2563eb"]):not([style*="background: #dc2626"]):not([style*="background: #7c3aed"]):not([style*="background: #10b981"]):not([style*="background:#2563eb"]):not([style*="background:#dc2626"]):not([style*="background:#7c3aed"]):not([style*="background:#10b981"]),
+.admin-modal-container [style*="rgb(255, 255, 255)"]:not(button):not(button *):not([class*="btn"]):not([style*="background: rgb(37, 99, 235)"]):not([style*="background: rgb(220, 38, 38)"]):not([style*="background: rgb(16, 185, 129)"]),
+.admin-modal-container [style*="rgb(255,255,255)"]:not(button):not(button *):not([class*="btn"]):not([style*="background:rgb(37,99,235)"]):not([style*="background:rgb(220,38,38)"]):not([style*="background:rgb(16,185,129)"]),
 .admin-modal-container [style*="#e2e8f0"],
+.admin-modal-container [style*="rgb(226, 232, 240)"],
+.admin-modal-container [style*="rgb(226,232,240)"],
 .admin-modal-container [style*="#f1f5f9"],
+.admin-modal-container [style*="rgb(241, 245, 249)"],
+.admin-modal-container [style*="rgb(241,245,249)"],
 .admin-modal-container [style*="#f8fafc"],
+.admin-modal-container [style*="rgb(248, 250, 252)"],
+.admin-modal-container [style*="rgb(248,250,252)"],
 .admin-modal-container [style*="#d1fae5"] {
   color: #0f172a !important;
 }
 
-/* Secondary & Dim Text Mapped to High-Contrast Slate #475569 */
+/* Secondary & Dim Text Mapped to High-Contrast Slate #334155 */
 .admin-modal-container [style*="#cbd5e1"],
+.admin-modal-container [style*="rgb(203, 213, 225)"],
+.admin-modal-container [style*="rgb(203,213,225)"],
 .admin-modal-container [style*="#94a3b8"],
+.admin-modal-container [style*="rgb(148, 163, 184)"],
+.admin-modal-container [style*="rgb(148,163,184)"],
+.admin-modal-container [style*="#64748b"],
+.admin-modal-container [style*="rgb(100, 116, 139)"],
+.admin-modal-container [style*="rgb(100,116,139)"],
 .admin-modal-container [style*="var(--text-dim)"],
 .admin-modal-container [style*="var(--text-muted)"] {
-  color: #475569 !important;
+  color: #334155 !important;
+  font-weight: 500 !important;
 }
 
 /* Primary & Danger Buttons in Admin Studio */
@@ -4174,11 +4206,24 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   color: #ffffff !important;
 }
 
+/* Disabled buttons inside Admin Studio */
+.admin-modal-container button:disabled,
+.admin-modal-container .btn-primary:disabled,
+.admin-modal-container .btn-danger:disabled,
+.admin-modal-container .btn-secondary:disabled {
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  border: 1.5px solid #cbd5e1 !important;
+  opacity: 0.75 !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
 /* Preserve Crisp White Text on Solid Colored Badges & Buttons */
 .admin-modal-container .btn-primary,
 .admin-modal-container .btn-primary *,
-.admin-modal-container .btn-danger,
-.admin-modal-container .btn-danger *,
+.admin-modal-container .btn-danger:not(:disabled),
+.admin-modal-container .btn-danger:not(:disabled) *,
 .admin-modal-container button[style*="background: #2563eb"],
 .admin-modal-container button[style*="background: #2563eb"] *,
 .admin-modal-container button[style*="background:#2563eb"],
@@ -4208,60 +4253,76 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 
 /* ⚡ Accessible High-Contrast Color Mapping for White Studio ⚡ */
 
-/* Greens: from washed-out light mint to rich dark emerald (#059669) */
+/* Greens: from washed-out light mint to rich dark forest emerald (#047857) */
 .admin-modal-container [style*="#34d399"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="52, 211, 153"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="52,211,153"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#6ee7b7"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="110, 231, 183"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="110,231,183"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#4ade80"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="74, 222, 128"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="74,222,128"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#86efac"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#2dd4bf"]:not(.btn-primary):not(.btn-danger) {
-  color: #059669 !important;
+  color: #047857 !important;
+  font-weight: 700 !important;
 }
 
 /* Yellows / Ambers: from faint yellow to rich bronze amber (#b45309) */
 .admin-modal-container [style*="#fbbf24"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="251, 191, 36"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="251,191,36"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#facc15"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="250, 204, 21"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="250,204,21"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#fcd34d"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#eab308"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#a3e635"]:not(.btn-primary):not(.btn-danger) {
   color: #b45309 !important;
+  font-weight: 700 !important;
 }
 
 /* Reds / Corals: from washed-out pink to deep crimson red (#dc2626) */
 .admin-modal-container [style*="#fca5a5"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="252, 165, 165"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="252,165,165"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#f87171"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="248, 113, 113"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="248,113,113"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#fb7185"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#fda4af"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#f472b6"]:not(.btn-primary):not(.btn-danger) {
   color: #dc2626 !important;
+  font-weight: 700 !important;
 }
 
 /* Cyans / Blues: from washed-out cyan to deep ocean azure (#0284c7) */
 .admin-modal-container [style*="#38bdf8"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="56, 189, 248"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="56,189,248"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#67e8f9"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="103, 232, 249"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="103,232,249"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#7dd3fc"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#bae6fd"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="var(--accent-cyan)"]:not(.btn-primary):not(.btn-danger) {
   color: #0284c7 !important;
+  font-weight: 700 !important;
 }
 
 /* Purples / Violets: from pale violet to deep royal purple (#7c3aed) */
 .admin-modal-container [style*="#c084fc"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="192, 132, 252"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="192,132,252"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#c4b5fd"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#a78bfa"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="167, 139, 250"]:not(.btn-primary):not(.btn-danger),
+.admin-modal-container [style*="167,139,250"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#a5b4fc"]:not(.btn-primary):not(.btn-danger),
 .admin-modal-container [style*="#d8b4fe"]:not(.btn-primary):not(.btn-danger) {
-  color: #7c3aed !important;
+  color: #6d28d9 !important;
+  font-weight: 700 !important;
 }
 
 /* Translucent Badges & Tags Enhanced to Rich Pastel Backgrounds with Crisp Borders */
@@ -5884,4 +5945,41 @@ svg.lucide {
 .adm-form-input:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* 📱 High-Priority Mobile Responsiveness for Admin Studio */
+@media (max-width: 768px) {
+  .adm-stat-grid,
+  .admin-kpis-strip {
+    display: flex !important;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    padding: 6px 10px !important;
+    gap: 8px !important;
+    scrollbar-width: none !important;
+    -webkit-overflow-scrolling: touch !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+    flex-shrink: 0 !important;
+    background: #f8fafc !important;
+  }
+
+  .adm-stat-grid::-webkit-scrollbar,
+  .admin-kpis-strip::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .adm-stat-card {
+    flex: 0 0 auto !important;
+    min-width: 145px !important;
+    padding: 6px 10px !important;
+    border-radius: 8px !important;
+  }
+
+  .admin-modal-container .admin-tab-body {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 12px 10px 80px 10px !important;
+  }
 }

@@ -307,25 +307,25 @@ export default function TabTechNexus(props) {
                         <ShieldCheck size={22} />
                       </div>
                       <div>
-                        <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
                           <span>🛡️ Client Device Auto-Protection Engine (Anti-Crash Hardware Guard)</span>
-                          <span style={{ fontSize: "0.68rem", background: "rgba(16, 185, 129, 0.2)", color: "#6ee7b7", padding: "2px 6px", borderRadius: "4px", border: "1px solid rgba(16, 185, 129, 0.4)" }}>ACTIVE</span>
+                          <span style={{ fontSize: "0.68rem", background: "#ecfdf5", color: "#047857", padding: "2px 8px", borderRadius: "4px", border: "1px solid #a7f3d0", fontWeight: 800 }}>ACTIVE</span>
                         </div>
-                        <div style={{ fontSize: "0.75rem", color: "#cbd5e1", marginTop: "3px" }}>
+                        <div style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 500, marginTop: "3px" }}>
                           Prevents old/budget phones from freezing or running out of memory. If you set High parameters, client devices automatically clamp workloads to safe thresholds.
                         </div>
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(0, 0, 0, 0.3)", padding: "6px 12px", borderRadius: "8px", border: "1px solid rgba(255, 255, 255, 0.08)", fontSize: "0.74rem" }}>
-                      <span style={{ color: "var(--text-muted)" }}>This Device:</span>
-                      <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>{hw.label}</span>
-                      <span style={{ color: "#64748b" }}>•</span>
-                      <span style={{ color: "#a78bfa" }}>{hw.cores} Cores</span>
-                      <span style={{ color: "#64748b" }}>•</span>
-                      <span style={{ color: "#34d399" }}>{hw.memoryGB ? `${hw.memoryGB} GB RAM` : "Standard RAM"}</span>
-                      <span style={{ color: "#64748b" }}>•</span>
-                      <span style={{ color: "#fbbf24", textTransform: "uppercase" }}>{hw.effectiveType}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", background: "#f8fafc", padding: "8px 14px", borderRadius: "8px", border: "1.5px solid #cbd5e1", fontSize: "0.76rem" }}>
+                      <span style={{ color: "#334155", fontWeight: 700 }}>This Device:</span>
+                      <span style={{ color: "#0284c7", fontWeight: 800 }}>{hw.label}</span>
+                      <span style={{ color: "#94a3b8" }}>•</span>
+                      <span style={{ color: "#6d28d9", fontWeight: 700 }}>{hw.cores} Cores</span>
+                      <span style={{ color: "#94a3b8" }}>•</span>
+                      <span style={{ color: "#047857", fontWeight: 700 }}>{hw.memoryGB ? `${hw.memoryGB} GB RAM` : "Standard RAM"}</span>
+                      <span style={{ color: "#94a3b8" }}>•</span>
+                      <span style={{ color: "#b45309", fontWeight: 800, textTransform: "uppercase" }}>{hw.effectiveType}</span>
                     </div>
                   </div>
                 );
@@ -346,24 +346,25 @@ export default function TabTechNexus(props) {
                 {/* HUD 1: Edge CDN RAM Cache */}
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid rgba(6, 182, 212, 0.3)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "12px",
                     padding: "14px",
                     position: "relative",
                     overflow: "hidden",
+                    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "0.74rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 800 }}>
                       Edge CDN In-Memory
                     </span>
-                    <Globe size={16} color="var(--accent-cyan)" />
+                    <Globe size={16} color="#0284c7" />
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#fff", lineHeight: 1.1 }}>
-                    {techTelemetry?.memoryCache?.itemCount ?? 0} <span style={{ fontSize: "0.85rem", color: "var(--accent-cyan)", fontWeight: 600 }}>Notes ({techTelemetry?.memoryCache?.totalMB ?? "0.00"} MB)</span>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>
+                    {techTelemetry?.memoryCache?.itemCount ?? 0} <span style={{ fontSize: "0.85rem", color: "#0284c7", fontWeight: 700 }}>Notes ({techTelemetry?.memoryCache?.totalMB ?? "0.00"} MB)</span>
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#334155", fontWeight: 500, marginTop: "4px" }}>
                     1ms instant stream • Max limit: {techSettings.cdnMaxRamItems === "auto" ? "🤖 Auto (Device Adaptive)" : `${techSettings.cdnMaxRamItems || 50} Notes`}
                   </div>
                   <div style={{ display: "flex", gap: "6px", marginTop: "10px" }}>
@@ -371,19 +372,19 @@ export default function TabTechNexus(props) {
                       onClick={handlePurgeMemoryCache}
                       disabled={techLoading}
                       className="btn-secondary"
-                      style={{ fontSize: "0.7rem", padding: "4px 8px", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}
+                      style={{ fontSize: "0.72rem", padding: "5px 10px", borderColor: "#fca5a5", color: "#dc2626", background: "#fef2f2", fontWeight: 700 }}
                       title="Purge all items from server memory"
                     >
-                      <Trash2 size={11} style={{ marginRight: "3px" }} /> Purge RAM
+                      <Trash2 size={12} style={{ marginRight: "3px" }} /> Purge RAM
                     </button>
                     <button
                       onClick={handlePrewarmPopular}
                       disabled={techLoading}
                       className="btn-secondary"
-                      style={{ fontSize: "0.7rem", padding: "4px 8px", borderColor: "rgba(6, 182, 212, 0.3)", color: "var(--accent-cyan)" }}
+                      style={{ fontSize: "0.72rem", padding: "5px 10px", borderColor: "#bfdbfe", color: "#0284c7", background: "#eff6ff", fontWeight: 700 }}
                       title="Pre-warm Top 10 most viewed notes into memory"
                     >
-                      <Flame size={11} style={{ marginRight: "3px" }} /> Prewarm Top 10
+                      <Flame size={12} style={{ marginRight: "3px" }} /> Prewarm Top 10
                     </button>
                   </div>
                 </div>
@@ -391,78 +392,81 @@ export default function TabTechNexus(props) {
                 {/* HUD 2: Database Writes Saved */}
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid rgba(160, 185, 129, 0.3)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "12px",
                     padding: "14px",
+                    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "0.74rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 800 }}>
                       DB Writes Prevented
                     </span>
-                    <ShieldCheck size={16} color="#10b981" />
+                    <ShieldCheck size={16} color="#059669" />
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#10b981", lineHeight: 1.1 }}>
-                    {techTelemetry?.dbWritesSaved ?? 0} <span style={{ fontSize: "0.85rem", color: "#6ee7b7", fontWeight: 600 }}>Writes</span>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: "#047857", lineHeight: 1.1 }}>
+                    {techTelemetry?.dbWritesSaved ?? 0} <span style={{ fontSize: "0.85rem", color: "#059669", fontWeight: 700 }}>Writes</span>
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#334155", fontWeight: 500, marginTop: "4px" }}>
                     Range stream storm blocked • 95%+ Firestore quota saved
                   </div>
-                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.7rem", color: "#34d399", background: "rgba(16, 185, 129, 0.1)", padding: "2px 8px", borderRadius: "4px" }}>
-                    <Check size={12} /> Strict Download Gating Active
+                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.72rem", color: "#065f46", background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "3px 8px", borderRadius: "6px", fontWeight: 700 }}>
+                    <Check size={13} /> Strict Download Gating Active
                   </div>
                 </div>
 
                 {/* HUD 3: P2P Campus Mesh */}
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid rgba(168, 85, 247, 0.3)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "12px",
                     padding: "14px",
+                    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "0.74rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 800 }}>
                       P2P Campus AirDrop
                     </span>
-                    <Share2 size={16} color="#c084fc" />
+                    <Share2 size={16} color="#7c3aed" />
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: techSettings.enableP2pAirDrop ? "#c084fc" : "#94a3b8", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: techSettings.enableP2pAirDrop ? "#6d28d9" : "#64748b", lineHeight: 1.1 }}>
                     {techSettings.enableP2pAirDrop ? "Mesh Ready" : "Disabled"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#334155", fontWeight: 500, marginTop: "4px" }}>
                     WebRTC Local Swarm • Max {techSettings.p2pMaxPeers === "auto" ? "🤖 Auto (Adaptive)" : `${techSettings.p2pMaxPeers || 10} peers`}
                   </div>
-                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.7rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.1)", padding: "2px 8px", borderRadius: "4px" }}>
-                    <Wifi size={12} /> College WiFi 0ms Sharing
+                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.72rem", color: "#6d28d9", background: "#f5f3ff", border: "1px solid #ddd6fe", padding: "3px 8px", borderRadius: "6px", fontWeight: 700 }}>
+                    <Wifi size={13} /> College WiFi 0ms Sharing
                   </div>
                 </div>
 
                 {/* HUD 4: Client Neural AI */}
                 <div
                   style={{
-                    background: "rgba(255, 255, 255, 0.03)",
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "12px",
                     padding: "14px",
+                    boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "0.74rem", color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 800 }}>
                       Client Neural AI &amp; WASM
                     </span>
-                    <Sparkles size={16} color="#f59e0b" />
+                    <Sparkles size={16} color="#d97706" />
                   </div>
-                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: techSettings.enableClientAi ? "#fbbf24" : "#94a3b8", lineHeight: 1.1 }}>
+                  <div style={{ fontSize: "1.45rem", fontWeight: 800, color: techSettings.enableClientAi ? "#b45309" : "#64748b", lineHeight: 1.1 }}>
                     {techSettings.enableClientAi ? "Neural RAG Active" : "Disabled"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#334155", fontWeight: 500, marginTop: "4px" }}>
                     In-Browser Vector Search • Tesseract OCR
                   </div>
-                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.7rem", color: "#fbbf24", background: "rgba(245, 158, 11, 0.1)", padding: "2px 8px", borderRadius: "4px" }}>
-                    <Zap size={12} /> ₹0 Server AI / GPU Cost
+                  <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.72rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: "3px 8px", borderRadius: "6px", fontWeight: 700 }}>
+                    <Zap size={13} /> ₹0 Server AI / GPU Cost
                   </div>
                 </div>
               </div>

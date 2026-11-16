@@ -105,7 +105,7 @@ export default function AdminModal({
   onMaintenanceChange,
 }) {
   const [activeTab, setActiveTab] = useState("notes");
-  const [showKpis, setShowKpis] = useState(true);
+  const [showKpis, setShowKpis] = useState(() => typeof window !== "undefined" && window.innerWidth > 768);
   const [deletedNoteIds, setDeletedNoteIds] = useState(new Set());
   const isHalfAdmin = currentUser?.role === "half_admin";
 
@@ -2054,7 +2054,7 @@ export default function AdminModal({
             {maintenanceMode ? <ShieldAlert size={24} /> : <ShieldCheck size={24} />}
           </div>
           <div>
-            <div style={{ fontSize: "1.08rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: "1.08rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
               <span>Server Maintenance Mode (Emergency Server Maintenance Control)</span>
               <span
                 style={{
@@ -2062,15 +2062,15 @@ export default function AdminModal({
                   fontWeight: 800,
                   padding: "3px 9px",
                   borderRadius: "999px",
-                  background: maintenanceMode ? "rgba(239, 68, 68, 0.25)" : "rgba(16, 185, 129, 0.2)",
-                  color: maintenanceMode ? "#fca5a5" : "#6ee7b7",
-                  border: `1px solid ${maintenanceMode ? "rgba(239, 68, 68, 0.5)" : "rgba(16, 185, 129, 0.4)"}`,
+                  background: maintenanceMode ? "#fef2f2" : "#ecfdf5",
+                  color: maintenanceMode ? "#b91c1c" : "#047857",
+                  border: `1.5px solid ${maintenanceMode ? "#fca5a5" : "#a7f3d0"}`,
                 }}
               >
                 ● {maintenanceMode ? "MAINTENANCE ACTIVE (STUDENTS PAUSED)" : "PLATFORM LIVE (100% PUBLIC ACCESS)"}
               </span>
             </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "3px" }}>
+            <div style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 500, marginTop: "3px" }}>
               One-click platform shield: pauses student traffic with a professional maintenance screen while keeping Render, LibSQL, MTProto, and Admin Studio 100% operational in the background.
             </div>
           </div>
@@ -2116,30 +2116,30 @@ export default function AdminModal({
 
       {/* Quick Safety Info Pills */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: "10px", marginBottom: "14px" }}>
-        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-          <div style={{ fontSize: "0.7rem", color: "var(--accent-cyan)", fontWeight: 700, textTransform: "uppercase" }}>🛡️ Admin Studio Bypass</div>
-          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Unrestricted Admin Access</div>
-          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Admins &amp; Half-Admins always pass through via session token</div>
+        <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", boxShadow: "0 2px 6px rgba(15, 23, 42, 0.03)" }}>
+          <div style={{ fontSize: "0.72rem", color: "#0284c7", fontWeight: 800, textTransform: "uppercase" }}>🛡️ Admin Studio Bypass</div>
+          <div style={{ fontSize: "0.82rem", color: "#0f172a", marginTop: "3px", fontWeight: 700 }}>Unrestricted Admin Access</div>
+          <div style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 500, marginTop: "2px" }}>Admins &amp; Half-Admins always pass through via session token</div>
         </div>
-        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-          <div style={{ fontSize: "0.7rem", color: "#34d399", fontWeight: 700, textTransform: "uppercase" }}>⚡ Zero Server Downtime</div>
-          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Daemon Kept 100% Online</div>
-          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Render daemon, Express, MTProto &amp; LibSQL remain connected</div>
+        <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", boxShadow: "0 2px 6px rgba(15, 23, 42, 0.03)" }}>
+          <div style={{ fontSize: "0.72rem", color: "#047857", fontWeight: 800, textTransform: "uppercase" }}>⚡ Zero Server Downtime</div>
+          <div style={{ fontSize: "0.82rem", color: "#0f172a", marginTop: "3px", fontWeight: 700 }}>Daemon Kept 100% Online</div>
+          <div style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 500, marginTop: "2px" }}>Render daemon, Express, MTProto &amp; LibSQL remain connected</div>
         </div>
-        <div style={{ background: "rgba(0, 0, 0, 0.25)", border: "1px solid rgba(255, 255, 255, 0.06)", borderRadius: "8px", padding: "10px 12px" }}>
-          <div style={{ fontSize: "0.7rem", color: "#fbbf24", fontWeight: 700, textTransform: "uppercase" }}>🚀 Instant Restoration</div>
-          <div style={{ fontSize: "0.78rem", color: "#e2e8f0", marginTop: "2px", fontWeight: 600 }}>Sub-Second Live Unpause</div>
-          <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Turning off instantly restores public browsing with zero build delays</div>
+        <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", boxShadow: "0 2px 6px rgba(15, 23, 42, 0.03)" }}>
+          <div style={{ fontSize: "0.72rem", color: "#b45309", fontWeight: 800, textTransform: "uppercase" }}>🚀 Instant Restoration</div>
+          <div style={{ fontSize: "0.82rem", color: "#0f172a", marginTop: "3px", fontWeight: 700 }}>Sub-Second Live Unpause</div>
+          <div style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 500, marginTop: "2px" }}>Turning off instantly restores public browsing with zero build delays</div>
         </div>
       </div>
 
       {/* 🛰️ All 3-Server Cluster Connection & Live Sync Indicator */}
       <div
         style={{
-          background: "rgba(0, 0, 0, 0.35)",
-          border: "1px solid rgba(16, 185, 129, 0.35)",
-          borderRadius: "8px",
-          padding: "10px 14px",
+          background: "#f0fdf4",
+          border: "1.5px solid #86efac",
+          borderRadius: "10px",
+          padding: "12px 16px",
           marginBottom: "14px",
           display: "flex",
           alignItems: "center",
@@ -2148,12 +2148,12 @@ export default function AdminModal({
           gap: "10px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Wifi size={16} style={{ color: "#34d399" }} />
-          <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <Wifi size={16} style={{ color: "#059669" }} />
+          <span style={{ fontSize: "0.84rem", fontWeight: 800, color: "#065f46" }}>
             All 3 Backend Servers Connected (Teeno Servers Synchronized):
           </span>
-          <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+          <span style={{ fontSize: "0.74rem", color: "#047857", fontWeight: 600 }}>
             Emergency pause shield is active across all 3 backend instances
           </span>
         </div>
@@ -2162,9 +2162,9 @@ export default function AdminModal({
           {/* Server #1 Connected */}
           <span
             style={{
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.45)",
-              color: "#34d399",
+              background: "#dcfce7",
+              border: "1px solid #86efac",
+              color: "#166534",
               padding: "4px 10px",
               borderRadius: "6px",
               fontSize: "0.72rem",
@@ -2182,9 +2182,9 @@ export default function AdminModal({
           {/* Server #2 Connected */}
           <span
             style={{
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.45)",
-              color: "#34d399",
+              background: "#dcfce7",
+              border: "1px solid #86efac",
+              color: "#166534",
               padding: "4px 10px",
               borderRadius: "6px",
               fontSize: "0.72rem",
@@ -3528,7 +3528,7 @@ export default function AdminModal({
                     {activeTabMeta?.group || "SYSTEM MODULE"}
                   </span>
                 </div>
-                <p style={{ margin: "2px 0 0", fontSize: "0.76rem", color: "#64748b", lineHeight: 1.4 }}>
+                <p style={{ margin: "2px 0 0", fontSize: "0.78rem", color: "#334155", fontWeight: 500, lineHeight: 1.4 }}>
                   {activeTabMeta?.desc || "Active enterprise telemetry and control surface"}
                 </p>
               </div>

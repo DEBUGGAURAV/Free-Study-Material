@@ -48,10 +48,10 @@ export default function TabRestoreVault(props) {
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
                 <div>
-                  <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+                  <h3 style={{ fontSize: "1.08rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                     Restore Vault (Zero Data Loss Archive)
                   </h3>
-                  <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "2px 0 0" }}>
+                  <p style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 500, margin: "2px 0 0" }}>
                     Safely recover or permanently delete archived study notes, student accounts, and notices.
                   </p>
                 </div>
@@ -103,11 +103,11 @@ export default function TabRestoreVault(props) {
               {/* Filters & Search */}
               <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
                 <div style={{ position: "relative", minWidth: "260px", flex: 1 }}>
-                  <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                  <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#475569" }} />
                   <input
                     type="text"
                     className="form-input"
-                    style={{ padding: "8px 12px 8px 32px", fontSize: "0.82rem" }}
+                    style={{ padding: "8px 12px 8px 32px", fontSize: "0.82rem", background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0f172a" }}
                     placeholder="Search deleted documents by title or subject..."
                     value={recycleSearch}
                     onChange={(e) => setRecycleSearch(e.target.value)}
@@ -126,27 +126,28 @@ export default function TabRestoreVault(props) {
                         type="button"
                         onClick={() => setRecycleFilter(f)}
                         style={{
-                          padding: "6px 12px",
-                          borderRadius: "var(--radius-sm)",
+                          padding: "6px 14px",
+                          borderRadius: "8px",
                           fontSize: "0.78rem",
-                          fontWeight: 700,
-                          background: isActive ? "var(--accent-indigo)" : "rgba(255, 255, 255, 0.05)",
-                          color: "#fff",
-                          border: isActive ? "1px solid #818cf8" : "1px solid rgba(255, 255, 255, 0.1)",
+                          fontWeight: 800,
+                          background: isActive ? "#2563eb" : "#f1f5f9",
+                          color: isActive ? "#ffffff" : "#1e293b",
+                          border: isActive ? "1.5px solid #1d4ed8" : "1.5px solid #cbd5e1",
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "6px",
-                          boxShadow: isActive ? "0 0 10px rgba(99, 102, 241, 0.35)" : "none",
+                          boxShadow: isActive ? "0 2px 8px rgba(37, 99, 235, 0.25)" : "none",
                         }}
                       >
                         <span>{f.toUpperCase()}</span>
                         <span
                           style={{
-                            fontSize: "0.7rem",
-                            padding: "1px 6px",
+                            fontSize: "0.72rem",
+                            padding: "1px 7px",
                             borderRadius: "10px",
-                            background: isActive ? "rgba(255, 255, 255, 0.25)" : "rgba(255, 255, 255, 0.1)",
+                            background: isActive ? "rgba(255, 255, 255, 0.25)" : "#e2e8f0",
+                            color: isActive ? "#ffffff" : "#0f172a",
                             fontWeight: 800,
                           }}
                         >
@@ -182,14 +183,14 @@ export default function TabRestoreVault(props) {
                   <tbody>
                     {recycleBinLoading ? (
                       <tr>
-                        <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "var(--text-dim)" }}>
+                        <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "#334155", fontWeight: 500 }}>
                           <div className="spinner" style={{ width: "24px", height: "24px", margin: "0 auto 8px" }} />
                           Loading Restore Vault records...
                         </td>
                       </tr>
                     ) : filteredRecycleItems.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "var(--text-dim)" }}>
+                        <td colSpan={5} style={{ padding: "40px", textAlign: "center", color: "#334155", fontWeight: 500 }}>
                           Restore Vault is empty. No deleted records found.
                         </td>
                       </tr>
@@ -202,15 +203,20 @@ export default function TabRestoreVault(props) {
                         const isSelected = selectedRecycleIds.includes(item.id);
 
                         const badgeBg = isNote
-                          ? "rgba(99, 102, 241, 0.15)"
+                          ? "#eef2ff"
                           : isUser
-                          ? "rgba(16, 185, 129, 0.15)"
-                          : "rgba(245, 158, 11, 0.15)";
+                          ? "#ecfdf5"
+                          : "#fffbeb";
+                        const badgeBorder = isNote
+                          ? "1px solid #c7d2fe"
+                          : isUser
+                          ? "1px solid #a7f3d0"
+                          : "1px solid #fde68a";
                         const badgeColor = isNote
-                          ? "#818cf8"
+                          ? "#3730a3"
                           : isUser
-                          ? "#34d399"
-                          : "#fbbf24";
+                          ? "#065f46"
+                          : "#92400e";
                         const badgeLabel = isNote
                           ? "NOTE"
                           : isUser
@@ -231,7 +237,7 @@ export default function TabRestoreVault(props) {
                           : "Recently Archived";
 
                         return (
-                          <tr key={item.id} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.04)", background: isSelected ? "rgba(99, 102, 241, 0.08)" : "transparent" }}>
+                          <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9", background: isSelected ? "#eff6ff" : "transparent" }}>
                             <td style={{ padding: "12px 16px" }}>
                               <input
                                 type="checkbox"
@@ -244,10 +250,11 @@ export default function TabRestoreVault(props) {
                                 <span
                                   style={{
                                     fontSize: "0.68rem",
-                                    fontWeight: 700,
-                                    padding: "2px 7px",
+                                    fontWeight: 800,
+                                    padding: "2px 8px",
                                     borderRadius: "4px",
                                     background: badgeBg,
+                                    border: badgeBorder,
                                     color: badgeColor,
                                     letterSpacing: "0.5px",
                                   }}
@@ -259,10 +266,10 @@ export default function TabRestoreVault(props) {
                                 </span>
                               </div>
                             </td>
-                            <td style={{ padding: "12px 16px", color: "var(--text-muted)" }}>
+                            <td style={{ padding: "12px 16px", color: "#1e293b", fontWeight: 500 }}>
                               {item.subject || item.email || item.branch || "Archived Data"}
                             </td>
-                            <td style={{ padding: "12px 16px", color: "var(--text-dim)" }}>
+                            <td style={{ padding: "12px 16px", color: "#475569", fontWeight: 500 }}>
                               {dateFormatted}
                             </td>
                             <td style={{ padding: "12px 16px", textAlign: "right" }}>
@@ -271,7 +278,7 @@ export default function TabRestoreVault(props) {
                                   <button
                                     onClick={() => setPreviewNoteInAdmin(item)}
                                     className="btn-icon"
-                                    style={{ width: "32px", height: "32px", background: "rgba(99, 102, 241, 0.15)", color: "#818cf8" }}
+                                    style={{ width: "32px", height: "32px", background: "#eef2ff", color: "#3730a3", border: "1px solid #c7d2fe" }}
                                     title="Preview Document with Mozilla PDF Engine"
                                   >
                                     <Eye size={15} />
