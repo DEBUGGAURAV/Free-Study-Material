@@ -147,13 +147,15 @@ export default function Navbar({
       e.preventDefault();
       setInstallPrompt(e);
     };
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", () => {
+    const onAppInstalled = () => {
       setIsInstalled(true);
       setInstallPrompt(null);
-    });
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", onAppInstalled);
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", onAppInstalled);
       if (mediaQuery && mediaQuery.removeEventListener) {
         mediaQuery.removeEventListener("change", checkStandalone);
       }
