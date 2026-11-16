@@ -491,12 +491,17 @@ export default function AdminModal({
   // Telemetry Loaders
   const loadStats = async () => {
     try {
-      const [s, h] = await Promise.all([
+      const [s, h, cdn] = await Promise.all([
         api.getStats().catch(() => ({ stats: null })),
         api.getHealth().catch(() => null),
+        api.getCdnStats().catch(() => null),
       ]);
       setStats(s?.stats || null);
       setHealth(h || null);
+      if (cdn) {
+        setCdnStats(cdn);
+        if (cdn?.retentionDays) setRetentionDays(cdn.retentionDays);
+      }
       if (s?.lastSync) setLastSyncInfo(s.lastSync);
     } catch {}
   };
