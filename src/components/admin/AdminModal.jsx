@@ -2949,10 +2949,12 @@ export default function AdminModal({
             <button
               type="button"
               onClick={handleExportJsonBackup}
-              className="btn-icon"
+              className="adm-header-backup-btn"
               style={{
                 height: "38px",
-                padding: "0 12px",
+                width: "auto",
+                minWidth: "max-content",
+                padding: "0 14px",
                 background: "#f0fdf4",
                 borderRadius: "9px",
                 border: "1.5px solid #86efac",
@@ -2961,14 +2963,18 @@ export default function AdminModal({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
-                fontSize: "0.76rem",
+                fontSize: "0.78rem",
                 fontWeight: 700,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
                 transition: "all 0.15s ease",
               }}
               title="1-Click JSON Backup: Export entire notes catalog offline (0 Server Load)"
             >
-              <Download size={14} />
-              <span>Backup JSON</span>
+              <Download size={14} style={{ flexShrink: 0, color: "#16a34a" }} />
+              <span className="adm-backup-label" style={{ color: "#16a34a", fontWeight: 700, whiteSpace: "nowrap" }}>
+                Backup JSON
+              </span>
             </button>
             <button
               onClick={() => {

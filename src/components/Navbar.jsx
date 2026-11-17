@@ -51,7 +51,6 @@ export default function Navbar({
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showMobileMoreSheet, setShowMobileMoreSheet] = useState(false);
   const [contributionTier, setContributionTier] = useState(() => getCampusContributionTier());
-  const searchInputRef = useRef(null);
 
   useEffect(() => {
     const handleTierUpdate = () => {
@@ -114,10 +113,13 @@ export default function Navbar({
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-          searchInputRef.current.select();
+        const searchInput = document.querySelector(".search-input");
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
         }
+        const el = document.getElementById("study-materials");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -189,48 +191,6 @@ export default function Navbar({
       currentUser.permissions.includes("delete_records")
     ))
   );
-
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
-
-  const handleVoiceSearch = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("🎙️ Voice search is not supported in this browser. Please use Chrome or Edge.");
-      return;
-    }
-
-    if (isListening) {
-      try {
-        if (recognitionRef.current) recognitionRef.current.stop();
-      } catch (_) {}
-      setIsListening(false);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "en-IN";
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => setIsListening(true);
-      recognition.onresult = (event) => {
-        setIsListening(false);
-        const transcript = event?.results?.[0]?.[0]?.transcript;
-        if (transcript) {
-          setSearchTerm(transcript);
-        }
-      };
-      recognition.onerror = () => setIsListening(false);
-      recognition.onend = () => setIsListening(false);
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (_) {
-      setIsListening(false);
-    }
-  };
 
   return (
     <>
@@ -376,92 +336,6 @@ export default function Navbar({
               )}
             </div>
           </div>
-
-          {/* Center Section: Wide Universal Spotlight Search (Never Crushed!) */}
-          {currentUser && <div className="search-wrapper">
-            <Search size={15} className="search-icon" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="search-input"
-              placeholder="Search notes, subjects, branch, PYQs..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <div className="search-right-tools">
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="search-clear-btn"
-                  title="Clear search"
-                >
-                  ✕
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleVoiceSearch}
-                className={`search-mic-btn ${isListening ? "listening" : ""}`}
-                title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
-              >
-                {isListening ? <MicOff size={14} /> : <Mic size={14} />}
-              </button>
-
-              {/* ♊ Circle to Search Button */}
-              <button
-                type="button"
-                className="search-circle-btn"
-                onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
-                style={{
-                  background: "linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(99, 102, 241, 0.12))",
-                  border: "1px solid rgba(56, 189, 248, 0.45)",
-                  color: "#0284c7",
-                  borderRadius: "6px",
-                  padding: "2px 7px",
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  marginLeft: "2px",
-                }}
-                title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
-              >
-                <GeminiIcon size={14} withRing ringColor="#3552c5" color="#0f8b7e" />
-                <span className="search-tool-label">Circle</span>
-              </button>
-
-              {/* ✨ AI Study Pod Popup Button */}
-              <button
-                type="button"
-                className="search-ai-btn"
-                onClick={onOpenAiStudyPod}
-                style={{
-                  background: "linear-gradient(135deg, rgba(99, 102, 241, 0.38), rgba(6, 182, 212, 0.38))",
-                  border: "1px solid rgba(139, 92, 246, 0.55)",
-                  color: "#ffffff",
-                  borderRadius: "8px",
-                  padding: "3px 9px",
-                  fontSize: "0.74rem",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  marginLeft: "4px",
-                  boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
-                }}
-                title="AI Study: Conversational Tutor, Flashcards & Summary"
-              >
-                <Sparkles size={12} color="#38bdf8" />
-                <span className="search-tool-label">AI Study</span>
-              </button>
-
-              <kbd className="search-kbd-shortcut">⌘K</kbd>
-            </div>
-          </div>}
 
           {/* Right Section (Desktop): Core Publish, Admin & User Identity */}
           <div className="nav-core-right">

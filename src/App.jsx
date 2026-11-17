@@ -2286,12 +2286,23 @@ export default function App() {
               showOnlyOffline={showOnlyOffline}
               setShowOnlyOffline={setShowOnlyOffline}
               offlineCount={offlineNotesCount}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
               onOpenCircleSearch={() => {
                 if (!currentUser) {
                   openAuth("signin");
                   return;
                 }
                 setIsScreenPencilActive(true);
+              }}
+              onOpenAiStudyPod={(targetTab = "chat", note = null) => {
+                if (!currentUser) {
+                  openAuth("signin");
+                  return;
+                }
+                setHomeAiPodNote(note && note.id ? note : null);
+                setHomeAiPodInitialTab(typeof targetTab === "string" ? targetTab : "chat");
+                setIsHomeAiPodOpen(true);
               }}
             />
 

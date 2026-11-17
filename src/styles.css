@@ -755,6 +755,16 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   font-size: 0.8rem;
 }
 
+.library-search-input {
+  padding: 10px 220px 10px 38px !important;
+}
+
+@media (max-width: 640px) {
+  .library-search-input {
+    padding: 9px 125px 9px 34px !important;
+  }
+}
+
 .search-input:focus {
   background: rgba(255, 255, 255, 0.09);
   border-color: var(--accent-cyan);

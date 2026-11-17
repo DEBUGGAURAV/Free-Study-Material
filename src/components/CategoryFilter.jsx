@@ -105,7 +105,7 @@ export default function CategoryFilter({
         <div style={{ flex: "1 1 240px", minWidth: "220px" }}>
           <p style={{ margin: 0, color: "#4361bb", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em" }}>THE LIBRARY</p>
           <h2 style={{ margin: "2px 0 4px", fontSize: "clamp(1.3rem, 2.4vw, 1.7rem)", fontWeight: 800, color: "#172338", letterSpacing: "-0.03em" }}>Explore study materials</h2>
-          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "block" }}>Filter by course, year, or branch to find the right resources.</span>
+          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "block", textAlign: "left" }}>Filter by course, year, or branch to find the right resources.</span>
         </div>
 
         {/* 🔍 Universal Spotlight Search Bar (Shifted to Explore Study Materials) */}
@@ -115,8 +115,7 @@ export default function CategoryFilter({
             <input
               ref={searchInputRef}
               type="text"
-              className="search-input"
-              style={{ paddingRight: "215px" }}
+              className="search-input library-search-input"
               placeholder="Search notes, subjects, branch, PYQs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm && setSearchTerm(e.target.value)}
