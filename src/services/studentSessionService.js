@@ -23,6 +23,41 @@ const sessionActiveThrottle = new Map();
 // Live in-memory cache for user security logs and sessions (instant response & fallback)
 const userMemorySecurityLogs = new Map();
 const userMemorySessions = new Map();
+// 🟢 Live in-memory user presence map (tracks realtime online activity with zero database load)
+const userLivePresence = new Map(); // userId -> { lastSeen: number, ip: string }
+
+function recordUserLivePresence(userId, extra = {}) {
+  if (!userId) return;
+  userLivePresence.set(String(userId), {
+    lastSeen: Date.now(),
+    ...extra,
+  });
+}
+
+function getUserLivePresence(userId) {
+  if (!userId) return null;
+  return userLivePresence.get(String(userId)) || null;
+}
+
+function isUserOnlineNow(userId, thresholdMs = 5 * 60 * 1000) {
+  const p = userLivePresence.get(String(userId));
+  if (!p) return false;
+  return (Date.now() - p.lastSeen) < thresholdMs;
+}
+
+function getLiveOnlineCount(thresholdMs = 5 * 60 * 1000) {
+  const now = Date.now();
+  let count = 0;
+  for (const [, data] of userLivePresence.entries()) {
+    if (now - data.lastSeen < thresholdMs) {
+      count++;
+    }
+  }
+  return count;
+}
+// Live in-memory throttle and buffer for student academic activities (reads, views, downloads)
+const academicActivityThrottle = new Map();
+const userMemoryAcademicActivities = new Map();
 
 /**
  * Bounds in-memory caches to prevent memory leaks over long server uptimes
@@ -52,6 +87,12 @@ function pruneSessionCaches() {
   }
   if (userMemorySessions.size > 2000) {
     userMemorySessions.clear();
+  }
+  if (userLivePresence.size > 5000) {
+    const cutoff = now - 2 * 3600 * 1000;
+    for (const [uid, data] of userLivePresence.entries()) {
+      if (data.lastSeen < cutoff) userLivePresence.delete(uid);
+    }
   }
 }
 
@@ -441,11 +482,110 @@ async function recordSecurityActivity(userId, { action = "ACTIVITY", details = "
 }
 
 /**
+ * 📖 Record student academic activity (Note Views, Reads, Downloads, Searches)
+ * - In-memory throttle prevents spamming Firestore (max 1 write per user+note+action per 30s)
+ * - Auto-caps student activities at rolling 20 events (strictly 0 DB bloat)
+ * - Non-blocking asynchronous Firestore execution
+ */
+async function recordStudentAcademicActivity(userId, {
+  type = "view",
+  action = "NOTE_VIEW",
+  noteId = "",
+  noteTitle = "",
+  subject = "",
+  course = "",
+  branch = "",
+  page = null,
+  detail = "",
+  fileSize = 0,
+}) {
+  if (!userId || userId === "admin-root") return null;
+  const uId = String(userId);
+  const now = Date.now();
+
+  // Strict Throttle Key: Prevent spamming DB when student flips pages or rapidly clicks
+  const throttleKey = `${uId}:${type}:${noteId || noteTitle || detail}`;
+  const lastTime = academicActivityThrottle.get(throttleKey) || 0;
+  if (now - lastTime < 30 * 1000) {
+    // Throttled: Already recorded in the last 30 seconds
+    return null;
+  }
+  academicActivityThrottle.set(throttleKey, now);
+
+  const cleanTitle = String(noteTitle || "Academic Study Material").trim();
+  const cleanSubject = String(subject || "General").trim();
+  let defaultDetail = "";
+  if (type === "download") {
+    defaultDetail = `Downloaded Note: ${cleanTitle}${cleanSubject ? ` (${cleanSubject})` : ""}`;
+  } else if (type === "search") {
+    defaultDetail = `Searched Library: "${cleanTitle}"`;
+  } else {
+    defaultDetail = `Read Note: ${cleanTitle}${cleanSubject ? ` (${cleanSubject})` : ""}${page ? ` • Page ${page}` : ""}`;
+  }
+
+  const newAct = {
+    id: `act_${now}_${crypto.randomBytes(3).toString("hex")}`,
+    type: String(type || "view").toLowerCase(),
+    action: String(action || (type === "download" ? "NOTE_DOWNLOAD" : type === "search" ? "NOTE_SEARCH" : "NOTE_VIEW")).toUpperCase(),
+    noteId: String(noteId || ""),
+    noteTitle: cleanTitle,
+    subject: cleanSubject,
+    course: String(course || ""),
+    branch: String(branch || ""),
+    page: page ? Number(page) : null,
+    fileSize: Number(fileSize || 0),
+    detail: detail || defaultDetail,
+    timestamp: new Date(now).toISOString(),
+    createdAt: now,
+  };
+
+  // In-memory buffer update (Max 20)
+  let memActs = userMemoryAcademicActivities.get(uId) || [];
+  memActs.unshift(newAct);
+  if (memActs.length > 20) memActs = memActs.slice(0, 20);
+  userMemoryAcademicActivities.set(uId, memActs);
+
+  if (db) {
+    try {
+      const userRef = db.collection("users").doc(uId);
+      const snap = await userRef.get().catch(() => null);
+      let activities = [];
+      if (snap && snap.exists) {
+        const uData = snap.data() || {};
+        activities = Array.isArray(uData.activities) ? [...uData.activities] : [];
+      } else {
+        activities = [...memActs];
+      }
+      activities.unshift(newAct);
+      // Auto-prune / cap at 20 events (strictly 0 DB bloat)
+      if (activities.length > 20) activities = activities.slice(0, 20);
+
+      const updatePayload = {
+        activities,
+        updatedAt: new Date(now).toISOString(),
+      };
+      if (type === "download") {
+        updatePayload.downloadsCount = ((snap?.data()?.downloadsCount || 0) + 1);
+      }
+      await userRef.set(updatePayload, { merge: true }).catch(() => {});
+    } catch (e) {
+      console.warn("[STUDENT-SESSION] recordStudentAcademicActivity error:", e.message);
+    }
+  }
+
+  return newAct;
+}
+
+/**
  * Update session last active time in Firestore (Throttled every 10 minutes)
  * Also seamlessly refreshes real client IP and device details if request is passed.
  */
 async function touchSessionActive(userId, sessionId, req = null) {
   if (!userId || !sessionId || userId === "admin-root") return;
+  const currentIp = req ? extractClientIp(req) : null;
+  // 🟢 Always refresh live presence in memory instantly (0 database load)
+  recordUserLivePresence(userId, { ip: currentIp });
+
   const now = Date.now();
   const last = sessionActiveThrottle.get(sessionId) || 0;
   if (now - last < 10 * 60 * 1000) return; // 10-minute throttle
@@ -898,5 +1038,10 @@ module.exports = {
   isSessionRevoked,
   isSessionRevokedSync,
   getUserSecurityLogs,
+  recordStudentAcademicActivity,
   formatDeviceIdentifier,
+  recordUserLivePresence,
+  getUserLivePresence,
+  isUserOnlineNow,
+  getLiveOnlineCount,
 };

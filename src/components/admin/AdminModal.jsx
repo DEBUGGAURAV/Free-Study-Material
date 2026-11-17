@@ -306,6 +306,7 @@ export default function AdminModal({
   // Student Registry
   const [students, setStudents] = useState([]);
   const [studentsTotal, setStudentsTotal] = useState(0);
+  const [studentsOnlineCount, setStudentsOnlineCount] = useState(0);
   const [studentPage, setStudentPage] = useState(1);
   const [studentSearch, setStudentSearch] = useState("");
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -644,13 +645,14 @@ export default function AdminModal({
     }
   };
 
-  const loadStudents = async (page = studentPage, search = studentSearch) => {
+  const loadStudents = async (page = studentPage, search = studentSearch, status = "") => {
     try {
       setStudentsLoading(true);
       setStudentsError(null);
-      const res = await api.getUsers({ page, limit: 10, search });
+      const res = await api.getUsers({ page, limit: 10, search, status });
       setStudents(res?.users || []);
       setStudentsTotal(res?.totalCount || 0);
+      setStudentsOnlineCount(res?.onlineCount ?? 0);
     } catch (err) {
       let rawMsg = err.message || "Failed to load student registry";
       if (typeof rawMsg === "string" && (rawMsg.includes("<") || rawMsg.includes("Suspended") || rawMsg.includes("DOCTYPE") || rawMsg.includes("html"))) {
@@ -2738,6 +2740,7 @@ export default function AdminModal({
     studentsError,
     studentsLoading,
     studentsTotal,
+    studentsOnlineCount,
     syncingTelegram,
     techActionMsg,
     techLoading,

@@ -624,6 +624,11 @@ export const api = {
     return data;
   },
 
+  sendHeartbeat: () =>
+    request("/auth/heartbeat", {
+      method: "POST",
+    }).catch(() => ({ success: true, online: false })),
+
   syncDeviceSpecs: async (deviceSpecs = null) => {
     const specs = deviceSpecs || getClientDeviceSpecs();
     return request("/auth/sync-device", {
@@ -643,6 +648,11 @@ export const api = {
   terminateSession: (sessionId) => request("/auth/terminate-session", { method: "POST", body: JSON.stringify({ sessionId }) }),
   terminateOtherSessions: () => request("/auth/terminate-other-sessions", { method: "POST" }),
   getRecentSecurityActivity: () => request("/auth/recent-activity"),
+  recordStudentActivity: (data) =>
+    request("/auth/record-activity", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 
   logout: async (reason = "Manual Session Logout", fallbackUser = null) => {
     const u = fallbackUser || getCurrentUser();
@@ -1046,6 +1056,7 @@ export const api = {
     if (params.page) query.append("page", params.page);
     if (params.limit) query.append("limit", params.limit);
     if (params.search) query.append("search", params.search);
+    if (params.status) query.append("status", params.status);
     const queryString = query.toString() ? `?${query.toString()}` : "";
     return request(`/admin/users${queryString}`);
   },

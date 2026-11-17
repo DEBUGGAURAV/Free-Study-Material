@@ -152,6 +152,12 @@ function authenticateToken(req, res, next) {
           touchSessionActive(user.id, user.sid, req);
         } catch (_) {}
       }
+
+      // 🟢 Live in-memory presence tracking (0 database cost)
+      try {
+        const { recordUserLivePresence } = require("../services/studentSessionService");
+        recordUserLivePresence(user.id, { ip: req.ip });
+      } catch (_) {}
     }
 
     // 🛡️ 30-Minute Student Inactivity Check (Server-Side Shield for Mobile & Web)

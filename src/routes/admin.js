@@ -371,7 +371,7 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
   try {
     if (!db) return res.json({ success: true, users: [], totalCount: 0 });
 
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, search = "", status = "" } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const pageLimit = parseInt(limit, 10) || 10;
 
@@ -457,6 +457,30 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         userMobile = (dec && !dec.startsWith("enc_gcm:")) ? dec : (d.plainMobile || "Not Set");
       }
 
+      // 🟢 Live online presence & last active calculation
+      let isOnline = false;
+      let isRecentlyActive = false;
+      let lastActiveAtStr = lastLoginStr || createdAtStr;
+      try {
+        const { getUserLivePresence } = require("../services/studentSessionService");
+        const livePres = getUserLivePresence(doc.id);
+        const liveLastSeen = livePres ? livePres.lastSeen : 0;
+
+        const activeSessionsList = Array.isArray(d.activeSessions) ? d.activeSessions : [];
+        const highestSessionActive = activeSessionsList.reduce((max, s) => Math.max(max, Number(s.lastActiveAt) || 0), 0);
+
+        const mostRecentActiveMs = Math.max(liveLastSeen, highestSessionActive, lastLoginTime);
+        if (mostRecentActiveMs > 0) {
+          lastActiveAtStr = new Date(mostRecentActiveMs).toISOString();
+          const diffMs = nowMs - mostRecentActiveMs;
+          if (diffMs < 5 * 60 * 1000) {
+            isOnline = true;
+          } else if (diffMs < 15 * 60 * 1000) {
+            isRecentlyActive = true;
+          }
+        }
+      } catch (_) {}
+
       users.push({
         id: doc.id,
         name: d.name || "Unnamed",
@@ -470,10 +494,13 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         deviceSpecs: d.deviceSpecs || null,
         role: isMain ? "admin" : (d.role || "student"),
         isBlocked: isMain ? false : Boolean(d.isBlocked),
+        isOnline,
+        isRecentlyActive,
         permissions: permsArray,
         activitiesCount: (d.activities || []).length,
         createdAt: createdAtStr,
         lastLoginAt: lastLoginStr,
+        lastActiveAt: lastActiveAtStr,
         isMainAdmin: isMain,
         customInactivityDays: userCustomDays,
         inactivityGraceDays: d.inactivityGraceDays || 0,
@@ -483,6 +510,7 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         daysRemaining,
         scheduledPurgeDate,
         allowedTabs: Array.isArray(d.allowedTabs) ? d.allowedTabs : [],
+        activeSessionsCount: (Array.isArray(d.activeSessions) ? d.activeSessions : []).length,
       });
     });
 
@@ -516,6 +544,25 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
       );
     }
 
+    // 🟢 Calculate global presence counts before status filter
+    const totalOnlineCount = users.filter((u) => u.isOnline).length;
+    const totalRecentlyActiveCount = users.filter((u) => u.isOnline || u.isRecentlyActive).length;
+
+    // Status query filter (supports online, recent, blocked, active, immune, expiring)
+    if (status === "online") {
+      users = users.filter((u) => u.isOnline);
+    } else if (status === "recent") {
+      users = users.filter((u) => u.isOnline || u.isRecentlyActive);
+    } else if (status === "blocked") {
+      users = users.filter((u) => u.isBlocked);
+    } else if (status === "active") {
+      users = users.filter((u) => !u.isBlocked);
+    } else if (status === "immune") {
+      users = users.filter((u) => u.neverPurge);
+    } else if (status === "expiring") {
+      users = users.filter((u) => !u.neverPurge && (u.daysRemaining ?? 90) <= 30);
+    }
+
     const totalCount = users.length;
     const startIndex = (pageNum - 1) * pageLimit;
     const paginatedUsers = users.slice(startIndex, startIndex + pageLimit);
@@ -523,6 +570,12 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
     return res.json({
       success: true,
       users: paginatedUsers,
+      totalCount,
+      onlineCount: totalOnlineCount,
+      recentlyActiveCount: totalRecentlyActiveCount,
+      page: pageNum,
+      totalPages: Math.ceil(totalCount / pageLimit),
+    });
       totalCount,
       page: pageNum,
       totalPages: Math.ceil(totalCount / pageLimit),
@@ -552,18 +605,45 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
     const rawActivities = Array.isArray(uData.activities) ? [...uData.activities] : [];
     const rawSecLogs = Array.isArray(uData.securityLogs) ? [...uData.securityLogs] : [];
 
-    // Unified activities list
-    const combined = [...rawActivities];
+    // Format academic study activities (note reads, views, downloads, searches)
+    const formattedActivities = rawActivities.map((act) => {
+      const cleanType = act.type || (act.action?.toLowerCase().includes("download") ? "download" : act.action?.toLowerCase().includes("search") ? "search" : "view");
+      const cleanAction = act.action || (cleanType === "download" ? "NOTE_DOWNLOAD" : cleanType === "search" ? "NOTE_SEARCH" : "NOTE_VIEW");
+      const noteTitle = act.noteTitle || act.title || "";
+      const subject = act.subject || "";
+      let title = act.title;
+      if (!title) {
+        if (cleanType === "download") title = `Downloaded: ${noteTitle || "Study Material"}`;
+        else if (cleanType === "search") title = `Searched Library: "${noteTitle}"`;
+        else title = `Read Note: ${noteTitle || "Study Material"}`;
+      }
+      return {
+        id: act.id || `act_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        type: cleanType,
+        action: cleanAction,
+        noteId: act.noteId || "",
+        noteTitle,
+        subject,
+        course: act.course || "",
+        branch: act.branch || "",
+        page: act.page || null,
+        fileSize: act.fileSize || 0,
+        title,
+        detail: act.detail || `${title}${subject ? ` (${subject})` : ""}${act.page ? ` • Page ${act.page}` : ""}`,
+        timestamp: act.timestamp || (act.createdAt ? new Date(act.createdAt).toISOString() : new Date().toISOString()),
+      };
+    });
 
-    // Merge security logs as activity items so admin sees all logins, logouts, device sessions
+    // Merge security logs as login activity items so admin sees full history
     for (const log of rawSecLogs) {
-      const alreadyIncluded = combined.some((a) => a.id === log.id);
+      const alreadyIncluded = formattedActivities.some((a) => a.id === log.id);
       if (!alreadyIncluded) {
         const itemDetail = log.details || `${log.action} on ${log.deviceName || "Device"}`;
-        combined.push({
+        const isLogin = String(log.action || "").toUpperCase() === "LOGIN";
+        formattedActivities.push({
           id: log.id || `act_${log.createdAt || Date.now()}`,
-          type: log.action ? log.action.toLowerCase() : "security",
-          action: log.action || "SECURITY",
+          type: isLogin ? "login" : "security",
+          action: log.action || "LOGIN",
           title: itemDetail,
           detail: `${itemDetail}${log.ipAddress && log.ipAddress !== "Active IP" && log.ipAddress !== "127.0.0.1" ? ` • IP: ${log.ipAddress}` : ""}`,
           timestamp: log.createdAt ? (typeof log.createdAt === "number" ? new Date(log.createdAt).toISOString() : String(log.createdAt)) : new Date().toISOString(),
@@ -575,15 +655,15 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
     }
 
     // Sort newest activity first
-    combined.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    formattedActivities.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
-    // 🛡️ Strict 15 Rolling Auto-Cap: Keep only latest 15 events
-    const cappedActivities = combined.slice(0, 15);
+    // 🛡️ Strict 20 Rolling Auto-Cap: Keep only latest 20 events
+    const cappedActivities = formattedActivities.slice(0, 20);
 
-    // Auto-prune stored array in Firestore if it grew beyond 15 items
-    if (rawActivities.length > 15) {
+    // Auto-prune stored array in Firestore if it grew beyond 20 items
+    if (rawActivities.length > 20) {
       db.collection("users").doc(id).update({
-        activities: rawActivities.slice(0, 15),
+        activities: rawActivities.slice(0, 20),
       }).catch(() => {});
     }
 

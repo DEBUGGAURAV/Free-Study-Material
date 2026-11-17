@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Activity, Trash2, LogOut, Smartphone, Laptop, Tablet, RefreshCw, CheckSquare, Square, AlertTriangle, CheckCircle2, MapPin, Globe } from "lucide-react";
+import { Activity, Trash2, LogOut, Smartphone, Laptop, Tablet, RefreshCw, CheckSquare, Square, AlertTriangle, CheckCircle2, MapPin, Globe, BookOpen, Download, Search, Eye } from "lucide-react";
 import { api } from "../../../api";
 
 export default function TabActivities(props) {
@@ -20,6 +20,7 @@ export default function TabActivities(props) {
   const [selectedSessionIds, setSelectedSessionIds] = useState([]);
   const [terminatingSelected, setTerminatingSelected] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
+  const [academicFilter, setAcademicFilter] = useState("all");
 
   const studentId = selectedStudentForActivity?.id;
   const studentName = selectedStudentForActivity?.name || "Student";
@@ -551,88 +552,274 @@ export default function TabActivities(props) {
       {/* ========================================================================= */}
       {/* SECTION 3: 📊 STUDENT AUDIT TRAIL (DOWNLOADS, VIEWS & SEARCHES)          */}
       {/* ========================================================================= */}
-      <div
-        style={{
-          background: "rgba(15, 23, 42, 0.6)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          borderRadius: "12px",
-          padding: "16px",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-          <div>
-            <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
-              Academic Audit Trail (Downloads &amp; Actions)
-            </h4>
-            <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "var(--text-dim)" }}>
-              Historical trail of study material reads, downloads, searches, and notes accessed.
-            </p>
-          </div>
+      {(() => {
+        const viewsCount = activities.filter((a) => a.type === "view" || a.action === "NOTE_VIEW").length;
+        const downloadsCount = activities.filter((a) => a.type === "download" || a.action === "NOTE_DOWNLOAD").length;
+        const loginsCount = activities.filter((a) => a.type === "login" || a.action === "LOGIN" || a.type === "security").length;
 
-          {activities.length > 0 && (
-            <button
-              onClick={handleClearAllActivities}
-              className="btn-danger"
-              style={{ padding: "6px 12px", fontSize: "0.76rem" }}
-            >
-              Clear Academic Audit
-            </button>
-          )}
-        </div>
+        const filteredActivities = activities.filter((act) => {
+          if (academicFilter === "views") return act.type === "view" || act.action === "NOTE_VIEW";
+          if (academicFilter === "downloads") return act.type === "download" || act.action === "NOTE_DOWNLOAD";
+          if (academicFilter === "logins") return act.type === "login" || act.action === "LOGIN" || act.type === "security";
+          return true;
+        });
 
-        {activitiesLoading ? (
-          <div style={{ textAlign: "center", padding: "30px", color: "var(--text-dim)" }}>
-            <div className="spinner" style={{ width: "20px", height: "20px", margin: "0 auto 6px" }} />
-            Loading academic activity stream...
-          </div>
-        ) : activities.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "24px", color: "var(--text-dim)", fontSize: "0.76rem" }}>
-            No academic downloads or searches recorded yet for this student.
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "350px", overflowY: "auto", paddingRight: "4px" }}>
-            {activities.map((act) => (
-              <div
-                key={act.id}
-                style={{
-                  background: "rgba(255, 255, 255, 0.02)",
-                  border: "1px solid rgba(255, 255, 255, 0.04)",
-                  borderRadius: "8px",
-                  padding: "10px 14px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-                  <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "rgba(6, 182, 212, 0.15)", color: "var(--accent-cyan)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Activity size={14} />
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.82rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                      {act.detail || act.type || "Student Action"}
-                    </div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                      {act.timestamp ? new Date(act.timestamp).toLocaleString() : "Recorded Event"}
-                    </div>
-                  </div>
-                </div>
+        return (
+          <div
+            style={{
+              background: "rgba(15, 23, 42, 0.6)",
+              border: "1px solid rgba(255, 255, 255, 0.08)",
+              borderRadius: "12px",
+              padding: "16px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+              <div>
+                <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Activity size={16} color="var(--accent-cyan)" />
+                  <span>Academic Audit Trail (Note Reads, Downloads &amp; Actions)</span>
+                </h4>
+                <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "var(--text-dim)" }}>
+                  Historical trail of study material reads, downloads, searches, and notes accessed.
+                </p>
+              </div>
 
+              {activities.length > 0 && (
+                <button
+                  onClick={handleClearAllActivities}
+                  className="btn-danger"
+                  style={{ padding: "6px 12px", fontSize: "0.76rem" }}
+                >
+                  Clear Academic Audit
+                </button>
+              )}
+            </div>
+
+            {/* Quick Filter Tabs */}
+            {activities.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
                 <button
                   type="button"
-                  onClick={() => handleDeleteActivity(act.id)}
-                  className="btn-icon"
-                  style={{ width: "26px", height: "26px", background: "rgba(244, 63, 94, 0.1)", color: "#f43f5e", flexShrink: 0 }}
-                  title="Delete Entry"
+                  onClick={() => setAcademicFilter("all")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "0.72rem",
+                    borderRadius: "6px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: academicFilter === "all" ? "var(--accent-cyan)" : "rgba(255, 255, 255, 0.05)",
+                    color: academicFilter === "all" ? "#0f172a" : "#cbd5e1",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    transition: "all 0.15s ease",
+                  }}
                 >
-                  <Trash2 size={12} />
+                  All ({activities.length})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setAcademicFilter("views")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "0.72rem",
+                    borderRadius: "6px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: academicFilter === "views" ? "#38bdf8" : "rgba(56, 189, 248, 0.1)",
+                    color: academicFilter === "views" ? "#0f172a" : "#38bdf8",
+                    border: "1px solid rgba(56, 189, 248, 0.25)",
+                    transition: "all 0.15s ease",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <BookOpen size={12} />
+                  <span>📖 Note Reads ({viewsCount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAcademicFilter("downloads")}
+                  style={{
+                    padding: "4px 10px",
+                    fontSize: "0.72rem",
+                    borderRadius: "6px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: academicFilter === "downloads" ? "#34d399" : "rgba(16, 185, 129, 0.1)",
+                    color: academicFilter === "downloads" ? "#0f172a" : "#34d399",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    transition: "all 0.15s ease",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Download size={12} />
+                  <span>📥 Downloads ({downloadsCount})</span>
+                </button>
+                {loginsCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setAcademicFilter("logins")}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: "0.72rem",
+                      borderRadius: "6px",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      background: academicFilter === "logins" ? "#a78bfa" : "rgba(167, 139, 250, 0.1)",
+                      color: academicFilter === "logins" ? "#0f172a" : "#c4b5fd",
+                      border: "1px solid rgba(167, 139, 250, 0.25)",
+                      transition: "all 0.15s ease",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <Smartphone size={12} />
+                    <span>🔐 Logins ({loginsCount})</span>
+                  </button>
+                )}
               </div>
-            ))}
+            )}
+
+            {activitiesLoading ? (
+              <div style={{ textAlign: "center", padding: "30px", color: "var(--text-dim)" }}>
+                <div className="spinner" style={{ width: "20px", height: "20px", margin: "0 auto 6px" }} />
+                Loading academic activity stream...
+              </div>
+            ) : activities.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "24px", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                No academic study activities recorded yet for this student. As they read or download notes, their activity trail will appear here automatically.
+              </div>
+            ) : filteredActivities.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "20px", color: "var(--text-dim)", fontSize: "0.76rem" }}>
+                No events found for the "{academicFilter}" filter.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "380px", overflowY: "auto", paddingRight: "4px" }}>
+                {filteredActivities.map((act) => {
+                  const isView = act.type === "view" || act.action === "NOTE_VIEW";
+                  const isDownload = act.type === "download" || act.action === "NOTE_DOWNLOAD";
+                  const isSearch = act.type === "search" || act.action === "NOTE_SEARCH";
+                  const isLogin = act.type === "login" || act.action === "LOGIN" || act.type === "security";
+
+                  const diff = Date.now() - new Date(act.timestamp || Date.now()).getTime();
+                  const mins = Math.max(0, Math.floor(diff / 60000));
+                  const relTime = mins < 1 ? "Just now" : (mins < 60 ? `${mins}m ago` : (mins < 1440 ? `${Math.floor(mins / 60)}h ago` : `${Math.floor(mins / 1440)}d ago`));
+                  const formattedDate = act.timestamp ? new Date(act.timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Recorded";
+
+                  let iconBg = "rgba(56, 189, 248, 0.15)";
+                  let iconColor = "#38bdf8";
+                  let badgeBg = "rgba(56, 189, 248, 0.12)";
+                  let badgeColor = "#38bdf8";
+                  let badgeText = "📖 READ NOTE";
+                  let iconComponent = <BookOpen size={14} />;
+
+                  if (isDownload) {
+                    iconBg = "rgba(16, 185, 129, 0.15)";
+                    iconColor = "#34d399";
+                    badgeBg = "rgba(16, 185, 129, 0.12)";
+                    badgeColor = "#34d399";
+                    badgeText = "📥 DOWNLOAD";
+                    iconComponent = <Download size={14} />;
+                  } else if (isSearch) {
+                    iconBg = "rgba(245, 158, 11, 0.15)";
+                    iconColor = "#fbbf24";
+                    badgeBg = "rgba(245, 158, 11, 0.12)";
+                    badgeColor = "#fbbf24";
+                    badgeText = "🔍 SEARCH";
+                    iconComponent = <Search size={14} />;
+                  } else if (isLogin) {
+                    iconBg = "rgba(167, 139, 250, 0.15)";
+                    iconColor = "#a78bfa";
+                    badgeBg = "rgba(167, 139, 250, 0.12)";
+                    badgeColor = "#c4b5fd";
+                    badgeText = "🔐 SIGN-IN";
+                    iconComponent = <Smartphone size={14} />;
+                  }
+
+                  const displayTitle = act.noteTitle || act.title || act.detail || "Academic Study Action";
+
+                  return (
+                    <div
+                      key={act.id}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.02)",
+                        border: "1px solid rgba(255, 255, 255, 0.05)",
+                        borderRadius: "8px",
+                        padding: "10px 14px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "10px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", minWidth: 0, flex: 1 }}>
+                        <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: iconBg, color: iconColor, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: "2px" }}>
+                          {iconComponent}
+                        </div>
+
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                            <span style={{ background: badgeBg, color: badgeColor, padding: "1px 6px", borderRadius: "4px", fontSize: "0.66rem", fontWeight: 700, flexShrink: 0 }}>
+                              {badgeText}
+                            </span>
+                            <span style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.84rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                              {displayTitle}
+                            </span>
+                          </div>
+
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px", flexWrap: "wrap", fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                            {act.subject && (
+                              <span style={{ background: "rgba(167, 139, 250, 0.1)", color: "#c4b5fd", padding: "1px 6px", borderRadius: "4px", fontWeight: 600 }}>
+                                {act.subject}
+                              </span>
+                            )}
+                            {act.branch && (
+                              <span style={{ background: "rgba(245, 158, 11, 0.1)", color: "#fbbf24", padding: "1px 6px", borderRadius: "4px", fontWeight: 600 }}>
+                                {act.branch}
+                              </span>
+                            )}
+                            {act.page && (
+                              <span style={{ color: "#38bdf8", fontWeight: 600 }}>
+                                Page {act.page}
+                              </span>
+                            )}
+                            {act.fileSize > 0 && (
+                              <span>{(act.fileSize / (1024 * 1024)).toFixed(1)} MB</span>
+                            )}
+                            {act.deviceName && isLogin && (
+                              <span>{act.deviceName}</span>
+                            )}
+                            {act.ipAddress && isLogin && act.ipAddress !== "Active IP" && (
+                              <span style={{ color: "#38bdf8" }}>IP: {act.ipAddress}</span>
+                            )}
+                            <span>•</span>
+                            <span style={{ color: "#34d399", fontWeight: 600 }}>{relTime}</span>
+                            <span>({formattedDate})</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteActivity(act.id)}
+                        className="btn-icon"
+                        style={{ width: "26px", height: "26px", background: "rgba(244, 63, 94, 0.1)", color: "#f43f5e", flexShrink: 0 }}
+                        title="Delete Entry"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
     </div>
   );
 }

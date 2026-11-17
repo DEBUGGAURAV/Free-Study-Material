@@ -11,7 +11,7 @@ import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
 import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote } from "../utils/offlineQueue";
-import { recordStudentNoteRead } from "../utils/studentStudyContext";
+import { recordStudentNoteRead, recordStudentAcademicDownload } from "../utils/studentStudyContext";
 import {
   getReadingProgress,
   saveReadingProgress,
@@ -1491,9 +1491,9 @@ export default function VirtualPdfReader({
     let isCancelled = false;
     const currentGeneration = ++loadGenerationRef.current;
 
-    // 🎓 Record this note into the student's study context for 6 AM Targeted Exam Pre-fetch
+    // 🎓 Record this note into the student's study context for 6 AM Targeted Exam Pre-fetch & Academic Audit Trail
     if (noteId || note) {
-      recordStudentNoteRead(note || { id: noteId, title, subject });
+      recordStudentNoteRead(note || { id: noteId, title, subject }, currentUser);
     }
 
     async function loadPdf() {
@@ -1953,8 +1953,10 @@ export default function VirtualPdfReader({
             setDownloadProgress(metrics);
           },
         });
+        recordStudentAcademicDownload(note || { id: noteId, title, subject });
       } else if (onDownload) {
         onDownload();
+        recordStudentAcademicDownload(note || { id: noteId, title, subject });
       }
       setOcrStatusText("✅ Document downloaded successfully!");
       setTimeout(() => setOcrStatusText(""), 4000);

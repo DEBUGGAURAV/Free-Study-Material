@@ -3,6 +3,7 @@ import VirtualPdfReader from "./VirtualPdfReader";
 import { api } from "../api";
 import { getSmartStreamUrl } from "../utils/cdnFailover";
 import { getNotePdfFileName } from "../utils/formatUtils";
+import { recordStudentAcademicDownload } from "../utils/studentStudyContext";
 
 export default function PreviewModal({
   note,
@@ -38,6 +39,7 @@ export default function PreviewModal({
       alert(effectiveReason);
       return;
     }
+    recordStudentAcademicDownload(note);
     try {
       await api.downloadNoteWithProgress(note.id, finalFileName);
     } catch (err) {

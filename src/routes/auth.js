@@ -2946,4 +2946,70 @@ router.get("/recent-activity", authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * 📖 POST /api/auth/record-activity
+ * Records note reads, views, downloads, or searches to the student's Academic Audit Trail.
+ * Non-blocking, in-memory throttled, strictly 0 server load.
+ */
+router.post("/record-activity", authenticateToken, async (req, res) => {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ success: false, message: "Authentication required." });
+  }
+  try {
+    const { recordStudentAcademicActivity } = require("../services/studentSessionService");
+    const body = req.body || {};
+
+    // Support batch sync of recent note reads (e.g. on profile sync)
+    if (Array.isArray(body.notes)) {
+      for (const n of body.notes.slice(0, 5)) {
+        if (n && (n.id || n.title)) {
+          recordStudentAcademicActivity(req.user.id, {
+            type: "view",
+            noteId: n.id,
+            noteTitle: n.title,
+            subject: n.subject,
+            branch: n.branch,
+            course: n.course,
+          }).catch(() => {});
+        }
+      }
+    } else {
+      const { type, action, noteId, noteTitle, subject, course, branch, page, detail, fileSize } = body;
+      recordStudentAcademicActivity(req.user.id, {
+        type: type || "view",
+        action,
+        noteId,
+        noteTitle,
+        subject,
+        course,
+        branch,
+        page,
+        detail,
+        fileSize,
+      }).catch(() => {});
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * 🟢 POST /api/auth/heartbeat
+ * Lightweight student presence heartbeat (sub-1ms, zero DB writes)
+ * Keeps live online status active while student has site open
+ */
+router.post("/heartbeat", authenticateToken, (req, res) => {
+  try {
+    if (req.user?.id) {
+      const { recordUserLivePresence } = require("../services/studentSessionService");
+      recordUserLivePresence(req.user.id, { ip: req.ip });
+    }
+    return res.json({ success: true, online: true });
+  } catch (_) {
+    return res.json({ success: true, online: false });
+  }
+});
+
 module.exports = router;

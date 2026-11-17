@@ -237,6 +237,32 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // 🟢 Live Presence Pulse: Informs Admin Studio that student is active/online on site (0 DB load)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    api.sendHeartbeat().catch(() => {});
+
+    const hbInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        api.sendHeartbeat().catch(() => {});
+      }
+    }, 60000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        api.sendHeartbeat().catch(() => {});
+      }
+    };
+    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(hbInterval);
+      window.removeEventListener("focus", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [currentUser?.id]);
+
   useEffect(() => {
     try {
       document.title = `${SITE_NAME} — ${SITE_TAGLINE}`;

@@ -19,7 +19,7 @@ import { acquireNoteDocument } from "../utils/cdnFailover";
 import { getCachedNoteIdsSet, invalidateCachedNoteIdsSet } from "../utils/p2pMesh";
 import { formatFileSize, formatMB, getNotePdfFileName } from "../utils/formatUtils";
 import { isNotePinnedOffline, togglePinOfflineNote, deleteSingleOfflineNote } from "../utils/offlineQueue";
-import { recordStudentNoteRead, recordCampusShare } from "../utils/studentStudyContext";
+import { recordStudentNoteRead, recordCampusShare, recordStudentAcademicDownload } from "../utils/studentStudyContext";
 import { playPop, playChime, playSuccess } from "../utils/soundEffects";
 import { shareWhatsAppStoryCard } from "../utils/revisionCardCanvas";
 
@@ -234,6 +234,7 @@ function NoteCard({
     if (downloading) return;
 
     recordStudentNoteRead(note, currentUser);
+    recordStudentAcademicDownload(note);
 
     const fileName = getNotePdfFileName(note);
 

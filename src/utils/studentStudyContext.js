@@ -103,10 +103,67 @@ export async function recordStudentNoteRead(note, currentUser = null) {
       });
     }
 
+    // 4. Background sync to student Academic Audit Trail (0ms, non-blocking beacon)
+    try {
+      const activeToken = typeof window !== "undefined"
+        ? (window.__FSM_AUTH_TOKEN__ || localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token"))
+        : null;
+      if (activeToken) {
+        fetch("/api/auth/record-activity", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            type: "view",
+            noteId: note.id,
+            noteTitle: note.title,
+            subject: note.subject,
+            branch: note.branch,
+            course: note.course,
+            page: note.page || 1,
+          }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
     return context;
   } catch (err) {
     console.warn("[STUDY CONTEXT] Record error:", err.message);
   }
+}
+
+/**
+ * Record a student download event to Academic Audit Trail
+ */
+export async function recordStudentAcademicDownload(note) {
+  if (!note || !note.id) return;
+  try {
+    const activeToken = typeof window !== "undefined"
+      ? (window.__FSM_AUTH_TOKEN__ || localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token"))
+      : null;
+    if (activeToken) {
+      fetch("/api/auth/record-activity", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${activeToken}`,
+        },
+        body: JSON.stringify({
+          type: "download",
+          noteId: note.id,
+          noteTitle: note.title,
+          subject: note.subject,
+          branch: note.branch,
+          course: note.course,
+          fileSize: note.fileSize || note.compressedSize || 0,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+  } catch (_) {}
 }
 
 /**
@@ -147,6 +204,30 @@ export async function syncStudentProfileContext(currentUser) {
         context,
       });
     }
+
+    // 🎓 Sync recent local reads to student Academic Audit Trail on login
+    try {
+      const rawNotes = localStorage.getItem(RECENT_NOTES_KEY);
+      if (rawNotes) {
+        const parsed = JSON.parse(rawNotes);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const activeToken = typeof window !== "undefined"
+            ? (window.__FSM_AUTH_TOKEN__ || localStorage.getItem("vault_token") || localStorage.getItem("token") || localStorage.getItem("fsm_token"))
+            : null;
+          if (activeToken) {
+            fetch("/api/auth/record-activity", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${activeToken}`,
+              },
+              body: JSON.stringify({ notes: parsed.slice(0, 5) }),
+              keepalive: true,
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (_) {}
 
     return context;
   } catch (_) {}

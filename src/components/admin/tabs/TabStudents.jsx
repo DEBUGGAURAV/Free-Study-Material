@@ -32,6 +32,7 @@ export default function TabStudents(props) {
     studentsError,
     studentsLoading,
     studentsTotal = 0,
+    studentsOnlineCount = 0,
     loadStudents,
   } = props;
 
@@ -47,6 +48,22 @@ export default function TabStudents(props) {
   // Filters state
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Helper to format last seen or active time
+  const formatLastSeen = (dateStr) => {
+    if (!dateStr) return "Never logged in";
+    const date = new Date(dateStr);
+    const diffMs = Date.now() - date.getTime();
+    if (isNaN(diffMs) || diffMs < 0) return "Just now";
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  };
 
   // Open Quick Logs Modal
   const handleOpenStudentLogs = async (student) => {
@@ -121,6 +138,8 @@ export default function TabStudents(props) {
       if (roleFilter === "student" && (s.role === "admin" || s.role === "half_admin" || isMasterAdminStudent(s))) return false;
     }
     if (statusFilter !== "all") {
+      if (statusFilter === "online" && !s.isOnline) return false;
+      if (statusFilter === "recent" && !s.isOnline && !s.isRecentlyActive) return false;
       if (statusFilter === "active" && s.isBlocked) return false;
       if (statusFilter === "blocked" && !s.isBlocked) return false;
       if (statusFilter === "immune" && !s.neverPurge) return false;
@@ -128,6 +147,9 @@ export default function TabStudents(props) {
     }
     return true;
   });
+
+  // Realtime online users count
+  const onlineCount = studentsOnlineCount || (students || []).filter((s) => s.isOnline).length;
 
   // Export Students (CSV or JSON)
   const handleExportStudents = (format = "csv") => {
