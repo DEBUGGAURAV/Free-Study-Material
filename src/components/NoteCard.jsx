@@ -23,6 +23,54 @@ import { recordStudentNoteRead, recordCampusShare, recordStudentAcademicDownload
 import { playPop, playChime, playSuccess } from "../utils/soundEffects";
 import { shareWhatsAppStoryCard } from "../utils/revisionCardCanvas";
 
+// Pure In-Memory Color Theme Generator for Clean Modern Aesthetic (0 CPU / 0 Server Load)
+function getSubjectTheme(subject = "", branch = "") {
+  const s = ((subject || "") + " " + (branch || "")).toLowerCase();
+  if (s.includes("cs") || s.includes("computer") || s.includes("it") || s.includes("data") || s.includes("algorithm") || s.includes("operating") || s.includes("software") || s.includes("python") || s.includes("java") || s.includes("c++") || s.includes("web") || s.includes("ai")) {
+    return {
+      bg: "#eef2ff",
+      border: "#c7d2fe",
+      color: "#4338ca",
+      dot: "#6366f1",
+      hoverBorder: "#818cf8",
+    };
+  }
+  if (s.includes("math") || s.includes("calculus") || s.includes("algebra") || s.includes("stat") || s.includes("discrete") || s.includes("numerical") || s.includes("matrix")) {
+    return {
+      bg: "#ecfdf5",
+      border: "#a7f3d0",
+      color: "#047857",
+      dot: "#10b981",
+      hoverBorder: "#34d399",
+    };
+  }
+  if (s.includes("physics") || s.includes("electronic") || s.includes("circuit") || s.includes("signal") || s.includes("electrical") || s.includes("ee") || s.includes("ece") || s.includes("vlsi") || s.includes("digital")) {
+    return {
+      bg: "#fffbeb",
+      border: "#fde68a",
+      color: "#b45309",
+      dot: "#f59e0b",
+      hoverBorder: "#fbbf24",
+    };
+  }
+  if (s.includes("mechanic") || s.includes("thermo") || s.includes("civil") || s.includes("fluid") || s.includes("machine") || s.includes("structure") || s.includes("robotics")) {
+    return {
+      bg: "#fff1f2",
+      border: "#fecdd3",
+      color: "#be123c",
+      dot: "#f43f5e",
+      hoverBorder: "#fb7185",
+    };
+  }
+  return {
+    bg: "#ecfeff",
+    border: "#a5f3fc",
+    color: "#0e7490",
+    dot: "#06b6d4",
+    hoverBorder: "#38bdf8",
+  };
+}
+
 function NoteCard({
   note,
   onPreview,
@@ -323,6 +371,8 @@ function NoteCard({
       : note.description
     : "";
 
+  const subjectTheme = getSubjectTheme(note.subject, note.branch);
+
   return (
     <article
       className="note-card"
@@ -330,6 +380,7 @@ function NoteCard({
       onMouseLeave={handleCardMouseLeave}
       style={{
         transform: tiltTransform || undefined,
+        "--card-theme-border": subjectTheme.hoverBorder,
       }}
     >
       {/* 🎴 Dynamic Specular Glare Reflection Layer */}
@@ -421,8 +472,25 @@ function NoteCard({
                 <h3 className="note-title" title={note.title}>
                   {note.title}
                 </h3>
-                <div className="note-subject">
-                  {note.subject || "General Academic"}
+                <div
+                  className="note-subject"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    background: subjectTheme.bg,
+                    color: subjectTheme.color,
+                    border: `1px solid ${subjectTheme.border}`,
+                    borderRadius: "6px",
+                    padding: "2px 8px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    marginTop: "4px",
+                    width: "fit-content",
+                  }}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
+                  <span>{note.subject || "General Academic"}</span>
                 </div>
               </div>
             </>
@@ -442,8 +510,25 @@ function NoteCard({
                   <h3 className="note-title" title={note.title}>
                     {note.title}
                   </h3>
-                  <div className="note-subject">
-                    {note.subject || "General Academic"}
+                  <div
+                    className="note-subject"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      background: subjectTheme.bg,
+                      color: subjectTheme.color,
+                      border: `1px solid ${subjectTheme.border}`,
+                      borderRadius: "6px",
+                      padding: "2px 8px",
+                      fontSize: "0.72rem",
+                      fontWeight: 700,
+                      marginTop: "4px",
+                      width: "fit-content",
+                    }}
+                  >
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
+                    <span>{note.subject || "General Academic"}</span>
                   </div>
                 </div>
               </div>

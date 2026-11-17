@@ -6093,3 +6093,44 @@ svg.lucide {
     padding: 12px 10px 80px 10px !important;
   }
 }
+
+/* 🔍 Linear Ambient Spotlight Glow on Universal Search Input (Pure White Saas Style) */
+.search-wrapper .search-input {
+  background: #ffffff !important;
+  border: 1.5px solid #dbeafe !important;
+  border-radius: 9999px !important;
+  color: #0f172a !important;
+  box-shadow: 0 2px 14px -3px rgba(99, 102, 241, 0.1), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.search-wrapper:focus-within .search-input,
+.search-wrapper .search-input:focus {
+  border-color: #6366f1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3.5px rgba(99, 102, 241, 0.16), 0 8px 24px -4px rgba(99, 102, 241, 0.14) !important;
+}
+
+.search-wrapper .search-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+}
+
+/* 🃏 3D Micro-Lift & Soft Elevation for Pure White Note Cards (0 Server Load) */
+.note-card {
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.24s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease !important;
+  will-change: transform, box-shadow;
+}
+
+.note-card:hover {
+  transform: translateY(-5px) scale(1.004) !important;
+  box-shadow: 0 20px 36px -12px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(99, 102, 241, 0.08) !important;
+  border-color: var(--card-theme-border, #cbd5e1) !important;
+}
+
+@media (max-width: 640px) {
+  .library-search-input {
+    padding: 8px 125px 8px 16px !important;
+  }
+}
+
