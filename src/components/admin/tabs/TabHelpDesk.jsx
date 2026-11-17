@@ -457,13 +457,16 @@ export default function TabHelpDesk() {
               borderRadius: "20px",
               fontSize: "0.78rem",
               fontWeight: 700,
-              background: statusFilter === "all" ? "var(--accent-cyan)" : "rgba(255,255,255,0.06)",
-              color: statusFilter === "all" ? "#000" : "#fff",
-              border: "none",
+              background: statusFilter === "all" ? "#0284c7" : "rgba(255,255,255,0.06)",
+              color: statusFilter === "all" ? "#ffffff" : "#0f172a",
+              border: statusFilter === "all" ? "1.5px solid #0284c7" : "1.5px solid #cbd5e1",
               cursor: "pointer",
+              boxShadow: statusFilter === "all" ? "0 2px 8px rgba(2, 132, 199, 0.35)" : "none",
             }}
           >
-            All ({totalCount})
+            <span style={{ color: statusFilter === "all" ? "#ffffff" : "#0f172a", fontWeight: 700 }}>
+              All ({totalCount})
+            </span>
           </button>
           <button
             type="button"
@@ -474,12 +477,15 @@ export default function TabHelpDesk() {
               fontSize: "0.78rem",
               fontWeight: 700,
               background: statusFilter === "active" ? "#10b981" : "rgba(255,255,255,0.06)",
-              color: "#fff",
-              border: "none",
+              color: statusFilter === "active" ? "#ffffff" : "#0f172a",
+              border: statusFilter === "active" ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
               cursor: "pointer",
+              boxShadow: statusFilter === "active" ? "0 2px 8px rgba(16, 185, 129, 0.35)" : "none",
             }}
           >
-            🟢 Active ({activeCount})
+            <span style={{ color: statusFilter === "active" ? "#ffffff" : "#0f172a", fontWeight: 700 }}>
+              🟢 Active ({activeCount})
+            </span>
           </button>
           <button
             type="button"
@@ -490,12 +496,15 @@ export default function TabHelpDesk() {
               fontSize: "0.78rem",
               fontWeight: 700,
               background: statusFilter === "closed" ? "#ef4444" : "rgba(255,255,255,0.06)",
-              color: "#fff",
-              border: "none",
+              color: statusFilter === "closed" ? "#ffffff" : "#0f172a",
+              border: statusFilter === "closed" ? "1.5px solid #ef4444" : "1.5px solid #cbd5e1",
               cursor: "pointer",
+              boxShadow: statusFilter === "closed" ? "0 2px 8px rgba(239, 68, 68, 0.35)" : "none",
             }}
           >
-            🔴 Closed ({closedCount})
+            <span style={{ color: statusFilter === "closed" ? "#ffffff" : "#0f172a", fontWeight: 700 }}>
+              🔴 Closed ({closedCount})
+            </span>
           </button>
         </div>
 
@@ -1115,8 +1124,8 @@ export default function TabHelpDesk() {
                   disabled={replySubmitting || !replyText.trim()}
                   style={{
                     padding: "8px 16px",
-                    background: "var(--accent-cyan)",
-                    color: "#000",
+                    background: "#0284c7",
+                    color: "#ffffff",
                     fontWeight: 800,
                     fontSize: "0.8rem",
                     border: "none",
@@ -1127,8 +1136,8 @@ export default function TabHelpDesk() {
                     gap: "6px",
                   }}
                 >
-                  <Send size={14} />
-                  <span>{replySubmitting ? "Sending..." : "Send Web Reply"}</span>
+                  <Send size={14} style={{ color: "#ffffff" }} />
+                  <span style={{ color: "#ffffff", fontWeight: 700 }}>{replySubmitting ? "Sending..." : "Send Web Reply"}</span>
                 </button>
               </div>
             </form>

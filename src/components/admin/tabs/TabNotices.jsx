@@ -551,14 +551,16 @@ export default function TabNotices({ currentUser }) {
                   padding: "6px 10px",
                   borderRadius: "6px",
                   fontSize: "0.76rem",
-                  fontWeight: 600,
-                  border: "none",
+                  fontWeight: 700,
+                  border: filterType === tab.id ? "1.5px solid #0284c7" : "1.5px solid #cbd5e1",
                   cursor: "pointer",
-                  background: filterType === tab.id ? "var(--accent-cyan)" : "rgba(255, 255, 255, 0.05)",
-                  color: filterType === tab.id ? "#0f172a" : "var(--text-muted)",
+                  background: filterType === tab.id ? "#0284c7" : "rgba(255, 255, 255, 0.05)",
+                  color: filterType === tab.id ? "#ffffff" : "#0f172a",
                 }}
               >
-                {tab.label}
+                <span style={{ color: filterType === tab.id ? "#ffffff" : "#0f172a", fontWeight: 700 }}>
+                  {tab.label}
+                </span>
               </button>
             ))}
           </div>
