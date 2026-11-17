@@ -593,8 +593,6 @@ async function touchSessionActive(userId, sessionId, req = null) {
   pruneSessionCaches();
   sessionActiveThrottle.set(sessionId, now);
 
-  const currentIp = req ? extractClientIp(req) : null;
-
   if (!db) return;
   try {
     const userRef = db.collection("users").doc(String(userId));

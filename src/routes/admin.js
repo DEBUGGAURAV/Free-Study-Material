@@ -576,10 +576,6 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
       page: pageNum,
       totalPages: Math.ceil(totalCount / pageLimit),
     });
-      totalCount,
-      page: pageNum,
-      totalPages: Math.ceil(totalCount / pageLimit),
-    });
   } catch (err) {
     console.error("[ADMIN] Users fetch error:", err);
     return res.status(500).json({ success: false, message: err.message });
