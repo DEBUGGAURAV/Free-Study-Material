@@ -117,6 +117,7 @@ export default function SwipeToReviseModal({ isOpen, onClose, initialSubject = "
   const [selectedSubject, setSelectedSubject] = useState(initialSubject);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [isDeckFinished, setIsDeckFinished] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState(null); // "right" | "left" | "up" | null
@@ -267,8 +268,7 @@ export default function SwipeToReviseModal({ isOpen, onClose, initialSubject = "
       if (currentIndex < deck.length - 1) {
         setCurrentIndex((prev) => prev + 1);
       } else {
-        // Reset back to card 1 with reshuffle
-        setCurrentIndex(0);
+        setIsDeckFinished(true);
       }
     }, 280);
   };
@@ -650,24 +650,101 @@ export default function SwipeToReviseModal({ isOpen, onClose, initialSubject = "
             }}
           />
 
-          {/* ACTIVE SWIPE CARD */}
-          <div
-            ref={cardRef}
-            className={`swipe-card-3d ${isFlipped ? "flipped" : ""}`}
-            style={{
-              position: "relative",
-              zIndex: 10,
-              width: "100%",
-              maxWidth: "440px",
-              minHeight: "330px",
-              borderRadius: "24px",
-              transformStyle: "preserve-3d",
-              transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) rotate(${cardRotation}deg) scale(${cardScale})`,
-              transition: isDragging ? "none" : "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              cursor: isDragging ? "grabbing" : "grab",
-              boxShadow: "0 20px 40px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(226, 232, 240, 0.8)",
-            }}
-          >
+          {/* ACTIVE SWIPE CARD OR COMPLETION SUMMARY */}
+          {isDeckFinished ? (
+            <div
+              style={{
+                position: "relative",
+                zIndex: 10,
+                width: "100%",
+                maxWidth: "440px",
+                minHeight: "330px",
+                borderRadius: "24px",
+                background: "#ffffff",
+                border: "2px solid #e2e8f0",
+                boxShadow: "0 20px 40px -10px rgba(15, 23, 42, 0.15)",
+                padding: "32px 24px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ width: "64px", height: "64px", borderRadius: "50%", background: "#ecfdf5", border: "2px solid #a7f3d0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", marginBottom: "16px" }}>
+                🏆
+              </div>
+              <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>
+                Session Complete! 🎉
+              </h3>
+              <p style={{ fontSize: "0.82rem", color: "#64748b", margin: "0 0 18px", maxWidth: "280px" }}>
+                You reviewed all {deck.length} questions in {selectedSubject}.
+              </p>
+
+              <div style={{ display: "flex", gap: "12px", marginBottom: "22px" }}>
+                <div style={{ padding: "8px 16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#059669" }}>
+                    {deck.filter(c => masteredIds.includes(c.id)).length}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>Mastered</div>
+                </div>
+                <div style={{ padding: "8px 16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#dc2626" }}>
+                    {deck.filter(c => revisionIds.includes(c.id)).length}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>Needs Review</div>
+                </div>
+                <div style={{ padding: "8px 16px", borderRadius: "12px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#2563eb" }}>
+                    +{deck.length * 15}
+                  </div>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", fontWeight: 600 }}>XP Earned</div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCurrentIndex(0);
+                  setIsDeckFinished(false);
+                }}
+                style={{
+                  padding: "10px 24px",
+                  borderRadius: "12px",
+                  background: "linear-gradient(135deg, #2563eb, #1d4ed8)",
+                  color: "#ffffff",
+                  fontWeight: 750,
+                  fontSize: "0.85rem",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
+                }}
+              >
+                <RotateCw size={14} />
+                <span>Restart Revision Deck</span>
+              </button>
+            </div>
+          ) : (
+            <div
+              ref={cardRef}
+              className={`swipe-card-3d ${isFlipped ? "flipped" : ""}`}
+              style={{
+                position: "relative",
+                zIndex: 10,
+                width: "100%",
+                maxWidth: "440px",
+                minHeight: "330px",
+                borderRadius: "24px",
+                transformStyle: "preserve-3d",
+                transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) rotate(${cardRotation}deg) scale(${cardScale})`,
+                transition: isDragging ? "none" : "transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                cursor: isDragging ? "grabbing" : "grab",
+                boxShadow: "0 20px 40px -10px rgba(15, 23, 42, 0.2), 0 0 0 1px rgba(226, 232, 240, 0.8)",
+              }}
+            >
             {/* FRONT OF CARD (Question & Options) */}
             <div
               className="card-side card-front"
@@ -885,6 +962,7 @@ export default function SwipeToReviseModal({ isOpen, onClose, initialSubject = "
               </button>
             </div>
           </div>
+          )}
         </div>
 
         {/* BOTTOM TACTILE 3D ACTION BAR */}

@@ -109,6 +109,29 @@ export default function AdminModal({
   const [deletedNoteIds, setDeletedNoteIds] = useState(new Set());
   const isHalfAdmin = currentUser?.role === "half_admin";
 
+  // 📥 1-Click Offline Catalog Backup (100% Client-Side, 0 Server Load)
+  const handleExportJsonBackup = () => {
+    try {
+      const backupData = {
+        exportedAt: new Date().toISOString(),
+        exportedBy: currentUser?.email || "admin",
+        totalNotes: notes.length,
+        catalog: notes,
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `academic-vault-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn("Failed to export backup", e);
+    }
+  };
+
   // Platform Maintenance Mode State (Declared before DASHBOARD_TABS)
   const [maintenanceMode, setMaintenanceMode] = useState(maintenanceState?.active || false);
   const [maintenanceTitle, setMaintenanceTitle] = useState(maintenanceState?.title || "Scheduled System Upgrade in Progress");
@@ -2919,6 +2942,30 @@ export default function AdminModal({
               title={showKpis ? "Hide KPIs (Maximize Workspace)" : "Show Global KPIs"}
             >
               <Activity size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={handleExportJsonBackup}
+              className="btn-icon"
+              style={{
+                height: "38px",
+                padding: "0 12px",
+                background: "#f0fdf4",
+                borderRadius: "9px",
+                border: "1.5px solid #86efac",
+                color: "#16a34a",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                transition: "all 0.15s ease",
+              }}
+              title="1-Click JSON Backup: Export entire notes catalog offline (0 Server Load)"
+            >
+              <Download size={14} />
+              <span>Backup JSON</span>
             </button>
             <button
               onClick={() => {
