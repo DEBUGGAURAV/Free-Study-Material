@@ -249,11 +249,49 @@ export default function TabStudents(props) {
             style={{ width: "auto", fontSize: "0.8rem", padding: "8px 10px" }}
           >
             <option value="all">All Statuses</option>
+            <option value="online">🟢 Online Now (Active on Site)</option>
+            <option value="recent">🟡 Recently Active (&lt;15m)</option>
             <option value="active">Active Accounts</option>
             <option value="blocked">Blocked Accounts</option>
             <option value="immune">🛡️ Immune (Never Purged)</option>
             <option value="expiring">⏳ Expiring Soon (&lt;30d)</option>
           </select>
+
+          {/* 🟢 Dedicated 1-Click Quick Filter: Online Users */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter((prev) => (prev === "online" ? "all" : "online"))}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "7px 13px",
+              borderRadius: "20px",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              background: statusFilter === "online" ? "#10b981" : "#ecfdf5",
+              color: statusFilter === "online" ? "#ffffff" : "#047857",
+              border: `1.5px solid ${statusFilter === "online" ? "#10b981" : "#a7f3d0"}`,
+              cursor: "pointer",
+              boxShadow: statusFilter === "online" ? "0 2px 8px rgba(16, 185, 129, 0.35)" : "none",
+              transition: "all 0.15s ease",
+            }}
+            title="Click to view students currently active or online on the site"
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: statusFilter === "online" ? "#ffffff" : "#10b981",
+                boxShadow: "0 0 8px #10b981",
+                display: "inline-block",
+              }}
+            />
+            <span style={{ color: statusFilter === "online" ? "#ffffff" : "#047857", fontWeight: 700 }}>
+              Online ({onlineCount})
+            </span>
+          </button>
 
           {/* Refresh Button */}
           {typeof loadStudents === "function" && (
@@ -554,10 +592,97 @@ export default function TabStudents(props) {
                       <span style={{ color: "#b91c1c", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "4px" }}>
                         <UserX size={14} /> Blocked
                       </span>
+                    ) : student.isOnline ? (
+                      <div>
+                        <span
+                          style={{
+                            background: "#ecfdf5",
+                            color: "#047857",
+                            border: "1px solid #a7f3d0",
+                            padding: "3px 9px",
+                            borderRadius: "20px",
+                            fontWeight: 800,
+                            fontSize: "0.72rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            boxShadow: "0 1px 4px rgba(16, 185, 129, 0.2)",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: "7px",
+                              height: "7px",
+                              borderRadius: "50%",
+                              background: "#10b981",
+                              boxShadow: "0 0 8px #10b981",
+                              display: "inline-block",
+                            }}
+                          />
+                          Online Now
+                        </span>
+                        <div style={{ fontSize: "0.68rem", color: "#059669", fontWeight: 600, marginTop: "2px" }}>
+                          Active on site • Live
+                        </div>
+                      </div>
+                    ) : student.isRecentlyActive ? (
+                      <div>
+                        <span
+                          style={{
+                            background: "#fef3c7",
+                            color: "#b45309",
+                            border: "1px solid #fcd34d",
+                            padding: "3px 9px",
+                            borderRadius: "20px",
+                            fontWeight: 700,
+                            fontSize: "0.72rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: "7px",
+                              height: "7px",
+                              borderRadius: "50%",
+                              background: "#f59e0b",
+                              display: "inline-block",
+                            }}
+                          />
+                          Away (&lt;15m)
+                        </span>
+                        <div style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 500, marginTop: "2px" }}>
+                          Seen {formatLastSeen(student.lastActiveAt || student.lastLoginAt)}
+                        </div>
+                      </div>
                     ) : (
-                      <span style={{ color: "#047857", fontWeight: 800, display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                        <UserCheck size={14} /> Active
-                      </span>
+                      <div>
+                        <span
+                          style={{
+                            color: "#64748b",
+                            fontWeight: 600,
+                            fontSize: "0.74rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: "6px",
+                              height: "6px",
+                              borderRadius: "50%",
+                              background: "#94a3b8",
+                              display: "inline-block",
+                            }}
+                          />
+                          Offline
+                        </span>
+                        <div style={{ fontSize: "0.68rem", color: "#94a3b8", fontWeight: 500, marginTop: "2px" }}>
+                          {formatLastSeen(student.lastActiveAt || student.lastLoginAt)}
+                        </div>
+                      </div>
                     )}
                   </td>
                   <td style={{ padding: "12px 16px", textAlign: "right" }}>
@@ -750,15 +875,35 @@ export default function TabStudents(props) {
               <span
                 style={{
                   fontSize: "0.74rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   padding: "3px 10px",
                   borderRadius: "6px",
-                  background: viewingStudent.isBlocked ? "#fef2f2" : "#ecfdf5",
-                  color: viewingStudent.isBlocked ? "#dc2626" : "#059669",
-                  border: `1px solid ${viewingStudent.isBlocked ? "#fecaca" : "#a7f3d0"}`,
+                  background: viewingStudent.isBlocked ? "#fef2f2" : viewingStudent.isOnline ? "#ecfdf5" : viewingStudent.isRecentlyActive ? "#fef3c7" : "#f1f5f9",
+                  color: viewingStudent.isBlocked ? "#dc2626" : viewingStudent.isOnline ? "#059669" : viewingStudent.isRecentlyActive ? "#b45309" : "#64748b",
+                  border: `1px solid ${viewingStudent.isBlocked ? "#fecaca" : viewingStudent.isOnline ? "#a7f3d0" : viewingStudent.isRecentlyActive ? "#fcd34d" : "#cbd5e1"}`,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
                 }}
               >
-                {viewingStudent.isBlocked ? "🚫 Account Blocked" : "✅ Account Active"}
+                {viewingStudent.isBlocked ? (
+                  "🚫 Account Blocked"
+                ) : viewingStudent.isOnline ? (
+                  <>
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }} />
+                    🟢 Online Now (Active on Site)
+                  </>
+                ) : viewingStudent.isRecentlyActive ? (
+                  <>
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#f59e0b" }} />
+                    🟡 Away (&lt;15m)
+                  </>
+                ) : (
+                  <>
+                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#94a3b8" }} />
+                    ⚪ Offline
+                  </>
+                )}
               </span>
 
               <span
@@ -821,9 +966,15 @@ export default function TabStudents(props) {
               </div>
 
               <div>
-                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Last Active / Login</div>
-                <div style={{ fontSize: "0.8rem", color: "#059669", fontWeight: 700, marginTop: "2px" }}>
-                  {viewingStudent.lastLoginAt ? new Date(viewingStudent.lastLoginAt).toLocaleString("en-IN") : "Never Logged In"}
+                <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Realtime Activity / Seen</div>
+                <div style={{ fontSize: "0.8rem", color: viewingStudent.isOnline ? "#059669" : "#0f172a", fontWeight: 700, marginTop: "2px" }}>
+                  {viewingStudent.isOnline
+                    ? "🟢 Active on Site Right Now"
+                    : viewingStudent.lastActiveAt
+                    ? new Date(viewingStudent.lastActiveAt).toLocaleString("en-IN")
+                    : viewingStudent.lastLoginAt
+                    ? new Date(viewingStudent.lastLoginAt).toLocaleString("en-IN")
+                    : "Never Logged In"}
                 </div>
               </div>
 

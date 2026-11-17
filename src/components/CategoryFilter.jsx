@@ -1,5 +1,5 @@
-import "react";
-import { LayoutGrid, List, GraduationCap, Calendar, Layers } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { LayoutGrid, List, GraduationCap, Calendar, Layers, Search, Mic, MicOff, Sparkles } from "lucide-react";
 import GeminiIcon from "./GeminiIcon";
 
 const COURSES = [
@@ -29,21 +29,177 @@ export default function CategoryFilter({
   setViewMode,
   sortBy = "recent",
   setSortBy,
+  searchTerm = "",
+  setSearchTerm,
   onOpenCircleSearch,
+  onOpenAiStudyPod,
   showOnlyOffline = false,
   setShowOnlyOffline,
   offlineCount = 0,
 }) {
   const branchList = ["All", ...(branches.length > 0 ? branches : ["CSE", "IT", "ECE", "ME", "Civil", "BCA", "MCA", "AI/ML"])];
 
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search at Explore study materials
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+        const el = document.getElementById("study-materials");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("🎙️ Voice search is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    if (isListening) {
+      try {
+        if (recognitionRef.current) recognitionRef.current.stop();
+      } catch (_) {}
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event) => {
+        setIsListening(false);
+        const transcript = event?.results?.[0]?.[0]?.transcript;
+        if (transcript && setSearchTerm) {
+          setSearchTerm(transcript);
+        }
+      };
+      recognition.onerror = () => setIsListening(false);
+      recognition.onend = () => setIsListening(false);
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (_) {
+      setIsListening(false);
+    }
+  };
+
   return (
     <section id="study-materials" className="control-bar-wrapper">
-      <div className="library-heading">
-        <div>
-          <p>THE LIBRARY</p>
-          <h2>Explore study materials</h2>
+      <div className="library-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "16px" }}>
+        <div style={{ flex: "1 1 240px", minWidth: "220px" }}>
+          <p style={{ margin: 0, color: "#4361bb", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em" }}>THE LIBRARY</p>
+          <h2 style={{ margin: "2px 0 4px", fontSize: "clamp(1.3rem, 2.4vw, 1.7rem)", fontWeight: 800, color: "#172338", letterSpacing: "-0.03em" }}>Explore study materials</h2>
+          <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "block" }}>Filter by course, year, or branch to find the right resources.</span>
         </div>
-        <span>Filter by course, year, or branch to find the right resources.</span>
+
+        {/* 🔍 Universal Spotlight Search Bar (Shifted to Explore Study Materials) */}
+        <div style={{ flex: "1 1 360px", maxWidth: "620px", minWidth: "260px" }}>
+          <div className="search-wrapper" style={{ width: "100%", maxWidth: "100%", margin: 0 }}>
+            <Search size={15} className="search-icon" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="search-input"
+              style={{ paddingRight: "215px" }}
+              placeholder="Search notes, subjects, branch, PYQs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm && setSearchTerm(e.target.value)}
+            />
+            <div className="search-right-tools">
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm && setSearchTerm("")}
+                  className="search-clear-btn"
+                  title="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleVoiceSearch}
+                className={`search-mic-btn ${isListening ? "listening" : ""}`}
+                title={isListening ? "Listening... Click to stop" : "Voice Search (Speak to search notes)"}
+              >
+                {isListening ? <MicOff size={14} /> : <Mic size={14} />}
+              </button>
+
+              {/* ♊ Circle to Search Button */}
+              {onOpenCircleSearch && (
+                <button
+                  type="button"
+                  className="search-circle-btn"
+                  onClick={onOpenCircleSearch}
+                  style={{
+                    background: "linear-gradient(135deg, rgba(2, 132, 199, 0.12), rgba(99, 102, 241, 0.12))",
+                    border: "1px solid rgba(56, 189, 248, 0.45)",
+                    color: "#0284c7",
+                    borderRadius: "6px",
+                    padding: "2px 7px",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    marginLeft: "2px",
+                  }}
+                  title="Circle to Search: Circle any question or diagram to solve with Gemini AI"
+                >
+                  <GeminiIcon size={14} withRing ringColor="#3552c5" color="#0f8b7e" />
+                  <span className="search-tool-label">Circle</span>
+                </button>
+              )}
+
+              {/* ✨ AI Study Pod Popup Button */}
+              {onOpenAiStudyPod && (
+                <button
+                  type="button"
+                  className="search-ai-btn"
+                  onClick={() => onOpenAiStudyPod("chat")}
+                  style={{
+                    background: "linear-gradient(135deg, rgba(99, 102, 241, 0.38), rgba(6, 182, 212, 0.38))",
+                    border: "1px solid rgba(139, 92, 246, 0.55)",
+                    color: "#ffffff",
+                    borderRadius: "8px",
+                    padding: "3px 9px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    marginLeft: "4px",
+                    boxShadow: "0 0 12px rgba(139, 92, 246, 0.35)",
+                  }}
+                  title="AI Study: Conversational Tutor, Flashcards & Summary"
+                >
+                  <Sparkles size={12} color="#38bdf8" />
+                  <span className="search-tool-label">AI Study</span>
+                </button>
+              )}
+
+              <kbd className="search-kbd-shortcut">⌘K</kbd>
+            </div>
+          </div>
+        </div>
       </div>
       {/* Dynamic Course & Program Filter Bar (Replaced rigid Semester Scene) */}
       <div className="semester-tabs" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto" }}>
@@ -224,32 +380,6 @@ export default function CategoryFilter({
                 <option value="title">🔤 Title (A-Z)</option>
               </select>
             </div>
-          )}
-
-          {onOpenCircleSearch && (
-            <button
-              type="button"
-              onClick={onOpenCircleSearch}
-              style={{
-                background: "linear-gradient(135deg, #eff6ff, #eef2ff)",
-                border: "1px solid #bae6fd",
-                color: "#0369a1",
-                borderRadius: "var(--radius-sm)",
-                padding: "4px 10px",
-                fontSize: "0.76rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                whiteSpace: "nowrap",
-                transition: "all 0.2s ease",
-              }}
-              title="Circle to Search: Ask question or upload diagram to solve with Gemini AI"
-            >
-              <GeminiIcon size={14} withRing ringColor="#0284c7" color="#0284c7" />
-              <span>Circle Search</span>
-            </button>
           )}
 
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", fontWeight: 600 }}>
