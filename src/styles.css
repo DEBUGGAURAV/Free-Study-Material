@@ -2351,6 +2351,10 @@ select option,
     justify-content: center !important;
   }
 
+  .admin-modal-header .adm-header-backup-btn .adm-backup-label {
+    display: none !important;
+  }
+
   .admin-modal-header button svg {
     width: 15px !important;
     height: 15px !important;
@@ -4090,6 +4094,12 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 .admin-modal-container .admin-modal-header {
   background: #ffffff !important;
   border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+.admin-modal-header .adm-header-backup-btn {
+  width: auto !important;
+  min-width: max-content !important;
+  white-space: nowrap !important;
 }
 
 .admin-modal-container .admin-kpis-strip {
