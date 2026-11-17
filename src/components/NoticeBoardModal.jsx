@@ -34,6 +34,18 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
     }
   }, [isOpen]);
 
+  // Keyboard accessibility: ESC to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   const loadNotices = async () => {
     try {
       setLoading(true);
@@ -166,56 +178,85 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
       <div
-        className="modal-content"
-        style={{ maxWidth: "760px", maxHeight: "88vh", display: "flex", flexDirection: "column" }}
+        className="modal-content notice-board-modal-content"
+        style={{
+          maxWidth: "760px",
+          width: "95vw",
+          maxHeight: "88vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "#ffffff",
+          color: "#0f172a",
+          border: "1.5px solid #cbd5e1",
+          borderRadius: "16px",
+          boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.25)",
+          padding: "20px 22px 14px 22px",
+          position: "relative",
+          boxSizing: "border-box",
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="modal-header" style={{ flexShrink: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div
+          className="modal-header"
+          style={{
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            marginBottom: "16px",
+            paddingBottom: "14px",
+            borderBottom: "1.5px solid #e2e8f0",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
             <div
               style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "var(--radius-sm)",
-                background: "rgba(6, 182, 212, 0.15)",
-                color: "var(--accent-cyan)",
+                width: "40px",
+                height: "40px",
+                borderRadius: "10px",
+                background: "#e0f2fe",
+                border: "1px solid #bae6fd",
+                color: "#0284c7",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <Bell size={20} />
             </div>
-            <div>
-              <div className="modal-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ minWidth: 0 }}>
+              <div className="modal-title" style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>
                 <span>Official Notice Board</span>
                 <span
                   style={{
-                    fontSize: "0.7rem",
+                    fontSize: "0.72rem",
                     padding: "2px 8px",
-                    borderRadius: "10px",
-                    background: "rgba(6, 182, 212, 0.15)",
-                    color: "var(--accent-cyan)",
+                    borderRadius: "12px",
+                    background: "#e0f2fe",
+                    color: "#0284c7",
+                    border: "1px solid #bae6fd",
                     fontWeight: 700,
                   }}
                 >
                   {notices.length} Live
                 </span>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+              <div style={{ fontSize: "0.75rem", color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 Latest announcements, syllabus updates, exam dates & study materials
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
             {canManageNotices && !showCreateForm && (
               <button
                 className="btn-primary"
-                style={{ padding: "6px 14px", fontSize: "0.8rem" }}
+                style={{ padding: "7px 14px", fontSize: "0.8rem", borderRadius: "8px", fontWeight: 700 }}
                 onClick={() => {
                   setEditingId(null);
                   setTitle("");
@@ -230,8 +271,14 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
               </button>
             )}
 
-            <button className="modal-close-btn" onClick={onClose} title="Close Notice Board">
-              <X size={20} />
+            <button
+              type="button"
+              className="notice-board-close-btn"
+              onClick={onClose}
+              title="Close Notice Board (Esc)"
+              aria-label="Close Notice Board"
+            >
+              <X size={20} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -647,6 +694,56 @@ export default function NoticeBoardModal({ isOpen, onClose, currentUser, onOpenN
               )}
             </div>
           )}
+        </div>
+
+        {/* Sticky Footer Bar with 1-Tap Close Button */}
+        <div
+          style={{
+            flexShrink: 0,
+            paddingTop: "12px",
+            marginTop: "12px",
+            borderTop: "1.5px solid #e2e8f0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            background: "#ffffff",
+          }}
+        >
+          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+            Press <kbd style={{ padding: "2px 6px", background: "#f1f5f9", borderRadius: "4px", border: "1px solid #cbd5e1", fontSize: "0.7rem", color: "#334155", fontWeight: 700 }}>Esc</kbd> or click outside to dismiss
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              padding: "7px 16px",
+              borderRadius: "8px",
+              background: "#f1f5f9",
+              border: "1.5px solid #cbd5e1",
+              color: "#334155",
+              fontWeight: 700,
+              fontSize: "0.82rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "all 0.15s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#fee2e2";
+              e.currentTarget.style.borderColor = "#fecaca";
+              e.currentTarget.style.color = "#ef4444";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f1f5f9";
+              e.currentTarget.style.borderColor = "#cbd5e1";
+              e.currentTarget.style.color = "#334155";
+            }}
+          >
+            <X size={15} strokeWidth={2.5} />
+            <span>Close Notice Board</span>
+          </button>
         </div>
       </div>
     </div>

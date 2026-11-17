@@ -139,6 +139,7 @@ export default function App() {
   const [selectedBranch, setSelectedBranch] = useState("All");
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [viewMode, setViewMode] = useState("grid"); // 'grid' or 'table'
+  const [sortBy, setSortBy] = useState("recent"); // 'recent' | 'popular' | 'size' | 'title'
 
   // Modals
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -1309,11 +1310,20 @@ export default function App() {
   };
 
   // Rule: Display initial 15 notes, keep rest hidden until user clicks "Show All Notes"
-  // ⚡ Memoized displayed notes: Eliminates redundant slice and filter loops on re-renders
+  // ⚡ Memoized displayed notes: Eliminates redundant slice and filter loops on re-renders (100% Client-Side Sort, 0 Server Load)
   const displayedNotes = useMemo(() => {
-    const list = showAllNotes ? notes : notes.slice(0, 15);
-    return list.filter(Boolean);
-  }, [showAllNotes, notes]);
+    let list = showAllNotes ? [...notes] : notes.slice(0, 15);
+    list = list.filter(Boolean);
+
+    if (sortBy === "popular") {
+      list.sort((a, b) => (b.downloadsCount || 0) - (a.downloadsCount || 0));
+    } else if (sortBy === "size") {
+      list.sort((a, b) => (a.compressedSize || a.fileSize || 0) - (b.compressedSize || b.fileSize || 0));
+    } else if (sortBy === "title") {
+      list.sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+    }
+    return list;
+  }, [showAllNotes, notes, sortBy]);
 
   const isAdminUser = currentUser?.role === "admin" || currentUser?.role === "half_admin" || isMasterAdminUser(currentUser);
   const hasBypassParam =
@@ -2245,6 +2255,8 @@ export default function App() {
               totalCount={notes.length}
               viewMode={viewMode}
               setViewMode={setViewMode}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
               showOnlyOffline={showOnlyOffline}
               setShowOnlyOffline={setShowOnlyOffline}
               offlineCount={offlineNotesCount}

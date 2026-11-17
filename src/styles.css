@@ -3686,21 +3686,21 @@ select option,
 .btn-logout-pill:hover, .mobile-logout-pill:hover { border-color: #efb8c1; background: #ffe4e8; color: #8d2437; }
 .mobile-profile-pill { border-color: #cbd5e1; background: #f7f9fd; color: #1d2b42 !important; }
 .mobile-profile-name { color: #1d2b42 !important; }
-.help-center-modal-content .form-label { color: #cbd5e1 !important; }
+.help-center-modal-content .form-label { color: #334155 !important; font-weight: 650; }
 .help-center-modal-content .form-input,
 .help-center-modal-content .form-select,
 .help-center-modal-content .form-textarea {
-  color: #f8fafc !important;
-  background: rgba(15, 23, 42, 0.85) !important;
-  border: 1px solid rgba(148, 163, 184, 0.34) !important;
-  color-scheme: dark;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color-scheme: light;
 }
 .help-center-modal-content .form-input:focus,
 .help-center-modal-content .form-select:focus,
 .help-center-modal-content .form-textarea:focus {
-  border-color: #38bdf8 !important;
-  background: rgba(15, 23, 42, 0.96) !important;
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2) !important;
+  border-color: #0284c7 !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.18) !important;
 }
 .help-center-modal-content .form-input::placeholder,
 .help-center-modal-content .form-textarea::placeholder {
@@ -3708,11 +3708,11 @@ select option,
   opacity: 1;
 }
 .help-center-modal-content select.form-input option {
-  background: #0f172a !important;
-  color: #f8fafc !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
 }
 .help-center-modal-content ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.65);
+  background: #f1f5f9;
 }
 .help-textarea-noscroll {
   resize: none !important;
@@ -3939,6 +3939,34 @@ select option,
 .app-footer strong { color: #34445d; }
 .notice-ticker { border-left: 4px solid #0f8b7e !important; box-shadow: 0 8px 22px -20px rgba(29, 48, 77, 0.55); transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease; }
 .notice-ticker:hover { border-color: #82b8b1 !important; background: linear-gradient(110deg, #e5f1ff, #e2f4ee) !important; box-shadow: 0 10px 24px -18px rgba(29, 48, 77, 0.42); transform: translateY(-1px); }
+.notice-board-modal-content {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.25) !important;
+}
+.notice-board-close-btn {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  border-radius: 10px !important;
+  background: #fef2f2 !important;
+  border: 1.5px solid #fecaca !important;
+  color: #ef4444 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.15) !important;
+  transition: all 0.18s ease !important;
+}
+.notice-board-close-btn:hover {
+  background: #fee2e2 !important;
+  border-color: #f87171 !important;
+  color: #dc2626 !important;
+  transform: scale(1.05);
+}
 .nav-auth-actions-mobile { gap: 5px; }
 .nav-auth-actions-mobile .btn-signup-nav, .nav-auth-actions-mobile .btn-signin-nav { min-height: 30px; padding: 5px 8px; font-size: 0.68rem; }
 .nav-auth-actions-mobile .btn-signin-nav { gap: 3px; }
@@ -3979,8 +4007,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 /* ==========================================================================
    DARK MODAL SCOPE OVERRIDES (Prevents Light :root variables inside dark feature modals)
    ========================================================================== */
-.dark-modal-surface,
-.help-center-modal-content {
+.dark-modal-surface {
   --bg-primary: #060913;
   --bg-surface: #0f172a;
   --bg-surface-elevated: #1e293b;

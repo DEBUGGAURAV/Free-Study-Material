@@ -734,6 +734,42 @@ export default function VirtualPdfReader({
   const canUseNativePdfViewer = hasNativePdfium;
 
     const [isMobileScreen, setIsMobileScreen] = useState(() => (typeof window !== "undefined" ? window.innerWidth < 768 : false));
+
+  // 📜 Auto-Scroll (Hands-Free Reading Mode - 100% Client-Side, 0 Server Load)
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(1);
+  const autoScrollRafRef = useRef(null);
+
+  useEffect(() => {
+    if (!isAutoScrolling) {
+      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+      return;
+    }
+
+    let lastTime = performance.now();
+    const scrollStep = (time) => {
+      const delta = time - lastTime;
+      lastTime = time;
+      if (mainScrollRef.current) {
+        const el = mainScrollRef.current;
+        const px = (autoScrollSpeed * 35 * delta) / 1000;
+        el.scrollTop += px;
+
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 6) {
+          setIsAutoScrolling(false);
+          return;
+        }
+      }
+      autoScrollRafRef.current = requestAnimationFrame(scrollStep);
+    };
+
+    autoScrollRafRef.current = requestAnimationFrame(scrollStep);
+
+    return () => {
+      if (autoScrollRafRef.current) cancelAnimationFrame(autoScrollRafRef.current);
+    };
+  }, [isAutoScrolling, autoScrollSpeed]);
+
   useEffect(() => {
     const handleResize = () => setIsMobileScreen(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
@@ -3823,8 +3859,13 @@ export default function VirtualPdfReader({
           backdropFilter: "blur(16px)",
           zIndex: 40,
           flexShrink: 0,
+          position: "relative",
         }}
       >
+        {/* Subtle Top Reading Progress Bar */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: "2.5px", background: nightMode ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)", overflow: "hidden", pointerEvents: "none" }}>
+          <div style={{ width: `${Math.min(100, Math.round((currentPage / (numPages || 1)) * 100))}%`, height: "100%", background: "linear-gradient(90deg, #06b6d4, #3b82f6)", transition: "width 0.25s ease" }} />
+        </div>
         {/* Row 1: Primary Bar (Title, Stepper & Critical Actions) */}
         <div
           style={{
@@ -3915,7 +3956,7 @@ export default function VirtualPdfReader({
 
               <span
                 style={{
-                  padding: "2px 6px",
+                  padding: "2px 8px",
                   borderRadius: "5px",
                   background: nightMode ? "rgba(255,255,255,0.08)" : "#fff",
                   border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.12)",
@@ -3924,9 +3965,17 @@ export default function VirtualPdfReader({
                   fontWeight: 700,
                   color: nightMode ? "#fff" : "#0f172a",
                   whiteSpace: "nowrap",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
                 }}
               >
-                {currentPage} / {numPages || "..."}
+                <span>{currentPage} / {numPages || "..."}</span>
+                {numPages > 1 && (
+                  <span style={{ fontSize: "0.68rem", opacity: 0.65, fontWeight: 500 }}>
+                    • ~{Math.max(1, Math.ceil(((numPages || 1) - currentPage) * 1.5))}m left
+                  </span>
+                )}
               </span>
 
               <button
@@ -3956,6 +4005,30 @@ export default function VirtualPdfReader({
           {/* Desktop Center: Auto-Fit & Zoom Controls */}
           {!isMobileScreen && (
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* 📜 Auto-Scroll Hands-Free Reading (100% Client-Side, 0 Server Load) */}
+              <button
+                type="button"
+                onClick={() => setIsAutoScrolling((prev) => !prev)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  background: isAutoScrolling ? "rgba(16, 185, 129, 0.2)" : (nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc"),
+                  border: isAutoScrolling ? "1.5px solid #10b981" : (nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(0,0,0,0.15)"),
+                  color: isAutoScrolling ? "#10b981" : (nightMode ? "#94a3b8" : "#64748b"),
+                  transition: "all 0.15s ease",
+                }}
+                title={isAutoScrolling ? "Pause Hands-Free Auto-Scroll" : "Start Hands-Free Auto-Scroll"}
+              >
+                {isAutoScrolling ? <Pause size={12} /> : <Play size={12} />}
+                <span>Auto-Scroll{isAutoScrolling ? ` (${autoScrollSpeed}x)` : ""}</span>
+              </button>
+
               {/* ↔️ Fit Width */}
               <button
                 type="button"

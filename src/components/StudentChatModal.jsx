@@ -2008,7 +2008,7 @@ export default function StudentChatModal({
 
   return (
     <div
-      className="scm-overlay dark-modal-surface"
+      className="scm-overlay scm-light-surface"
       onClick={onClose}
     >
       <style>{`
@@ -2020,7 +2020,7 @@ export default function StudentChatModal({
           position: fixed;
           inset: 0;
           z-index: 1200;
-          background: rgba(4, 7, 15, 0.88);
+          background: rgba(15, 23, 42, 0.65);
           backdrop-filter: blur(14px);
           -webkit-backdrop-filter: blur(14px);
           display: flex;
@@ -2037,10 +2037,10 @@ export default function StudentChatModal({
           height: min(840px, 88vh);
           display: flex;
           flex-direction: column;
-          background: #0b101b;
+          background: #ffffff;
           border-radius: 24px;
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 45px rgba(99, 102, 241, 0.12);
+          border: 1.5px solid #cbd5e1;
+          box-shadow: 0 25px 70px -15px rgba(15, 23, 42, 0.25);
           overflow: hidden;
           position: relative;
           box-sizing: border-box;
@@ -2052,7 +2052,7 @@ export default function StudentChatModal({
           to { opacity: 1; transform: scale(1) translateY(0); }
         }
 
-        /* Ambient WhatsApp Doodle Pattern */
+        /* Ambient WhatsApp Doodle Pattern (Light Studio) */
         .scm-chat-feed {
           flex: 1;
           overflow-y: auto;
@@ -2061,8 +2061,8 @@ export default function StudentChatModal({
           display: flex;
           flex-direction: column;
           gap: 12px;
-          background-color: #080c16;
-          background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+          background-color: #f8fafc;
+          background-image: radial-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px);
           background-size: 22px 22px;
           -webkit-overflow-scrolling: touch;
         }
@@ -2104,13 +2104,13 @@ export default function StudentChatModal({
           font-weight: 500;
         }
 
-        /* Dark Glass for Received Messages */
+        /* Pure White Surface for Received Messages */
         .scm-bubble-content.theirs {
-          background: #1e293b;
+          background: #ffffff;
           border-radius: 20px 20px 20px 4px;
-          color: #ffffff !important;
-          border: 1.5px solid rgba(255, 255, 255, 0.14);
-          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+          color: #0f172a !important;
+          border: 1.5px solid #e2e8f0;
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
           font-size: 0.88rem;
           font-weight: 500;
         }
@@ -2120,12 +2120,12 @@ export default function StudentChatModal({
           display: none;
           align-items: center;
           gap: 4px;
-          background: rgba(15, 23, 42, 0.95);
+          background: #ffffff;
           backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          border: 1.5px solid #cbd5e1;
           border-radius: 999px;
           padding: 3px 8px;
-          box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.15);
           position: absolute;
           top: -26px;
           z-index: 10;
@@ -2148,10 +2148,10 @@ export default function StudentChatModal({
         .scm-msg-context-menu {
           position: absolute;
           bottom: 28px;
-          background: #0f172a;
-          border: 1px solid rgba(255, 255, 255, 0.18);
+          background: #ffffff;
+          border: 1.5px solid #cbd5e1;
           border-radius: 12px;
-          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+          box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
           padding: 6px;
           z-index: 120;
           display: flex;
@@ -2175,7 +2175,7 @@ export default function StudentChatModal({
           padding: 8px 10px;
           border: none;
           background: transparent;
-          color: #f1f5f9;
+          color: #1e293b;
           font-size: 0.76rem;
           font-weight: 600;
           cursor: pointer;
@@ -2186,7 +2186,7 @@ export default function StudentChatModal({
         }
 
         .scm-msg-context-menu button:hover {
-          background: rgba(255, 255, 255, 0.08);
+          background: #f1f5f9;
         }
 
         /* Bouncing Dots Typing Animation */
@@ -2300,8 +2300,8 @@ export default function StudentChatModal({
           className="scm-header-wrap"
           style={{
             padding: "12px 18px",
-            background: "rgba(13, 19, 33, 0.95)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            background: "#ffffff",
+            borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -2315,18 +2315,18 @@ export default function StudentChatModal({
             <button
               onClick={onClose}
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "none",
-                borderRadius: "50%",
+                background: "#f1f5f9",
+                border: "1.5px solid #cbd5e1",
+                borderRadius: "10px",
                 width: "36px",
                 height: "36px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#cbd5e1",
+                color: "#334155",
                 cursor: "pointer",
                 flexShrink: 0,
-                transition: "background 0.2s ease",
+                transition: "all 0.15s ease",
               }}
               title="Close Chat"
             >
@@ -2352,15 +2352,16 @@ export default function StudentChatModal({
                   width: "100%",
                   height: "100%",
                   borderRadius: "50%",
-                  background: "#080c16",
+                  background: "#ffffff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#fff",
+                  color: "#0f172a",
                   fontSize: "1.05rem",
+                  boxShadow: "inset 0 0 4px rgba(0,0,0,0.06)",
                 }}
               >
-                {currentRoom.isPrivate ? <Lock size={18} color="#fca5a5" /> : "🏛️"}
+                {currentRoom.isPrivate ? <Lock size={18} color="#ef4444" /> : "🏛️"}
               </div>
 
               {/* Pulsing Active Online Dot */}
@@ -2373,7 +2374,7 @@ export default function StudentChatModal({
                   height: "11px",
                   borderRadius: "50%",
                   background: "#10b981",
-                  border: "2px solid #080c16",
+                  border: "2px solid #ffffff",
                   boxShadow: "0 0 6px #10b981",
                 }}
               />
@@ -2387,7 +2388,7 @@ export default function StudentChatModal({
                     margin: 0,
                     fontSize: "0.98rem",
                     fontWeight: 800,
-                    color: "#fff",
+                    color: "#0f172a",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -2790,21 +2791,23 @@ export default function StudentChatModal({
             <button
               onClick={onClose}
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "none",
-                borderRadius: "50%",
                 width: "36px",
                 height: "36px",
+                borderRadius: "10px",
+                background: "#fef2f2",
+                border: "1.5px solid #fecaca",
+                color: "#ef4444",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--text-dim)",
                 cursor: "pointer",
-                transition: "all 0.2s ease",
+                flexShrink: 0,
+                boxShadow: "0 2px 6px rgba(239, 68, 68, 0.15)",
+                transition: "all 0.15s ease",
               }}
-              title="Close (ESC)"
+              title="Close Chat (ESC)"
             >
-              <X size={17} />
+              <X size={18} strokeWidth={2.5} />
             </button>
           </div>
         </div>
@@ -2817,8 +2820,8 @@ export default function StudentChatModal({
           className="scm-tabs-bar"
           style={{
             padding: "8px 16px",
-            background: "rgba(10, 15, 27, 0.98)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+            background: "#f8fafc",
+            borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
             alignItems: "center",
             gap: "8px",
@@ -2836,9 +2839,9 @@ export default function StudentChatModal({
               fontSize: "0.78rem",
               fontWeight: 700,
               cursor: "pointer",
-              border: activeTab === "public" ? "1px solid var(--accent-indigo)" : "1px solid rgba(255,255,255,0.08)",
-              background: activeTab === "public" ? "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(6,182,212,0.3))" : "rgba(255,255,255,0.04)",
-              color: activeTab === "public" ? "#fff" : "var(--text-muted)",
+              border: activeTab === "public" ? "1.5px solid #0284c7" : "1.5px solid #e2e8f0",
+              background: activeTab === "public" ? "#e0f2fe" : "#ffffff",
+              color: activeTab === "public" ? "#0369a1" : "#475569",
               whiteSpace: "nowrap",
               display: "inline-flex",
               alignItems: "center",
@@ -2858,9 +2861,9 @@ export default function StudentChatModal({
               fontSize: "0.78rem",
               fontWeight: 700,
               cursor: "pointer",
-              border: activeTab === "create_join" ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.08)",
-              background: activeTab === "create_join" ? "linear-gradient(135deg, rgba(99,102,241,0.25), rgba(6,182,212,0.25))" : "rgba(255,255,255,0.04)",
-              color: activeTab === "create_join" ? "#fff" : "var(--text-muted)",
+              border: activeTab === "create_join" ? "1.5px solid #0284c7" : "1.5px solid #e2e8f0",
+              background: activeTab === "create_join" ? "#e0f2fe" : "#ffffff",
+              color: activeTab === "create_join" ? "#0369a1" : "#475569",
               whiteSpace: "nowrap",
               display: "inline-flex",
               alignItems: "center",
@@ -2868,7 +2871,7 @@ export default function StudentChatModal({
               transition: "all 0.18s ease",
             }}
           >
-            <Lock size={13} color={activeTab === "create_join" ? "var(--accent-cyan)" : "#94a3b8"} />
+            <Lock size={13} color={activeTab === "create_join" ? "#0284c7" : "#64748b"} />
             <span>🔒 Private Chat</span>
           </button>
 
@@ -2895,9 +2898,9 @@ export default function StudentChatModal({
                     fontSize: "0.76rem",
                     fontWeight: 600,
                     cursor: "pointer",
-                    border: isActive ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.08)",
-                    background: isActive ? "rgba(6, 182, 212, 0.2)" : "rgba(255,255,255,0.03)",
-                    color: isActive ? "#38bdf8" : "var(--text-dim)",
+                    border: isActive ? "1.5px solid #0284c7" : "1.5px solid #e2e8f0",
+                    background: isActive ? "#e0f2fe" : "#ffffff",
+                    color: isActive ? "#0284c7" : "#64748b",
                     whiteSpace: "nowrap",
                     display: "inline-flex",
                     alignItems: "center",
@@ -2989,18 +2992,18 @@ export default function StudentChatModal({
           <div
             style={{
               padding: "7px 16px",
-              background: "linear-gradient(90deg, rgba(6, 182, 212, 0.12) 0%, rgba(99, 102, 241, 0.12) 100%)",
-              borderBottom: "1px solid rgba(6, 182, 212, 0.2)",
+              background: "#eff6ff",
+              borderBottom: "1.5px solid #bfdbfe",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               gap: "10px",
               fontSize: "0.78rem",
-              color: "#e0f2fe",
+              color: "#1e3a8a",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: 0 }}>
-              <Megaphone size={14} color="var(--accent-cyan)" style={{ flexShrink: 0 }} />
+              <Megaphone size={14} color="#2563eb" style={{ flexShrink: 0 }} />
               {isEditingNotice ? (
                 <input
                   type="text"
@@ -3008,9 +3011,9 @@ export default function StudentChatModal({
                   onChange={(e) => setNoticeDraft(e.target.value)}
                   style={{
                     flex: 1,
-                    background: "#080c16",
-                    color: "#fff",
-                    border: "1px solid rgba(6, 182, 212, 0.4)",
+                    background: "#ffffff",
+                    color: "#0f172a",
+                    border: "1.5px solid #93c5fd",
                     borderRadius: "6px",
                     padding: "3px 8px",
                     fontSize: "0.78rem",
@@ -3018,7 +3021,7 @@ export default function StudentChatModal({
                 />
               ) : (
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  <strong style={{ color: "var(--accent-cyan)" }}>Notice:</strong> {chatNotice.text}
+                  <strong style={{ color: "#1d4ed8" }}>Notice:</strong> {chatNotice.text}
                 </span>
               )}
             </div>
@@ -3029,13 +3032,13 @@ export default function StudentChatModal({
                   <>
                     <button
                       onClick={handleSaveNotice}
-                      style={{ background: "#06b6d4", color: "#000", border: "none", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 700, cursor: "pointer" }}
+                      style={{ background: "#0284c7", color: "#fff", border: "none", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", fontWeight: 700, cursor: "pointer" }}
                     >
                       Save
                     </button>
                     <button
                       onClick={() => setIsEditingNotice(false)}
-                      style={{ background: "transparent", color: "#cbd5e1", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer" }}
+                      style={{ background: "transparent", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer" }}
                     >
                       Cancel
                     </button>
@@ -3043,7 +3046,7 @@ export default function StudentChatModal({
                 ) : (
                   <button
                     onClick={() => setIsEditingNotice(true)}
-                    style={{ background: "rgba(255,255,255,0.08)", color: "var(--accent-cyan)", border: "none", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer" }}
+                    style={{ background: "#dbeafe", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: "4px", padding: "2px 8px", fontSize: "0.7rem", cursor: "pointer", fontWeight: 700 }}
                     title="Edit Notice"
                   >
                     Edit
@@ -3069,6 +3072,7 @@ export default function StudentChatModal({
               padding: "30px 20px",
               textAlign: "center",
               gap: "16px",
+              background: "#ffffff",
             }}
           >
             <div
@@ -3076,21 +3080,21 @@ export default function StudentChatModal({
                 width: "68px",
                 height: "68px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.2))",
-                border: "1px solid rgba(99, 102, 241, 0.4)",
+                background: "#e0f2fe",
+                border: "1.5px solid #bae6fd",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "var(--accent-cyan)",
+                color: "#0284c7",
               }}
             >
               <Users size={32} />
             </div>
             <div style={{ maxWidth: "420px" }}>
-              <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 800, color: "#fff" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "1.2rem", fontWeight: 800, color: "#0f172a" }}>
                 Student Identity Required
               </h3>
-              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "#475569", lineHeight: 1.5 }}>
                 Sign in with your student account to discuss engineering notes, share academic blueprints, and collaborate in Private Chats with your peers.
               </p>
             </div>
@@ -3112,6 +3116,7 @@ export default function StudentChatModal({
               display: "flex",
               flexDirection: "column",
               gap: "20px",
+              background: "#ffffff",
             }}
           >
             <div style={{ textAlign: "center", maxWidth: "520px", margin: "0 auto" }}>
@@ -3120,34 +3125,34 @@ export default function StudentChatModal({
                   width: "58px",
                   height: "58px",
                   borderRadius: "18px",
-                  background: "linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.25))",
-                  border: "1px solid rgba(6, 182, 212, 0.45)",
+                  background: "#e0f2fe",
+                  border: "1.5px solid #bae6fd",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   margin: "0 auto 12px",
-                  color: "#38bdf8",
-                  boxShadow: "0 10px 25px rgba(6, 182, 212, 0.25)",
+                  color: "#0284c7",
+                  boxShadow: "0 10px 25px rgba(2, 132, 199, 0.15)",
                 }}
               >
                 <Users size={28} />
               </div>
-              <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#fff", margin: "0 0 6px" }}>
+              <h2 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>
                 Private Study Chats
               </h2>
-              <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", margin: 0, lineHeight: 1.5 }}>
+              <p style={{ fontSize: "0.82rem", color: "#475569", margin: 0, lineHeight: 1.5 }}>
                 Private chat rooms for focused study sessions. When all members leave or the chat is closed, all messages and shared files are permanently deleted.
               </p>
             </div>
 
             {joinError && (
-              <div style={{ padding: "10px 14px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.35)", borderRadius: "10px", color: "#fca5a5", fontSize: "0.82rem", textAlign: "center" }}>
+              <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1.5px solid #fecaca", borderRadius: "10px", color: "#dc2626", fontSize: "0.82rem", textAlign: "center", fontWeight: 600 }}>
                 {joinError}
               </div>
             )}
 
             {createSuccess && (
-              <div style={{ padding: "10px 14px", background: "rgba(16, 185, 129, 0.15)", border: "1px solid rgba(16, 185, 129, 0.35)", borderRadius: "10px", color: "#6ee7b7", fontSize: "0.82rem", textAlign: "center" }}>
+              <div style={{ padding: "10px 14px", background: "#ecfdf5", border: "1.5px solid #a7f3d0", borderRadius: "10px", color: "#059669", fontSize: "0.82rem", textAlign: "center", fontWeight: 650 }}>
                 {createSuccess}
               </div>
             )}
@@ -3155,14 +3160,14 @@ export default function StudentChatModal({
             {/* Responsive 1 or 2 Columns Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
               {/* Card 1: Create Private Chat */}
-              <div style={{ background: "linear-gradient(145deg, rgba(15, 23, 42, 0.75), rgba(30, 41, 59, 0.55))", border: "1px solid rgba(99, 102, 241, 0.25)", borderRadius: "16px", padding: "20px", backdropFilter: "blur(12px)", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.3)" }}>
-                <h4 style={{ margin: "0 0 14px", fontSize: "0.95rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Plus size={16} color="var(--accent-cyan)" /> Create Private Chat
+              <div style={{ background: "#f8fafc", border: "1.5px solid #cbd5e1", borderRadius: "16px", padding: "20px", boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)" }}>
+                <h4 style={{ margin: "0 0 14px", fontSize: "0.95rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Plus size={16} color="#0284c7" /> Create Private Chat
                 </h4>
 
                 <form onSubmit={handleCreateRoom} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                    <label style={{ fontSize: "0.75rem", color: "#475569", display: "block", marginBottom: "4px", fontWeight: 650 }}>
                       Chat Name
                     </label>
                     <input
@@ -3172,12 +3177,12 @@ export default function StudentChatModal({
                       value={newRoomName}
                       onChange={(e) => setNewRoomName(e.target.value)}
                       required
-                      style={{ width: "100%" }}
+                      style={{ width: "100%", background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0f172a" }}
                     />
                   </div>
 
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                    <label style={{ fontSize: "0.75rem", color: "#475569", display: "block", marginBottom: "4px", fontWeight: 650 }}>
                       Invite Passcode (Optional)
                     </label>
                     <input
@@ -3186,7 +3191,7 @@ export default function StudentChatModal({
                       placeholder="Auto-generated if left blank"
                       value={newRoomSecret}
                       onChange={(e) => setNewRoomSecret(e.target.value)}
-                      style={{ width: "100%" }}
+                      style={{ width: "100%", background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0f172a" }}
                     />
                   </div>
 
@@ -3197,14 +3202,14 @@ export default function StudentChatModal({
               </div>
 
               {/* Card 2: Join Private Chat */}
-              <div style={{ background: "linear-gradient(145deg, rgba(15, 23, 42, 0.75), rgba(30, 41, 59, 0.55))", border: "1px solid rgba(6, 182, 212, 0.25)", borderRadius: "16px", padding: "20px", backdropFilter: "blur(12px)", boxShadow: "0 12px 30px rgba(0, 0, 0, 0.3)" }}>
-                <h4 style={{ margin: "0 0 14px", fontSize: "0.95rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Key size={16} color="var(--accent-cyan)" /> Join with Invite Code
+              <div style={{ background: "#f8fafc", border: "1.5px solid #cbd5e1", borderRadius: "16px", padding: "20px", boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)" }}>
+                <h4 style={{ margin: "0 0 14px", fontSize: "0.95rem", fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Key size={16} color="#0284c7" /> Join with Invite Code
                 </h4>
 
                 <form onSubmit={handleJoinByCode} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <div>
-                    <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>
+                    <label style={{ fontSize: "0.75rem", color: "#475569", display: "block", marginBottom: "4px", fontWeight: 650 }}>
                       Chat Invite Code
                     </label>
                     <input
@@ -3214,7 +3219,7 @@ export default function StudentChatModal({
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value)}
                       required
-                      style={{ width: "100%" }}
+                      style={{ width: "100%", background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0f172a" }}
                     />
                   </div>
 
@@ -4134,8 +4139,8 @@ export default function StudentChatModal({
               style={{
                 position: "relative",
                 padding: "10px 16px max(12px, env(safe-area-inset-bottom, 12px)) 16px",
-                background: "rgba(11, 16, 27, 0.98)",
-                borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                background: "#ffffff",
+                borderTop: "1.5px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
                 gap: "8px",
@@ -4151,11 +4156,10 @@ export default function StudentChatModal({
                     right: "16px",
                     maxHeight: "220px",
                     overflowY: "auto",
-                    background: "rgba(15, 23, 42, 0.98)",
-                    backdropFilter: "blur(14px)",
-                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "14px",
-                    boxShadow: "0 10px 30px rgba(0, 0, 0, 0.65), 0 0 15px rgba(56, 189, 248, 0.15)",
+                    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.15)",
                     padding: "6px",
                     zIndex: 60,
                     display: "flex",
@@ -4167,7 +4171,7 @@ export default function StudentChatModal({
                     style={{
                       padding: "4px 8px",
                       fontSize: "0.7rem",
-                      color: "var(--accent-cyan)",
+                      color: "#0284c7",
                       fontWeight: 700,
                       letterSpacing: "0.5px",
                       textTransform: "uppercase",
@@ -4177,7 +4181,7 @@ export default function StudentChatModal({
                     }}
                   >
                     <span>Mention Member or Admin (@)</span>
-                    <span style={{ fontSize: "0.66rem", color: "var(--text-dim)", textTransform: "none" }}>Tap or Tab to choose</span>
+                    <span style={{ fontSize: "0.66rem", color: "#64748b", textTransform: "none" }}>Tap or Tab to choose</span>
                   </div>
                   {mentionSuggestions.map((item) => (
                     <button
@@ -4190,15 +4194,15 @@ export default function StudentChatModal({
                         gap: "10px",
                         padding: "7px 10px",
                         borderRadius: "8px",
-                        background: "rgba(255, 255, 255, 0.03)",
+                        background: "transparent",
                         border: "none",
                         cursor: "pointer",
                         textAlign: "left",
                         width: "100%",
                         transition: "background 0.15s ease",
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(56, 189, 248, 0.15)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)")}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#f1f5f9")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                     >
                       <div
                         style={{
@@ -4324,8 +4328,8 @@ export default function StudentChatModal({
                       flex: 1,
                       display: "flex",
                       alignItems: "center",
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      background: "#f8fafc",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "28px",
                       padding: "4px 8px 4px 12px",
                       gap: "8px",
@@ -4341,7 +4345,7 @@ export default function StudentChatModal({
                       style={{
                         background: "none",
                         border: "none",
-                        color: uploadingFile ? "var(--accent-cyan)" : "var(--text-dim)",
+                        color: uploadingFile ? "#0284c7" : "#64748b",
                         cursor: "pointer",
                         padding: "6px",
                         display: "flex",
@@ -4377,7 +4381,7 @@ export default function StudentChatModal({
                         background: "transparent",
                         border: "none",
                         outline: "none",
-                        color: "#fff",
+                        color: "#0f172a",
                         fontSize: "0.9rem",
                         fontFamily: "inherit",
                         minWidth: 0,
@@ -4392,7 +4396,7 @@ export default function StudentChatModal({
                       style={{
                         background: "none",
                         border: "none",
-                        color: showEmojiPicker ? "var(--accent-cyan)" : "var(--text-dim)",
+                        color: showEmojiPicker ? "#0284c7" : "#64748b",
                         cursor: "pointer",
                         padding: "6px",
                         display: "flex",
@@ -4610,13 +4614,13 @@ export default function StudentChatModal({
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "#0f172a",
-              border: "1px solid rgba(56, 189, 248, 0.3)",
+              background: "#ffffff",
+              border: "1.5px solid #cbd5e1",
               borderRadius: "20px",
               padding: "24px",
               maxWidth: "380px",
               width: "100%",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.6), 0 0 25px rgba(56, 189, 248, 0.15)",
+              boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.25)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -4631,25 +4635,25 @@ export default function StudentChatModal({
                 position: "absolute",
                 top: "16px",
                 right: "16px",
-                background: "rgba(255,255,255,0.06)",
-                border: "none",
+                background: "#fef2f2",
+                border: "1.5px solid #fecaca",
                 borderRadius: "50%",
                 width: "32px",
                 height: "32px",
-                color: "#94a3b8",
+                color: "#ef4444",
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <X size={16} />
+              <X size={16} strokeWidth={2.5} />
             </button>
 
-            <h3 style={{ margin: "0 0 4px", fontSize: "1.15rem", fontWeight: 800, color: "#fff" }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: "1.15rem", fontWeight: 800, color: "#0f172a" }}>
               Chat Profile & Photo
             </h3>
-            <p style={{ margin: "0 0 16px", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+            <p style={{ margin: "0 0 16px", fontSize: "0.78rem", color: "#64748b" }}>
               Customize your public chat avatar & handle
             </p>
 
@@ -4660,16 +4664,16 @@ export default function StudentChatModal({
                   width: "90px",
                   height: "90px",
                   borderRadius: "50%",
-                  border: "3px solid #38bdf8",
+                  border: "3px solid #0284c7",
                   overflow: "hidden",
-                  background: "#1e293b",
+                  background: "#f1f5f9",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontSize: "2rem",
                   fontWeight: 800,
-                  color: "#fff",
-                  boxShadow: "0 4px 20px rgba(56, 189, 248, 0.3)",
+                  color: "#0f172a",
+                  boxShadow: "0 4px 20px rgba(2, 132, 199, 0.18)",
                 }}
               >
                 {avatarPreview ? (
@@ -4687,8 +4691,8 @@ export default function StudentChatModal({
                   position: "absolute",
                   bottom: "0",
                   right: "0",
-                  background: "linear-gradient(135deg, #06b6d4, #3b82f6)",
-                  border: "2px solid #0f172a",
+                  background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                  border: "2px solid #ffffff",
                   borderRadius: "50%",
                   width: "32px",
                   height: "32px",
@@ -4697,7 +4701,7 @@ export default function StudentChatModal({
                   justifyContent: "center",
                   color: "#fff",
                   cursor: "pointer",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
                 }}
                 title="Upload Profile Photo"
               >
@@ -4717,11 +4721,11 @@ export default function StudentChatModal({
               type="button"
               onClick={() => profileFileInputRef.current?.click()}
               style={{
-                background: "rgba(56, 189, 248, 0.12)",
-                border: "1px solid rgba(56, 189, 248, 0.3)",
+                background: "#f0f9ff",
+                border: "1.5px solid #bae6fd",
                 borderRadius: "8px",
                 padding: "6px 14px",
-                color: "#38bdf8",
+                color: "#0284c7",
                 fontSize: "0.78rem",
                 fontWeight: 700,
                 cursor: "pointer",
@@ -4737,20 +4741,20 @@ export default function StudentChatModal({
 
             {/* Chat Handle input */}
             <div style={{ width: "100%", textAlign: "left", marginBottom: "14px" }}>
-              <label style={{ fontSize: "0.76rem", fontWeight: 700, color: "#cbd5e1", display: "block", marginBottom: "6px" }}>
+              <label style={{ fontSize: "0.76rem", fontWeight: 700, color: "#334155", display: "block", marginBottom: "6px" }}>
                 Chat Handle (@username)
               </label>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  background: "rgba(255,255,255,0.05)",
-                  border: isUsernameReserved ? "1px solid #ef4444" : "1px solid rgba(255,255,255,0.15)",
+                  background: "#ffffff",
+                  border: isUsernameReserved ? "1.5px solid #ef4444" : "1.5px solid #cbd5e1",
                   borderRadius: "10px",
                   padding: "0 12px",
                 }}
               >
-                <span style={{ color: isUsernameReserved ? "#f87171" : "#38bdf8", fontWeight: 800, fontSize: "0.9rem" }}>@</span>
+                <span style={{ color: isUsernameReserved ? "#ef4444" : "#0284c7", fontWeight: 800, fontSize: "0.9rem" }}>@</span>
                 <input
                   type="text"
                   value={editingUsername}
@@ -4762,7 +4766,7 @@ export default function StudentChatModal({
                     background: "transparent",
                     border: "none",
                     padding: "10px 8px",
-                    color: "#fff",
+                    color: "#0f172a",
                     fontSize: "0.88rem",
                     outline: "none",
                     fontWeight: 600,
@@ -4916,15 +4920,15 @@ export default function StudentChatModal({
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "linear-gradient(145deg, #111827, #0f172a)",
-              border: "1px solid rgba(239, 68, 68, 0.35)",
+              background: "#ffffff",
+              border: "1.5px solid #cbd5e1",
               borderRadius: "16px",
               width: "100%",
               maxWidth: "520px",
               maxHeight: "85vh",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(239,68,68,0.15)",
+              boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.25)",
               overflow: "hidden",
             }}
           >
@@ -4932,17 +4936,17 @@ export default function StudentChatModal({
             <div
               style={{
                 padding: "14px 18px",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                borderBottom: "1.5px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                background: "rgba(239, 68, 68, 0.08)",
+                background: "#fef2f2",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <div
                   style={{
-                    background: "rgba(239, 68, 68, 0.2)",
+                    background: "#fee2e2",
                     borderRadius: "8px",
                     padding: "6px",
                     display: "flex",
@@ -4953,10 +4957,10 @@ export default function StudentChatModal({
                   <ShieldOff size={18} color="#ef4444" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
+                  <h3 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#991b1b" }}>
                     Restricted Chat Students
                   </h3>
-                  <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                  <p style={{ margin: 0, fontSize: "0.72rem", color: "#64748b" }}>
                     Manage students restricted from participating in chat across all rooms
                   </p>
                 </div>
@@ -6085,38 +6089,49 @@ export default function StudentChatModal({
         >
           <div
             style={{
-              background: "linear-gradient(145deg, #0f172a 0%, #1e293b 100%)",
-              border: "1px solid rgba(56, 189, 248, 0.35)",
+              background: "#ffffff",
+              border: "1.5px solid #cbd5e1",
               borderRadius: "16px",
               padding: "22px",
               width: "100%",
               maxWidth: "420px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+              boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.25)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "34px", height: "34px", borderRadius: "10px", background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "#e0f2fe", border: "1px solid #bae6fd", color: "#0284c7", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Edit2 size={16} />
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#fff" }}>Rename Private Chat</h4>
-                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Update room name for all members</div>
+                  <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 800, color: "#0f172a" }}>Rename Private Chat</h4>
+                  <div style={{ fontSize: "0.72rem", color: "#64748b" }}>Update room name for all members</div>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setRenameModalOpen(false)}
-                style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", padding: "4px" }}
+                style={{
+                  background: "#fef2f2",
+                  border: "1.5px solid #fecaca",
+                  borderRadius: "8px",
+                  color: "#ef4444",
+                  cursor: "pointer",
+                  width: "30px",
+                  height: "30px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                <X size={18} />
+                <X size={16} strokeWidth={2.5} />
               </button>
             </div>
 
             <form onSubmit={handleSaveRoomRename} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               <div>
-                <label style={{ fontSize: "0.76rem", color: "var(--text-dim)", display: "block", marginBottom: "6px", fontWeight: 600 }}>
+                <label style={{ fontSize: "0.76rem", color: "#475569", display: "block", marginBottom: "6px", fontWeight: 650 }}>
                   Chat Name
                 </label>
                 <input
@@ -6127,7 +6142,7 @@ export default function StudentChatModal({
                   placeholder="e.g. DBMS Exam Revision 2026"
                   autoFocus
                   required
-                  style={{ width: "100%", fontSize: "0.88rem", boxSizing: "border-box" }}
+                  style={{ width: "100%", fontSize: "0.88rem", boxSizing: "border-box", background: "#ffffff", border: "1.5px solid #cbd5e1", color: "#0f172a" }}
                 />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "0.68rem", color: "var(--text-dim)" }}>
                   <span>Visible to all current & future members</span>
@@ -6186,8 +6201,8 @@ export default function StudentChatModal({
         >
           <div
             style={{
-              background: "linear-gradient(145deg, #0f172a, #1e293b)",
-              border: "1px solid rgba(168, 85, 247, 0.35)",
+              background: "#ffffff",
+              border: "1.5px solid #cbd5e1",
               borderRadius: "20px",
               width: "100%",
               maxWidth: "500px",
@@ -6195,8 +6210,8 @@ export default function StudentChatModal({
               display: "flex",
               flexDirection: "column",
               padding: "24px",
-              boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(168, 85, 247, 0.2)",
-              color: "#fff",
+              boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.25)",
+              color: "#0f172a",
               position: "relative",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -6209,21 +6224,21 @@ export default function StudentChatModal({
                     width: "42px",
                     height: "42px",
                     borderRadius: "12px",
-                    background: "linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(59, 130, 246, 0.25))",
-                    border: "1px solid rgba(168, 85, 247, 0.45)",
+                    background: "#f3e8ff",
+                    border: "1px solid #d8b4fe",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    color: "#c084fc",
+                    color: "#9333ea",
                   }}
                 >
                   <Users size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#fff" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
                     Group Members & Admin
                   </h3>
-                  <div style={{ fontSize: "0.76rem", color: "#c084fc", fontWeight: 600, marginTop: "2px" }}>
+                  <div style={{ fontSize: "0.76rem", color: "#7e22ce", fontWeight: 700, marginTop: "2px" }}>
                     🔒 {membersTargetRoom?.name || currentRoom.name}
                   </div>
                 </div>
@@ -6233,18 +6248,19 @@ export default function StudentChatModal({
                 type="button"
                 onClick={() => setMembersModalOpen(false)}
                 style={{
-                  background: "rgba(255, 255, 255, 0.06)",
-                  border: "none",
+                  background: "#fef2f2",
+                  border: "1.5px solid #fecaca",
                   borderRadius: "8px",
                   padding: "6px",
-                  color: "var(--text-dim)",
+                  color: "#ef4444",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                 }}
+                title="Close"
               >
-                <X size={18} />
+                <X size={18} strokeWidth={2.5} />
               </button>
             </div>
 

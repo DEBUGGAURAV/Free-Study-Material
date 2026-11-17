@@ -27,6 +27,8 @@ export default function CategoryFilter({
   totalCount,
   viewMode = "grid",
   setViewMode,
+  sortBy = "recent",
+  setSortBy,
   onOpenCircleSearch,
   showOnlyOffline = false,
   setShowOnlyOffline,
@@ -193,6 +195,34 @@ export default function CategoryFilter({
               >
                 <List size={15} />
               </button>
+            </div>
+          )}
+
+          {/* ⚡ Client-Side Instant Sort (0 Server Load) */}
+          {setSortBy && (
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                style={{
+                  height: "30px",
+                  padding: "0 8px",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  borderRadius: "var(--radius-sm)",
+                  border: "1.5px solid #cbd5e1",
+                  background: "#ffffff",
+                  color: "#334155",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+                title="Sort Notes (100% Instant Client-Side)"
+              >
+                <option value="recent">⚡ Recently Added</option>
+                <option value="popular">🔥 Most Downloaded</option>
+                <option value="size">📦 Smallest Size</option>
+                <option value="title">🔤 Title (A-Z)</option>
+              </select>
             </div>
           )}
 

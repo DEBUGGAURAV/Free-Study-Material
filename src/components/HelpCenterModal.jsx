@@ -99,6 +99,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
     }
   }, [securityDetention, isOpen]);
 
+  // Keyboard accessibility: ESC to close
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   // Tickets State
   const [myTickets, setMyTickets] = useState([]);
   const [loadingTickets, setLoadingTickets] = useState(false);
@@ -187,8 +197,8 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
           display: "inline-flex",
           flexDirection: "column",
           gap: "4px",
-          background: "rgba(0, 0, 0, 0.45)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          background: "#f1f5f9",
+          border: "1.5px solid #cbd5e1",
           borderRadius: "8px",
           padding: "6px 8px",
           maxWidth: "320px",
@@ -201,7 +211,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
             <img
               src={att.url}
               alt={att.name || "Attachment"}
-              style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "6px" }}
+              style={{ width: "100%", maxHeight: "160px", objectFit: "cover", borderRadius: "6px", border: "1px solid #e2e8f0" }}
             />
           </a>
         )}
@@ -209,19 +219,20 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
           <video
             controls
             src={att.url}
-            style={{ width: "100%", maxHeight: "180px", borderRadius: "6px", background: "#000" }}
+            style={{ width: "100%", maxHeight: "180px", borderRadius: "6px", background: "#0f172a" }}
           />
         )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "6px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden" }}>
-            {isImg ? <ImageIcon size={14} color="#38bdf8" /> : isVid ? <Film size={14} color="#f59e0b" /> : <FileText size={14} color="#34d399" />}
+            {isImg ? <ImageIcon size={14} color="#0284c7" /> : isVid ? <Film size={14} color="#d97706" /> : <FileText size={14} color="#059669" />}
             <a
               href={att.url}
               target="_blank"
               rel="noopener noreferrer"
               style={{
                 fontSize: "0.75rem",
-                color: "#e2e8f0",
+                color: "#0f172a",
+                fontWeight: 650,
                 textDecoration: "underline",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
@@ -232,27 +243,27 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
             >
               {att.name || "View Attachment"}
             </a>
-            {att.size && <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>({formatSize(att.size)})</span>}
+            {att.size && <span style={{ fontSize: "0.68rem", color: "#64748b" }}>({formatSize(att.size)})</span>}
           </div>
           {onRemove && (
             <button
               type="button"
               onClick={onRemove}
               style={{
-                background: "rgba(239, 68, 68, 0.2)",
-                border: "none",
+                background: "#fef2f2",
+                border: "1px solid #fecaca",
                 borderRadius: "50%",
                 width: "20px",
                 height: "20px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#fca5a5",
+                color: "#ef4444",
                 cursor: "pointer",
               }}
               title="Remove file"
             >
-              <X size={12} />
+              <X size={12} strokeWidth={2.5} />
             </button>
           )}
         </div>
@@ -491,52 +502,67 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
           padding: 0,
           borderRadius: "16px",
           overflow: "hidden",
-          background: "linear-gradient(180deg, #131b2e 0%, #0c1222 100%)",
-          border: "1px solid rgba(56, 189, 248, 0.2)",
-          boxShadow: "0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 35px rgba(56, 189, 248, 0.15)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
+          boxShadow: "0 25px 70px -15px rgba(15, 23, 42, 0.22)",
         }}
       >
         {/* Header */}
         <div
           style={{
-            padding: "20px 24px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "18px 24px",
+            borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "rgba(255, 255, 255, 0.02)",
+            background: "#ffffff",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div
               style={{
-                width: "36px",
-                height: "36px",
+                width: "38px",
+                height: "38px",
                 borderRadius: "10px",
-                background: "rgba(56, 189, 248, 0.15)",
+                background: "#e0f2fe",
+                border: "1px solid #bae6fd",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#38bdf8",
+                color: "#0284c7",
               }}
             >
               <HelpCircle size={20} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#fff" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
                 Help & Support Center
               </h3>
-              <p style={{ margin: 0, fontSize: "0.78rem", color: "var(--text-dim)" }}>
+              <p style={{ margin: 0, fontSize: "0.78rem", color: "#475569" }}>
                 Instant FAQs, note requests & 2-way admin support for all students
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="modal-close-btn"
-            style={{ position: "static", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer" }}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "10px",
+              background: "#fef2f2",
+              border: "1.5px solid #fecaca",
+              color: "#ef4444",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              flexShrink: 0,
+              boxShadow: "0 2px 6px rgba(239, 68, 68, 0.15)",
+              transition: "all 0.15s ease",
+            }}
+            title="Close Help Center (Esc)"
           >
-            <X size={20} />
+            <X size={18} strokeWidth={2.5} />
           </button>
         </div>
 
@@ -544,9 +570,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            borderBottom: "1.5px solid #e2e8f0",
             padding: "0 24px",
-            background: "rgba(0, 0, 0, 0.2)",
+            background: "#f8fafc",
             gap: "8px",
           }}
         >
@@ -560,9 +586,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               padding: "12px 16px",
               background: "none",
               border: "none",
-              borderBottom: activeTab === "faqs" ? "2px solid #38bdf8" : "2px solid transparent",
-              color: activeTab === "faqs" ? "#38bdf8" : "var(--text-dim)",
-              fontWeight: activeTab === "faqs" ? 600 : 500,
+              borderBottom: activeTab === "faqs" ? "2px solid #0284c7" : "2px solid transparent",
+              color: activeTab === "faqs" ? "#0284c7" : "#64748b",
+              fontWeight: activeTab === "faqs" ? 700 : 500,
               fontSize: "0.85rem",
               cursor: "pointer",
               display: "flex",
@@ -585,9 +611,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               padding: "12px 16px",
               background: "none",
               border: "none",
-              borderBottom: activeTab === "ask" ? "2px solid #38bdf8" : "2px solid transparent",
-              color: activeTab === "ask" ? "#38bdf8" : "var(--text-dim)",
-              fontWeight: activeTab === "ask" ? 600 : 500,
+              borderBottom: activeTab === "ask" ? "2px solid #0284c7" : "2px solid transparent",
+              color: activeTab === "ask" ? "#0284c7" : "#64748b",
+              fontWeight: activeTab === "ask" ? 700 : 500,
               fontSize: "0.85rem",
               cursor: "pointer",
               display: "flex",
@@ -610,9 +636,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               padding: "12px 16px",
               background: "none",
               border: "none",
-              borderBottom: activeTab === "tickets" ? "2px solid #38bdf8" : "2px solid transparent",
-              color: activeTab === "tickets" ? "#38bdf8" : "var(--text-dim)",
-              fontWeight: activeTab === "tickets" ? 600 : 500,
+              borderBottom: activeTab === "tickets" ? "2px solid #0284c7" : "2px solid transparent",
+              color: activeTab === "tickets" ? "#0284c7" : "#64748b",
+              fontWeight: activeTab === "tickets" ? 700 : 500,
               fontSize: "0.85rem",
               cursor: "pointer",
               display: "flex",
@@ -626,8 +652,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
             {myTickets.length > 0 && (
               <span
                 style={{
-                  background: myTickets.some((t) => t.status === "active") ? "#f59e0b" : "rgba(56, 189, 248, 0.25)",
-                  color: myTickets.some((t) => t.status === "active") ? "#000" : "#38bdf8",
+                  background: myTickets.some((t) => t.status === "active") ? "#fef3c7" : "#e0f2fe",
+                  color: myTickets.some((t) => t.status === "active") ? "#92400e" : "#0284c7",
+                  border: myTickets.some((t) => t.status === "active") ? "1px solid #fde68a" : "1px solid #bae6fd",
                   fontSize: "0.68rem",
                   fontWeight: 800,
                   padding: "1px 6px",
@@ -641,7 +668,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
         </div>
 
         {/* Tab Content Area */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", background: "#ffffff" }}>
           {/* Active Ticket Alert Banner when user has tickets and is on FAQs/Ask tabs */}
           {myTickets.some((t) => t.status === "active" || t.status === "answered") && activeTab !== "tickets" && (
             <div
@@ -711,9 +738,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                     width: "100%",
                     padding: "11px 14px 11px 40px",
                     borderRadius: "10px",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    color: "#fff",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
+                    color: "#0f172a",
                     fontSize: "0.86rem",
                     outline: "none",
                   }}
@@ -723,7 +750,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               {/* FAQ Accordions */}
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {filteredFaqs.length === 0 ? (
-                  <div style={{ textAlign: "center", padding: "30px 10px", color: "var(--text-dim)" }}>
+                  <div style={{ textAlign: "center", padding: "30px 10px", color: "#64748b" }}>
                     <p style={{ margin: "0 0 8px 0", fontSize: "0.9rem" }}>No matching answers found for "{searchQuery}".</p>
                     <button
                       type="button"
@@ -742,10 +769,10 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         key={faq.id}
                         style={{
                           borderRadius: "10px",
-                          background: isExpanded ? "rgba(56, 189, 248, 0.06)" : "rgba(255, 255, 255, 0.03)",
+                          background: isExpanded ? "#f0f9ff" : "#f8fafc",
                           border: isExpanded
-                            ? "1px solid rgba(56, 189, 248, 0.3)"
-                            : "1px solid rgba(255, 255, 255, 0.06)",
+                            ? "1.5px solid #bae6fd"
+                            : "1.5px solid #e2e8f0",
                           overflow: "hidden",
                           transition: "all 0.2s ease",
                         }}
@@ -761,13 +788,13 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                             userSelect: "none",
                           }}
                         >
-                          <span style={{ fontWeight: 600, fontSize: "0.88rem", color: isExpanded ? "#38bdf8" : "#f1f5f9" }}>
+                          <span style={{ fontWeight: 700, fontSize: "0.88rem", color: isExpanded ? "#0284c7" : "#0f172a" }}>
                             {faq.question}
                           </span>
                           {isExpanded ? (
-                            <ChevronUp size={16} color="#38bdf8" />
+                            <ChevronUp size={16} color="#0284c7" />
                           ) : (
-                            <ChevronDown size={16} color="var(--text-dim)" />
+                            <ChevronDown size={16} color="#64748b" />
                           )}
                         </div>
                         {isExpanded && (
@@ -775,9 +802,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                             style={{
                               padding: "0 16px 14px 16px",
                               fontSize: "0.84rem",
-                              color: "rgba(226, 232, 240, 0.85)",
-                              lineHeight: "1.5",
-                              borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+                              color: "#334155",
+                              lineHeight: "1.55",
+                              borderTop: "1px solid #e2e8f0",
                               paddingTop: "10px",
                             }}
                           >
@@ -788,17 +815,17 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   overflowX: "auto",
                                   margin: "12px 0",
                                   borderRadius: "8px",
-                                  border: "1px solid rgba(56, 189, 248, 0.25)",
-                                  background: "rgba(15, 23, 42, 0.6)",
+                                  border: "1.5px solid #cbd5e1",
+                                  background: "#ffffff",
                                 }}
                               >
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem", minWidth: "540px" }}>
                                   <thead>
-                                    <tr style={{ background: "rgba(30, 41, 59, 0.95)", textAlign: "left", color: "#38bdf8" }}>
-                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Reason</th>
-                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Detention Time</th>
-                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Auto-Unjail?</th>
-                                      <th style={{ padding: "9px 12px", borderBottom: "1px solid rgba(56, 189, 248, 0.25)" }}>Admin Manual Control</th>
+                                    <tr style={{ background: "#f1f5f9", textAlign: "left", color: "#0f172a" }}>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1.5px solid #cbd5e1" }}>Reason</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1.5px solid #cbd5e1" }}>Detention Time</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1.5px solid #cbd5e1" }}>Auto-Unjail?</th>
+                                      <th style={{ padding: "9px 12px", borderBottom: "1.5px solid #cbd5e1" }}>Admin Manual Control</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -806,14 +833,14 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                       <tr
                                         key={idx}
                                         style={{
-                                          borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-                                          background: idx % 2 === 0 ? "rgba(15, 23, 42, 0.4)" : "rgba(30, 41, 59, 0.2)",
+                                          borderBottom: "1px solid #e2e8f0",
+                                          background: idx % 2 === 0 ? "#ffffff" : "#f8fafc",
                                         }}
                                       >
-                                        <td style={{ padding: "8px 12px", fontWeight: 700, color: "#f8fafc" }}>{row.reason}</td>
-                                        <td style={{ padding: "8px 12px", color: "#fbbf24", fontWeight: 700 }}>{row.detentionTime}</td>
-                                        <td style={{ padding: "8px 12px", color: "#34d399", fontWeight: 600 }}>{row.autoUnjail}</td>
-                                        <td style={{ padding: "8px 12px", color: "#38bdf8", fontWeight: 500 }}>{row.adminControl}</td>
+                                        <td style={{ padding: "8px 12px", fontWeight: 700, color: "#0f172a" }}>{row.reason}</td>
+                                        <td style={{ padding: "8px 12px", color: "#b45309", fontWeight: 700 }}>{row.detentionTime}</td>
+                                        <td style={{ padding: "8px 12px", color: "#059669", fontWeight: 650 }}>{row.autoUnjail}</td>
+                                        <td style={{ padding: "8px 12px", color: "#0284c7", fontWeight: 600 }}>{row.adminControl}</td>
                                       </tr>
                                     ))}
                                   </tbody>
@@ -826,9 +853,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   marginTop: "10px",
                                   padding: "10px 12px",
                                   borderRadius: "8px",
-                                  background: "rgba(239, 68, 68, 0.1)",
-                                  border: "1px solid rgba(239, 68, 68, 0.25)",
-                                  color: "#fca5a5",
+                                  background: "#fef2f2",
+                                  border: "1.5px solid #fecaca",
+                                  color: "#991b1b",
                                   fontSize: "0.78rem",
                                   lineHeight: "1.45",
                                 }}
@@ -854,16 +881,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                   style={{
                     textAlign: "center",
                     padding: "30px 16px",
-                    background: "rgba(16, 185, 129, 0.08)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
+                    background: "#ecfdf5",
+                    border: "1.5px solid #a7f3d0",
                     borderRadius: "12px",
                   }}
                 >
-                  <CheckCircle2 size={42} color="#10b981" style={{ margin: "0 auto 12px auto" }} />
-                  <h4 style={{ margin: "0 0 6px 0", color: "#10b981", fontSize: "1.1rem", fontWeight: 700 }}>
+                  <CheckCircle2 size={42} color="#059669" style={{ margin: "0 auto 12px auto" }} />
+                  <h4 style={{ margin: "0 0 6px 0", color: "#065f46", fontSize: "1.1rem", fontWeight: 800 }}>
                     Question Submitted Successfully!
                   </h4>
-                  <p style={{ margin: "0 0 16px 0", fontSize: "0.84rem", color: "rgba(226, 232, 240, 0.85)" }}>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "0.84rem", color: "#047857" }}>
                     Admin has been notified. You can track their reply anytime without logging in using your Ticket ID:
                   </p>
 
@@ -872,14 +899,14 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "10px",
-                      background: "rgba(0, 0, 0, 0.4)",
+                      background: "#ffffff",
                       padding: "8px 16px",
                       borderRadius: "8px",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
+                      border: "1.5px solid #6ee7b7",
                       marginBottom: "20px",
                     }}
                   >
-                    <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "1px", color: "#38bdf8" }}>
+                    <span style={{ fontSize: "1.1rem", fontWeight: 800, letterSpacing: "1px", color: "#0284c7" }}>
                       {submitSuccess.ticket_code}
                     </span>
                     <button
@@ -888,7 +915,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       style={{
                         background: "none",
                         border: "none",
-                        color: copiedCode === submitSuccess.ticket_code ? "#10b981" : "var(--text-dim)",
+                        color: copiedCode === submitSuccess.ticket_code ? "#059669" : "#64748b",
                         cursor: "pointer",
                       }}
                       title="Copy Ticket ID"
@@ -916,9 +943,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         padding: "10px 14px",
                         marginBottom: "16px",
                         borderRadius: "8px",
-                        background: "rgba(244, 63, 94, 0.12)",
-                        border: "1px solid rgba(244, 63, 94, 0.3)",
-                        color: "#fda4af",
+                        background: "#fef2f2",
+                        border: "1.5px solid #fecaca",
+                        color: "#dc2626",
                         fontSize: "0.82rem",
                       }}
                     >
@@ -943,16 +970,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         padding: "10px 14px",
                         marginBottom: "16px",
                         borderRadius: "8px",
-                        background: "rgba(56, 189, 248, 0.08)",
-                        border: "1px solid rgba(56, 189, 248, 0.2)",
+                        background: "#f0f9ff",
+                        border: "1.5px solid #bae6fd",
                         display: "flex",
                         alignItems: "center",
                         gap: "10px",
                         fontSize: "0.82rem",
-                        color: "#bae6fd",
+                        color: "#0369a1",
                       }}
                     >
-                      <User size={16} color="#38bdf8" />
+                      <User size={16} color="#0284c7" />
                       <div>
                         Signed in as <strong>{currentUser.name}</strong> ({currentUser.email || "Student Account"}{currentUser.mobile ? ` • 📱 ${currentUser.mobile}` : ""})
                       </div>
@@ -968,7 +995,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                       >
                         <div>
                           <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <User size={12} color="#38bdf8" /> Name *
+                            <User size={12} color="#0284c7" /> Name *
                           </label>
                           <input
                             type="text"
@@ -981,7 +1008,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         </div>
                         <div>
                           <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <Mail size={12} color="#38bdf8" /> Email *
+                            <Mail size={12} color="#0284c7" /> Email *
                           </label>
                           <input
                             type="email"
@@ -994,7 +1021,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         </div>
                         <div>
                           <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <Phone size={12} color="#38bdf8" /> Mobile No *
+                            <Phone size={12} color="#0284c7" /> Mobile No *
                           </label>
                           <input
                             type="tel"
@@ -1006,7 +1033,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                           />
                         </div>
                       </div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "6px" }}>
+                      <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "6px" }}>
                         🔒 Email &amp; Mobile Number are mandatory so our academic team can contact and assist you.
                       </div>
                     </div>
@@ -1026,7 +1053,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         className="form-input"
                         value={category}
                         onChange={(e) => setCategory(e.target.value)}
-                        style={{ cursor: "pointer", width: "100%", color: "#f8fafc", colorScheme: "dark" }}
+                        style={{ cursor: "pointer", width: "100%", color: "#0f172a", background: "#ffffff", colorScheme: "light" }}
                       >
                         <option value="general">General Support</option>
                         <option value="missing_notes">📚 Request Missing Notes</option>
@@ -1058,14 +1085,14 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         marginBottom: "14px",
                         padding: "12px 14px",
                         borderRadius: "10px",
-                        background: "rgba(239, 68, 68, 0.12)",
-                        border: "1px solid rgba(239, 68, 68, 0.35)",
-                        color: "#fca5a5",
+                        background: "#fef2f2",
+                        border: "1.5px solid #fecaca",
+                        color: "#991b1b",
                         fontSize: "0.82rem",
                         lineHeight: "1.45",
                       }}
                     >
-                      <div style={{ fontWeight: 800, color: "#f87171", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+                      <div style={{ fontWeight: 800, color: "#dc2626", display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
                         <span>🚨</span> Security Appeal & Shared Campus Wi-Fi Shield:
                       </div>
                       <div>
@@ -1113,13 +1140,13 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         onClick={() => askFileInputRef.current?.click()}
                         disabled={askUploading}
                         style={{
-                          background: "rgba(56, 189, 248, 0.12)",
-                          border: "1px solid rgba(56, 189, 248, 0.35)",
+                          background: "#f0f9ff",
+                          border: "1.5px solid #bae6fd",
                           borderRadius: "6px",
-                          padding: "4px 10px",
-                          color: "#38bdf8",
+                          padding: "5px 12px",
+                          color: "#0284c7",
                           fontSize: "0.75rem",
-                          fontWeight: 600,
+                          fontWeight: 700,
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
@@ -1149,7 +1176,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         )}
                       </div>
                     )}
-                    <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "4px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "4px" }}>
                       Supports Screenshots (PNG, JPG), Syllabus Documents (PDF, DOCX), &amp; Videos (MP4, WebM) up to 35 MB.
                     </div>
                   </div>
@@ -1198,9 +1225,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                     flex: 1,
                     padding: "10px 14px",
                     borderRadius: "8px",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    color: "#fff",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
+                    color: "#0f172a",
                     fontSize: "0.85rem",
                     outline: "none",
                   }}
@@ -1216,8 +1243,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                     padding: "8px 12px",
                     marginBottom: "12px",
                     borderRadius: "6px",
-                    background: "rgba(244, 63, 94, 0.1)",
-                    color: "#fda4af",
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    color: "#dc2626",
                     fontSize: "0.8rem",
                   }}
                 >
@@ -1226,15 +1254,15 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
               )}
 
               {loadingTickets ? (
-                <div style={{ textAlign: "center", padding: "30px 0", color: "var(--text-dim)" }}>
+                <div style={{ textAlign: "center", padding: "30px 0", color: "#64748b" }}>
                   <div className="spinner" style={{ margin: "0 auto 10px auto" }} />
                   <span>Loading ticket status...</span>
                 </div>
               ) : myTickets.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px 10px", color: "var(--text-dim)" }}>
+                <div style={{ textAlign: "center", padding: "40px 10px", color: "#64748b" }}>
                   <Ticket size={36} style={{ margin: "0 auto 12px auto", opacity: 0.4 }} />
-                  <p style={{ margin: "0 0 6px 0", fontSize: "0.92rem", fontWeight: 600 }}>No tickets found on this device</p>
-                  <p style={{ margin: "0 0 16px 0", fontSize: "0.8rem" }}>
+                  <p style={{ margin: "0 0 6px 0", fontSize: "0.92rem", fontWeight: 700, color: "#1e293b" }}>No tickets found on this device</p>
+                  <p style={{ margin: "0 0 16px 0", fontSize: "0.8rem", color: "#64748b" }}>
                     When you ask a question, your ticket and admin replies will show up here automatically.
                   </p>
                   <button
@@ -1255,10 +1283,10 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                         key={t.ticket_code}
                         style={{
                           borderRadius: "12px",
-                          background: isAnswered ? "rgba(16, 185, 129, 0.05)" : "rgba(255, 255, 255, 0.03)",
+                          background: isAnswered ? "#f0fdf4" : "#f8fafc",
                           border: isAnswered
-                            ? "1px solid rgba(16, 185, 129, 0.25)"
-                            : "1px solid rgba(255, 255, 255, 0.08)",
+                            ? "1.5px solid #bbf7d0"
+                            : "1.5px solid #e2e8f0",
                           padding: "16px",
                         }}
                       >
@@ -1272,7 +1300,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontWeight: 700, color: "#38bdf8", fontSize: "0.92rem" }}>
+                            <span style={{ fontWeight: 800, color: "#0284c7", fontSize: "0.92rem" }}>
                               #{t.ticket_code}
                             </span>
                             <span
@@ -1280,8 +1308,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                 fontSize: "0.72rem",
                                 padding: "2px 8px",
                                 borderRadius: "4px",
-                                background: "rgba(255, 255, 255, 0.08)",
-                                color: "var(--text-dim)",
+                                background: "#e2e8f0",
+                                color: "#475569",
+                                fontWeight: 650,
                                 textTransform: "capitalize",
                               }}
                             >
@@ -1297,11 +1326,12 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   alignItems: "center",
                                   gap: "4px",
                                   fontSize: "0.75rem",
-                                  color: "#94a3b8",
-                                  background: "rgba(100, 116, 139, 0.2)",
+                                  color: "#475569",
+                                  background: "#f1f5f9",
+                                  border: "1px solid #cbd5e1",
                                   padding: "3px 8px",
                                   borderRadius: "12px",
-                                  fontWeight: 600,
+                                  fontWeight: 650,
                                 }}
                               >
                                 <Lock size={12} />
@@ -1314,11 +1344,12 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   alignItems: "center",
                                   gap: "4px",
                                   fontSize: "0.75rem",
-                                  color: "#10b981",
-                                  background: "rgba(16, 185, 129, 0.15)",
+                                  color: "#15803d",
+                                  background: "#dcfce7",
+                                  border: "1px solid #86efac",
                                   padding: "3px 8px",
                                   borderRadius: "12px",
-                                  fontWeight: 600,
+                                  fontWeight: 700,
                                 }}
                               >
                                 <CheckCircle2 size={13} />
@@ -1331,11 +1362,12 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   alignItems: "center",
                                   gap: "4px",
                                   fontSize: "0.75rem",
-                                  color: "#f59e0b",
-                                  background: "rgba(245, 158, 11, 0.15)",
+                                  color: "#b45309",
+                                  background: "#fef3c7",
+                                  border: "1px solid #fde68a",
                                   padding: "3px 8px",
                                   borderRadius: "12px",
-                                  fontWeight: 600,
+                                  fontWeight: 700,
                                 }}
                               >
                                 <Clock size={13} />
@@ -1363,22 +1395,22 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                       style={{
                                         padding: "10px 14px",
                                         borderRadius: "10px",
-                                        background: isAdmin ? "rgba(16, 185, 129, 0.1)" : "rgba(255, 255, 255, 0.04)",
-                                        borderLeft: isAdmin ? "3px solid #10b981" : "3px solid #38bdf8",
-                                        border: isAdmin ? "1px solid rgba(16, 185, 129, 0.25)" : "1px solid rgba(255, 255, 255, 0.06)",
+                                        background: isAdmin ? "#ecfdf5" : "#ffffff",
+                                        borderLeft: isAdmin ? "4px solid #10b981" : "4px solid #0284c7",
+                                        border: isAdmin ? "1.5px solid #a7f3d0" : "1.5px solid #e2e8f0",
                                       }}
                                     >
                                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                                        <span style={{ fontSize: "0.76rem", fontWeight: 700, color: isAdmin ? "#34d399" : "#38bdf8" }}>
+                                        <span style={{ fontSize: "0.76rem", fontWeight: 750, color: isAdmin ? "#059669" : "#0284c7" }}>
                                           {isAdmin ? `👑 ${msg.sender_name || "Platform Admin"}` : `👤 ${msg.sender_name || t.user_name || "You"}`}
                                         </span>
                                         {msg.created_at && (
-                                          <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                          <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
                                             {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                           </span>
                                         )}
                                       </div>
-                                      <p style={{ margin: 0, fontSize: "0.84rem", color: isAdmin ? "#ecfdf5" : "#f8fafc", lineHeight: "1.45" }}>
+                                      <p style={{ margin: 0, fontSize: "0.84rem", color: isAdmin ? "#064e3b" : "#0f172a", lineHeight: "1.45" }}>
                                         {msg.text}
                                       </p>
                                       {/* Attachment badges inside conversation bubble */}
@@ -1398,7 +1430,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                           return (
                             <>
                               <div style={{ marginBottom: "12px" }}>
-                                <p style={{ margin: 0, fontSize: "0.85rem", color: "#f8fafc", lineHeight: "1.4" }}>
+                                <p style={{ margin: 0, fontSize: "0.85rem", color: "#0f172a", lineHeight: "1.45", fontWeight: 500 }}>
                                   {t.question}
                                 </p>
                                 {/* Attachment badges in fallback question view */}
@@ -1408,7 +1440,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   </div>
                                 )}
                                 {t.subject && (
-                                  <span style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "4px", display: "block" }}>
+                                  <span style={{ fontSize: "0.74rem", color: "#64748b", marginTop: "4px", display: "block" }}>
                                     Subject / Note: {t.subject}
                                   </span>
                                 )}
@@ -1417,8 +1449,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                               {isAnswered ? (
                                 <div
                                   style={{
-                                    background: "rgba(16, 185, 129, 0.1)",
-                                    borderLeft: "3px solid #10b981",
+                                    background: "#ecfdf5",
+                                    borderLeft: "4px solid #10b981",
+                                    border: "1.5px solid #a7f3d0",
                                     padding: "10px 14px",
                                     borderRadius: "0 8px 8px 0",
                                     marginTop: "8px",
@@ -1433,16 +1466,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                       marginBottom: "4px",
                                     }}
                                   >
-                                    <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#34d399" }}>
+                                    <span style={{ fontSize: "0.76rem", fontWeight: 750, color: "#059669" }}>
                                       👑 Admin Response ({t.admin_name || "Platform Admin"})
                                     </span>
                                     {t.replied_at && (
-                                      <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                                      <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
                                         {new Date(t.replied_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                                       </span>
                                     )}
                                   </div>
-                                  <p style={{ margin: 0, fontSize: "0.84rem", color: "#ecfdf5", lineHeight: "1.45" }}>
+                                  <p style={{ margin: 0, fontSize: "0.84rem", color: "#064e3b", lineHeight: "1.45" }}>
                                     {t.admin_reply}
                                   </p>
                                 </div>
@@ -1450,15 +1483,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                 <div
                                   style={{
                                     fontSize: "0.76rem",
-                                    color: "var(--text-dim)",
+                                    color: "#92400e",
                                     fontStyle: "italic",
-                                    background: "rgba(0, 0, 0, 0.2)",
+                                    background: "#fef3c7",
+                                    border: "1px solid #fde68a",
                                     padding: "8px 12px",
                                     borderRadius: "6px",
                                     marginBottom: "12px",
                                   }}
                                 >
-                                  ⏳ Your question has been forwarded to administrators in Topic 6. As soon as admin replies, it will appear right here.
+                                  ⏳ Your question has been forwarded to administrators. As soon as admin replies, it will appear right here.
                                 </div>
                               )}
                             </>
@@ -1467,7 +1501,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
 
                         {/* Student Reply Form (Allowed on active or answered tickets) */}
                         {t.status !== "closed" ? (
-                          <div style={{ marginTop: "12px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", paddingTop: "12px" }}>
+                          <div style={{ marginTop: "12px", borderTop: "1.5px solid #e2e8f0", paddingTop: "12px" }}>
                             {/* Render reply attachments chips */}
                             {Array.isArray(replyAttachments[t.ticket_code]) && replyAttachments[t.ticket_code].length > 0 && (
                               <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "8px" }}>
@@ -1488,11 +1522,11 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                             >
                               <label
                                 style={{
-                                  background: "rgba(56, 189, 248, 0.12)",
-                                  border: "1px solid rgba(56, 189, 248, 0.35)",
+                                  background: "#f0f9ff",
+                                  border: "1.5px solid #bae6fd",
                                   borderRadius: "8px",
                                   padding: "9px 11px",
-                                  color: "#38bdf8",
+                                  color: "#0284c7",
                                   cursor: "pointer",
                                   display: "flex",
                                   alignItems: "center",
@@ -1525,9 +1559,9 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   flex: 1,
                                   padding: "9px 12px",
                                   borderRadius: "8px",
-                                  background: "rgba(255, 255, 255, 0.05)",
-                                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                                  color: "#fff",
+                                  background: "#ffffff",
+                                  border: "1.5px solid #cbd5e1",
+                                  color: "#0f172a",
                                   fontSize: "0.82rem",
                                   outline: "none",
                                 }}
@@ -1561,7 +1595,8 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                 style={{
                                   marginTop: "6px",
                                   fontSize: "0.78rem",
-                                  color: replyNotice[t.ticket_code].startsWith("✅") ? "#34d399" : "#fda4af",
+                                  color: replyNotice[t.ticket_code].startsWith("✅") ? "#059669" : "#dc2626",
+                                  fontWeight: 600,
                                 }}
                               >
                                 {replyNotice[t.ticket_code]}
@@ -1574,16 +1609,16 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                               marginTop: "12px",
                               padding: "10px 14px",
                               borderRadius: "8px",
-                              background: "rgba(100, 116, 139, 0.12)",
-                              border: "1px solid rgba(148, 163, 184, 0.25)",
+                              background: "#f1f5f9",
+                              border: "1.5px solid #cbd5e1",
                               display: "flex",
                               alignItems: "center",
                               gap: "8px",
                               fontSize: "0.8rem",
-                              color: "#cbd5e1",
+                              color: "#475569",
                             }}
                           >
-                            <Lock size={15} color="#94a3b8" />
+                            <Lock size={15} color="#64748b" />
                             <span>
                               This ticket has been resolved and closed by Administrator. Replies are closed. If you have a new question, please{" "}
                               <span
@@ -1591,7 +1626,7 @@ export default function HelpCenterModal({ isOpen, onClose, currentUser, security
                                   setActiveTab("ask");
                                   setSubmitSuccess(null);
                                 }}
-                                style={{ color: "#38bdf8", cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}
+                                style={{ color: "#0284c7", cursor: "pointer", textDecoration: "underline", fontWeight: 700 }}
                               >
                                 ask a new question
                               </span>
