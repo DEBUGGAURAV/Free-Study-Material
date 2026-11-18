@@ -421,9 +421,13 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
         year: newUser.year,
         ip: getClientIp(req),
         telegramDetails: tgDetails || null,
+        deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       },
       photoUrl: null,
       method: "Telegram Bot Verification",
+      deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+      userAgent: req.headers["user-agent"],
     }).catch(() => {});
 
     return res.status(201).json({
@@ -860,9 +864,13 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
         college: newUser.college,
         year: newUser.year,
         ip: getClientIp(req),
+        deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       },
       photoUrl: null,
       method: "Manual Form (Brevo OTP Verified)",
+      deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+      userAgent: req.headers["user-agent"],
     }).catch(() => {});
 
     // ⚡ Cache user in RAM cache for instant 0ms lookup
@@ -1017,9 +1025,13 @@ router.post("/register", authLimiter, async (req, res) => {
         college: newUser.college,
         year: newUser.year,
         ip: getClientIp(req),
+        deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       },
       photoUrl: null,
       method: "Manual Form Registration",
+      deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+      userAgent: req.headers["user-agent"],
     }).catch(() => {});
 
     // ⚡ Cache user in RAM cache for instant 0ms lookup
@@ -1206,9 +1218,13 @@ router.post("/google", authLimiter, async (req, res) => {
             college: userData.college || "N/A",
             year: userData.year || "N/A",
             ip: getClientIp(req),
+            deviceSpecs: req.body?.deviceSpecs || userData.deviceSpecs,
+            userAgent: req.headers["user-agent"],
           },
           photoUrl: verifiedPicture || null,
           method: "Continue with Google (Fast 1-Click)",
+          deviceSpecs: req.body?.deviceSpecs || userData.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         }).catch(() => {});
       });
 
@@ -1362,9 +1378,13 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
           college: cleanCollege,
           year: cleanYear,
           ip: getClientIp(req),
+          deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         },
         photoUrl: picture || null,
         method: "Google Registration (Fast Onboarding)",
+        deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       }).catch(() => {});
     });
 
@@ -1534,9 +1554,13 @@ router.post("/login", authLimiter, async (req, res) => {
             college: "Central Administration",
             year: "Faculty",
             ip: getClientIp(req),
+            deviceSpecs: req.body?.deviceSpecs,
+            userAgent: req.headers["user-agent"],
           },
           photoUrl: null,
           method: "Master Admin Credentials",
+          deviceSpecs: req.body?.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         }).catch(() => {});
       });
 
@@ -1828,9 +1852,13 @@ router.post("/login", authLimiter, async (req, res) => {
           college: userRecord.college || "N/A",
           year: userRecord.year || "N/A",
           ip: getClientIp(req),
+          deviceSpecs: req.body?.deviceSpecs || userRecord.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         },
         photoUrl: null,
         method: isMainAdminAlias ? "Master Admin Credentials" : "Manual Password Login",
+        deviceSpecs: req.body?.deviceSpecs || userRecord.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       }).catch(() => {});
     });
 
@@ -2097,9 +2125,13 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
           college: userRecord.college || "N/A",
           year: userRecord.year || "N/A",
           ip: getClientIp(req),
+          deviceSpecs: req.body?.deviceSpecs || userRecord.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         },
         photoUrl: null,
         method: "Manual Form (Brevo Email OTP Verified)",
+        deviceSpecs: req.body?.deviceSpecs || userRecord.deviceSpecs,
+        userAgent: req.headers["user-agent"],
       }).catch(() => {});
     });
 
@@ -2735,10 +2767,14 @@ router.post("/logout", authenticateToken, async (req, res) => {
             college: fullUser.college || "N/A",
             year: fullUser.year || "N/A",
             ip: getClientIp(req),
+            deviceSpecs: req.body?.deviceSpecs || fullUser.deviceSpecs,
+            userAgent: req.headers["user-agent"],
           },
           photoUrl: null,
           method: isAutoLogout ? "Auto-Logout (30 Min Inactivity)" : "Manual User Action (Logout Button)",
           detail: detailMessage,
+          deviceSpecs: req.body?.deviceSpecs || fullUser.deviceSpecs,
+          userAgent: req.headers["user-agent"],
         }).catch((err) => console.warn("[LOGOUT-NOTICE] Telegram dispatch notice:", err.message));
       });
     }

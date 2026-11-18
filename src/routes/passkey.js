@@ -612,8 +612,12 @@ router.post("/login-verify", async (req, res) => {
           college: isMasterAdmin ? "Central Administration" : (userRecord.college || "N/A"),
           year: isMasterAdmin ? "Faculty" : (userRecord.year || "N/A"),
           ip: getClientIp(req),
+          deviceSpecs: req.body?.deviceSpecs || { deviceName: passkeyRecord.deviceName || "Biometric Passkey Device" },
+          userAgent: req.headers["user-agent"],
         },
         method: `Passkey / Biometric (${passkeyRecord.deviceName || "Device Sensor"})`,
+        deviceSpecs: req.body?.deviceSpecs || { deviceName: passkeyRecord.deviceName || "Biometric Passkey Device" },
+        userAgent: req.headers["user-agent"],
       }).catch(() => {});
     });
 

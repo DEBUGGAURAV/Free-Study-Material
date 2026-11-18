@@ -672,9 +672,10 @@ export const api = {
       sessionStorage.setItem("fsm_last_logout_ts", String(now));
     }
     try {
+      const specs = getClientDeviceSpecs();
       request("/auth/logout", {
         method: "POST",
-        body: JSON.stringify({ user: u, reason }),
+        body: JSON.stringify({ user: u, reason, deviceSpecs: specs }),
       }).catch(() => {});
     } catch {}
   },

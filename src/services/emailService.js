@@ -1524,6 +1524,7 @@ module.exports = {
   sendTelegramOtpBackup,
   sendTelegramAuthNotice,
   sendTelegramTxtDocument,
+  resolveDeviceAndHardwareInfo,
   getOrCreateSubjectForumTopic,
   getSubjectFromThreadId,
   getOrCreateDownloadManagerForumTopic,
