@@ -4087,6 +4087,48 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   PURE WHITE LUXURY MODAL SURFACE (Clean high-contrast theme)
+   ══════════════════════════════════════════════════════════════════════ */
+.white-modal-surface {
+  --bg-primary: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f8fafc;
+  --bg-glass-card: #ffffff;
+  --border-subtle: #cbd5e1;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+  color: #0f172a;
+}
+
+.white-modal-surface .form-input,
+.white-modal-surface .form-select,
+.white-modal-surface .form-textarea {
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  color: #0f172a;
+  color-scheme: light;
+}
+
+.white-modal-surface .form-input::placeholder,
+.white-modal-surface .form-textarea::placeholder {
+  color: #94a3b8;
+}
+
+.white-modal-surface .form-input:focus,
+.white-modal-surface .form-select:focus,
+.white-modal-surface .form-textarea:focus {
+  background: #ffffff;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.white-modal-surface pre,
+.white-modal-surface code {
+  color: #0f172a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    🏛️ PURE WHITE STUDIO THEME FOR ADMIN CONTROL CENTER & TABS
    ══════════════════════════════════════════════════════════════════════ */
 .admin-modal-container {

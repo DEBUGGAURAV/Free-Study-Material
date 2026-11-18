@@ -68,6 +68,33 @@ function getLiveOnlineCount(thresholdMs = 5 * 60 * 1000) {
   }
   return count;
 }
+
+/**
+ * Returns detailed list of currently active users on this node
+ */
+function getLiveOnlineUsers(thresholdMs = 5 * 60 * 1000) {
+  const now = Date.now();
+  const seenKeys = new Set();
+  const list = [];
+  for (const [key, data] of userLivePresence.entries()) {
+    if (now - (data.lastSeen || 0) < thresholdMs) {
+      const email = data.email || (key.includes("@") ? key : null);
+      const uniqueId = email || key;
+      if (seenKeys.has(uniqueId)) continue;
+      seenKeys.add(uniqueId);
+      list.push({
+        userId: data.userId || (!key.includes("@") ? key : null),
+        email: email || "Anonymous Student",
+        name: data.name || data.userName || (email ? email.split("@")[0] : "Student"),
+        role: data.role || (email?.toLowerCase().includes("aky435316") ? "admin" : "student"),
+        ip: data.ip || null,
+        lastSeen: data.lastSeen,
+        agoSec: Math.max(0, Math.floor((now - (data.lastSeen || 0)) / 1000)),
+      });
+    }
+  }
+  return list.sort((a, b) => a.agoSec - b.agoSec);
+}
 // Live in-memory throttle and buffer for student academic activities (reads, views, downloads)
 const academicActivityThrottle = new Map();
 const userMemoryAcademicActivities = new Map();
@@ -1058,4 +1085,5 @@ module.exports = {
   getUserLivePresence,
   isUserOnlineNow,
   getLiveOnlineCount,
+  getLiveOnlineUsers,
 };

@@ -904,16 +904,16 @@ export default function CircleSearchModal({
               alignItems: "center",
               justifyContent: "space-between",
               padding: "7px 16px",
-              background: "rgba(56, 189, 248, 0.08)",
-              borderBottom: "1px solid rgba(56, 189, 248, 0.2)",
+              background: "#f0f9ff",
+              borderBottom: "1.5px solid #e0f2fe",
               gap: "8px",
               flexShrink: 0,
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
               <GeminiIcon size={15} withRing />
-              <div style={{ fontSize: "0.76rem", color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                <strong style={{ color: "#38bdf8" }}>Extracted: </strong>
+              <div style={{ fontSize: "0.76rem", color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <strong style={{ color: "#0284c7" }}>Extracted: </strong>
                 {liveExtractedText || circleData?.text}
               </div>
             </div>
@@ -928,33 +928,33 @@ export default function CircleSearchModal({
                   setTimeout(() => setCopiedQuery(false), 2000);
                 }}
                 style={{
-                  background: copiedQuery ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.1)",
-                  border: copiedQuery ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.2)",
-                  color: copiedQuery ? "#34d399" : "#f1f5f9",
+                  background: copiedQuery ? "#ecfdf5" : "#ffffff",
+                  border: copiedQuery ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
+                  color: copiedQuery ? "#047857" : "#334155",
                   borderRadius: "14px",
                   padding: "3px 10px",
                   fontSize: "0.72rem",
-                  fontWeight: 700,
+                  fontWeight: 750,
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
                 }}
               >
-                {copiedQuery ? <Check size={12} color="#34d399" /> : <Copy size={12} />}
+                {copiedQuery ? <Check size={12} color="#047857" /> : <Copy size={12} />}
                 <span>{copiedQuery ? "Copied!" : "📋 Copy Text"}</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("notes")}
                 style={{
-                  background: activeTab === "notes" ? "rgba(99, 102, 241, 0.25)" : "rgba(255, 255, 255, 0.06)",
-                  border: "1px solid rgba(99, 102, 241, 0.3)",
-                  color: "#a5b4fc",
+                  background: activeTab === "notes" ? "#eff6ff" : "#ffffff",
+                  border: "1.5px solid #cbd5e1",
+                  color: activeTab === "notes" ? "#0284c7" : "#475569",
                   borderRadius: "14px",
                   padding: "3px 10px",
                   fontSize: "0.72rem",
-                  fontWeight: 700,
+                  fontWeight: 750,
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
@@ -973,8 +973,8 @@ export default function CircleSearchModal({
           <div
             style={{
               padding: "10px 18px",
-              background: "rgba(15, 23, 42, 0.72)",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+              background: "#f8fafc",
+              borderBottom: "1.5px solid #e2e8f0",
               flexShrink: 0,
             }}
           >
@@ -986,11 +986,11 @@ export default function CircleSearchModal({
                   padding: "5px 12px",
                   borderRadius: "8px",
                   fontSize: "0.76rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   cursor: "pointer",
-                  background: activeInputMode === "pencil" ? "rgba(56, 189, 248, 0.22)" : "rgba(255, 255, 255, 0.05)",
-                  color: activeInputMode === "pencil" ? "#38bdf8" : "#94a3b8",
-                  border: activeInputMode === "pencil" ? "1px solid rgba(56, 189, 248, 0.45)" : "1px solid transparent",
+                  background: activeInputMode === "pencil" ? "#eff6ff" : "#ffffff",
+                  color: activeInputMode === "pencil" ? "#0284c7" : "#64748b",
+                  border: activeInputMode === "pencil" ? "1.5px solid #0284c7" : "1.5px solid #cbd5e1",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
@@ -1012,11 +1012,11 @@ export default function CircleSearchModal({
                   padding: "5px 12px",
                   borderRadius: "8px",
                   fontSize: "0.76rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   cursor: "pointer",
-                  background: activeInputMode === "image" ? "rgba(99, 102, 241, 0.22)" : "rgba(255, 255, 255, 0.05)",
-                  color: activeInputMode === "image" ? "#a5b4fc" : "#94a3b8",
-                  border: activeInputMode === "image" ? "1px solid rgba(99, 102, 241, 0.45)" : "1px solid transparent",
+                  background: activeInputMode === "image" ? "#f5f3ff" : "#ffffff",
+                  color: activeInputMode === "image" ? "#6d28d9" : "#64748b",
+                  border: activeInputMode === "image" ? "1.5px solid #8b5cf6" : "1.5px solid #cbd5e1",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
@@ -1033,11 +1033,11 @@ export default function CircleSearchModal({
                   padding: "5px 12px",
                   borderRadius: "8px",
                   fontSize: "0.76rem",
-                  fontWeight: 700,
+                  fontWeight: 800,
                   cursor: "pointer",
-                  background: activeInputMode === "text" ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.05)",
-                  color: activeInputMode === "text" ? "#34d399" : "#94a3b8",
-                  border: activeInputMode === "text" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid transparent",
+                  background: activeInputMode === "text" ? "#ecfdf5" : "#ffffff",
+                  color: activeInputMode === "text" ? "#059669" : "#64748b",
+                  border: activeInputMode === "text" ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
@@ -1067,14 +1067,15 @@ export default function CircleSearchModal({
                     position: "relative",
                     height: "175px",
                     borderRadius: "12px",
-                    border: "1.5px solid rgba(56, 189, 248, 0.4)",
-                    background: "#020617",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#ffffff",
                     cursor: PENCIL_CURSOR_STYLE,
                     touchAction: "none",
                     userSelect: "none",
                     WebkitUserSelect: "none",
                     WebkitTouchCallout: "none",
                     overflow: "hidden",
+                    boxShadow: "inset 0 1px 3px rgba(0,0,0,0.04)",
                   }}
                 >
                   {activePadStrokes.length === 0 && (
@@ -1087,12 +1088,12 @@ export default function CircleSearchModal({
                         alignItems: "center",
                         justifyContent: "center",
                         pointerEvents: "none",
-                        color: "#64748b",
+                        color: "#94a3b8",
                         fontSize: "0.8rem",
                       }}
                     >
-                      <Pencil size={24} color="#38bdf8" style={{ marginBottom: "6px", opacity: 0.75 }} />
-                      <span>Draw any structure, graph, circuit, shape, or math equation with your pencil</span>
+                      <Pencil size={24} color="#0284c7" style={{ marginBottom: "6px", opacity: 0.8 }} />
+                      <span style={{ fontWeight: 600, color: "#64748b" }}>Draw any structure, graph, circuit, shape, or math equation with your pencil</span>
                     </div>
                   )}
                   <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
@@ -1103,8 +1104,8 @@ export default function CircleSearchModal({
                           key={idx}
                           d={d}
                           fill="none"
-                          stroke="#38bdf8"
-                          strokeWidth="2.2"
+                          stroke="#0284c7"
+                          strokeWidth="2.4"
                           strokeLinecap="round"
                           strokeLinejoin="round"
                         />
@@ -1120,12 +1121,13 @@ export default function CircleSearchModal({
                       onClick={() => setPadStrokes((p) => p.slice(0, -1))}
                       disabled={padStrokes.length === 0}
                       style={{
-                        background: "rgba(255,255,255,0.07)",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        color: "#cbd5e1",
+                        background: "#ffffff",
+                        border: "1.5px solid #cbd5e1",
+                        color: "#475569",
                         borderRadius: "8px",
                         padding: "5px 10px",
                         fontSize: "0.74rem",
+                        fontWeight: 700,
                         cursor: "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -1140,12 +1142,13 @@ export default function CircleSearchModal({
                       onClick={() => setPadStrokes([])}
                       disabled={padStrokes.length === 0}
                       style={{
-                        background: "rgba(244, 63, 94, 0.15)",
-                        border: "1px solid rgba(244, 63, 94, 0.35)",
-                        color: "#fda4af",
+                        background: "#fef2f2",
+                        border: "1.5px solid #fecaca",
+                        color: "#dc2626",
                         borderRadius: "8px",
                         padding: "5px 10px",
                         fontSize: "0.74rem",
+                        fontWeight: 700,
                         cursor: "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -1163,13 +1166,13 @@ export default function CircleSearchModal({
                       onClick={handleCopyPadHandwriting}
                       disabled={isPadOcrCopying || padStrokes.length === 0}
                       style={{
-                        background: copiedPadOcr ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)",
-                        border: copiedPadOcr ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.18)",
-                        color: copiedPadOcr ? "#34d399" : "#e2e8f0",
+                        background: copiedPadOcr ? "#ecfdf5" : "#ffffff",
+                        border: copiedPadOcr ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
+                        color: copiedPadOcr ? "#047857" : "#334155",
                         borderRadius: "8px",
                         padding: "6px 12px",
                         fontSize: "0.75rem",
-                        fontWeight: 700,
+                        fontWeight: 750,
                         cursor: padStrokes.length === 0 ? "not-allowed" : "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -1177,7 +1180,7 @@ export default function CircleSearchModal({
                       }}
                       title="Extract handwritten text / formula from your pencil sketch"
                     >
-                      {copiedPadOcr ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+                      {copiedPadOcr ? <Check size={13} color="#047857" /> : <Copy size={13} />}
                       <span>
                         {copiedPadOcr ? "Copied!" : isPadOcrCopying ? "⚡ Reading..." : "📋 Extract & Copy Text"}
                       </span>
@@ -1192,7 +1195,7 @@ export default function CircleSearchModal({
                         padding: "6px 16px",
                         borderRadius: "8px",
                         fontSize: "0.78rem",
-                        fontWeight: 700,
+                        fontWeight: 750,
                         cursor: "pointer",
                         display: "inline-flex",
                         alignItems: "center",
@@ -1200,7 +1203,7 @@ export default function CircleSearchModal({
                       }}
                     >
                       <Sparkles size={14} />
-                      <span>{isSolving ? "Analyzing..." : "✨ Get Result of Drawing"}</span>
+                      <span>{isSolving ? "Analyzing..." : "✨ Get Result"}</span>
                     </button>
                   </div>
                 </div>
@@ -1213,23 +1216,23 @@ export default function CircleSearchModal({
                   <div
                     onClick={() => fileInputRef.current?.click()}
                     style={{
-                      border: "2px dashed rgba(99, 102, 241, 0.4)",
+                      border: "2px dashed #cbd5e1",
                       borderRadius: "12px",
                       padding: "20px 14px",
                       textAlign: "center",
                       cursor: "pointer",
-                      background: "rgba(99, 102, 241, 0.05)",
+                      background: "#ffffff",
                     }}
                   >
-                    <Upload size={24} color="#818cf8" style={{ margin: "0 auto 6px" }} />
-                    <div style={{ fontSize: "0.84rem", fontWeight: 700, color: "#fff" }}>
+                    <Upload size={24} color="#6366f1" style={{ margin: "0 auto 6px" }} />
+                    <div style={{ fontSize: "0.84rem", fontWeight: 750, color: "#0f172a" }}>
                       Click to Upload or Paste (Ctrl+V) Handwritten Notes / Diagram Photo
                     </div>
                   </div>
                 ) : (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                      <span style={{ fontSize: "0.74rem", color: "#38bdf8", fontWeight: 600 }}>
+                      <span style={{ fontSize: "0.74rem", color: "#0284c7", fontWeight: 700 }}>
                         ✏️ Draw any shape/line with pencil over the handwritten part you want extracted/solved:
                       </span>
                       <div style={{ display: "flex", gap: "8px" }}>
@@ -1240,7 +1243,7 @@ export default function CircleSearchModal({
                               setImageStrokes([]);
                               if (uploadedImageSrc) autoExtractFromImageSource(uploadedImageSrc, []);
                             }}
-                            style={{ background: "none", border: "none", color: "#cbd5e1", fontSize: "0.72rem", cursor: "pointer" }}
+                            style={{ background: "none", border: "none", color: "#64748b", fontSize: "0.72rem", cursor: "pointer", fontWeight: 700 }}
                           >
                             Clear Marks
                           </button>
@@ -1255,12 +1258,13 @@ export default function CircleSearchModal({
                           style={{
                             background: "none",
                             border: "none",
-                            color: "#f87171",
+                            color: "#dc2626",
                             fontSize: "0.72rem",
                             cursor: "pointer",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "3px",
+                            fontWeight: 700,
                           }}
                         >
                           <RotateCcw size={11} />
@@ -1280,8 +1284,8 @@ export default function CircleSearchModal({
                         maxHeight: "155px",
                         overflow: "hidden",
                         borderRadius: "10px",
-                        border: "1.5px solid rgba(56, 189, 248, 0.35)",
-                        background: "#020617",
+                        border: "1.5px solid #cbd5e1",
+                        background: "#ffffff",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1310,8 +1314,8 @@ export default function CircleSearchModal({
                               key={idx}
                               d={d}
                               fill="none"
-                              stroke="#38bdf8"
-                              strokeWidth="2.2"
+                              stroke="#0284c7"
+                              strokeWidth="2.4"
                               strokeLinecap="round"
                               strokeLinejoin="round"
                             />
@@ -1327,8 +1331,8 @@ export default function CircleSearchModal({
                           marginTop: "7px",
                           padding: "6px 10px",
                           borderRadius: "8px",
-                          background: "rgba(56, 189, 248, 0.08)",
-                          border: "1px solid rgba(56, 189, 248, 0.25)",
+                          background: "#f0f9ff",
+                          border: "1.5px solid #bae6fd",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
@@ -1336,8 +1340,8 @@ export default function CircleSearchModal({
                           fontSize: "0.75rem",
                         }}
                       >
-                        <div style={{ minWidth: 0, flex: 1, color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          <strong style={{ color: "#38bdf8" }}>
+                        <div style={{ minWidth: 0, flex: 1, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <strong style={{ color: "#0284c7" }}>
                             {isAutoExtracting ? "⚡ Reading handwriting: " : "📝 Handwritten Text: "}
                           </strong>
                           <span>{liveExtractedText || "Extracting via AI Vision..."}</span>
@@ -1350,13 +1354,13 @@ export default function CircleSearchModal({
                               setActiveInputMode("text");
                             }}
                             style={{
-                              background: "rgba(99, 102, 241, 0.2)",
-                              border: "1px solid rgba(99, 102, 241, 0.4)",
-                              color: "#c7d2fe",
+                              background: "#ffffff",
+                              border: "1.5px solid #cbd5e1",
+                              color: "#4f46e5",
                               borderRadius: "6px",
                               padding: "2px 8px",
                               fontSize: "0.7rem",
-                              fontWeight: 700,
+                              fontWeight: 750,
                               cursor: "pointer",
                               flexShrink: 0,
                             }}
@@ -1373,20 +1377,20 @@ export default function CircleSearchModal({
                         onClick={handleCopyCroppedText}
                         disabled={isOcrCopying}
                         style={{
-                          background: copiedOcr ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.08)",
-                          border: copiedOcr ? "1px solid #10b981" : "1px solid rgba(255, 255, 255, 0.18)",
-                          color: copiedOcr ? "#34d399" : "#e2e8f0",
+                          background: copiedOcr ? "#ecfdf5" : "#ffffff",
+                          border: copiedOcr ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
+                          color: copiedOcr ? "#047857" : "#334155",
                           borderRadius: "8px",
                           padding: "6px 12px",
                           fontSize: "0.75rem",
-                          fontWeight: 700,
+                          fontWeight: 750,
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "5px",
                         }}
                       >
-                        {copiedOcr ? <Check size={13} color="#34d399" /> : <Copy size={13} />}
+                        {copiedOcr ? <Check size={13} color="#047857" /> : <Copy size={13} />}
                         <span>
                           {copiedOcr
                             ? "Copied!"
@@ -1405,7 +1409,7 @@ export default function CircleSearchModal({
                           padding: "6px 16px",
                           borderRadius: "8px",
                           fontSize: "0.76rem",
-                          fontWeight: 700,
+                          fontWeight: 750,
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
@@ -1442,9 +1446,9 @@ export default function CircleSearchModal({
                     }}
                     style={{
                       flex: 1,
-                      background: "rgba(0, 0, 0, 0.4)",
-                      border: "1px solid rgba(56, 189, 248, 0.35)",
-                      color: "#fff",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
+                      color: "#0f172a",
                       borderRadius: "10px",
                       padding: "9px 13px",
                       fontSize: "0.84rem",
@@ -1468,7 +1472,7 @@ export default function CircleSearchModal({
                       padding: "0 16px",
                       borderRadius: "10px",
                       fontSize: "0.8rem",
-                      fontWeight: 700,
+                      fontWeight: 750,
                       cursor: "pointer",
                       display: "inline-flex",
                       alignItems: "center",
@@ -1492,14 +1496,15 @@ export default function CircleSearchModal({
                           runSolveTurn({ promptText: q, displayUserText: q, isInitial: true });
                         }}
                         style={{
-                          background: "rgba(255, 255, 255, 0.04)",
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          background: "#ffffff",
+                          border: "1.5px solid #cbd5e1",
                           borderRadius: "14px",
                           padding: "3px 10px",
                           fontSize: "0.71rem",
-                          color: "#94a3b8",
+                          color: "#475569",
                           cursor: "pointer",
                           whiteSpace: "nowrap",
+                          fontWeight: 600,
                         }}
                       >
                         {q}
@@ -1516,8 +1521,8 @@ export default function CircleSearchModal({
         <div
           style={{
             display: "flex",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-            background: "rgba(10, 15, 30, 0.5)",
+            borderBottom: "1.5px solid #e2e8f0",
+            background: "#f8fafc",
             flexShrink: 0,
           }}
         >
@@ -1526,11 +1531,11 @@ export default function CircleSearchModal({
             style={{
               flex: 1,
               padding: "9px",
-              background: activeTab === "ai" ? "rgba(56, 189, 248, 0.12)" : "transparent",
+              background: activeTab === "ai" ? "#eff6ff" : "transparent",
               border: "none",
-              borderBottom: activeTab === "ai" ? "2px solid #38bdf8" : "2px solid transparent",
-              color: activeTab === "ai" ? "#38bdf8" : "#94a3b8",
-              fontWeight: 700,
+              borderBottom: activeTab === "ai" ? "2.5px solid #0284c7" : "2.5px solid transparent",
+              color: activeTab === "ai" ? "#0284c7" : "#64748b",
+              fontWeight: 800,
               fontSize: "0.82rem",
               cursor: "pointer",
               display: "flex",
@@ -1547,11 +1552,11 @@ export default function CircleSearchModal({
             style={{
               flex: 1,
               padding: "9px",
-              background: activeTab === "notes" ? "rgba(99, 102, 241, 0.12)" : "transparent",
+              background: activeTab === "notes" ? "#f5f3ff" : "transparent",
               border: "none",
-              borderBottom: activeTab === "notes" ? "2px solid #818cf8" : "2px solid transparent",
-              color: activeTab === "notes" ? "#818cf8" : "#94a3b8",
-              fontWeight: 700,
+              borderBottom: activeTab === "notes" ? "2.5px solid #4f46e5" : "2.5px solid transparent",
+              color: activeTab === "notes" ? "#4f46e5" : "#64748b",
+              fontWeight: 800,
               fontSize: "0.82rem",
               cursor: "pointer",
               display: "flex",
@@ -1566,15 +1571,15 @@ export default function CircleSearchModal({
         </div>
 
         {/* Main Scrollable Thread / Notes Body */}
-        <div ref={chatScrollContainerRef} style={{ flex: "1 1 auto", minHeight: "180px", overflowY: "auto", padding: "16px 18px", WebkitOverflowScrolling: "touch" }}>
+        <div ref={chatScrollContainerRef} style={{ flex: "1 1 auto", minHeight: "180px", overflowY: "auto", padding: "16px 18px", background: "#f8fafc", WebkitOverflowScrolling: "touch" }}>
           {activeTab === "ai" ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {messages.length === 0 && !isSolving && (
-                <div style={{ textAlign: "center", padding: "28px 16px", color: "#94a3b8" }}>
+                <div style={{ textAlign: "center", padding: "28px 16px", color: "#64748b" }}>
                   <div style={{ marginBottom: "10px" }}>
                     <GeminiIcon size={36} withRing />
                   </div>
-                  <div style={{ fontWeight: 700, color: "#e2e8f0", marginBottom: "4px" }}>
+                  <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
                     Draw any structure above with the Pencil, or ask any question below!
                   </div>
                   <div style={{ fontSize: "0.76rem", color: "#64748b" }}>
@@ -1591,12 +1596,13 @@ export default function CircleSearchModal({
                         maxWidth: "85%",
                         maxHeight: "140px",
                         overflowY: "auto",
-                        background: "linear-gradient(135deg, rgba(2, 132, 199, 0.28), rgba(99, 102, 241, 0.28))",
-                        border: "1px solid rgba(56, 189, 248, 0.38)",
+                        background: "#eff6ff",
+                        border: "1.5px solid #bfdbfe",
                         borderRadius: "16px 16px 4px 16px",
                         padding: "10px 14px",
-                        color: "#f8fafc",
+                        color: "#1e293b",
                         fontSize: "0.84rem",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
                       }}
                     >
                       {msg.image && (
@@ -1610,8 +1616,8 @@ export default function CircleSearchModal({
                               objectFit: "contain",
                               borderRadius: "6px",
                               display: "block",
-                              border: "1px solid rgba(255,255,255,0.22)",
-                              background: "#020617",
+                              border: "1px solid #cbd5e1",
+                              background: "#ffffff",
                             }}
                           />
                         </div>
@@ -1624,14 +1630,14 @@ export default function CircleSearchModal({
                     key={msg.id}
                     ref={idx === messages.length - 1 ? latestAiMessageRef : null}
                     style={{
-                      background: "linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(10, 15, 29, 0.98) 100%)",
-                      border: "1.5px solid rgba(56, 189, 248, 0.35)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "18px 18px 18px 4px",
                       padding: "16px 18px",
                       fontSize: "0.88rem",
                       lineHeight: "1.7",
-                      color: "#f8fafc",
-                      boxShadow: "0 10px 30px -10px rgba(56, 189, 248, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+                      color: "#0f172a",
+                      boxShadow: "0 10px 30px -10px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(0, 0, 0, 0.05)",
                     }}
                   >
                     <div
@@ -1641,7 +1647,7 @@ export default function CircleSearchModal({
                         justifyContent: "space-between",
                         marginBottom: "10px",
                         paddingBottom: "8px",
-                        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                        borderBottom: "1px solid #e2e8f0",
                         flexWrap: "wrap",
                         gap: "6px",
                       }}
@@ -1669,10 +1675,10 @@ export default function CircleSearchModal({
                             fontSize: "0.72rem",
                             padding: "3px 9px",
                             borderRadius: "999px",
-                            background: msg.cached ? "rgba(16, 185, 129, 0.16)" : "rgba(56, 189, 248, 0.16)",
-                            color: msg.cached ? "#34d399" : "#38bdf8",
+                            background: msg.cached ? "#ecfdf5" : "#f0fdf4",
+                            color: msg.cached ? "#059669" : "#047857",
                             fontWeight: 750,
-                            border: `1px solid ${msg.cached ? "rgba(52, 211, 153, 0.35)" : "rgba(56, 189, 248, 0.35)"}`,
+                            border: `1px solid ${msg.cached ? "#a7f3d0" : "#bbf7d0"}`,
                           }}
                         >
                           <Zap size={11} />
@@ -1686,13 +1692,13 @@ export default function CircleSearchModal({
                         type="button"
                         onClick={() => handleCopyMessage(msg.id, msg.text)}
                         style={{
-                          background: "rgba(255, 255, 255, 0.08)",
-                          border: "1px solid rgba(255, 255, 255, 0.15)",
+                          background: "#f8fafc",
+                          border: "1.5px solid #cbd5e1",
                           borderRadius: "7px",
                           padding: "4px 9px",
-                          color: copiedMsgId === msg.id ? "#34d399" : "#cbd5e1",
+                          color: copiedMsgId === msg.id ? "#059669" : "#475569",
                           fontSize: "0.72rem",
-                          fontWeight: 600,
+                          fontWeight: 700,
                           cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
@@ -1705,7 +1711,9 @@ export default function CircleSearchModal({
                       </button>
                     </div>
 
-                    <MathMarkdown content={msg.text} />
+                    <div style={{ color: "#0f172a" }}>
+                      <MathMarkdown content={msg.text} />
+                    </div>
 
                     {/* ⚡ Follow-up Actions for Circle / Pencil AI */}
                     <div
@@ -1715,7 +1723,7 @@ export default function CircleSearchModal({
                         gap: "6px",
                         marginTop: "14px",
                         paddingTop: "10px",
-                        borderTop: "1px dashed rgba(255, 255, 255, 0.1)",
+                        borderTop: "1px dashed #e2e8f0",
                         alignItems: "center",
                       }}
                     >
@@ -1736,18 +1744,19 @@ export default function CircleSearchModal({
                           }}
                           disabled={isSolving}
                           style={{
-                            background: "rgba(255, 255, 255, 0.05)",
-                            border: "1px solid rgba(56, 189, 248, 0.35)",
+                            background: "#ffffff",
+                            border: "1.5px solid #cbd5e1",
                             borderRadius: "999px",
-                            padding: "3px 9px",
+                            padding: "3px 10px",
                             fontSize: "0.71rem",
-                            color: "#7dd3fc",
+                            color: "#334155",
                             cursor: isSolving ? "not-allowed" : "pointer",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "4px",
-                            fontWeight: 600,
+                            fontWeight: 700,
                             transition: "all 0.15s ease",
+                            boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                           }}
                         >
                           <span>{action.icon}</span>
@@ -1766,19 +1775,20 @@ export default function CircleSearchModal({
                     alignItems: "center",
                     gap: "10px",
                     padding: "12px 14px",
-                    background: "rgba(56, 189, 248, 0.08)",
-                    border: "1px solid rgba(56, 189, 248, 0.22)",
+                    background: "#f0f9ff",
+                    border: "1.5px solid #bae6fd",
                     borderRadius: "14px",
                     fontSize: "0.8rem",
-                    color: "#bae6fd",
+                    color: "#0369a1",
+                    fontWeight: 700,
                   }}
                 >
                   <div
                     style={{
                       width: "18px",
                       height: "18px",
-                      border: "2.5px solid rgba(56, 189, 248, 0.25)",
-                      borderTop: "2.5px solid #38bdf8",
+                      border: "2.5px solid #bae6fd",
+                      borderTop: "2.5px solid #0284c7",
                       borderRadius: "50%",
                       animation: "spin 0.8s linear infinite",
                       flexShrink: 0,
@@ -1803,13 +1813,15 @@ export default function CircleSearchModal({
                       key={note.id || note._id}
                       style={{
                         padding: "12px 14px",
-                        background: "rgba(255, 255, 255, 0.04)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        background: "#ffffff",
+                        border: "1.5px solid #cbd5e1",
                         borderRadius: "12px",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
                         cursor: "pointer",
+                        boxShadow: "0 2px 8px rgba(15, 23, 42, 0.05)",
+                        transition: "all 0.15s ease",
                       }}
                       onClick={() => {
                         if (onOpenNote) onOpenNote(note);
@@ -1817,20 +1829,20 @@ export default function CircleSearchModal({
                       }}
                     >
                       <div style={{ minWidth: 0, flex: 1, paddingRight: "12px" }}>
-                        <div style={{ fontWeight: 700, fontSize: "0.88rem", color: "#fff", marginBottom: "2px" }}>
+                        <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "#0f172a", marginBottom: "2px" }}>
                           {note.title || "Academic Notes"}
                         </div>
-                        <div style={{ fontSize: "0.74rem", color: "#94a3b8", display: "flex", gap: "8px" }}>
+                        <div style={{ fontSize: "0.74rem", color: "#64748b", display: "flex", gap: "8px" }}>
                           <span>📚 {note.subject || "Subject"}</span>
                           {note.branch && <span>• 🏛️ {note.branch}</span>}
                         </div>
                       </div>
-                      <ExternalLink size={16} color="#38bdf8" />
+                      <ExternalLink size={16} color="#0284c7" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div style={{ textAlign: "center", padding: "30px", color: "#94a3b8" }}>
+                <div style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
                   No exact matching notes found in the vault.
                 </div>
               )}
@@ -1842,8 +1854,8 @@ export default function CircleSearchModal({
         <div
           style={{
             padding: "10px 16px 12px",
-            borderTop: "1px solid rgba(255, 255, 255, 0.1)",
-            background: "rgba(10, 15, 30, 0.92)",
+            borderTop: "1.5px solid #e2e8f0",
+            background: "#ffffff",
             flexShrink: 0,
           }}
         >
@@ -1856,13 +1868,13 @@ export default function CircleSearchModal({
                   disabled={isSolving}
                   onClick={() => handleSendFollowUp(chip)}
                   style={{
-                    background: "rgba(56, 189, 248, 0.1)",
-                    border: "1px solid rgba(56, 189, 248, 0.28)",
-                    color: "#bae6fd",
+                    background: "#f1f5f9",
+                    border: "1px solid #cbd5e1",
+                    color: "#334155",
                     borderRadius: "999px",
                     padding: "4px 10px",
                     fontSize: "0.71rem",
-                    fontWeight: 600,
+                    fontWeight: 700,
                     cursor: "pointer",
                     whiteSpace: "nowrap",
                     flexShrink: 0,
@@ -1875,13 +1887,13 @@ export default function CircleSearchModal({
                 type="button"
                 onClick={() => setMessages([])}
                 style={{
-                  background: "rgba(244, 63, 94, 0.12)",
-                  border: "1px solid rgba(244, 63, 94, 0.3)",
-                  color: "#fda4af",
+                  background: "#fef2f2",
+                  border: "1px solid #fecaca",
+                  color: "#dc2626",
                   borderRadius: "999px",
                   padding: "4px 10px",
                   fontSize: "0.71rem",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
                   whiteSpace: "nowrap",
                   flexShrink: 0,
@@ -1906,9 +1918,9 @@ export default function CircleSearchModal({
               }}
               style={{
                 flex: 1,
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                color: "#fff",
+                background: "#f8fafc",
+                border: "1.5px solid #cbd5e1",
+                color: "#0f172a",
                 borderRadius: "12px",
                 padding: "10px 14px",
                 fontSize: "0.84rem",

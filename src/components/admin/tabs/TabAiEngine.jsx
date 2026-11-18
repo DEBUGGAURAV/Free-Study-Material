@@ -1796,22 +1796,23 @@ export default function TabAiEngine() {
       {/* Admin Testing Playground */}
       <div
         style={{
-          background: "rgba(255, 255, 255, 0.02)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
           borderRadius: "16px",
           padding: "20px",
           display: "flex",
           flexDirection: "column",
           gap: "14px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Bot size={18} color="#a78bfa" />
-          <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+          <Bot size={18} color="#6366f1" />
+          <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
             Live Query Simulator &amp; Failover Tester
           </h4>
         </div>
-        <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: 0 }}>
+        <p style={{ fontSize: "0.78rem", color: "#64748b", margin: 0 }}>
           Test real-time student Q&amp;A directly. See which engine responds, response latency, and failover status.
         </p>
 
@@ -1828,9 +1829,9 @@ export default function TabAiEngine() {
                 padding: "9px 12px",
                 fontSize: "0.82rem",
                 borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                background: "rgba(0, 0, 0, 0.3)",
-                color: "#fff",
+                border: "1.5px solid #cbd5e1",
+                background: "#f8fafc",
+                color: "#0f172a",
               }}
             />
             <button
@@ -1845,31 +1846,32 @@ export default function TabAiEngine() {
           </div>
         </form>
 
-        {/* Playground Response Box */}
+        {/* Playground Response Box (Pure White AI Search Result Card) */}
         {playAnswer && (
           <div
             style={{
-              padding: "16px",
-              background: "rgba(15, 23, 42, 0.8)",
-              borderRadius: "12px",
-              border: "1px solid rgba(99, 102, 241, 0.35)",
+              padding: "16px 18px",
+              background: "#ffffff",
+              borderRadius: "14px",
+              border: "1.5px solid #cbd5e1",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
               display: "flex",
               flexDirection: "column",
               gap: "10px",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem", flexWrap: "wrap", gap: "6px" }}>
-              <span style={{ color: "#38bdf8", fontWeight: 700 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.74rem", flexWrap: "wrap", gap: "6px", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+              <span style={{ color: "#0284c7", fontWeight: 800 }}>
                 ⚡ Engine: {playAnswer.provider?.toUpperCase()} ({playAnswer.model})
               </span>
-              <div style={{ display: "flex", gap: "8px", color: "var(--text-dim)" }}>
+              <div style={{ display: "flex", gap: "8px", color: "#64748b", fontWeight: 600 }}>
                 <span>Latency: {playAnswer.latencyMs}ms</span>
-                {playAnswer.failover && <span style={{ color: "#f59e0b" }}>• Failover Active</span>}
-                {playAnswer.cached && <span style={{ color: "#34d399" }}>• 0ms Cache Hit</span>}
+                {playAnswer.failover && <span style={{ color: "#d97706" }}>• Failover Active</span>}
+                {playAnswer.cached && <span style={{ color: "#059669" }}>• 0ms Cache Hit</span>}
               </div>
             </div>
 
-            <div style={{ fontSize: "0.82rem", color: "#0f172a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: "0.84rem", color: "#0f172a", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
               {playAnswer.answer}
             </div>
           </div>
@@ -1881,12 +1883,13 @@ export default function TabAiEngine() {
         className="card-cyber"
         style={{
           padding: "22px",
-          background: "rgba(15, 23, 42, 0.75)",
-          border: "1px solid rgba(56, 189, 248, 0.25)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
           borderRadius: "16px",
           display: "flex",
           flexDirection: "column",
           gap: "14px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -2052,12 +2055,13 @@ export default function TabAiEngine() {
         className="card-cyber"
         style={{
           padding: "22px",
-          background: "rgba(15, 23, 42, 0.75)",
-          border: "1px solid rgba(99, 102, 241, 0.25)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
           borderRadius: "16px",
           display: "flex",
           flexDirection: "column",
           gap: "16px",
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -2234,37 +2238,38 @@ export default function TabAiEngine() {
         {selectedStudent && (
           <div
             style={{
-              background: "rgba(139, 92, 246, 0.08)",
-              border: "1px solid rgba(139, 92, 246, 0.35)",
+              background: "#f8fafc",
+              border: "1.5px solid #cbd5e1",
               borderRadius: "14px",
               padding: "16px",
               display: "flex",
               flexDirection: "column",
               gap: "14px",
-              boxShadow: "0 8px 24px rgba(139, 92, 246, 0.12)",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <User size={18} color="#a78bfa" />
-                  <h4 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                  <User size={18} color="#6366f1" />
+                  <h4 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                     {selectedStudent.userName || "Student Scholar"}
                   </h4>
                   <span
                     style={{
-                      background: "rgba(139, 92, 246, 0.25)",
-                      color: "#c4b5fd",
+                      background: "#f5f3ff",
+                      color: "#6d28d9",
                       padding: "2px 8px",
                       borderRadius: "6px",
                       fontSize: "0.72rem",
-                      fontWeight: 700,
+                      fontWeight: 750,
+                      border: "1px solid #ddd6fe",
                     }}
                   >
                     {studentSpecificLogs.length} Questions Asked
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: "14px", fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "4px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "14px", fontSize: "0.76rem", color: "#64748b", marginTop: "4px", flexWrap: "wrap" }}>
                   <span>📧 <code>{selectedStudent.userEmail || "anonymous"}</code></span>
                   {selectedStudent.userMobile && <span>📱 <code>{selectedStudent.userMobile}</code></span>}
                   {selectedStudent.userId && <span>🆔 <code>{selectedStudent.userId}</code></span>}
@@ -2283,7 +2288,9 @@ export default function TabAiEngine() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "5px",
-                    background: "rgba(255, 255, 255, 0.08)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
+                    color: "#475569",
                   }}
                 >
                   <X size={13} />
@@ -2293,10 +2300,10 @@ export default function TabAiEngine() {
             </div>
 
             {/* Student Specific Logs Table */}
-            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)", background: "rgba(0,0,0,0.25)" }}>
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1.5px solid #cbd5e1", background: "#ffffff" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
                 <thead>
-                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1.5px solid #cbd5e1", color: "#475569" }}>
                     <th style={{ padding: "8px 12px" }}>Time (UTC)</th>
                     <th style={{ padding: "8px 12px" }}>Student Query / Circled Formula</th>
                     <th style={{ padding: "8px 12px" }}>Engine & Model</th>
@@ -2307,21 +2314,21 @@ export default function TabAiEngine() {
                 <tbody>
                   {loadingStudentLogs ? (
                     <tr>
-                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)" }}>
+                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
                         <RefreshCw size={16} className="animate-spin" style={{ margin: "0 auto 6px auto", display: "block" }} />
                         Loading student query history...
                       </td>
                     </tr>
                   ) : studentSpecificLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "var(--text-dim)" }}>
+                      <td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "#64748b" }}>
                         No searches recorded for this student yet.
                       </td>
                     </tr>
                   ) : (
                     studentSpecificLogs.map((log) => (
-                      <tr key={log.id} style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.05)" }}>
-                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                      <tr key={log.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", color: "#64748b", fontFamily: "var(--font-mono)" }}>
                           {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
                         </td>
                         <td style={{ padding: "8px 12px", maxWidth: "420px" }}>
@@ -2342,10 +2349,10 @@ export default function TabAiEngine() {
                             {String(log.provider).toUpperCase()} ({log.model || "Default"})
                           </span>
                         </td>
-                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
-                          {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
+                        <td style={{ padding: "8px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "#64748b" }}>
+                          {log.cached ? <span style={{ color: "#059669" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
                         </td>
-                        <td style={{ padding: "8px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                        <td style={{ padding: "8px 12px", maxWidth: "160px", color: "#64748b", fontSize: "0.72rem" }}>
                           {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
                         </td>
                       </tr>
@@ -2365,7 +2372,7 @@ export default function TabAiEngine() {
             {/* Student Search Bar */}
             <div style={{ display: "flex", gap: "8px" }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                 <input
                   type="text"
                   value={studentSearchFilter}
@@ -2379,9 +2386,9 @@ export default function TabAiEngine() {
                     padding: "8px 12px 8px 34px",
                     fontSize: "0.8rem",
                     borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    background: "rgba(0, 0, 0, 0.25)",
-                    color: "#fff",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#f8fafc",
+                    color: "#0f172a",
                   }}
                 />
               </div>
@@ -2396,10 +2403,10 @@ export default function TabAiEngine() {
             </div>
 
             {/* Students Table */}
-            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1.5px solid #cbd5e1", background: "#ffffff" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
                 <thead>
-                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1.5px solid #cbd5e1", color: "#475569" }}>
                     <th style={{ padding: "10px 12px" }}>Student Profile</th>
                     <th style={{ padding: "10px 12px" }}>Contact Info</th>
                     <th style={{ padding: "10px 12px" }}>Total Queries</th>
@@ -2412,14 +2419,14 @@ export default function TabAiEngine() {
                 <tbody>
                   {loadingStudents ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "#64748b" }}>
                         <RefreshCw size={18} className="animate-spin" style={{ margin: "0 auto 8px auto", display: "block" }} />
                         Loading student directory...
                       </td>
                     </tr>
                   ) : studentsSummary.length === 0 ? (
                     <tr>
-                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "var(--text-dim)" }}>
+                      <td colSpan={7} style={{ padding: "30px", textAlign: "center", color: "#64748b" }}>
                         No students have queried AI yet. When students use Circle to Search or Ask AI, their profiles will appear here.
                       </td>
                     </tr>
@@ -2428,25 +2435,25 @@ export default function TabAiEngine() {
                       <tr
                         key={st.studentKey || idx}
                         style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                          borderBottom: "1px solid #f1f5f9",
                           transition: "background 0.15s ease",
                         }}
                       >
                         <td style={{ padding: "10px 12px" }}>
                           <div style={{ fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: "6px" }}>
-                            <User size={14} color="#38bdf8" />
+                            <User size={14} color="#0284c7" />
                             <span>{st.userName || "Student Scholar"}</span>
                           </div>
-                          {st.userId && <div style={{ fontSize: "0.68rem", color: "var(--text-muted)" }}>ID: {st.userId}</div>}
+                          {st.userId && <div style={{ fontSize: "0.68rem", color: "#64748b" }}>ID: {st.userId}</div>}
                         </td>
-                        <td style={{ padding: "10px 12px" }}>
+                        <td style={{ padding: "10px 10px" }}>
                           <div style={{ fontSize: "0.72rem", color: "#334155" }}>{st.userEmail || "anonymous"}</div>
-                          {st.userMobile && <div style={{ fontSize: "0.68rem", color: "#34d399" }}>📱 {st.userMobile}</div>}
+                          {st.userMobile && <div style={{ fontSize: "0.68rem", color: "#059669" }}>📱 {st.userMobile}</div>}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
-                          <strong style={{ color: "#38bdf8", fontSize: "0.85rem" }}>{st.totalQueries}</strong> searches
+                          <strong style={{ color: "#0284c7", fontSize: "0.85rem" }}>{st.totalQueries}</strong> searches
                         </td>
-                        <td style={{ padding: "10px 12px", color: "#34d399" }}>
+                        <td style={{ padding: "10px 12px", color: "#059669" }}>
                           {st.cachedQueries > 0 ? `🎯 ${st.cachedQueries} (0ms)` : "0"}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
@@ -2458,8 +2465,8 @@ export default function TabAiEngine() {
                                   fontSize: "0.65rem",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
-                                  background: "rgba(255, 255, 255, 0.06)",
-                                  color: "#94a3b8",
+                                  background: "#f1f5f9",
+                                  color: "#475569",
                                   fontWeight: 600,
                                 }}
                               >
@@ -2468,7 +2475,7 @@ export default function TabAiEngine() {
                             ))}
                           </div>
                         </td>
-                        <td style={{ padding: "10px 12px", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                        <td style={{ padding: "10px 12px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
                           {st.lastSearchAt ? st.lastSearchAt.replace("T", " ").slice(0, 16) : "N/A"}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right" }}>
@@ -2508,7 +2515,7 @@ export default function TabAiEngine() {
             {/* Search Bar Filter */}
             <div style={{ display: "flex", gap: "8px" }}>
               <div style={{ position: "relative", flex: 1 }}>
-                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <Search size={14} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                 <input
                   type="text"
                   value={aiSearchFilter}
@@ -2522,9 +2529,9 @@ export default function TabAiEngine() {
                     padding: "8px 12px 8px 34px",
                     fontSize: "0.8rem",
                     borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    background: "rgba(0, 0, 0, 0.25)",
-                    color: "#fff",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#f8fafc",
+                    color: "#0f172a",
                   }}
                 />
               </div>
@@ -2539,10 +2546,10 @@ export default function TabAiEngine() {
             </div>
 
             {/* Turso AI Logs Table */}
-            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+            <div style={{ overflowX: "auto", borderRadius: "10px", border: "1.5px solid #cbd5e1", background: "#ffffff" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.76rem", textAlign: "left" }}>
                 <thead>
-                  <tr style={{ background: "rgba(255, 255, 255, 0.04)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", color: "var(--text-dim)" }}>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1.5px solid #cbd5e1", color: "#475569" }}>
                     <th style={{ padding: "10px 12px" }}>Time (UTC)</th>
                     <th style={{ padding: "10px 12px" }}>Student Details</th>
                     <th style={{ padding: "10px 12px" }}>Query / Question</th>
@@ -2570,11 +2577,11 @@ export default function TabAiEngine() {
                       <tr
                         key={log.id}
                         style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                          borderBottom: "1px solid #f1f5f9",
                           transition: "background 0.15s ease",
                         }}
                       >
-                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", color: "#64748b", fontFamily: "var(--font-mono)" }}>
                           {log.createdAt ? log.createdAt.replace("T", " ").slice(0, 19) : "Just now"}
                         </td>
                         <td style={{ padding: "10px 12px" }}>
@@ -2592,9 +2599,9 @@ export default function TabAiEngine() {
                               }}
                               title="Inspect this student's full search history"
                               style={{
-                                background: "rgba(139, 92, 246, 0.15)",
-                                border: "1px solid rgba(139, 92, 246, 0.35)",
-                                color: "#c4b5fd",
+                                background: "#f5f3ff",
+                                border: "1px solid #ddd6fe",
+                                color: "#6d28d9",
                                 borderRadius: "6px",
                                 padding: "2px 7px",
                                 fontSize: "0.68rem",
@@ -2609,8 +2616,8 @@ export default function TabAiEngine() {
                               <span>View Searches</span>
                             </button>
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{log.userEmail || "anonymous"}</div>
-                          {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#94a3b8" }}>📱 {log.userMobile}</div>}
+                          <div style={{ fontSize: "0.7rem", color: "#64748b" }}>{log.userEmail || "anonymous"}</div>
+                          {log.userMobile && <div style={{ fontSize: "0.68rem", color: "#059669" }}>📱 {log.userMobile}</div>}
                         </td>
                         <td style={{ padding: "10px 12px", maxWidth: "300px" }}>
                           <div style={{ color: "#0f172a", wordBreak: "break-word", fontWeight: 500 }}>{log.query}</div>
@@ -2630,10 +2637,10 @@ export default function TabAiEngine() {
                             {String(log.provider).toUpperCase()}
                           </span>
                         </td>
-                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
-                          {log.cached ? <span style={{ color: "#34d399" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
+                        <td style={{ padding: "10px 12px", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", color: "#64748b" }}>
+                          {log.cached ? <span style={{ color: "#059669" }}>0ms (cache)</span> : `${log.latencyMs || 0}ms`}
                         </td>
-                        <td style={{ padding: "10px 12px", maxWidth: "160px", color: "var(--text-dim)", fontSize: "0.72rem" }}>
+                        <td style={{ padding: "10px 12px", maxWidth: "160px", color: "#64748b", fontSize: "0.72rem" }}>
                           {log.noteTitle ? <span title={log.noteTitle}>📄 {log.noteTitle.slice(0, 24)}...</span> : "General"}
                         </td>
                       </tr>

@@ -156,7 +156,12 @@ function authenticateToken(req, res, next) {
       // 🟢 Live in-memory presence tracking (0 database cost)
       try {
         const { recordUserLivePresence } = require("../services/studentSessionService");
-        recordUserLivePresence(user.id, { ip: req.ip, email: user.email });
+        recordUserLivePresence(user.id, {
+          ip: req.ip || req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"],
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        });
       } catch (_) {}
     }
 

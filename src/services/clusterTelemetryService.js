@@ -97,6 +97,7 @@ function createInitialNode(id, name, url, role, defaults = {}) {
     totalRequests: 0,
     telemetrySynced: false,
     isCurrentResponder: false,
+    activeUsersList: [],
     region: null,
     hardware: null,
     lastChecked: 0,
@@ -109,44 +110,58 @@ const DEFAULT_CLUSTER_URLS = [
   "https://freestudymaterial.onrender.com",
 ];
 
-const clusterNodes = [
-  createInitialNode(
-    "backend_1",
-    "Backend #1 (Active Node #1)",
-    backendClusterUrls[0] || DEFAULT_CLUSTER_URLS[0],
-    "Active Production Node #1",
-    {
-      status: "ONLINE",
-      httpCode: 200,
-      latencyMs: 50,
-      isHealthy: true,
+function getContainerMemoryLimitBytes() {
+  const fs = require("fs");
+  try {
+    if (fs.existsSync("/sys/fs/cgroup/memory.max")) {
+      const raw = fs.readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim();
+      if (raw && raw !== "max") {
+        const val = parseInt(raw, 10);
+        if (!isNaN(val) && val > 0 && val < 1099511627776) return val;
+      }
     }
-  ),
-  createInitialNode(
-    "backend_2",
-    "Backend #2 (Active Node #2)",
-    backendClusterUrls[1] || DEFAULT_CLUSTER_URLS[1],
-    "Active Production Node #2",
-    {
-      status: "ONLINE",
-      httpCode: 200,
-      latencyMs: 50,
-      isHealthy: true,
+  } catch (_) {}
+
+  try {
+    if (fs.existsSync("/sys/fs/cgroup/memory/memory.limit_in_bytes")) {
+      const raw = fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8").trim();
+      if (raw) {
+        const val = parseInt(raw, 10);
+        if (!isNaN(val) && val > 0 && val < 1099511627776) return val;
+      }
     }
-  ),
-  createInitialNode(
-    "backend_3",
-    "Backend #3 (Production Node #3)",
-    backendClusterUrls[2] || DEFAULT_CLUSTER_URLS[2],
-    "Production Node #3",
-    {
-      status: "ONLINE",
-      httpCode: 200,
-      latencyMs: 50,
-      isHealthy: true,
-    }
-  ),
-];
+  } catch (_) {}
+
+  const envMb = parseInt(process.env.RAM_LIMIT_MB, 10);
+  if (!isNaN(envMb) && envMb > 0) return envMb * 1024 * 1024;
+  return 512 * 1024 * 1024; // 512 MB Render Free container default
+}
+
+function buildInitialClusterNodes() {
+  const urls = [...new Set([...(backendClusterUrls || []), ...DEFAULT_CLUSTER_URLS])].filter(Boolean);
+  const nodes = [];
+  for (let i = 0; i < urls.length; i++) {
+    const num = i + 1;
+    const isProd = num <= 2;
+    nodes.push(
+      createInitialNode(
+        `backend_${num}`,
+        `Backend #${num} (${isProd ? `Active Node #${num}` : `Production Node #${num}`})`,
+        urls[i],
+        isProd ? `Active Production Node #${num}` : `Production Node #${num}`,
+        {
+          status: "ONLINE",
+          httpCode: 200,
+          latencyMs: 50,
+          isHealthy: true,
+        }
+      )
+    );
+  }
+  return nodes;
+}
+
+const clusterNodes = buildInitialClusterNodes();
 
 const liveRequestStats = {
   total: 0,
@@ -205,11 +220,41 @@ function getLocalNodeTelemetry() {
     }
   }
 
+  const containerLimitBytes = getContainerMemoryLimitBytes();
+  const containerLimitMB = Math.round(containerLimitBytes / 1048576);
+  const procRssMB = Math.round(procMem.rss / 1048576);
+  const containerUsagePercent = Math.min(100, Math.round((procMem.rss / containerLimitBytes) * 100));
+
+  let activeUsersList = [];
+  try {
+    const { getLiveOnlineUsers } = require("./studentSessionService");
+    activeUsersList = getLiveOnlineUsers(5 * 60 * 1000) || [];
+  } catch (_) {}
+
+  const seenIps = new Set(activeUsersList.map((u) => u.ip).filter(Boolean));
+  for (const [ip, timestamp] of activeUserTracker.entries()) {
+    if (now - timestamp < 5 * 60 * 1000 && !seenIps.has(ip) && ip !== "guest_client") {
+      activeUsersList.push({
+        isGuest: true,
+        email: `Guest (${ip.slice(0, 15)})`,
+        name: "Guest Visitor",
+        role: "guest",
+        ip: ip,
+        lastSeen: timestamp,
+        agoSec: Math.max(0, Math.floor((now - timestamp) / 1000)),
+      });
+      seenIps.add(ip);
+    }
+  }
+
+  const liveUsersCount = Math.max(activeUsersList.length, activeUserTracker.size, liveRequestStats.inflight > 0 ? 1 : 0);
+
   return {
     hostname: getCurrentServerHostname(),
     region: process.env.RENDER_REGION || "singapore",
     serviceName: process.env.RENDER_SERVICE_NAME || process.env.RENDER_EXTERNAL_HOSTNAME || "freestudymaterial",
-    liveUsers: Math.max(activeUserTracker.size, liveRequestStats.inflight > 0 ? 1 : 0),
+    liveUsers: liveUsersCount,
+    activeUsersList,
     activeSockets: liveRequestStats.inflight,
     rps: liveRps,
     requestsOn: liveRequestStats.on,
@@ -223,6 +268,9 @@ function getLocalNodeTelemetry() {
       cpuUsagePercent: computeLiveCpuUsagePercent(),
       loadAvg: loadAvg.map((v) => Number((v || 0).toFixed(2))),
       arch: os.arch(),
+      containerLimitMB,
+      containerLimitBytes,
+      containerUsagePercent,
       ramTotalMB: Math.round(totalMemBytes / 1048576),
       ramUsedMB: Math.round(usedMemBytes / 1048576),
       ramFreeMB: Math.round(freeMemBytes / 1048576),
@@ -230,11 +278,11 @@ function getLocalNodeTelemetry() {
       ramUsedGB: (usedMemBytes / 1073741824).toFixed(2),
       ramFreeGB: (freeMemBytes / 1073741824).toFixed(2),
       ramUsagePercent: memUsagePercent,
-      rssMB: Math.round(procMem.rss / 1048576),
+      rssMB: procRssMB,
       heapUsedMB: Math.round(procMem.heapUsed / 1048576),
       heapTotalMB: Math.round(procMem.heapTotal / 1048576),
       externalMB: Math.round((procMem.external || 0) / 1048576),
-      ramLimitMB: Number(process.env.RAM_LIMIT_MB || 512),
+      ramLimitMB: containerLimitMB,
       osPlatform: `${os.type()} ${os.platform()}`,
       osRelease: os.release(),
       nodeVersion: process.version,
@@ -312,6 +360,8 @@ function applyLocalTelemetryToNode(node, local, measuredLatencyMs = 1) {
   node.latencyMs = measuredLatencyMs;
   node.region = local.region;
   node.liveNodeUsers = local.liveUsers;
+  node.activeUsers = local.liveUsers || (Array.isArray(local.activeUsersList) ? local.activeUsersList.length : 0);
+  node.activeUsersList = Array.isArray(local.activeUsersList) ? local.activeUsersList : [];
   node.activeSockets = local.activeSockets;
   node.rps = local.rps;
   node.requestsOn = local.requestsOn;
@@ -323,7 +373,7 @@ function applyLocalTelemetryToNode(node, local, measuredLatencyMs = 1) {
 }
 
 /**
- * Recalculate dynamic user distribution and traffic shares across cluster (3 -> 2 -> 1 Cascade)
+ * Recalculate dynamic user distribution and traffic shares across cluster (N -> N-1 -> 1 Cascade)
  */
 function recalculateClusterDistribution() {
   const now = Date.now();
@@ -334,10 +384,6 @@ function recalculateClusterDistribution() {
   const localLive = Math.max(activeUserTracker.size, liveRequestStats.inflight > 0 ? 1 : 0);
   const syncedSum = syncedHealthyNodes.reduce((acc, n) => acc + (n.liveNodeUsers || 0), 0);
   const totalLiveUsers = Math.max(syncedSum, localLive, 1);
-
-  const b1 = clusterNodes[0];
-  const b2 = clusterNodes[1];
-  const b3 = clusterNodes[2];
 
   const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
   const activeCount = activeNodes.length;
@@ -350,45 +396,30 @@ function recalculateClusterDistribution() {
     }
   }
 
-  if (activeCount === 3) {
-    const baseShare = Math.floor(totalLiveUsers / 3);
-    const remainder = totalLiveUsers % 3;
-    b1.activeUsers = b1.telemetrySynced ? b1.liveNodeUsers : baseShare + (remainder > 0 ? 1 : 0);
-    b2.activeUsers = b2.telemetrySynced ? b2.liveNodeUsers : baseShare + (remainder > 1 ? 1 : 0);
-    b3.activeUsers = b3.telemetrySynced ? b3.liveNodeUsers : baseShare;
+  if (activeCount > 0) {
+    const sharePercent = (100 / activeCount).toFixed(1);
+    const baseShare = Math.floor(totalLiveUsers / activeCount);
+    let remainder = totalLiveUsers % activeCount;
 
-    b1.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
-    b2.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
-    b3.trafficShare = "33.3% Active (Sticky IP-Hash Load Balanced)";
-  } else if (activeCount === 2) {
-    const half = Math.ceil(totalLiveUsers / 2);
-    const otherHalf = Math.max(0, totalLiveUsers - half);
-
-    activeNodes[0].activeUsers = activeNodes[0].telemetrySynced ? activeNodes[0].liveNodeUsers : half;
-    activeNodes[0].trafficShare = "50% Active User Share (Sticky IP-Hash Load Balanced)";
-
-    activeNodes[1].activeUsers = activeNodes[1].telemetrySynced ? activeNodes[1].liveNodeUsers : otherHalf;
-    activeNodes[1].trafficShare = "50% Active User Share (Sticky IP-Hash Load Balanced)";
+    for (let i = 0; i < activeNodes.length; i++) {
+      const n = activeNodes[i];
+      if (n.telemetrySynced && typeof n.liveNodeUsers === "number") {
+        n.activeUsers = n.liveNodeUsers;
+      } else {
+        n.activeUsers = baseShare + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder--;
+      }
+      n.trafficShare = `${sharePercent}% Active User Share (Sticky IP-Hash Load Balanced)`;
+    }
 
     const downNodes = clusterNodes.filter((n) => !n.isEnabled || !n.isHealthy);
     for (const d of downNodes) {
       d.activeUsers = 0;
       d.trafficShare = d.status === "SUSPENDED"
-        ? "0% (503 Suspended — Auto-Shifted to 2 Active Nodes)"
-        : "0% (Disabled / Offline)";
-      d.trafficRedirection = `${activeNodes[0].name} & ${activeNodes[1].name} (50% / 50% Active Split)`;
-    }
-  } else if (activeCount === 1) {
-    const survivor = activeNodes[0];
-    survivor.activeUsers = survivor.telemetrySynced ? Math.max(survivor.liveNodeUsers, 1) : totalLiveUsers;
-    survivor.trafficShare = "100% of Active Traffic (Sole Active Survivor Node)";
-
-    for (const n of clusterNodes) {
-      if (n !== survivor) {
-        n.activeUsers = 0;
-        n.trafficShare = n.status === "SUSPENDED" ? "0% (503 Suspended)" : "0% (Bypassed)";
-        n.trafficRedirection = `${survivor.name} (100% Fallback Survivor)`;
-      }
+        ? `0% (503 Suspended — Auto-Shifted to ${activeCount} Active Nodes)`
+        : "0% (Bypassed / Offline)";
+      const targetNames = activeNodes.map((a) => a.name.split(" ")[0] + " " + a.name.split(" ")[1]).join(" & ");
+      d.trafficRedirection = `Traffic Redirected to: ${targetNames} (${sharePercent}% Split)`;
     }
   } else {
     for (const n of clusterNodes) {
@@ -544,7 +575,9 @@ function applyProbeResponseToNode(node, res, rawText, totalMs, bytes, firstByteM
     if (parsed && parsed.telemetry) {
       const t = parsed.telemetry;
       node.region = t.region || node.region;
-      node.liveNodeUsers = Number(t.liveUsers ?? 0);
+      node.liveNodeUsers = Number(t.liveUsers ?? (Array.isArray(t.activeUsersList) ? t.activeUsersList.length : 0));
+      node.activeUsers = node.liveNodeUsers;
+      node.activeUsersList = Array.isArray(t.activeUsersList) ? t.activeUsersList : [];
       node.activeSockets = Number(t.activeSockets ?? 0);
       node.rps = Number(t.rps ?? 0);
       node.requestsOn = Number(t.requestsOn ?? node.requestsOn ?? 0);
@@ -679,11 +712,94 @@ async function initClusterStateFromFirestore() {
           }
         }
       }
+
+      // Restore custom dynamic backend nodes added via Admin Studio
+      if (Array.isArray(data.customNodes)) {
+        for (const cn of data.customNodes) {
+          if (cn.url && !clusterNodes.some((n) => n.id === cn.id || normalizeHost(n.url) === normalizeHost(cn.url))) {
+            const added = createInitialNode(
+              cn.id || `backend_${Date.now()}`,
+              cn.name || `Backend #${clusterNodes.length + 1}`,
+              cn.url,
+              cn.role || `Custom Production Node #${clusterNodes.length + 1}`,
+              { status: "ONLINE", httpCode: 200, latencyMs: 50, isHealthy: true }
+            );
+            added.isCustom = true;
+            if (data[added.id] && typeof data[added.id].isEnabled === "boolean") {
+              added.isEnabled = data[added.id].isEnabled;
+            }
+            clusterNodes.push(added);
+          }
+        }
+      }
       recalculateClusterDistribution();
     }
   } catch (err) {
     console.warn("[CLUSTER] Startup Firestore load notice:", err.message);
   }
+}
+
+async function addClusterNode({ name, url, role }) {
+  const cleanUrl = String(url || "").trim().replace(/\/$/, "");
+  if (!cleanUrl) throw new Error("A valid server URL is required");
+  const existing = clusterNodes.find((n) => n.url && normalizeHost(n.url) === normalizeHost(cleanUrl));
+  if (existing) throw new Error(`Server URL already exists in cluster as ${existing.name}`);
+
+  const nextIndex = clusterNodes.length + 1;
+  const newNode = createInitialNode(
+    `backend_${Date.now()}`,
+    name || `Backend #${nextIndex} (Production Node #${nextIndex})`,
+    cleanUrl,
+    role || `Production Node #${nextIndex}`,
+    { status: "CHECKING", httpCode: 0, latencyMs: 0, isHealthy: false }
+  );
+  newNode.isCustom = true;
+  clusterNodes.push(newNode);
+
+  try {
+    const { db } = require("../firebase");
+    if (db) {
+      const customList = clusterNodes.filter((n) => n.isCustom).map((n) => ({
+        id: n.id,
+        name: n.name,
+        url: n.url,
+        role: n.role,
+        isCustom: true,
+      }));
+      await db.collection("settings").doc("server_cluster").set({ customNodes: customList }, { merge: true });
+    }
+  } catch (err) {
+    console.warn("[CLUSTER] Failed to persist custom node to Firestore:", err.message);
+  }
+
+  setTimeout(() => probeSingleNode(newNode), 100);
+  recalculateClusterDistribution();
+  return newNode;
+}
+
+async function removeClusterNode(nodeId) {
+  const idx = clusterNodes.findIndex((n) => n.id === nodeId);
+  if (idx === -1) throw new Error("Node not found");
+  clusterNodes.splice(idx, 1);
+
+  try {
+    const { db } = require("../firebase");
+    if (db) {
+      const customList = clusterNodes.filter((n) => n.isCustom).map((n) => ({
+        id: n.id,
+        name: n.name,
+        url: n.url,
+        role: n.role,
+        isCustom: true,
+      }));
+      await db.collection("settings").doc("server_cluster").set({ customNodes: customList }, { merge: true });
+    }
+  } catch (err) {
+    console.warn("[CLUSTER] Failed to persist node removal to Firestore:", err.message);
+  }
+
+  recalculateClusterDistribution();
+  return { success: true };
 }
 
 // Initialize on server boot
@@ -771,4 +887,6 @@ module.exports = {
   toggleClusterNode,
   syncNodeState,
   probeClusterNodes,
+  addClusterNode,
+  removeClusterNode,
 };

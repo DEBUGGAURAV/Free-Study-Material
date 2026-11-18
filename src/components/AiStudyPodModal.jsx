@@ -1119,14 +1119,14 @@ export default function AiStudyPodModal({
                       <div
                         key={msg.id}
                         style={{
-                          background: "linear-gradient(180deg, rgba(15, 23, 42, 0.94) 0%, rgba(10, 15, 29, 0.98) 100%)",
-                          border: "1.5px solid rgba(139, 92, 246, 0.35)",
+                          background: "#ffffff",
+                          border: "1.5px solid #cbd5e1",
                           borderRadius: "18px 18px 18px 4px",
                           padding: "16px 18px",
                           fontSize: "0.88rem",
                           lineHeight: 1.7,
-                          color: "#f8fafc",
-                          boxShadow: "0 10px 30px -10px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08)",
+                          color: "#0f172a",
+                          boxShadow: "0 10px 30px -10px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(0, 0, 0, 0.05)",
                         }}
                       >
                         <div
@@ -1136,7 +1136,7 @@ export default function AiStudyPodModal({
                             alignItems: "center",
                             marginBottom: "10px",
                             paddingBottom: "8px",
-                            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderBottom: "1px solid #e2e8f0",
                             gap: "8px",
                             flexWrap: "wrap",
                           }}
@@ -1161,10 +1161,10 @@ export default function AiStudyPodModal({
                                 fontSize: "0.72rem",
                                 padding: "3px 9px",
                                 borderRadius: "999px",
-                                background: msg.cached ? "rgba(16, 185, 129, 0.16)" : "rgba(139, 92, 246, 0.2)",
-                                color: msg.cached ? "#34d399" : "#c4b5fd",
+                                background: msg.cached ? "#ecfdf5" : "#f5f3ff",
+                                color: msg.cached ? "#059669" : "#6d28d9",
                                 fontWeight: 750,
-                                border: `1px solid ${msg.cached ? "rgba(52, 211, 153, 0.35)" : "rgba(139, 92, 246, 0.35)"}`,
+                                border: `1px solid ${msg.cached ? "#a7f3d0" : "#ddd6fe"}`,
                               }}
                             >
                               {msg.cached

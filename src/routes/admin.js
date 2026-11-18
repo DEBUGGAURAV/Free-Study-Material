@@ -59,6 +59,8 @@ let getLocalNodeTelemetry = null;
 let probeClusterNodes = null;
 let toggleClusterNode = null;
 let syncNodeState = null;
+let addClusterNode = null;
+let removeClusterNode = null;
 try {
   const clusterService = require("../services/clusterTelemetryService");
   getClusterTelemetry = clusterService.getClusterTelemetry;
@@ -66,6 +68,8 @@ try {
   probeClusterNodes = clusterService.probeClusterNodes;
   toggleClusterNode = clusterService.toggleClusterNode;
   syncNodeState = clusterService.syncNodeState;
+  addClusterNode = clusterService.addClusterNode;
+  removeClusterNode = clusterService.removeClusterNode;
 } catch {}
 
 const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
@@ -2581,6 +2585,37 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
       }
     }
 
+    function getContainerMemoryLimitBytes() {
+      try {
+        if (fs.existsSync("/sys/fs/cgroup/memory.max")) {
+          const raw = fs.readFileSync("/sys/fs/cgroup/memory.max", "utf8").trim();
+          if (raw && raw !== "max") {
+            const val = parseInt(raw, 10);
+            if (!isNaN(val) && val > 0 && val < 1099511627776) return val;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        if (fs.existsSync("/sys/fs/cgroup/memory/memory.limit_in_bytes")) {
+          const raw = fs.readFileSync("/sys/fs/cgroup/memory/memory.limit_in_bytes", "utf8").trim();
+          if (raw) {
+            const val = parseInt(raw, 10);
+            if (!isNaN(val) && val > 0 && val < 1099511627776) return val;
+          }
+        }
+      } catch (_) {}
+
+      const envMb = parseInt(process.env.RAM_LIMIT_MB, 10);
+      if (!isNaN(envMb) && envMb > 0) return envMb * 1024 * 1024;
+      return 512 * 1024 * 1024;
+    }
+
+    const containerLimitBytes = getContainerMemoryLimitBytes();
+    const containerLimitMB = Math.round(containerLimitBytes / (1024 * 1024));
+    const procRssMB = Math.round(procMem.rss / (1024 * 1024));
+    const containerUsagePercent = Math.min(100, Math.round((procMem.rss / containerLimitBytes) * 100));
+
     return res.json({
       success: true,
       hardware: {
@@ -2592,6 +2627,14 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
           usagePercent: cpuUsagePercent,
           loadAvg: loadAvg.map((l) => Number(l.toFixed(2))),
         },
+        containerMemory: {
+          limitBytes: containerLimitBytes,
+          limitMB: containerLimitMB,
+          limitGB: (containerLimitBytes / (1024 ** 3)).toFixed(2),
+          rssMB: procRssMB,
+          usagePercent: containerUsagePercent,
+          freeMB: Math.max(0, containerLimitMB - procRssMB),
+        },
         memory: {
           totalBytes: totalMemBytes,
           freeBytes: freeMemBytes,
@@ -2600,6 +2643,8 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
           freeGB: (freeMemBytes / (1024 ** 3)).toFixed(2),
           usedGB: (usedMemBytes / (1024 ** 3)).toFixed(2),
           usagePercent: memUsagePercent,
+          containerLimitMB,
+          containerUsagePercent,
         },
         v8ProcessMemory: {
           rssMB: Math.round(procMem.rss / (1024 * 1024)),
@@ -4560,6 +4605,54 @@ router.post("/cluster/toggle-node", authenticateToken, requireAdmin, async (req,
       nodeId,
       isEnabled,
       message: `Cluster Node '${nodeId}' successfully switched ${isEnabled ? "ON" : "OFF"}.`,
+      clusterTelemetry: telemetry,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/admin/cluster/add-node
+ * Dynamically scale cluster: add a 4th, 5th, or Nth backend server node
+ */
+router.post("/cluster/add-node", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { name, url, role } = req.body || {};
+    if (!url) {
+      return res.status(400).json({ success: false, message: "Valid backend server URL is required." });
+    }
+    if (typeof addClusterNode !== "function") {
+      return res.status(500).json({ success: false, message: "Cluster telemetry engine not loaded." });
+    }
+    const newNode = await addClusterNode({ name, url, role });
+    const telemetry = typeof getClusterTelemetry === "function" ? getClusterTelemetry() : null;
+    return res.json({
+      success: true,
+      message: `Successfully added ${newNode.name} to the cluster!`,
+      node: newNode,
+      clusterTelemetry: telemetry,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/cluster/remove-node/:nodeId
+ * Remove a custom dynamic server node from the cluster
+ */
+router.delete("/cluster/remove-node/:nodeId", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { nodeId } = req.params;
+    if (typeof removeClusterNode !== "function") {
+      return res.status(500).json({ success: false, message: "Cluster telemetry engine not loaded." });
+    }
+    await removeClusterNode(nodeId);
+    const telemetry = typeof getClusterTelemetry === "function" ? getClusterTelemetry() : null;
+    return res.json({
+      success: true,
+      message: `Node '${nodeId}' successfully removed from cluster.`,
       clusterTelemetry: telemetry,
     });
   } catch (err) {
