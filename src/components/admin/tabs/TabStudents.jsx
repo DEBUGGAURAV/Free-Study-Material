@@ -486,7 +486,7 @@ export default function TabStudents(props) {
                       onClick={() => setViewingStudent(student)}
                       title="Click to view complete student profile and details"
                     >
-                      <span style={{ color: "#0f172a", textDecoration: "underline", textDecorationColor: "#94a3b8" }}>
+                      <span className="student-name-text" style={{ color: "#0f172a", fontWeight: 800, textDecoration: "underline", textDecorationColor: "#64748b" }}>
                         {student.name || "Student"}
                       </span>
                       {isMasterAdminStudent(student) && (

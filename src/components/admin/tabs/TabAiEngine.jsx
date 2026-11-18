@@ -2,6 +2,67 @@ import { useState, useEffect } from "react";
 import { Sparkles, Bot, Zap, Activity, RefreshCw, Power, ShieldCheck, Cpu, CheckCircle, Send, RotateCcw, Globe, Download, FileText, Database, Search, Users, MessageSquare, Sliders, Save, User, Eye, X } from "lucide-react";
 import { api } from "../../../api";
 
+// 🎚️ Luxury High-Contrast On/Off Switch for every AI Engine
+function AiEngineSwitch({ enabled, onToggle, label = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={`Click to turn ${enabled ? "OFF" : "ON"} ${label}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "7px",
+        background: enabled ? "#ecfdf5" : "#f1f5f9",
+        border: enabled ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
+        borderRadius: "999px",
+        padding: "3px 8px 3px 5px",
+        cursor: "pointer",
+        transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        boxShadow: enabled ? "0 2px 8px rgba(16, 185, 129, 0.25)" : "0 1px 2px rgba(0, 0, 0, 0.05)",
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          width: "34px",
+          height: "18px",
+          borderRadius: "999px",
+          background: enabled ? "linear-gradient(135deg, #10b981, #059669)" : "#cbd5e1",
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "2px",
+          boxSizing: "border-box",
+          transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
+        <span
+          style={{
+            width: "14px",
+            height: "14px",
+            borderRadius: "50%",
+            background: "#ffffff",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.3)",
+            transform: enabled ? "translateX(16px)" : "translateX(0px)",
+            transition: "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+            display: "block",
+          }}
+        />
+      </span>
+      <span
+        style={{
+          fontSize: "0.72rem",
+          fontWeight: 800,
+          letterSpacing: "0.03em",
+          color: enabled ? "#047857" : "#475569",
+        }}
+      >
+        {enabled ? "ON" : "OFF"}
+      </span>
+    </button>
+  );
+}
+
 export default function TabAiEngine() {
   const [loading, setLoading] = useState(true);
   const [telemetry, setTelemetry] = useState(null);
@@ -615,7 +676,7 @@ export default function TabAiEngine() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#ffffff", margin: 0 }}>
-                Global Master AI Kill-Switch (सारे AI का मुख्य स्विच)
+                Global Master AI Kill-Switch
               </h3>
               <span
                 style={{
@@ -663,22 +724,22 @@ export default function TabAiEngine() {
           }}
         >
           <Power size={16} />
-          <span>{isGlobalAiActive ? "⚡ SHUT DOWN ALL AI (सब बंद करें)" : "⚡ ACTIVATE ALL AI (सब चालू करें)"}</span>
+          <span>{isGlobalAiActive ? "⚡ SHUT DOWN ALL AI" : "⚡ ACTIVATE ALL AI"}</span>
         </button>
       </div>
 
       {/* Engine Fleet Filter Tabs & Interactive Switcher */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginTop: "2px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
+          <h4 style={{ fontSize: "1rem", fontWeight: 800, color: "#0f172a", margin: 0, display: "flex", alignItems: "center", gap: "6px" }}>
             <span>⚡ Multi-Tier AI Engine Fleet</span>
           </h4>
-          <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: isGlobalAiActive ? "rgba(56, 189, 248, 0.15)" : "rgba(239, 68, 68, 0.2)", color: isGlobalAiActive ? "#38bdf8" : "#fca5a5", fontWeight: 700, border: isGlobalAiActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)" }}>
+          <span style={{ fontSize: "0.7rem", padding: "2px 8px", borderRadius: "999px", background: isGlobalAiActive ? "rgba(56, 189, 248, 0.15)" : "rgba(239, 68, 68, 0.2)", color: isGlobalAiActive ? "#0284c7" : "#dc2626", fontWeight: 700, border: isGlobalAiActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(239, 68, 68, 0.3)" }}>
             {activeEnginesCount} Active Providers
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", background: "rgba(15, 23, 42, 0.7)", padding: "4px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", background: "#ffffff", padding: "4px", borderRadius: "10px", border: "1.5px solid #cbd5e1", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
           {[
             { id: "all", label: "🌟 All Engines (7)" },
             { id: "primary", label: "⚡ Core LPUs & GPUs (Groq / Gemini / NVIDIA)" },
@@ -690,9 +751,9 @@ export default function TabAiEngine() {
               type="button"
               onClick={() => setEngineFilter(f.id)}
               style={{
-                background: engineFilter === f.id ? "linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3))" : "transparent",
-                color: engineFilter === f.id ? "#fff" : "var(--text-dim)",
-                border: engineFilter === f.id ? "1px solid var(--accent-cyan)" : "none",
+                background: engineFilter === f.id ? "linear-gradient(135deg, #0284c7, #4f46e5)" : "transparent",
+                color: engineFilter === f.id ? "#ffffff" : "#64748b",
+                border: engineFilter === f.id ? "1px solid #0284c7" : "none",
                 padding: "5px 12px",
                 borderRadius: "7px",
                 fontSize: "0.74rem",
@@ -736,41 +797,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         Groq Cloud LPU
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#059669", fontWeight: 700 }}>
                         Tier 1 Primary
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Model: {settings.groqModel || "llama-3.1-8b"}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("groq", settings.groqEnabled)}
-                  style={{
-                    background: settings.groqEnabled ? "linear-gradient(135deg, #10b981, #059669)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.groqEnabled ? "0 2px 10px rgba(16, 185, 129, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.groqEnabled ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={Boolean(settings.groqEnabled)}
+                  onToggle={() => handleToggle("groq", settings.groqEnabled)}
+                  label="Groq Cloud LPU"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -845,41 +889,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         Gemini 2.0 Flash
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(56, 189, 248, 0.2)", color: "#0284c7", fontWeight: 700 }}>
                         Tier 2 Failover
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Model: {settings.geminiModel || "gemini-2.0-flash"}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("gemini", settings.geminiEnabled)}
-                  style={{
-                    background: settings.geminiEnabled ? "linear-gradient(135deg, #0284c7, #06b6d4)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.geminiEnabled ? "0 2px 10px rgba(2, 132, 199, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.geminiEnabled ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={Boolean(settings.geminiEnabled)}
+                  onToggle={() => handleToggle("gemini", settings.geminiEnabled)}
+                  label="Gemini 2.0 Flash"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -954,41 +981,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         Cloudflare Workers AI
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(245, 158, 11, 0.2)", color: "#d97706", fontWeight: 700 }}>
                         Tier 2 Edge GPU
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Model: {settings.cloudflareModel || "@cf/meta/llama-3.1-8b-instruct"}
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("cloudflare", settings.cloudflareAiEnabled !== false)}
-                  style={{
-                    background: settings.cloudflareAiEnabled !== false ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.cloudflareAiEnabled !== false ? "0 2px 10px rgba(245, 158, 11, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.cloudflareAiEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={settings.cloudflareAiEnabled !== false}
+                  onToggle={() => handleToggle("cloudflare", settings.cloudflareAiEnabled !== false)}
+                  label="Cloudflare Workers AI"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -1228,41 +1238,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         GitHub Models (Microsoft)
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(59, 130, 246, 0.2)", color: "#60a5fa", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(59, 130, 246, 0.2)", color: "#1d4ed8", fontWeight: 700 }}>
                         GPT-4o-mini Vision
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Host: Microsoft Azure AI USA
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("github", settings.githubModelsEnabled !== false)}
-                  style={{
-                    background: settings.githubModelsEnabled !== false ? "linear-gradient(135deg, #3b82f6, #1d4ed8)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.githubModelsEnabled !== false ? "0 2px 10px rgba(59, 130, 246, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.githubModelsEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={settings.githubModelsEnabled !== false}
+                  onToggle={() => handleToggle("github", settings.githubModelsEnabled !== false)}
+                  label="GitHub Models"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -1351,41 +1344,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         OpenRouter Free Tier
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(168, 85, 247, 0.2)", color: "#7e22ce", fontWeight: 700 }}>
                         Multi-Model Free
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Model: Nemotron / Gemma / Vision:free
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("openrouter", settings.openRouterEnabled !== false)}
-                  style={{
-                    background: settings.openRouterEnabled !== false ? "linear-gradient(135deg, #a855f7, #7e22ce)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.openRouterEnabled !== false ? "0 2px 10px rgba(168, 85, 247, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.openRouterEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={settings.openRouterEnabled !== false}
+                  onToggle={() => handleToggle("openrouter", settings.openRouterEnabled !== false)}
+                  label="OpenRouter Free Tier"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -1474,41 +1450,24 @@ export default function TabAiEngine() {
                   </div>
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+                      <h4 style={{ fontSize: "0.98rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>
                         NVIDIA NIM (DGX Cloud)
                       </h4>
-                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(118, 185, 0, 0.2)", color: "#84cc16", fontWeight: 700 }}>
+                      <span style={{ fontSize: "0.66rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(118, 185, 0, 0.2)", color: "#4d7c0f", fontWeight: 700 }}>
                         Llama 3.3 70B &amp; Vision
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#94a3b8", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontFamily: "var(--font-mono)", marginTop: "2px" }}>
                       Hardware: NVIDIA H100 / H200 Tensor Core GPUs
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleToggle("nvidia", settings.nvidiaEnabled !== false)}
-                  style={{
-                    background: settings.nvidiaEnabled !== false ? "linear-gradient(135deg, #76b900, #4d7c0f)" : "rgba(255, 255, 255, 0.1)",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "999px",
-                    padding: "5px 12px",
-                    fontSize: "0.74rem",
-                    fontWeight: 800,
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "5px",
-                    boxShadow: settings.nvidiaEnabled !== false ? "0 2px 10px rgba(118, 185, 0, 0.4)" : "none",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Power size={12} />
-                  <span>{settings.nvidiaEnabled !== false ? "ACTIVE" : "PAUSED"}</span>
-                </button>
+                <AiEngineSwitch
+                  enabled={settings.nvidiaEnabled !== false}
+                  onToggle={() => handleToggle("nvidia", settings.nvidiaEnabled !== false)}
+                  label="NVIDIA NIM"
+                />
               </div>
 
               <p style={{ fontSize: "0.76rem", color: "var(--text-dim)", margin: "10px 0 0", lineHeight: 1.4 }}>
@@ -1628,31 +1587,11 @@ export default function TabAiEngine() {
           </div>
 
           {/* Master ON / OFF Toggle Switch */}
-          <button
-            type="button"
-            onClick={() => handleToggle("circle", settings.circleSearchEnabled)}
-            style={{
-              background: settings.circleSearchEnabled
-                ? "linear-gradient(135deg, #0284c7, #06b6d4)"
-                : "rgba(255, 255, 255, 0.1)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "999px",
-              padding: "7px 16px",
-              fontSize: "0.78rem",
-              fontWeight: 800,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              boxShadow: settings.circleSearchEnabled ? "0 2px 12px rgba(2, 132, 199, 0.45)" : "none",
-              transition: "all 0.2s ease",
-            }}
-            title={settings.circleSearchEnabled ? "Click to Pause Circle to Search" : "Click to Enable Circle to Search"}
-          >
-            <Power size={13} />
-            <span>{settings.circleSearchEnabled ? "ACTIVE (ON)" : "PAUSED (OFF)"}</span>
-          </button>
+          <AiEngineSwitch
+            enabled={Boolean(settings.circleSearchEnabled)}
+            onToggle={() => handleToggle("circle", settings.circleSearchEnabled)}
+            label="Circle to Search"
+          />
         </div>
 
         {/* Usage & Quota Meter */}
@@ -1821,27 +1760,16 @@ export default function TabAiEngine() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <Globe size={18} color="#f59e0b" />
-              <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff", margin: 0 }}>
+              <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#0f172a", margin: 0 }}>
                 Cloudflare Worker Edge Proxy
               </h4>
             </div>
 
-            <button
-              type="button"
-              onClick={() => handleToggle("edge", settings.edgeProxyEnabled)}
-              style={{
-                background: settings.edgeProxyEnabled ? "rgba(245, 158, 11, 0.15)" : "rgba(255, 255, 255, 0.05)",
-                color: settings.edgeProxyEnabled ? "#fbbf24" : "#94a3b8",
-                border: settings.edgeProxyEnabled ? "1px solid rgba(245, 158, 11, 0.35)" : "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: "8px",
-                padding: "5px 12px",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {settings.edgeProxyEnabled ? "🟢 EDGE ACTIVE" : "⚪ DISABLED"}
-            </button>
+            <AiEngineSwitch
+              enabled={Boolean(settings.edgeProxyEnabled)}
+              onToggle={() => handleToggle("edge", settings.edgeProxyEnabled)}
+              label="Cloudflare Worker Edge Proxy"
+            />
           </div>
 
           <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.5, margin: 0 }}>

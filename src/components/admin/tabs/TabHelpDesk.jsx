@@ -452,12 +452,13 @@ export default function TabHelpDesk() {
           <button
             type="button"
             onClick={() => setStatusFilter("all")}
+            className={`btn-help-filter-pill ${statusFilter === "all" ? "active-all" : ""}`}
             style={{
               padding: "6px 14px",
               borderRadius: "20px",
               fontSize: "0.78rem",
               fontWeight: 700,
-              background: statusFilter === "all" ? "#0284c7" : "rgba(255,255,255,0.06)",
+              background: statusFilter === "all" ? "#0284c7" : "#f1f5f9",
               color: statusFilter === "all" ? "#ffffff" : "#0f172a",
               border: statusFilter === "all" ? "1.5px solid #0284c7" : "1.5px solid #cbd5e1",
               cursor: "pointer",
@@ -471,12 +472,13 @@ export default function TabHelpDesk() {
           <button
             type="button"
             onClick={() => setStatusFilter("active")}
+            className={`btn-help-filter-pill ${statusFilter === "active" ? "active-active" : ""}`}
             style={{
               padding: "6px 14px",
               borderRadius: "20px",
               fontSize: "0.78rem",
               fontWeight: 700,
-              background: statusFilter === "active" ? "#10b981" : "rgba(255,255,255,0.06)",
+              background: statusFilter === "active" ? "#10b981" : "#f1f5f9",
               color: statusFilter === "active" ? "#ffffff" : "#0f172a",
               border: statusFilter === "active" ? "1.5px solid #10b981" : "1.5px solid #cbd5e1",
               cursor: "pointer",
@@ -490,12 +492,13 @@ export default function TabHelpDesk() {
           <button
             type="button"
             onClick={() => setStatusFilter("closed")}
+            className={`btn-help-filter-pill ${statusFilter === "closed" ? "active-closed" : ""}`}
             style={{
               padding: "6px 14px",
               borderRadius: "20px",
               fontSize: "0.78rem",
               fontWeight: 700,
-              background: statusFilter === "closed" ? "#ef4444" : "rgba(255,255,255,0.06)",
+              background: statusFilter === "closed" ? "#ef4444" : "#f1f5f9",
               color: statusFilter === "closed" ? "#ffffff" : "#0f172a",
               border: statusFilter === "closed" ? "1.5px solid #ef4444" : "1.5px solid #cbd5e1",
               cursor: "pointer",

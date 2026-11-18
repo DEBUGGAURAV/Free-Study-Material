@@ -1750,6 +1750,68 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
 });
 
 /**
+ * POST /api/admin/notes/import-json
+ * 📥 Restore notes catalog from an exported JSON backup file
+ */
+router.post("/notes/import-json", authenticateToken, checkAdminOrPermission(["manage_notes", "all"]), async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
+    const notesToImport = Array.isArray(req.body?.catalog)
+      ? req.body.catalog
+      : Array.isArray(req.body?.notes)
+      ? req.body.notes
+      : null;
+
+    if (!notesToImport || notesToImport.length === 0) {
+      return res.status(400).json({ success: false, message: "No valid notes array found in JSON payload." });
+    }
+
+    let restored = 0;
+    const batchSize = 250;
+    for (let i = 0; i < notesToImport.length; i += batchSize) {
+      const chunk = notesToImport.slice(i, i + batchSize);
+      const batch = db.batch();
+      for (const item of chunk) {
+        const noteId = String(item.id || item._id || "").trim();
+        if (!noteId) continue;
+        const noteData = { ...item };
+        delete noteData._id;
+        delete noteData.archivedAt;
+        delete noteData.archivedBy;
+        delete noteData.collectionName;
+        delete noteData.typeLabel;
+        noteData.updatedAt = new Date().toISOString();
+        const docRef = db.collection("notes").doc(noteId);
+        batch.set(docRef, noteData, { merge: true });
+        restored++;
+      }
+      await batch.commit();
+    }
+
+    // Upsert into Turso Cache if active
+    try {
+      const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+      if (typeof upsertNoteInCache === "function") {
+        for (const item of notesToImport) {
+          const noteId = String(item.id || item._id || "").trim();
+          if (noteId) upsertNoteInCache({ ...item, id: noteId });
+        }
+      }
+    } catch (_) {}
+
+    invalidateAllCache();
+
+    return res.json({
+      success: true,
+      message: `Successfully restored ${restored} notes from JSON backup into live database!`,
+      count: restored,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: "Import failed: " + err.message });
+  }
+});
+
+/**
  * DELETE /api/admin/recycle-bin/permanent/:id
  */
 router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {

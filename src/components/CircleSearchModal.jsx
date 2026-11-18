@@ -743,21 +743,21 @@ export default function CircleSearchModal({
       onClick={onClose}
     >
       <div
-        className="dark-modal-surface"
+        className="white-modal-surface"
         style={{
           width: "100%",
           maxWidth: "800px",
           height: "min(92vh, 880px)",
           maxHeight: "calc(100dvh - 16px)",
           minHeight: "min(480px, calc(100dvh - 16px))",
-          background: "linear-gradient(180deg, #0f172a 0%, #090d16 100%)",
-          border: "1.5px solid rgba(56, 189, 248, 0.42)",
+          background: "#ffffff",
+          border: "1.5px solid #cbd5e1",
           borderRadius: "22px",
-          boxShadow: "0 25px 60px rgba(0,0,0,0.92), 0 0 40px rgba(56, 189, 248, 0.22)",
+          boxShadow: "0 25px 60px -15px rgba(15, 23, 42, 0.35), 0 0 30px rgba(99, 102, 241, 0.12)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          color: "#fff",
+          color: "#0f172a",
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -766,13 +766,13 @@ export default function CircleSearchModal({
           className="circle-search-header"
           style={{
             padding: "12px 16px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: "10px",
             flexShrink: 0,
-            background: "linear-gradient(135deg, rgba(2, 132, 199, 0.18), rgba(99, 102, 241, 0.18))",
+            background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
@@ -781,8 +781,8 @@ export default function CircleSearchModal({
                 width: "34px",
                 height: "34px",
                 borderRadius: "50%",
-                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.35), rgba(99, 102, 241, 0.35))",
-                border: "1.5px solid rgba(56, 189, 248, 0.5)",
+                background: "linear-gradient(135deg, #eff6ff, #e0e7ff)",
+                border: "1.5px solid #93c5fd",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -797,7 +797,7 @@ export default function CircleSearchModal({
                 style={{
                   fontWeight: 800,
                   fontSize: "0.98rem",
-                  color: "#f8fafc",
+                  color: "#0f172a",
                   letterSpacing: "-0.2px",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
@@ -810,7 +810,7 @@ export default function CircleSearchModal({
                 className="circle-modal-sub"
                 style={{
                   fontSize: "0.71rem",
-                  color: "#94a3b8",
+                  color: "#64748b",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -832,16 +832,17 @@ export default function CircleSearchModal({
                 }}
                 style={{
                   background: "linear-gradient(135deg, #0284c7, #6366f1)",
-                  border: "1px solid rgba(255,255,255,0.25)",
+                  border: "none",
                   color: "#fff",
                   borderRadius: "10px",
-                  padding: "6px 10px",
+                  padding: "6px 11px",
                   fontSize: "0.74rem",
                   fontWeight: 700,
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "5px",
+                  boxShadow: "0 2px 8px rgba(2, 132, 199, 0.25)",
                 }}
                 title="Activate Freehand Pencil directly on the screen / PDF"
               >
@@ -855,17 +856,18 @@ export default function CircleSearchModal({
               className="circle-header-btn"
               onClick={() => setShowTopInputPanel((v) => !v)}
               style={{
-                background: showTopInputPanel ? "rgba(56, 189, 248, 0.22)" : "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-                color: "#7dd3fc",
+                background: showTopInputPanel ? "#eff6ff" : "#ffffff",
+                border: "1.5px solid #cbd5e1",
+                color: showTopInputPanel ? "#2563eb" : "#475569",
                 borderRadius: "10px",
-                padding: "6px 10px",
+                padding: "6px 11px",
                 fontSize: "0.73rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "4px",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
               }}
               title="Toggle Pencil Sketch Pad / Image Upload"
             >
@@ -876,9 +878,9 @@ export default function CircleSearchModal({
             <button
               onClick={onClose}
               style={{
-                background: "rgba(255, 255, 255, 0.08)",
-                border: "none",
-                color: "#94a3b8",
+                background: "#f1f5f9",
+                border: "1.5px solid #cbd5e1",
+                color: "#64748b",
                 cursor: "pointer",
                 borderRadius: "50%",
                 width: "30px",

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import {
   X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe,
-  Download, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock,
+  Download, Upload, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock,
   LayoutGrid, Search, ChevronDown, BookOpen, Users, HelpCircle, Bell, Server,
   Rocket, Activity, Database, RotateCcw, MessageSquare, Bot, Sparkles, Terminal,
   CheckCircle, AlertTriangle, Layers, Radio
@@ -129,6 +129,47 @@ export default function AdminModal({
       URL.revokeObjectURL(url);
     } catch (e) {
       console.warn("Failed to export backup", e);
+    }
+  };
+
+  const restoreFileInputRef = useRef(null);
+  const [jsonImporting, setJsonImporting] = useState(false);
+
+  // 📤 Restore / Import Notes Catalog from offline JSON backup
+  const handleImportJsonBackup = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setJsonImporting(true);
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const notesList = Array.isArray(data?.catalog)
+        ? data.catalog
+        : Array.isArray(data?.notes)
+        ? data.notes
+        : Array.isArray(data)
+        ? data
+        : null;
+
+      if (!notesList || notesList.length === 0) {
+        alert("Invalid backup file: No notes catalog array found in JSON.");
+        return;
+      }
+
+      if (!window.confirm(`📥 Restore ${notesList.length} notes from JSON backup "${file.name}" into live database?`)) {
+        return;
+      }
+
+      const res = await api.importNotesJsonBackup(data);
+      alert(res.message || `Successfully restored ${res.count || notesList.length} notes!`);
+      if (onRefreshNotes) onRefreshNotes();
+      window.dispatchEvent(new CustomEvent("fsm:notes-updated"));
+      loadDatabaseOverview();
+    } catch (err) {
+      alert("Failed to restore from JSON backup: " + err.message);
+    } finally {
+      setJsonImporting(false);
+      if (restoreFileInputRef.current) restoreFileInputRef.current.value = "";
     }
   };
 
@@ -2387,6 +2428,7 @@ export default function AdminModal({
       });
       loadRecycleBinItems();
       if (onRefreshNotes) onRefreshNotes();
+      window.dispatchEvent(new CustomEvent("fsm:notes-updated"));
       loadStudents();
       loadDatabaseOverview();
     } catch (err) {
@@ -2414,6 +2456,7 @@ export default function AdminModal({
       setDeletedNoteIds(new Set());
       loadRecycleBinItems();
       if (onRefreshNotes) onRefreshNotes();
+      window.dispatchEvent(new CustomEvent("fsm:notes-updated"));
       loadStudents();
       loadDatabaseOverview();
     } catch (err) {
@@ -2954,13 +2997,14 @@ export default function AdminModal({
                 height: "38px",
                 width: "auto",
                 minWidth: "max-content",
-                padding: "0 14px",
+                padding: "0 12px",
                 background: "#f0fdf4",
                 borderRadius: "9px",
                 border: "1.5px solid #86efac",
                 color: "#16a34a",
                 cursor: "pointer",
                 display: "inline-flex",
+                flexDirection: "row",
                 alignItems: "center",
                 gap: "6px",
                 fontSize: "0.78rem",
@@ -2974,6 +3018,45 @@ export default function AdminModal({
               <Download size={14} style={{ flexShrink: 0, color: "#16a34a" }} />
               <span className="adm-backup-label" style={{ color: "#16a34a", fontWeight: 700, whiteSpace: "nowrap" }}>
                 Backup JSON
+              </span>
+            </button>
+            <input
+              type="file"
+              ref={restoreFileInputRef}
+              accept=".json"
+              style={{ display: "none" }}
+              onChange={handleImportJsonBackup}
+            />
+            <button
+              type="button"
+              onClick={() => restoreFileInputRef.current?.click()}
+              disabled={jsonImporting}
+              className="adm-header-restore-btn"
+              style={{
+                height: "38px",
+                width: "auto",
+                minWidth: "max-content",
+                padding: "0 12px",
+                background: "#f0f9ff",
+                borderRadius: "9px",
+                border: "1.5px solid #7dd3fc",
+                color: "#0284c7",
+                cursor: "pointer",
+                display: "inline-flex",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "0.78rem",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                flexShrink: 0,
+                transition: "all 0.15s ease",
+              }}
+              title="Restore / Import Notes Catalog from offline JSON backup"
+            >
+              <Upload size={14} style={{ flexShrink: 0, color: "#0284c7" }} />
+              <span className="adm-restore-label" style={{ color: "#0284c7", fontWeight: 700, whiteSpace: "nowrap" }}>
+                {jsonImporting ? "Restoring..." : "Restore JSON"}
               </span>
             </button>
             <button

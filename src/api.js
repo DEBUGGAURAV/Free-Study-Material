@@ -1220,10 +1220,29 @@ export const api = {
     }),
   getRecycleBinNotes: () => request("/admin/recycle-bin/notes"),
   getRecycleBinItems: () => request("/admin/recycle-bin/items"),
-  restoreNote: (id) => request(`/admin/recycle-bin/restore/${id}`, { method: "POST" }),
-  restoreItem: (id) => request(`/admin/recycle-bin/restore/${id}`, { method: "POST" }),
-  restoreAllNotes: () => request("/admin/recycle-bin/restore-all", { method: "POST" }),
-  restoreAllItems: () => request("/admin/recycle-bin/restore-all", { method: "POST" }),
+  restoreNote: async (id) => {
+    invalidateClientNotesCache();
+    return request(`/admin/recycle-bin/restore/${id}`, { method: "POST" });
+  },
+  restoreItem: async (id) => {
+    invalidateClientNotesCache();
+    return request(`/admin/recycle-bin/restore/${id}`, { method: "POST" });
+  },
+  restoreAllNotes: async () => {
+    invalidateClientNotesCache();
+    return request("/admin/recycle-bin/restore-all", { method: "POST" });
+  },
+  restoreAllItems: async () => {
+    invalidateClientNotesCache();
+    return request("/admin/recycle-bin/restore-all", { method: "POST" });
+  },
+  importNotesJsonBackup: async (backupData) => {
+    invalidateClientNotesCache();
+    return request("/admin/notes/import-json", {
+      method: "POST",
+      body: JSON.stringify(backupData),
+    });
+  },
   deletePermanentNote: (id) => request(`/admin/recycle-bin/permanent/${id}`, { method: "DELETE" }),
   deletePermanentItem: (id) => request(`/admin/recycle-bin/permanent/${id}`, { method: "DELETE" }),
   deleteAllRecycleBinItems: () => request("/admin/recycle-bin/delete-all", { method: "DELETE" }),

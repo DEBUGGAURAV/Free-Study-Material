@@ -4110,10 +4110,66 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   border-bottom: 1.5px solid #e2e8f0 !important;
 }
 
-.admin-modal-header .adm-header-backup-btn {
+.admin-modal-header .adm-header-backup-btn,
+.admin-modal-header .adm-header-restore-btn {
   width: auto !important;
   min-width: max-content !important;
   white-space: nowrap !important;
+  display: inline-flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 12px !important;
+  height: 36px !important;
+  font-size: 0.78rem !important;
+  line-height: normal !important;
+}
+
+.admin-modal-header .adm-header-backup-btn .adm-backup-label,
+.admin-modal-header .adm-header-restore-btn .adm-restore-label {
+  display: inline-block !important;
+  white-space: nowrap !important;
+}
+
+/* 🔘 Guarantee 100% Text Visibility for HelpDesk & Admin Filter Pills */
+.admin-modal-container .btn-help-filter-pill.active-all,
+.admin-modal-container .btn-help-filter-pill.active-all *,
+.admin-modal-container button.active-all,
+.admin-modal-container button.active-all * {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.admin-modal-container .btn-help-filter-pill.active-active,
+.admin-modal-container .btn-help-filter-pill.active-active *,
+.admin-modal-container button.active-active,
+.admin-modal-container button.active-active * {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.admin-modal-container .btn-help-filter-pill.active-closed,
+.admin-modal-container .btn-help-filter-pill.active-closed *,
+.admin-modal-container button.active-closed,
+.admin-modal-container button.active-closed * {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.admin-modal-container .btn-help-filter-pill:not(.active-all):not(.active-active):not(.active-closed),
+.admin-modal-container .btn-help-filter-pill:not(.active-all):not(.active-active):not(.active-closed) * {
+  color: #0f172a !important;
+}
+
+/* 👤 Explicit Student Name Contrast Guarantee */
+.admin-modal-container .student-name-text,
+.student-name-text {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  text-decoration: underline !important;
+  text-decoration-color: #64748b !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .admin-modal-container .admin-kpis-strip {
