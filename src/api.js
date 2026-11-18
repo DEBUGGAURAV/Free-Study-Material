@@ -10,6 +10,7 @@ export const STREAM_BASE = "/api";
 import { acquireNoteDocument } from "./utils/cdnFailover";
 import { saveAuthSession, loadAuthSession, clearAuthSession, saveAuthToken } from "./utils/authIndexedDb";
 import { getEffectiveTechConfig } from "./utils/hardwareAdaptiveEngine";
+import { BACKEND_CLUSTER_URLS } from "./config/clientConfig";
 import "./utils/offlineQueue";
 
 let inMemoryToken = null;
@@ -201,11 +202,13 @@ async function request(endpoint, options = {}) {
   // automatically failover to live cluster nodes (Backend 2 & Backend 3)
   const isUnreachable = !res || [502, 503, 504].includes(res.status);
   if (isUnreachable && typeof window !== "undefined") {
-    const clusterBackends = [
-      "https://freestudymaterial1.onrender.com",
-      "https://freestudymaterial2.onrender.com",
-      "https://freestudymaterial.onrender.com",
-    ];
+    const clusterBackends = Array.isArray(BACKEND_CLUSTER_URLS) && BACKEND_CLUSTER_URLS.length > 0
+      ? BACKEND_CLUSTER_URLS
+      : [
+          "https://freestudymaterial1.onrender.com",
+          "https://freestudymaterial2.onrender.com",
+          "https://freestudymaterial.onrender.com",
+        ];
     for (const clusterOrigin of clusterBackends) {
       try {
         const cleanEp = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
@@ -1197,6 +1200,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ nodeId, isEnabled }),
     }),
+  addClusterNode: (nodeData) =>
+    request("/admin/cluster/add-node", {
+      method: "POST",
+      body: JSON.stringify(nodeData),
+    }),
+  removeClusterNode: (nodeId) =>
+    request(`/admin/cluster/remove-node/${encodeURIComponent(nodeId)}`, {
+      method: "DELETE",
+    }),
   getClusterTelemetry: () => request("/admin/cluster/telemetry"),
   getSoftwareSpecs: () => request("/admin/system/software"),
   getSoftwareInfo: () => request("/admin/system/software"),
@@ -1717,11 +1729,13 @@ export const api = {
     }
 
     // 2. Direct Cluster Backends Failover (Backend 2 & Backend 3)
-    const clusterBackends = [
-      "https://freestudymaterial1.onrender.com",
-      "https://freestudymaterial2.onrender.com",
-      "https://freestudymaterial.onrender.com",
-    ];
+    const clusterBackends = Array.isArray(BACKEND_CLUSTER_URLS) && BACKEND_CLUSTER_URLS.length > 0
+      ? BACKEND_CLUSTER_URLS
+      : [
+          "https://freestudymaterial1.onrender.com",
+          "https://freestudymaterial2.onrender.com",
+          "https://freestudymaterial.onrender.com",
+        ];
 
     for (const origin of clusterBackends) {
       try {

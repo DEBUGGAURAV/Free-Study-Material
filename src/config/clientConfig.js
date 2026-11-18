@@ -41,14 +41,13 @@ export const BACKEND_CLUSTER_URLS = (() => {
     })
     .filter((url, index, urls) => url && urls.indexOf(url) === index);
 
-  if (envUrls.length >= 3) return envUrls;
   const merged = [...envUrls];
   for (const def of DEFAULT_CLUSTER_URLS) {
-    if (!merged.includes(def) && merged.length < 3) {
+    if (!merged.includes(def)) {
       merged.push(def);
     }
   }
-  return merged.length >= 3 ? merged : DEFAULT_CLUSTER_URLS;
+  return merged.length > 0 ? merged : DEFAULT_CLUSTER_URLS;
 })();
 
 /**

@@ -72,7 +72,7 @@ function AdminModuleFallback({ label = "Loading module telemetry..." }) {
 }
 
 
-function AdminStatCard({ label, badge, badgeBg, badgeColor, val, valColor = "#0f172a", icon: Icon, iconBg, iconBorder, iconColor }) {
+function AdminStatCard({ label, badge, badgeBg, badgeColor, val, valColor = "#0f172a", subVal, icon: Icon, iconBg, iconBorder, iconColor }) {
   return (
     <div className="adm-stat-card">
       <div>
@@ -81,6 +81,7 @@ function AdminStatCard({ label, badge, badgeBg, badgeColor, val, valColor = "#0f
           {badge && <span className="adm-stat-badge" style={{ background: badgeBg, color: badgeColor }}>{badge}</span>}
         </div>
         <div className="adm-stat-val" style={{ color: valColor }}>{val}</div>
+        {subVal && <div style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "2px", fontWeight: 600 }}>{subVal}</div>}
       </div>
       <div className="adm-stat-icon-wrap" style={{ background: iconBg, border: `1.5px solid ${iconBorder}`, color: iconColor }}>
         <Icon size={18} />
@@ -3149,10 +3150,17 @@ export default function AdminModal({
           />
           <AdminStatCard
             label="RAM Consumption"
-            badge="1MS CACHE"
+            badge={hardwareInfo?.containerMemory?.limitMB ? `${hardwareInfo.containerMemory.usagePercent}% QUOTA` : "1MS CACHE"}
             badgeBg="#fffbeb"
             badgeColor="#d97706"
-            val={hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : "81 MB")}
+            val={
+              hardwareInfo?.containerMemory?.limitMB
+                ? `${hardwareInfo.containerMemory.usedMB} / ${hardwareInfo.containerMemory.limitMB} MB`
+                : (hardwareInfo?.v8ProcessMemory?.rssMB
+                  ? `${hardwareInfo.v8ProcessMemory.rssMB} MB`
+                  : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : (hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : "195 MB")))
+            }
+            subVal={hardwareInfo?.memory?.totalGB ? `Host: ${hardwareInfo.memory.totalGB} GB Physical` : undefined}
             valColor="#d97706"
             icon={Cpu}
             iconBg="#fffbeb"
