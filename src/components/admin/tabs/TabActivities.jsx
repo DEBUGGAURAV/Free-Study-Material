@@ -364,9 +364,11 @@ export default function TabActivities(props) {
               const isSelected = selectedSessionIds.includes(sess.sessionId);
               const isTerminating = terminatingSessionId === sess.sessionId;
               const loginDate = sess.createdAt ? new Date(sess.createdAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Active";
-              const lastActiveDiff = Date.now() - Number(sess.lastActiveAt || sess.createdAt || Date.now());
+              const lastActiveDate = new Date(Number(sess.lastActiveAt || sess.createdAt || Date.now()));
+              const lastActiveTime = !isNaN(lastActiveDate.getTime()) ? lastActiveDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              const lastActiveDiff = Date.now() - lastActiveDate.getTime();
               const lastActiveMins = Math.floor(lastActiveDiff / 60000);
-              const lastActiveStr = lastActiveMins < 2 ? "Active now" : `${lastActiveMins}m ago`;
+              const lastActiveStr = lastActiveMins < 2 ? `Active now${lastActiveTime ? ` (${lastActiveTime})` : ""}` : `${lastActiveMins}m ago${lastActiveTime ? ` (${lastActiveTime})` : ""}`;
 
               return (
                 <div

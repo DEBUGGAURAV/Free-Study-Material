@@ -49,20 +49,36 @@ export default function TabStudents(props) {
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  // Helper to format last seen or active time
+  // Helper to format last seen or active time with precise hour & minute (hh:mm a)
   const formatLastSeen = (dateStr) => {
     if (!dateStr) return "Never logged in";
     const date = new Date(dateStr);
     const diffMs = Date.now() - date.getTime();
-    if (isNaN(diffMs) || diffMs < 0) return "Just now";
+    if (isNaN(diffMs)) return "Never logged in";
+
+    const timeStr = date.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    if (diffMs < 60000 && diffMs >= 0) return `Just now • ${timeStr}`;
     const mins = Math.floor(diffMs / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 60) return `${mins}m ago (${timeStr})`;
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) {
+      const isToday = new Date().toDateString() === date.toDateString();
+      return isToday ? `Today at ${timeStr} (${hours}h ago)` : `Yesterday at ${timeStr} (${hours}h ago)`;
+    }
     const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+    const dateFormatted = date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+    });
+    if (days === 1) return `Yesterday at ${timeStr}`;
+    if (days < 30) return `${dateFormatted} at ${timeStr} (${days}d ago)`;
+    return `${dateFormatted} at ${timeStr}`;
   };
 
   // Open Quick Logs Modal
@@ -622,7 +638,7 @@ export default function TabStudents(props) {
                           Online Now
                         </span>
                         <div style={{ fontSize: "0.68rem", color: "#059669", fontWeight: 600, marginTop: "2px" }}>
-                          Active on site • Live
+                          Active on site • Live ({new Date(student.lastActiveAt || Date.now()).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })})
                         </div>
                       </div>
                     ) : student.isRecentlyActive ? (
@@ -1134,7 +1150,7 @@ export default function TabStudents(props) {
                                 <div style={{ fontSize: "0.7rem", color: "#64748b", display: "flex", gap: "8px", marginTop: "2px" }}>
                                   <span>🌐 {sess.ipAddress || "Active IP"}</span>
                                   {sess.location && <span>📍 {sess.location}</span>}
-                                  <span>• Logged in: {sess.createdAt ? new Date(sess.createdAt).toLocaleDateString() : "Active"}</span>
+                                  <span>• Active: {sess.lastActiveAt ? new Date(sess.lastActiveAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : (sess.createdAt ? new Date(sess.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : "Active")}</span>
                                 </div>
                               </div>
                             </div>

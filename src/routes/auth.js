@@ -3004,7 +3004,7 @@ router.post("/heartbeat", authenticateToken, (req, res) => {
   try {
     if (req.user?.id) {
       const { recordUserLivePresence } = require("../services/studentSessionService");
-      recordUserLivePresence(req.user.id, { ip: req.ip });
+      recordUserLivePresence(req.user.id, { ip: req.ip, email: req.user.email });
     }
     return res.json({ success: true, online: true });
   } catch (_) {

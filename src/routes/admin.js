@@ -462,21 +462,40 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
       let isRecentlyActive = false;
       let lastActiveAtStr = lastLoginStr || createdAtStr;
       try {
-        const { getUserLivePresence } = require("../services/studentSessionService");
-        const livePres = getUserLivePresence(doc.id);
-        const liveLastSeen = livePres ? livePres.lastSeen : 0;
+        const { getUserLivePresence, recordUserLivePresence } = require("../services/studentSessionService");
 
-        const activeSessionsList = Array.isArray(d.activeSessions) ? d.activeSessions : [];
-        const highestSessionActive = activeSessionsList.reduce((max, s) => Math.max(max, Number(s.lastActiveAt) || 0), 0);
+        // Check if this record is the currently requesting authenticated admin/user
+        const isRequestingUser = Boolean(
+          req.user && (
+            String(req.user.id) === doc.id ||
+            (req.user.email && d.email && req.user.email.toLowerCase().trim() === d.email.toLowerCase().trim()) ||
+            (isMain && (req.user.isMainAdmin || req.user.role === "admin" || req.user.id === "admin-root"))
+          )
+        );
 
-        const mostRecentActiveMs = Math.max(liveLastSeen, highestSessionActive, lastLoginTime);
-        if (mostRecentActiveMs > 0) {
-          lastActiveAtStr = new Date(mostRecentActiveMs).toISOString();
-          const diffMs = nowMs - mostRecentActiveMs;
-          if (diffMs < 5 * 60 * 1000) {
-            isOnline = true;
-          } else if (diffMs < 15 * 60 * 1000) {
-            isRecentlyActive = true;
+        if (isRequestingUser) {
+          // The admin making this request is actively connected right now
+          isOnline = true;
+          isRecentlyActive = false;
+          lastActiveAtStr = new Date(nowMs).toISOString();
+          recordUserLivePresence(doc.id, { ip: req.ip, email: d.email });
+          if (req.user?.id) recordUserLivePresence(req.user.id, { ip: req.ip, email: d.email });
+        } else {
+          const livePres = getUserLivePresence(doc.id, d.email);
+          const liveLastSeen = livePres ? livePres.lastSeen : 0;
+
+          const activeSessionsList = Array.isArray(d.activeSessions) ? d.activeSessions : [];
+          const highestSessionActive = activeSessionsList.reduce((max, s) => Math.max(max, Number(s.lastActiveAt) || 0), 0);
+
+          const mostRecentActiveMs = Math.max(liveLastSeen, highestSessionActive, lastLoginTime);
+          if (mostRecentActiveMs > 0) {
+            lastActiveAtStr = new Date(mostRecentActiveMs).toISOString();
+            const diffMs = nowMs - mostRecentActiveMs;
+            if (diffMs < 5 * 60 * 1000) {
+              isOnline = true;
+            } else if (diffMs < 15 * 60 * 1000) {
+              isRecentlyActive = true;
+            }
           }
         }
       } catch (_) {}

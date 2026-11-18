@@ -24,23 +24,36 @@ const sessionActiveThrottle = new Map();
 const userMemorySecurityLogs = new Map();
 const userMemorySessions = new Map();
 // 🟢 Live in-memory user presence map (tracks realtime online activity with zero database load)
-const userLivePresence = new Map(); // userId -> { lastSeen: number, ip: string }
+// Indexes by both userId and email (lowercase) for 100% presence resolution
+const userLivePresence = new Map(); // userId or email -> { lastSeen: number, ip: string, email: string }
 
 function recordUserLivePresence(userId, extra = {}) {
-  if (!userId) return;
-  userLivePresence.set(String(userId), {
-    lastSeen: Date.now(),
+  if (!userId && !extra.email) return;
+  const now = Date.now();
+  const data = {
+    lastSeen: now,
     ...extra,
-  });
+  };
+  if (userId) {
+    userLivePresence.set(String(userId), data);
+  }
+  if (extra.email) {
+    userLivePresence.set(String(extra.email).toLowerCase().trim(), data);
+  }
 }
 
-function getUserLivePresence(userId) {
-  if (!userId) return null;
-  return userLivePresence.get(String(userId)) || null;
+function getUserLivePresence(userId, email = null) {
+  if (userId && userLivePresence.has(String(userId))) {
+    return userLivePresence.get(String(userId));
+  }
+  if (email && userLivePresence.has(String(email).toLowerCase().trim())) {
+    return userLivePresence.get(String(email).toLowerCase().trim());
+  }
+  return null;
 }
 
-function isUserOnlineNow(userId, thresholdMs = 5 * 60 * 1000) {
-  const p = userLivePresence.get(String(userId));
+function isUserOnlineNow(userId, email = null, thresholdMs = 5 * 60 * 1000) {
+  const p = getUserLivePresence(userId, email);
   if (!p) return false;
   return (Date.now() - p.lastSeen) < thresholdMs;
 }
@@ -581,10 +594,13 @@ async function recordStudentAcademicActivity(userId, {
  * Also seamlessly refreshes real client IP and device details if request is passed.
  */
 async function touchSessionActive(userId, sessionId, req = null) {
-  if (!userId || !sessionId || userId === "admin-root") return;
+  if (!userId) return;
   const currentIp = req ? extractClientIp(req) : null;
+  const email = req?.user?.email || null;
   // 🟢 Always refresh live presence in memory instantly (0 database load)
-  recordUserLivePresence(userId, { ip: currentIp });
+  recordUserLivePresence(userId, { ip: currentIp, email });
+
+  if (!sessionId || userId === "admin-root") return;
 
   const now = Date.now();
   const last = sessionActiveThrottle.get(sessionId) || 0;
