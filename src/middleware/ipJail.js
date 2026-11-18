@@ -191,23 +191,27 @@ function incrementScrubbedCount(count = 1, ip = "unknown", sampleKey = "") {
 }
 
 function isWhitelistedIp(req, ip) {
-  if (
-    !ip ||
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip === "::ffff:127.0.0.1" ||
-    ip === "localhost" ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("10.") ||
-    ip.startsWith("172.16.") ||
-    ip.startsWith("172.17.") ||
-    ip.startsWith("172.18.") ||
-    ip.startsWith("172.19.") ||
-    ip.startsWith("172.2") ||
-    ip.startsWith("172.30.") ||
-    ip.startsWith("172.31.")
-  ) {
-    return true;
+  if (!ip) return false;
+
+  // In non-production, loopback and private subnets are whitelisted for developer convenience
+  if (process.env.NODE_ENV !== "production") {
+    if (
+      ip === "127.0.0.1" ||
+      ip === "::1" ||
+      ip === "::ffff:127.0.0.1" ||
+      ip === "localhost" ||
+      ip.startsWith("192.168.") ||
+      ip.startsWith("10.") ||
+      ip.startsWith("172.16.") ||
+      ip.startsWith("172.17.") ||
+      ip.startsWith("172.18.") ||
+      ip.startsWith("172.19.") ||
+      ip.startsWith("172.2") ||
+      ip.startsWith("172.30.") ||
+      ip.startsWith("172.31.")
+    ) {
+      return true;
+    }
   }
 
   // 1. Check known active Administrator IPs cache

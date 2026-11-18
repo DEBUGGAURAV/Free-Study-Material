@@ -137,7 +137,10 @@ async function cleanTursoStudentData() {
   }
   try {
     await studentTursoClient.execute("DELETE FROM student_sessions WHERE revoked = 1;");
-    await studentTursoClient.execute("DELETE FROM student_security_logs WHERE created_at < " + (Date.now() - 30 * 86400000) + ";");
+    await studentTursoClient.execute({
+      sql: "DELETE FROM student_security_logs WHERE created_at < ?",
+      args: [Date.now() - 30 * 86400000],
+    });
     return {
       success: true,
       message: "Turso Student Vault cleaned successfully! Stale revoked sessions and old telemetry logs purged.",

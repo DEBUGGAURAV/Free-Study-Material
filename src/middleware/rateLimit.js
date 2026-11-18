@@ -124,24 +124,28 @@ function isUserAdmin(req) {
  */
 function isImmune(req) {
   try {
-    if (!req) return true;
+    if (!req) return false;
     const ip = getClientIp(req);
-    if (
-      !ip ||
-      ip === "127.0.0.1" ||
-      ip === "::1" ||
-      ip === "localhost" ||
-      ip.startsWith("192.168.") ||
-      ip.startsWith("10.") ||
-      ip.startsWith("172.16.") ||
-      ip.startsWith("172.17.") ||
-      ip.startsWith("172.18.") ||
-      ip.startsWith("172.19.") ||
-      ip.startsWith("172.2") ||
-      ip.startsWith("172.30.") ||
-      ip.startsWith("172.31.")
-    ) {
-      return true;
+    if (!ip) return false;
+
+    // In local development, developer machines and loopback are immune
+    if (process.env.NODE_ENV !== "production") {
+      if (
+        ip === "127.0.0.1" ||
+        ip === "::1" ||
+        ip === "localhost" ||
+        ip.startsWith("192.168.") ||
+        ip.startsWith("10.") ||
+        ip.startsWith("172.16.") ||
+        ip.startsWith("172.17.") ||
+        ip.startsWith("172.18.") ||
+        ip.startsWith("172.19.") ||
+        ip.startsWith("172.2") ||
+        ip.startsWith("172.30.") ||
+        ip.startsWith("172.31.")
+      ) {
+        return true;
+      }
     }
 
     const query = req.query || {};

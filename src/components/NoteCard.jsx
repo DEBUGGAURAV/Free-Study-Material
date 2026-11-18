@@ -28,46 +28,61 @@ function getSubjectTheme(subject = "", branch = "") {
   const s = ((subject || "") + " " + (branch || "")).toLowerCase();
   if (s.includes("cs") || s.includes("computer") || s.includes("it") || s.includes("data") || s.includes("algorithm") || s.includes("operating") || s.includes("software") || s.includes("python") || s.includes("java") || s.includes("c++") || s.includes("web") || s.includes("ai")) {
     return {
-      bg: "#eef2ff",
-      border: "#c7d2fe",
-      color: "#4338ca",
-      dot: "#6366f1",
+      accentGradient: "linear-gradient(90deg, #6366f1, #06b6d4)",
+      bg: "#eff6ff",
+      border: "#bfdbfe",
+      color: "#1e40af",
+      dot: "#2563eb",
       hoverBorder: "#818cf8",
+      hoverShadow: "rgba(99, 102, 241, 0.25)",
+      badgeName: "CSE & IT",
     };
   }
   if (s.includes("math") || s.includes("calculus") || s.includes("algebra") || s.includes("stat") || s.includes("discrete") || s.includes("numerical") || s.includes("matrix")) {
     return {
+      accentGradient: "linear-gradient(90deg, #10b981, #059669)",
       bg: "#ecfdf5",
       border: "#a7f3d0",
-      color: "#047857",
-      dot: "#10b981",
+      color: "#065f46",
+      dot: "#059669",
       hoverBorder: "#34d399",
+      hoverShadow: "rgba(16, 185, 129, 0.25)",
+      badgeName: "MATHEMATICS",
     };
   }
   if (s.includes("physics") || s.includes("electronic") || s.includes("circuit") || s.includes("signal") || s.includes("electrical") || s.includes("ee") || s.includes("ece") || s.includes("vlsi") || s.includes("digital")) {
     return {
+      accentGradient: "linear-gradient(90deg, #f59e0b, #d97706)",
       bg: "#fffbeb",
       border: "#fde68a",
-      color: "#b45309",
-      dot: "#f59e0b",
+      color: "#92400e",
+      dot: "#d97706",
       hoverBorder: "#fbbf24",
+      hoverShadow: "rgba(245, 158, 11, 0.25)",
+      badgeName: "ECE & EE",
     };
   }
   if (s.includes("mechanic") || s.includes("thermo") || s.includes("civil") || s.includes("fluid") || s.includes("machine") || s.includes("structure") || s.includes("robotics")) {
     return {
+      accentGradient: "linear-gradient(90deg, #f43f5e, #e11d48)",
       bg: "#fff1f2",
       border: "#fecdd3",
-      color: "#be123c",
-      dot: "#f43f5e",
+      color: "#9f1239",
+      dot: "#e11d48",
       hoverBorder: "#fb7185",
+      hoverShadow: "rgba(244, 63, 94, 0.25)",
+      badgeName: "MECH & CIVIL",
     };
   }
   return {
-    bg: "#ecfeff",
-    border: "#a5f3fc",
-    color: "#0e7490",
-    dot: "#06b6d4",
+    accentGradient: "linear-gradient(90deg, #0284c7, #6366f1)",
+    bg: "#f0f9ff",
+    border: "#bae6fd",
+    color: "#0369a1",
+    dot: "#0284c7",
     hoverBorder: "#38bdf8",
+    hoverShadow: "rgba(2, 132, 199, 0.25)",
+    badgeName: "CORE SUBJECT",
   };
 }
 
@@ -114,19 +129,19 @@ function NoteCard({
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    const rotX = ((y - centerY) / centerY) * -3.8;
-    const rotY = ((x - centerX) / centerX) * 3.8;
+    const rotX = ((y - centerY) / centerY) * -4.2;
+    const rotY = ((x - centerX) / centerX) * 4.2;
 
-    setTiltTransform(`perspective(900px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translateZ(4px)`);
+    setTiltTransform(`perspective(900px) translateY(-7px) rotateX(${rotX.toFixed(2)}deg) rotateY(${rotY.toFixed(2)}deg) translateZ(6px)`);
     setGlarePosition({
-      opacity: 1,
+      opacity: 0.18,
       x: Math.round((x / rect.width) * 100),
       y: Math.round((y / rect.height) * 100),
     });
   };
 
   const handleCardMouseLeave = () => {
-    setTiltTransform("perspective(900px) rotateX(0deg) rotateY(0deg) translateZ(0px)");
+    setTiltTransform("");
     setGlarePosition((prev) => ({ ...prev, opacity: 0 }));
   };
 
@@ -381,8 +396,21 @@ function NoteCard({
       style={{
         transform: tiltTransform || undefined,
         "--card-theme-border": subjectTheme.hoverBorder,
+        "--card-theme-shadow": subjectTheme.hoverShadow,
       }}
     >
+      {/* 🎨 Subject-Wise Smart Signature Top Accent Bar (Vivid on White Background) */}
+      <div
+        style={{
+          height: "3.5px",
+          background: subjectTheme.accentGradient,
+          borderRadius: "18px 18px 0 0",
+          margin: "-12px -13px 8px -13px",
+          flexShrink: 0,
+        }}
+        aria-hidden="true"
+      />
+
       {/* 🎴 Dynamic Specular Glare Reflection Layer */}
       <div
         className="card-specular-glare"
@@ -477,19 +505,19 @@ function NoteCard({
                   style={{
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "5px",
+                    gap: "6px",
                     background: subjectTheme.bg,
                     color: subjectTheme.color,
-                    border: `1px solid ${subjectTheme.border}`,
+                    border: `1.5px solid ${subjectTheme.border}`,
                     borderRadius: "6px",
-                    padding: "2px 8px",
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
+                    padding: "2.5px 8px",
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
                     marginTop: "4px",
                     width: "fit-content",
                   }}
                 >
-                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
+                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
                   <span>{note.subject || "General Academic"}</span>
                 </div>
               </div>
@@ -515,19 +543,19 @@ function NoteCard({
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
-                      gap: "5px",
+                      gap: "6px",
                       background: subjectTheme.bg,
                       color: subjectTheme.color,
-                      border: `1px solid ${subjectTheme.border}`,
+                      border: `1.5px solid ${subjectTheme.border}`,
                       borderRadius: "6px",
-                      padding: "2px 8px",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
+                      padding: "2.5px 8px",
+                      fontSize: "0.74rem",
+                      fontWeight: 800,
                       marginTop: "4px",
                       width: "fit-content",
                     }}
                   >
-                    <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
                     <span>{note.subject || "General Academic"}</span>
                   </div>
                 </div>

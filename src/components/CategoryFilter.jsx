@@ -20,7 +20,8 @@ const QUICK_SEARCH_PILLS = [
   { label: "🔥 PYQs & Solved Papers", term: "PYQ" },
   { label: "⚡ Formula Derivations", term: "Formula" },
   { label: "📝 Handwritten Notes", term: "Handwritten" },
-  { label: "🎯 Unit-Wise Notes", term: "Unit" },
+  { label: "🎯 Most Downloaded", term: "most_downloaded", isSort: true },
+  { label: "📚 Unit-Wise Notes", term: "Unit" },
   { label: "🧪 Lab Manuals & VIVA", term: "Lab" },
 ];
 
@@ -57,7 +58,9 @@ export default function CategoryFilter({
 
   // Instant 0ms In-Memory Search Autocomplete (0 Server Load)
   const liveSuggestions = useMemo(() => {
-    if (!searchTerm || searchTerm.trim().length < 2) return [];
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return (notes || []).slice(0, 4);
+    }
     const query = searchTerm.toLowerCase().trim();
     return (notes || [])
       .filter((n) => {
@@ -66,7 +69,7 @@ export default function CategoryFilter({
         const b = (n.branch || "").toLowerCase();
         return t.includes(query) || s.includes(query) || b.includes(query);
       })
-      .slice(0, 4);
+      .slice(0, 5);
   }, [notes, searchTerm]);
 
   // Click outside listener to safely close spotlight dropdown
@@ -167,13 +170,15 @@ export default function CategoryFilter({
               style={{
                 width: "100%",
                 background: "#ffffff",
-                border: "1.5px solid #dbeafe",
+                border: isSearchFocused ? "1.5px solid #6366f1" : "1.5px solid #cbd5e1",
                 borderRadius: "9999px",
-                padding: "9px 230px 9px 20px",
+                padding: "10px 230px 10px 20px",
                 fontSize: "0.86rem",
                 color: "#0f172a",
                 outline: "none",
-                boxShadow: "0 2px 14px -3px rgba(99, 102, 241, 0.1), 0 1px 3px rgba(0, 0, 0, 0.04)",
+                boxShadow: isSearchFocused
+                  ? "0 0 0 4px rgba(99, 102, 241, 0.25), 0 12px 32px -4px rgba(99, 102, 241, 0.24), 0 0 20px rgba(6, 182, 212, 0.18)"
+                  : "0 2px 10px -2px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04)",
                 transition: "all 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
                 boxSizing: "border-box",
               }}
@@ -333,33 +338,33 @@ export default function CategoryFilter({
             </div>
           </div>
 
-          {/* ⚡ Live Search Spotlight Floating Dropdown (Pure White Glassmorphism, 0ms Instant Results) */}
+          {/* ⚡ Live Search Spotlight Floating Dropdown (High-Contrast White Theme with 0ms Instant Results) */}
           {isSearchFocused && liveSuggestions.length > 0 && (
             <div
               style={{
                 position: "absolute",
-                top: "calc(100% + 8px)",
+                top: "calc(100% + 10px)",
                 left: 0,
                 right: 0,
                 background: "#ffffff",
-                border: "1.5px solid #e2e8f0",
-                borderRadius: "14px",
-                boxShadow: "0 24px 50px -12px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.04)",
-                padding: "8px",
+                border: "1.5px solid #cbd5e1",
+                borderRadius: "16px",
+                boxShadow: "0 24px 56px -12px rgba(15, 23, 42, 0.28), 0 4px 16px rgba(99, 102, 241, 0.16), 0 0 0 1px rgba(99, 102, 241, 0.15)",
+                padding: "10px",
                 zIndex: 1050,
                 animation: "fadeIn 0.15s ease-out",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 6px", borderBottom: "1px solid #f1f5f9", marginBottom: "4px" }}>
-                <span style={{ fontSize: "0.7rem", fontWeight: 800, color: "#4f46e5", letterSpacing: "0.06em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                  <span>⚡ Quick Results ({liveSuggestions.length})</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 8px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "6px" }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", letterSpacing: "0.06em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                  <span>⚡ {searchTerm ? `Live Search Results (${liveSuggestions.length})` : "🔥 Recommended Study Materials"}</span>
                 </span>
-                <span style={{ fontSize: "0.68rem", color: "#94a3b8" }}>
-                  Click to open reader
+                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>
+                  Instant 0ms Reader
                 </span>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
                 {liveSuggestions.map((item) => (
                   <div
                     key={item.id}
@@ -372,26 +377,32 @@ export default function CategoryFilter({
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: "10px",
-                      padding: "8px 10px",
-                      borderRadius: "8px",
+                      padding: "8px 12px",
+                      borderRadius: "10px",
                       cursor: "pointer",
-                      transition: "all 0.15s ease",
+                      transition: "all 0.16s ease",
                       background: "#ffffff",
+                      border: "1px solid transparent",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#f8faff";
+                      e.currentTarget.style.background = "#f0f4ff";
+                      e.currentTarget.style.borderColor = "#c7d2fe";
+                      e.currentTarget.style.transform = "translateX(4px)";
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.background = "#ffffff";
+                      e.currentTarget.style.borderColor = "transparent";
+                      e.currentTarget.style.transform = "none";
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
                       <div
                         style={{
-                          width: "30px",
-                          height: "30px",
+                          width: "32px",
+                          height: "32px",
                           borderRadius: "8px",
-                          background: "rgba(99, 102, 241, 0.08)",
+                          background: "#eff6ff",
+                          border: "1px solid #bfdbfe",
                           color: "#4f46e5",
                           display: "flex",
                           alignItems: "center",
@@ -399,21 +410,21 @@ export default function CategoryFilter({
                           flexShrink: 0,
                         }}
                       >
-                        <FileText size={16} color="#4f46e5" />
+                        <FileText size={17} color="#4f46e5" />
                       </div>
 
                       <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.82rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.84rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                           {item.title}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap", fontSize: "0.68rem" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap", fontSize: "0.7rem" }}>
                           {item.subject && (
-                            <span style={{ background: "#edf2ff", color: "#4338ca", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                            <span style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "1px 7px", borderRadius: "4px", fontWeight: 700 }}>
                               {item.subject}
                             </span>
                           )}
                           {item.branch && (
-                            <span style={{ color: "#64748b" }}>• {item.branch}</span>
+                            <span style={{ color: "#475569", fontWeight: 600 }}>• {item.branch}</span>
                           )}
                           {item.year && (
                             <span style={{ color: "#64748b" }}>• {item.year}</span>
@@ -425,10 +436,10 @@ export default function CategoryFilter({
                     <button
                       type="button"
                       style={{
-                        padding: "4px 10px",
-                        fontSize: "0.72rem",
-                        fontWeight: 700,
-                        borderRadius: "6px",
+                        padding: "5px 12px",
+                        fontSize: "0.74rem",
+                        fontWeight: 750,
+                        borderRadius: "7px",
                         background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
                         color: "#ffffff",
                         border: "none",
@@ -437,11 +448,11 @@ export default function CategoryFilter({
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "4px",
-                        boxShadow: "0 2px 6px rgba(79, 70, 229, 0.25)",
+                        boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
                       }}
                     >
                       <span>Read</span>
-                      <ArrowUpRight size={11} />
+                      <ArrowUpRight size={12} />
                     </button>
                   </div>
                 ))}
@@ -451,50 +462,65 @@ export default function CategoryFilter({
         </div>
       </div>
 
-      {/* 🏷️ 1-Click Quick Filter Pills (Pure White Luxury Buttons) */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", padding: "2px 0 12px", borderBottom: "1px solid #f1f5f9", marginBottom: "10px" }}>
-        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#64748b", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+      {/* 🏷️ 1-Click Quick Filter Pills (High-Contrast White Theme Luxury Buttons) */}
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", padding: "2px 0 12px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "12px" }}>
+        <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>
           <span>Quick Find:</span>
         </span>
         {QUICK_SEARCH_PILLS.map((pill) => {
-          const isActive = searchTerm === pill.term;
+          const isActive = pill.isSort ? sortBy === "downloads" : searchTerm === pill.term;
           return (
             <button
               key={pill.term}
               type="button"
               onClick={() => {
-                if (isActive) {
-                  if (setSearchTerm) setSearchTerm("");
+                if (pill.isSort) {
+                  if (isActive) {
+                    if (setSortBy) setSortBy("recent");
+                  } else {
+                    if (setSortBy) setSortBy("downloads");
+                  }
                 } else {
-                  if (setSearchTerm) setSearchTerm(pill.term);
+                  if (isActive) {
+                    if (setSearchTerm) setSearchTerm("");
+                  } else {
+                    if (setSearchTerm) setSearchTerm(pill.term);
+                  }
                 }
               }}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "5px",
-                padding: "5px 12px",
-                fontSize: "0.74rem",
-                fontWeight: isActive ? 800 : 600,
+                gap: "6px",
+                padding: "6px 14px",
+                fontSize: "0.76rem",
+                fontWeight: isActive ? 800 : 700,
                 borderRadius: "999px",
-                background: "#ffffff",
-                border: isActive ? "1.5px solid #4f46e5" : "1px solid #e2e8f0",
-                color: isActive ? "#4338ca" : "#475569",
-                boxShadow: isActive ? "0 4px 12px rgba(79, 70, 229, 0.16)" : "0 1px 3px rgba(0, 0, 0, 0.03)",
+                background: isActive ? "linear-gradient(135deg, #4f46e5, #06b6d4)" : "#ffffff",
+                border: isActive ? "1.5px solid transparent" : "1.5px solid #cbd5e1",
+                color: isActive ? "#ffffff" : "#334155",
+                boxShadow: isActive ? "0 4px 16px rgba(79, 70, 229, 0.38)" : "0 2px 6px rgba(15, 23, 42, 0.05)",
                 cursor: "pointer",
                 whiteSpace: "nowrap",
-                transition: "all 0.18s ease",
+                transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                transform: isActive ? "translateY(-1px)" : "none",
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.borderColor = "#c7d2fe";
-                  e.currentTarget.style.color = "#4f46e5";
+                  e.currentTarget.style.borderColor = "#6366f1";
+                  e.currentTarget.style.background = "#f8faff";
+                  e.currentTarget.style.color = "#4338ca";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 16px -2px rgba(99, 102, 241, 0.2)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.borderColor = "#e2e8f0";
-                  e.currentTarget.style.color = "#475569";
+                  e.currentTarget.style.borderColor = "#cbd5e1";
+                  e.currentTarget.style.background = "#ffffff";
+                  e.currentTarget.style.color = "#334155";
+                  e.currentTarget.style.transform = "none";
+                  e.currentTarget.style.boxShadow = "0 2px 6px rgba(15, 23, 42, 0.05)";
                 }
               }}
             >

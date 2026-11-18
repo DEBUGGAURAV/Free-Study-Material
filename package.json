@@ -73,6 +73,7 @@
   "overrides": {
     "braces": "^3.0.3",
     "uuid": "^11.1.1",
-    "chokidar": "^4.0.3"
+    "chokidar": "^4.0.3",
+    "minimatch": "^11.0.9"
   }
 }
