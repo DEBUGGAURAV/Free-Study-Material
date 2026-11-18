@@ -2906,9 +2906,23 @@ select option,
   }
 
   .library-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 8px !important;
+    margin-bottom: 10px !important;
+  }
+
+  .library-heading-text {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .library-search-container {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 
   .library-heading > span {

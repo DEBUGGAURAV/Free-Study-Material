@@ -80,7 +80,11 @@ export default function CategoryFilter({
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search at Explore study materials
@@ -147,14 +151,14 @@ export default function CategoryFilter({
   return (
     <section id="study-materials" className="control-bar-wrapper">
       <div className="library-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "14px" }}>
-        <div style={{ flex: "1 1 240px", minWidth: "220px" }}>
+        <div className="library-heading-text" style={{ flex: "1 1 auto", minWidth: "220px" }}>
           <p style={{ margin: 0, color: "#4361bb", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em" }}>THE LIBRARY</p>
           <h2 style={{ margin: "2px 0 4px", fontSize: "clamp(1.3rem, 2.4vw, 1.7rem)", fontWeight: 800, color: "#172338", letterSpacing: "-0.03em" }}>Explore study materials</h2>
           <span style={{ fontSize: "0.78rem", color: "var(--text-muted)", display: "block", textAlign: "left" }}>Filter by course, year, or branch to find the right resources.</span>
         </div>
 
         {/* 🔍 Universal Spotlight Search Bar (Pure White Linear Style with Ambient Glow - Pixel Perfect Match) */}
-        <div ref={searchContainerRef} style={{ flex: "1 1 360px", maxWidth: "620px", minWidth: "260px", position: "relative" }}>
+        <div ref={searchContainerRef} className="library-search-container" style={{ flex: "1 1 auto", maxWidth: "620px", minWidth: "260px", position: "relative" }}>
           <div className="search-wrapper" style={{ width: "100%", maxWidth: "100%", margin: 0, position: "relative" }}>
             <input
               ref={searchInputRef}
@@ -336,129 +340,158 @@ export default function CategoryFilter({
                 ⌘K
               </kbd>
             </div>
-          </div>
 
-          {/* ⚡ Live Search Spotlight Floating Dropdown (High-Contrast White Theme with 0ms Instant Results) */}
-          {isSearchFocused && liveSuggestions.length > 0 && (
-            <div
-              style={{
-                position: "absolute",
-                top: "calc(100% + 10px)",
-                left: 0,
-                right: 0,
-                background: "#ffffff",
-                border: "1.5px solid #cbd5e1",
-                borderRadius: "16px",
-                boxShadow: "0 24px 56px -12px rgba(15, 23, 42, 0.28), 0 4px 16px rgba(99, 102, 241, 0.16), 0 0 0 1px rgba(99, 102, 241, 0.15)",
-                padding: "10px",
-                zIndex: 1050,
-                animation: "fadeIn 0.15s ease-out",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 8px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "6px" }}>
-                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", letterSpacing: "0.06em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                  <span>⚡ {searchTerm ? `Live Search Results (${liveSuggestions.length})` : "🔥 Recommended Study Materials"}</span>
-                </span>
-                <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>
-                  Instant 0ms Reader
-                </span>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                {liveSuggestions.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => {
-                      if (onPreview) onPreview(item);
-                      setIsSearchFocused(false);
-                    }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "10px",
-                      padding: "8px 12px",
-                      borderRadius: "10px",
-                      cursor: "pointer",
-                      transition: "all 0.16s ease",
-                      background: "#ffffff",
-                      border: "1px solid transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#f0f4ff";
-                      e.currentTarget.style.borderColor = "#c7d2fe";
-                      e.currentTarget.style.transform = "translateX(4px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "#ffffff";
-                      e.currentTarget.style.borderColor = "transparent";
-                      e.currentTarget.style.transform = "none";
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
-                      <div
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "8px",
-                          background: "#eff6ff",
-                          border: "1px solid #bfdbfe",
-                          color: "#4f46e5",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FileText size={17} color="#4f46e5" />
-                      </div>
-
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.84rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                          {item.title}
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap", fontSize: "0.7rem" }}>
-                          {item.subject && (
-                            <span style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "1px 7px", borderRadius: "4px", fontWeight: 700 }}>
-                              {item.subject}
-                            </span>
-                          )}
-                          {item.branch && (
-                            <span style={{ color: "#475569", fontWeight: 600 }}>• {item.branch}</span>
-                          )}
-                          {item.year && (
-                            <span style={{ color: "#64748b" }}>• {item.year}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
+            {/* ⚡ Live Search Spotlight Floating Dropdown (Anchored directly below Search Input) */}
+            {isSearchFocused && liveSuggestions.length > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  left: 0,
+                  right: 0,
+                  background: "#ffffff",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: "16px",
+                  boxShadow: "0 24px 56px -12px rgba(15, 23, 42, 0.28), 0 4px 16px rgba(99, 102, 241, 0.16), 0 0 0 1px rgba(99, 102, 241, 0.15)",
+                  padding: "10px",
+                  zIndex: 1050,
+                  maxHeight: "min(360px, 60vh)",
+                  overflowY: "auto",
+                  animation: "fadeIn 0.15s ease-out",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 10px 8px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "6px" }}>
+                  <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4f46e5", letterSpacing: "0.06em", textTransform: "uppercase", display: "inline-flex", alignItems: "center", gap: "5px" }}>
+                    <span>⚡ {searchTerm ? `Quick Results (${liveSuggestions.length})` : "🔥 Recommended Study Materials"}</span>
+                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "0.68rem", color: "#64748b", fontWeight: 600 }}>
+                      Tap to open
+                    </span>
                     <button
                       type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsSearchFocused(false);
+                      }}
                       style={{
-                        padding: "5px 12px",
-                        fontSize: "0.74rem",
-                        fontWeight: 750,
-                        borderRadius: "7px",
-                        background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
-                        color: "#ffffff",
+                        background: "#f1f5f9",
                         border: "none",
-                        cursor: "pointer",
-                        flexShrink: 0,
+                        color: "#64748b",
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
                         display: "inline-flex",
                         alignItems: "center",
-                        gap: "4px",
-                        boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
                       }}
+                      title="Close quick results"
                     >
-                      <span>Read</span>
-                      <ArrowUpRight size={12} />
+                      ✕
                     </button>
                   </div>
-                ))}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+                  {liveSuggestions.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (onPreview) onPreview(item);
+                        setIsSearchFocused(false);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "10px",
+                        padding: "8px 12px",
+                        borderRadius: "10px",
+                        cursor: "pointer",
+                        transition: "all 0.16s ease",
+                        background: "#ffffff",
+                        border: "1px solid transparent",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#f0f4ff";
+                        e.currentTarget.style.borderColor = "#c7d2fe";
+                        e.currentTarget.style.transform = "translateX(4px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "#ffffff";
+                        e.currentTarget.style.borderColor = "transparent";
+                        e.currentTarget.style.transform = "none";
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "8px",
+                            background: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            color: "#4f46e5",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <FileText size={17} color="#4f46e5" />
+                        </div>
+
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "0.84rem", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                            {item.title}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "2px", flexWrap: "wrap", fontSize: "0.7rem" }}>
+                            {item.subject && (
+                              <span style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "1px 7px", borderRadius: "4px", fontWeight: 700 }}>
+                                {item.subject}
+                              </span>
+                            )}
+                            {item.branch && (
+                              <span style={{ color: "#475569", fontWeight: 600 }}>• {item.branch}</span>
+                            )}
+                            {item.year && (
+                              <span style={{ color: "#64748b" }}>• {item.year}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "0.74rem",
+                          fontWeight: 750,
+                          borderRadius: "7px",
+                          background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
+                          color: "#ffffff",
+                          border: "none",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
+                        }}
+                      >
+                        <span>Read</span>
+                        <ArrowUpRight size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
