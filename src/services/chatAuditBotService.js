@@ -3456,8 +3456,69 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
     `⏰ <b>Action Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>\n\n` +
     `🔒 <i>Forensic Audit Record: User identity, Turso database rows, and all associated chat & session traces permanently expunged across Firebase and Turso. Delivered strictly to Supergroup Topic 114.</i>`;
 
+  const cleanTxtContent = [
+    "================================================================================",
+    "       STUDENT ACCOUNT CASCADE PURGE REPORT - TOPIC 114 (FORENSIC AUDIT)        ",
+    "================================================================================",
+    `Timestamp           : ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST`,
+    `Student Name        : ${studentName}`,
+    `Email Address       : ${studentEmail}`,
+    `Mobile Number       : ${studentMobile}`,
+    `College / Institute : ${studentCollege}`,
+    inactivityDays !== undefined
+      ? `Inactivity Days     : ${inactivityDays} Days${thresholdDays ? ` (Exceeded ${thresholdDays}-Day threshold)` : ""}`
+      : `Purge Trigger       : Manual Administrator Cascade`,
+    "--------------------------------------------------------------------------------",
+    "PURGE & DATABASE CASCADE RESULTS:",
+    `  • Turso LibSQL Rows   : ${tursoCleared} (Profiles, messages, audits, sockets expunged)`,
+    `  • Chat & Sessions     : 100% Expunged & Cleared (Firestore + Turso LibSQL + Edge RAM)`,
+    `  • Total Chat Messages : ${totalMessagesDeleted} messages erased`,
+    `  • Chat Rooms Involved : ${roomsInvolved}`,
+    "--------------------------------------------------------------------------------",
+    `Action Executed By  : ${adminName} (${adminEmail})`,
+    "================================================================================",
+    "END OF CHAT AUDIT REPORT - FREE STUDY MATERIAL CHAT AUDIT BOT (@fsm_chat_bot)",
+    "================================================================================",
+  ].filter(Boolean).join("\n");
+
+  const emailSafe = (studentEmail || "student").toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const txtFilename = `CASCADE_PURGE_CHAT_${emailSafe}_${Date.now()}.txt`;
+  const summaryCaption = [
+    `🚨 <b>[STUDENT ACCOUNT CASCADE PURGE REPORT - TOPIC 114]</b>`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `👤 <b>Student:</b> <code>${escapeHtml(studentName)}</code>`,
+    `📧 <b>Email:</b> <code>${escapeHtml(studentEmail)}</code>`,
+    `💬 <b>Messages Erased:</b> <code>${totalMessagesDeleted}</code>`,
+    `⚡ <b>Turso Rows Cleared:</b> <code>${escapeHtml(tursoCleared)}</code>`,
+    `👮 <b>Executed By:</b> <code>${escapeHtml(adminName)}</code>`,
+    `🕒 <b>Timestamp:</b> <code>${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST</code>`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `📎 <b>Dossier File:</b> <code>${txtFilename}</code>`,
+    `<i>Full forensic audit report attached in TXT file format.</i>`,
+  ].join("\n");
+
   for (const { chatId, threadId } of targetChats) {
     try {
+      // 📄 STRICT REQUIREMENT: Send purge audit in TXT file format
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      if (threadId) form.append("message_thread_id", String(threadId));
+      form.append("document", new Blob([Buffer.from(cleanTxtContent, "utf-8")], { type: "text/plain;charset=utf-8" }), txtFilename);
+      form.append("caption", summaryCaption.slice(0, 1024));
+      form.append("parse_mode", "HTML");
+
+      const docRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (docRes.ok) {
+        console.log(`[CHAT-AUDIT-BOT] 📄 User deletion report TXT file successfully sent to ${chatId} (Topic #${threadId || "General"})`);
+        continue;
+      }
+
+      // Fallback: If sendDocument fails, fallback to sendMessage
       const body = {
         chat_id: chatId,
         text: textHtml,
@@ -3465,7 +3526,6 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
       };
       if (threadId) body.message_thread_id = threadId;
       let res = await callTelegram("sendMessage", body);
-      // Fallback: If specific forum thread rejected, deliver to supergroup main chat
       if (!res.ok && body.message_thread_id) {
         delete body.message_thread_id;
         await callTelegram("sendMessage", body);

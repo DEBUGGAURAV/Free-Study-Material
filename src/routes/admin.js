@@ -1896,6 +1896,35 @@ router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermissi
       deleteTelegramMessages(tgMsgIdsToDelete).catch(() => {});
     }
 
+    // 📄 Dispatch complete permanent purge audit dossier in TXT format to Telegram
+    try {
+      const { sendTelegramTxtDocument } = require("../services/emailService");
+      const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      const txtContent = [
+        "================================================================================",
+        "          RESTORE VAULT PERMANENT PURGE AUDIT - ALL RECORDS EMPTIED             ",
+        "================================================================================",
+        `Executed At    : ${timeStr} IST`,
+        `Executed By    : ${req.user?.name || "Admin"} (${req.user?.email || "admin"})`,
+        `Records Purged : ${docsToDelete.length} records permanently removed`,
+        "--------------------------------------------------------------------------------",
+        "PURGED RECORDS LIST:",
+        ...docsToDelete.map((d, i) => {
+          const dat = d.data() || {};
+          return `  [${i + 1}] ID: ${d.id} | Collection: ${dat.collectionName || "notes"} | Title: ${dat.title || "Record"} | ArchivedAt: ${dat.archivedAt || "N/A"}`;
+        }),
+        "================================================================================",
+        "END OF RESTORE VAULT PURGE AUDIT - FREE STUDY MATERIAL",
+        "================================================================================",
+      ].join("\n");
+
+      sendTelegramTxtDocument({
+        filename: `RESTORE_VAULT_PURGE_${Date.now()}.txt`,
+        content: txtContent,
+        caption: `🗑️ <b>[RESTORE VAULT PERMANENT PURGE COMPLETE]</b>\n━━━━━━━━━━━━━━━━━━━━\n📁 <b>Purged Records:</b> <code>${docsToDelete.length} items</code>\n👮 <b>Admin:</b> <code>${req.user?.email || "Admin"}</code>\n🕒 <b>Time:</b> <code>${timeStr} IST</code>\n━━━━━━━━━━━━━━━━━━━━\n📎 <i>Full list of permanently purged records attached as TXT file.</i>`,
+      }).catch(() => {});
+    } catch (_) {}
+
     invalidateAllCache();
 
     return res.json({
@@ -3520,6 +3549,30 @@ router.delete("/database/clear-collection/:collectionName", authenticateToken, c
         deletedCount++;
       }
     }
+
+    // 📄 Dispatch bulk collection purge audit report in TXT format to Telegram
+    try {
+      const { sendTelegramTxtDocument } = require("../services/emailService");
+      const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      const txtContent = [
+        "================================================================================",
+        `      DATABASE BULK COLLECTION PURGE AUDIT - COLLECTION: ${collectionName.toUpperCase()}`,
+        "================================================================================",
+        `Executed At    : ${timeStr} IST`,
+        `Executed By    : ${req.user?.name || "Admin"} (${req.user?.email || "admin"})`,
+        `Collection     : ${collectionName}`,
+        `Records Purged : ${deletedCount} items cleared`,
+        "================================================================================",
+        "END OF COLLECTION PURGE AUDIT - FREE STUDY MATERIAL",
+        "================================================================================",
+      ].join("\n");
+
+      sendTelegramTxtDocument({
+        filename: `COLLECTION_PURGE_${collectionName.toUpperCase()}_${Date.now()}.txt`,
+        content: txtContent,
+        caption: `🗑️ <b>[DATABASE COLLECTION PURGED]</b>\n━━━━━━━━━━━━━━━━━━━━\n📁 <b>Collection:</b> <code>${collectionName}</code>\n⚡ <b>Purged Items:</b> <code>${deletedCount} records</code>\n👮 <b>Admin:</b> <code>${req.user?.email || "Admin"}</code>\n🕒 <b>Time:</b> <code>${timeStr} IST</code>\n━━━━━━━━━━━━━━━━━━━━\n📎 <i>Full collection purge audit attached as TXT file.</i>`,
+      }).catch(() => {});
+    } catch (_) {}
 
     return res.json({
       success: true,

@@ -1599,33 +1599,70 @@ async function dispatchUserPurgeTelegramAudit({
   try {
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
 
-    const text = [
+    const cleanTxt = [
+      "================================================================================",
+      "             AI CASCADE ACCOUNT PURGE AUDIT - TOPIC REPORT                      ",
+      "================================================================================",
+      `Timestamp           : ${timeStr} IST`,
+      `User ID             : ${userId}`,
+      `User Name           : ${userName}`,
+      `Email Address       : ${userEmail}`,
+      `Mobile Number       : ${userMobile || "N/A"}`,
+      "--------------------------------------------------------------------------------",
+      "PURGE AUDIT DETAILS:",
+      "  • Firebase Purge Status  : 100% Cleared (Profile, Passkeys & Study Context Purged)",
+      `  • Uploaded Notes Re-attr : ${uploadedNotesCount}`,
+      `  • Chat Messages Purged   : ${chatMessagesDeleted}`,
+      `  • Turso LibSQL Cascade   : ${tursoDeletedCount} rows deleted`,
+      "    (Users, Chat Profiles, Rooms & AI Search Logs cascade-purged)",
+      "--------------------------------------------------------------------------------",
+      `Initiated By        : ${deletedBy}`,
+      `Purge Reason        : ${reason}`,
+      "================================================================================",
+      "END OF PURGE AUDIT - FREE STUDY MATERIAL AI GUARDIAN",
+      "================================================================================",
+    ].join("\n");
+
+    const emailSafe = (userEmail || "user").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const txtFilename = `AI_CASCADE_PURGE_${emailSafe}_${Date.now()}.txt`;
+    const caption = [
       `🔥 <b>Cascade Account Purge Audit</b>`,
       `━━━━━━━━━━━━━━━━━━━━`,
       `👤 <b>User:</b> ${(userName || "Unknown").replace(/[<>]/g, "")}`,
       `🆔 <b>User ID:</b> <code>${userId}</code>`,
       `📧 <b>Email:</b> <code>${(userEmail || "N/A").replace(/[<>]/g, "")}</code>`,
-      `📱 <b>Mobile:</b> <code>${userMobile || "N/A"}</code>`,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `🗑️ <b>Firebase Purge Status:</b> 100% Cleared`,
-      `  • Profile, Passkeys & Study Context: <b>Purged</b>`,
-      `  • Uploaded Notes Re-attributed: <b>${uploadedNotesCount}</b>`,
-      `  • Chat Messages Purged: <b>${chatMessagesDeleted}</b>`,
-      `⚡ <b>Turso LibSQL Cascade:</b> <b>${tursoDeletedCount} rows deleted</b>`,
-      `  • <i>Users, Chat Profiles, Rooms & AI Search Logs cascade-purged</i>`,
-      `━━━━━━━━━━━━━━━━━━━━`,
+      `⚡ <b>Turso Cascade:</b> <code>${tursoDeletedCount} rows deleted</code>`,
       `🛡️ <b>Initiated By:</b> ${deletedBy}`,
-      `📝 <b>Reason:</b> ${reason}`,
       `🕒 <b>Timestamp:</b> ${timeStr}`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `📎 <b>Dossier File:</b> <code>${txtFilename}</code>`,
+      `<i>Full purge audit dossier attached in TXT file format.</i>`,
     ].join("\n");
 
+    // 📄 STRICT REQUIREMENT: Send in TXT file format
+    const form = new FormData();
+    form.append("chat_id", chatId);
+    if (topicId) form.append("message_thread_id", String(topicId));
+    form.append("document", new Blob([Buffer.from(cleanTxt, "utf-8")], { type: "text/plain;charset=utf-8" }), txtFilename);
+    form.append("caption", caption.slice(0, 1024));
+    form.append("parse_mode", "HTML");
+
+    const docRes = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (docRes.ok) return true;
+
+    // Fallback: send as text message if document dispatch failed
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId,
         message_thread_id: topicId,
-        text,
+        text: caption,
         parse_mode: "HTML",
         disable_web_page_preview: true,
       }),

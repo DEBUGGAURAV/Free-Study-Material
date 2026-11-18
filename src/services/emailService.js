@@ -355,6 +355,188 @@ async function getOrCreateDownloadManagerForumTopic(targetChatId = null, botToke
 }
 
 /**
+ * 📄 Dispatches audit logs and database purge dossiers as real .TXT file attachments
+ * via Telegram sendDocument API with a concise HTML caption summary.
+ */
+async function sendTelegramTxtDocument({
+  botToken = null,
+  chatId = null,
+  threadId = null,
+  filename = "audit_report.txt",
+  content = "",
+  caption = "",
+}) {
+  try {
+    const token = (botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || "").trim();
+    const targetChat = (chatId || process.env.TELEGRAM_TOPIC_GROUP_ID || "").trim();
+    if (!token || !targetChat) return false;
+
+    const form = new FormData();
+    form.append("chat_id", targetChat);
+    if (threadId && !isNaN(Number(threadId))) {
+      form.append("message_thread_id", String(threadId));
+    }
+    const cleanFilename = filename.endsWith(".txt") ? filename : `${filename}.txt`;
+    form.append(
+      "document",
+      new Blob([Buffer.from(content, "utf-8")], { type: "text/plain;charset=utf-8" }),
+      cleanFilename
+    );
+    if (caption) {
+      form.append("caption", caption.slice(0, 1024));
+      form.append("parse_mode", "HTML");
+    }
+
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (res.ok) {
+      console.log(`[TELEGRAM-TXT-DISPATCH] ✅ TXT file '${cleanFilename}' sent to chat ${targetChat} (Topic #${threadId || "General"})`);
+      return true;
+    } else {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[TELEGRAM-TXT-DISPATCH] sendDocument notice (${res.status}):`, errText);
+      // Fallback: send as text message if sendDocument rejected
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: targetChat,
+          ...(threadId && !isNaN(Number(threadId)) ? { message_thread_id: Number(threadId) } : {}),
+          text: (caption ? `${caption}\n\n` : "") + content.slice(0, 3500),
+          parse_mode: "HTML",
+        }),
+        signal: AbortSignal.timeout(6000),
+      }).catch(() => {});
+      return false;
+    }
+  } catch (err) {
+    console.warn("[TELEGRAM-TXT-DISPATCH] Error:", err.message);
+    return false;
+  }
+}
+
+/**
+ * HTML escaper to ensure Telegram parse_mode: HTML compatibility
+ */
+function escapeHtml(str = "") {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Resolves Device Name and Hardware Capability for Login, Register, and Logout notices
+ */
+function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, directUserAgent = null) {
+  let specs = directDeviceSpecs || user?.deviceSpecs || user?.specs || null;
+  if (typeof specs === "string") {
+    try {
+      specs = JSON.parse(specs);
+    } catch (_) {}
+  }
+  const ua = String(directUserAgent || user?.userAgent || user?.ua || "").trim();
+
+  let deviceName = "";
+  let hardwareCapability = "";
+
+  // 1. Resolve Device Name
+  if (specs && typeof specs === "object") {
+    if (specs.deviceName && typeof specs.deviceName === "string" && specs.deviceName.trim()) {
+      deviceName = specs.deviceName.trim();
+    } else if (specs.brand || specs.model || specs.os) {
+      const brand = specs.brand || "Device";
+      const model = specs.model ? ` (${specs.model})` : "";
+      const os = specs.os || "OS";
+      const browser = specs.browser ? ` • ${specs.browser}` : "";
+      deviceName = `${brand}${model} • ${os}${browser}`;
+      if (specs.screen && specs.screen !== "0x0") {
+        deviceName += ` [${specs.screen}]`;
+      }
+    }
+  }
+
+  // Fallback to User-Agent if client specs didn't provide a deviceName
+  if (!deviceName) {
+    if (ua) {
+      let os = "Desktop Web";
+      let browser = "Web Browser";
+
+      // OS Detection
+      if (/Windows NT 10.0/i.test(ua)) os = "Windows 10/11 PC";
+      else if (/Windows NT 6.3/i.test(ua)) os = "Windows 8.1 PC";
+      else if (/Windows NT 6.1/i.test(ua)) os = "Windows 7 PC";
+      else if (/iPhone/i.test(ua)) os = "Apple iPhone (iOS)";
+      else if (/iPad/i.test(ua)) os = "Apple iPad (iPadOS)";
+      else if (/Macintosh|Mac OS X/i.test(ua)) os = "Apple Mac (macOS)";
+      else if (/Android/i.test(ua)) {
+        const m = ua.match(/;\s([^;)]+)\sBuild\//i);
+        os = m && m[1] ? `Android (${m[1].trim()})` : "Android Smartphone";
+      } else if (/Linux/i.test(ua)) os = "Linux PC";
+
+      // Browser Detection
+      if (/Edg\//i.test(ua)) browser = "Microsoft Edge";
+      else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+      else if (/Chrome\//i.test(ua)) browser = /Android|iPhone|iPad|Mobile/i.test(ua) ? "Chrome Mobile" : "Google Chrome";
+      else if (/Safari\//i.test(ua) && !/Chrome/i.test(ua)) browser = /iPhone|iPad|Mobile/i.test(ua) ? "Mobile Safari" : "Apple Safari";
+      else if (/Firefox\//i.test(ua)) browser = "Mozilla Firefox";
+      else if (/Opera|OPR\//i.test(ua)) browser = "Opera";
+
+      deviceName = `${os} • ${browser}`;
+    } else {
+      deviceName = "Active Student Device (Web Client)";
+    }
+  }
+
+  // 2. Resolve Hardware Capability
+  const cores = Number(specs?.cores || 0);
+  const memoryGB = Number(specs?.memoryGB || 0);
+  const isMobile = Boolean(specs?.isMobile || /Android|iPhone|iPad|Mobile/i.test(ua));
+  const tier = String(specs?.tier || "").toLowerCase();
+
+  if (cores > 0 && memoryGB > 0) {
+    if (cores >= 8 && memoryGB >= 8 && !isMobile) {
+      hardwareCapability = `High-End Workstation (${cores} Cores, ${memoryGB}GB+ RAM)`;
+    } else if (cores >= 6 && memoryGB >= 6) {
+      hardwareCapability = `High Performance (${cores} Cores, ${memoryGB}GB RAM)`;
+    } else if (memoryGB <= 2 || cores <= 2) {
+      hardwareCapability = `Budget Device (${cores} Cores, ~${memoryGB}GB RAM)`;
+    } else {
+      hardwareCapability = `Standard Performance (${cores} Cores, ~${memoryGB}GB RAM)`;
+    }
+  } else if (specs?.hardwareCapability && typeof specs.hardwareCapability === "string") {
+    hardwareCapability = specs.hardwareCapability.trim();
+  } else if (specs?.label && typeof specs.label === "string" && (specs.label.includes("Cores") || specs.label.includes("RAM"))) {
+    hardwareCapability = specs.label.trim();
+  } else if (tier === "high" || tier === "workstation") {
+    hardwareCapability = "High Performance Multi-Core Architecture";
+  } else if (tier === "ultra_low" || tier === "low") {
+    hardwareCapability = "Budget Mobile Architecture (Adaptive Guard)";
+  } else if (cores > 0) {
+    hardwareCapability = `Multi-Core Compute Engine (${cores} Cores)`;
+  } else {
+    // Dynamic fallback based on platform/UA
+    if (/iPhone|iPad/i.test(ua)) {
+      hardwareCapability = "Apple Bionic / Neural Engine Architecture";
+    } else if (/Macintosh|Mac OS X/i.test(ua)) {
+      hardwareCapability = "Apple Silicon / macOS Core Engine";
+    } else if (/Android|Mobile/i.test(ua)) {
+      hardwareCapability = "Mobile ARM Multi-Core (Adaptive Client)";
+    } else if (/Windows|Linux/i.test(ua)) {
+      hardwareCapability = "Desktop Workstation (Multi-Core x64)";
+    } else {
+      hardwareCapability = "Standard Architecture (Adaptive Web Engine)";
+    }
+  }
+
+  return { deviceName, hardwareCapability };
+}
+
+/**
  * Realtime Telegram Security Bot Activity Notifier
  * Alerts Master Admin on EVERY Login, Logout, and Registration!
  * If Google Sign-In with photo: Dispatches photo directly to Telegram, but NEVER saves photo in DB.
@@ -372,6 +554,8 @@ async function sendTelegramAuthNotice({
   threadId: customThreadId = null,
   targetChatId: customTargetChatId = null,
   replyMarkup = null,
+  deviceSpecs = null,
+  userAgent = null,
 }) {
   try {
     let currentSettings = null;
@@ -471,6 +655,9 @@ async function sendTelegramAuthNotice({
     }
 
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const deviceInfo = (event === "REGISTER" || event === "LOGIN" || event === "LOGOUT")
+      ? resolveDeviceAndHardwareInfo(user, deviceSpecs, userAgent)
+      : null;
     let titleIcon = "🔔";
     let eventTitle = "User Activity";
 
@@ -665,6 +852,7 @@ async function sendTelegramAuthNotice({
         (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "") +
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         (user.telegramDetails?.username ? `🔗 <b>Telegram Handle:</b> @${user.telegramDetails.username}\n` : "") +
+        (deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` : "") +
         `📝 <b>Registration Method:</b> <code>${regMethodDisplay}</code>\n` +
         `⚡ <b>Account Status:</b> <code>✅ Active & Verified Student (Vault Access Granted)</code>\n` +
         (isGoogle ? `✨ <b>Google Verification:</b> <code>100% Cryptographically Verified by Google</code>\n` : "") +
@@ -719,6 +907,7 @@ async function sendTelegramAuthNotice({
       if (event === "DEVTOOLS_VIOLATION" && detail) {
         caption = detail;
       } else {
+        const isAuthDeviceNotice = (event === "LOGIN" || event === "LOGOUT");
         caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
           nameAndIdentityBlock +
           (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
@@ -727,6 +916,7 @@ async function sendTelegramAuthNotice({
           (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
           (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
           (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
+          (isAuthDeviceNotice && deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` : "") +
           (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
           `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
           (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +
@@ -868,6 +1058,92 @@ async function sendTelegramAuthNotice({
         }
       } catch (pdfErr) {
         console.warn("[TELEGRAM-AUTH-NOTICE] Send document error:", pdfErr.message);
+      }
+    }
+
+    // 1.8 🗑️ STRICT REQUIREMENT: Purge & Database Delete messages MUST be sent in TXT FILE format
+    const isPurgeOrDeleteEvent = (
+      event === "ACCOUNT_PURGE" ||
+      String(event || "").includes("PURGE") ||
+      String(event || "").includes("DELETE") ||
+      event === "DATABASE_DELETE"
+    );
+
+    if (isPurgeOrDeleteEvent) {
+      try {
+        const emailSafe = (user.email || user.name || "account").toLowerCase().replace(/[^a-z0-9]/g, "_");
+        const txtFilename = `PURGE_DOSSIER_${emailSafe}_${Date.now()}.txt`;
+
+        const cleanTxtContent = [
+          "================================================================================",
+          "        FREE STUDY MATERIAL — ACCOUNT PURGE & DATABASE DELETE AUDIT DOSSIER     ",
+          "================================================================================",
+          `Generated At        : ${timeStr} IST`,
+          `Event Identifier    : ${event}`,
+          `Action Type         : ${user.actionType === "ADMIN_DELETE" ? "Manual Administrator Account Deletion" : "Automated Inactivity Purge"}`,
+          `Executed By         : ${admin ? `${admin.name || "Admin"} (${admin.email || "admin"})` : (method || "Automated Lifecycle Sweeper")}`,
+          "--------------------------------------------------------------------------------",
+          "STUDENT IDENTIFIER & CREDENTIALS:",
+          `  • Student Name     : ${user.name || "Scholar"}`,
+          `  • Email Address    : ${user.email || "N/A"}`,
+          `  • Mobile Number    : ${user.mobile || "N/A"}`,
+          `  • College / Inst.  : ${user.college || "N/A"}`,
+          `  • Academic Year    : ${user.year || "N/A"}`,
+          `  • Telegram ID      : ${user.telegramDetails?.id || "N/A"}`,
+          `  • Telegram Handle  : ${user.telegramDetails?.username ? `@${user.telegramDetails.username}` : (user.telegramName || "N/A")}`,
+          `  • Registration Date: ${user.registeredDate || "N/A"}`,
+          `  • Last Login Date  : ${user.lastLoginDate || "Never Logged In"}`,
+          user.inactivityDays !== undefined ? `  • Inactivity Days  : ${user.inactivityDays} Days (Threshold: ${user.thresholdDays || 90} Days)` : null,
+          "--------------------------------------------------------------------------------",
+          "DATABASE CASCADE & PURGE STATUS:",
+          "  • Firebase Firestore : User document deleted from 'users' collection",
+          "  • Turso LibSQL Cloud : Associated profile, chat records & telemetry expunged",
+          "  • WebAuthn / Passkeys: Biometric keys revoked and deleted",
+          "  • Active Sessions    : All JWT tokens and session records invalidated",
+          "--------------------------------------------------------------------------------",
+          `STUDY NOTES UPLOADED BY STUDENT (${user.uploadedNotes?.length || 0} Total - Preserved in Vault):`,
+          user.uploadedNotes && user.uploadedNotes.length > 0
+            ? user.uploadedNotes.map((n, i) => `  [${i + 1}] ${n.title} | ${n.course || "Course"} | ${n.branch || "Branch"} | ${formatRealSize(n.fileSize)} | ID: ${n.id || "N/A"}`).join("\n")
+            : "  (No study notes uploaded by this student)",
+          "--------------------------------------------------------------------------------",
+          `DOCUMENTS DOWNLOADED BY STUDENT (${user.downloadedNotes?.length || user.downloadsCount || 0} Total):`,
+          user.downloadedNotes && user.downloadedNotes.length > 0
+            ? user.downloadedNotes.map((d, i) => `  [${i + 1}] ${d.title} | Subject: ${d.subject || "General"} | ID: ${d.id || "N/A"}`).join("\n")
+            : "  (No download records found)",
+          "================================================================================",
+          "END OF AUDIT DOSSIER — FREE STUDY MATERIAL SECURITY GUARDIAN",
+          "================================================================================",
+        ].filter(Boolean).join("\n");
+
+        const shortCaption = [
+          `🗑️ <b>[ACCOUNT PURGE & DATABASE DELETE DOSSIER]</b>`,
+          `━━━━━━━━━━━━━━━━━━━━`,
+          `👤 <b>Student:</b> <code>${user.name || "Scholar"}</code>`,
+          `📧 <b>Email:</b> <code>${user.email || "N/A"}</code>`,
+          (user.mobile ? `📱 <b>Mobile:</b> <code>${user.mobile}</code>` : null),
+          `⚡ <b>Database Cascade:</b> <code>100% Expunged (Firestore + Turso)</code>`,
+          `👮 <b>Executed By:</b> <code>${admin?.name || method || "Lifecycle Sweeper"}</code>`,
+          `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>`,
+          `━━━━━━━━━━━━━━━━━━━━`,
+          `📎 <b>Dossier File:</b> <code>${txtFilename}</code>`,
+          `<i>Full forensic audit dossier attached in TXT file format.</i>`,
+        ].filter(Boolean).join("\n");
+
+        const ok = await sendTelegramTxtDocument({
+          botToken,
+          chatId: targetChatId,
+          threadId,
+          filename: txtFilename,
+          content: cleanTxtContent,
+          caption: shortCaption,
+        });
+
+        if (ok) {
+          console.log(`[TELEGRAM-AUTH-NOTICE] 📄 Purge Dossier TXT file successfully dispatched for ${user.email} [Topic: ${threadId || "General"}]`);
+          return;
+        }
+      } catch (txtErr) {
+        console.warn("[TELEGRAM-AUTH-NOTICE] Purge TXT dispatch error:", txtErr.message);
       }
     }
 
@@ -1247,6 +1523,7 @@ module.exports = {
   sendProfileMobileOtpEmail,
   sendTelegramOtpBackup,
   sendTelegramAuthNotice,
+  sendTelegramTxtDocument,
   getOrCreateSubjectForumTopic,
   getSubjectFromThreadId,
   getOrCreateDownloadManagerForumTopic,
