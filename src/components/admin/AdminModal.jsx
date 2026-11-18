@@ -3150,17 +3150,44 @@ export default function AdminModal({
           />
           <AdminStatCard
             label="RAM Consumption"
-            badge={hardwareInfo?.containerMemory?.limitMB ? `${hardwareInfo.containerMemory.usagePercent}% QUOTA` : "1MS CACHE"}
+            badge={
+              (hardwareInfo?.clusterMemory?.activeNodesCount || 1) > 1
+                ? `${hardwareInfo.clusterMemory.activeNodesCount} NODES ACTIVE`
+                : (hardwareInfo?.containerMemory?.limitMB ? `${hardwareInfo.containerMemory.usagePercent || 0}% QUOTA` : "1MS CACHE")
+            }
             badgeBg="#fffbeb"
             badgeColor="#d97706"
-            val={
-              hardwareInfo?.containerMemory?.limitMB
-                ? `${hardwareInfo.containerMemory.usedMB} / ${hardwareInfo.containerMemory.limitMB} MB`
-                : (hardwareInfo?.v8ProcessMemory?.rssMB
-                  ? `${hardwareInfo.v8ProcessMemory.rssMB} MB`
-                  : (health?.memoryUsageMB ? `${health.memoryUsageMB} MB` : (hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB` : "195 MB")))
-            }
-            subVal={hardwareInfo?.memory?.totalGB ? `Host: ${hardwareInfo.memory.totalGB} GB Physical` : undefined}
+            val={(() => {
+              const used = Number(
+                hardwareInfo?.containerMemory?.usedMB ??
+                hardwareInfo?.containerMemory?.rssMB ??
+                hardwareInfo?.v8ProcessMemory?.rssMB ??
+                health?.memoryUsageMB ??
+                195
+              );
+              const limit = Number(hardwareInfo?.containerMemory?.limitMB || 512);
+              const activeNodes = Number(hardwareInfo?.clusterMemory?.activeNodesCount || 1);
+
+              if (activeNodes > 1 && hardwareInfo?.clusterMemory?.totalClusterLimitMB) {
+                const clusterUsed = Number(hardwareInfo.clusterMemory.totalClusterUsedMB || used);
+                const clusterLimit = Number(hardwareInfo.clusterMemory.totalClusterLimitMB);
+                return `${clusterUsed} / ${clusterLimit} MB`;
+              }
+              return `${used} / ${limit} MB`;
+            })()}
+            subVal={(() => {
+              const hostGB = hardwareInfo?.memory?.totalGB || "30.65";
+              const activeNodes = Number(hardwareInfo?.clusterMemory?.activeNodesCount || 1);
+              const totalNodes = Number(hardwareInfo?.clusterMemory?.totalConfiguredNodes || 1);
+
+              if (activeNodes > 1 && hardwareInfo?.clusterMemory?.totalClusterLimitGB) {
+                return `Cluster: ${hardwareInfo.clusterMemory.totalClusterLimitGB} GB (${activeNodes} Backends) • Host: ${hostGB} GB`;
+              }
+              if (totalNodes > 1) {
+                return `Node: ${hardwareInfo?.containerMemory?.limitMB || 512} MB • Cluster: ${(totalNodes * 0.5).toFixed(1)} GB Max • Host: ${hostGB} GB`;
+              }
+              return `Host: ${hostGB} GB Physical • Dynamic Auto-Scale`;
+            })()}
             valColor="#d97706"
             icon={Cpu}
             iconBg="#fffbeb"

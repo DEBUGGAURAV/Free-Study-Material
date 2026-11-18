@@ -846,6 +846,25 @@ function getClusterTelemetry() {
     ? `${activeNodes[0].name} (${activeNodes[0].url})`
     : "No Online Backend Available";
 
+  // 🧠 Dynamic Cluster Memory Aggregation across all active/configured backend nodes
+  let totalClusterLimitMB = 0;
+  let totalClusterUsedMB = 0;
+  const configuredNodes = clusterNodes.filter((n) => n.url);
+  for (const n of configuredNodes) {
+    if (n.isEnabled) {
+      const nodeLimitMB = Number(n.hardware?.containerLimitMB || n.hardware?.ramLimitMB || 512);
+      const nodeUsedMB = Number(n.hardware?.rssMB || n.hardware?.usedMB || 0);
+      totalClusterLimitMB += nodeLimitMB;
+      totalClusterUsedMB += nodeUsedMB;
+    }
+  }
+  if (totalClusterLimitMB === 0) {
+    const local = getLocalNodeTelemetry();
+    totalClusterLimitMB = Number(local.hardware?.containerLimitMB || 512);
+    totalClusterUsedMB = Number(local.hardware?.rssMB || 0);
+  }
+  const clusterMemPercent = totalClusterLimitMB > 0 ? Math.round((totalClusterUsedMB / totalClusterLimitMB) * 100) : 0;
+
   return {
     requests: {
       total: totalRequests,
@@ -857,6 +876,16 @@ function getClusterTelemetry() {
         ? Number(((totalOn / totalRequests) * 100).toFixed(1))
         : 100,
       totalConnectedUsers: Math.max(totalConnectedUsers, 1),
+    },
+    clusterMemory: {
+      totalConfiguredNodes: configuredNodes.length || 1,
+      activeNodesCount: activeCount,
+      totalClusterLimitMB,
+      totalClusterLimitGB: (totalClusterLimitMB / 1024).toFixed(2),
+      totalClusterUsedMB,
+      clusterUsagePercent: clusterMemPercent,
+      perNodeLimitMB: 512,
+      hostTotalGB: (os.totalmem() / 1073741824).toFixed(2),
     },
     cluster: {
       nodes: clusterNodes,

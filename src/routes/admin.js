@@ -2616,6 +2616,19 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
     const procRssMB = Math.round(procMem.rss / (1024 * 1024));
     const containerUsagePercent = Math.min(100, Math.round((procMem.rss / containerLimitBytes) * 100));
 
+    // Dynamic Cluster Telemetry & Multi-Backend RAM Aggregation
+    const clusterTelem = getClusterTelemetry ? getClusterTelemetry() : null;
+    const clusterMem = clusterTelem?.clusterMemory || {
+      totalConfiguredNodes: 1,
+      activeNodesCount: 1,
+      totalClusterLimitMB: containerLimitMB,
+      totalClusterLimitGB: (containerLimitMB / 1024).toFixed(2),
+      totalClusterUsedMB: procRssMB,
+      clusterUsagePercent: containerUsagePercent,
+      perNodeLimitMB: containerLimitMB,
+      hostTotalGB: (totalMemBytes / (1024 ** 3)).toFixed(2),
+    };
+
     return res.json({
       success: true,
       hardware: {
@@ -2631,10 +2644,12 @@ router.get("/system/hardware", authenticateToken, checkAdminOrPermission("all"),
           limitBytes: containerLimitBytes,
           limitMB: containerLimitMB,
           limitGB: (containerLimitBytes / (1024 ** 3)).toFixed(2),
+          usedMB: procRssMB,
           rssMB: procRssMB,
           usagePercent: containerUsagePercent,
           freeMB: Math.max(0, containerLimitMB - procRssMB),
         },
+        clusterMemory: clusterMem,
         memory: {
           totalBytes: totalMemBytes,
           freeBytes: freeMemBytes,
