@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle, Wifi, Plus, X, Search, Eye } from "lucide-react";
+import { Activity, RefreshCw, Cpu, Server, HardDrive, Trash2, ShieldAlert, AlertTriangle, CheckCircle, ArrowRight, CornerDownRight, Power, Users, CheckCircle2, AlertCircle, Wifi, X, Search, Eye } from "lucide-react";
 import { api } from "../../../api";
 import { BACKEND_CLUSTER_URLS } from "../../../config/clientConfig";
 
@@ -18,10 +18,6 @@ export default function TabHardware(props) {
   const [actionFeedback, setActionFeedback] = useState(null);
   const [selectedNodeUsers, setSelectedNodeUsers] = useState(null);
   const [userSearchTerm, setUserSearchTerm] = useState("");
-  const [showAddNodeModal, setShowAddNodeModal] = useState(false);
-  const [newNodeData, setNewNodeData] = useState({ name: "", url: "", role: "production" });
-  const [addingNode, setAddingNode] = useState(false);
-  const [deletingNodeId, setDeletingNodeId] = useState(null);
 
   useEffect(() => {
     if (hardwareInfo?.process?.uptimeSeconds) {
@@ -176,61 +172,6 @@ export default function TabHardware(props) {
       }
     }
   }, [clusterTelemetry?.cluster?.nodes, localNodes]);
-
-  // Handler to add custom server node (Scale beyond 2 or 3)
-  const handleAddNode = async (e) => {
-    e?.preventDefault();
-    if (!newNodeData.url || !newNodeData.url.trim()) return;
-    try {
-      setAddingNode(true);
-      const res = await api.addClusterNode(newNodeData);
-      if (res?.clusterTelemetry?.cluster?.nodes) {
-        setLocalNodes(res.clusterTelemetry.cluster.nodes);
-      }
-      setActionFeedback({
-        type: "success",
-        message: `New server node '${newNodeData.name || newNodeData.url}' successfully added to cluster!`,
-      });
-      setShowAddNodeModal(false);
-      setNewNodeData({ name: "", url: "", role: "production" });
-      loadHardwareInfo?.(true);
-    } catch (err) {
-      setActionFeedback({
-        type: "error",
-        message: err.message || "Failed to add cluster node.",
-      });
-    } finally {
-      setAddingNode(false);
-      setTimeout(() => setActionFeedback(null), 6000);
-    }
-  };
-
-  // Handler to remove a server node from cluster
-  const handleRemoveNode = async (nodeId, nodeName) => {
-    if (!window.confirm(`Are you sure you want to remove node '${nodeName || nodeId}' from the cluster rotation?`)) {
-      return;
-    }
-    try {
-      setDeletingNodeId(nodeId);
-      const res = await api.removeClusterNode(nodeId);
-      if (res?.clusterTelemetry?.cluster?.nodes) {
-        setLocalNodes(res.clusterTelemetry.cluster.nodes);
-      }
-      setActionFeedback({
-        type: "success",
-        message: `Node '${nodeName || nodeId}' successfully removed from cluster rotation.`,
-      });
-      loadHardwareInfo?.(true);
-    } catch (err) {
-      setActionFeedback({
-        type: "error",
-        message: err.message || "Failed to remove cluster node.",
-      });
-    } finally {
-      setDeletingNodeId(null);
-      setTimeout(() => setActionFeedback(null), 6000);
-    }
-  };
 
   return (
     <div>
@@ -509,43 +450,17 @@ export default function TabHardware(props) {
       })()}
 
       {/* ========================================================================= */}
-      {/* 🌐 SECTION 3: MULTI-BACKEND CLUSTER LIVE USERS, SPEED & HARDWARE MATRIX */}
+      {/* 🌐 SECTION 3: 3-BACKEND CLUSTER LIVE USERS, SPEED & HARDWARE MATRIX */}
       {/* ========================================================================= */}
       <div style={{ marginBottom: "22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
-          <div>
-            <h4 style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-              <Server size={18} style={{ color: "#38bdf8" }} />
-              <span>Multi-Backend Cluster: Live Users, Speed &amp; Hardware Details</span>
-            </h4>
-            <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "2px" }}>
-              Dynamic Cluster ({nodes.length} Nodes Configured) • Real-Time Probe Every 3s
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <button
-              type="button"
-              onClick={() => setShowAddNodeModal(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                background: "rgba(56, 189, 248, 0.12)",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-                borderRadius: "8px",
-                padding: "6px 12px",
-                fontSize: "0.75rem",
-                color: "#38bdf8",
-                fontWeight: 700,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-              }}
-              title="Add Backend #4, #5 or additional cloud nodes to scale cluster"
-            >
-              <Plus size={13} />
-              <span>+ Add Server Node</span>
-            </button>
-          </div>
+          <h4 style={{ fontSize: "0.94rem", fontWeight: 800, color: "#fff", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+            <Server size={18} style={{ color: "#38bdf8" }} />
+            <span>Each Backend: Live Users, Connection Speed &amp; Hardware Details</span>
+          </h4>
+          <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+            Real-Time Per-Node Live Probe • Auto-Sync Every 3s
+          </span>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))", gap: "14px" }}>
@@ -644,19 +559,6 @@ export default function TabHardware(props) {
                             HOST
                           </span>
                         )}
-                        {node.isCustom && (
-                          <span style={{
-                            fontSize: "0.6rem",
-                            fontWeight: 800,
-                            padding: "1px 6px",
-                            borderRadius: "999px",
-                            background: "rgba(168, 85, 247, 0.18)",
-                            border: "1px solid rgba(168, 85, 247, 0.4)",
-                            color: "#c084fc",
-                          }}>
-                            CUSTOM
-                          </span>
-                        )}
                       </div>
                       <div style={{ fontSize: "0.68rem", color: "#94a3b8", maxWidth: "185px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={node.url}>
                         {(node.url || "Not configured").replace(/^https?:\/\//, "")}
@@ -664,63 +566,35 @@ export default function TabHardware(props) {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {/* Remove button for custom nodes */}
-                    {node.isCustom && (
-                      <button
-                        type="button"
-                        disabled={deletingNodeId === node.id}
-                        onClick={() => handleRemoveNode(node.id, node.name)}
-                        style={{
-                          background: "rgba(239, 68, 68, 0.15)",
-                          border: "1px solid rgba(239, 68, 68, 0.35)",
-                          color: "#f87171",
-                          borderRadius: "20px",
-                          padding: "4px 8px",
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "3px",
-                        }}
-                        title="Remove this node from cluster"
-                      >
-                        <Trash2 size={11} />
-                        <span>Delete</span>
-                      </button>
+                  {/* Interactive Server ON / OFF Switch */}
+                  <button
+                    type="button"
+                    disabled={togglingNodeId === node.id || !node.url}
+                    onClick={() => handleToggleNode(node.id, !isEnabled)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      border: isEnabled ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
+                      background: isEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      color: isEnabled ? "#34d399" : "#fca5a5",
+                      fontWeight: 800,
+                      fontSize: "0.7rem",
+                      cursor: togglingNodeId === node.id ? "wait" : "pointer",
+                      transition: "all 0.2s ease",
+                      flexShrink: 0,
+                    }}
+                    title={`Click to turn ${node.name} ${isEnabled ? "OFF" : "ON"}`}
+                  >
+                    {togglingNodeId === node.id ? (
+                      <RefreshCw size={11} className="spinner" />
+                    ) : (
+                      <Power size={11} style={{ color: isEnabled ? "#10b981" : "#ef4444" }} />
                     )}
-
-                    {/* Interactive Server ON / OFF Switch */}
-                    <button
-                      type="button"
-                      disabled={togglingNodeId === node.id || !node.url}
-                      onClick={() => handleToggleNode(node.id, !isEnabled)}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "5px",
-                        padding: "4px 10px",
-                        borderRadius: "20px",
-                        border: isEnabled ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(239, 68, 68, 0.5)",
-                        background: isEnabled ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
-                        color: isEnabled ? "#34d399" : "#fca5a5",
-                        fontWeight: 800,
-                        fontSize: "0.7rem",
-                        cursor: togglingNodeId === node.id ? "wait" : "pointer",
-                        transition: "all 0.2s ease",
-                        flexShrink: 0,
-                      }}
-                      title={`Click to turn ${node.name} ${isEnabled ? "OFF" : "ON"}`}
-                    >
-                      {togglingNodeId === node.id ? (
-                        <RefreshCw size={11} className="spinner" />
-                      ) : (
-                        <Power size={11} style={{ color: isEnabled ? "#10b981" : "#ef4444" }} />
-                      )}
-                      <span>{isEnabled ? "ON" : "OFF"}</span>
-                    </button>
-                  </div>
+                    <span>{isEnabled ? "ON" : "OFF"}</span>
+                  </button>
                 </div>
 
                 {/* 1. LIVE USERS, SOCKETS & TRAFFIC */}
@@ -1027,13 +901,21 @@ export default function TabHardware(props) {
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
               <span style={{ color: "#94a3b8" }}>Container Quota Limit:</span>
               <span style={{ color: "#38bdf8", fontWeight: 700 }}>
-                {hardwareInfo?.containerMemory?.limitMB || hardwareInfo?.memory?.containerLimitMB || 512} MB Max
+                {hardwareInfo?.containerMemory?.limitMB || hardwareInfo?.memory?.containerLimitMB || 512} MB Max (Per Backend)
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
               <span style={{ color: "#94a3b8" }}>Backend RSS Memory:</span>
               <span style={{ color: "#34d399", fontWeight: 800 }}>
-                {hardwareInfo?.containerMemory?.usedMB || hardwareInfo?.memory?.containerRssMB || hardwareInfo?.v8ProcessMemory?.rssMB || 195} MB ({hardwareInfo?.containerMemory?.usagePercent || hardwareInfo?.memory?.containerUsagePercent || 38}%)
+                {hardwareInfo?.containerMemory?.usedMB || hardwareInfo?.containerMemory?.rssMB || hardwareInfo?.memory?.containerRssMB || hardwareInfo?.v8ProcessMemory?.rssMB || 195} MB ({hardwareInfo?.containerMemory?.usagePercent || hardwareInfo?.memory?.containerUsagePercent || 38}%)
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+              <span style={{ color: "#94a3b8" }}>Cluster Total Capacity:</span>
+              <span style={{ color: "#a78bfa", fontWeight: 800 }}>
+                {hardwareInfo?.clusterMemory?.totalClusterLimitMB
+                  ? `${hardwareInfo.clusterMemory.totalClusterLimitMB} MB (${hardwareInfo.clusterMemory.totalClusterLimitGB} GB across ${hardwareInfo.clusterMemory.totalConfiguredNodes || 3} Nodes)`
+                  : "1,536 MB (1.54 GB across 3 Nodes)"}
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
@@ -1049,14 +931,14 @@ export default function TabHardware(props) {
               </span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#94a3b8" }}>Physical Host RAM (Shared):</span>
+              <span style={{ color: "#94a3b8" }}>Physical Host RAM (Shared Bare-Metal):</span>
               <span style={{ color: "#fbbf24", fontWeight: 600 }}>
                 {hardwareInfo?.memory?.usedGB ? `${hardwareInfo.memory.usedGB} / ${hardwareInfo.memory.totalGB} GB (${hardwareInfo.memory.usagePercent}%)` : "30.65 GB Bare-Metal"}
               </span>
             </div>
           </div>
           <div style={{ marginTop: "10px", padding: "6px 8px", background: "rgba(255,255,255,0.03)", borderRadius: "6px", fontSize: "0.68rem", color: "#64748b", lineHeight: "1.35" }}>
-            💡 <strong>Architecture Note:</strong> 30.65 GB is Render’s shared AMD EPYC bare-metal host machine RAM. The backend Node.js container runs inside a dedicated 512 MB cgroup quota.
+            💡 <strong>Architecture &amp; Scaling Note:</strong> 30.65 GB is Render’s shared AMD EPYC bare-metal host machine RAM. Each backend runs in an isolated 512 MB Linux container. When you add more backends in future, your active cluster capacity dynamically scales up (e.g., 2 Nodes = 1,024 MB, 3 Nodes = 1,536 MB, 4 Nodes = 2,048 MB) automatically!
           </div>
         </div>
 
@@ -1340,190 +1222,6 @@ export default function TabHardware(props) {
                 ));
               })()}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* ➕ MODAL 2: ADD SERVER NODE (SCALE BEYOND 2 / 3 NODES) */}
-      {/* ========================================================================= */}
-      {showAddNodeModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(6px)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "16px",
-          }}
-          onClick={() => setShowAddNodeModal(false)}
-        >
-          <div
-            style={{
-              background: "#0f172a",
-              border: "1px solid rgba(56, 189, 248, 0.35)",
-              borderRadius: "16px",
-              width: "100%",
-              maxWidth: "520px",
-              boxShadow: "0 20px 60px rgba(0, 0, 0, 0.6)",
-              overflow: "hidden",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{
-              padding: "16px 20px",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "10px",
-                  background: "rgba(56, 189, 248, 0.15)",
-                  color: "#38bdf8",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}>
-                  <Server size={20} />
-                </div>
-                <div>
-                  <h4 style={{ margin: 0, color: "#fff", fontSize: "0.98rem", fontWeight: 800 }}>
-                    Add Server Node to Cluster
-                  </h4>
-                  <p style={{ margin: "2px 0 0", color: "#94a3b8", fontSize: "0.72rem" }}>
-                    Scale to Backend #4, #5 or additional cloud instances
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddNodeModal(false)}
-                style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer" }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddNode} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
-                  Server Display Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Backend #4 (Production Node #4)"
-                  value={newNodeData.name}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, name: e.target.value })}
-                  style={{
-                    width: "100%",
-                    background: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "8px",
-                    padding: "9px 12px",
-                    color: "#fff",
-                    fontSize: "0.82rem",
-                    outline: "none",
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
-                  Server Public Origin URL
-                </label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://freestudymaterial4.onrender.com"
-                  value={newNodeData.url}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, url: e.target.value })}
-                  style={{
-                    width: "100%",
-                    background: "rgba(15, 23, 42, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "8px",
-                    padding: "9px 12px",
-                    color: "#fff",
-                    fontSize: "0.82rem",
-                    outline: "none",
-                  }}
-                />
-                <span style={{ fontSize: "0.68rem", color: "#64748b", marginTop: "3px", display: "block" }}>
-                  Must be reachable via HTTPS (e.g. Render, Railway, AWS, Fly.io, or VPS).
-                </span>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#cbd5e1", marginBottom: "6px" }}>
-                  Cluster Node Role
-                </label>
-                <select
-                  value={newNodeData.role}
-                  onChange={(e) => setNewNodeData({ ...newNodeData, role: e.target.value })}
-                  style={{
-                    width: "100%",
-                    background: "#0f172a",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "8px",
-                    padding: "9px 12px",
-                    color: "#fff",
-                    fontSize: "0.82rem",
-                    outline: "none",
-                  }}
-                >
-                  <option value="production">Active Production Node (Load Balanced)</option>
-                  <option value="replica">Failover Replica (Hot Standby)</option>
-                  <option value="standby">Backup Disaster Recovery</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddNodeModal(false)}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "8px",
-                    color: "#cbd5e1",
-                    padding: "8px 16px",
-                    cursor: "pointer",
-                    fontSize: "0.82rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addingNode}
-                  className="btn-primary"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 18px",
-                    fontSize: "0.82rem",
-                    fontWeight: 700,
-                  }}
-                >
-                  {addingNode ? <RefreshCw size={14} className="spinner" /> : <Plus size={14} />}
-                  <span>{addingNode ? "Adding Node..." : "Add to Cluster"}</span>
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}
