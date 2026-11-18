@@ -28,7 +28,8 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
     target: 'es2020',
-    chunkSizeWarningLimit: 1200,
+    chunkSizeWarningLimit: 2500,
+    reportCompressedSize: false,
     rollupOptions: {
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
@@ -41,6 +42,18 @@ export default defineConfig({
             }
             if (id.includes('lucide-react')) {
               return 'vendor-icons';
+            }
+            if (id.includes('katex')) {
+              return 'vendor-katex';
+            }
+            if (id.includes('elkjs')) {
+              return 'vendor-elk';
+            }
+            if (id.includes('cytoscape') || id.includes('cose-bilkent')) {
+              return 'vendor-cytoscape';
+            }
+            if (id.includes('d3')) {
+              return 'vendor-d3';
             }
             if (id.includes('pdfjs-dist')) {
               return 'vendor-pdf';

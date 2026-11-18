@@ -1277,11 +1277,11 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 5px 9px;
-  border-radius: 10px;
+  padding: 4px 8px;
+  border-radius: 8px;
   background: rgba(15, 23, 42, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 0.70rem;
+  font-size: 0.68rem;
   transition: all 0.2s ease;
   box-sizing: border-box;
 }
@@ -3822,8 +3822,8 @@ select option,
 .branch-chip { border-color: #e2e8f2; background: #f8faff; color: #475b7e; }
 .branch-chip:hover { border-color: #bde3dc; background: #edf8f6; color: #087c70; }
 .branch-chip.active { border-color: #bde3dc; background: #eaf7f4; color: #087c70; box-shadow: none; }
-.note-card { border-color: #e2e8f1; border-radius: 20px; background: #fff; box-shadow: 0 12px 32px -24px rgba(29, 48, 77, 0.38); }
-.note-card { padding: 15px; gap: 11px; background: linear-gradient(180deg, #fff, #fbfcff); }
+.note-card { border-color: #e2e8f1; border-radius: 18px; background: #fff; box-shadow: 0 12px 32px -24px rgba(29, 48, 77, 0.38); }
+.note-card { padding: 12px 13px; gap: 7px; background: linear-gradient(180deg, #fff, #fbfcff); }
 .note-card::before { left: 16px; right: 16px; height: 2px; background: linear-gradient(90deg, transparent, #4361ee 32%, #0f9f8f 78%, transparent); opacity: 0.7; }
 .note-card:hover { transform: translateY(-3px); border-color: #c4cff4; box-shadow: var(--shadow-card-hover); }
 .admin-status-toggle.active { border-color: #a9d9cf !important; background: #e4f6ef !important; color: #06695f !important; box-shadow: none; }
@@ -6226,7 +6226,8 @@ svg.lucide {
 }
 
 .search-wrapper:focus-within {
-  filter: drop-shadow(0 4px 16px rgba(99, 102, 241, 0.18));
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.18);
+  border-radius: 9999px;
 }
 
 .search-wrapper .search-input::placeholder {

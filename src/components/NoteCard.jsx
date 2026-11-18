@@ -222,9 +222,15 @@ function NoteCard({
     note?.allowDownload === "false" ||
     note?.allowDownload === 0 ||
     note?.allowDownload === "0";
-  const isNoteDownloadBlocked = Boolean(
-    isSingleNoteDisabled || !allowNotesDownload || allowNotesDownload === "false"
+  const isAdminUser = Boolean(
+    isAdmin ||
+    currentUser?.role === "admin" ||
+    currentUser?.email === "aky435316@gmail.com" ||
+    (currentUser?.permissions && currentUser.permissions.includes("all"))
   );
+  const isNoteDownloadBlocked = isAdminUser
+    ? Boolean(isSingleNoteDisabled)
+    : Boolean(isSingleNoteDisabled || allowNotesDownload === false || allowNotesDownload === "false");
 
   // 1. Direct Device Native Share: PNG Image Attached + Clean Text & Link + Direct OS Share Sheet
   const handleShareNote = async (e) => {
@@ -379,12 +385,19 @@ function NoteCard({
     onPreview(note);
   };
 
-  const cleanDescription = note.description
-    ? note.description.toLowerCase().includes("telegram") ||
-      note.description.includes("TECH TITAN STORAGE")
-      ? "📚 Verified Academic Notes • Free Study Material"
-      : note.description
-    : "";
+  const cleanDescription = useMemo(() => {
+    const raw = String(note.description || "").trim();
+    if (
+      !raw ||
+      raw.toLowerCase().includes("telegram") ||
+      raw.includes("TECH TITAN STORAGE") ||
+      raw.toLowerCase().startsWith("imported and synchronized") ||
+      raw.toLowerCase().includes("cloud storage")
+    ) {
+      return "";
+    }
+    return raw;
+  }, [note.description]);
 
   const subjectTheme = getSubjectTheme(note.subject, note.branch);
 

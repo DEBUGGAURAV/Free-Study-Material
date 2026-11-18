@@ -4235,6 +4235,9 @@ let techSettings = {
 function applyTechSettings(data) {
   if (!data) return;
   techSettings = { ...techSettings, ...data };
+  if (data.allowNotesDownload === undefined) {
+    techSettings.allowNotesDownload = true;
+  }
   // Sync with smart deduplication engine
   try {
     const { updateDedupSettings } = require("../services/dedupSettings");
