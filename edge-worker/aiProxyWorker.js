@@ -548,7 +548,12 @@ function queryHeuristicGuard(query, context) {
 async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle, user = null) {
   const token = (env.HELP_BOT_TOKEN || env.TELEGRAM_HELP_BOT_TOKEN || "").trim();
   const chatId = (env.HELP_CHAT_ID || env.TELEGRAM_HELP_CHAT_ID || "").trim();
-  const topicId = (env.HELP_TOPIC_ACTIVE_ID || env.HELP_TOPIC_ID || "").trim();
+  // 🎯 Strictly fix AI Search & Circle to Search to Topic 17 (never leak into HelpDesk Topic 6/7)
+  let topicId = 17;
+  const envTopic = Number((env.AI_SEARCH_TOPIC_ID || env.TELEGRAM_AI_SEARCH_TOPIC_ID || "").trim());
+  if (!isNaN(envTopic) && envTopic > 0 && envTopic !== 6 && envTopic !== 7 && envTopic !== 14) {
+    topicId = envTopic;
+  }
   if (!token || !chatId) return;
 
   try {
@@ -595,7 +600,9 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
       `❓ <b>Query / Formula:</b>\n<blockquote>${String(query || "").slice(0, 300).replace(/[<>]/g, "")}</blockquote>`,
+      "━━━━━━━━━━━━━━━━━━━━",
       `🕒 <b>Timestamp:</b> ${timeStr}`,
+      `📍 <i>Delivered to Dedicated AI Queries Hub (Topic #${topicId})</i>`,
     ].join("\n");
 
     const payload = {
@@ -603,10 +610,8 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       text,
       parse_mode: "HTML",
       disable_web_page_preview: true,
+      message_thread_id: Number(topicId),
     };
-    if (topicId) {
-      payload.message_thread_id = Number(topicId);
-    }
 
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",

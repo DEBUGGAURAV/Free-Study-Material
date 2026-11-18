@@ -78,20 +78,19 @@ function isAiGloballyEnabled() {
 
 /**
  * Resolves the dedicated Telegram Topic ID for AI Search Logs (strictly Topic 17).
- * Strictly prevents AI searches from leaking into Help Active (6), Help Closed (7), or legacy topics.
+ * Strictly prevents AI searches and Circle to Search from leaking into Help Active (6), Help Closed (7), or legacy topics.
  */
 function getAiSearchTopicId() {
-  const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
-  const savedTopic = Number(currentAiSettings.aiSearchTopicId || 0);
   const blockedTopics = new Set([6, 7, 14, 60, 70]);
-
+  const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
   if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     return envTopic;
   }
+  const savedTopic = Number(currentAiSettings.aiSearchTopicId || 0);
   if (savedTopic > 0 && !blockedTopics.has(savedTopic)) {
     return savedTopic;
   }
-  return 17;
+  return 17; // Strictly fixed to Topic 17 without requiring env change
 }
 
 // 1-minute rolling rate limiter window
@@ -1276,10 +1275,12 @@ async function setupTelegramAiSupportTopics(customChatId = null) {
     });
     const dataA = await resA.json();
     if (dataA.ok && dataA.result?.message_thread_id) {
-      results.aiSearchTopicId = dataA.result.message_thread_id;
-      currentAiSettings.aiSearchTopicId = dataA.result.message_thread_id;
+      const createdId = Number(dataA.result.message_thread_id);
+      results.aiSearchTopicId = (createdId === 6 || createdId === 7 || createdId === 14) ? 17 : createdId;
+      currentAiSettings.aiSearchTopicId = results.aiSearchTopicId;
     } else {
-      results.aiSearchTopicError = dataA.description || "Failed to create AI Search topic";
+      results.aiSearchTopicId = 17;
+      currentAiSettings.aiSearchTopicId = 17;
     }
   } catch (err) {
     results.aiSearchTopicError = err.message;
@@ -1421,12 +1422,13 @@ async function createAiSearchForumTopic(token, chatId) {
       const data = await res.json().catch(() => null);
       if (data && data.ok && data.result?.message_thread_id) {
         const newId = Number(data.result.message_thread_id);
-        currentAiSettings.aiSearchTopicId = newId;
+        const safeId = (newId === 6 || newId === 7 || newId === 14) ? 17 : newId;
+        currentAiSettings.aiSearchTopicId = safeId;
         await saveAiSettingsToDb().catch(() => {});
-        console.log(`[TELEGRAM-AI-AUDIT] 🆕 Auto-created AI Search Logs topic: Topic #${newId}`);
-        return newId;
+        console.log(`[TELEGRAM-AI-AUDIT] 🆕 Auto-created AI Search Logs topic: Topic #${safeId}`);
+        return safeId;
       }
-      return null;
+      return 17;
     } catch (err) {
       console.warn("[TELEGRAM-AI-AUDIT] Auto-create topic warning:", err.message);
       return null;
@@ -1558,7 +1560,7 @@ async function dispatchAiSearchTelegramAudit({
     if (/thread not found|topic.*deleted|topic.*closed|message_thread_id/i.test(errDesc)) {
       console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);
       const freshTopicId = await createAiSearchForumTopic(token, chatId);
-      const targetRetryId = freshTopicId || 17;
+      const targetRetryId = (freshTopicId && freshTopicId !== 6 && freshTopicId !== 7 && freshTopicId !== 14) ? freshTopicId : 17;
       const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
