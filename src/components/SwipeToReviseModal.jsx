@@ -4,17 +4,12 @@ import {
   Flame,
   RotateCw,
   Sparkles,
-  Award,
   Check,
   Star,
-  Zap,
   Volume2,
   VolumeX,
-  BookOpen,
   Filter,
   CheckCircle2,
-  ChevronRight,
-  TrendingUp,
 } from "lucide-react";
 import { playPop } from "../utils/soundEffects";
 

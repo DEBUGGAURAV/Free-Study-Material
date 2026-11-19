@@ -6,15 +6,11 @@ import {
   CheckCircle2,
   RotateCw,
   RotateCcw,
-  Layers,
-  ChevronLeft,
-  ChevronRight,
   Lightbulb,
   Award,
   Volume2,
   VolumeX,
   HelpCircle,
-  Zap,
 } from "lucide-react";
 import MathMarkdown from "./MathMarkdown";
 import { playSwipeCardSound } from "../utils/soundEffects";
