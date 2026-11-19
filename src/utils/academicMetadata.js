@@ -323,13 +323,13 @@ function extractAcademicMetadata({ fileName = "", caption = "", chatTitle = "", 
       if (chatSubject) {
         subject = chatSubject;
       } else if (!chatTitle.toLowerCase().includes("group")) {
-        subject = `${chatTitle.trim()} Material`;
+        subject = chatTitle.trim();
       }
     }
 
     // Default Fallback
     if (!subject) {
-      subject = "Computer Science & Engineering Material";
+      subject = "Computer Science & Engineering";
     }
   }
 

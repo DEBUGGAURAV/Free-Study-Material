@@ -399,7 +399,16 @@ function NoteCard({
     return raw;
   }, [note.description]);
 
-  const subjectTheme = getSubjectTheme(note.subject, note.branch);
+  const cleanSubject = useMemo(() => {
+    let raw = String(note?.subject || "").trim();
+    if (!raw) return "General Academic";
+    // Strip redundant trailing "Material", "Materials", "Notes", or "Study Material" along with optional separators
+    raw = raw.replace(/[\s\-_|:]*(Material|Materials|Notes|Study\s*Material)$/i, "").trim();
+    raw = raw.replace(/[\s\-_|:]+$/, "").trim();
+    return raw || "General Academic";
+  }, [note?.subject]);
+
+  const subjectTheme = getSubjectTheme(cleanSubject, note.branch);
 
   return (
     <article
@@ -524,14 +533,27 @@ function NoteCard({
                     border: `1.5px solid ${subjectTheme.border}`,
                     borderRadius: "6px",
                     padding: "2.5px 8px",
-                    fontSize: "0.74rem",
+                    fontSize: "0.72rem",
                     fontWeight: 800,
                     marginTop: "4px",
-                    width: "fit-content",
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
                   }}
                 >
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
-                  <span>{note.subject || "General Academic"}</span>
+                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block", flexShrink: 0 }} />
+                  <span
+                    style={{
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      minWidth: 0,
+                      flex: 1,
+                    }}
+                    title={cleanSubject}
+                  >
+                    {cleanSubject}
+                  </span>
                 </div>
               </div>
             </>
@@ -562,14 +584,27 @@ function NoteCard({
                       border: `1.5px solid ${subjectTheme.border}`,
                       borderRadius: "6px",
                       padding: "2.5px 8px",
-                      fontSize: "0.74rem",
+                      fontSize: "0.72rem",
                       fontWeight: 800,
                       marginTop: "4px",
-                      width: "fit-content",
+                      maxWidth: "100%",
+                      boxSizing: "border-box",
+                      overflow: "hidden",
                     }}
                   >
-                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block" }} />
-                    <span>{note.subject || "General Academic"}</span>
+                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block", flexShrink: 0 }} />
+                    <span
+                      style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                      title={cleanSubject}
+                    >
+                      {cleanSubject}
+                    </span>
                   </div>
                 </div>
               </div>
