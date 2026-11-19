@@ -686,6 +686,14 @@ router.delete("/:id", authenticateToken, async (req, res) => {
 
     const data = userDoc.data() || {};
     const passkeys = Array.isArray(data.passkeys) ? data.passkeys : [];
+    
+    // 🛡️ Strict Object-Level Authorization (BOLA/IDOR Defense):
+    // Ensure caller owns this passkey credential before allowing removal
+    const targetPasskey = passkeys.find((p) => p.id === credId);
+    if (!targetPasskey && !isAdmin) {
+      return res.status(403).json({ success: false, message: "Unauthorized: This passkey does not belong to your account." });
+    }
+
     const filtered = passkeys.filter((p) => p.id !== credId);
 
     const updatePayload = {

@@ -1,0 +1,95 @@
+{
+  "info": {
+    "name": "FreeStudyMaterial API & Security Audit Collection",
+    "description": "Complete test collection for API endpoints, BOLA verification, Auth, and Notes.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://freestudymaterial1.onrender.com"
+    },
+    {
+      "key": "jwtToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Health & Status Check",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept-Encoding", "value": "br, gzip" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "health"]
+        }
+      }
+    },
+    {
+      "name": "2. Get Public Notes",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/notes",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "notes"]
+        }
+      }
+    },
+    {
+      "name": "3. [BOLA Test] Unauthorized Note Edit (Expect 401/403)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Unauthorized BOLA Edit\"}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/notes/test_note_123",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "notes", "test_note_123"]
+        }
+      }
+    },
+    {
+      "name": "4. [BOLA Test] View Private HelpDesk Ticket (Expect 401/403/404)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/help/ticket/TKT-PRIVATE-001",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "help", "ticket", "TKT-PRIVATE-001"]
+        }
+      }
+    },
+    {
+      "name": "5. [BOLA Test] Delete Passkey Without Ownership (Expect 401/403/404)",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/passkey/test_cred_id",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "auth", "passkey", "test_cred_id"]
+        }
+      }
+    },
+    {
+      "name": "6. [Admin Shield] Access Admin Recycle Bin Without Token (Expect 401)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/admin/recycle-bin/items",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "admin", "recycle-bin", "items"]
+        }
+      }
+    }
+  ]
+}
