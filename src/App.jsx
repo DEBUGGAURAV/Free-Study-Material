@@ -1159,7 +1159,6 @@ export default function App() {
   // Ensures ANY event (upload in Telegram, delete in Telegram, web upload/delete) instantly reflects on UI without manual click
   useEffect(() => {
     let es = null;
-    let fallbackPollTimer = null;
     let isMounted = true;
     let lastSeenSyncStamp = null;
 
@@ -1193,23 +1192,7 @@ export default function App() {
 
     connectLiveStream();
 
-    // 🛡️ Fail-Safe 1: Periodic 10-second sync check in case SSE is blocked by an aggressive proxy
-    fallbackPollTimer = setInterval(async () => {
-      if (!isMounted || (typeof document !== "undefined" && document.hidden)) return;
-      try {
-        const res = await api.getSyncStatus();
-        const stamp = res?.lastSync?.timestamp;
-        if (stamp) {
-          if (lastSeenSyncStamp && lastSeenSyncStamp !== stamp) {
-            console.log("[LIVE-SYNC] 🔄 Background sync event detected. Refreshing catalog...");
-            fetchNotes(currentUserRef.current, true);
-          }
-          lastSeenSyncStamp = stamp;
-        }
-      } catch (_) {}
-    }, 10000);
-
-    // 🛡️ Fail-Safe 2: Instant re-check on Tab Focus or Window Visibility Return
+    // 🛡️ Event-driven sync on Tab Focus or Window Visibility Return (0 background timers)
     const handleVisibilityChange = () => {
       if (typeof document !== "undefined" && !document.hidden && isMounted) {
         api.getSyncStatus().then((res) => {
@@ -1230,9 +1213,6 @@ export default function App() {
       isMounted = false;
       if (es) {
         try { es.close(); } catch (_) {}
-      }
-      if (fallbackPollTimer) {
-        clearInterval(fallbackPollTimer);
       }
       window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleVisibilityChange);

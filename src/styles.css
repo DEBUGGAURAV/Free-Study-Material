@@ -1382,6 +1382,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .note-showcase-box:hover {
@@ -1422,6 +1425,10 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   display: flex;
   align-items: center;
   gap: 9px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .showcase-doc-icon {
@@ -1440,6 +1447,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
 .showcase-text-body {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .card-thumbnail-box {
@@ -1509,9 +1519,9 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   color: var(--accent-cyan);
   font-weight: 600;
   margin-top: 2px;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .note-desc {
@@ -5348,7 +5358,6 @@ svg.lucide {
 }
 
 .note-subject {
-  color: #2563eb !important;
   font-weight: 750 !important;
 }
 

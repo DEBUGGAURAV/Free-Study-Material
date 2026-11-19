@@ -402,9 +402,11 @@ function NoteCard({
   const cleanSubject = useMemo(() => {
     let raw = String(note?.subject || "").trim();
     if (!raw) return "General Academic";
-    // Strip redundant trailing "Material", "Materials", "Notes", or "Study Material" along with optional separators
-    raw = raw.replace(/[\s\-_|:]*(Material|Materials|Notes|Study\s*Material)$/i, "").trim();
-    raw = raw.replace(/[\s\-_|:]+$/, "").trim();
+    // Strip leading emojis and symbols
+    raw = raw.replace(/^[\p{Emoji}\p{Extended_Pictographic}\s\-_|:]+/gu, "").trim();
+    // Strip redundant trailing "Material", "Materials", "Notes", "Study Material", etc. along with optional separators & emojis
+    raw = raw.replace(/[\s\-_|:]*(Study\s*Material|Lecture\s*Notes|Handwritten\s*Notes|Materials?|Materia|Notes?|PDFs?|PYQs?|Books?)[\p{Emoji}\p{Extended_Pictographic}\s\-_|:]*$/iu, "").trim();
+    raw = raw.replace(/[\p{Emoji}\p{Extended_Pictographic}\s\-_|:]+$/gu, "").trim();
     return raw || "General Academic";
   }, [note?.subject]);
 
@@ -526,29 +528,44 @@ function NoteCard({
                   className="note-subject"
                   style={{
                     display: "inline-flex",
-                    alignItems: "center",
+                    alignItems: "flex-start",
                     gap: "6px",
                     background: subjectTheme.bg,
                     color: subjectTheme.color,
                     border: `1.5px solid ${subjectTheme.border}`,
-                    borderRadius: "6px",
-                    padding: "2.5px 8px",
+                    borderRadius: "7px",
+                    padding: "3px 8px",
                     fontSize: "0.72rem",
                     fontWeight: 800,
-                    marginTop: "4px",
+                    marginTop: "5px",
                     maxWidth: "100%",
                     boxSizing: "border-box",
-                    overflow: "hidden",
+                    lineHeight: 1.35,
                   }}
                 >
-                  <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block", flexShrink: 0 }} />
                   <span
                     style={{
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
+                      width: "7px",
+                      height: "7px",
+                      borderRadius: "50%",
+                      background: subjectTheme.dot,
+                      display: "inline-block",
+                      flexShrink: 0,
+                      marginTop: "4px",
+                    }}
+                  />
+                  <span
+                    style={{
                       minWidth: 0,
                       flex: 1,
+                      wordBreak: "break-word",
+                      overflowWrap: "anywhere",
+                      whiteSpace: "normal",
+                      lineHeight: 1.35,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
                     }}
                     title={cleanSubject}
                   >
@@ -577,29 +594,44 @@ function NoteCard({
                     className="note-subject"
                     style={{
                       display: "inline-flex",
-                      alignItems: "center",
+                      alignItems: "flex-start",
                       gap: "6px",
                       background: subjectTheme.bg,
                       color: subjectTheme.color,
                       border: `1.5px solid ${subjectTheme.border}`,
-                      borderRadius: "6px",
-                      padding: "2.5px 8px",
+                      borderRadius: "7px",
+                      padding: "3px 8px",
                       fontSize: "0.72rem",
                       fontWeight: 800,
-                      marginTop: "4px",
+                      marginTop: "5px",
                       maxWidth: "100%",
                       boxSizing: "border-box",
-                      overflow: "hidden",
+                      lineHeight: 1.35,
                     }}
                   >
-                    <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: subjectTheme.dot, display: "inline-block", flexShrink: 0 }} />
                     <span
                       style={{
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
+                        width: "7px",
+                        height: "7px",
+                        borderRadius: "50%",
+                        background: subjectTheme.dot,
+                        display: "inline-block",
+                        flexShrink: 0,
+                        marginTop: "4px",
+                      }}
+                    />
+                    <span
+                      style={{
                         minWidth: 0,
                         flex: 1,
+                        wordBreak: "break-word",
+                        overflowWrap: "anywhere",
+                        whiteSpace: "normal",
+                        lineHeight: 1.35,
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                        overflow: "hidden",
                       }}
                       title={cleanSubject}
                     >

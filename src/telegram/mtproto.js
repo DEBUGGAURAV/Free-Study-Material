@@ -1457,115 +1457,115 @@ let isAutoSyncing = false;
 let fastLivenessTimer = null;
 let isCheckingFastLiveness = false;
 
-function startFastLivenessChecker(intervalMs = 10000) {
-  if (fastLivenessTimer) return;
-  console.log(`[MTProto] ⚡ Fast Telegram Liveness Checker started (${intervalMs / 1000}s interval).`);
+/**
+ * Event-Driven Telegram Liveness Verifier
+ * Invoked on actual Telegram events, on-demand during sync, or when an admin reconciles.
+ * Zero recurring 10-second background polling!
+ */
+async function checkNotesLivenessNow(customNotes = null) {
+  if (isCheckingFastLiveness || !client || !client.connected) return;
+  isCheckingFastLiveness = true;
+  try {
+    const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+    const allNotes = customNotes || (await getAllCachedNotes());
+    if (!allNotes || allNotes.length === 0) return;
 
-  fastLivenessTimer = setInterval(async () => {
-    if (isCheckingFastLiveness || !client || !client.connected) return;
-    isCheckingFastLiveness = true;
-    try {
-      const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
-      const allNotes = await getAllCachedNotes();
-      if (!allNotes || allNotes.length === 0) return;
+    const db = getFirestoreDb();
+    if (!db) return;
 
-      const db = getFirestoreDb();
-      if (!db) return;
+    // Check the latest 30 notes (fast 0-cost RAM inspection)
+    const recentNotes = allNotes.slice(0, 30);
 
-      // Check the latest 30 notes (fast 0-cost RAM inspection)
-      const recentNotes = allNotes.slice(0, 30);
+    for (const note of recentNotes) {
+      let isDead = false;
 
-      for (const note of recentNotes) {
-        let isDead = false;
-
-        // 1. Check original message in Group / Topic
-        if (note.telegramOriginChatId && note.telegramOriginMessageId) {
-          try {
-            const originMsgs = await client.getMessages(note.telegramOriginChatId, {
-              ids: [Number(note.telegramOriginMessageId)],
-            });
-            if (
-              !originMsgs ||
-              !originMsgs[0] ||
-              originMsgs[0].className === "MessageEmpty" ||
-              !originMsgs[0].media
-            ) {
-              isDead = true;
-            }
-          } catch (originErr) {
-            if (originErr.message && (originErr.message.includes("MESSAGE_ID_INVALID") || originErr.message.includes("TOPIC_DELETED"))) {
-              isDead = true;
-            }
-          }
-        }
-
-        // 2. Check storage channel message
-        if (!isDead && note.telegramMessageId && storageChatId) {
-          try {
-            const storageMsgs = await client.getMessages(storageChatId, {
-              ids: [Number(note.telegramMessageId)],
-            });
-            if (
-              !storageMsgs ||
-              !storageMsgs[0] ||
-              storageMsgs[0].className === "MessageEmpty" ||
-              !storageMsgs[0].media
-            ) {
-              isDead = true;
-            }
-          } catch (_) {}
-        }
-
-        // 3. Check if the parent Forum Topic itself was deleted in Telegram
-        if (!isDead && (note.telegramThreadId || note.telegramTopicId) && note.telegramOriginChatId) {
-          const tId = Number(note.telegramThreadId || note.telegramTopicId);
-          if (tId && tId > 0) {
-            try {
-              const topicCheck = await client.getMessages(note.telegramOriginChatId, { ids: [tId] });
-              if (!topicCheck || !topicCheck[0] || topicCheck[0].className === "MessageEmpty") {
-                isDead = true;
-              }
-            } catch (_) {}
-          }
-        }
-
-        if (isDead) {
-          console.log(`[FAST-LIVENESS] 🗑️ Telegram message deleted for "${note.title}" (ID: ${note.id}). Instantly purging from site...`);
-          await db.collection("deleted_records").doc(`notes_${note.id}`).set({
-            ...note,
-            originalId: note.id,
-            collectionName: "notes",
-            typeLabel: "Note",
-            archivedAt: new Date().toISOString(),
-            archivedBy: "Telegram Fast Liveness Purge",
-          }).catch(() => {});
-          await db.collection("deleted_notes").doc(note.id).set({
-            ...note,
-            archivedAt: new Date().toISOString(),
-            archivedBy: "Telegram Fast Liveness Purge",
-          }).catch(() => {});
-          await db.collection("notes").doc(note.id).delete().catch(() => {});
-          if (note.telegramMessageId && storageChatId) {
-            deleteTelegramMessages([note.telegramMessageId], storageChatId).catch(() => {});
-          }
-          purgeNoteFromWebAndCdn(note.id);
-          recordSyncEvent({
-            trigger: `Telegram Deletion Detected: "${note.title}"`,
-            details: `Auto-purged from site in <10s`,
-            purgedCount: 1,
+      // 1. Check original message in Group / Topic
+      if (note.telegramOriginChatId && note.telegramOriginMessageId) {
+        try {
+          const originMsgs = await client.getMessages(note.telegramOriginChatId, {
+            ids: [Number(note.telegramOriginMessageId)],
           });
+          if (
+            !originMsgs ||
+            !originMsgs[0] ||
+            originMsgs[0].className === "MessageEmpty" ||
+            !originMsgs[0].media
+          ) {
+            isDead = true;
+          }
+        } catch (originErr) {
+          if (originErr.message && (originErr.message.includes("MESSAGE_ID_INVALID") || originErr.message.includes("TOPIC_DELETED"))) {
+            isDead = true;
+          }
+        }
+      }
+
+      // 2. Check storage channel message
+      if (!isDead && note.telegramMessageId && storageChatId) {
+        try {
+          const storageMsgs = await client.getMessages(storageChatId, {
+            ids: [Number(note.telegramMessageId)],
+          });
+          if (
+            !storageMsgs ||
+            !storageMsgs[0] ||
+            storageMsgs[0].className === "MessageEmpty" ||
+            !storageMsgs[0].media
+          ) {
+            isDead = true;
+          }
+        } catch (_) {}
+      }
+
+      // 3. Check if the parent Forum Topic itself was deleted in Telegram
+      if (!isDead && (note.telegramThreadId || note.telegramTopicId) && note.telegramOriginChatId) {
+        const tId = Number(note.telegramThreadId || note.telegramTopicId);
+        if (tId && tId > 0) {
           try {
-            const { broadcastCatalogEvent } = require("../services/realtimeEventService");
-            broadcastCatalogEvent({ event: "note_deleted", noteId: note.id, title: note.title });
+            const topicCheck = await client.getMessages(note.telegramOriginChatId, { ids: [tId] });
+            if (!topicCheck || !topicCheck[0] || topicCheck[0].className === "MessageEmpty") {
+              isDead = true;
+            }
           } catch (_) {}
         }
       }
-    } catch (_) {
-      // Quiet background guard
-    } finally {
-      isCheckingFastLiveness = false;
+
+      if (isDead) {
+        console.log(`[EVENT-LIVENESS] 🗑️ Telegram message deleted for "${note.title}" (ID: ${note.id}). Instantly purging from site...`);
+        await db.collection("deleted_records").doc(`notes_${note.id}`).set({
+          ...note,
+          originalId: note.id,
+          collectionName: "notes",
+          typeLabel: "Note",
+          archivedAt: new Date().toISOString(),
+          archivedBy: "Telegram Event Liveness Purge",
+        }).catch(() => {});
+        await db.collection("deleted_notes").doc(note.id).set({
+          ...note,
+          archivedAt: new Date().toISOString(),
+          archivedBy: "Telegram Event Liveness Purge",
+        }).catch(() => {});
+        await db.collection("notes").doc(note.id).delete().catch(() => {});
+        if (note.telegramMessageId && storageChatId) {
+          deleteTelegramMessages([note.telegramMessageId], storageChatId).catch(() => {});
+        }
+        purgeNoteFromWebAndCdn(note.id);
+        recordSyncEvent({
+          trigger: `Telegram Deletion Detected: "${note.title}"`,
+          details: `Auto-purged from site instantly`,
+          purgedCount: 1,
+        });
+        try {
+          const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+          broadcastCatalogEvent({ event: "note_deleted", noteId: note.id, title: note.title });
+        } catch (_) {}
+      }
     }
-  }, intervalMs);
+  } catch (_) {
+    // Quiet background guard
+  } finally {
+    isCheckingFastLiveness = false;
+  }
 }
 
 /**
@@ -1584,6 +1584,7 @@ function startAutoSyncWorker(intervalMs = 5 * 60 * 1000) {
     try {
       console.log("[MTProto AUTOSYNC] 🔄 Executing 5-minute periodic two-way sync cycle...");
       await syncTelegramChannel();
+      await checkNotesLivenessNow();
       recordSyncEvent({
         trigger: "5-Minute Two-Way Auto-Sync",
         details: "Auto-Sync Cycle Verified (Database & Telegram Online)",
@@ -1604,9 +1605,6 @@ function startAutoSyncWorker(intervalMs = 5 * 60 * 1000) {
 
   // 5-minute recurring quota-saving interval
   autoSyncTimer = setInterval(runSync, intervalMs);
-
-  // ⚡ Start Realtime 10-Second Fast Telegram Liveness Checker
-  startFastLivenessChecker(10000);
 }
 
 function stopAutoSyncWorker() {
@@ -1661,6 +1659,7 @@ module.exports = {
   deleteTelegramMessages,
   startAutoSyncWorker,
   stopAutoSyncWorker,
+  checkNotesLivenessNow,
   getMTProtoDetails,
   getLastSyncState,
   recordSyncEvent,
