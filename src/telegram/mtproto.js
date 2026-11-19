@@ -93,8 +93,6 @@ function purgeNoteFromWebAndCdn(noteId) {
     const { broadcastCatalogEvent } = require("../services/realtimeEventService");
     broadcastCatalogEvent({ event: "note_deleted", noteId });
   } catch (_) {}
-    if (cfWorker) fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
-  } catch (_) {}
 }
 
 function clearCache() {
