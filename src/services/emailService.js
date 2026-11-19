@@ -182,7 +182,8 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
   const creationPromise = (async () => {
     // Prioritize @TechTitanNotesBot token specifically for topic operations
     const effectiveBotToken = (process.env.TELEGRAM_BOT_TOKEN || botToken || process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
-    let effectiveChatId = (process.env.TELEGRAM_STORAGE_CHAT_ID || targetChatId || "").toString().trim();
+    // Target chat prioritized, falling back to configured central storage channel
+    let effectiveChatId = (targetChatId || process.env.TELEGRAM_STORAGE_CHAT_ID || "").toString().trim();
     if (!effectiveBotToken || !effectiveChatId) return null;
 
     // 1. Check RAM Cache (Instant 0ms lookup)
@@ -296,7 +297,7 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
               threadId: newThreadId,
               name: topicName,
               chatId: effectiveChatId,
-              botUsername: "TechTitanNotesBot",
+              botUsername: (process.env.TELEGRAM_BOT_USERNAME || "TechTitanNotesBot").replace(/^@/, "").trim(),
               createdAt: new Date().toISOString(),
             }, { merge: true });
           }
@@ -310,12 +311,13 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
           ramCache.delete("subjects_list"); // Instantly refresh subjects dropdown
         }
 
+        const activeBotTag = (process.env.TELEGRAM_BOT_USERNAME || "TechTitanNotesBot").replace(/^@/, "").trim();
         // Post introductory message in pure English
         const introText =
           `📌 <b>Free Study Material — Subject Forum Initialized</b>\n\n` +
           `📚 <b>Subject:</b> <code>${cleanSubject}</code>\n` +
           `📁 <i>All academic lecture notes, documents, and syllabus updates for <b>${cleanSubject}</b> will be automatically organized here.</i>\n\n` +
-          `🤖 <b>Managed by:</b> <code>@TechTitanNotesBot</code>\n` +
+          `🤖 <b>Managed by:</b> <code>@${activeBotTag}</code>\n` +
           `🌐 <b>Academic Cloud Engine:</b> <code>Live Automated Topic Routing</code>`;
 
         fetch(`https://api.telegram.org/bot${effectiveBotToken}/sendMessage`, {

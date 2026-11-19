@@ -3,15 +3,12 @@ import {
   Cloud,
   Search,
   UploadCloud,
-  Shield,
   ShieldCheck,
   LogOut,
   Bell,
   BellRing,
   LogIn,
   Smartphone,
-  Mic,
-  MicOff,
   MessageSquare,
   HelpCircle,
   Users,
@@ -29,6 +26,18 @@ import { useTechFlags } from "../utils/techFlagsStore";
 import { getWebPushStatus, subscribeWebPush, unsubscribeWebPush } from "../utils/webPushClient";
 import { getCampusContributionTier } from "../utils/studentStudyContext";
 import SpotlightModal from "./SpotlightModal";
+
+function checkIsStandalone() {
+  if (typeof window === "undefined") return false;
+  try {
+    const isStandaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)")?.matches : false;
+    const isNavStandalone = window.navigator?.standalone === true;
+    const isAndroidApp = typeof document !== "undefined" && Boolean(document.referrer?.includes("android-app://"));
+    return Boolean(isStandaloneMedia || isNavStandalone || isAndroidApp);
+  } catch (_) {
+    return false;
+  }
+}
 
 export default function Navbar({
   searchTerm,
@@ -100,17 +109,7 @@ export default function Navbar({
     }
   };
 
-  const [isInstalled, setIsInstalled] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const isStandaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)")?.matches : false;
-      const isNavStandalone = window.navigator?.standalone === true;
-      const isAndroidApp = typeof document !== "undefined" && Boolean(document.referrer?.includes("android-app://"));
-      return Boolean(isStandaloneMedia || isNavStandalone || isAndroidApp);
-    } catch (_) {
-      return false;
-    }
-  });
+  const [isInstalled, setIsInstalled] = useState(checkIsStandalone);
 
   // Global Keyboard Shortcut: ⌘K or Ctrl+K opens the Spotlight Center Modal
   useEffect(() => {
@@ -125,22 +124,17 @@ export default function Navbar({
   }, []);
 
   useEffect(() => {
-    const checkStandalone = () => {
-      try {
-        const isStandaloneMedia = window.matchMedia ? window.matchMedia("(display-mode: standalone)")?.matches : false;
-        const isNavStandalone = window.navigator?.standalone === true;
-        const isAndroidApp = typeof document !== "undefined" && Boolean(document.referrer?.includes("android-app://"));
-        if (isStandaloneMedia || isNavStandalone || isAndroidApp) {
-          setIsInstalled(true);
-        }
-      } catch (_) {}
+    const syncStandalone = () => {
+      if (checkIsStandalone()) {
+        setIsInstalled(true);
+      }
     };
-    checkStandalone();
+    syncStandalone();
     let mediaQuery = null;
     try {
       mediaQuery = typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(display-mode: standalone)") : null;
       if (mediaQuery && mediaQuery.addEventListener) {
-        mediaQuery.addEventListener("change", checkStandalone);
+        mediaQuery.addEventListener("change", syncStandalone);
       }
     } catch (_) {}
     const handler = (e) => {

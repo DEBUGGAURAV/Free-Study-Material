@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { LayoutGrid, List, GraduationCap, Calendar, Layers, Search, Mic, MicOff, Sparkles, FileText, ArrowUpRight } from "lucide-react";
+import { useState, useRef } from "react";
+import { LayoutGrid, List, GraduationCap, Calendar, Layers, Search, Mic, MicOff, Sparkles } from "lucide-react";
 import GeminiIcon from "./GeminiIcon";
 
 const COURSES = [
@@ -34,8 +34,6 @@ export default function CategoryFilter({
   setSelectedBranch,
   branches = [],
   totalCount,
-  notes = [],
-  onPreview,
   viewMode = "grid",
   setViewMode,
   sortBy = "recent",
@@ -55,43 +53,6 @@ export default function CategoryFilter({
   const recognitionRef = useRef(null);
   const searchInputRef = useRef(null);
   const searchContainerRef = useRef(null);
-
-
-  // Click outside listener to safely close spotlight dropdown
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
-        setIsSearchFocused(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("touchstart", handleClickOutside, { passive: true });
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-    };
-  }, []);
-
-  // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search at Explore study materials
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        if (searchInputRef.current) {
-          searchInputRef.current.focus();
-          searchInputRef.current.select();
-          setIsSearchFocused(true);
-        }
-        const el = document.getElementById("study-materials");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
-      }
-      if (e.key === "Escape") {
-        setIsSearchFocused(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   const handleVoiceSearch = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -152,6 +113,7 @@ export default function CategoryFilter({
               placeholder="Search notes, subjects, branch, PYQs..."
               value={searchTerm}
               onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setIsSearchFocused(false)}
               onChange={(e) => {
                 if (setSearchTerm) setSearchTerm(e.target.value);
                 setIsSearchFocused(true);
@@ -161,7 +123,7 @@ export default function CategoryFilter({
                 background: "#ffffff",
                 border: isSearchFocused ? "1.5px solid #6366f1" : "1.5px solid #cbd5e1",
                 borderRadius: "9999px",
-                padding: "10px 230px 10px 20px",
+                padding: "10px 175px 10px 20px",
                 fontSize: "0.86rem",
                 color: "#0f172a",
                 outline: "none",
@@ -306,24 +268,6 @@ export default function CategoryFilter({
                   <span className="search-tool-label">AI Study</span>
                 </button>
               )}
-
-              <kbd
-                className="search-kbd-shortcut"
-                style={{
-                  background: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  color: "#64748b",
-                  borderRadius: "5px",
-                  padding: "2.5px 7px",
-                  fontSize: "0.68rem",
-                  fontWeight: 700,
-                  fontFamily: "inherit",
-                  lineHeight: 1,
-                  pointerEvents: "none",
-                }}
-              >
-                ⌘K
-              </kbd>
             </div>
 
           </div>

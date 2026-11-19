@@ -222,14 +222,14 @@ router.post("/upload-attachment", helpLimiter, uploadHelpAttachment.single("file
 router.get("/attachment/:filename", (req, res) => {
   try {
     const filename = path.basename(req.params.filename);
-    const filePath = path.join(HELP_ATTACHMENTS_DIR, filename);
-    if (!fs.existsSync(filePath)) {
+    const resolvedPath = path.resolve(HELP_ATTACHMENTS_DIR, filename);
+    if (!resolvedPath.startsWith(path.resolve(HELP_ATTACHMENTS_DIR)) || !fs.existsSync(resolvedPath)) {
       return res.status(404).json({ success: false, message: "Attachment not found." });
     }
     res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
-    return res.sendFile(filePath);
+    return res.sendFile(resolvedPath);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

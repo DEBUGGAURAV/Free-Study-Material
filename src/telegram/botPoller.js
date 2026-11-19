@@ -194,7 +194,26 @@ async function sendTelegramMessage(chatId, text, replyToMsgId = null, threadId =
 
       console.warn(`[BOT POLLER] sendMessage error (${data.description}), retrying clean send to Chat ${chatId}...`);
 
-      // Fallback 1: If threadId or reply_to_message_id caused 400 error, retry with clean payload to chatId
+      // Fallback 1: If reply_to_message_id caused 400 error, retry preserving message_thread_id so topic routing is maintained!
+      if (threadId && !isNaN(Number(threadId))) {
+        const topicRes = await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text,
+            message_thread_id: Number(threadId),
+            parse_mode: "HTML",
+          }),
+        });
+        const topicData = await topicRes.json();
+        if (topicData.ok) {
+          console.log(`[BOT POLLER] ✅ Receipt delivered to Topic ${threadId} (replyTo bypassed)`);
+          return topicData;
+        }
+      }
+
+      // Fallback 2: General chat send if threadId was invalid or topic was deleted
       const cleanRes = await fetch(`https://api.telegram.org/bot${activeToken}/sendMessage`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -305,7 +324,8 @@ async function processIncomingMessage(message) {
     try {
       const topicInfo = message.forum_topic_created || message.forum_topic_edited;
       const topicName = (topicInfo.name || "").trim();
-      const threadId = message.message_thread_id;
+      const threadId = message.message_thread_id || message.message_id;
+      const activeBotUser = (process.env.TELEGRAM_BOT_USERNAME || "TechTitanNotesBot").replace(/^@/, "").trim();
       if (topicName && threadId) {
         const cleanSubject = topicName.replace(/^[^\w\s]+/, "").trim();
         const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
@@ -318,7 +338,7 @@ async function processIncomingMessage(message) {
               threadId: Number(threadId),
               name: topicName,
               chatId: message.chat.id.toString(),
-              botUsername: "TechTitanNotesBot",
+              botUsername: activeBotUser,
               updatedAt: new Date().toISOString(),
             },
             { merge: true }
@@ -384,6 +404,31 @@ async function processIncomingMessage(message) {
       const matchedSubject = await getSubjectFromThreadId(threadId);
       if (matchedSubject) {
         threadTitle = matchedSubject;
+      } else {
+        // Fallback: Query topic creation event directly from Telegram DC via GramJS
+        const client = await getClient();
+        if (client) {
+          const topicMsgs = await client.getMessages(chatId, { ids: [Number(threadId)] });
+          if (topicMsgs && topicMsgs[0] && topicMsgs[0].action?.title) {
+            threadTitle = topicMsgs[0].action.title;
+            const cleanSub = threadTitle.replace(/^[^\w\s]+/, "").trim();
+            const normKey = cleanSub.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+            if (db && cleanSub) {
+              db.collection("subject_forum_topics").doc(normKey).set(
+                {
+                  subject: cleanSub,
+                  normalizedKey: normKey,
+                  threadId: Number(threadId),
+                  name: threadTitle,
+                  chatId: chatId.toString(),
+                  botUsername: (process.env.TELEGRAM_BOT_USERNAME || "TechTitanNotesBot").replace(/^@/, "").trim(),
+                  updatedAt: new Date().toISOString(),
+                },
+                { merge: true }
+              ).catch(() => {});
+            }
+          }
+        }
       }
     } catch (_) {}
   }

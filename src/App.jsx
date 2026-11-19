@@ -2387,8 +2387,6 @@ export default function App() {
               setSelectedBranch={setSelectedBranch}
               branches={branches}
               totalCount={notes.length}
-              notes={notes}
-              onPreview={setPreviewNote}
               viewMode={viewMode}
               setViewMode={setViewMode}
               sortBy={sortBy}

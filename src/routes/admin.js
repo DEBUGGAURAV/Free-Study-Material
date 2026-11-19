@@ -4220,7 +4220,7 @@ let techSettings = {
   maintenanceTitle: "Scheduled System Upgrade in Progress",
   maintenanceMessage: "We are currently performing scheduled platform upgrades to optimize performance, cloud CDN caching, and security. Free Study Material will be back online shortly!",
   maintenanceEstimatedEnd: "",
-  maintenanceBypassKey: "fsm_admin_override",
+  maintenanceBypassKey: process.env.MAINTENANCE_BYPASS_KEY || process.env.ADMIN_BYPASS_KEY || "fsm_admin_override",
 
   // 📥 Student Notes Download Master Switch (Manual 24/7 by default • Active Round the Clock)
   allowNotesDownload: true,

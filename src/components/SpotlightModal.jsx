@@ -4,13 +4,10 @@ import {
   X,
   FileText,
   Sparkles,
-  ArrowUpRight,
   CornerDownLeft,
   Flame,
   UploadCloud,
   CheckCircle2,
-  Clock,
-  Layers,
 } from "lucide-react";
 
 export default function SpotlightModal({

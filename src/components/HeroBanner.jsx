@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles, Zap, Award, Flame } from "lucide-react";
+import { ArrowRight, BookOpen, FileText, Search, ShieldCheck, Sparkles, Flame } from "lucide-react";
 import { playPop } from "../utils/soundEffects";
 
 export default function HeroBanner({ totalNotes = 0, currentUser = null, onOpenUpload, onBrowsePapers, onOpenAiStudy, onOpenSwipeToRevise }) {

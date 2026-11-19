@@ -1518,6 +1518,19 @@ function startFastLivenessChecker(intervalMs = 10000) {
           } catch (_) {}
         }
 
+        // 3. Check if the parent Forum Topic itself was deleted in Telegram
+        if (!isDead && (note.telegramThreadId || note.telegramTopicId) && note.telegramOriginChatId) {
+          const tId = Number(note.telegramThreadId || note.telegramTopicId);
+          if (tId && tId > 0) {
+            try {
+              const topicCheck = await client.getMessages(note.telegramOriginChatId, { ids: [tId] });
+              if (!topicCheck || !topicCheck[0] || topicCheck[0].className === "MessageEmpty") {
+                isDead = true;
+              }
+            } catch (_) {}
+          }
+        }
+
         if (isDead) {
           console.log(`[FAST-LIVENESS] 🗑️ Telegram message deleted for "${note.title}" (ID: ${note.id}). Instantly purging from site...`);
           await db.collection("deleted_records").doc(`notes_${note.id}`).set({

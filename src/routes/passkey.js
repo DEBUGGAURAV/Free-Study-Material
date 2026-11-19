@@ -54,6 +54,12 @@ function isTrustedPasskeyOrigin(candidateOrigin) {
     const host = url.hostname.toLowerCase();
     if (host === "localhost" || host === "127.0.0.1") return true;
     if (host.endsWith(".pages.dev") || host.endsWith(".onrender.com") || host.endsWith(".workers.dev")) return true;
+    const configuredSite = getSiteUrl();
+    if (configuredSite) {
+      try {
+        if (new URL(configuredSite).hostname.toLowerCase() === host) return true;
+      } catch (_) {}
+    }
     return TRUSTED_PASSKEY_ORIGINS.some((t) => {
       try {
         return new URL(t).hostname.toLowerCase() === host;

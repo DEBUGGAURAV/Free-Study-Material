@@ -464,10 +464,11 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
   }
 
   // Scannable URL text
+  const displayHost = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "freestudymaterial.pages.dev";
   ctx.textAlign = "center";
   ctx.font = "800 24px 'JetBrains Mono', Consolas, monospace";
   ctx.fillStyle = "#4338ca";
-  ctx.fillText("freestudymaterial.pages.dev", WIDTH / 2, qrBoxY + 494);
+  ctx.fillText(displayHost, WIDTH / 2, qrBoxY + 494);
 
   // 8. Footer Branding
   ctx.font = "600 21px Inter, system-ui, -apple-system, sans-serif";
@@ -486,10 +487,6 @@ export function generateWhatsAppStoryCardFile(note = {}, shareUrl = "", customFi
     .slice(0, 32) || "study-note";
   const fileName = customFileName || `${cleanTitle}-whatsapp-story.png`;
   return canvasToFile(canvas, fileName);
-}
-
-export async function generateWhatsAppStoryCardBlob(note = {}, shareUrl = "") {
-  return generateWhatsAppStoryCardFile(note, shareUrl);
 }
 
 /**
