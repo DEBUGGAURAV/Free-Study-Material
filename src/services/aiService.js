@@ -1479,79 +1479,117 @@ async function dispatchAiSearchTelegramAudit({
     const isSummary = queryType === "summary" || String(queryType).includes("summary");
 
     let headline = `🤖 <b>AI Academic Query & Solution</b>`;
-    if (isCircle) headline = `⭕ <b>Circle to Search & Solve</b>`;
-    else if (isFlashcards) headline = `🗂️ <b>Note Study Flashcards</b>`;
-    else if (isSummary) headline = `📄 <b>Note Executive Summary</b>`;
+    let filePrefix = "AI_QUERY";
+    if (isCircle) {
+      headline = `⭕ <b>Circle to Search & Solve</b>`;
+      filePrefix = "CIRCLE_TO_SEARCH";
+    } else if (isFlashcards) {
+      headline = `🗂️ <b>Note Study Flashcards</b>`;
+      filePrefix = "AI_FLASHCARDS";
+    } else if (isSummary) {
+      headline = `📄 <b>Note Executive Summary</b>`;
+      filePrefix = "AI_SUMMARY";
+    }
 
     const engine = getAiEngineAuditDetails(provider, model, cached);
 
-    // Format Answer / Solution cleanly for Telegram HTML
-    let answerBlock = "";
+    // Format Answer / Solution cleanly for TXT file
+    let rawAnswerText = "";
     if (answer) {
-      let rawAnswerText = "";
       if (typeof answer === "string") {
         rawAnswerText = answer;
       } else if (Array.isArray(answer)) {
         rawAnswerText = answer
-          .slice(0, 5)
-          .map((card, idx) => `Card ${idx + 1}: ${card.question || ""}\n→ ${card.answer || ""}`)
-          .join("\n\n");
+          .map((card, idx) => `[Card ${idx + 1}]\nQuestion: ${card.question || ""}\nAnswer  : ${card.answer || ""}`)
+          .join("\n\n--------------------------------------------------------------------------------\n\n");
       } else if (typeof answer === "object") {
         rawAnswerText = JSON.stringify(answer, null, 2);
       }
-
-      // Sanitize HTML and cap at 2000 chars so the whole message easily fits under 3900 chars (single Telegram message)
-      const cleanAnswer = rawAnswerText
-        .replace(/<[^>]+>/g, "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .slice(0, 2000)
-        .trim();
-
-      if (cleanAnswer) {
-        answerBlock = `💡 <b>AI Generated Solution / Response:</b>\n<blockquote>${cleanAnswer}</blockquote>`;
-      }
     }
 
-    // Consolidated single complete message (Question + AI Solution in ONE payload)
-    const text = [
+    // 📄 Complete Untruncated .txt Audit Content
+    const fullTxtContent = [
+      "================================================================================",
+      `       ${isCircle ? "CIRCLE TO SEARCH & SOLVE" : "AI ACADEMIC QUERY & SOLUTION"} - FULL AUDIT DOSSIER`,
+      "================================================================================",
+      `Timestamp           : ${timeStr} IST`,
+      `Service Type        : ${isCircle ? "Circle to Search (Visual / Text)" : isFlashcards ? "Note Flashcards" : isSummary ? "Executive Summary" : "AI Academic Q&A"}`,
+      `Topic Channel       : Topic #${topicId} (AI Queries Hub)`,
+      "--------------------------------------------------------------------------------",
+      "STUDENT PROFILE:",
+      `  • Full Name       : ${studentName}`,
+      `  • Email Address   : ${studentEmail}`,
+      `  • Mobile Number   : ${studentMobile}`,
+      noteTitle ? `  • Document/Note   : ${noteTitle}` : "",
+      "--------------------------------------------------------------------------------",
+      "AI INFERENCE ENGINE TELEMETRY:",
+      `  • Engine Provider : ${engine.name}`,
+      `  • Model Name      : ${engine.model}`,
+      `  • Provider Tier   : ${engine.tier}`,
+      `  • Response Latency: ${latencyMs || 0}ms (${engine.speed})`,
+      `  • Cache Status    : ${cached ? "Cache Hit (0ms / 0 Tokens)" : "Fresh Live Inference"}`,
+      failover ? `  • Auto-Failover   : ACTIVE (Primary engine failover backup triggered)` : "  • Auto-Failover   : Inactive (Normal)",
+      "================================================================================",
+      "STUDENT QUESTION / CIRCLED QUERY:",
+      "--------------------------------------------------------------------------------",
+      String(query || "").trim(),
+      "",
+      "================================================================================",
+      "AI GENERATED SOLUTION / RESPONSE (UNTRUNCATED FULL TEXT):",
+      "--------------------------------------------------------------------------------",
+      rawAnswerText ? rawAnswerText.trim() : "(No text response generated)",
+      "",
+      "================================================================================",
+      "END OF AUDIT DOSSIER - FREE STUDY MATERIAL AI GUARDIAN",
+      "================================================================================",
+    ].filter((line) => line !== null && line !== undefined).join("\n");
+
+    const emailSafe = (studentEmail || "student").toLowerCase().replace(/[^a-z0-9]/g, "_");
+    const txtFilename = `${filePrefix}_${emailSafe}_${Date.now()}.txt`;
+
+    // Short, high-contrast Telegram caption card (<1024 chars)
+    const caption = [
       headline,
-      `━━━━━━━━━━━━━━━━━━━━`,
-      `🧠 <b>AI Used:</b> <b>${engine.name}</b>`,
-      `📦 <b>Model:</b> <code>${engine.model}</code>`,
-      `🏷️ <b>Engine Tier:</b> ${engine.tier}`,
-      failover ? `🛡️ <b>Auto-Failover:</b> ⚠️ Primary engine shifted to failover backup` : "",
-      `⏱️ <b>Response Time:</b> ${latencyMs || 0}ms (${engine.speed})`,
-      `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
       `━━━━━━━━━━━━━━━━━━━━`,
       `👤 <b>Student:</b> ${studentName}`,
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
-      noteTitle ? `📚 <b>Document:</b> ${noteTitle.replace(/[<>]/g, "")}` : "",
-      `❓ <b>Student Question / Formula:</b>\n<blockquote>${cleanQuery}</blockquote>`,
-      answerBlock,
+      `🧠 <b>AI:</b> <b>${engine.name}</b> (<code>${engine.model}</code>)`,
+      `⏱️ <b>Latency:</b> ${latencyMs || 0}ms • ${cached ? "🎯 0ms Cache" : "⚡ Fresh Inference"}`,
+      noteTitle ? `📚 <b>Note:</b> ${noteTitle.slice(0, 40).replace(/[<>]/g, "")}` : "",
       `━━━━━━━━━━━━━━━━━━━━`,
-      `🕒 <b>Timestamp:</b> ${timeStr} IST`,
-      `📍 <i>Delivered to Dedicated AI Queries Hub (Topic #${topicId})</i>`,
+      `❓ <b>Query:</b> <i>${cleanQuery.slice(0, 140)}${cleanQuery.length > 140 ? "..." : ""}</i>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `📎 <b>Attached Document:</b> <code>${txtFilename}</code>`,
+      `<i>Full AI response & solution delivered in .txt file format.</i>`,
     ].filter(Boolean).join("\n");
 
-    const payload = {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-      message_thread_id: Number(topicId),
-    };
+    // 📄 Send strictly in TXT document format via sendDocument
+    async function sendTxtDoc(targetThreadId) {
+      const form = new FormData();
+      form.append("chat_id", chatId);
+      if (targetThreadId && !isNaN(Number(targetThreadId))) {
+        form.append("message_thread_id", String(targetThreadId));
+      }
+      form.append(
+        "document",
+        new Blob([Buffer.from(fullTxtContent, "utf-8")], { type: "text/plain;charset=utf-8" }),
+        txtFilename
+      );
+      form.append("caption", caption.slice(0, 1024));
+      form.append("parse_mode", "HTML");
 
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json().catch(() => null);
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(12000),
+      });
+      return res.json().catch(() => null);
+    }
 
+    const data = await sendTxtDoc(topicId);
     if (data && data.ok) {
+      console.log(`[TELEGRAM-AI-AUDIT] ✅ AI response .txt document '${txtFilename}' sent to Topic #${topicId}`);
       return true;
     }
 
@@ -1561,12 +1599,7 @@ async function dispatchAiSearchTelegramAudit({
       console.warn(`[TELEGRAM-AI-AUDIT] Topic #${topicId} unavailable (${errDesc}). Auto-creating fresh AI topic...`);
       const freshTopicId = await createAiSearchForumTopic(token, chatId);
       const targetRetryId = (freshTopicId && freshTopicId !== 6 && freshTopicId !== 7 && freshTopicId !== 14) ? freshTopicId : 17;
-      const retryRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, message_thread_id: Number(targetRetryId) }),
-      });
-      const retryData = await retryRes.json().catch(() => null);
+      const retryData = await sendTxtDoc(targetRetryId);
       return Boolean(retryData && retryData.ok);
     }
 
