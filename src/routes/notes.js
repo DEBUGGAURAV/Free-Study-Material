@@ -831,6 +831,19 @@ router.get("/cache-stats", (req, res) => {
 });
 
 /**
+ * GET /api/notes/live-stream
+ * Real-time Server-Sent Events (SSE) stream for instant 0ms catalog synchronizations
+ */
+router.get("/live-stream", (req, res) => {
+  try {
+    const { registerSseClient } = require("../services/realtimeEventService");
+    registerSseClient(req, res);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to establish SSE live stream" });
+  }
+});
+
+/**
  * GET /api/notes
  * Fetches list of notes with in-memory RAM caching for 1ms response
  * Supports limit parameter (e.g. 15 by default, or all=true)

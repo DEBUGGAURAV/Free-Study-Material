@@ -225,9 +225,11 @@ app.use(
     level: 6,
     threshold: 1024,
     filter: (req, res) => {
-      // Don't re-compress binary PDF streams
+      // Don't re-compress binary PDF streams or buffer real-time SSE event streams
       if (
         req.path.includes("/stream") ||
+        req.path.includes("live-stream") ||
+        (req.headers && req.headers.accept === "text/event-stream") ||
         req.path.endsWith(".pdf") ||
         (res.getHeader && res.getHeader("content-type") && String(res.getHeader("content-type")).includes("application/pdf"))
       ) {
@@ -519,9 +521,9 @@ function startServer(portToTry, attempt = 1) {
       console.warn("[BOT POLLER] Poller start deferred:", e.message);
     }
 
-    // 4. Start 30-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync
+    // 4. Start Event-Driven Two-Way Auto-Sync with Real-Time 10s Fast Liveness Guard
     try {
-      startAutoSyncWorker(30 * 60 * 1000);
+      startAutoSyncWorker(2 * 60 * 1000);
     } catch (e) {
       console.warn("[MTProto AUTOSYNC] Worker start deferred:", e.message);
     }

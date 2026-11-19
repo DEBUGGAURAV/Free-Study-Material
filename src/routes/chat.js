@@ -1130,6 +1130,21 @@ let wssInstance = null;
 function initChatWebSocket(server) {
   wssInstance = new WebSocketServer({ server, path: "/ws/chat" });
 
+  try {
+    const { setWebSocketBroadcaster } = require("../services/realtimeEventService");
+    setWebSocketBroadcaster((payload) => {
+      if (!wssInstance) return;
+      const str = typeof payload === "string" ? payload : JSON.stringify(payload);
+      roomSockets.forEach((socketsMap) => {
+        socketsMap.forEach((clientWs) => {
+          if (clientWs && clientWs.readyState === WebSocket.OPEN) {
+            try { clientWs.send(str); } catch (_) {}
+          }
+        });
+      });
+    });
+  } catch (_) {}
+
   wssInstance.on("connection", async (ws, req) => {
     // Authenticate connecting socket (Query param, httpOnly cookie, DB verification, or Admin bypass)
     let user = null;

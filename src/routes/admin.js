@@ -1372,6 +1372,10 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
     } catch (_) {}
 
     invalidateAllCache();
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({ event: "note_deleted", noteId: id, title: doc.exists ? doc.data()?.title : "" });
+    } catch (_) {}
     return res.json({ success: true, message: "Note safely moved to Restore Vault and synced with Telegram." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -3374,6 +3378,10 @@ const { syncTelegramChannel, deduplicateDatabaseNotes } = require("../telegram/m
 router.post("/telegram/sync", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
     const result = await syncTelegramChannel();
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({ event: "catalog_synced", ...result, lastSync: getLastSyncState() });
+    } catch (_) {}
     return res.json({
       ...result,
       lastSync: getLastSyncState(),

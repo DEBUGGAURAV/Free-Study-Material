@@ -46,21 +46,23 @@ function normalizeNoteTitle(str) {
 async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize, fileHash }) {
   if (!db) return null;
 
+  let matchedDoc = null;
+
   try {
     // 1. Check by telegramDocumentId (Unique across Telegram)
     if (fileUniqueId) {
       const snap = await db.collection("notes").where("telegramDocumentId", "==", fileUniqueId.toString()).limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+      if (!snap.empty) matchedDoc = snap.docs[0];
     }
 
     // 2. Check by fileHash if provided
-    if (fileHash) {
+    if (!matchedDoc && fileHash) {
       const snap = await db.collection("notes").where("fileHash", "==", fileHash).limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+      if (!snap.empty) matchedDoc = snap.docs[0];
     }
 
     // 3. Exact originalName query with generous tolerance (tolerates up to 3MB variance)
-    if (fileName) {
+    if (!matchedDoc && fileName) {
       const snap = await db.collection("notes").where("originalName", "==", fileName).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
@@ -68,14 +70,15 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
           const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
           const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
           if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+            matchedDoc = doc;
+            break;
           }
         }
       }
     }
 
     // 4. Exact title query with generous size tolerance
-    if (title) {
+    if (!matchedDoc && title) {
       const snap = await db.collection("notes").where("title", "==", title).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
@@ -83,27 +86,75 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
           const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
           const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
           if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+            matchedDoc = doc;
+            break;
           }
         }
       }
     }
 
     // 5. Normalized title matching (Catches punctuation and spacing differences)
-    const normInput = normalizeNoteTitle(title || fileName);
-    if (normInput) {
-      const allNotes = await db.collection("notes").limit(200).get();
-      for (const doc of allNotes.docs) {
-        const d = doc.data();
-        const normDoc = normalizeNoteTitle(d.title || d.originalName);
-        if (normDoc && normInput === normDoc) {
-          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
-          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
-          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+    if (!matchedDoc) {
+      const normInput = normalizeNoteTitle(title || fileName);
+      if (normInput) {
+        const allNotes = await db.collection("notes").limit(200).get();
+        for (const doc of allNotes.docs) {
+          const d = doc.data();
+          const normDoc = normalizeNoteTitle(d.title || d.originalName);
+          if (normDoc && normInput === normDoc) {
+            const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+            const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+            if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+              matchedDoc = doc;
+              break;
+            }
           }
         }
       }
+    }
+
+    // 🛡️ LIVENESS CHECK: If a duplicate candidate was found, verify if its Telegram message is ACTUALLY still alive!
+    // If the student deleted the file from Telegram and is now re-uploading, the old record is an orphan!
+    if (matchedDoc) {
+      const d = matchedDoc.data();
+      try {
+        const client = await getClient();
+        if (client) {
+          const checkChat = d.telegramOriginChatId || getStorageChatId();
+          const checkMsgId = d.telegramOriginMessageId || d.telegramMessageId;
+          if (checkChat && checkMsgId) {
+            const remoteMsgs = await client.getMessages(checkChat, { ids: [Number(checkMsgId)] });
+            const isDead = !remoteMsgs || !remoteMsgs[0] || remoteMsgs[0].className === "MessageEmpty" || !remoteMsgs[0].media;
+            if (isDead) {
+              console.log(`[BOT POLLER] 🔄 Prior note "${d.title}" (ID: ${matchedDoc.id}) was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
+              await db.collection("deleted_records").doc(`notes_${matchedDoc.id}`).set({
+                ...d,
+                originalId: matchedDoc.id,
+                collectionName: "notes",
+                typeLabel: "Note",
+                archivedAt: new Date().toISOString(),
+                archivedBy: "Telegram Pre-Upload Stale Purge",
+              }).catch(() => {});
+              await db.collection("deleted_notes").doc(matchedDoc.id).set({
+                ...d,
+                archivedAt: new Date().toISOString(),
+                archivedBy: "Telegram Pre-Upload Stale Purge",
+              }).catch(() => {});
+              await db.collection("notes").doc(matchedDoc.id).delete().catch(() => {});
+              const { purgeNoteFromWebAndCdn } = require("./mtproto");
+              if (typeof purgeNoteFromWebAndCdn === "function") {
+                purgeNoteFromWebAndCdn(matchedDoc.id);
+              }
+              const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+              broadcastCatalogEvent({ event: "note_deleted", noteId: matchedDoc.id, title: d.title });
+              return null; // Stale duplicate purged! Allow fresh upload!
+            }
+          }
+        }
+      } catch (livenessErr) {
+        console.warn("[BOT POLLER] Duplicate liveness probe warning:", livenessErr.message);
+      }
+      return matchedDoc;
     }
   } catch (err) {
     console.warn("[BOT POLLER] Duplicate check query warning:", err.message);
@@ -476,6 +527,7 @@ async function processIncomingMessage(message) {
       telegramOriginChatId: chatId.toString(),
       telegramOriginMessageId: Number(messageId),
       telegramThreadId: threadId,
+      telegramTopicId: threadId,
       status: "ready",
       uploadedBy: "telegram-bot-realtime",
       uploaderName: senderName || "Telegram Student",
@@ -497,6 +549,10 @@ async function processIncomingMessage(message) {
         upsertNoteInCache(noteData).catch(() => {});
       }
       invalidateAllCache();
+    } catch (_) {}
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({ event: "note_created", note: noteData });
     } catch (_) {}
 
     // Auto-post to Notice Board

@@ -1129,9 +1129,115 @@ export default function App() {
     setPreviewNote((prev) => (prev && prev.id === noteId ? null : prev));
   }, []);
 
+  const addOrUpdateNoteInCatalogAndState = useCallback((newNote) => {
+    if (!newNote || !newNote.id) return;
+    const prev = allCatalogNotesRef.current || [];
+    const filteredPrev = prev.filter((n) => n.id !== newNote.id);
+    const updated = [newNote, ...filteredPrev];
+    const sorted = sortNotesByTimestamp(updated);
+    allCatalogNotesRef.current = sorted;
+    saveNotesCatalogToIdb(sorted).catch(() => {});
+    try {
+      safeStorage.setItem("fsm_cached_notes", JSON.stringify(sorted.map(({ ocrText, ...meta }) => meta)));
+    } catch (_) {}
+    const f = filterStateRef.current;
+    setNotes(searchNotesCatalogLocally({
+      query: f.searchTerm,
+      branch: f.selectedBranch,
+      course: f.selectedCourse,
+      year: f.selectedYear,
+      fallbackNotes: sorted,
+    }));
+    triggerIdleCatalogPrecache(sorted);
+  }, [sortNotesByTimestamp]);
+
   const handleDeleteNoteFromState = (noteId) => {
     removeNoteFromCatalogAndState(noteId);
   };
+
+  // ⚡ Pillar: Real-Time Instant 0ms Two-Way Sync Engine (SSE + Heartbeat Guard)
+  // Ensures ANY event (upload in Telegram, delete in Telegram, web upload/delete) instantly reflects on UI without manual click
+  useEffect(() => {
+    let es = null;
+    let fallbackPollTimer = null;
+    let isMounted = true;
+    let lastSeenSyncStamp = null;
+
+    const connectLiveStream = () => {
+      if (typeof window === "undefined" || !("EventSource" in window)) return;
+      try {
+        es = new EventSource("/api/notes/live-stream");
+
+        es.onmessage = (event) => {
+          if (!isMounted || !event?.data) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data.event === "note_created" && data.note) {
+              console.log("[LIVE-SYNC] ⚡ Real-time note created:", data.note.title);
+              addOrUpdateNoteInCatalogAndState(data.note);
+            } else if (data.event === "note_deleted" && data.noteId) {
+              console.log("[LIVE-SYNC] 🗑️ Real-time note deleted:", data.noteId);
+              removeNoteFromCatalogAndState(data.noteId);
+            } else if (data.event === "catalog_synced") {
+              console.log("[LIVE-SYNC] 🔄 Real-time catalog reconciled:", data);
+              fetchNotes(currentUserRef.current, true);
+            }
+          } catch (_) {}
+        };
+
+        es.onerror = () => {
+          // Automatic browser reconnection per SSE spec
+        };
+      } catch (_) {}
+    };
+
+    connectLiveStream();
+
+    // 🛡️ Fail-Safe 1: Periodic 10-second sync check in case SSE is blocked by an aggressive proxy
+    fallbackPollTimer = setInterval(async () => {
+      if (!isMounted || (typeof document !== "undefined" && document.hidden)) return;
+      try {
+        const res = await api.getSyncStatus();
+        const stamp = res?.lastSync?.timestamp;
+        if (stamp) {
+          if (lastSeenSyncStamp && lastSeenSyncStamp !== stamp) {
+            console.log("[LIVE-SYNC] 🔄 Background sync event detected. Refreshing catalog...");
+            fetchNotes(currentUserRef.current, true);
+          }
+          lastSeenSyncStamp = stamp;
+        }
+      } catch (_) {}
+    }, 10000);
+
+    // 🛡️ Fail-Safe 2: Instant re-check on Tab Focus or Window Visibility Return
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden && isMounted) {
+        api.getSyncStatus().then((res) => {
+          const stamp = res?.lastSync?.timestamp;
+          if (stamp && lastSeenSyncStamp && lastSeenSyncStamp !== stamp) {
+            console.log("[LIVE-SYNC] 🔄 Window focused; new Telegram sync detected. Refreshing...");
+            fetchNotes(currentUserRef.current, true);
+          }
+          if (stamp) lastSeenSyncStamp = stamp;
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      if (es) {
+        try { es.close(); } catch (_) {}
+      }
+      if (fallbackPollTimer) {
+        clearInterval(fallbackPollTimer);
+      }
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
+  }, [addOrUpdateNoteInCatalogAndState, removeNoteFromCatalogAndState]);
 
   useEffect(() => {
     const handleNotesSynced = (e) => {

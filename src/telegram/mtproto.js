@@ -83,6 +83,16 @@ function purgeNoteFromWebAndCdn(noteId) {
   // 4. Purge from Cloudflare Edge Worker worldwide POP cache
   try {
     const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
+    if (cfWorker) {
+      fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 5. Broadcast real-time deletion to all connected website browsers (SSE + WebSocket)
+  try {
+    const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+    broadcastCatalogEvent({ event: "note_deleted", noteId });
+  } catch (_) {}
     if (cfWorker) fetch(`${cfWorker}/api/notes/${noteId}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
   } catch (_) {}
 }
@@ -244,27 +254,29 @@ function normalizeNoteTitle(str) {
 async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileSize, fileHash }) {
   if (!db) return null;
 
+  let candidateDoc = null;
+
   try {
     // 1. Check by telegramDocumentId (GramJS DC unique document ID)
     if (docIdStr) {
       const snap = await db.collection("notes").where("telegramDocumentId", "==", docIdStr.toString()).limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+      if (!snap.empty) candidateDoc = snap.docs[0];
     }
 
     // 2. Check by telegramMessageId
-    if (msgId && Number(msgId) > 0) {
+    if (!candidateDoc && msgId && Number(msgId) > 0) {
       const snap = await db.collection("notes").where("telegramMessageId", "==", Number(msgId)).limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+      if (!snap.empty) candidateDoc = snap.docs[0];
     }
 
     // 3. Check by fileHash if provided
-    if (fileHash) {
+    if (!candidateDoc && fileHash) {
       const snap = await db.collection("notes").where("fileHash", "==", fileHash).limit(1).get();
-      if (!snap.empty) return snap.docs[0];
+      if (!snap.empty) candidateDoc = snap.docs[0];
     }
 
     // 4. Single-field query by exact fileSize with in-memory name / title check (Zero composite index required)
-    if (fileSize && Number(fileSize) > 0) {
+    if (!candidateDoc && fileSize && Number(fileSize) > 0) {
       const snap = await db.collection("notes").where("fileSize", "==", Number(fileSize)).limit(10).get();
       if (!snap.empty) {
         const cleanName = (originalName || "").toLowerCase().trim();
@@ -278,14 +290,15 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
             (cleanTitle && docTitle && cleanTitle === docTitle) ||
             (cleanName && docTitle && (cleanName.includes(docTitle) || docTitle.includes(cleanName)))
           ) {
-            return doc;
+            candidateDoc = doc;
+            break;
           }
         }
       }
     }
 
     // 5. Query by originalName (tolerates up to 3MB variance for Telegram wrapper / re-compression)
-    if (originalName) {
+    if (!candidateDoc && originalName) {
       const snap = await db.collection("notes").where("originalName", "==", originalName).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
@@ -293,14 +306,15 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
           const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
           const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
           if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+            candidateDoc = doc;
+            break;
           }
         }
       }
     }
 
     // 6. Query by exact title with generous size tolerance
-    if (title) {
+    if (!candidateDoc && title) {
       const snap = await db.collection("notes").where("title", "==", title).limit(10).get();
       if (!snap.empty) {
         for (const doc of snap.docs) {
@@ -308,27 +322,66 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
           const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
           const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
           if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+            candidateDoc = doc;
+            break;
           }
         }
       }
     }
 
     // 7. Normalized title matching (Catches slight punctuation/spacing variations)
-    const normInput = normalizeNoteTitle(title || originalName);
-    if (normInput) {
-      const allNotes = await db.collection("notes").limit(200).get();
-      for (const doc of allNotes.docs) {
-        const d = doc.data();
-        const normDoc = normalizeNoteTitle(d.title || d.originalName);
-        if (normDoc && normInput === normDoc) {
-          const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
-          const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
-          if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-            return doc;
+    if (!candidateDoc) {
+      const normInput = normalizeNoteTitle(title || originalName);
+      if (normInput) {
+        const allNotes = await db.collection("notes").limit(200).get();
+        for (const doc of allNotes.docs) {
+          const d = doc.data();
+          const normDoc = normalizeNoteTitle(d.title || d.originalName);
+          if (normDoc && normInput === normDoc) {
+            const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+            const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+            if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+              candidateDoc = doc;
+              break;
+            }
           }
         }
       }
+    }
+
+    // 🛡️ LIVENESS CHECK: If candidate found, check if message is actually still alive on Telegram
+    if (candidateDoc) {
+      const d = candidateDoc.data();
+      try {
+        if (client) {
+          const checkChat = d.telegramOriginChatId || storageChatId;
+          const checkMsgId = d.telegramOriginMessageId || d.telegramMessageId;
+          if (checkChat && checkMsgId) {
+            const remoteMsgs = await client.getMessages(checkChat, { ids: [Number(checkMsgId)] });
+            const isDead = !remoteMsgs || !remoteMsgs[0] || remoteMsgs[0].className === "MessageEmpty" || !remoteMsgs[0].media;
+            if (isDead) {
+              console.log(`[MTProto] 🔄 Prior note "${d.title}" (ID: ${candidateDoc.id}) was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
+              await db.collection("deleted_records").doc(`notes_${candidateDoc.id}`).set({
+                ...d,
+                originalId: candidateDoc.id,
+                collectionName: "notes",
+                typeLabel: "Note",
+                archivedAt: new Date().toISOString(),
+                archivedBy: "Telegram Pre-Upload Stale Purge",
+              }).catch(() => {});
+              await db.collection("deleted_notes").doc(candidateDoc.id).set({
+                ...d,
+                archivedAt: new Date().toISOString(),
+                archivedBy: "Telegram Pre-Upload Stale Purge",
+              }).catch(() => {});
+              await db.collection("notes").doc(candidateDoc.id).delete().catch(() => {});
+              purgeNoteFromWebAndCdn(candidateDoc.id);
+              return null; // Stale duplicate purged! Allow fresh upload!
+            }
+          }
+        }
+      } catch (_) {}
+      return candidateDoc;
     }
   } catch (err) {
     console.warn("[MTProto] Duplicate check query warning:", err.message);
@@ -483,6 +536,7 @@ function setupChannelSyncListeners(c) {
         telegramMessageId: Number(message.id),
         telegramDocumentId: doc.id?.toString() || null,
         telegramThreadId: topicThreadId,
+        telegramTopicId: topicThreadId,
         status: "ready",
         uploadedBy: "telegram-channel-sync",
         uploaderName: "Direct Sync",
@@ -520,6 +574,10 @@ function setupChannelSyncListeners(c) {
           upsertNoteInCache(noteData).catch(() => {});
         }
         invalidateAllCache();
+        try {
+          const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+          broadcastCatalogEvent({ event: "note_created", note: noteData });
+        } catch (_) {}
       } catch (_) {}
 
       // Deliver instant rich HTML receipt back to the Topic in Telegram!
@@ -640,10 +698,19 @@ function setupChannelSyncListeners(c) {
             }
           }
 
-          // C. Purge ALL notes where telegramTopicId matches delId (topic deleted in Telegram)
+          // C. Purge ALL notes where telegramTopicId or telegramThreadId matches delId (topic deleted in Telegram)
+          const topicDocsToPurge = [];
           const snapTopic = await db.collection("notes").where("telegramTopicId", "==", delId).get();
-          if (!snapTopic.empty) {
-            for (const doc of snapTopic.docs) {
+          if (!snapTopic.empty) topicDocsToPurge.push(...snapTopic.docs);
+          const snapThread = await db.collection("notes").where("telegramThreadId", "==", delId).get();
+          if (!snapThread.empty) {
+            for (const tDoc of snapThread.docs) {
+              if (!topicDocsToPurge.some((d) => d.id === tDoc.id)) topicDocsToPurge.push(tDoc);
+            }
+          }
+
+          if (topicDocsToPurge.length > 0) {
+            for (const doc of topicDocsToPurge) {
               const noteData = doc.data();
               console.log(`[MTProto SYNC] Moving note "${noteData.title}" (ID: ${doc.id}) to Restore Vault because Topic ${delId} was deleted in Telegram.`);
               await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
@@ -654,13 +721,16 @@ function setupChannelSyncListeners(c) {
                 title: noteData.title || "Study Material",
                 archivedAt: new Date().toISOString(),
                 archivedBy: "Telegram Two-Way Sync Deletion",
-              });
+              }).catch(() => {});
               await db.collection("deleted_notes").doc(doc.id).set({
                 ...noteData,
                 archivedAt: new Date().toISOString(),
                 archivedBy: "Telegram Two-Way Sync Deletion",
-              });
-              await db.collection("notes").doc(doc.id).delete();
+              }).catch(() => {});
+              await db.collection("notes").doc(doc.id).delete().catch(() => {});
+              if (noteData.telegramMessageId && storageChatId && noteData.telegramMessageId !== delId) {
+                deleteTelegramMessages([noteData.telegramMessageId], storageChatId).catch(() => {});
+              }
               purgeNoteFromWebAndCdn(doc.id);
             }
           }
@@ -1000,14 +1070,29 @@ async function syncTelegramChannel() {
   }
 
   // 4. Verify topic-based notes: if their topic was removed in Telegram, purge them
-  const topicDocs = snap.docs.filter((d) => d.data().telegramTopicId && d.data().telegramOriginChatId);
+  const topicDocs = snap.docs.filter((d) => (d.data().telegramTopicId || d.data().telegramThreadId) && d.data().telegramOriginChatId);
   for (const tDoc of topicDocs) {
     const data = tDoc.data();
+    const topicId = data.telegramTopicId || data.telegramThreadId;
     try {
-      const topicMsgs = await c.getMessages(data.telegramOriginChatId, { ids: [Number(data.telegramTopicId)] });
+      const topicMsgs = await c.getMessages(data.telegramOriginChatId, { ids: [Number(topicId)] });
       if (!topicMsgs || !topicMsgs[0]) {
-        console.log(`[MTProto RECONCILE] Purging note "${data.title}" because its Topic ${data.telegramTopicId} was removed.`);
-        await db.collection("notes").doc(tDoc.id).delete();
+        console.log(`[MTProto RECONCILE] Purging note "${data.title}" because its Topic ${topicId} was removed.`);
+        await db.collection("deleted_records").doc(`notes_${tDoc.id}`).set({
+          ...data,
+          originalId: tDoc.id,
+          collectionName: "notes",
+          typeLabel: "Note",
+          title: data.title || "Study Material",
+          archivedAt: new Date().toISOString(),
+          archivedBy: "Telegram Topic Reconcile Purge",
+        }).catch(() => {});
+        await db.collection("deleted_notes").doc(tDoc.id).set({
+          ...data,
+          archivedAt: new Date().toISOString(),
+          archivedBy: "Telegram Topic Reconcile Purge",
+        }).catch(() => {});
+        await db.collection("notes").doc(tDoc.id).delete().catch(() => {});
         purgeNoteFromWebAndCdn(tDoc.id);
         purgedCount++;
       }
@@ -1023,6 +1108,17 @@ async function syncTelegramChannel() {
     importedCount,
     purgedCount,
   });
+
+  try {
+    const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+    broadcastCatalogEvent({
+      event: "catalog_synced",
+      verifiedCount,
+      importedCount,
+      purgedCount,
+      lastSync: getLastSyncState(),
+    });
+  } catch (_) {}
 
   return {
     success: true,
@@ -1360,6 +1456,106 @@ async function deleteTelegramMessages(messageIds, channelId = null) {
 
 let autoSyncTimer = null;
 let isAutoSyncing = false;
+let fastLivenessTimer = null;
+let isCheckingFastLiveness = false;
+
+function startFastLivenessChecker(intervalMs = 10000) {
+  if (fastLivenessTimer) return;
+  console.log(`[MTProto] ⚡ Fast Telegram Liveness Checker started (${intervalMs / 1000}s interval).`);
+
+  fastLivenessTimer = setInterval(async () => {
+    if (isCheckingFastLiveness || !client || !client.connected) return;
+    isCheckingFastLiveness = true;
+    try {
+      const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+      const allNotes = await getAllCachedNotes();
+      if (!allNotes || allNotes.length === 0) return;
+
+      const db = getFirestoreDb();
+      if (!db) return;
+
+      // Check the latest 30 notes (fast 0-cost RAM inspection)
+      const recentNotes = allNotes.slice(0, 30);
+
+      for (const note of recentNotes) {
+        let isDead = false;
+
+        // 1. Check original message in Group / Topic
+        if (note.telegramOriginChatId && note.telegramOriginMessageId) {
+          try {
+            const originMsgs = await client.getMessages(note.telegramOriginChatId, {
+              ids: [Number(note.telegramOriginMessageId)],
+            });
+            if (
+              !originMsgs ||
+              !originMsgs[0] ||
+              originMsgs[0].className === "MessageEmpty" ||
+              !originMsgs[0].media
+            ) {
+              isDead = true;
+            }
+          } catch (originErr) {
+            if (originErr.message && (originErr.message.includes("MESSAGE_ID_INVALID") || originErr.message.includes("TOPIC_DELETED"))) {
+              isDead = true;
+            }
+          }
+        }
+
+        // 2. Check storage channel message
+        if (!isDead && note.telegramMessageId && storageChatId) {
+          try {
+            const storageMsgs = await client.getMessages(storageChatId, {
+              ids: [Number(note.telegramMessageId)],
+            });
+            if (
+              !storageMsgs ||
+              !storageMsgs[0] ||
+              storageMsgs[0].className === "MessageEmpty" ||
+              !storageMsgs[0].media
+            ) {
+              isDead = true;
+            }
+          } catch (_) {}
+        }
+
+        if (isDead) {
+          console.log(`[FAST-LIVENESS] 🗑️ Telegram message deleted for "${note.title}" (ID: ${note.id}). Instantly purging from site...`);
+          await db.collection("deleted_records").doc(`notes_${note.id}`).set({
+            ...note,
+            originalId: note.id,
+            collectionName: "notes",
+            typeLabel: "Note",
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Fast Liveness Purge",
+          }).catch(() => {});
+          await db.collection("deleted_notes").doc(note.id).set({
+            ...note,
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Fast Liveness Purge",
+          }).catch(() => {});
+          await db.collection("notes").doc(note.id).delete().catch(() => {});
+          if (note.telegramMessageId && storageChatId) {
+            deleteTelegramMessages([note.telegramMessageId], storageChatId).catch(() => {});
+          }
+          purgeNoteFromWebAndCdn(note.id);
+          recordSyncEvent({
+            trigger: `Telegram Deletion Detected: "${note.title}"`,
+            details: `Auto-purged from site in <10s`,
+            purgedCount: 1,
+          });
+          try {
+            const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+            broadcastCatalogEvent({ event: "note_deleted", noteId: note.id, title: note.title });
+          } catch (_) {}
+        }
+      }
+    } catch (_) {
+      // Quiet background guard
+    } finally {
+      isCheckingFastLiveness = false;
+    }
+  }, intervalMs);
+}
 
 /**
  * 5-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync Engine
@@ -1397,12 +1593,19 @@ function startAutoSyncWorker(intervalMs = 5 * 60 * 1000) {
 
   // 5-minute recurring quota-saving interval
   autoSyncTimer = setInterval(runSync, intervalMs);
+
+  // ⚡ Start Realtime 10-Second Fast Telegram Liveness Checker
+  startFastLivenessChecker(10000);
 }
 
 function stopAutoSyncWorker() {
   if (autoSyncTimer) {
     clearInterval(autoSyncTimer);
     autoSyncTimer = null;
+  }
+  if (fastLivenessTimer) {
+    clearInterval(fastLivenessTimer);
+    fastLivenessTimer = null;
   }
   console.log("[MTProto AUTOSYNC] Auto-Sync worker stopped.");
 }

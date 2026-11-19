@@ -226,6 +226,10 @@ router.post(
             upsertNoteInCache(noteData).catch(() => {});
           }
         } catch (_) {}
+        try {
+          const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+          broadcastCatalogEvent({ event: "note_created", note: noteData });
+        } catch (_) {}
 
         const isOver100MB = file.size >= (DIRECT_MTPROTO_SIZE_BYTES || 100 * 1024 * 1024);
         const isLargeFile = file.size > 50 * 1024 * 1024;
