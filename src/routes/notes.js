@@ -195,9 +195,8 @@ loadDiskCacheIntoMemory();
  * Direct Telegram Bot API stream with native HTTP Range support (206 Partial Content).
  * Avoids MTProto socket setup latency, update timeouts, and undici fetch ECONNRESET errors.
  */
-function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
+function getTelegramBotFileInfo(botToken, botFileId, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
-    let resolved = false;
     const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
     const metaReq = https.get(metaUrl, (metaRes) => {
       let raw = "";
@@ -208,80 +207,72 @@ function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
           if (!parsed.ok || !parsed.result?.file_path) {
             return reject(new Error("Telegram Bot getFile error: " + (parsed.description || "File not found in Bot API")));
           }
-          const filePath = parsed.result.file_path;
-          const totalSize = Number(parsed.result.file_size) || 0;
-          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${filePath}`;
-          const headers = {};
-          if (rangeHeader) {
-            headers["Range"] = rangeHeader;
-          }
-          const fileReq = https.get(fileUrl, { headers }, (fileRes) => {
-            if (fileRes.statusCode !== 200 && fileRes.statusCode !== 206) {
-              return reject(new Error(`Telegram Bot file stream status ${fileRes.statusCode}`));
-            }
-
-            if (!res.headersSent) {
-              res.status(fileRes.statusCode);
-              if (fileRes.headers["content-type"]) res.setHeader("Content-Type", fileRes.headers["content-type"]);
-              if (fileRes.headers["content-length"]) res.setHeader("Content-Length", fileRes.headers["content-length"]);
-              if (fileRes.headers["content-range"]) res.setHeader("Content-Range", fileRes.headers["content-range"]);
-              res.setHeader("Accept-Ranges", "bytes");
-              res.setHeader("X-Real-Source", "CLOUD_STORAGE");
-              res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Direct Stream)");
-              res.setHeader("X-Data-Source", "bot_api");
-              res.setHeader("CF-Cache-Status", "MISS");
-            }
-
-            fileRes.pipe(res);
-
-            fileRes.on("end", () => {
-              if (!resolved) {
-                resolved = true;
-                resolve({ success: true, totalSize });
-              }
-            });
-
-            fileRes.on("error", (err) => {
-              if (!resolved) {
-                resolved = true;
-                reject(err);
-              }
-            });
-          });
-
-          fileReq.on("error", (err) => {
-            if (!resolved) {
-              resolved = true;
-              reject(err);
-            }
-          });
-          fileReq.setTimeout(25000, () => {
-            fileReq.destroy();
-            if (!resolved) {
-              resolved = true;
-              reject(new Error("Telegram Bot file download timeout"));
-            }
-          });
+          resolve(parsed.result);
         } catch (e) {
-          if (!resolved) {
-            resolved = true;
-            reject(e);
-          }
+          reject(e);
+        }
+      });
+    });
+    metaReq.on("error", reject);
+    metaReq.setTimeout(timeoutMs, () => {
+      metaReq.destroy();
+      reject(new Error("Telegram Bot getFile metadata timeout"));
+    });
+  });
+}
+
+async function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
+  const fileInfo = await getTelegramBotFileInfo(botToken, botFileId, 8000);
+  return new Promise((resolve, reject) => {
+    let resolved = false;
+    const totalSize = Number(fileInfo.file_size) || 0;
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
+    const headers = rangeHeader ? { Range: rangeHeader } : {};
+    const fileReq = https.get(fileUrl, { headers }, (fileRes) => {
+      if (fileRes.statusCode !== 200 && fileRes.statusCode !== 206) {
+        return reject(new Error(`Telegram Bot file stream status ${fileRes.statusCode}`));
+      }
+
+      if (!res.headersSent) {
+        res.status(fileRes.statusCode);
+        if (fileRes.headers["content-type"]) res.setHeader("Content-Type", fileRes.headers["content-type"]);
+        if (fileRes.headers["content-length"]) res.setHeader("Content-Length", fileRes.headers["content-length"]);
+        if (fileRes.headers["content-range"]) res.setHeader("Content-Range", fileRes.headers["content-range"]);
+        res.setHeader("Accept-Ranges", "bytes");
+        res.setHeader("X-Real-Source", "CLOUD_STORAGE");
+        res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Direct Stream)");
+        res.setHeader("X-Data-Source", "bot_api");
+        res.setHeader("CF-Cache-Status", "MISS");
+      }
+
+      fileRes.pipe(res);
+
+      fileRes.on("end", () => {
+        if (!resolved) {
+          resolved = true;
+          resolve({ success: true, totalSize });
+        }
+      });
+
+      fileRes.on("error", (err) => {
+        if (!resolved) {
+          resolved = true;
+          reject(err);
         }
       });
     });
 
-    metaReq.on("error", (err) => {
+    fileReq.on("error", (err) => {
       if (!resolved) {
         resolved = true;
         reject(err);
       }
     });
-    metaReq.setTimeout(8000, () => {
-      metaReq.destroy();
+    fileReq.setTimeout(25000, () => {
+      fileReq.destroy();
       if (!resolved) {
         resolved = true;
-        reject(new Error("Telegram Bot getFile metadata timeout"));
+        reject(new Error("Telegram Bot file download timeout"));
       }
     });
   });
@@ -290,79 +281,49 @@ function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
 /**
  * Downloads full document buffer from Telegram Bot API with timeout safety.
  */
-function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 45000) {
+async function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 45000) {
+  const result = await getTelegramBotFileInfo(botToken, botFileId, 15000);
   return new Promise((resolve, reject) => {
     let resolved = false;
-    const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
-    const metaReq = https.get(metaUrl, (metaRes) => {
-      let raw = "";
-      metaRes.on("data", (c) => (raw += c));
-      metaRes.on("end", () => {
-        try {
-          const parsed = JSON.parse(raw);
-          if (!parsed.ok || !parsed.result?.file_path) {
-            return reject(new Error("Telegram Bot getFile failed: " + (parsed.description || "Unknown")));
-          }
-          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${parsed.result.file_path}`;
-          const fileReq = https.get(fileUrl, (fileRes) => {
-            if (fileRes.statusCode !== 200) {
-              return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
-            }
-            const chunks = [];
-            let total = 0;
-            fileRes.on("data", (chunk) => {
-              chunks.push(chunk);
-              total += chunk.length;
-            });
-            fileRes.on("end", () => {
-              if (!resolved) {
-                resolved = true;
-                resolve({
-                  buffer: Buffer.concat(chunks),
-                  totalSize: total,
-                  mimeType: "application/pdf",
-                });
-              }
-            });
-            fileRes.on("error", (err) => {
-              if (!resolved) {
-                resolved = true;
-                reject(err);
-              }
-            });
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${result.file_path}`;
+    const fileReq = https.get(fileUrl, (fileRes) => {
+      if (fileRes.statusCode !== 200) {
+        return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
+      }
+      const chunks = [];
+      let total = 0;
+      fileRes.on("data", (chunk) => {
+        chunks.push(chunk);
+        total += chunk.length;
+      });
+      fileRes.on("end", () => {
+        if (!resolved) {
+          resolved = true;
+          resolve({
+            buffer: Buffer.concat(chunks),
+            totalSize: total,
+            mimeType: "application/pdf",
           });
-          fileReq.on("error", (err) => {
-            if (!resolved) {
-              resolved = true;
-              reject(err);
-            }
-          });
-          fileReq.setTimeout(timeoutMs, () => {
-            fileReq.destroy();
-            if (!resolved) {
-              resolved = true;
-              reject(new Error("Bot file download timed out"));
-            }
-          });
-        } catch (e) {
-          if (!resolved) {
-            resolved = true;
-            reject(e);
-          }
+        }
+      });
+      fileRes.on("error", (err) => {
+        if (!resolved) {
+          resolved = true;
+          reject(err);
         }
       });
     });
-    metaReq.on("error", (err) => {
+    fileReq.on("error", (err) => {
       if (!resolved) {
         resolved = true;
         reject(err);
       }
     });
-    metaReq.setTimeout(15000, () => {
-      metaReq.destroy();
+    fileReq.setTimeout(timeoutMs, () => {
+      fileReq.destroy();
       if (!resolved) {
         resolved = true;
-        reject(new Error("Telegram Bot getFile meta timed out"));
+        reject(new Error("Bot file download timed out"));
       }
     });
   });
@@ -371,110 +332,89 @@ function getTelegramBotBuffer(botToken, botFileId, timeoutMs = 45000) {
 /**
  * Streams directly from Telegram Bot API to express response & writes to Server SSD disk cache simultaneously
  */
-function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expectedSize = 0) {
+async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, expectedSize = 0) {
+  const fileInfo = await getTelegramBotFileInfo(botToken, botFileId, 10000);
   return new Promise((resolve, reject) => {
-    const metaUrl = `https://api.telegram.org/bot${botToken}/getFile?file_id=${botFileId}`;
-    const metaReq = https.get(metaUrl, (metaRes) => {
-      let raw = "";
-      metaRes.on("data", (c) => (raw += c));
-      metaRes.on("end", () => {
-        try {
-          const parsed = JSON.parse(raw);
-          if (!parsed.ok || !parsed.result?.file_path) {
-            return reject(new Error("Telegram Bot getFile failed: " + (parsed.description || "Unknown")));
-          }
-          const fileUrl = `https://api.telegram.org/file/bot${botToken}/${parsed.result.file_path}`;
-          const fileReq = https.get(fileUrl, (fileRes) => {
-            if (fileRes.statusCode !== 200) {
-              return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
-            }
+    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
+    const fileReq = https.get(fileUrl, (fileRes) => {
+      if (fileRes.statusCode !== 200) {
+        return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
+      }
 
-            const total = parseInt(fileRes.headers["content-length"] || expectedSize || 0, 10);
-            if (!res.headersSent) {
-              res.status(200);
-              res.setHeader("Content-Type", "application/pdf");
-              if (total > 0) res.setHeader("Content-Length", total);
-              res.setHeader("X-Accel-Buffering", "no");
-              res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-              res.setHeader("CDN-Cache-Control", "public, max-age=31536000");
-              res.setHeader("X-Real-Source", "CLOUD_STORAGE");
-              res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Telegram Fast-Stream)");
-            }
+      const total = parseInt(fileRes.headers["content-length"] || expectedSize || 0, 10);
+      if (!res.headersSent) {
+        res.status(200);
+        res.setHeader("Content-Type", "application/pdf");
+        if (total > 0) res.setHeader("Content-Length", total);
+        res.setHeader("X-Accel-Buffering", "no");
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        res.setHeader("CDN-Cache-Control", "public, max-age=31536000");
+        res.setHeader("X-Real-Source", "CLOUD_STORAGE");
+        res.setHeader("X-Source-Label", "Primary Academic Cloud Storage Vault (Telegram Fast-Stream)");
+      }
 
-            const safeId = sanitizeCacheId(noteId);
-            const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
-            const tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
-            let diskStream = null;
-            let bytesWritten = 0;
+      const safeId = sanitizeCacheId(noteId);
+      const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
+      const tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
+      let diskStream = null;
+      let bytesWritten = 0;
+      try {
+        if (tmpPath && fs.existsSync(CDN_CACHE_DIR)) {
+          diskStream = fs.createWriteStream(tmpPath);
+        }
+      } catch (_) {}
+
+      fileRes.on("data", (chunk) => {
+        if (!res.writableEnded) res.write(chunk);
+        if (diskStream) {
+          bytesWritten += chunk.length;
+          diskStream.write(chunk);
+        }
+      });
+
+      fileRes.on("end", async () => {
+        if (!res.writableEnded) res.end();
+        if (diskStream) {
+          diskStream.end();
+          if (safeId && tmpPath && binPath) {
             try {
-              if (tmpPath && fs.existsSync(CDN_CACHE_DIR)) {
-                diskStream = fs.createWriteStream(tmpPath);
+              // Only promote to real cache if stream finished with all expected bytes
+              if (!total || bytesWritten >= total) {
+                await fs.promises.rename(tmpPath, binPath);
+                const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
+                await fs.promises.writeFile(
+                  metaFile,
+                  JSON.stringify({
+                    mimeType: "application/pdf",
+                    totalSize: bytesWritten || total,
+                    cachedAt: Date.now(),
+                  }),
+                  "utf8"
+                );
+              } else {
+                if (fs.existsSync(tmpPath)) await fs.promises.unlink(tmpPath);
               }
             } catch (_) {}
-
-            fileRes.on("data", (chunk) => {
-              if (!res.writableEnded) res.write(chunk);
-              if (diskStream) {
-                bytesWritten += chunk.length;
-                diskStream.write(chunk);
-              }
-            });
-
-            fileRes.on("end", async () => {
-              if (!res.writableEnded) res.end();
-              if (diskStream) {
-                diskStream.end();
-                if (safeId && tmpPath && binPath) {
-                  try {
-                    // Only promote to real cache if stream finished with all expected bytes
-                    if (!total || bytesWritten >= total) {
-                      await fs.promises.rename(tmpPath, binPath);
-                      const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
-                      await fs.promises.writeFile(
-                        metaFile,
-                        JSON.stringify({
-                          mimeType: "application/pdf",
-                          totalSize: bytesWritten || total,
-                          cachedAt: Date.now(),
-                        }),
-                        "utf8"
-                      );
-                    } else {
-                      if (fs.existsSync(tmpPath)) await fs.promises.unlink(tmpPath);
-                    }
-                  } catch (_) {}
-                }
-              }
-              resolve(true);
-            });
-
-            fileRes.on("error", (err) => {
-              if (diskStream) {
-                diskStream.destroy();
-                try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
-              }
-              reject(err);
-            });
-          });
-
-          fileReq.setTimeout(60000, () => {
-            fileReq.destroy();
-            reject(new Error("Telegram Bot stream timed out after 60s"));
-          });
-
-          fileReq.on("error", reject);
-        } catch (e) {
-          reject(e);
+          }
         }
+        resolve(true);
+      });
+
+      fileRes.on("error", (err) => {
+        if (diskStream) {
+          diskStream.destroy();
+          try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+        }
+        reject(err);
       });
     });
 
-    metaReq.setTimeout(10000, () => {
-      metaReq.destroy();
-      reject(new Error("Telegram Bot getFile timed out after 10s"));
+    fileReq.setTimeout(60000, () => {
+      fileReq.destroy();
+      reject(new Error("Telegram Bot stream timed out after 60s"));
     });
 
-    metaReq.on("error", reject);
+    fileReq.on("error", reject);
   });
 }
 
