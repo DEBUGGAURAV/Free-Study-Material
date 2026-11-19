@@ -16,7 +16,7 @@ const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
 const { recordSyncEvent } = require("./syncTracker");
 const { upsertNoteToTurso } = require("../services/tursoService");
-const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 function getBotToken() {
   return (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -500,7 +500,7 @@ async function processIncomingMessage(message) {
           `📚 <b>Subject:</b> ${dupData.subject || subject}\n` +
           `🎓 <b>Program:</b> ${dupData.course || course} (${dupData.branch || branch} • ${dupData.year || year})\n` +
           `💾 <b>Size:</b> ${realSize}\n` +
-          `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${duplicateDoc.id}/stream\n` +
+          `🔗 <b>Direct Link:</b> ${getNotePublicUrl(duplicateDoc.id)}\n` +
           `🌐 <b>Website:</b> ${siteUrl}\n\n` +
           `<i>🛡️ <b>Deduplication Shield:</b> This document is already indexed and live on the website. Duplicate re-upload was safely prevented to conserve cloud storage. Students can access it directly.</i>`;
 
@@ -634,7 +634,7 @@ async function processIncomingMessage(message) {
         `📚 <b>Subject:</b> ${subject}\n` +
         `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
         `💾 <b>Size:</b> ${realSize}\n` +
-        `🔗 <b>Direct Link:</b> ${siteUrl2}/api/notes/${noteRef.id}/stream\n` +
+        `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
         `🌐 <b>Website:</b> ${siteUrl2}\n\n` +
         `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 

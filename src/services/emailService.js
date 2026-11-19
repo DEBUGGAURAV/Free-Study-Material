@@ -5,7 +5,7 @@
 
 const nodemailer = require("nodemailer");
 const { ramCache } = require("../utils/ramCache");
-const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 // Configuration from environment variables
 const SMTP_HOST = (process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com").trim();
@@ -754,7 +754,7 @@ async function sendTelegramAuthNotice({
         `💾 <b>File Size:</b> <code>${realSizeStr}</code>\n` +
         `👤 <b>Uploaded By:</b> <code>${user.name || "Student Contributor"}</code>\n` +
         (user.email ? `📧 <b>Email:</b> <code>${user.email}</code>\n` : "") +
-        `🔗 <b>Direct Link:</b> ${getSiteUrl()}/api/notes/${note?.id}/stream\n` +
+        `🔗 <b>Direct Link:</b> ${getNotePublicUrl(note?.id)}\n` +
         `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>\n\n` +
         `<i>Auto-routed to dedicated Subject Topic. Document & Receipt published separately.</i>`;
     } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {

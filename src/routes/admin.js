@@ -12,107 +12,21 @@ const { getSiteDomain } = require("../config/siteConfig");
 const { getBackendClusterUrls } = require("../config/clusterConfig");
 const { createStepUpToken, requireStepUpAuth } = require("../middleware/adminStepUp");
 
-let deleteTelegramMessages = null;
-let getMTProtoDetails = null;
-try {
-  const mtproto = require("../telegram/mtproto");
-  deleteTelegramMessages = mtproto.deleteTelegramMessages;
-  getMTProtoDetails = mtproto.getMTProtoDetails;
-} catch {}
+const safeRequire = (modPath, defaults = {}) => {
+  try { return require(modPath) || defaults; } catch { return defaults; }
+};
 
-let getBotPollerDetails = null;
-try {
-  const botPoller = require("../telegram/botPoller");
-  getBotPollerDetails = botPoller.getBotPollerDetails;
-} catch {}
-
-let getPipelineList = null;
-try {
-  const queueService = require("../services/queueService");
-  getPipelineList = queueService.getPipelineList;
-} catch {}
-
-let getBotSettings = null;
-let updateBotSettings = null;
-let BOT_USERNAME = "fsm_security_otp_bot";
-let pendingRegistrations = null;
-let pendingPasswordResets = null;
-try {
-  const secBot = require("../services/securityBotService");
-  getBotSettings = secBot.getBotSettings;
-  updateBotSettings = secBot.updateBotSettings;
-  BOT_USERNAME = secBot.BOT_USERNAME;
-  pendingRegistrations = secBot.pendingRegistrations;
-  pendingPasswordResets = secBot.pendingPasswordResets;
-} catch {}
-
-let getAntiSleepTelemetry = null;
-let triggerManualPulse = null;
-try {
-  const antiSleep = require("../services/antiSleepService");
-  getAntiSleepTelemetry = antiSleep.getAntiSleepTelemetry;
-  triggerManualPulse = antiSleep.triggerManualPulse;
-} catch {}
-
-let getClusterTelemetry = null;
-let getLocalNodeTelemetry = null;
-let probeClusterNodes = null;
-let toggleClusterNode = null;
-let syncNodeState = null;
-let addClusterNode = null;
-let removeClusterNode = null;
-try {
-  const clusterService = require("../services/clusterTelemetryService");
-  getClusterTelemetry = clusterService.getClusterTelemetry;
-  getLocalNodeTelemetry = clusterService.getLocalNodeTelemetry;
-  probeClusterNodes = clusterService.probeClusterNodes;
-  toggleClusterNode = clusterService.toggleClusterNode;
-  syncNodeState = clusterService.syncNodeState;
-  addClusterNode = clusterService.addClusterNode;
-  removeClusterNode = clusterService.removeClusterNode;
-} catch {}
-
+const { deleteTelegramMessages, getMTProtoDetails } = safeRequire("../telegram/mtproto");
+const { getBotPollerDetails } = safeRequire("../telegram/botPoller");
+const { getPipelineList } = safeRequire("../services/queueService");
+const { getBotSettings, updateBotSettings, BOT_USERNAME = "fsm_security_otp_bot", pendingRegistrations, pendingPasswordResets } = safeRequire("../services/securityBotService");
+const { getAntiSleepTelemetry, triggerManualPulse } = safeRequire("../services/antiSleepService");
+const { getClusterTelemetry, getLocalNodeTelemetry, probeClusterNodes, toggleClusterNode, syncNodeState, addClusterNode, removeClusterNode } = safeRequire("../services/clusterTelemetryService");
 const { sendTelegramAuthNotice, getOrCreateSubjectForumTopic } = require("../services/emailService");
-
-let getCacheWarmerStatus = null;
-try {
-  getCacheWarmerStatus = require("../utils/cacheWarmer").getCacheWarmerStatus;
-} catch {}
-
-let telegramCircuitBreaker = null;
-try {
-  telegramCircuitBreaker = require("../utils/circuitBreaker").telegramCircuitBreaker;
-} catch {}
-
-let getWatchdogStats = null;
-let getMemoryGuardStats = null;
-try {
-  const watchdog = require("../utils/selfHealingWatchdog");
-  getWatchdogStats = watchdog.getWatchdogStats;
-  getMemoryGuardStats = watchdog.getMemoryGuardStats;
-} catch {}
-
-let getThreatIntelligence = null;
-let unjailIp = null;
-let unjailDevice = null;
-let unjailByIncident = null;
-let clearAllJails = null;
-let recordThreatIncident = null;
-let jailSpecificIp = null;
-let jailSpecificDevice = null;
-let addPardonedIncident = null;
-try {
-  const ipJail = require("../middleware/ipJail");
-  getThreatIntelligence = ipJail.getThreatIntelligence;
-  unjailIp = ipJail.unjailIp;
-  unjailDevice = ipJail.unjailDevice;
-  unjailByIncident = ipJail.unjailByIncident;
-  clearAllJails = ipJail.clearAllJails;
-  recordThreatIncident = ipJail.recordThreatIncident;
-  jailSpecificIp = ipJail.jailSpecificIp;
-  jailSpecificDevice = ipJail.jailSpecificDevice;
-  addPardonedIncident = ipJail.addPardonedIncident;
-} catch {}
+const { getCacheWarmerStatus } = safeRequire("../utils/cacheWarmer");
+const { telegramCircuitBreaker } = safeRequire("../utils/circuitBreaker");
+const { getWatchdogStats, getMemoryGuardStats } = safeRequire("../utils/selfHealingWatchdog");
+const { getThreatIntelligence, unjailIp, unjailDevice, unjailByIncident, clearAllJails, recordThreatIncident, jailSpecificIp, jailSpecificDevice, addPardonedIncident } = safeRequire("../middleware/ipJail");
 
 
 
@@ -1479,47 +1393,48 @@ router.post("/notes/delete-all", authenticateToken, checkAdminOrPermission("mana
  * GET /api/admin/recycle-bin/items & /recycle-bin/notes
  * Universal Restore Vault: Returns all deleted records (Notes, Notices, Users)
  */
+async function getRecycleBinVault() {
+  if (!db) return { items: [], notes: [], totalCount: 0 };
+  const [recSnap, notesSnap] = await Promise.all([
+    db.collection("deleted_records").get(),
+    db.collection("deleted_notes").get(),
+  ]);
+
+  const itemsMap = new Map();
+  recSnap.forEach((d) => itemsMap.set(d.id, { id: d.id, ...d.data() }));
+
+  notesSnap.forEach((d) => {
+    const data = d.data();
+    const key = `notes_${d.id}`;
+    if (!itemsMap.has(key) && !itemsMap.has(d.id)) {
+      itemsMap.set(key, {
+        id: key,
+        originalId: d.id,
+        collectionName: "notes",
+        typeLabel: "Note",
+        title: data.title || "Study Material",
+        subject: data.subject || "Academic",
+        branch: data.branch || "General",
+        ...data,
+      });
+    }
+  });
+
+  const items = Array.from(itemsMap.values()).sort(
+    (a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0)
+  );
+
+  return {
+    items,
+    notes: items.filter((i) => i.collectionName === "notes"),
+    totalCount: items.length,
+  };
+}
+
 router.get("/recycle-bin/items", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
-    if (!db) return res.json({ success: true, items: [], totalCount: 0 });
-
-    const [recSnap, notesSnap] = await Promise.all([
-      db.collection("deleted_records").get(),
-      db.collection("deleted_notes").get(),
-    ]);
-
-    const itemsMap = new Map();
-
-    recSnap.forEach((d) => {
-      itemsMap.set(d.id, { id: d.id, ...d.data() });
-    });
-
-    notesSnap.forEach((d) => {
-      const data = d.data();
-      const key = `notes_${d.id}`;
-      if (!itemsMap.has(key) && !itemsMap.has(d.id)) {
-        itemsMap.set(key, {
-          id: key,
-          originalId: d.id,
-          collectionName: "notes",
-          typeLabel: "Note",
-          title: data.title || "Study Material",
-          subject: data.subject || "Academic",
-          branch: data.branch || "General",
-          ...data,
-        });
-      }
-    });
-
-    const items = Array.from(itemsMap.values());
-    items.sort((a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0));
-
-    return res.json({
-      success: true,
-      items,
-      notes: items.filter((i) => i.collectionName === "notes"),
-      totalCount: items.length,
-    });
+    const vault = await getRecycleBinVault();
+    return res.json({ success: true, ...vault });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1527,45 +1442,8 @@ router.get("/recycle-bin/items", authenticateToken, checkAdminOrPermission("mana
 
 router.get("/recycle-bin/notes", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
-    if (!db) return res.json({ success: true, notes: [], totalCount: 0 });
-
-    const [recSnap, notesSnap] = await Promise.all([
-      db.collection("deleted_records").get(),
-      db.collection("deleted_notes").get(),
-    ]);
-
-    const itemsMap = new Map();
-
-    recSnap.forEach((d) => {
-      itemsMap.set(d.id, { id: d.id, ...d.data() });
-    });
-
-    notesSnap.forEach((d) => {
-      const data = d.data();
-      const key = `notes_${d.id}`;
-      if (!itemsMap.has(key) && !itemsMap.has(d.id)) {
-        itemsMap.set(key, {
-          id: key,
-          originalId: d.id,
-          collectionName: "notes",
-          typeLabel: "Note",
-          title: data.title || "Study Material",
-          subject: data.subject || "Academic",
-          branch: data.branch || "General",
-          ...data,
-        });
-      }
-    });
-
-    const items = Array.from(itemsMap.values());
-    items.sort((a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0));
-
-    return res.json({
-      success: true,
-      notes: items,
-      items,
-      totalCount: items.length,
-    });
+    const vault = await getRecycleBinVault();
+    return res.json({ success: true, notes: vault.items, items: vault.items, totalCount: vault.totalCount });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -2264,55 +2142,7 @@ router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), 
   return res.json({ success: true, retentionDays: cdnRetentionDays, message: `CDN Cache retention set to ${label}.` });
 });
 
-router.post("/cdn/purge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
-  lastEdgePurgeTime = Date.now();
-  invalidateAllCache();
-  try {
-    const notesRouter = require("./notes");
-    if (notesRouter && typeof notesRouter.purgeMemoryCache === "function") {
-      notesRouter.purgeMemoryCache();
-    }
-  } catch (_) {}
-  try {
-    const cdnDiskDir = path.join(process.cwd(), "cache", "cdn");
-    if (fs.existsSync(cdnDiskDir)) {
-      const files = fs.readdirSync(cdnDiskDir);
-      for (const f of files) {
-        try { fs.unlinkSync(path.join(cdnDiskDir, f)); } catch (_) {}
-      }
-    }
-  } catch (_) {}
-  if (global.gc) {
-    try { global.gc(); } catch (e) {}
-  }
-
-  // Update Firestore isCdnCached: false across all notes
-  if (db) {
-    try {
-      const snap = await db.collection("notes").where("isCdnCached", "==", true).get();
-      if (!snap.empty) {
-        const batch = db.batch();
-        snap.forEach((d) => {
-          batch.update(d.ref, { isCdnCached: false, cdnCachedAt: null });
-        });
-        await batch.commit().catch(() => {});
-      }
-    } catch (_) {}
-  }
-
-  // Purge Cloudflare Worker CDN edge
-  try {
-    const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
-    if (cfWorker) {
-      fetch(`${cfWorker}/api/admin/cdn/purge?purge_all=1`, { method: "PURGE" }).catch(() => {});
-      fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
-    }
-  } catch (_) {}
-
-  return res.json({ success: true, message: "Global Cloudflare Edge CDN, Worker & In-Memory RAM Cache purged globally! Cache pool is now 0 MB." });
-});
-
-router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
+async function purgeCdnDiskAndEdge() {
   lastEdgePurgeTime = Date.now();
   try {
     const notesRouter = require("./notes");
@@ -2323,28 +2153,21 @@ router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission(["all",
   try {
     const cdnDiskDir = path.join(process.cwd(), "cache", "cdn");
     if (fs.existsSync(cdnDiskDir)) {
-      const files = fs.readdirSync(cdnDiskDir);
-      for (const f of files) {
+      for (const f of fs.readdirSync(cdnDiskDir)) {
         try { fs.unlinkSync(path.join(cdnDiskDir, f)); } catch (_) {}
       }
     }
   } catch (_) {}
-
-  // Update Firestore isCdnCached: false
   if (db) {
     try {
       const snap = await db.collection("notes").where("isCdnCached", "==", true).get();
       if (!snap.empty) {
         const batch = db.batch();
-        snap.forEach((d) => {
-          batch.update(d.ref, { isCdnCached: false, cdnCachedAt: null });
-        });
+        snap.forEach((d) => batch.update(d.ref, { isCdnCached: false, cdnCachedAt: null }));
         await batch.commit().catch(() => {});
       }
     } catch (_) {}
   }
-
-  // Purge Cloudflare Worker CDN edge
   try {
     const cfWorker = (process.env.CF_WORKER_URL || process.env.VITE_CF_WORKER_URL || "").trim();
     if (cfWorker) {
@@ -2352,7 +2175,25 @@ router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission(["all",
       fetch(`${cfWorker}/purge_all`, { method: "POST" }).catch(() => {});
     }
   } catch (_) {}
+}
 
+router.post("/cdn/purge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
+  invalidateAllCache();
+  try {
+    const notesRouter = require("./notes");
+    if (notesRouter && typeof notesRouter.purgeMemoryCache === "function") {
+      notesRouter.purgeMemoryCache();
+    }
+  } catch (_) {}
+  if (global.gc) {
+    try { global.gc(); } catch (e) {}
+  }
+  await purgeCdnDiskAndEdge();
+  return res.json({ success: true, message: "Global Cloudflare Edge CDN, Worker & In-Memory RAM Cache purged globally! Cache pool is now 0 MB." });
+});
+
+router.post("/cdn/purge-edge", authenticateToken, checkAdminOrPermission(["all", "manage_cdn", "performance"]), async (req, res) => {
+  await purgeCdnDiskAndEdge();
   return res.json({ success: true, message: "Cloudflare Edge CDN, Worker & Disk Cache purged globally! Edge caches are now cleared." });
 });
 
@@ -4341,21 +4182,7 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
       await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
     }
 
-    try {
-      const { updateDedupSettings } = require("../services/dedupSettings");
-      updateDedupSettings(techSettings);
-    } catch (_) {}
-
-    try {
-      const { updateMaintenanceConfig } = require("../middleware/maintenance");
-      updateMaintenanceConfig({
-        active: Boolean(techSettings.maintenanceMode),
-        title: techSettings.maintenanceTitle,
-        message: techSettings.maintenanceMessage,
-        estimatedEnd: techSettings.maintenanceEstimatedEnd,
-        bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
-      });
-    } catch (_) {}
+    applyTechSettings(techSettings);
 
     // Broadcast maintenance state to all 3 cluster servers
     try {
@@ -4527,29 +4354,12 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
       await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
     }
 
-    try {
-      const { updateDedupSettings } = require("../services/dedupSettings");
-      updateDedupSettings(techSettings);
-    } catch (_) {}
+    applyTechSettings(techSettings);
 
-    try {
-      const { updateMaintenanceConfig } = require("../middleware/maintenance");
-      updateMaintenanceConfig({
-        active: Boolean(techSettings.maintenanceMode),
-        title: techSettings.maintenanceTitle,
-        message: techSettings.maintenanceMessage,
-        estimatedEnd: techSettings.maintenanceEstimatedEnd,
-        bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
-      });
-    } catch (_) {}
-
-    // Broadcast maintenance state to all 3 cluster servers
+    // Broadcast maintenance state to all cluster servers
     try {
       broadcastMaintenanceToCluster(techSettings, req);
     } catch (_) {}
-
-    // Broadcast maintenance state to Server #3 and all cluster nodes
-    broadcastMaintenanceToCluster(techSettings, req);
 
     return res.json({
       success: true,
@@ -4614,16 +4424,7 @@ router.post("/maintenance/sync", (req, res) => {
     if (message) techSettings.maintenanceMessage = message;
     if (estimatedEnd !== undefined) techSettings.maintenanceEstimatedEnd = estimatedEnd;
 
-    try {
-      const { updateMaintenanceConfig } = require("../middleware/maintenance");
-      updateMaintenanceConfig({
-        active: Boolean(techSettings.maintenanceMode),
-        title: techSettings.maintenanceTitle,
-        message: techSettings.maintenanceMessage,
-        estimatedEnd: techSettings.maintenanceEstimatedEnd,
-        bypassKey: techSettings.maintenanceBypassKey || "fsm_admin_override",
-      });
-    } catch (_) {}
+    applyTechSettings(techSettings);
 
     return res.json({
       success: true,

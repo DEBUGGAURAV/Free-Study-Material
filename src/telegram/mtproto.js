@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
 const { recordSyncEvent, getLastSyncState } = require("./syncTracker");
-const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
 
 const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
 const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();
@@ -488,7 +488,7 @@ function setupChannelSyncListeners(c) {
             `📚 <b>Subject:</b> ${subject}\n` +
             `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
             `💾 <b>Size:</b> ${realSize}\n` +
-            `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${dup.id || dup.docId || ""}/stream\n` +
+            `🔗 <b>Direct Link:</b> ${getNotePublicUrl(dup.id || dup.docId || "")}\n` +
             `🌐 <b>Website:</b> ${siteUrl}\n\n` +
             `<i>🛡️ This document is already live on the platform. Duplicate re-upload was safely prevented.</i>`;
 
@@ -597,7 +597,7 @@ function setupChannelSyncListeners(c) {
           `📚 <b>Subject:</b> ${subject}\n` +
           `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
           `💾 <b>Size:</b> ${realSize}\n` +
-          `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${noteRef.id}/stream\n` +
+          `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
           `🌐 <b>Website:</b> ${siteUrl}\n\n` +
           `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 
@@ -1028,7 +1028,7 @@ async function syncTelegramChannel() {
               `📚 <b>Subject:</b> ${subject}\n` +
               `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
               `💾 <b>Size:</b> ${formatMb} MB\n` +
-              `🔗 <b>Direct Link:</b> ${siteUrl}/api/notes/${noteRef.id}/stream\n` +
+              `🔗 <b>Direct Link:</b> ${getNotePublicUrl(noteRef.id)}\n` +
               `🌐 <b>Website:</b> ${siteUrl}\n\n` +
               `<i>Note is now live at #1 position and accessible to all registered students.</i>`;
 

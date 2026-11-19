@@ -13,20 +13,46 @@ const DEFAULT_SITE_NAME = process.env.SITE_NAME || "Free Study Material";
 const DEFAULT_VAULT_NAME = process.env.SITE_VAULT_NAME || `${DEFAULT_SITE_NAME} Vault`;
 const DEFAULT_DOMAIN =
   process.env.CLIENT_URL ||
+  process.env.FRONTEND_URL ||
+  process.env.PUBLIC_URL ||
   process.env.SITE_URL ||
   process.env.RENDER_EXTERNAL_URL ||
   (process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null) ||
   (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
-  "";
+  "https://freestudymaterial.pages.dev";
 
 /**
- * Get active canonical platform URL dynamically
+ * Get active canonical platform URL dynamically.
+ * Auto-detects custom domains, Cloudflare Pages, Vercel, Netlify, Render, Railway, etc.
  */
 function getSiteUrl(req = null) {
-  if (process.env.CLIENT_URL) return process.env.CLIENT_URL.replace(/\/+$/, "");
-  if (process.env.SITE_URL) return process.env.SITE_URL.replace(/\/+$/, "");
-  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL.replace(/\/+$/, "");
-  if (process.env.RAILWAY_STATIC_URL) return `https://${process.env.RAILWAY_STATIC_URL}`.replace(/\/+$/, "");
+  const envCandidates = [
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_URL,
+    process.env.PUBLIC_URL,
+    process.env.SITE_URL,
+    process.env.APP_URL,
+    process.env.WEB_URL,
+    process.env.RENDER_EXTERNAL_URL,
+    process.env.RENDER_EXTERNAL_HOSTNAME ? `https://${process.env.RENDER_EXTERNAL_HOSTNAME}` : null,
+    process.env.CF_PAGES_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null,
+    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    process.env.RAILWAY_STATIC_URL ? `https://${process.env.RAILWAY_STATIC_URL}` : null,
+    process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null,
+    process.env.URL, // Netlify production domain
+    process.env.DEPLOY_PRIME_URL,
+  ];
+
+  for (const candidate of envCandidates) {
+    if (candidate && typeof candidate === "string" && candidate.trim()) {
+      let trimmed = candidate.trim().replace(/\/+$/, "");
+      if (!/^https?:\/\//i.test(trimmed)) {
+        trimmed = `https://${trimmed}`;
+      }
+      return trimmed;
+    }
+  }
 
   if (req && req.get) {
     const host = req.get("host");
@@ -37,6 +63,17 @@ function getSiteUrl(req = null) {
   }
 
   return DEFAULT_DOMAIN.replace(/\/+$/, "");
+}
+
+/**
+ * Canonical Universal Public Note URL (Works seamlessly on any host / domain)
+ * Directly opens the note in the Virtual PDF Reader on the web.
+ * Query format (?noteId=...) is immune to 404s on all static web hosts and SPAs.
+ */
+function getNotePublicUrl(noteId) {
+  if (!noteId) return getSiteUrl();
+  const base = getSiteUrl();
+  return `${base}/?noteId=${encodeURIComponent(noteId)}`;
 }
 
 /**
@@ -67,6 +104,7 @@ function getSiteDomain(req = null) {
 
 module.exports = {
   getSiteUrl,
+  getNotePublicUrl,
   getSiteName,
   getVaultName,
   getSiteDomain,
