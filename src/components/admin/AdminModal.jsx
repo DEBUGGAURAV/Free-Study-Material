@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import {
   X, Shield, UserCheck, ChevronLeft, ChevronRight, Save, RefreshCw, Cpu, Globe,
-  Download, Upload, Zap, ShieldCheck, ShieldAlert, Power, Wifi, FileText, Sliders, Lock,
+  Download, Upload, Zap, ShieldCheck, ShieldAlert, Power, Wifi, Sliders, Lock,
   LayoutGrid, Search, ChevronDown, BookOpen, Users, HelpCircle, Bell, Server,
-  Rocket, Activity, Database, RotateCcw, MessageSquare, Bot, Sparkles, Terminal,
-  CheckCircle, AlertTriangle, Layers, Radio
+  Rocket, Activity, Database, RotateCcw, MessageSquare, Bot, Sparkles,
+  AlertTriangle
 } from "lucide-react";
 import { api, getAuthToken } from "../../api";
 import { BACKEND_CLUSTER_URLS } from "../../config/clientConfig";

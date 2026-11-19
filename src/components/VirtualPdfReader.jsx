@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, Layers, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
 import QRCode from "qrcode";
