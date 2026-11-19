@@ -6260,3 +6260,108 @@ svg.lucide {
   }
 }
 
+/* ---------------- ⌘K Spotlight Center Search Modal & Navbar Capsule ---------------- */
+@keyframes spotlightFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spotlightScaleUp {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.nav-spotlight-capsule {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  cursor: pointer;
+  flex: 1 1 auto;
+  max-width: 380px;
+  min-width: 180px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.nav-spotlight-capsule:hover {
+  border-color: #6366f1;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15), 0 0 0 2px rgba(99, 102, 241, 0.12);
+  transform: translateY(-1px);
+}
+
+.nav-spotlight-icon {
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.nav-spotlight-placeholder {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.nav-spotlight-kbd {
+  font-size: 0.68rem;
+  font-weight: 800;
+  font-family: monospace;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 2px 6px;
+  border-radius: 5px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.btn-spotlight-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  color: #4338ca;
+  border-radius: 9999px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  flex-shrink: 0;
+  transition: all 0.18s ease;
+}
+
+.btn-spotlight-mobile:hover,
+.btn-spotlight-mobile:active {
+  background: #eef2ff;
+  border-color: #818cf8;
+}
+
+@media (max-width: 900px) {
+  .nav-spotlight-capsule {
+    display: none !important;
+  }
+}
+
+@media (min-width: 901px) {
+  .btn-spotlight-mobile {
+    display: none !important;
+  }
+}
+
+

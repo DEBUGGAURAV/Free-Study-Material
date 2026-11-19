@@ -28,10 +28,13 @@ import GeminiIcon from "./GeminiIcon";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { getWebPushStatus, subscribeWebPush, unsubscribeWebPush } from "../utils/webPushClient";
 import { getCampusContributionTier } from "../utils/studentStudyContext";
+import SpotlightModal from "./SpotlightModal";
 
 export default function Navbar({
   searchTerm,
   setSearchTerm,
+  notes = [],
+  onPreview,
   onOpenUpload,
   onOpenAdmin,
   onOpenNotices,
@@ -50,6 +53,7 @@ export default function Navbar({
 }) {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showMobileMoreSheet, setShowMobileMoreSheet] = useState(false);
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [contributionTier, setContributionTier] = useState(() => getCampusContributionTier());
 
   useEffect(() => {
@@ -108,18 +112,12 @@ export default function Navbar({
     }
   });
 
-  // Global Keyboard Shortcut: ⌘K or Ctrl+K focuses the Universal Spotlight Search
+  // Global Keyboard Shortcut: ⌘K or Ctrl+K opens the Spotlight Center Modal
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        const searchInput = document.querySelector(".search-input");
-        if (searchInput) {
-          searchInput.focus();
-          searchInput.select();
-        }
-        const el = document.getElementById("study-materials");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
+        setIsSpotlightOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -224,6 +222,16 @@ export default function Navbar({
 
             {/* Mobile Compact Right Cluster (Admin + Upload + Profile + Logout / Sign In) */}
             <div className="mobile-header-actions">
+              <button
+                type="button"
+                className="btn-spotlight-mobile"
+                onClick={() => setIsSpotlightOpen(true)}
+                title="Spotlight Search (⌘K)"
+              >
+                <Search size={13} strokeWidth={2.4} />
+                <span>Search</span>
+              </button>
+
               {isAdminOrManager && (
                 <button
                   type="button"
@@ -335,6 +343,17 @@ export default function Navbar({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Desktop Center Spotlight Search Bar Capsule (Option 2) */}
+          <div
+            className="nav-spotlight-capsule"
+            onClick={() => setIsSpotlightOpen(true)}
+            title="Search notes, subjects, branch, PYQs... (⌘K / Ctrl+K)"
+          >
+            <Search size={15} className="nav-spotlight-icon" strokeWidth={2.4} />
+            <span className="nav-spotlight-placeholder">Search notes, subjects, PYQs...</span>
+            <kbd className="nav-spotlight-kbd">⌘K</kbd>
           </div>
 
           {/* Right Section (Desktop): Core Publish, Admin & User Identity */}
@@ -972,6 +991,18 @@ export default function Navbar({
           )}
         </>
       )}
+      {/* ⌘K Spotlight Center Modal (Apple / Raycast Style - Option 2) */}
+      <SpotlightModal
+        isOpen={isSpotlightOpen}
+        onClose={() => setIsSpotlightOpen(false)}
+        notes={notes}
+        onPreview={onPreview}
+        onOpenAiStudyPod={onOpenAiStudyPod}
+        onOpenCircleSearch={onOpenCircleSearch}
+        onOpenSwipeToRevise={onOpenSwipeToRevise}
+        onOpenUpload={onOpenUpload}
+        currentUser={currentUser}
+      />
     </>
   );
 }

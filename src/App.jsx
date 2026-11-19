@@ -1564,6 +1564,8 @@ export default function App() {
       <Navbar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
+        notes={notes}
+        onPreview={setPreviewNote}
         onOpenUpload={() => {
           if (!currentUser) {
             openAuth("signup");
