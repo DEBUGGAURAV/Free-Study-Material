@@ -756,15 +756,30 @@ async function deduplicateDatabaseNotes() {
   const db = getFirestoreDb();
   if (!db) return { success: false, cleanedCount: 0 };
 
-  const snap = await db.collection("notes").get();
+  let notesList = [];
+  try {
+    const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+    notesList = await getAllCachedNotes();
+  } catch (_) {}
+
+  if (!notesList || notesList.length === 0) {
+    try {
+      const snap = await db.collection("notes").get();
+      notesList = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn("[DEDUP] Firestore read notice (falling back):", e.message);
+      return { success: false, cleanedCount: 0 };
+    }
+  }
+
   const seenDocIds = new Map();
   const seenHashes = new Map();
   const seenTgMsgIds = new Map();
   const seenNormTitles = new Map();
   let duplicateCleanedCount = 0;
 
-  for (const doc of snap.docs) {
-    const data = doc.data();
+  for (const doc of notesList) {
+    const data = doc;
     const docIdStr = data.telegramDocumentId;
     const normTitle = normalizeNoteTitle(data.title || data.originalName);
 
@@ -848,16 +863,30 @@ async function syncTelegramChannel() {
   // 1. Run Automated Database Deduplication Sweep
   const { cleanedCount: duplicateCleanedCount } = await deduplicateDatabaseNotes();
 
-  // 2. Map existing valid notes for reconciliation
-  const snap = await db.collection("notes").get();
+  // 2. Map existing valid notes for reconciliation using Turso cache (0 Firestore reads!)
+  let notesList = [];
+  try {
+    const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+    notesList = await getAllCachedNotes();
+  } catch (_) {}
+
+  if (!notesList || notesList.length === 0) {
+    try {
+      const snap = await db.collection("notes").get();
+      notesList = snap.docs.map((d) => ({ docId: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn("[MTProto RECONCILE] Firestore read notice (falling back):", e.message);
+      notesList = [];
+    }
+  }
+
   const existingNotesWithTg = [];
   const knownMsgIds = new Set();
 
-  for (const doc of snap.docs) {
-    const data = doc.data();
+  for (const data of notesList) {
     if (data.telegramMessageId && Number(data.telegramMessageId) > 0) {
       const msgId = Number(data.telegramMessageId);
-      existingNotesWithTg.push({ docId: doc.id, msgId, title: data.title });
+      existingNotesWithTg.push({ docId: data.id || data.docId, msgId, title: data.title });
       knownMsgIds.add(msgId);
     }
   }

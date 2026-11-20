@@ -67,8 +67,17 @@ try {
  * Initialize Cache Tables in the Dedicated Turso Database
  */
 async function initTursoNotesCacheTables() {
-  if (!client) return false;
+  if (!client) initLocalCacheClient();
   try {
+    if (isCloud) {
+      try {
+        await client.execute("SELECT 1;");
+      } catch (connErr) {
+        console.warn("[TURSO-NOTES-CACHE] Cloud connection notice (" + connErr.message + "). Activating local LibSQL SQLite.");
+        initLocalCacheClient();
+      }
+    }
+
     await client.execute(`
       CREATE TABLE IF NOT EXISTS notes_cache (
         id TEXT PRIMARY KEY,
@@ -105,6 +114,9 @@ async function initTursoNotesCacheTables() {
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTES-CACHE] Table init warning:", err.message);
+    if (isCloud) {
+      initLocalCacheClient();
+    }
     return false;
   }
 }
@@ -127,45 +139,50 @@ const getNoteTimestamp = (val) => {
  * and automatically mirror into Turso Notes Cache (L2) and RAM (L1)
  */
 async function refreshCacheFromFirestore() {
-  if (!db) return [];
-  console.log("[TURSO-NOTES-CACHE] 📥 Fetching live notes from Firestore to populate Edge Cache...");
-  const snapshot = await db.collection("notes").get();
-  const rawNotes = [];
+  if (!db) return ramNotesMemory || [];
+  try {
+    console.log("[TURSO-NOTES-CACHE] 📥 Fetching live notes from Firestore to populate Edge Cache...");
+    const snapshot = await db.collection("notes").get();
+    const rawNotes = [];
 
-  const CDN_CACHE_DIR = path.join(process.cwd(), "cache", "cdn");
+    const CDN_CACHE_DIR = path.join(process.cwd(), "cache", "cdn");
 
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    const createdMs = getNoteTimestamp(data.createdAt);
-    const updatedMs = getNoteTimestamp(data.updatedAt);
-    const effectiveMs = Math.max(createdMs, updatedMs);
-    const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      const createdMs = getNoteTimestamp(data.createdAt);
+      const updatedMs = getNoteTimestamp(data.updatedAt);
+      const effectiveMs = Math.max(createdMs, updatedMs);
+      const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
 
-    let cleanDescription = data.description;
-    if (cleanDescription && (cleanDescription.includes("TECH TITAN STORAGE") || cleanDescription.includes("Synced from Telegram"))) {
-      cleanDescription = "📚 Verified Academic Notes • Free Study Material";
-    }
+      let cleanDescription = data.description;
+      if (cleanDescription && (cleanDescription.includes("TECH TITAN STORAGE") || cleanDescription.includes("Synced from Telegram"))) {
+        cleanDescription = "📚 Verified Academic Notes • Free Study Material";
+      }
 
-    const isCdn = Boolean(data.isCdnCached || fs.existsSync(path.join(CDN_CACHE_DIR, `${doc.id}.bin`)));
+      const isCdn = Boolean(data.isCdnCached || fs.existsSync(path.join(CDN_CACHE_DIR, `${doc.id}.bin`)));
 
-    rawNotes.push({
-      id: doc.id,
-      ...data,
-      isCdnCached: isCdn,
-      description: cleanDescription || "📚 Verified Academic Notes • Free Study Material",
-      createdAt: createdAtIso,
-      _sortTimestamp: effectiveMs,
+      rawNotes.push({
+        id: doc.id,
+        ...data,
+        isCdnCached: isCdn,
+        description: cleanDescription || "📚 Verified Academic Notes • Free Study Material",
+        createdAt: createdAtIso,
+        _sortTimestamp: effectiveMs,
+      });
     });
-  });
 
-  // Batch save into Turso
-  await saveNotesToTursoCache(rawNotes);
+    // Batch save into Turso
+    await saveNotesToTursoCache(rawNotes);
 
-  // Set L1 RAM (5 minutes TTL)
-  ramNotesMemory = rawNotes;
-  ramNotesExpiresAt = Date.now() + 5 * 60 * 1000;
+    // Set L1 RAM (5 minutes TTL)
+    ramNotesMemory = rawNotes;
+    ramNotesExpiresAt = Date.now() + 5 * 60 * 1000;
 
-  return rawNotes;
+    return rawNotes;
+  } catch (err) {
+    console.warn("[TURSO-NOTES-CACHE] Firestore fetch notice (quota exhausted or offline):", err.message);
+    return ramNotesMemory || [];
+  }
 }
 
 /**
@@ -210,6 +227,9 @@ async function saveNotesToTursoCache(notesList) {
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTES-CACHE] Batch save warning:", err.message);
+    if (isCloud) {
+      initLocalCacheClient();
+    }
     return false;
   }
 }
@@ -252,6 +272,23 @@ async function getAllCachedNotes() {
       }
     } catch (err) {
       console.warn("[TURSO-NOTES-CACHE] Turso read warning:", err.message);
+      if (isCloud) {
+        initLocalCacheClient();
+        try {
+          const localRes = await client.execute("SELECT id, data FROM notes_cache ORDER BY sortTimestamp DESC");
+          if (localRes && localRes.rows && localRes.rows.length > 0) {
+            const parsedNotes = [];
+            for (const row of localRes.rows) {
+              try { parsedNotes.push(JSON.parse(row.data)); } catch (_) {}
+            }
+            if (parsedNotes.length > 0) {
+              ramNotesMemory = parsedNotes;
+              ramNotesExpiresAt = now + 5 * 60 * 1000;
+              return parsedNotes;
+            }
+          }
+        } catch (_) {}
+      }
     }
   }
 

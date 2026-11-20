@@ -218,10 +218,41 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
 
     if (!db) return res.json({ success: true, stats: {} });
 
-    const [notesSnap, usersSnap] = await Promise.all([
-      db.collection("notes").get(),
-      db.collection("users").get(),
-    ]);
+    let notesList = [];
+    try {
+      const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+      notesList = await getAllCachedNotes();
+    } catch (_) {}
+
+    if (!notesList || notesList.length === 0) {
+      try {
+        const notesSnap = await db.collection("notes").get();
+        notesList = notesSnap.docs.map((d) => d.data());
+      } catch (e) {
+        console.warn("[ADMIN-STATS] Notes read notice:", e.message);
+        notesList = [];
+      }
+    }
+
+    let totalStudents = 0;
+    try {
+      const countSnap = await db.collection("users").count().get();
+      totalStudents = countSnap.data().count;
+    } catch (_) {
+      try {
+        const usersSnap = await db.collection("users").get();
+        totalStudents = usersSnap.size;
+      } catch (uErr) {
+        console.warn("[ADMIN-STATS] Users read notice (using Turso count):", uErr.message);
+        try {
+          const { tursoClient } = require("../services/tursoService");
+          if (tursoClient) {
+            const uRes = await tursoClient.execute("SELECT COUNT(*) as c FROM users");
+            totalStudents = Number(uRes.rows[0]?.c || 0);
+          }
+        } catch (_) {}
+      }
+    }
 
     let totalNotes = 0;
     let totalOriginalBytes = 0;
@@ -230,8 +261,7 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
     let totalDownloads = 0;
     let totalBandwidthSavedBytes = 0;
 
-    notesSnap.forEach((doc) => {
-      const data = doc.data();
+    notesList.forEach((data) => {
       totalNotes++;
       const orig = Number(data.fileSize) || 0;
       const comp = Number(data.compressedSize) || orig;
@@ -254,7 +284,7 @@ router.get("/stats", authenticateToken, checkAdminOrPermission("all"), async (re
 
     const statsResult = {
       totalNotes,
-      totalStudents: usersSnap.size,
+      totalStudents,
       totalDownloads,
       totalDuplicates,
       totalOriginalBytes,
