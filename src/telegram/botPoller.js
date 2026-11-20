@@ -330,6 +330,18 @@ async function processIncomingMessage(message) {
         const cleanSubject = topicName.replace(/^[^\w\s]+/, "").trim();
         const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
 
+        if (cleanSubject) {
+          try {
+            const { saveSubjectTopicToTurso } = require("../services/tursoNotesCacheService");
+            saveSubjectTopicToTurso({
+              key: normalizedKey,
+              subject: cleanSubject,
+              threadId: Number(threadId),
+              topicName: topicName,
+            }).catch(() => {});
+          } catch (_) {}
+        }
+
         if (db && cleanSubject) {
           await db.collection("subject_forum_topics").doc(normalizedKey).set(
             {
@@ -413,6 +425,17 @@ async function processIncomingMessage(message) {
             threadTitle = topicMsgs[0].action.title;
             const cleanSub = threadTitle.replace(/^[^\w\s]+/, "").trim();
             const normKey = cleanSub.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+            if (cleanSub) {
+              try {
+                const { saveSubjectTopicToTurso } = require("../services/tursoNotesCacheService");
+                saveSubjectTopicToTurso({
+                  key: normKey,
+                  subject: cleanSub,
+                  threadId: Number(threadId),
+                  topicName: threadTitle,
+                }).catch(() => {});
+              } catch (_) {}
+            }
             if (db && cleanSub) {
               db.collection("subject_forum_topics").doc(normKey).set(
                 {

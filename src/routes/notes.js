@@ -578,6 +578,20 @@ async function purgeDeletedTelegramNote(noteId, noteTitle = "") {
       const docSnap = await db.collection("notes").doc(noteId).get().catch(() => null);
       if (docSnap && docSnap.exists) {
         const noteData = docSnap.data();
+        try {
+          const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+          saveDeletedRecordToTurso({
+            id: `notes_${noteId}`,
+            originalDocId: noteId,
+            collectionName: "notes",
+            title: noteData.title || noteTitle || "Study Material",
+            subject: noteData.subject || "Academic",
+            branch: noteData.branch || "General",
+            data: noteData,
+            deletedBy: "Cloud Storage Deletion Sync",
+            reason: "Document deleted from academic cloud storage",
+          }).catch(() => {});
+        } catch (_) {}
         await Promise.all([
           db.collection("deleted_records").doc(`notes_${noteId}`).set({
             ...noteData,
@@ -1096,12 +1110,23 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const doc = await db.collection("notes").doc(id).get();
     if (!doc.exists) {
       console.warn(`[NOTES] Requested note ID not found in live collection: "${id}"`);
-      const [delNote, delRec] = await Promise.all([
-        db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
-        db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
-      ]);
-      if (delNote.exists || delRec.exists) {
-        const archivedData = delNote.exists ? delNote.data() : delRec.data();
+      let archivedData = null;
+      try {
+        const { getDeletedRecordFromTurso } = require("../services/tursoNotesCacheService");
+        archivedData = await getDeletedRecordFromTurso(id);
+      } catch (_) {}
+
+      if (!archivedData) {
+        const [delNote, delRec] = await Promise.all([
+          db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
+          db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
+        ]);
+        if (delNote.exists || delRec.exists) {
+          archivedData = delNote.exists ? delNote.data() : delRec.data();
+        }
+      }
+
+      if (archivedData) {
         return res.status(404).json({
           success: false,
           message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,
@@ -1649,12 +1674,23 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       const doc = await db.collection("notes").doc(id).get();
       if (!doc.exists) {
         console.warn(`[STREAM] Note ID not found in live collection: "${id}"`);
-        const [delNote, delRec] = await Promise.all([
-          db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
-          db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
-        ]);
-        if (delNote.exists || delRec.exists) {
-          const archivedData = delNote.exists ? delNote.data() : delRec.data();
+        let archivedData = null;
+        try {
+          const { getDeletedRecordFromTurso } = require("../services/tursoNotesCacheService");
+          archivedData = await getDeletedRecordFromTurso(id);
+        } catch (_) {}
+
+        if (!archivedData) {
+          const [delNote, delRec] = await Promise.all([
+            db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
+            db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
+          ]);
+          if (delNote.exists || delRec.exists) {
+            archivedData = delNote.exists ? delNote.data() : delRec.data();
+          }
+        }
+
+        if (archivedData) {
           return res.status(404).json({
             success: false,
             message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,

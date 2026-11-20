@@ -313,7 +313,18 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
       if (newThreadId) {
         console.log(`[TELEGRAM TOPIC AUTO-CREATE] Successfully created single dedicated topic "${topicName}" via @TechTitanNotesBot (Thread ID: ${newThreadId}, Chat: ${effectiveChatId})`);
 
-        // Save in Firestore database for persistent routing across all future notes
+        // 1. Save in Turso 2 Edge Cache (fsm-cache-freestudymaterial: 0ms Edge Speed)
+        try {
+          const { saveSubjectTopicToTurso } = require("./tursoNotesCacheService");
+          saveSubjectTopicToTurso({
+            key: normalizedKey,
+            subject: cleanSubject,
+            threadId: newThreadId,
+            topicName: topicName,
+          }).catch(() => {});
+        } catch (_) {}
+
+        // 2. Save in Firestore database for persistent routing across all future notes
         try {
           const { db } = require("../firebase");
           if (db) {

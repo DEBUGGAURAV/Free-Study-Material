@@ -1249,6 +1249,22 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
     if (doc.exists) {
       const noteData = doc.data();
 
+      // Archive to Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+      try {
+        const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+        saveDeletedRecordToTurso({
+          id: `notes_${id}`,
+          originalDocId: id,
+          collectionName: "notes",
+          title: noteData.title || "Study Material",
+          subject: noteData.subject || "Academic",
+          branch: noteData.branch || "General",
+          data: noteData,
+          deletedBy: req.user.email || "Admin",
+          reason: "Deleted by admin",
+        }).catch(() => {});
+      } catch (_) {}
+
       // Archive to Universal Restore Vault & deleted_notes
       await db.collection("deleted_records").doc(`notes_${id}`).set({
         ...noteData,
@@ -1358,6 +1374,22 @@ router.post("/notes/delete-all", authenticateToken, checkAdminOrPermission("mana
       if (data.telegramMessageId) {
         tgMsgIds.push(data.telegramMessageId);
       }
+      // Archive to Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+      try {
+        const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+        saveDeletedRecordToTurso({
+          id: `notes_${doc.id}`,
+          originalDocId: doc.id,
+          collectionName: "notes",
+          title: data.title || "Study Material",
+          subject: data.subject || "Academic",
+          branch: data.branch || "General",
+          data: data,
+          deletedBy: req.user.email || "Admin",
+          reason: "Bulk delete by admin",
+        }).catch(() => {});
+      } catch (_) {}
+
       await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
         ...data,
         originalId: doc.id,
@@ -1425,34 +1457,54 @@ router.post("/notes/delete-all", authenticateToken, checkAdminOrPermission("mana
  * Universal Restore Vault: Returns all deleted records (Notes, Notices, Users)
  */
 async function getRecycleBinVault() {
-  if (!db) return { items: [], notes: [], totalCount: 0 };
-  const [recSnap, notesSnap] = await Promise.all([
-    db.collection("deleted_records").get(),
-    db.collection("deleted_notes").get(),
-  ]);
-
   const itemsMap = new Map();
-  recSnap.forEach((d) => itemsMap.set(d.id, { id: d.id, ...d.data() }));
 
-  notesSnap.forEach((d) => {
-    const data = d.data();
-    const key = `notes_${d.id}`;
-    if (!itemsMap.has(key) && !itemsMap.has(d.id)) {
-      itemsMap.set(key, {
-        id: key,
-        originalId: d.id,
-        collectionName: "notes",
-        typeLabel: "Note",
-        title: data.title || "Study Material",
-        subject: data.subject || "Academic",
-        branch: data.branch || "General",
-        ...data,
+  // 1. Fetch from Turso 2 Edge Cache (fsm-cache-freestudymaterial: 0ms Edge Speed)
+  try {
+    const { getAllDeletedRecordsFromTurso } = require("../services/tursoNotesCacheService");
+    const tursoRecords = await getAllDeletedRecordsFromTurso(null, 500);
+    tursoRecords.forEach((r) => {
+      itemsMap.set(r.id, r);
+      if (r.originalDocId || r.originalId) {
+        const oId = r.originalDocId || r.originalId;
+        itemsMap.set(`${r.collectionName || "notes"}_${oId}`, r);
+        itemsMap.set(oId, r);
+      }
+    });
+  } catch (_) {}
+
+  // 2. Fetch from Database Fallback (if any)
+  if (db) {
+    try {
+      const [recSnap, notesSnap] = await Promise.all([
+        db.collection("deleted_records").get().catch(() => ({ forEach: () => {} })),
+        db.collection("deleted_notes").get().catch(() => ({ forEach: () => {} })),
+      ]);
+
+      recSnap.forEach((d) => itemsMap.set(d.id, { id: d.id, ...d.data() }));
+
+      notesSnap.forEach((d) => {
+        const data = d.data();
+        const key = `notes_${d.id}`;
+        if (!itemsMap.has(key) && !itemsMap.has(d.id)) {
+          itemsMap.set(key, {
+            id: key,
+            originalId: d.id,
+            originalDocId: d.id,
+            collectionName: "notes",
+            typeLabel: "Note",
+            title: data.title || "Study Material",
+            subject: data.subject || "Academic",
+            branch: data.branch || "General",
+            ...data,
+          });
+        }
       });
-    }
-  });
+    } catch (_) {}
+  }
 
   const items = Array.from(itemsMap.values()).sort(
-    (a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0)
+    (a, b) => new Date(b.archivedAt || b.deletedAt || 0) - new Date(a.archivedAt || a.deletedAt || 0)
   );
 
   return {
@@ -1523,19 +1575,28 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
       }
     }
 
-    if (!recordDoc || !recordDoc.exists) {
+    // 3. Fallback: Search Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    let tursoRecord = null;
+    if (!recordDoc) {
+      try {
+        const { getDeletedRecordFromTurso } = require("../services/tursoNotesCacheService");
+        tursoRecord = (await getDeletedRecordFromTurso(rawId)) || (await getDeletedRecordFromTurso(cleanId));
+      } catch (_) {}
+    }
+
+    if (!recordDoc && !tursoRecord) {
       return res.status(404).json({ success: false, message: "Item not found in Restore Vault." });
     }
 
-    const data = recordDoc.data() || {};
+    const data = recordDoc ? (recordDoc.data() || {}) : { ...tursoRecord };
     let targetCollection = data.collectionName || "";
     if (!targetCollection) {
-      if (foundDocId.startsWith("users_") || data.email || data.rollNumber) targetCollection = "users";
-      else if (foundDocId.startsWith("notices_")) targetCollection = "notices";
+      if ((foundDocId && foundDocId.startsWith("users_")) || data.email || data.rollNumber) targetCollection = "users";
+      else if ((foundDocId && foundDocId.startsWith("notices_")) || data.noticeDate) targetCollection = "notices";
       else targetCollection = "notes";
     }
 
-    const originalDocId = data.originalId || cleanId || foundDocId.replace(/^(notes_|users_|notices_)/, "");
+    const originalDocId = data.originalDocId || data.originalId || cleanId || (foundDocId ? foundDocId.replace(/^(notes_|users_|notices_)/, "") : rawId);
     const typeLabel = data.typeLabel || (targetCollection === "notes" ? "Note" : targetCollection === "users" ? "Student" : "Notice");
 
     delete data.archivedAt;
@@ -1543,11 +1604,22 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
     delete data.collectionName;
     delete data.typeLabel;
     delete data.originalId;
+    delete data.originalDocId;
+    delete data.deletedAt;
+    delete data.deletedBy;
+    delete data.reason;
 
     await db.collection(targetCollection).doc(originalDocId).set({
       ...data,
       updatedAt: new Date().toISOString(),
     });
+
+    // Clean up archive in Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    try {
+      const { permanentlyDeleteRecordFromTurso } = require("../services/tursoNotesCacheService");
+      await permanentlyDeleteRecordFromTurso(rawId);
+      await permanentlyDeleteRecordFromTurso(originalDocId);
+    } catch (_) {}
 
     // Clean up archive collections across all candidate keys
     await Promise.all([
@@ -1654,6 +1726,36 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
       restoredCount++;
     }
 
+    // 3. Restore all records from Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    try {
+      const { getAllDeletedRecordsFromTurso, purgeAllDeletedRecordsFromTurso } = require("../services/tursoNotesCacheService");
+      const tursoRecords = await getAllDeletedRecordsFromTurso(null, 500);
+      for (const r of tursoRecords) {
+        const targetCol = r.collectionName || "notes";
+        const origId = r.originalDocId || r.originalId || r.id.replace(/^(notes_|users_|notices_)/, "");
+        const key = `${targetCol}_${origId}`;
+        if (restoredIds.has(key)) continue;
+        restoredIds.add(key);
+
+        const recData = { ...r };
+        delete recData.id;
+        delete recData.originalId;
+        delete recData.originalDocId;
+        delete recData.collectionName;
+        delete recData.typeLabel;
+        delete recData.deletedAt;
+        delete recData.deletedBy;
+        delete recData.reason;
+
+        await db.collection(targetCol).doc(origId).set({
+          ...recData,
+          updatedAt: new Date().toISOString(),
+        });
+        restoredCount++;
+      }
+      await purgeAllDeletedRecordsFromTurso();
+    } catch (_) {}
+
     invalidateAllCache();
 
     return res.json({
@@ -1756,6 +1858,13 @@ router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermi
       deleteTelegramMessages([data.telegramMessageId]).catch(() => {});
     }
 
+    // Permanently purge from Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    try {
+      const { permanentlyDeleteRecordFromTurso } = require("../services/tursoNotesCacheService");
+      await permanentlyDeleteRecordFromTurso(rawId);
+      await permanentlyDeleteRecordFromTurso(cleanId);
+    } catch (_) {}
+
     await Promise.all([
       db.collection("deleted_records").doc(rawId).delete().catch(() => {}),
       db.collection("deleted_records").doc(`notes_${cleanId}`).delete().catch(() => {}),
@@ -1808,6 +1917,12 @@ router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermissi
     if (tgMsgIdsToDelete.length > 0 && deleteTelegramMessages) {
       deleteTelegramMessages(tgMsgIdsToDelete).catch(() => {});
     }
+
+    // Purge from Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    try {
+      const { purgeAllDeletedRecordsFromTurso } = require("../services/tursoNotesCacheService");
+      await purgeAllDeletedRecordsFromTurso();
+    } catch (_) {}
 
     // 📄 Dispatch complete permanent purge audit dossier in TXT format to Telegram
     try {
@@ -3391,6 +3506,22 @@ router.delete("/database/clear-collection/:collectionName", authenticateToken, c
       const snap = await db.collection("notes").get();
       for (const doc of snap.docs) {
         const dData = doc.data();
+        // Archive to Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+        try {
+          const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+          saveDeletedRecordToTurso({
+            id: `notes_${doc.id}`,
+            originalDocId: doc.id,
+            collectionName: "notes",
+            title: dData.title || "Study Material",
+            subject: dData.subject || "Academic",
+            branch: dData.branch || "General",
+            data: dData,
+            deletedBy: req.user.email || "Admin",
+            reason: "Bulk delete by admin",
+          }).catch(() => {});
+        } catch (_) {}
+
         await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
           ...dData,
           originalId: doc.id,
@@ -3413,6 +3544,21 @@ router.delete("/database/clear-collection/:collectionName", authenticateToken, c
       const snap = await db.collection("notices").get();
       for (const doc of snap.docs) {
         const dData = doc.data();
+        try {
+          const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+          saveDeletedRecordToTurso({
+            id: `notices_${doc.id}`,
+            originalDocId: doc.id,
+            collectionName: "notices",
+            title: dData.title || "Announcement",
+            subject: dData.subject || "Campus Notice",
+            branch: dData.branch || "General",
+            data: dData,
+            deletedBy: req.user.email || "Admin",
+            reason: "Bulk delete by admin",
+          }).catch(() => {});
+        } catch (_) {}
+
         await db.collection("deleted_records").doc(`notices_${doc.id}`).set({
           ...dData,
           originalId: doc.id,
@@ -3519,7 +3665,23 @@ router.delete("/database/item/:collectionName/:id", authenticateToken, checkAdmi
       });
     }
 
-    // ♻️ UNIVERSAL ARCHIVE: Save to Restore Vault
+    // ♻️ UNIVERSAL ARCHIVE: Save to Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+    try {
+      const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+      saveDeletedRecordToTurso({
+        id: `${collectionName}_${id}`,
+        originalDocId: id,
+        collectionName,
+        title: dData.title || dData.name || id,
+        subject: dData.subject || "Academic",
+        branch: dData.branch || "General",
+        data: dData,
+        deletedBy: req.user?.email || "Admin",
+        reason: `Manual studio deletion from ${collectionName}`,
+      }).catch(() => {});
+    } catch (_) {}
+
+    // Save to Firestore Restore Vault
     const typeLabel = collectionName === "notes" ? "Note" : collectionName === "users" ? "Student" : "Notice";
     await db.collection("deleted_records").doc(`${collectionName}_${id}`).set({
       ...dData,
@@ -3754,9 +3916,37 @@ router.get("/security-bot/settings", authenticateToken, checkAdminOrPermission("
  */
 router.get("/security-bot/subject-topics", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
   try {
-    if (!db) return res.json({ success: true, topics: [] });
-    const snap = await db.collection("subject_forum_topics").orderBy("createdAt", "desc").limit(100).get();
-    const topics = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const topicsMap = new Map();
+
+    // 1. Fetch from Turso 2 Edge Cache (fsm-cache-freestudymaterial: 0ms Edge Speed)
+    try {
+      const { getAllSubjectTopicsFromTurso } = require("../services/tursoNotesCacheService");
+      const tursoTopics = await getAllSubjectTopicsFromTurso();
+      tursoTopics.forEach((t) => {
+        topicsMap.set(t.key, {
+          id: t.key,
+          subject: t.subject,
+          threadId: t.threadId,
+          name: t.topicName || t.subject,
+          createdAt: t.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString(),
+          source: "turso-cache",
+        });
+      });
+    } catch (_) {}
+
+    // 2. Fetch from Database Fallback (if any)
+    if (db) {
+      try {
+        const snap = await db.collection("subject_forum_topics").orderBy("createdAt", "desc").limit(100).get();
+        snap.docs.forEach((d) => {
+          if (!topicsMap.has(d.id)) {
+            topicsMap.set(d.id, { id: d.id, ...d.data() });
+          }
+        });
+      } catch (_) {}
+    }
+
+    const topics = Array.from(topicsMap.values());
     return res.json({ success: true, topics, totalCount: topics.length });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

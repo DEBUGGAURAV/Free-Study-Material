@@ -102,6 +102,24 @@ function clearCache() {
   } catch {}
 }
 
+function archiveNoteToTursoRecycleBin(noteId, noteData, reason = "Telegram sync deletion") {
+  if (!noteId) return;
+  try {
+    const { saveDeletedRecordToTurso } = require("../services/tursoNotesCacheService");
+    saveDeletedRecordToTurso({
+      id: `notes_${noteId}`,
+      originalDocId: noteId,
+      collectionName: "notes",
+      title: noteData?.title || "Study Material",
+      subject: noteData?.subject || "Academic",
+      branch: noteData?.branch || "General",
+      data: noteData,
+      deletedBy: "Telegram Sync",
+      reason: reason,
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 async function getClient() {
   // If client exists and is actively connected, return immediately
   if (client && isConnected && client.connected) return client;
@@ -359,6 +377,7 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
             const isDead = !remoteMsgs || !remoteMsgs[0] || remoteMsgs[0].className === "MessageEmpty" || !remoteMsgs[0].media;
             if (isDead) {
               console.log(`[MTProto] 🔄 Prior note "${d.title}" (ID: ${candidateDoc.id}) was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
+              archiveNoteToTursoRecycleBin(candidateDoc.id, d, "Telegram Pre-Upload Stale Purge");
               await db.collection("deleted_records").doc(`notes_${candidateDoc.id}`).set({
                 ...d,
                 originalId: candidateDoc.id,
@@ -652,6 +671,7 @@ function setupChannelSyncListeners(c) {
             for (const doc of snapMsg.docs) {
               const noteData = doc.data();
               console.log(`[MTProto SYNC] Moving note "${noteData.title}" (ID: ${doc.id}) to Restore Vault because Storage Message ${delId} was deleted.`);
+              archiveNoteToTursoRecycleBin(doc.id, noteData, "Storage Message Deleted in Telegram");
               await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
                 ...noteData,
                 originalId: doc.id,
@@ -677,6 +697,7 @@ function setupChannelSyncListeners(c) {
             for (const doc of snapOrigin.docs) {
               const noteData = doc.data();
               console.log(`[MTProto SYNC] Moving note "${noteData.title}" (ID: ${doc.id}) to Restore Vault because Original Message ${delId} was deleted.`);
+              archiveNoteToTursoRecycleBin(doc.id, noteData, "Original Message Deleted in Telegram");
               await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
                 ...noteData,
                 originalId: doc.id,
@@ -711,6 +732,7 @@ function setupChannelSyncListeners(c) {
             for (const doc of topicDocsToPurge) {
               const noteData = doc.data();
               console.log(`[MTProto SYNC] Moving note "${noteData.title}" (ID: ${doc.id}) to Restore Vault because Topic ${delId} was deleted in Telegram.`);
+              archiveNoteToTursoRecycleBin(doc.id, noteData, "Topic Deleted in Telegram");
               await db.collection("deleted_records").doc(`notes_${doc.id}`).set({
                 ...noteData,
                 originalId: doc.id,
@@ -910,6 +932,7 @@ async function syncTelegramChannel() {
           try {
             const curDoc = await db.collection("notes").doc(batchNotes[j].docId).get();
             const noteData = curDoc.exists ? curDoc.data() : { title: batchNotes[j].title, telegramMessageId: batchNotes[j].msgId };
+            archiveNoteToTursoRecycleBin(batchNotes[j].docId, noteData, "Telegram Storage Channel Reconcile Purge");
             await db.collection("deleted_records").doc(`notes_${batchNotes[j].docId}`).set({
               ...noteData,
               originalId: batchNotes[j].docId,
@@ -1105,6 +1128,7 @@ async function syncTelegramChannel() {
       const topicMsgs = await c.getMessages(data.telegramOriginChatId, { ids: [Number(topicId)] });
       if (!topicMsgs || !topicMsgs[0]) {
         console.log(`[MTProto RECONCILE] Purging note "${data.title}" because its Topic ${topicId} was removed.`);
+        archiveNoteToTursoRecycleBin(tDoc.id, data, `Topic ${topicId} removed in Telegram`);
         await db.collection("deleted_records").doc(`notes_${tDoc.id}`).set({
           ...data,
           originalId: tDoc.id,
@@ -1561,6 +1585,7 @@ async function checkNotesLivenessNow(customNotes = null) {
 
       if (isDead) {
         console.log(`[EVENT-LIVENESS] 🗑️ Telegram message deleted for "${note.title}" (ID: ${note.id}). Instantly purging from site...`);
+        archiveNoteToTursoRecycleBin(note.id, note, "Telegram message deleted event");
         await db.collection("deleted_records").doc(`notes_${note.id}`).set({
           ...note,
           originalId: note.id,

@@ -1059,6 +1059,17 @@ async function startSecurityBotPoller() {
           if (cleanName && threadId) {
             const normalizedKey = cleanName.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
             console.log(`[TOPIC SYNC] Detected newly created topic in Telegram: "${cleanName}" (Thread ID: ${threadId})`);
+            // Save in Turso 2 Edge Cache (fsm-cache-freestudymaterial)
+            try {
+              const { saveSubjectTopicToTurso } = require("./tursoNotesCacheService");
+              saveSubjectTopicToTurso({
+                key: normalizedKey,
+                subject: cleanName,
+                threadId: Number(threadId),
+                topicName: rawName,
+              }).catch(() => {});
+            } catch (_) {}
+
             if (db) {
               await db.collection("subject_forum_topics").doc(normalizedKey).set({
                 subject: cleanName,
@@ -1084,6 +1095,16 @@ async function startSecurityBotPoller() {
           const threadId = msg.message_thread_id;
           if (cleanName && threadId && db) {
             const normalizedKey = cleanName.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+            try {
+              const { saveSubjectTopicToTurso } = require("./tursoNotesCacheService");
+              saveSubjectTopicToTurso({
+                key: normalizedKey,
+                subject: cleanName,
+                threadId: Number(threadId),
+                topicName: rawName,
+              }).catch(() => {});
+            } catch (_) {}
+
             await db.collection("subject_forum_topics").doc(normalizedKey).set({
               subject: cleanName,
               normalizedKey,
