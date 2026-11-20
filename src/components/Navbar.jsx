@@ -259,23 +259,8 @@ export default function Navbar({
               </div>
             </div>
 
-            {/* Top-Right Cluster on Mobile: Day/Night Toggle + Profile / Sign Out */}
+            {/* Top-Right Cluster on Mobile: Profile / Sign Out / Auth Actions */}
             <div className="mobile-top-right">
-              {/* ☀️ / 🌙 Day & Night Universal Theme Toggle (Ultra-Visible on Mobile, Rotates 360° on Click) */}
-              <button
-                type="button"
-                className={`btn-theme-toggle mobile-theme-toggle ${isThemeRotating ? "theme-icon-rotate" : ""}`}
-                onClick={toggleTheme}
-                title={isDark ? "Switch to Day Mode (☀️ Light Workspace)" : "Switch to Night Mode (🌙 Dark OLED)"}
-                aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
-              >
-                {isDark ? (
-                  <Moon size={16} className="theme-icon moon-icon" strokeWidth={2.4} />
-                ) : (
-                  <Sun size={16} className="theme-icon sun-icon" strokeWidth={2.4} />
-                )}
-              </button>
-
               {currentUser ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <button
@@ -338,7 +323,7 @@ export default function Navbar({
               title="Spotlight Search (⌘K / Ctrl+K)"
             >
               <Search size={14} strokeWidth={2.4} className="mobile-search-pill-icon" />
-              <span className="mobile-search-pill-text">Search notes, PYQs...</span>
+              <span className="mobile-search-pill-text">Search notes...</span>
               <kbd className="mobile-search-pill-kbd">⌘K</kbd>
             </button>
 
@@ -395,6 +380,21 @@ export default function Navbar({
               >
                 <Flame size={13} color="#f59e0b" fill="#f59e0b" />
                 <span>Revise</span>
+              </button>
+
+              {/* ☀️ / 🌙 Day & Night Universal Theme Toggle (Beside Revise button) */}
+              <button
+                type="button"
+                className={`btn-theme-toggle mobile-theme-toggle ${isThemeRotating ? "theme-icon-rotate" : ""}`}
+                onClick={toggleTheme}
+                title={isDark ? "Switch to Day Mode (☀️ Light Workspace)" : "Switch to Night Mode (🌙 Dark OLED)"}
+                aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
+              >
+                {isDark ? (
+                  <Moon size={15} className="theme-icon moon-icon" strokeWidth={2.4} />
+                ) : (
+                  <Sun size={15} className="theme-icon sun-icon" strokeWidth={2.4} />
+                )}
               </button>
 
               {currentUser && !isAdminOrManager && (
