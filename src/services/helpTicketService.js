@@ -1505,7 +1505,7 @@ async function studentReplyHelpTicket({ ticketCode, replyText, userId = null, gu
 }
 
 /**
- * Dispatch student reply notification to Active Topic 6 AND Admin Bot DM (with HTML entity escaping & resilient fallback)
+ * Dispatch student reply notification to Active Support Topic (Topic 18) AND Admin Bot DM (with HTML entity escaping & resilient fallback)
  */
 async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   const botToken = getHelpBotToken();
@@ -1562,7 +1562,7 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
   };
 
   try {
-    // 1. Dual-dispatch to Supergroup Topic 6 (Active Support Forum) so forum admins see student replies!
+    // 1. Dual-dispatch to Supergroup Active Support Topic (Topic 18, never Topic 6) so forum admins see student replies!
     if (chatId) {
       const activeTopicId = getHelpActiveTopicId();
       const groupPayload = {
@@ -1867,7 +1867,7 @@ function startHelpBotPoller() {
               }).catch(() => {});
             }
 
-            // Post active ticket notice back to Topic 6
+            // Post active ticket notice back to Active Support Topic (Topic 18, never Topic 6)
             if (res.ticket) {
               await dispatchTelegramHelpNotice(res.ticket);
             }

@@ -668,7 +668,15 @@ async function sendTelegramAuthNotice({
         if (!threadId) {
           threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
         }
-      } else if (event === "ACCOUNT_PURGE") {
+      } else if (
+        event === "ACCOUNT_PURGE" ||
+        event === "USER_DELETION" ||
+        event === "ACCOUNT_DELETION" ||
+        event === "USER_CASCADE_PURGE" ||
+        event === "DATABASE_DELETE" ||
+        (String(event || "").includes("PURGE") && !String(event || "").startsWith("PASSKEY_"))
+      ) {
+        // 🗑️ STRICT USER REQUIREMENT: Account Purge & Deletion Dossiers route ONLY to Security Supergroup Topic 59 (NEVER Topic 6)
         threadId = "59";
       } else if (event === "IP_JAIL_APPEAL") {
         // Dedicated Forum Topic 750 specifically for Security Quarantine / IP Appeals
@@ -1089,11 +1097,19 @@ async function sendTelegramAuthNotice({
     }
 
     // 1.8 🗑️ STRICT REQUIREMENT: Purge & Database Delete messages MUST be sent in TXT FILE format
+    // 🛡️ Strict Defense: PASSKEY_DELETE & PASSKEY_REGISTER are Security Updates (Topic 6), NOT Purge/Delete dossiers!
     const isPurgeOrDeleteEvent = (
-      event === "ACCOUNT_PURGE" ||
-      String(event || "").includes("PURGE") ||
-      String(event || "").includes("DELETE") ||
-      event === "DATABASE_DELETE"
+      event !== "PASSKEY_DELETE" &&
+      event !== "PASSKEY_REGISTER" &&
+      !String(event || "").startsWith("PASSKEY_") && (
+        event === "ACCOUNT_PURGE" ||
+        event === "USER_DELETION" ||
+        event === "ACCOUNT_DELETION" ||
+        event === "USER_CASCADE_PURGE" ||
+        event === "DATABASE_DELETE" ||
+        String(event || "").includes("PURGE") ||
+        (String(event || "").includes("DELETE") && !String(event || "").includes("PASSKEY"))
+      )
     );
 
     if (isPurgeOrDeleteEvent) {
@@ -1237,6 +1253,10 @@ async function sendTelegramAuthNotice({
       isNoteEvent ||
       event === "IP_JAIL_APPEAL" ||
       event === "ACCOUNT_PURGE" ||
+      event === "USER_DELETION" ||
+      event === "ACCOUNT_DELETION" ||
+      event === "USER_CASCADE_PURGE" ||
+      event === "DATABASE_DELETE" ||
       event === "SECURITY_ALERT" ||
       event === "SECURITY_UPDATE" ||
       event === "DEVTOOLS_VIOLATION" ||

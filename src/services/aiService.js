@@ -1626,8 +1626,8 @@ async function dispatchUserPurgeTelegramAudit({
 }) {
   const token = getHelpBotToken();
   const chatId = getHelpChatId();
-  const topicId = currentAiSettings.purgeAuditTopicId;
-  if (!token || !chatId || !topicId) return false;
+  const topicId = Number(currentAiSettings.purgeAuditTopicId);
+  if (!token || !chatId || !topicId || topicId === 6 || topicId === 7 || topicId === 14) return false;
 
   try {
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
