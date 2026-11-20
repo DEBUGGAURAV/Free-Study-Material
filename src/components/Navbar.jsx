@@ -214,18 +214,64 @@ export default function Navbar({
               </div>
             </div>
 
-            {/* Mobile Compact Right Cluster (Admin + Upload + Profile + Logout / Sign In) */}
-            <div className="mobile-header-actions">
-              <button
-                type="button"
-                className="btn-spotlight-mobile"
-                onClick={() => setIsSpotlightOpen(true)}
-                title="Spotlight Search (⌘K)"
-              >
-                <Search size={13} strokeWidth={2.4} />
-                <span>Search</span>
-              </button>
+            {/* Top-Right Cluster on Mobile: Profile Avatar or Auth (Clean, balanced) */}
+            <div className="mobile-top-right">
+              {currentUser ? (
+                <button
+                  type="button"
+                  className="mobile-profile-avatar-pill"
+                  onClick={onOpenProfile}
+                  onMouseEnter={handlePrefetchProfile}
+                  onTouchStart={handlePrefetchProfile}
+                  title={`Logged in as ${currentUser.name || "Student"} • Tap to View Profile & Settings`}
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
+                    border: "2px solid #ffffff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ffffff",
+                    fontWeight: 900,
+                    fontSize: "0.82rem",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
+                    flexShrink: 0,
+                    padding: 0,
+                  }}
+                >
+                  {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+                </button>
+              ) : (
+                <div className="nav-auth-actions nav-auth-actions-mobile">
+                  <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
+                    Sign Up
+                  </button>
+                  <button type="button" className="btn-signin-nav" onClick={() => onOpenAuth("signin")}>
+                    <LogIn size={13} />
+                    <span>Sign In</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
 
+          {/* Mobile Second Line ("Free Study ke niche line"): Full Search Bar + Action Pills */}
+          <div className="mobile-second-row">
+            <button
+              type="button"
+              className="mobile-search-pill"
+              onClick={() => setIsSpotlightOpen(true)}
+              title="Spotlight Search (⌘K / Ctrl+K)"
+            >
+              <Search size={14} strokeWidth={2.4} className="mobile-search-pill-icon" />
+              <span className="mobile-search-pill-text">Search notes, PYQs...</span>
+              <kbd className="mobile-search-pill-kbd">⌘K</kbd>
+            </button>
+
+            <div className="mobile-second-row-actions">
               {isAdminOrManager && (
                 <button
                   type="button"
@@ -238,7 +284,7 @@ export default function Navbar({
                     border: "1.5px solid transparent",
                     color: "#0f172a",
                     borderRadius: "999px",
-                    padding: "4px 9px",
+                    padding: "4.5px 9px",
                     fontSize: "0.72rem",
                     fontWeight: 800,
                     display: "inline-flex",
@@ -264,7 +310,7 @@ export default function Navbar({
                   border: "1.5px solid #fde68a",
                   color: "#92400e",
                   borderRadius: "999px",
-                  padding: "4px 9px",
+                  padding: "4.5px 9px",
                   fontSize: "0.72rem",
                   fontWeight: 800,
                   display: "inline-flex",
@@ -287,54 +333,24 @@ export default function Navbar({
                   onClick={onOpenUpload}
                   title="Upload Notes"
                   style={{
-                    padding: "4px 9px",
+                    padding: "4.5px 9px",
                     fontSize: "0.72rem",
+                    fontWeight: 800,
                     flexShrink: 0,
+                    borderRadius: "999px",
+                    background: "linear-gradient(135deg, #4361ee, #3a0ca3)",
+                    color: "#ffffff",
+                    border: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 8px rgba(67, 97, 238, 0.25)",
                   }}
                 >
                   <UploadCloud size={13} />
                   <span>Upload</span>
                 </button>
-              )}
-
-              {currentUser ? (
-                <button
-                  type="button"
-                  className="mobile-profile-avatar-pill"
-                  onClick={onOpenProfile}
-                  onMouseEnter={handlePrefetchProfile}
-                  onTouchStart={handlePrefetchProfile}
-                  title={`Logged in as ${currentUser.name || "Student"} • Tap to View Profile & Settings`}
-                  style={{
-                    width: "30px",
-                    height: "30px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
-                    border: "2px solid #ffffff",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#ffffff",
-                    fontWeight: 900,
-                    fontSize: "0.8rem",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
-                    flexShrink: 0,
-                    padding: 0,
-                  }}
-                >
-                  {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
-                </button>
-              ) : (
-                <div className="nav-auth-actions nav-auth-actions-mobile">
-                  <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
-                    Sign Up
-                  </button>
-                  <button type="button" className="btn-signin-nav" onClick={() => onOpenAuth("signin")}>
-                    <LogIn size={13} />
-                    <span>Sign In</span>
-                  </button>
-                </div>
               )}
             </div>
           </div>
