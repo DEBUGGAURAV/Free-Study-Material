@@ -467,7 +467,7 @@ router.post("/login-options", async (req, res) => {
       const cleanEmail = email.toLowerCase().trim();
       let passkeys = [];
 
-      // Look up user's passkeys in RAM cache or database
+      // 1. Look up user's passkeys in RAM cache (0ms)
       if (ramCache) {
         const cached = ramCache.get(`auth_user_${cleanEmail}`);
         if (cached && Array.isArray(cached.userRecord?.passkeys)) {
@@ -475,6 +475,18 @@ router.post("/login-options", async (req, res) => {
         }
       }
 
+      // 1.5 Look up user's passkeys in Turso Edge Cache (sub-5ms)
+      if (!passkeys || passkeys.length === 0) {
+        try {
+          const { getPasskeysByEmailFromTurso } = require("../services/tursoService");
+          const tursoPks = await getPasskeysByEmailFromTurso(cleanEmail);
+          if (Array.isArray(tursoPks) && tursoPks.length > 0) {
+            passkeys = tursoPks;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Fallback to Firestore only if missing from RAM and Turso
       if ((!passkeys || passkeys.length === 0) && db) {
         try {
           const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
@@ -545,8 +557,18 @@ router.post("/login-verify", async (req, res) => {
     let userId = null;
     let userRecord = null;
 
-    // 1. Check passkeys collection in database
-    if (db) {
+    // 1. Check Turso Edge Cloud / Local LibSQL (sub-5ms)
+    try {
+      const { getPasskeyFromTurso } = require("../services/tursoService");
+      const tursoPk = await getPasskeyFromTurso(credential.id);
+      if (tursoPk && tursoPk.publicKey) {
+        passkeyRecord = tursoPk;
+        userId = tursoPk.userId;
+      }
+    } catch (_) {}
+
+    // 2. Fallback: Check passkeys collection in Firestore
+    if (!passkeyRecord && db) {
       try {
         const passkeyIndexDoc = await db.collection("passkeys").doc(credential.id).get();
         if (passkeyIndexDoc.exists) {
@@ -599,13 +621,21 @@ router.post("/login-verify", async (req, res) => {
       return res.status(404).json({ success: false, message: "No registered biometric passkey found for this device." });
     }
 
-    // Resolve user data if not resolved yet
-    if (!userRecord && userId) {
-      if (ramCache && stored && stored.email) {
-        const cached = ramCache.get(`auth_user_${stored.email}`);
+    // Resolve user data if not resolved yet (RAM -> Turso -> Firestore)
+    if (!userRecord && (userId || passkeyRecord.userEmail || stored?.email)) {
+      const candidateEmail = stored?.email || passkeyRecord.userEmail;
+      if (ramCache && candidateEmail) {
+        const cached = ramCache.get(`auth_user_${candidateEmail}`);
         if (cached) userRecord = cached.userRecord;
       }
-      if (!userRecord && db) {
+      if (!userRecord && candidateEmail) {
+        try {
+          const { getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
+          const tursoUser = await getCachedUserByEmailFromTurso(candidateEmail);
+          if (tursoUser) userRecord = tursoUser;
+        } catch (_) {}
+      }
+      if (!userRecord && db && userId) {
         try {
           const userDoc = await db.collection("users").doc(userId).get();
           if (userDoc && userDoc.exists) {

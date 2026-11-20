@@ -279,126 +279,6 @@ export default function AuthModal({
     }
   }, [isOpen]);
 
-  // 💎 3D Luxury Tilt & Mouse Glare Physics (Zero-lag, 60fps RAF Lerp)
-  const sceneRef = useRef(null);
-  const tiltRef = useRef(null);
-  const rafRef = useRef(null);
-  const tiltStateRef = useRef({
-    targetTiltX: 0,
-    targetTiltY: 0,
-    currentTiltX: 0,
-    currentTiltY: 0,
-    targetMx: 50,
-    targetMy: 50,
-    currentMx: 50,
-    currentMy: 50,
-  });
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const animLoop = () => {
-      const state = tiltStateRef.current;
-      const k = 0.16; // Responsive spring factor
-
-      state.currentTiltX += (state.targetTiltX - state.currentTiltX) * k;
-      state.currentTiltY += (state.targetTiltY - state.currentTiltY) * k;
-      state.currentMx += (state.targetMx - state.currentMx) * k;
-      state.currentMy += (state.targetMy - state.currentMy) * k;
-
-      if (tiltRef.current) {
-        tiltRef.current.style.transform = `rotateX(${state.currentTiltX.toFixed(2)}deg) rotateY(${state.currentTiltY.toFixed(2)}deg)`;
-      }
-      if (sceneRef.current) {
-        sceneRef.current.style.setProperty("--mx", `${state.currentMx.toFixed(1)}%`);
-        sceneRef.current.style.setProperty("--my", `${state.currentMy.toFixed(1)}%`);
-        sceneRef.current.style.setProperty("--back-mx", `${(100 - state.currentMx).toFixed(1)}%`);
-      }
-
-      rafRef.current = requestAnimationFrame(animLoop);
-    };
-
-    rafRef.current = requestAnimationFrame(animLoop);
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [isOpen]);
-
-  // 📱 Mobile Gyroscope / Physical Device Tilt Support
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleOrientation = (e) => {
-      if (e.gamma == null || e.beta == null) return;
-      // Clamp gamma (-25 to +25) and beta (15 to 65 normalized to neutral 40)
-      const gamma = Math.max(-25, Math.min(25, e.gamma));
-      const betaNorm = Math.max(-25, Math.min(25, e.beta - 40));
-
-      const maxTilt = 14;
-      const state = tiltStateRef.current;
-      state.targetTiltY = (gamma / 25) * maxTilt;
-      state.targetTiltX = -(betaNorm / 25) * maxTilt;
-
-      state.targetMx = Math.max(10, Math.min(90, 50 + (gamma / 25) * 40));
-      state.targetMy = Math.max(10, Math.min(90, 50 + (betaNorm / 25) * 40));
-    };
-
-    if (typeof window !== "undefined" && window.DeviceOrientationEvent) {
-      window.addEventListener("deviceorientation", handleOrientation, { passive: true });
-    }
-
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("deviceorientation", handleOrientation);
-      }
-    };
-  }, [isOpen]);
-
-  const handleSceneMouseMove = (e) => {
-    if (!sceneRef.current) return;
-    const rect = sceneRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const normX = Math.max(-1.4, Math.min(1.4, (x - rect.width / 2) / (rect.width / 2)));
-    const normY = Math.max(-1.4, Math.min(1.4, (y - rect.height / 2) / (rect.height / 2)));
-
-    const maxTilt = 14;
-    const state = tiltStateRef.current;
-    state.targetTiltX = -Math.max(-1, Math.min(1, normY)) * maxTilt;
-    state.targetTiltY = Math.max(-1, Math.min(1, normX)) * maxTilt;
-    state.targetMx = Math.max(0, Math.min(100, (x / rect.width) * 100));
-    state.targetMy = Math.max(0, Math.min(100, (y / rect.height) * 100));
-  };
-
-  // 📱 Mobile Touch 3D Tracking (Same dynamic 14° tilt and neon light follow as desktop)
-  const handleSceneTouchMove = (e) => {
-    if (!sceneRef.current || !e.touches || !e.touches[0]) return;
-    const touch = e.touches[0];
-    const rect = sceneRef.current.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-
-    const normX = Math.max(-1.4, Math.min(1.4, (x - rect.width / 2) / (rect.width / 2)));
-    const normY = Math.max(-1.4, Math.min(1.4, (y - rect.height / 2) / (rect.height / 2)));
-
-    const maxTilt = 14;
-    const state = tiltStateRef.current;
-    state.targetTiltX = -Math.max(-1, Math.min(1, normY)) * maxTilt;
-    state.targetTiltY = Math.max(-1, Math.min(1, normX)) * maxTilt;
-    state.targetMx = Math.max(0, Math.min(100, (x / rect.width) * 100));
-    state.targetMy = Math.max(0, Math.min(100, (y / rect.height) * 100));
-  };
-
-  const handleSceneMouseLeave = () => {
-    const state = tiltStateRef.current;
-    state.targetTiltX = 0;
-    state.targetTiltY = 0;
-    state.targetMx = 50;
-    state.targetMy = 50;
-  };
-
   const handlePasskeySignIn = async () => {
     try {
       setPasskeyLoading(true);
@@ -1374,11 +1254,6 @@ export default function AuthModal({
   return (
     <div
       className="modal-overlay auth-modal-overlay"
-      onMouseMove={handleSceneMouseMove}
-      onMouseLeave={handleSceneMouseLeave}
-      onTouchStart={handleSceneTouchMove}
-      onTouchMove={handleSceneTouchMove}
-      onTouchEnd={handleSceneMouseLeave}
       onClick={() => {
         if (showPostRegPasskeyPrompt) {
           handlePostRegSkipPasskey();
@@ -1390,17 +1265,11 @@ export default function AuthModal({
       }}
     >
       <div
-        ref={sceneRef}
         className="modal-content auth-3d-scene"
         style={{ maxWidth: "380px", width: "100%", padding: 0, background: "transparent", border: "none", boxShadow: "none", overflow: "visible", maxHeight: "none" }}
         onClick={(e) => e.stopPropagation()}
-        onMouseMove={handleSceneMouseMove}
-        onMouseLeave={handleSceneMouseLeave}
-        onTouchStart={handleSceneTouchMove}
-        onTouchMove={handleSceneTouchMove}
-        onTouchEnd={handleSceneMouseLeave}
       >
-        <div ref={tiltRef} className="auth-3d-tilt">
+        <div className="auth-3d-tilt">
           <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
 
             {/* =================================================================

@@ -68,9 +68,11 @@ async function checkAccountLockout(identifier) {
 
   // 2. Turso 4 Check (fsm-studet-session: Sub-millisecond Edge Check)
   const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
+  let tursoChecked = false;
   try {
     const { getTursoAccountLockout } = require("./tursoStudentVaultService");
     const tursoLock = await getTursoAccountLockout(docId);
+    tursoChecked = true;
     if (tursoLock && tursoLock.lockedUntil && tursoLock.lockedUntil > now) {
       const remainingMs = tursoLock.lockedUntil - now;
       lockoutCache.set(key, {
@@ -84,12 +86,20 @@ async function checkAccountLockout(identifier) {
         remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
       };
     }
+
+    // Account is clean in Turso - cache in RAM for 15 seconds to eliminate repeated checks
+    lockoutCache.set(key, {
+      attempts: tursoLock?.attempts || 0,
+      lockedUntil: 0,
+      lastAttempt: now,
+    });
+    return { isLocked: false, remainingMs: 0, remainingMinutes: 0 };
   } catch (err) {
     console.debug("[ACCOUNT-LOCKOUT] Turso 4 lookup notice:", err.message);
   }
 
-  // 3. Database Fallback (if any)
-  if (db) {
+  // 3. Database Fallback (Executed ONLY if Turso was unreachable/offline)
+  if (!tursoChecked && db) {
     try {
       const snap = await db.collection("account_lockouts").doc(docId).get();
       if (snap.exists) {

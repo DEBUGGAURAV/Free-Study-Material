@@ -1213,7 +1213,20 @@ router.post("/google", authLimiter, async (req, res) => {
       docId = cached.docId;
     }
 
-    // 2. Check Firestore safely (gracefully handles quota exhaustion / offline)
+    // 1.5 Check Dedicated Turso Edge Users Cache (sub-5ms instant lookup)
+    if (!userData) {
+      try {
+        const { getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
+        const tursoCached = await getCachedUserByEmailFromTurso(verifiedEmail);
+        if (tursoCached) {
+          userData = tursoCached;
+          docId = tursoCached.id;
+          if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
+        }
+      } catch (_) {}
+    }
+
+    // 2. Check Firestore only if cold-cache / missing from RAM & Turso
     if (!userData && db) {
       try {
         const snap = await db.collection("users").where("email", "==", verifiedEmail).limit(1).get();
@@ -1221,6 +1234,10 @@ router.post("/google", authLimiter, async (req, res) => {
           docId = snap.docs[0].id;
           userData = decryptUserObject(snap.docs[0].data());
           if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
+          try {
+            const { cacheUserInTurso } = require("../services/tursoUserCacheService");
+            cacheUserInTurso({ ...userData, id: docId }).catch(() => {});
+          } catch (_) {}
         }
       } catch (dbErr) {
         console.warn("[AUTH-GOOGLE] Database query notice:", dbErr.message);

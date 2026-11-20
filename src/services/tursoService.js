@@ -42,6 +42,11 @@ try {
       authToken: authToken,
     });
     console.log(`[TURSO] 🟢 Connected to Turso Edge Cloud: ${rawUrl}`);
+    // Non-blocking ping test: If cloud token has expired or is 401, immediately switch to 0ms local LibSQL
+    client.execute("SELECT 1;").catch((err) => {
+      console.warn(`[TURSO] Standby notice (${err.message}). Seamlessly activated local LibSQL vault.`);
+      initLocalClient();
+    });
   } else {
     initLocalClient();
   }
@@ -1815,7 +1820,23 @@ async function getPasskeyFromTurso(credentialId) {
     }
     return null;
   } catch (err) {
-    console.warn("[TURSO] getPasskeyFromTurso warning:", err.message);
+    if (isCloud && (String(err.message).includes("401") || String(err.message).includes("fetch failed"))) {
+      initLocalClient();
+      try {
+        const id = String(credentialId).trim();
+        const res = await client.execute({
+          sql: `SELECT * FROM passkeys WHERE id = ? LIMIT 1`,
+          args: [id],
+        });
+        if (res.rows && res.rows.length > 0) {
+          const p = res.rows[0];
+          let transports = ["internal", "hybrid"];
+          try { if (p.transports) transports = JSON.parse(p.transports); } catch (_) {}
+          return { ...p, transports };
+        }
+      } catch (_) {}
+    }
+    console.warn("[TURSO] getPasskeyFromTurso notice:", err.message);
     return null;
   }
 }
@@ -1839,7 +1860,24 @@ async function getPasskeysByEmailFromTurso(email) {
     }
     return [];
   } catch (err) {
-    console.warn("[TURSO] getPasskeysByEmailFromTurso warning:", err.message);
+    if (isCloud && (String(err.message).includes("401") || String(err.message).includes("fetch failed"))) {
+      initLocalClient();
+      try {
+        const cleanEmail = String(email).trim().toLowerCase();
+        const res = await client.execute({
+          sql: `SELECT * FROM passkeys WHERE LOWER(userEmail) = ?`,
+          args: [cleanEmail],
+        });
+        if (res.rows && res.rows.length > 0) {
+          return res.rows.map((p) => {
+            let transports = ["internal", "hybrid"];
+            try { if (p.transports) transports = JSON.parse(p.transports); } catch (_) {}
+            return { ...p, transports };
+          });
+        }
+      } catch (_) {}
+    }
+    console.warn("[TURSO] getPasskeysByEmailFromTurso notice:", err.message);
     return [];
   }
 }

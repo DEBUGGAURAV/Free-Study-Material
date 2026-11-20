@@ -3267,8 +3267,6 @@ select option,
    ========================================================================== */
 
 .auth-3d-scene {
-  perspective: 850px;
-  perspective-origin: center center;
   width: 100%;
   max-width: 380px !important;
   margin: auto;
@@ -3283,9 +3281,6 @@ select option,
   overflow-y: visible !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
-  --mx: 50%;
-  --my: 50%;
-  --back-mx: 50%;
 }
 
 .auth-modal-overlay {
@@ -3318,48 +3313,35 @@ select option,
 }
 
 .auth-3d-tilt {
-  transform-style: preserve-3d;
-  will-change: transform;
   width: 100%;
+  transform: none !important;
 }
 
 .auth-3d-flipper {
   position: relative;
   width: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.75s cubic-bezier(0.34, 1.35, 0.64, 1);
-  will-change: transform;
-}
-
-.auth-3d-flipper.is-flipped {
-  transform: rotateY(180deg);
 }
 
 .auth-card-face {
   width: 100%;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   border-radius: 22px;
   border: 1.5px solid transparent;
-  background: 
-    linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) padding-box,
-    radial-gradient(circle 260px at var(--mx, 50%) var(--my, 50%), #2563eb 0%, #38bdf8 35%, #818cf8 65%, #cbd5e1 100%) border-box;
-  box-shadow: 
-    0 20px 45px -10px rgba(15, 23, 42, 0.35),
-    0 0 35px -5px rgba(37, 99, 235, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 1);
+  box-sizing: border-box;
+  padding: 16px 20px;
+  color: #0f172a;
   position: relative;
   overflow: hidden;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
-  box-sizing: border-box;
-  padding: 16px 20px;
-  color: #0f172a;
+  transition: opacity 0.22s ease-in-out;
 }
 
 .auth-card-face.face-active {
   position: relative;
   pointer-events: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none !important;
 }
 
 .auth-card-face.face-hidden {
@@ -3368,44 +3350,36 @@ select option,
   left: 0;
   width: 100%;
   pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: none !important;
 }
 
 .auth-card-front {
-  transform: rotateY(0deg);
-}
-
-.auth-card-back {
-  transform: rotateY(180deg);
+  transform: none !important;
   background: 
     linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) padding-box,
-    radial-gradient(circle 260px at var(--back-mx, 50%) var(--my, 50%), #4f46e5 0%, #a855f7 35%, #38bdf8 65%, #cbd5e1 100%) border-box;
+    linear-gradient(135deg, #2563eb 0%, #38bdf8 35%, #818cf8 65%, #cbd5e1 100%) border-box;
   box-shadow: 
-    0 20px 45px -10px rgba(15, 23, 42, 0.35),
-    0 0 35px -5px rgba(79, 70, 229, 0.25),
+    0 20px 45px -10px rgba(15, 23, 42, 0.25),
+    0 0 35px -5px rgba(37, 99, 235, 0.20),
     inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
-/* VIBRANT SAPPHIRE COLOR ILLUMINATION (Clearly visible on mouse move!) */
-.auth-card-front::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(circle 240px at var(--mx, 50%) var(--my, 50%), rgba(37, 99, 235, 0.25) 0%, rgba(6, 182, 212, 0.18) 30%, rgba(99, 102, 241, 0.08) 55%, transparent 75%);
-  border-radius: 22px;
-  z-index: 6;
-  transition: opacity 0.2s ease;
+.auth-card-back {
+  transform: none !important;
+  background: 
+    linear-gradient(145deg, #ffffff 0%, #f8fafc 100%) padding-box,
+    linear-gradient(135deg, #4f46e5 0%, #a855f7 35%, #38bdf8 65%, #cbd5e1 100%) border-box;
+  box-shadow: 
+    0 20px 45px -10px rgba(15, 23, 42, 0.25),
+    0 0 35px -5px rgba(79, 70, 229, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
 }
 
+.auth-card-front::after,
 .auth-card-back::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: radial-gradient(circle 240px at var(--back-mx, 50%) var(--my, 50%), rgba(79, 70, 229, 0.28) 0%, rgba(168, 85, 247, 0.18) 30%, rgba(6, 182, 212, 0.08) 55%, transparent 75%);
-  border-radius: 22px;
-  z-index: 6;
-  transition: opacity 0.2s ease;
+  display: none !important;
 }
 
 /* 3D EMV Microchip */
@@ -3517,6 +3491,25 @@ select option,
   font-weight: 500;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
   box-sizing: border-box;
+  position: relative;
+  z-index: 2;
+}
+.auth-card-face .form-select {
+  cursor: pointer !important;
+  color-scheme: light !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+.auth-card-face .form-select option {
+  cursor: pointer !important;
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+}
+.auth-card-face .form-input,
+.auth-card-face input:not([type="checkbox"]):not([type="radio"]) {
+  cursor: text;
 }
 .auth-card-face .form-input:focus,
 .auth-card-face .form-select:focus,
