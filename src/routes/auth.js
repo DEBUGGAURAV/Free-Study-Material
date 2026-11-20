@@ -30,10 +30,6 @@ const {
   encryptUserObject,
   decryptUserObject,
 } = require("../utils/cryptoVault");
-const {
-  getUserFromTursoByEmail,
-  saveUserToTurso,
-} = require("../services/tursoService");
 
 /**
  * Strips registered JWT timing/ID claims (exp, iat, nbf, jti) before re-signing with expiresIn.
@@ -792,12 +788,6 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
         console.warn("[AUTH-REGISTER-OTP] Firestore unique check notice:", chkErr.message);
       }
     }
-    if (!isDuplicate) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
-        if (tursoUser) isDuplicate = true;
-      } catch (_) {}
-    }
 
     if (isDuplicate) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
@@ -823,12 +813,6 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
-    // Save to Turso / Local SQLite
-    await saveUserToTurso({
-      ...newUser,
-      passwordHash: hashedPassword,
-    }).catch(() => {});
 
     // Save to RAM cache
     if (ramCache) {
@@ -981,14 +965,6 @@ router.post("/register", authLimiter, async (req, res) => {
       }
     }
 
-    if (!isEmailTaken) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
-        if (tursoUser) isEmailTaken = true;
-      } catch (_) {}
-    }
-
-
     if (isEmailTaken) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
@@ -1017,13 +993,7 @@ router.post("/register", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
-    await saveUserToTurso({
-      ...newUser,
-      passwordHash: hashedPassword,
-    }).catch(() => {});
-
-    // 2. Cache in RAM
+    // Cache in RAM
     if (ramCache) {
       ramCache.set(`auth_user_${cleanEmail}`, { userRecord: { ...newUser, password: hashedPassword, passwordHash: hashedPassword }, docId: userId }, 3600);
     }
@@ -1242,25 +1212,11 @@ router.post("/google", authLimiter, async (req, res) => {
           docId = snap.docs[0].id;
           userData = decryptUserObject(snap.docs[0].data());
           if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
-          saveUserToTurso({ ...userData, id: docId }).catch(() => {});
         }
       } catch (dbErr) {
-        console.warn("[AUTH-GOOGLE] Firestore query notice (falling back to Turso/local):", dbErr.message);
+        console.warn("[AUTH-GOOGLE] Database query notice:", dbErr.message);
       }
     }
-
-    // 3. Check Turso / Local SQLite (100% resilient fallback)
-    if (!userData) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(verifiedEmail);
-        if (tursoUser) {
-          docId = tursoUser.id;
-          userData = tursoUser;
-          if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
-        }
-      } catch (_) {}
-    }
-
 
     if (userData) {
       // Existing User -> Immediate Login (NO OTP)
@@ -1428,14 +1384,6 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       }
     }
 
-    if (!isEmailTaken) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
-        if (tursoUser) isEmailTaken = true;
-      } catch (_) {}
-    }
-
-
     if (isEmailTaken) {
       return res.status(409).json({
         success: false,
@@ -1467,10 +1415,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
-    await saveUserToTurso(newUser).catch(() => {});
-
-    // 2. Cache in RAM
+    // Cache in RAM
     if (ramCache) {
       ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 3600);
     }
@@ -1732,27 +1677,12 @@ router.post("/login", authLimiter, async (req, res) => {
           userRecord = decryptUserObject(snap.docs[0].data());
           docId = snap.docs[0].id;
           ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
-          saveUserToTurso({ ...userRecord, id: docId }).catch(() => {});
         }
       } catch (dbErr) {
         console.warn("[AUTH] Database lookup notice:", dbErr.message);
         dbLookupError = dbErr;
       }
     }
-
-    // ⚡ 3. Turso / Local SQLite Fallback (resilient against Firestore quota exhaustion)
-    if (!userRecord) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(inputIdentity);
-        if (tursoUser) {
-          userRecord = tursoUser;
-          docId = tursoUser.id;
-          ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 3600);
-          dbLookupError = null;
-        }
-      } catch (_) {}
-    }
-
 
     if (!userRecord && dbLookupError) {
       if (dbLookupError.message && dbLookupError.message.includes("RESOURCE_EXHAUSTED")) {
@@ -1867,10 +1797,6 @@ router.post("/login", authLimiter, async (req, res) => {
       bcrypt.hash(cleanPassword, 10).then((h) => {
         db.collection("users").doc(docId).update({ password: h, passwordHash: h }).catch(() => {});
       }).catch(() => {});
-    }
-
-    if (passwordValid && userRecord) {
-      saveUserToTurso({ ...userRecord, id: docId || userRecord.id, passwordHash: userRecord.password || userRecord.passwordHash }).catch(() => {});
     }
 
     if (passwordValid && isMainAdminAlias && !userRecord) {
@@ -2103,17 +2029,6 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
       } catch (dbErr) {
         console.warn("[AUTH] DB lookup fallback:", dbErr.message);
       }
-    }
-
-    if (!userRecord) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(inputIdentity);
-        if (tursoUser) {
-          userRecord = tursoUser;
-          docId = tursoUser.id;
-          if (ramCache) ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 3600);
-        }
-      } catch (_) {}
     }
 
     if (userRecord && userRecord.isBlocked && inputIdentity !== MAIN_ADMIN_EMAIL) {
@@ -2726,13 +2641,6 @@ router.put("/profile", authenticateToken, async (req, res) => {
       }
       updateData.photoUrl = photoUrl;
       updateData.avatarHistory = avatarHistory;
-
-      if (tursoClient) {
-        tursoClient.execute({
-          sql: "UPDATE users SET avatar = ?, name = ?, updatedAt = ? WHERE id = ?",
-          args: [String(photoUrl || "").slice(0, 1000), cleanName, new Date().toISOString(), String(req.user.id)],
-        }).catch(() => {});
-      }
     }
 
     await userDocRef.update(updateData);

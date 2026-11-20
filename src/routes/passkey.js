@@ -22,15 +22,6 @@ const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
 const { ramCache } = require("../utils/ramCache");
 const {
-  saveUserToTurso,
-  getUserFromTursoByEmail,
-  getUserFromTursoById,
-  savePasskeyToTurso,
-  getPasskeyFromTurso,
-  getPasskeysByEmailFromTurso,
-  deletePasskeyFromTurso,
-} = require("../services/tursoService");
-const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
   generateAuthenticationOptions,
@@ -173,18 +164,7 @@ async function resolveUserDocAndId(req) {
     }
   }
 
-  // 4. Fallback to Turso / Local SQLite
-  if (!userData) {
-    try {
-      const tursoUser = (userId ? await getUserFromTursoById(userId) : null) || (userEmail ? await getUserFromTursoByEmail(userEmail) : null);
-      if (tursoUser) {
-        userData = tursoUser;
-        effectiveUserId = tursoUser.id || userId;
-      }
-    } catch (_) {}
-  }
-
-  // 5. Admin root fallback
+  // 4. Admin root fallback
   if (!userData && isAdmin) {
     userData = {
       id: effectiveUserId || "admin-root",
@@ -240,12 +220,7 @@ router.get("/register-options", authenticateToken, async (req, res) => {
     }
 
     const userData = resolvedUser || userDoc.data() || {};
-    let existingPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
-    if (existingPasskeys.length === 0 && (req.user.email || userData.email)) {
-      try {
-        existingPasskeys = await getPasskeysByEmailFromTurso(req.user.email || userData.email);
-      } catch (_) {}
-    }
+    const existingPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
 
     const { rpID } = getRpInfo(req);
 
@@ -293,7 +268,7 @@ router.get("/register-options", authenticateToken, async (req, res) => {
 
 /**
  * ============================================================================
- * 2. REGISTRATION VERIFICATION (Save Passkey to Turso & OLD Firebase)
+ * 2. REGISTRATION VERIFICATION (Save Passkey to MongoDB Atlas & Biometric Vault)
  * POST /api/auth/passkey/register-verify
  * ============================================================================
  */
@@ -368,18 +343,6 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
 
     const email = (req.user.email || existingData.email || "").toLowerCase().trim();
 
-    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
-    await savePasskeyToTurso({
-      id: newPasskey.id,
-      userId: effectiveUserId,
-      userEmail: email,
-      publicKey: newPasskey.publicKey,
-      counter: newPasskey.counter,
-      transports: newPasskey.transports,
-      deviceType: "platform",
-      createdAt: newPasskey.createdAt,
-    });
-
     const userToSave = {
       ...existingData,
       id: effectiveUserId,
@@ -388,13 +351,12 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       hasPasskey: true,
       updatedAt: new Date().toISOString(),
     };
-    await saveUserToTurso(userToSave).catch(() => {});
 
     if (ramCache && email) {
       ramCache.set(`auth_user_${email}`, { userRecord: userToSave, docId: effectiveUserId }, 3600);
     }
 
-    // 2. Mirror to Firestore safely (if available & quota allows)
+    // Save directly to MongoDB Atlas database
     if (db) {
       try {
         await db.collection("users").doc(effectiveUserId).set(
@@ -423,6 +385,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
           id: newPasskey.id,
           userId: effectiveUserId,
           email,
+          userEmail: email,
           publicKey: newPasskey.publicKey,
           counter: newPasskey.counter,
           transports: newPasskey.transports,
@@ -430,7 +393,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
           createdAt: newPasskey.createdAt,
         }).catch(() => {});
       } catch (dbErr) {
-        console.warn("[PASSKEY] Firestore mirror notice (saved safely in Turso/Local):", dbErr.message);
+        console.warn("[PASSKEY] Database save notice:", dbErr.message);
       }
     }
 
@@ -495,12 +458,14 @@ router.post("/login-options", async (req, res) => {
       const cleanEmail = email.toLowerCase().trim();
       let passkeys = [];
 
-      // 1. Try Turso / Local SQLite first (0ms, resilient, zero quota)
-      try {
-        passkeys = await getPasskeysByEmailFromTurso(cleanEmail);
-      } catch (_) {}
+      // Look up user's passkeys in RAM cache or database
+      if (ramCache) {
+        const cached = ramCache.get(`auth_user_${cleanEmail}`);
+        if (cached && Array.isArray(cached.userRecord?.passkeys)) {
+          passkeys = cached.userRecord.passkeys;
+        }
+      }
 
-      // 2. If empty, try Firestore safely
       if ((!passkeys || passkeys.length === 0) && db) {
         try {
           const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
@@ -508,14 +473,10 @@ router.post("/login-options", async (req, res) => {
             const userData = snap.docs[0].data();
             if (Array.isArray(userData?.passkeys) && userData.passkeys.length > 0) {
               passkeys = userData.passkeys;
-              // Mirror to Turso for future 0ms lookups
-              for (const pk of passkeys) {
-                savePasskeyToTurso({ ...pk, userId: snap.docs[0].id, userEmail: cleanEmail }).catch(() => {});
-              }
             }
           }
         } catch (dbErr) {
-          console.warn("[PASSKEY-LOGIN-OPTIONS] Firestore read notice:", dbErr.message);
+          console.warn("[PASSKEY-LOGIN-OPTIONS] Database read notice:", dbErr.message);
         }
       }
 
@@ -551,7 +512,7 @@ router.post("/login-options", async (req, res) => {
 
 /**
  * ============================================================================
- * 4. LOGIN VERIFICATION (Authenticate using Turso & OLD Firebase)
+ * 4. LOGIN VERIFICATION (Authenticate using MongoDB Atlas & Biometric Credentials)
  * POST /api/auth/passkey/login-verify
  * ============================================================================
  */
@@ -575,45 +536,23 @@ router.post("/login-verify", async (req, res) => {
     let userId = null;
     let userRecord = null;
 
-    // 1. Check Turso / Local SQLite first (0ms, quota-free!)
-    try {
-      const tursoPasskey = await getPasskeyFromTurso(credential.id);
-      if (tursoPasskey) {
-        passkeyRecord = tursoPasskey;
-        userId = tursoPasskey.userId;
-      }
-    } catch (_) {}
-
-    // 2. Check Firestore passkeys index (safely wrapped in try/catch)
-    if (!passkeyRecord && db) {
+    // 1. Check passkeys collection in database
+    if (db) {
       try {
         const passkeyIndexDoc = await db.collection("passkeys").doc(credential.id).get();
         if (passkeyIndexDoc.exists) {
           const idxData = passkeyIndexDoc.data();
           userId = idxData.userId;
           passkeyRecord = idxData;
-          savePasskeyToTurso(idxData).catch(() => {});
         }
       } catch (dbErr) {
-        console.warn("[PASSKEY-LOGIN] Firestore index notice:", dbErr.message);
+        console.warn("[PASSKEY-LOGIN] Database index notice:", dbErr.message);
       }
     }
 
-    // 3. If stored.email was provided, check email query in Turso & Firestore
+    // 2. If stored.email was provided, check user's passkeys in database
     if (!passkeyRecord && stored && stored.email) {
-      try {
-        const tursoUser = await getUserFromTursoByEmail(stored.email);
-        if (tursoUser && Array.isArray(tursoUser.passkeys)) {
-          const match = tursoUser.passkeys.find((p) => p.id === credential.id);
-          if (match) {
-            passkeyRecord = match;
-            userId = tursoUser.id;
-            userRecord = tursoUser;
-          }
-        }
-      } catch (_) {}
-
-      if (!passkeyRecord && db) {
+      if (db) {
         try {
           const snap = await db.collection("users").where("email", "==", stored.email).limit(1).get();
           if (!snap.empty) {
@@ -630,7 +569,7 @@ router.post("/login-verify", async (req, res) => {
       }
     }
 
-    // 4. Admin fallback
+    // 3. Admin fallback
     if (!passkeyRecord && db) {
       try {
         const adminDoc = await db.collection("users").doc("admin-root").get();
@@ -657,21 +596,19 @@ router.post("/login-verify", async (req, res) => {
         const cached = ramCache.get(`auth_user_${stored.email}`);
         if (cached) userRecord = cached.userRecord;
       }
-      if (!userRecord) {
-        try {
-          userRecord = await getUserFromTursoById(userId);
-        } catch (_) {}
-      }
-      if (!userRecord && passkeyRecord.userEmail) {
-        try {
-          userRecord = await getUserFromTursoByEmail(passkeyRecord.userEmail);
-        } catch (_) {}
-      }
       if (!userRecord && db) {
         try {
           const userDoc = await db.collection("users").doc(userId).get();
           if (userDoc && userDoc.exists) {
             userRecord = decryptUserObject(userDoc.data());
+          }
+        } catch (_) {}
+      }
+      if (!userRecord && passkeyRecord.userEmail && db) {
+        try {
+          const snap = await db.collection("users").where("email", "==", passkeyRecord.userEmail).limit(1).get();
+          if (!snap.empty) {
+            userRecord = decryptUserObject(snap.docs[0].data());
           }
         } catch (_) {}
       }
@@ -721,16 +658,10 @@ router.post("/login-verify", async (req, res) => {
       return res.status(401).json({ success: false, message: "Biometric authentication failed. Signature mismatch." });
     }
 
-    // Update counter in Turso & Firestore (replay attack protection)
+    // Update counter in Database (replay attack protection)
     const newCounter = verification.authenticationInfo.newCounter;
     passkeyRecord.counter = newCounter;
     passkeyRecord.lastUsedAt = new Date().toISOString();
-
-    savePasskeyToTurso({
-      ...passkeyRecord,
-      counter: newCounter,
-      userEmail: userRecord.email || passkeyRecord.userEmail,
-    }).catch(() => {});
 
     if (db && userId) {
       db.collection("passkeys").doc(passkeyRecord.id).set({ counter: newCounter, lastUsedAt: passkeyRecord.lastUsedAt }, { merge: true }).catch(() => {});
@@ -837,13 +768,7 @@ router.get("/list", authenticateToken, async (req, res) => {
 
     const { userDoc, userData: resolvedUser } = await resolveUserDocAndId(req);
     const data = resolvedUser || (userDoc && userDoc.exists ? userDoc.data() : {}) || {};
-    let passkeyList = Array.isArray(data.passkeys) ? data.passkeys : [];
-    
-    if (passkeyList.length === 0 && (req.user.email || data.email)) {
-      try {
-        passkeyList = await getPasskeysByEmailFromTurso(req.user.email || data.email);
-      } catch (_) {}
-    }
+    const passkeyList = Array.isArray(data.passkeys) ? data.passkeys : [];
 
     const passkeys = passkeyList.map((p) => ({
       id: p.id,
@@ -878,11 +803,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     // Strict Object-Level Authorization
     const targetPasskey = passkeys.find((p) => p.id === credId);
     if (!targetPasskey && !isAdmin) {
-      // Check Turso ownership
-      const tursoPk = await getPasskeyFromTurso(credId).catch(() => null);
-      if (tursoPk && tursoPk.userId !== effectiveUserId && tursoPk.userEmail !== req.user.email) {
-        return res.status(403).json({ success: false, message: "Unauthorized: This passkey does not belong to your account." });
-      }
+      return res.status(403).json({ success: false, message: "Unauthorized: This passkey does not belong to your account." });
     }
 
     const filtered = passkeys.filter((p) => p.id !== credId);
@@ -893,13 +814,7 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    // 1. Delete from Turso / Local SQLite
-    await deletePasskeyFromTurso(credId).catch(() => {});
-    if (data.email) {
-      saveUserToTurso({ ...data, id: effectiveUserId, passkeys: filtered, hasPasskey: filtered.length > 0 }).catch(() => {});
-    }
-
-    // 2. Delete from Firestore if available
+    // Delete from database
     if (db) {
       try {
         await db.collection("users").doc(effectiveUserId).set(updatePayload, { merge: true });
