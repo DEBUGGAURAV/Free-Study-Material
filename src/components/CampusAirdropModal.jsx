@@ -498,13 +498,15 @@ export default function CampusAirdropModal({
       style={{
         position: "fixed",
         inset: 0,
-        background: "rgba(0, 0, 0, 0.8)",
-        backdropFilter: "blur(8px)",
+        background: "rgba(15, 23, 42, 0.6)",
+        backdropFilter: "blur(12px) saturate(180%)",
+        WebkitBackdropFilter: "blur(12px) saturate(180%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         zIndex: 99999,
         padding: "16px",
+        animation: "airdropFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) {
@@ -514,56 +516,82 @@ export default function CampusAirdropModal({
       }}
     >
       <div
-        className="dark-modal-surface"
+        className="campus-airdrop-modal-surface white-modal-surface"
         style={{
           width: "100%",
-          maxWidth: "480px",
-          background: "linear-gradient(135deg, #0b1120, #0f172a)",
-          border: "1px solid rgba(192, 132, 252, 0.35)",
-          borderRadius: "18px",
-          boxShadow: "0 25px 60px rgba(0, 0, 0, 0.7), 0 0 35px rgba(168, 85, 247, 0.15)",
+          maxWidth: "490px",
+          background: "#ffffff",
+          border: "1.5px solid rgba(226, 232, 240, 0.95)",
+          borderRadius: "24px",
+          boxShadow: "0 25px 70px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.9) inset, 0 12px 32px -4px rgba(99, 102, 241, 0.12)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          color: "#f8fafc",
+          color: "#0f172a",
           position: "relative",
+          animation: "airdropSlideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
+          fontFamily: "var(--font-sans, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif)",
         }}
       >
+        {/* Top Rainbow Accent Strip */}
+        <div
+          style={{
+            height: "4px",
+            width: "100%",
+            background: "linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899, #06b6d4)",
+          }}
+        />
+
         {/* Header */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "16px 20px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-            background: "rgba(255, 255, 255, 0.02)",
+            padding: "18px 22px 14px",
+            borderBottom: "1px solid #f1f5f9",
+            background: "linear-gradient(180deg, #ffffff 0%, #fafafa 100%)",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "10px",
-                background: "linear-gradient(135deg, #9333ea, #c084fc)",
+                width: "42px",
+                height: "42px",
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 15px rgba(168, 85, 247, 0.4)",
+                boxShadow: "0 4px 14px rgba(139, 92, 246, 0.35)",
+                flexShrink: 0,
               }}
             >
-              <Zap size={20} color="#fff" />
+              <Zap size={22} color="#ffffff" strokeWidth={2.4} />
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: "6px" }}>
-                Campus AirDrop
-                <span style={{ fontSize: "0.68rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.4)" }}>
-                  0% Net • 0ms
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0, fontSize: "1.12rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.02em" }}>
+                  Campus AirDrop
+                </h3>
+                <span
+                  style={{
+                    fontSize: "0.68rem",
+                    fontWeight: 800,
+                    padding: "2px 8px",
+                    borderRadius: "9999px",
+                    background: "linear-gradient(135deg, #ecfdf5, #d1fae5)",
+                    color: "#047857",
+                    border: "1px solid #a7f3d0",
+                    boxShadow: "0 1px 2px rgba(16, 185, 129, 0.1)",
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  ⚡ 0% Net • 0ms P2P
                 </span>
-              </h3>
-              <p style={{ margin: 0, fontSize: "0.74rem", color: "#94a3b8" }}>
-                Zero-Internet P2P BitTorrent & 1-Tap QR Mesh
+              </div>
+              <p style={{ margin: "2px 0 0", fontSize: "0.75rem", color: "#64748b", fontWeight: 500 }}>
+                Zero-Internet P2P BitTorrent & Instant QR Mesh
               </p>
             </div>
           </div>
@@ -573,17 +601,32 @@ export default function CampusAirdropModal({
               stopCamera();
               onClose();
             }}
+            title="Close"
             style={{
-              background: "rgba(255, 255, 255, 0.06)",
-              border: "none",
-              borderRadius: "8px",
-              padding: "6px",
-              color: "#94a3b8",
+              width: "34px",
+              height: "34px",
+              borderRadius: "10px",
+              background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              color: "#64748b",
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "all 0.18s ease",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#fee2e2";
+              e.currentTarget.style.color = "#ef4444";
+              e.currentTarget.style.borderColor = "#fca5a5";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f1f5f9";
+              e.currentTarget.style.color = "#64748b";
+              e.currentTarget.style.borderColor = "#e2e8f0";
             }}
           >
-            <X size={18} />
+            <X size={18} strokeWidth={2.4} />
           </button>
         </div>
 
@@ -592,9 +635,12 @@ export default function CampusAirdropModal({
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            padding: "8px 16px",
-            background: "rgba(0, 0, 0, 0.25)",
-            gap: "8px",
+            padding: "5px",
+            margin: "14px 20px 0",
+            background: "#f1f5f9",
+            borderRadius: "14px",
+            border: "1px solid #e2e8f0",
+            gap: "6px",
           }}
         >
           <button
@@ -605,22 +651,23 @@ export default function CampusAirdropModal({
             }}
             disabled={!(selectedNote?.id || currentNote?.id)}
             style={{
-              padding: "9px 12px",
-              borderRadius: "8px",
-              border: activeTab === "send" ? "1px solid #c084fc" : "1px solid transparent",
-              background: activeTab === "send" ? "rgba(168, 85, 247, 0.2)" : "transparent",
-              color: activeTab === "send" ? "#e9d5ff" : ((selectedNote?.id || currentNote?.id) ? "#94a3b8" : "#475569"),
-              fontWeight: activeTab === "send" ? 700 : 500,
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "none",
+              background: activeTab === "send" ? "linear-gradient(135deg, #7c3aed, #6366f1)" : "transparent",
+              color: activeTab === "send" ? "#ffffff" : ((selectedNote?.id || currentNote?.id) ? "#475569" : "#94a3b8"),
+              fontWeight: activeTab === "send" ? 800 : 600,
               fontSize: "0.82rem",
+              boxShadow: activeTab === "send" ? "0 3px 12px rgba(124, 58, 237, 0.28)" : "none",
               cursor: (selectedNote?.id || currentNote?.id) ? "pointer" : "not-allowed",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
+              gap: "7px",
+              transition: "all 0.18s ease",
             }}
           >
-            <Share2 size={15} />
+            <Share2 size={15} strokeWidth={2.2} />
             <span>⚡ Share Note</span>
           </button>
 
@@ -630,22 +677,23 @@ export default function CampusAirdropModal({
               setActiveTab("receive");
             }}
             style={{
-              padding: "9px 12px",
-              borderRadius: "8px",
-              border: activeTab === "receive" ? "1px solid #38bdf8" : "1px solid transparent",
-              background: activeTab === "receive" ? "rgba(56, 189, 248, 0.2)" : "transparent",
-              color: activeTab === "receive" ? "#bae6fd" : "#94a3b8",
-              fontWeight: activeTab === "receive" ? 700 : 500,
+              padding: "10px 14px",
+              borderRadius: "10px",
+              border: "none",
+              background: activeTab === "receive" ? "linear-gradient(135deg, #0284c7, #2563eb)" : "transparent",
+              color: activeTab === "receive" ? "#ffffff" : "#475569",
+              fontWeight: activeTab === "receive" ? 800 : 600,
               fontSize: "0.82rem",
+              boxShadow: activeTab === "receive" ? "0 3px 12px rgba(37, 99, 235, 0.28)" : "none",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              gap: "6px",
-              transition: "all 0.15s ease",
+              gap: "7px",
+              transition: "all 0.18s ease",
             }}
           >
-            <Camera size={15} />
+            <Camera size={15} strokeWidth={2.2} />
             <span>📷 Receive Note</span>
           </button>
         </div>
@@ -654,21 +702,21 @@ export default function CampusAirdropModal({
         {errorMsg && (
           <div
             style={{
-              margin: "12px 16px 0",
+              margin: "12px 20px 0",
               padding: "10px 14px",
-              borderRadius: "10px",
+              borderRadius: "12px",
               background: "#fef2f2",
-              border: "1.5px solid #f87171",
+              border: "1.5px solid #fecaca",
               color: "#991b1b",
               fontSize: "0.82rem",
               fontWeight: 700,
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              boxShadow: "0 2px 8px rgba(220, 38, 38, 0.15)",
+              gap: "9px",
+              boxShadow: "0 2px 8px rgba(220, 38, 38, 0.08)",
             }}
           >
-            <AlertTriangle size={16} color="#dc2626" strokeWidth={2.2} style={{ flexShrink: 0 }} />
+            <AlertTriangle size={17} color="#dc2626" strokeWidth={2.2} style={{ flexShrink: 0 }} />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -680,25 +728,28 @@ export default function CampusAirdropModal({
             <div>
               {/* Offline Notes Dropdown Selector if multiple offline notes exist */}
               {availableOfflineNotes.length > 1 && (
-                <div style={{ marginBottom: "10px" }}>
-                  <label style={{ fontSize: "0.72rem", color: "#94a3b8", display: "block", marginBottom: "4px" }}>
+                <div style={{ marginBottom: "12px" }}>
+                  <label style={{ fontSize: "0.74rem", fontWeight: 700, color: "#475569", display: "block", marginBottom: "5px" }}>
                     📁 Select Saved Note to AirDrop:
                   </label>
                   <select
                     value={selectedNote?.id || currentNote?.id || ""}
                     onChange={(e) => {
-                      const found = availableOfflineNotes.find(n => String(n.id) === String(e.target.value));
+                      const found = availableOfflineNotes.find((n) => String(n.id) === String(e.target.value));
                       if (found) setSelectedNote(found);
                     }}
                     style={{
                       width: "100%",
-                      padding: "7px 10px",
-                      borderRadius: "8px",
-                      background: "rgba(15, 23, 42, 0.9)",
-                      border: "1px solid rgba(168, 85, 247, 0.4)",
-                      color: "#e9d5ff",
-                      fontSize: "0.78rem",
+                      padding: "9px 12px",
+                      borderRadius: "10px",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
+                      color: "#0f172a",
+                      fontSize: "0.8rem",
+                      fontWeight: 600,
                       cursor: "pointer",
+                      boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+                      outline: "none",
                     }}
                   >
                     {availableOfflineNotes.map((n) => (
@@ -713,25 +764,38 @@ export default function CampusAirdropModal({
               {/* Note Preview Box */}
               <div
                 style={{
-                  padding: "10px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                  marginBottom: "12px",
+                  padding: "12px 16px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #faf5ff 0%, #f5f3ff 60%, #eff6ff 100%)",
+                  border: "1.5px solid #e9d5ff",
+                  marginBottom: "14px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  boxShadow: "0 2px 8px rgba(168, 85, 247, 0.06)",
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff" }}>
+                  <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#1e1b4b" }}>
                     {(selectedNote || currentNote)?.title || "Document Note"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#6b21a8", fontWeight: 600, marginTop: "2px" }}>
                     {(selectedNote || currentNote)?.subject || "Academic"} • {(selectedNote || currentNote)?.branch || "All Branches"}
                   </div>
                 </div>
-                <div style={{ fontSize: "0.74rem", fontWeight: 700, color: "#c084fc", fontFamily: "var(--font-mono)" }}>
+                <div
+                  style={{
+                    fontSize: "0.74rem",
+                    fontWeight: 800,
+                    color: "#7c3aed",
+                    background: "#ffffff",
+                    border: "1px solid #ddd6fe",
+                    padding: "3px 9px",
+                    borderRadius: "7px",
+                    fontFamily: "var(--font-mono, monospace)",
+                    boxShadow: "0 1px 2px rgba(124, 58, 237, 0.08)",
+                  }}
+                >
                   {senderSession?.buffer ? `${(senderSession.buffer.byteLength / (1024 * 1024)).toFixed(1)} MB` : "100% Offline"}
                 </div>
               </div>
@@ -740,77 +804,128 @@ export default function CampusAirdropModal({
               {senderProgress && (
                 <div
                   style={{
-                    padding: "14px",
-                    borderRadius: "12px",
-                    background: "rgba(168, 85, 247, 0.1)",
-                    border: "1px solid rgba(168, 85, 247, 0.3)",
-                    marginBottom: "12px",
+                    padding: "14px 16px",
+                    borderRadius: "14px",
+                    background: "linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%)",
+                    border: "1.5px solid #d8b4fe",
+                    marginBottom: "14px",
+                    boxShadow: "0 3px 10px rgba(168, 85, 247, 0.08)",
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "6px" }}>
-                    <span style={{ color: "#e9d5ff", fontWeight: 600 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "8px" }}>
+                    <span style={{ color: "#6b21a8", fontWeight: 700 }}>
                       {senderDone ? "🎉 Transfer Complete!" : "⚡ AirDropping Chunks..."}
                     </span>
-                    <span style={{ color: "#34d399", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                    <span style={{ color: "#059669", fontWeight: 800, fontFamily: "var(--font-mono, monospace)" }}>
                       {senderProgress.speed} • {senderProgress.percent}%
                     </span>
                   </div>
-                  <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "6px", overflow: "hidden" }}>
+                  <div style={{ width: "100%", height: "8px", background: "#e2e8f0", borderRadius: "9999px", overflow: "hidden" }}>
                     <div
                       style={{
                         width: `${senderProgress.percent}%`,
                         height: "100%",
-                        background: senderDone ? "linear-gradient(90deg, #10b981, #34d399)" : "linear-gradient(90deg, #9333ea, #c084fc)",
-                        borderRadius: "6px",
+                        background: senderDone ? "linear-gradient(90deg, #10b981, #059669)" : "linear-gradient(90deg, #7c3aed, #a855f7, #ec4899)",
+                        borderRadius: "9999px",
                         transition: "width 0.2s ease",
                       }}
                     />
                   </div>
                 </div>
               )}
+
               {!senderDone && (
                 <div
                   style={{
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    padding: "16px",
+                    padding: "18px 16px",
                     background: "#ffffff",
-                    borderRadius: "14px",
-                    boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                    borderRadius: "18px",
+                    border: "1.5px solid #e2e8f0",
+                    boxShadow: "0 10px 30px -4px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.04)",
                   }}
                 >
                   {offerQrUrl ? (
                     <img
                       src={offerQrUrl}
                       alt="AirDrop QR Handshake"
-                      style={{ width: "230px", height: "230px", borderRadius: "8px", display: "block" }}
+                      style={{
+                        width: "230px",
+                        height: "230px",
+                        borderRadius: "12px",
+                        border: "1px solid #f1f5f9",
+                        padding: "8px",
+                        background: "#ffffff",
+                        display: "block",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+                      }}
                     />
                   ) : errorMsg ? (
-                    <div style={{ width: "230px", height: "230px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "16px", color: "#64748b" }}>
+                    <div
+                      style={{
+                        width: "230px",
+                        height: "230px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        textAlign: "center",
+                        padding: "16px",
+                        color: "#64748b",
+                      }}
+                    >
                       <AlertTriangle size={32} color="#f59e0b" style={{ marginBottom: "10px" }} />
-                      <span style={{ fontSize: "0.82rem", color: "#ef4444", marginBottom: "6px", fontWeight: 700 }}>Note Not In Offline Cache</span>
+                      <span style={{ fontSize: "0.82rem", color: "#ef4444", marginBottom: "6px", fontWeight: 700 }}>
+                        Note Not In Offline Cache
+                      </span>
                       <span style={{ fontSize: "0.72rem", color: "#64748b", lineHeight: 1.4 }}>
                         Open this note once in the Reader while online so it caches automatically for offline sharing.
                       </span>
                     </div>
                   ) : (
-                    <div style={{ width: "230px", height: "230px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", color: "#64748b" }}>
-                      <RefreshCw size={24} className="spin" />
-                      <span style={{ fontSize: "0.74rem", color: "#94a3b8" }}>Preparing offline QR handshake...</span>
+                    <div
+                      style={{
+                        width: "230px",
+                        height: "230px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "10px",
+                        color: "#64748b",
+                      }}
+                    >
+                      <RefreshCw size={24} className="spin" color="#6366f1" />
+                      <span style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 600 }}>Preparing offline QR handshake...</span>
                     </div>
                   )}
 
-                  <div style={{ marginTop: "10px", textAlign: "center", color: "#0f172a" }}>
-                    <div style={{ fontSize: "0.82rem", fontWeight: 700 }}>
+                  <div style={{ marginTop: "12px", textAlign: "center", color: "#0f172a" }}>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 800 }}>
                       Ask receiver to scan this QR code
                     </div>
                     {airdropPairingPin && (
-                      <div style={{ marginTop: "4px", fontSize: "0.78rem", color: "#7c3aed", fontWeight: 700 }}>
-                        Pairing PIN: <span style={{ background: "#ede9fe", padding: "2px 8px", borderRadius: "4px", letterSpacing: "1px" }}>{airdropPairingPin}</span>
+                      <div style={{ marginTop: "6px", fontSize: "0.78rem", color: "#6d28d9", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                        <span>Pairing PIN:</span>
+                        <span
+                          style={{
+                            background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
+                            border: "1px solid #c4b5fd",
+                            color: "#6d28d9",
+                            padding: "3px 10px",
+                            borderRadius: "6px",
+                            letterSpacing: "1.5px",
+                            fontWeight: 900,
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          {airdropPairingPin}
+                        </span>
                       </div>
                     )}
-                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginTop: "3px" }}>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, marginTop: "5px" }}>
                       100% Offline • Connect via Mobile Hotspot or Local Wi-Fi
                     </div>
                   </div>
@@ -818,27 +933,37 @@ export default function CampusAirdropModal({
               )}
 
               {/* Actions & Fallbacks */}
-              <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+              <div style={{ display: "flex", gap: "10px", marginTop: "14px" }}>
                 <button
                   type="button"
                   onClick={() => copyToClipboard(senderSession?.offerToken)}
                   style={{
                     flex: 1,
-                    padding: "8px 12px",
-                    background: "rgba(255, 255, 255, 0.05)",
-                    border: "1px solid rgba(255, 255, 255, 0.15)",
-                    borderRadius: "8px",
-                    color: "#cbd5e1",
-                    fontSize: "0.76rem",
-                    fontWeight: 600,
+                    padding: "9px 14px",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
+                    borderRadius: "10px",
+                    color: "#334155",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "6px",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                    transition: "all 0.18s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f8fafc";
+                    e.currentTarget.style.borderColor = "#94a3b8";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "#ffffff";
+                    e.currentTarget.style.borderColor = "#cbd5e1";
                   }}
                 >
-                  {copied ? <Check size={14} color="#34d399" /> : <Copy size={14} />}
+                  {copied ? <Check size={14} color="#059669" strokeWidth={2.4} /> : <Copy size={14} strokeWidth={2.2} />}
                   <span>{copied ? "Copied Token!" : "Copy Token"}</span>
                 </button>
 
@@ -856,43 +981,76 @@ export default function CampusAirdropModal({
                   }}
                   style={{
                     flex: 1,
-                    padding: "8px 12px",
-                    background: showSenderScanner ? "rgba(239, 68, 68, 0.2)" : "rgba(168, 85, 247, 0.15)",
-                    border: showSenderScanner ? "1px solid #ef4444" : "1px solid rgba(168, 85, 247, 0.35)",
-                    borderRadius: "8px",
-                    color: showSenderScanner ? "#fca5a5" : "#e9d5ff",
-                    fontSize: "0.76rem",
-                    fontWeight: 600,
+                    padding: "9px 14px",
+                    background: showSenderScanner ? "#fee2e2" : "linear-gradient(135deg, #7c3aed, #6366f1)",
+                    border: showSenderScanner ? "1.5px solid #fca5a5" : "none",
+                    borderRadius: "10px",
+                    color: showSenderScanner ? "#dc2626" : "#ffffff",
+                    fontSize: "0.78rem",
+                    fontWeight: 700,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "6px",
+                    boxShadow: showSenderScanner ? "none" : "0 3px 12px rgba(124, 58, 237, 0.25)",
+                    transition: "all 0.18s ease",
                   }}
                 >
-                  <Camera size={14} />
+                  <Camera size={14} strokeWidth={2.2} />
                   <span>{showSenderScanner ? "Close Camera" : "📷 Scan Answer QR"}</span>
                 </button>
               </div>
 
               {/* Sender Viewfinder when scanning Receiver's Answer QR */}
               {showSenderScanner && (
-                <div style={{ marginTop: "12px", borderRadius: "12px", overflow: "hidden", position: "relative", height: "230px", background: "#000" }}>
+                <div
+                  style={{
+                    marginTop: "12px",
+                    borderRadius: "16px",
+                    overflow: "hidden",
+                    position: "relative",
+                    height: "230px",
+                    background: "#0f172a",
+                    border: "2px solid #e2e8f0",
+                    boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)",
+                  }}
+                >
                   <video
                     ref={videoRef}
                     playsInline
                     muted
                     style={{ width: "100%", height: "100%", objectFit: "cover" }}
                   />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                    <div style={{ width: "160px", height: "160px", border: "2px solid #c084fc", borderRadius: "14px", boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.45)" }} />
-                    <span style={{ marginTop: "8px", fontSize: "0.72rem", color: "#e9d5ff", textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>Point at Receiver's Answer QR</span>
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "160px",
+                        height: "160px",
+                        border: "2.5px solid #c084fc",
+                        borderRadius: "14px",
+                        boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.55)",
+                      }}
+                    />
+                    <span style={{ marginTop: "10px", fontSize: "0.74rem", color: "#f8fafc", fontWeight: 700, textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>
+                      Point at Receiver's Answer QR
+                    </span>
                   </div>
                 </div>
               )}
 
               {/* Manual Paste Link */}
-              <div style={{ marginTop: "8px", textAlign: "center" }}>
+              <div style={{ marginTop: "10px", textAlign: "center" }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -905,8 +1063,9 @@ export default function CampusAirdropModal({
                   style={{
                     background: "none",
                     border: "none",
-                    color: "#94a3b8",
-                    fontSize: "0.72rem",
+                    color: "#6366f1",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
                     cursor: "pointer",
                     textDecoration: "underline",
                     padding: 0,
@@ -918,7 +1077,15 @@ export default function CampusAirdropModal({
 
               {/* Answer Input Dropdown */}
               {showAnswerInput && (
-                <div style={{ marginTop: "10px", padding: "10px", background: "rgba(0, 0, 0, 0.3)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "12px",
+                    background: "#f8fafc",
+                    borderRadius: "12px",
+                    border: "1.5px solid #e2e8f0",
+                  }}
+                >
                   <input
                     type="text"
                     placeholder="Paste receiver's answer token here..."
@@ -926,14 +1093,15 @@ export default function CampusAirdropModal({
                     onChange={(e) => setAnswerInputText(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "8px 10px",
-                      borderRadius: "6px",
-                      background: "rgba(255, 255, 255, 0.08)",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
-                      color: "#fff",
-                      fontSize: "0.76rem",
-                      marginBottom: "6px",
+                      padding: "9px 12px",
+                      borderRadius: "8px",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
+                      color: "#0f172a",
+                      fontSize: "0.78rem",
+                      marginBottom: "8px",
                       outline: "none",
+                      boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
                     }}
                   />
                   <button
@@ -941,14 +1109,15 @@ export default function CampusAirdropModal({
                     onClick={handleApplyAnswerToken}
                     style={{
                       width: "100%",
-                      padding: "8px",
-                      borderRadius: "6px",
-                      background: "linear-gradient(135deg, #9333ea, #c084fc)",
+                      padding: "9px",
+                      borderRadius: "8px",
+                      background: "linear-gradient(135deg, #7c3aed, #6366f1)",
                       border: "none",
-                      color: "#fff",
-                      fontSize: "0.76rem",
+                      color: "#ffffff",
+                      fontSize: "0.78rem",
                       fontWeight: 700,
                       cursor: "pointer",
+                      boxShadow: "0 3px 10px rgba(124, 58, 237, 0.25)",
                     }}
                   >
                     ⚡ Establish High-Speed Data Tunnel
@@ -968,18 +1137,19 @@ export default function CampusAirdropModal({
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
-                    padding: "24px 16px",
-                    background: "rgba(16, 185, 129, 0.1)",
-                    border: "1px solid rgba(16, 185, 129, 0.3)",
-                    borderRadius: "14px",
+                    padding: "26px 20px",
+                    background: "linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)",
+                    border: "1.5px solid #6ee7b7",
+                    borderRadius: "18px",
                     textAlign: "center",
+                    boxShadow: "0 10px 25px -4px rgba(16, 185, 129, 0.15)",
                   }}
                 >
-                  <CheckCircle2 size={48} color="#34d399" style={{ marginBottom: "12px" }} />
-                  <h4 style={{ margin: "0 0 6px", fontSize: "1.05rem", fontWeight: 700, color: "#fff" }}>
+                  <CheckCircle2 size={52} color="#059669" style={{ marginBottom: "12px" }} />
+                  <h4 style={{ margin: "0 0 6px", fontSize: "1.1rem", fontWeight: 800, color: "#065f46" }}>
                     Note Received Successfully!
                   </h4>
-                  <p style={{ margin: "0 0 16px", fontSize: "0.78rem", color: "#94a3b8" }}>
+                  <p style={{ margin: "0 0 16px", fontSize: "0.8rem", color: "#047857", fontWeight: 500 }}>
                     Cached in your device's IndexedDB vault. Available 100% offline forever.
                   </p>
                   <button
@@ -992,14 +1162,15 @@ export default function CampusAirdropModal({
                       }
                     }}
                     style={{
-                      padding: "10px 24px",
-                      borderRadius: "8px",
-                      background: "linear-gradient(135deg, #10b981, #059669)",
+                      padding: "11px 26px",
+                      borderRadius: "10px",
+                      background: "linear-gradient(135deg, #059669, #10b981)",
                       border: "none",
-                      color: "#fff",
-                      fontSize: "0.84rem",
-                      fontWeight: 700,
+                      color: "#ffffff",
+                      fontSize: "0.86rem",
+                      fontWeight: 800,
                       cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(16, 185, 129, 0.35)",
                     }}
                   >
                     📖 Open & Read Document
@@ -1011,26 +1182,27 @@ export default function CampusAirdropModal({
                   {receiverProgress && (
                     <div
                       style={{
-                        padding: "12px 14px",
-                        borderRadius: "12px",
-                        background: "rgba(56, 189, 248, 0.1)",
-                        border: "1px solid rgba(56, 189, 248, 0.3)",
-                        marginBottom: "12px",
+                        padding: "14px 16px",
+                        borderRadius: "14px",
+                        background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
+                        border: "1.5px solid #7dd3fc",
+                        marginBottom: "14px",
+                        boxShadow: "0 3px 10px rgba(2, 132, 199, 0.08)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "6px" }}>
-                        <span style={{ color: "#bae6fd", fontWeight: 600 }}>📥 Receiving Document Chunks...</span>
-                        <span style={{ color: "#38bdf8", fontWeight: 700, fontFamily: "var(--font-mono)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", marginBottom: "8px" }}>
+                        <span style={{ color: "#0369a1", fontWeight: 700 }}>📥 Receiving Document Chunks...</span>
+                        <span style={{ color: "#0284c7", fontWeight: 800, fontFamily: "var(--font-mono, monospace)" }}>
                           {receiverProgress.speed} • {receiverProgress.percent}%
                         </span>
                       </div>
-                      <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.1)", borderRadius: "6px", overflow: "hidden" }}>
+                      <div style={{ width: "100%", height: "8px", background: "#cbd5e1", borderRadius: "9999px", overflow: "hidden" }}>
                         <div
                           style={{
                             width: `${receiverProgress.percent}%`,
                             height: "100%",
                             background: "linear-gradient(90deg, #0284c7, #38bdf8)",
-                            borderRadius: "6px",
+                            borderRadius: "9999px",
                             transition: "width 0.2s ease",
                           }}
                         />
@@ -1045,51 +1217,64 @@ export default function CampusAirdropModal({
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
-                        padding: "16px",
+                        padding: "18px 16px",
                         background: "#ffffff",
-                        borderRadius: "14px",
-                        marginBottom: "12px",
+                        borderRadius: "18px",
+                        border: "1.5px solid #e2e8f0",
+                        boxShadow: "0 10px 30px -4px rgba(15, 23, 42, 0.08)",
+                        marginBottom: "14px",
                       }}
                     >
                       <img
                         src={answerQrUrl}
                         alt="Answer QR"
-                        style={{ width: "210px", height: "210px", borderRadius: "8px" }}
+                        style={{
+                          width: "210px",
+                          height: "210px",
+                          borderRadius: "10px",
+                          border: "1px solid #f1f5f9",
+                          padding: "6px",
+                        }}
                       />
-                      <div style={{ marginTop: "8px", textAlign: "center", color: "#0f172a" }}>
-                        <div style={{ fontSize: "0.8rem", fontWeight: 700 }}>Show this Answer QR to Seeder</div>
-                        <div style={{ fontSize: "0.68rem", color: "#64748b" }}>Or copy answer token below</div>
+                      <div style={{ marginTop: "10px", textAlign: "center", color: "#0f172a" }}>
+                        <div style={{ fontSize: "0.85rem", fontWeight: 800 }}>Show this Answer QR to Seeder</div>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "2px" }}>Or copy answer token below</div>
                       </div>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(receiverSession?.answerToken)}
                         style={{
-                          marginTop: "8px",
-                          padding: "6px 12px",
-                          background: "#0f172a",
-                          color: "#fff",
+                          marginTop: "10px",
+                          padding: "8px 16px",
+                          background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                          color: "#ffffff",
                           border: "none",
-                          borderRadius: "6px",
-                          fontSize: "0.72rem",
+                          borderRadius: "8px",
+                          fontSize: "0.78rem",
+                          fontWeight: 700,
                           cursor: "pointer",
+                          boxShadow: "0 3px 10px rgba(2, 132, 199, 0.25)",
                         }}
                       >
                         {copied ? "Copied!" : "Copy Answer Token"}
                       </button>
                     </div>
                   )}
+
                   {!answerQrUrl && !receiverProgress && (
                     <div
                       style={{
                         position: "relative",
                         width: "100%",
                         height: "260px",
-                        borderRadius: "14px",
+                        borderRadius: "16px",
                         overflow: "hidden",
-                        background: "#000",
+                        background: "#0f172a",
+                        border: "2px solid #e2e8f0",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        boxShadow: "0 4px 16px rgba(15, 23, 42, 0.08)",
                       }}
                     >
                       <video
@@ -1105,23 +1290,37 @@ export default function CampusAirdropModal({
                       />
 
                       {!cameraActive && (
-                        <div style={{ textAlign: "center", padding: "20px" }}>
-                          <Camera size={36} color="#64748b" style={{ marginBottom: "10px" }} />
-                          <div style={{ fontSize: "0.82rem", color: "#94a3b8", marginBottom: "12px" }}>
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background: "linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textAlign: "center",
+                            padding: "20px",
+                            border: "1.5px dashed #7dd3fc",
+                          }}
+                        >
+                          <Camera size={38} color="#0284c7" style={{ marginBottom: "10px" }} />
+                          <div style={{ fontSize: "0.86rem", color: "#0369a1", fontWeight: 700, marginBottom: "12px" }}>
                             Camera is ready to scan Seeder's QR Code
                           </div>
                           <button
                             type="button"
                             onClick={startCamera}
                             style={{
-                              padding: "8px 16px",
-                              background: "linear-gradient(135deg, #0284c7, #38bdf8)",
+                              padding: "10px 20px",
+                              background: "linear-gradient(135deg, #0284c7, #2563eb)",
                               border: "none",
-                              borderRadius: "8px",
-                              color: "#fff",
-                              fontWeight: 700,
-                              fontSize: "0.78rem",
+                              borderRadius: "10px",
+                              color: "#ffffff",
+                              fontWeight: 800,
+                              fontSize: "0.82rem",
                               cursor: "pointer",
+                              boxShadow: "0 4px 12px rgba(2, 132, 199, 0.3)",
                             }}
                           >
                             📷 Activate Camera
@@ -1136,17 +1335,15 @@ export default function CampusAirdropModal({
                             position: "absolute",
                             width: "180px",
                             height: "180px",
-                            border: "2px solid #38bdf8",
+                            border: "2.5px solid #38bdf8",
                             borderRadius: "16px",
-                            boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.45)",
+                            boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.55)",
                             pointerEvents: "none",
                           }}
                         />
                       )}
                     </div>
                   )}
-
-
 
                   {/* Manual Paste Fallback */}
                   <div style={{ marginTop: "12px" }}>
@@ -1156,8 +1353,9 @@ export default function CampusAirdropModal({
                       style={{
                         background: "none",
                         border: "none",
-                        color: "#94a3b8",
-                        fontSize: "0.74rem",
+                        color: "#0284c7",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
                         cursor: "pointer",
                         textDecoration: "underline",
                         padding: 0,
@@ -1167,7 +1365,15 @@ export default function CampusAirdropModal({
                     </button>
 
                     {showManualReceive && (
-                      <div style={{ marginTop: "8px" }}>
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          padding: "12px",
+                          background: "#f8fafc",
+                          borderRadius: "12px",
+                          border: "1.5px solid #e2e8f0",
+                        }}
+                      >
                         <textarea
                           rows={2}
                           placeholder="Paste Seeder's offer token here..."
@@ -1175,15 +1381,16 @@ export default function CampusAirdropModal({
                           onChange={(e) => setManualOfferText(e.target.value)}
                           style={{
                             width: "100%",
-                            padding: "8px 10px",
-                            borderRadius: "6px",
-                            background: "rgba(255, 255, 255, 0.08)",
-                            border: "1px solid rgba(255, 255, 255, 0.15)",
-                            color: "#fff",
-                            fontSize: "0.74rem",
+                            padding: "9px 12px",
+                            borderRadius: "8px",
+                            background: "#ffffff",
+                            border: "1.5px solid #cbd5e1",
+                            color: "#0f172a",
+                            fontSize: "0.76rem",
                             outline: "none",
                             resize: "none",
-                            marginBottom: "6px",
+                            marginBottom: "8px",
+                            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
                           }}
                         />
                         <button
@@ -1191,14 +1398,15 @@ export default function CampusAirdropModal({
                           onClick={() => handleProcessOfferToken(manualOfferText)}
                           style={{
                             width: "100%",
-                            padding: "8px",
-                            background: "linear-gradient(135deg, #0284c7, #38bdf8)",
+                            padding: "9px",
+                            background: "linear-gradient(135deg, #0284c7, #2563eb)",
                             border: "none",
-                            borderRadius: "6px",
-                            color: "#fff",
-                            fontWeight: 700,
-                            fontSize: "0.76rem",
+                            borderRadius: "8px",
+                            color: "#ffffff",
+                            fontWeight: 800,
+                            fontSize: "0.78rem",
                             cursor: "pointer",
+                            boxShadow: "0 3px 10px rgba(2, 132, 199, 0.25)",
                           }}
                         >
                           📥 Connect & Receive Note
@@ -1215,21 +1423,22 @@ export default function CampusAirdropModal({
         {/* Footer Guarantee */}
         <div
           style={{
-            padding: "10px 20px",
-            background: "rgba(0, 0, 0, 0.35)",
-            borderTop: "1px solid rgba(255, 255, 255, 0.06)",
-            fontSize: "0.7rem",
+            padding: "12px 22px",
+            background: "linear-gradient(180deg, #fafafa 0%, #f1f5f9 100%)",
+            borderTop: "1px solid #f1f5f9",
+            fontSize: "0.72rem",
             color: "#64748b",
+            fontWeight: 600,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
           <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <ShieldCheck size={14} color="#10b981" />
+            <ShieldCheck size={15} color="#059669" strokeWidth={2.2} />
             End-to-End Local WebRTC Mesh
           </span>
-          <span>Zero Server Cost • ₹0 Forever</span>
+          <span style={{ fontWeight: 700, color: "#475569" }}>Zero Server Cost • ₹0 Forever</span>
         </div>
       </div>
     </div>

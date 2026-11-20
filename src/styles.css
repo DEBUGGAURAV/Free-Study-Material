@@ -1858,16 +1858,35 @@ body,
 
 
 .btn-mesh-airdrop {
-  background: rgba(168, 85, 247, 0.12);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.35);
+  background: #f0fdf4 !important;
+  color: #047857 !important;
+  border: 1.5px solid #a7f3d0 !important;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.08);
 }
 
 .btn-mesh-airdrop:hover {
-  background: rgba(168, 85, 247, 0.24);
-  border-color: rgba(168, 85, 247, 0.55);
-  color: #e9d5ff;
+  background: #dcfce7 !important;
+  border-color: #6ee7b7 !important;
+  color: #065f46 !important;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+@keyframes airdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes airdropSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Fallback legacy classes for backward compatibility */
