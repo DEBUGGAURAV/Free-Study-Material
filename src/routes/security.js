@@ -148,8 +148,9 @@ async function dispatchTamperTelegramAlert({
     `📱 <b>Device:</b> ${cleanInfo.device} (${cleanInfo.os})`,
     `🌐 <b>Browser:</b> ${cleanInfo.browser}`,
     forensics?.ram || user?.memoryEstimate
-      ? `⚙️ <b>Hardware:</b> ${safeHtml(forensics?.cores || user?.hardwareCores || "4 Cores")} • <b>${safeHtml(forensics?.ram || user?.memoryEstimate || "Standard RAM")}</b>`
+      ? `⚙️ <b>Hardware:</b> ${safeHtml(forensics?.cores || user?.hardwareCores || "4 Cores")} • <b>${safeHtml(forensics?.ram || user?.memoryEstimate || "Standard RAM")}</b>${forensics?.storage || user?.storage ? ` • <b>${safeHtml(forensics?.storage || user?.storage)}</b>` : ""}`
       : user.college && user.college !== "N/A" ? `🏛️ <b>Hardware Profile:</b> ${safeHtml(user.college)}` : null,
+    (forensics?.storage || user?.storage || user?.deviceSpecs?.storage) ? `💾 <b>Device Storage:</b> <code>${safeHtml(forensics?.storage || user?.storage || user?.deviceSpecs?.storage)}</code>` : null,
     forensics?.gpu || user?.gpuRenderer ? `🎮 <b>GPU Renderer:</b> <code>${safeHtml(forensics?.gpu || user?.gpuRenderer)}</code>` : null,
     forensics?.screen || user?.year ? `🖥️ <b>Display & Screen:</b> ${safeHtml(forensics?.screen || user?.year)}` : null,
     forensics?.touch || user?.touchSpec ? `👆 <b>Input:</b> ${safeHtml(forensics?.touch || user?.touchSpec)}` : null,
@@ -417,7 +418,8 @@ router.post("/anti-bot-alert", async (req, res) => {
       `👤 <b>Student:</b> ${user?.name || "Suspicious Device Session"}`,
       `📧 <b>Email:</b> <code>${user?.email || "N/A"}</code>`,
       `🌐 <b>IP Address:</b> <code>${clientIp}</code>`,
-      `💻 <b>Hardware Spec:</b> ${deviceSpecs?.label || (deviceSpecs?.cores ? `${deviceSpecs.cores} Cores, ${deviceSpecs.memoryGB}GB RAM` : "Client Hardware")}`,
+      `💻 <b>Hardware Spec:</b> ${deviceSpecs?.label || (deviceSpecs?.cores ? `${deviceSpecs.cores} Cores, ${deviceSpecs.memoryGB}GB RAM` : "Client Hardware")}${deviceSpecs?.storage ? ` • ${deviceSpecs.storage}` : ""}`,
+      deviceSpecs?.storage ? `💾 <b>Device Storage:</b> <code>${deviceSpecs.storage}</code>` : null,
       accountsDetected ? `👥 <b>Linked Accounts Detected:</b> <code>${accountsDetected}</code>` : null,
       `⚠️ <b>Forensic Anomaly:</b>`,
       `<i>${reason || "Automated headless browser or multi-account clone cluster detected."}</i>`,

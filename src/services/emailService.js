@@ -500,42 +500,61 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
   const isMobile = Boolean(specs?.isMobile || /Android|iPhone|iPad|Mobile/i.test(ua));
   const tier = String(specs?.tier || "").toLowerCase();
 
+  let storage = "";
+  if (specs?.storage && typeof specs.storage === "string" && specs.storage.trim()) {
+    storage = specs.storage.trim();
+  } else if (specs?.storageGB && Number(specs.storageGB) > 0) {
+    storage = `${specs.storageGB} GB Fast Storage`;
+  } else if (user?.storage && typeof user.storage === "string") {
+    storage = user.storage.trim();
+  } else {
+    storage = isMobile ? "Fast Flash Storage (UFS / eMMC)" : "Fast Solid-State Storage (NVMe / SSD)";
+  }
+
+  const storageSnippet = storage ? ` • ${storage}` : "";
+
   if (cores > 0 && memoryGB > 0) {
     if (cores >= 8 && memoryGB >= 8 && !isMobile) {
-      hardwareCapability = `High-End Workstation (${cores} Cores, ${memoryGB}GB+ RAM)`;
+      hardwareCapability = `High-End Workstation (${cores} Cores, ${memoryGB}GB+ RAM${storageSnippet})`;
     } else if (cores >= 6 && memoryGB >= 6) {
-      hardwareCapability = `High Performance (${cores} Cores, ${memoryGB}GB RAM)`;
+      hardwareCapability = `High Performance (${cores} Cores, ${memoryGB}GB RAM${storageSnippet})`;
     } else if (memoryGB <= 2 || cores <= 2) {
-      hardwareCapability = `Budget Device (${cores} Cores, ~${memoryGB}GB RAM)`;
+      hardwareCapability = `Budget Device (${cores} Cores, ~${memoryGB}GB RAM${storageSnippet})`;
     } else {
-      hardwareCapability = `Standard Performance (${cores} Cores, ~${memoryGB}GB RAM)`;
+      hardwareCapability = `Standard Performance (${cores} Cores, ~${memoryGB}GB RAM${storageSnippet})`;
     }
   } else if (specs?.hardwareCapability && typeof specs.hardwareCapability === "string") {
     hardwareCapability = specs.hardwareCapability.trim();
+    if (storage && !hardwareCapability.includes("Storage")) {
+      hardwareCapability += ` • ${storage}`;
+    }
   } else if (specs?.label && typeof specs.label === "string" && (specs.label.includes("Cores") || specs.label.includes("RAM"))) {
     hardwareCapability = specs.label.trim();
+    if (storage && !hardwareCapability.includes("Storage")) {
+      hardwareCapability += ` • ${storage}`;
+    }
   } else if (tier === "high" || tier === "workstation") {
-    hardwareCapability = "High Performance Multi-Core Architecture";
+    hardwareCapability = `High Performance Multi-Core Architecture${storageSnippet}`;
   } else if (tier === "ultra_low" || tier === "low") {
-    hardwareCapability = "Budget Mobile Architecture (Adaptive Guard)";
+    hardwareCapability = `Budget Mobile Architecture (Adaptive Guard${storageSnippet})`;
   } else if (cores > 0) {
-    hardwareCapability = `Multi-Core Compute Engine (${cores} Cores)`;
+    hardwareCapability = `Multi-Core Compute Engine (${cores} Cores${storageSnippet})`;
   } else {
     // Dynamic fallback based on platform/UA
     if (/iPhone|iPad/i.test(ua)) {
-      hardwareCapability = "Apple Bionic / Neural Engine Architecture";
+      hardwareCapability = `Apple Bionic / Neural Engine Architecture${storageSnippet}`;
     } else if (/Macintosh|Mac OS X/i.test(ua)) {
-      hardwareCapability = "Apple Silicon / macOS Core Engine";
+      hardwareCapability = `Apple Silicon / macOS Core Engine${storageSnippet}`;
     } else if (/Android|Mobile/i.test(ua)) {
-      hardwareCapability = "Mobile ARM Multi-Core (Adaptive Client)";
+      hardwareCapability = `Mobile ARM Multi-Core (Adaptive Client${storageSnippet})`;
     } else if (/Windows|Linux/i.test(ua)) {
-      hardwareCapability = "Desktop Workstation (Multi-Core x64)";
+      hardwareCapability = `Desktop Workstation (Multi-Core x64${storageSnippet})`;
     } else {
-      hardwareCapability = "Standard Architecture (Adaptive Web Engine)";
+      hardwareCapability = `Standard Architecture (Adaptive Web Engine${storageSnippet})`;
     }
   }
 
-  return { deviceName, hardwareCapability };
+  return { deviceName, hardwareCapability, storage };
 }
 
 /**
@@ -854,7 +873,7 @@ async function sendTelegramAuthNotice({
         (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "") +
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         (user.telegramDetails?.username ? `🔗 <b>Telegram Handle:</b> @${user.telegramDetails.username}\n` : "") +
-        (deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` : "") +
+        (deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage:</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") : "") +
         `📝 <b>Registration Method:</b> <code>${regMethodDisplay}</code>\n` +
         `⚡ <b>Account Status:</b> <code>✅ Active & Verified Student (Vault Access Granted)</code>\n` +
         (isGoogle ? `✨ <b>Google Verification:</b> <code>100% Cryptographically Verified by Google</code>\n` : "") +
@@ -918,7 +937,7 @@ async function sendTelegramAuthNotice({
           (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
           (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
           (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
-          (isAuthDeviceNotice && deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` : "") +
+          (isAuthDeviceNotice && deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage:</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") : "") +
           (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
           `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
           (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +

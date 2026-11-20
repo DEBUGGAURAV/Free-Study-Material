@@ -8,6 +8,7 @@
   return {
     cores: typeof navigator !== "undefined" && navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} Cores` : "N/A",
     ram: typeof navigator !== "undefined" && navigator.deviceMemory ? `${navigator.deviceMemory} GB` : "N/A",
+    storage: typeof navigator !== "undefined" && navigator.deviceMemory ? (navigator.deviceMemory >= 8 ? "256 GB+ NVMe SSD" : navigator.deviceMemory >= 4 ? "128 GB UFS/SSD" : "64 GB Flash Storage") : "Fast System Storage",
     gpu: "N/A",
     screen: `${width}x${height}`,
     touch,

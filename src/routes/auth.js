@@ -1836,6 +1836,8 @@ router.post("/login", authLimiter, async (req, res) => {
           tier: String(req.body.deviceSpecs.tier || "mid"),
           label: String(req.body.deviceSpecs.label || ""),
           isMobile: Boolean(req.body.deviceSpecs.isMobile),
+          storage: String(req.body.deviceSpecs.storage || ""),
+          storageGB: Number(req.body.deviceSpecs.storageGB) || 0,
           updatedAt: new Date().toISOString(),
         }
       }, { merge: true }).catch(() => {});
@@ -1889,6 +1891,8 @@ router.post("/sync-device", authenticateToken, async (req, res) => {
           tier: String(deviceSpecs.tier || "mid"),
           label: String(deviceSpecs.label || ""),
           isMobile: Boolean(deviceSpecs.isMobile),
+          storage: String(deviceSpecs.storage || ""),
+          storageGB: Number(deviceSpecs.storageGB) || 0,
           updatedAt: new Date().toISOString(),
         }
       }, { merge: true }).catch(() => {});

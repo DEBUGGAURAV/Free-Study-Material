@@ -308,6 +308,31 @@ if (typeof navigator !== "undefined" && navigator.userAgentData?.getHighEntropyV
     .catch(() => {});
 }
 
+// 💾 Fast Eager Client Storage & Hardware Cache (0ms latency for auth calls)
+let cachedStorageEstimate = null;
+function refreshStorageEstimate() {
+  if (typeof navigator !== "undefined" && navigator.storage && typeof navigator.storage.estimate === "function") {
+    navigator.storage.estimate().then((est) => {
+      if (est && est.quota) {
+        const quotaGB = (est.quota / (1024 * 1024 * 1024)).toFixed(1);
+        const usageMB = ((est.usage || 0) / (1024 * 1024)).toFixed(1);
+        cachedStorageEstimate = {
+          quotaGB: Number(quotaGB),
+          usageMB: Number(usageMB),
+          rawQuota: est.quota,
+          rawUsage: est.usage,
+          label: `${quotaGB} GB Storage (${quotaGB} GB Fast Quota • ${usageMB} MB Used)`,
+          shortLabel: `${quotaGB} GB Fast Storage`,
+        };
+      }
+    }).catch(() => {});
+  }
+}
+
+if (typeof window !== "undefined") {
+  refreshStorageEstimate();
+}
+
 /**
  * Capture crystal-clear hardware specifications and human-readable device model
  */
@@ -321,6 +346,8 @@ export function getClientDeviceSpecs() {
       browser: "Browser",
       cores: 4,
       memoryGB: 4,
+      storage: "64.0 GB Fast Storage",
+      storageGB: 64,
       isMobile: false,
       screen: "1920x1080",
     };
@@ -334,6 +361,10 @@ export function getClientDeviceSpecs() {
     const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
     const dpr = window.devicePixelRatio || 1;
     const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+
+    // Fast Non-Blocking Storage Resolution (from eager cache or smart heuristic)
+    const storage = cachedStorageEstimate?.shortLabel || (cachedStorageEstimate?.quotaGB ? `${cachedStorageEstimate.quotaGB} GB Fast Storage` : (isMobile ? "Fast Flash Storage (UFS)" : "Fast SSD Storage (NVMe)"));
+    const storageGB = cachedStorageEstimate?.quotaGB || null;
 
     let os = "Unknown OS";
     let brand = "";
@@ -438,6 +469,8 @@ export function getClientDeviceSpecs() {
       browser,
       cores,
       memoryGB,
+      storage,
+      storageGB,
       isMobile,
       screen: screenRes,
       pixelRatio: dpr,
@@ -453,6 +486,8 @@ export function getClientDeviceSpecs() {
       browser: "Browser",
       cores: 4,
       memoryGB: 4,
+      storage: "Fast System Storage",
+      storageGB: 64,
       isMobile: false,
       screen: "",
     };
