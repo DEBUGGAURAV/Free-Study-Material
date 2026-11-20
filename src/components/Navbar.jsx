@@ -357,7 +357,7 @@ export default function Navbar({
                   title="Admin Studio Control Panel"
                 >
                   <ShieldCheck size={14} color="#7c3aed" strokeWidth={2.25} />
-                  <span style={{ color: "#0f172a" }}>Admin</span>
+                  <span>Admin</span>
                 </button>
               )}
 
@@ -487,7 +487,7 @@ export default function Navbar({
                 title="Admin Security Studio: Notes, Telemetry & Vault Management"
               >
                 <ShieldCheck size={16} color="#7c3aed" strokeWidth={2.25} />
-                <span style={{ color: "#0f172a" }}>Admin Studio</span>
+                <span>Admin Studio</span>
               </button>
             )}
 
@@ -606,7 +606,7 @@ export default function Navbar({
             <div className="icon-3d-indigo" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               <MessageSquare size={14} color="#2563eb" />
             </div>
-            <span style={{ color: "#0f172a" }}>Chat</span>
+            <span>Chat</span>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
@@ -675,7 +675,7 @@ export default function Navbar({
             <div className="icon-3d-emerald" style={{ width: "22px", height: "22px", borderRadius: "8px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               <HelpCircle size={14} color="#059669" />
             </div>
-            <span style={{ color: "#0f172a" }}>Help Desk</span>
+            <span>Help Desk</span>
             <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #06b6d4)", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
           </button>
 
@@ -705,7 +705,7 @@ export default function Navbar({
               >
                 <BellRing size={14} color={pushStatus.subscribed ? "#059669" : "#0284c7"} />
               </div>
-              <span style={{ color: "#0f172a" }}>{pushBusy ? "Saving..." : pushStatus.subscribed ? "Alerts On" : "Push Alerts"}</span>
+              <span>{pushBusy ? "Saving..." : pushStatus.subscribed ? "Alerts On" : "Push Alerts"}</span>
               {pushStatus.subscribed && (
                 <span style={{ width: "7px", height: "7px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 10px #10b981", display: "inline-block" }} />
               )}

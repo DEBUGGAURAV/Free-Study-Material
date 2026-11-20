@@ -357,14 +357,20 @@ export default function AuthModal({
       localStorage.setItem("academic_vault_login_pref", "password");
     }
 
-    setShowPostRegPasskeyPrompt(false);
-    setPostRegUser(null);
-
-    // Directly authenticate & immediately land on the main page!
-    if (onAuthSuccess) {
-      onAuthSuccess(authenticatedUser);
+    // Always ask user if they want to activate 1-Click Biometric Passkey on this device (Telegram Bot, Email OTP, Google)
+    if (supportsPasskey && !authenticatedUser.hasPasskey) {
+      setPostRegUser(authenticatedUser);
+      setShowPostRegPasskeyPrompt(true);
+      setError(null);
+      setFieldErrors({});
+      setSuccessMsg(null);
+    } else {
+      // If passkey is not supported or already setup, immediately authenticate & land on main page!
+      if (onAuthSuccess) {
+        onAuthSuccess(authenticatedUser);
+      }
+      onClose();
     }
-    onClose();
   };
 
   // Forgot Password State
@@ -1264,7 +1270,189 @@ export default function AuthModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="auth-3d-tilt">
-          <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
+          {showPostRegPasskeyPrompt && postRegUser ? (
+            <div className="auth-card-face auth-card-front face-active" style={{ minHeight: "auto" }}>
+              {/* Passcard Header */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px", paddingBottom: "10px", borderBottom: "1px solid #e2e8f0" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+                  <div style={{ width: "32px", height: "32px", borderRadius: "9px", background: "linear-gradient(135deg, #0284c7, #4f46e5)", color: "#fff", display: "grid", placeItems: "center", fontWeight: 900, fontSize: "0.8rem", boxShadow: "0 3px 10px rgba(2, 132, 199, 0.25)" }}>
+                    FSM
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.66rem", fontWeight: 800, letterSpacing: "0.06em", color: "#0284c7", textTransform: "uppercase" }}>
+                      Biometric Security
+                    </div>
+                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#1e293b" }}>
+                      1-Click Passkey Setup
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <button
+                    className="modal-close-btn"
+                    onClick={handlePostRegSkipPasskey}
+                    type="button"
+                    title="Skip and go to main page"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Error Alert Box */}
+              {error && (
+                <div
+                  className="auth-error-banner"
+                  style={{
+                    background: "#fef2f2",
+                    border: "1.5px solid #ef4444",
+                    color: "#b91c1c",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    marginBottom: "12px",
+                    fontSize: "0.82rem",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px",
+                  }}
+                >
+                  <AlertCircle size={16} style={{ color: "#ef4444", flexShrink: 0, marginTop: "2px" }} />
+                  <div style={{ flex: 1, lineHeight: "1.4" }}>{error}</div>
+                </div>
+              )}
+
+              {/* Success Alert Box */}
+              {successMsg && (
+                <div
+                  className="auth-success-banner"
+                  style={{
+                    background: "#ecfdf5",
+                    border: "1.5px solid #10b981",
+                    color: "#065f46",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    marginBottom: "12px",
+                    fontSize: "0.82rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+                  <span>{successMsg}</span>
+                </div>
+              )}
+
+              {/* Passkey UI Content */}
+              <div style={{ textAlign: "center", padding: "6px 2px" }}>
+                <div
+                  style={{
+                    width: "64px",
+                    height: "64px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, rgba(2, 132, 199, 0.15), rgba(99, 102, 241, 0.18))",
+                    border: "2px solid rgba(2, 132, 199, 0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 14px auto",
+                    boxShadow: "0 0 20px rgba(2, 132, 199, 0.2)",
+                  }}
+                >
+                  <Fingerprint size={34} color="#0284c7" />
+                </div>
+
+                <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
+                  Enable 1-Click Biometric Login?
+                </h3>
+                <p style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.5, marginBottom: "16px" }}>
+                  Would you like to activate a <strong>Passkey</strong> on this device? Next time, sign in instantly using <strong>Fingerprint</strong>, <strong>Face ID</strong>, or <strong>Windows Hello</strong> without typing any password!
+                </p>
+
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    textAlign: "left",
+                    marginBottom: "18px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    fontSize: "0.78rem",
+                    color: "#334155",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#0284c7" }}>
+                    <Sparkles size={15} style={{ flexShrink: 0 }} />
+                    <span><strong>0-Second Sign In:</strong> Tap your sensor & enter immediately</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#059669" }}>
+                    <ShieldCheck size={15} style={{ flexShrink: 0 }} />
+                    <span><strong>Hardware Security:</strong> Stored safely inside your device chip</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#6366f1" }}>
+                    <KeyRound size={15} style={{ flexShrink: 0 }} />
+                    <span><strong>Password Optional:</strong> Password login remains available anytime</span>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handlePostRegEnablePasskey}
+                    disabled={regPasskeyLoading}
+                    style={{
+                      width: "100%",
+                      justifyContent: "center",
+                      padding: "12px",
+                      background: "linear-gradient(135deg, #0284c7, #2563eb)",
+                      boxShadow: "0 4px 14px rgba(2, 132, 199, 0.35)",
+                      fontSize: "0.88rem",
+                      fontWeight: 750,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {regPasskeyLoading ? (
+                      <>
+                        <div className="spinner"></div>
+                        <span>Waiting for Fingerprint / Face ID...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Fingerprint size={18} />
+                        <span>⚡ Enable Passkey (Recommended)</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handlePostRegSkipPasskey}
+                    disabled={regPasskeyLoading}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
+                      borderRadius: "10px",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 650,
+                      cursor: "pointer",
+                      transition: "all 0.18s ease",
+                    }}
+                  >
+                    Skip for Now (Continue to Main Page ➔)
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
 
             {/* =================================================================
                 FRONT FACE (Sign In, Recovery, Google Onboarding, Passkey Setup)
@@ -1482,115 +1670,6 @@ export default function AuthModal({
           >
             <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
             <span>{successMsg}</span>
-          </div>
-        )}
-
-        {/* ================= POST-REGISTRATION PASSKEY PROMPT ================= */}
-        {showPostRegPasskeyPrompt && postRegUser && (
-          <div style={{ textAlign: "center", padding: "10px 4px 6px" }}>
-            <div
-              style={{
-                width: "66px",
-                height: "66px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, rgba(6, 182, 212, 0.22), rgba(99, 102, 241, 0.25))",
-                border: "2px solid rgba(56, 189, 248, 0.45)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 16px auto",
-                boxShadow: "0 0 24px rgba(56, 189, 248, 0.28)",
-              }}
-            >
-              <Fingerprint size={36} color="#38bdf8" />
-            </div>
-
-            <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "#fff", marginBottom: "6px" }}>
-              Enable 1-Click Biometric Login?
-            </h3>
-            <p style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "18px" }}>
-              Would you like to activate a <strong>Passkey</strong> on this device? Next time, sign in instantly using <strong>Fingerprint</strong>, <strong>Face ID</strong>, or <strong>Windows Hello</strong> without typing any password!
-            </p>
-
-            <div
-              style={{
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderRadius: "10px",
-                padding: "12px 14px",
-                textAlign: "left",
-                marginBottom: "20px",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-                fontSize: "0.78rem",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#38bdf8" }}>
-                <Sparkles size={15} style={{ flexShrink: 0 }} />
-                <span><strong>0-Second Sign In:</strong> Tap your sensor & enter immediately</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#34d399" }}>
-                <ShieldCheck size={15} style={{ flexShrink: 0 }} />
-                <span><strong>Hardware Security:</strong> Stored safely inside your device chip</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#a78bfa" }}>
-                <KeyRound size={15} style={{ flexShrink: 0 }} />
-                <span><strong>Password Optional:</strong> Password login remains available anytime</span>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={handlePostRegEnablePasskey}
-                disabled={regPasskeyLoading}
-                style={{
-                  width: "100%",
-                  justifyContent: "center",
-                  padding: "12px",
-                  background: "linear-gradient(135deg, #0284c7, #6366f1)",
-                  boxShadow: "0 4px 14px rgba(2, 132, 199, 0.35)",
-                  fontSize: "0.9rem",
-                  fontWeight: 700,
-                }}
-              >
-                {regPasskeyLoading ? (
-                  <>
-                    <div className="spinner"></div>
-                    <span>Waiting for Fingerprint / Face ID...</span>
-                  </>
-                ) : (
-                  <>
-                    <Fingerprint size={18} />
-                    <span>⚡ Enable Passkey (Recommended)</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={handlePostRegSkipPasskey}
-                disabled={regPasskeyLoading}
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  background: "transparent",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  borderRadius: "8px",
-                  color: "var(--text-dim)",
-                  fontSize: "0.82rem",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                onMouseEnter={(e) => (e.target.style.color = "#fff")}
-                onMouseLeave={(e) => (e.target.style.color = "var(--text-dim)")}
-              >
-                Skip for Now (Sign In with Password)
-              </button>
-            </div>
           </div>
         )}
 
@@ -2802,7 +2881,7 @@ export default function AuthModal({
         )}
 
         {/* ================= TAB 3: SIGN UP ================= */}
-        {!showPostRegPasskeyPrompt && tab === "signup" && !isGoogleOnboarding && (
+        {tab === "signup" && !isGoogleOnboarding && (
           <div>
             {/* 1. Continue with Google (Top Option 1) */}
             <button
@@ -3498,6 +3577,7 @@ export default function AuthModal({
             </div>
 
           </div>
+          )}
         </div>
       </div>
     </div>

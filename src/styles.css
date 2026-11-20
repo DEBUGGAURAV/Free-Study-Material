@@ -7433,5 +7433,470 @@ body.dark-theme,
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 24px rgba(99, 102, 241, 0.2) !important;
 }
 
+/* ==========================================================================
+   🌙 UNIVERSAL HIGH-CONTRAST NIGHT MODE ENGINE (Eliminates Invisible Text)
+   ========================================================================== */
+
+/* 1. Force all dark inline colors to crisp off-white #f8fafc in Dark Mode */
+html[data-theme="dark"] [style*="color: #0f172a"],
+html.dark-theme [style*="color: #0f172a"],
+body.dark-theme [style*="color: #0f172a"],
+[data-theme="dark"] [style*="color: #0f172a"],
+[data-theme="dark"] [style*="color:#0f172a"],
+[data-theme="dark"] [style*="color: rgb(15, 23, 42)"],
+[data-theme="dark"] [style*="color:rgb(15,23,42)"],
+[data-theme="dark"] [style*="color: #1e293b"],
+[data-theme="dark"] [style*="color:#1e293b"],
+[data-theme="dark"] [style*="color: rgb(30, 41, 59)"],
+[data-theme="dark"] [style*="color:rgb(30,41,59)"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#111827"],
+[data-theme="dark"] [style*="color: rgb(17, 24, 39)"],
+[data-theme="dark"] [style*="color: #000000"],
+[data-theme="dark"] [style*="color:#000000"],
+[data-theme="dark"] [style*="color: #000"],
+[data-theme="dark"] [style*="color:#000"],
+[data-theme="dark"] [style*="color: black"],
+[data-theme="dark"] [style*="color: #1f2937"],
+[data-theme="dark"] [style*="color:#1f2937"],
+[data-theme="dark"] [style*="color: rgb(31, 41, 55)"] {
+  color: #f8fafc !important;
+}
+
+/* 2. Force all dark secondary/muted inline colors to clear readable #cbd5e1 in Dark Mode */
+html[data-theme="dark"] [style*="color: #334155"],
+html.dark-theme [style*="color: #334155"],
+body.dark-theme [style*="color: #334155"],
+[data-theme="dark"] [style*="color: #334155"],
+[data-theme="dark"] [style*="color:#334155"],
+[data-theme="dark"] [style*="color: rgb(51, 65, 85)"],
+[data-theme="dark"] [style*="color: #475569"],
+[data-theme="dark"] [style*="color:#475569"],
+[data-theme="dark"] [style*="color: rgb(71, 85, 105)"],
+[data-theme="dark"] [style*="color: #374151"],
+[data-theme="dark"] [style*="color:#374151"],
+[data-theme="dark"] [style*="color: #64748b"],
+[data-theme="dark"] [style*="color:#64748b"],
+[data-theme="dark"] [style*="color: rgb(100, 116, 139)"] {
+  color: #cbd5e1 !important;
+}
+
+/* 2.1 Vibrant Light-Tint Mapping for Dark Accent Colors in Night Mode */
+[data-theme="dark"] [style*="color: #087c70"],
+[data-theme="dark"] [style*="color:#087c70"] {
+  color: #2dd4bf !important;
+}
+[data-theme="dark"] [style*="color: #065f46"],
+[data-theme="dark"] [style*="color:#065f46"],
+[data-theme="dark"] [style*="color: #047857"],
+[data-theme="dark"] [style*="color:#047857"] {
+  color: #34d399 !important;
+}
+[data-theme="dark"] [style*="color: #1e40af"],
+[data-theme="dark"] [style*="color:#1e40af"],
+[data-theme="dark"] [style*="color: #1d4ed8"],
+[data-theme="dark"] [style*="color:#1d4ed8"] {
+  color: #93c5fd !important;
+}
+[data-theme="dark"] [style*="color: #0369a1"],
+[data-theme="dark"] [style*="color:#0369a1"],
+[data-theme="dark"] [style*="color: #0284c7"],
+[data-theme="dark"] [style*="color:#0284c7"] {
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] [style*="color: #92400e"],
+[data-theme="dark"] [style*="color:#92400e"],
+[data-theme="dark"] [style*="color: #b45309"],
+[data-theme="dark"] [style*="color:#b45309"],
+[data-theme="dark"] [style*="color: #78350f"],
+[data-theme="dark"] [style*="color:#78350f"] {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] [style*="color: #9f1239"],
+[data-theme="dark"] [style*="color:#9f1239"],
+[data-theme="dark"] [style*="color: #be123c"],
+[data-theme="dark"] [style*="color:#be123c"] {
+  color: #fb7185 !important;
+}
+[data-theme="dark"] [style*="color: #5b21b6"],
+[data-theme="dark"] [style*="color:#5b21b6"],
+[data-theme="dark"] [style*="color: #4338ca"],
+[data-theme="dark"] [style*="color:#4338ca"] {
+  color: #c084fc !important;
+}
+
+/* 3. Convert White/Light Inline Backgrounds to Dark Slate Surfaces with Crisp Text */
+[data-theme="dark"] [style*="background: #ffffff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background: #ffffff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background:#ffffff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background:#ffffff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background: #fff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background: #fff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background:#fff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background:#fff"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background: white"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background: white"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background: rgb(255, 255, 255)"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+.dark-theme [style*="background: rgb(255, 255, 255)"]:not(button[style*="linear-gradient"]):not(.badge):not(.tag),
+[data-theme="dark"] [style*="background: #f8fafc"],
+.dark-theme [style*="background: #f8fafc"],
+[data-theme="dark"] [style*="background:#f8fafc"],
+.dark-theme [style*="background:#f8fafc"],
+[data-theme="dark"] [style*="background: #f1f5f9"],
+.dark-theme [style*="background: #f1f5f9"],
+[data-theme="dark"] [style*="background:#f1f5f9"],
+.dark-theme [style*="background:#f1f5f9"],
+[data-theme="dark"] [style*="background: #f8faff"],
+.dark-theme [style*="background: #f8faff"],
+[data-theme="dark"] [style*="background:#f8faff"],
+.dark-theme [style*="background:#f8faff"] {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+/* 4. Ensure All Modal Containers, Boxes & Inner Text Elements Are Razor-Sharp */
+[data-theme="dark"] .modal-content,
+.dark-theme .modal-content,
+[data-theme="dark"] .modal-box,
+.dark-theme .modal-box,
+[data-theme="dark"] .profile-modal-card,
+.dark-theme .profile-modal-card,
+[data-theme="dark"] .help-center-modal-content,
+.dark-theme .help-center-modal-content,
+[data-theme="dark"] .notice-board-modal-content,
+.dark-theme .notice-board-modal-content,
+[data-theme="dark"] .white-modal-surface,
+.dark-theme .white-modal-surface,
+[data-theme="dark"] .campus-airdrop-modal-surface,
+.dark-theme .campus-airdrop-modal-surface,
+[data-theme="dark"] .swipe-revise-dialog,
+.dark-theme .swipe-revise-dialog,
+[data-theme="dark"] .scm-window,
+.dark-theme .scm-window {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .modal-content h1,
+.dark-theme .modal-content h1,
+[data-theme="dark"] .modal-content h2,
+.dark-theme .modal-content h2,
+[data-theme="dark"] .modal-content h3,
+.dark-theme .modal-content h3,
+[data-theme="dark"] .modal-content h4,
+.dark-theme .modal-content h4,
+[data-theme="dark"] .modal-content h5,
+.dark-theme .modal-content h5,
+[data-theme="dark"] .modal-content strong,
+.dark-theme .modal-content strong,
+[data-theme="dark"] .modal-content .modal-title,
+.dark-theme .modal-content .modal-title,
+[data-theme="dark"] .modal-box h1,
+.dark-theme .modal-box h1,
+[data-theme="dark"] .modal-box h2,
+.dark-theme .modal-box h2,
+[data-theme="dark"] .modal-box h3,
+.dark-theme .modal-box h3,
+[data-theme="dark"] .modal-box h4,
+.dark-theme .modal-box h4,
+[data-theme="dark"] .modal-box strong,
+.dark-theme .modal-box strong,
+[data-theme="dark"] .white-modal-surface h1,
+.dark-theme .white-modal-surface h1,
+[data-theme="dark"] .white-modal-surface h2,
+.dark-theme .white-modal-surface h2,
+[data-theme="dark"] .white-modal-surface h3,
+.dark-theme .white-modal-surface h3,
+[data-theme="dark"] .white-modal-surface h4,
+.dark-theme .white-modal-surface h4,
+[data-theme="dark"] .white-modal-surface strong,
+.dark-theme .white-modal-surface strong,
+[data-theme="dark"] .white-modal-surface .circle-modal-title,
+.dark-theme .white-modal-surface .circle-modal-title {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .modal-content p,
+.dark-theme .modal-content p,
+[data-theme="dark"] .modal-box p,
+.dark-theme .modal-box p,
+[data-theme="dark"] .white-modal-surface p,
+.dark-theme .white-modal-surface p,
+[data-theme="dark"] .white-modal-surface .circle-modal-sub,
+.dark-theme .white-modal-surface .circle-modal-sub {
+  color: #94a3b8 !important;
+}
+
+/* 5. Note Cards Complete Dark Mode Specs & Actions */
+[data-theme="dark"] .note-card,
+.dark-theme .note-card {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .note-title,
+.dark-theme .note-title {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .note-desc,
+.dark-theme .note-desc {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .note-specs-hud,
+.dark-theme .note-specs-hud {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .note-specs-label,
+.dark-theme .note-specs-label {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .note-specs-val,
+.dark-theme .note-specs-val {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .note-specs-item.specs-divider,
+.dark-theme .note-specs-item.specs-divider {
+  border-left-color: #334155 !important;
+  border-right-color: #334155 !important;
+}
+[data-theme="dark"] .note-author,
+.dark-theme .note-author {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .note-subject,
+.dark-theme .note-subject {
+  background: rgba(30, 41, 59, 0.9) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  color: #a5b4fc !important;
+}
+[data-theme="dark"] .study-buddy-radar,
+.dark-theme .study-buddy-radar {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+}
+[data-theme="dark"] .study-buddy-radar strong,
+.dark-theme .study-buddy-radar strong {
+  color: #6ee7b7 !important;
+}
+[data-theme="dark"] .note-recommended-badge,
+.dark-theme .note-recommended-badge {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .note-recommended-badge strong,
+.dark-theme .note-recommended-badge strong {
+  color: #fde68a !important;
+}
+[data-theme="dark"] .btn-action-read,
+.dark-theme .btn-action-read {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #38bdf8 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+}
+[data-theme="dark"] .btn-action-read:hover,
+.dark-theme .btn-action-read:hover {
+  background: #273549 !important;
+  border-color: #38bdf8 !important;
+  color: #ffffff !important;
+}
+
+/* 6. Student Chat Modal Complete Dark Mode */
+[data-theme="dark"] .scm-chat-feed,
+.dark-theme .scm-chat-feed {
+  background-color: #090d16 !important;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px) !important;
+}
+[data-theme="dark"] .scm-bubble-content.theirs,
+.dark-theme .scm-bubble-content.theirs {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .scm-bubble-content.theirs span,
+.dark-theme .scm-bubble-content.theirs span {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .scm-hover-actions,
+.dark-theme .scm-hover-actions {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .scm-header,
+.dark-theme .scm-header,
+[data-theme="dark"] .scm-sidebar,
+.dark-theme .scm-sidebar,
+[data-theme="dark"] .scm-input-bar,
+.dark-theme .scm-input-bar {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .scm-sidebar h2,
+.dark-theme .scm-sidebar h2,
+[data-theme="dark"] .scm-sidebar h3,
+.dark-theme .scm-sidebar h3,
+[data-theme="dark"] .scm-sidebar h4,
+.dark-theme .scm-sidebar h4,
+[data-theme="dark"] .scm-sidebar strong,
+.dark-theme .scm-sidebar strong {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .scm-sidebar p,
+.dark-theme .scm-sidebar p,
+[data-theme="dark"] .scm-sidebar span,
+.dark-theme .scm-sidebar span {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .scm-input-textarea,
+.dark-theme .scm-input-textarea {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .scm-input-textarea::placeholder,
+.dark-theme .scm-input-textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* 7. Student Command Center Complete High Contrast */
+[data-theme="dark"] .command-center-card,
+.dark-theme .command-center-card {
+  background: #0f172a !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .command-center-card h1,
+.dark-theme .command-center-card h1,
+[data-theme="dark"] .command-center-card h2,
+.dark-theme .command-center-card h2,
+[data-theme="dark"] .command-center-card h3,
+.dark-theme .command-center-card h3,
+[data-theme="dark"] .command-center-card h4,
+.dark-theme .command-center-card h4,
+[data-theme="dark"] .command-center-card strong,
+.dark-theme .command-center-card strong {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .command-center-card p,
+.dark-theme .command-center-card p {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .command-center-card span:not([class*="badge"]):not([class*="tag"]):not([style*="background"]),
+.dark-theme .command-center-card span:not([class*="badge"]):not([class*="tag"]):not([style*="background"]) {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .telemetry-tile,
+.dark-theme .telemetry-tile {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .telemetry-tile strong,
+.dark-theme .telemetry-tile strong,
+[data-theme="dark"] .telemetry-tile .stat-val,
+.dark-theme .telemetry-tile .stat-val {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .telemetry-tile span,
+.dark-theme .telemetry-tile span {
+  color: #94a3b8 !important;
+}
+
+/* 8. Rescue Hub (0 search results) */
+[data-theme="dark"] .search-rescue-hub,
+.dark-theme .search-rescue-hub {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .rescue-hub-title,
+.dark-theme .rescue-hub-title {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .rescue-hub-desc,
+.dark-theme .rescue-hub-desc {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .rescue-card,
+.dark-theme .rescue-card {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .rescue-card-body strong,
+.dark-theme .rescue-card-body strong {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .rescue-card-body p,
+.dark-theme .rescue-card-body p {
+  color: #94a3b8 !important;
+}
+
+/* 9. Quick Search Pills in CategoryFilter */
+[data-theme="dark"] .quick-find-row,
+.dark-theme .quick-find-row {
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+[data-theme="dark"] .quick-find-pill,
+.dark-theme .quick-find-pill {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .quick-find-pill:hover,
+.dark-theme .quick-find-pill:hover {
+  background: #273549 !important;
+  border-color: #6366f1 !important;
+  color: #ffffff !important;
+}
+[data-theme="dark"] .quick-find-pill.active,
+.dark-theme .quick-find-pill.active {
+  background: linear-gradient(135deg, #4f46e5, #06b6d4) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+
+/* 10. Tables & Forms in Modals (Help Center & Profile) */
+[data-theme="dark"] table,
+.dark-theme table {
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] tr[style*="background: #f1f5f9"],
+.dark-theme tr[style*="background: #f1f5f9"],
+[data-theme="dark"] tr[style*="background:#f1f5f9"],
+.dark-theme tr[style*="background:#f1f5f9"],
+[data-theme="dark"] th,
+.dark-theme th {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+[data-theme="dark"] td,
+.dark-theme td {
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] td strong,
+.dark-theme td strong {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .form-label,
+.dark-theme .form-label {
+  color: #cbd5e1 !important;
+}
+
+/* 11. Navbar Launchpad Text Spans In Dark Mode */
+[data-theme="dark"] .launchpad-pill span:not([class*="badge"]),
+.dark-theme .launchpad-pill span:not([class*="badge"]),
+[data-theme="dark"] .navbar-content .btn-auth-signin span,
+.dark-theme .navbar-content .btn-auth-signin span {
+  color: #f8fafc !important;
+}
+
 
 

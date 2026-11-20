@@ -274,9 +274,9 @@ export default function CategoryFilter({
         </div>
       </div>
 
-      {/* 🏷️ 1-Click Quick Filter Pills (High-Contrast White Theme Luxury Buttons) */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", padding: "2px 0 12px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "12px" }}>
-        <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+      {/* 🏷️ 1-Click Quick Filter Pills (High-Contrast Theme Luxury Buttons) */}
+      <div className="quick-find-row" style={{ display: "flex", alignItems: "center", gap: "8px", overflowX: "auto", padding: "2px 0 12px", borderBottom: "1.5px solid #f1f5f9", marginBottom: "12px" }}>
+        <span className="quick-find-label" style={{ fontSize: "0.72rem", fontWeight: 800, color: "#64748b", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "5px", letterSpacing: "0.04em", textTransform: "uppercase" }}>
           <span>Quick Find:</span>
         </span>
         {QUICK_SEARCH_PILLS.map((pill) => {
@@ -285,6 +285,7 @@ export default function CategoryFilter({
             <button
               key={pill.term}
               type="button"
+              className={`quick-find-pill ${isActive ? "active" : ""}`}
               onClick={() => {
                 if (pill.isSort) {
                   if (isActive) {
