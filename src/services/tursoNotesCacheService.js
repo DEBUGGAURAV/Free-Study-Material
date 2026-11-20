@@ -110,7 +110,38 @@ async function initTursoNotesCacheTables() {
       )
     `);
 
-    console.log("[TURSO-NOTES-CACHE] ⚡ High-speed Notes Cache tables ready.");
+    // 3. Subject-to-Telegram Forum Topic Mappings (fsm-cache-freestudymaterial)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS subject_forum_topics (
+        normalized_key TEXT PRIMARY KEY,
+        subject TEXT NOT NULL,
+        thread_id INTEGER NOT NULL,
+        topic_name TEXT,
+        created_at INTEGER
+      )
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_topics_thread ON subject_forum_topics(thread_id)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_topics_subject ON subject_forum_topics(subject)`).catch(() => {});
+
+    // 4. Admin Recycle Bin & Universal Restore Vault (fsm-cache-freestudymaterial)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS deleted_records (
+        id TEXT PRIMARY KEY,
+        original_doc_id TEXT NOT NULL,
+        collection_name TEXT NOT NULL,
+        title TEXT,
+        subject TEXT,
+        branch TEXT,
+        data_json TEXT,
+        deleted_by TEXT,
+        deleted_at INTEGER,
+        reason TEXT
+      )
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_deleted_col ON deleted_records(collection_name)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_deleted_orig ON deleted_records(original_doc_id)`).catch(() => {});
+
+    console.log("[TURSO-NOTES-CACHE] ⚡ High-speed Notes Cache, Topics & Recycle Bin tables ready.");
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTES-CACHE] Table init warning:", err.message);
@@ -396,8 +427,14 @@ async function getTursoNotesCacheTelemetry() {
       await client.execute("SELECT 1 AS ping");
       latencyMs = Date.now() - t0;
       isAlive = true;
-      const countRes = await client.execute("SELECT COUNT(*) AS c FROM notes_cache").catch(() => ({ rows: [{ c: 0 }] }));
+      const [countRes, topicRes, delRes] = await Promise.all([
+        client.execute("SELECT COUNT(*) AS c FROM notes_cache").catch(() => ({ rows: [{ c: 0 }] })),
+        client.execute("SELECT COUNT(*) AS c FROM subject_forum_topics").catch(() => ({ rows: [{ c: 0 }] })),
+        client.execute("SELECT COUNT(*) AS c FROM deleted_records").catch(() => ({ rows: [{ c: 0 }] })),
+      ]);
       totalRowsInTable = Number(countRes.rows[0]?.c || 0);
+      topicsCount = Number(topicRes.rows[0]?.c || 0);
+      deletedCount = Number(delRes.rows[0]?.c || 0);
     } catch (_) {
       isAlive = false;
     }
@@ -407,8 +444,236 @@ async function getTursoNotesCacheTelemetry() {
     connected: isAlive,
     latencyMs,
     totalRowsInTable,
+    topicsCount,
+    deletedCount,
     speedScore: latencyMs < 5 ? "Sub-5ms (Microsecond Speed)" : `${latencyMs}ms`,
   };
+}
+
+/**
+ * 🏷️ Subject-to-Telegram Forum Topic Mappings (Turso 2: fsm-cache)
+ */
+async function saveSubjectTopicToTurso({ key, subject, threadId, topicName }) {
+  if (!client || !key || !threadId) return false;
+  try {
+    const cleanKey = String(key).trim().toLowerCase();
+    const cleanSubject = String(subject || topicName || key).trim();
+    const threadNum = Number(threadId);
+    await client.execute({
+      sql: `INSERT OR REPLACE INTO subject_forum_topics (normalized_key, subject, thread_id, topic_name, created_at)
+            VALUES (?, ?, ?, ?, ?)`,
+      args: [cleanKey, cleanSubject, threadNum, String(topicName || cleanSubject), Date.now()],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO-CACHE] saveSubjectTopic error:", err.message);
+    return false;
+  }
+}
+
+async function getSubjectTopicFromTurso(keyOrSubject) {
+  if (!client || !keyOrSubject) return null;
+  try {
+    const clean = String(keyOrSubject).trim().toLowerCase();
+    const res = await client.execute({
+      sql: `SELECT * FROM subject_forum_topics WHERE normalized_key = ? OR LOWER(subject) = ? LIMIT 1`,
+      args: [clean, clean],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        key: r.normalized_key,
+        subject: r.subject,
+        threadId: Number(r.thread_id),
+        topicName: r.topic_name,
+        createdAt: r.created_at,
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function getSubjectTopicByThreadIdFromTurso(threadId) {
+  if (!client || !threadId) return null;
+  try {
+    const num = Number(threadId);
+    const res = await client.execute({
+      sql: `SELECT * FROM subject_forum_topics WHERE thread_id = ? LIMIT 1`,
+      args: [num],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        key: r.normalized_key,
+        subject: r.subject,
+        threadId: Number(r.thread_id),
+        topicName: r.topic_name,
+        createdAt: r.created_at,
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function getAllSubjectTopicsFromTurso() {
+  if (!client) return [];
+  try {
+    const res = await client.execute("SELECT * FROM subject_forum_topics ORDER BY subject ASC");
+    return (res.rows || []).map((r) => ({
+      key: r.normalized_key,
+      subject: r.subject,
+      threadId: Number(r.thread_id),
+      topicName: r.topic_name,
+      createdAt: r.created_at,
+    }));
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * 🗑️ Admin Recycle Bin & Universal Restore Vault (Turso 2: fsm-cache)
+ */
+async function saveDeletedRecordToTurso({ id, originalDocId, collectionName, title, subject, branch, data, deletedBy, reason }) {
+  if (!client || (!id && !originalDocId)) return false;
+  try {
+    const recId = String(id || `${collectionName || "item"}_${originalDocId}`).trim();
+    const origId = String(originalDocId || id).replace(/^[^_]+_/, "").trim();
+    const col = String(collectionName || "notes").toLowerCase().trim();
+    const dataStr = typeof data === "string" ? data : JSON.stringify(data || {});
+
+    await client.execute({
+      sql: `INSERT OR REPLACE INTO deleted_records (id, original_doc_id, collection_name, title, subject, branch, data_json, deleted_by, deleted_at, reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        recId,
+        origId,
+        col,
+        String(title || data?.title || "Deleted Item"),
+        String(subject || data?.subject || ""),
+        String(branch || data?.branch || ""),
+        dataStr,
+        String(deletedBy || "admin"),
+        Date.now(),
+        String(reason || "Deleted by admin"),
+      ],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO-CACHE] saveDeletedRecord error:", err.message);
+    return false;
+  }
+}
+
+async function getDeletedRecordFromTurso(idOrOrigId) {
+  if (!client || !idOrOrigId) return null;
+  try {
+    const clean = String(idOrOrigId).trim();
+    const rawClean = clean.replace(/^[^_]+_/, "");
+    const res = await client.execute({
+      sql: `SELECT * FROM deleted_records WHERE id = ? OR original_doc_id = ? OR id = ? LIMIT 1`,
+      args: [clean, clean, rawClean],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const r = res.rows[0];
+      let data = {};
+      try {
+        if (r.data_json) data = JSON.parse(r.data_json);
+      } catch (_) {}
+      return {
+        id: r.id,
+        originalDocId: r.original_doc_id,
+        originalId: r.original_doc_id,
+        collectionName: r.collection_name,
+        title: r.title,
+        subject: r.subject,
+        branch: r.branch,
+        deletedBy: r.deleted_by,
+        deletedAt: r.deleted_at,
+        reason: r.reason,
+        ...data,
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function getAllDeletedRecordsFromTurso(collectionName = null, limit = 200) {
+  if (!client) return [];
+  try {
+    const safeLimit = Math.min(500, Math.max(1, limit));
+    let sql = "SELECT * FROM deleted_records";
+    let args = [];
+    if (collectionName) {
+      sql += " WHERE collection_name = ?";
+      args.push(String(collectionName).toLowerCase().trim());
+    }
+    sql += " ORDER BY deleted_at DESC LIMIT ?";
+    args.push(safeLimit);
+
+    const res = await client.execute({ sql, args });
+    return (res.rows || []).map((r) => {
+      let data = {};
+      try {
+        if (r.data_json) data = JSON.parse(r.data_json);
+      } catch (_) {}
+      return {
+        id: r.id,
+        originalId: r.original_doc_id,
+        originalDocId: r.original_doc_id,
+        collectionName: r.collection_name,
+        typeLabel: r.collection_name === "notes" ? "Note" : (r.collection_name === "notices" ? "Notice" : "Record"),
+        title: r.title || data.title || "Deleted Item",
+        subject: r.subject || data.subject || "Academic",
+        branch: r.branch || data.branch || "General",
+        deletedBy: r.deleted_by,
+        deletedAt: r.deleted_at,
+        reason: r.reason,
+        ...data,
+      };
+    });
+  } catch (err) {
+    return [];
+  }
+}
+
+async function permanentlyDeleteRecordFromTurso(idOrOrigId) {
+  if (!client || !idOrOrigId) return false;
+  try {
+    const clean = String(idOrOrigId).trim();
+    const rawClean = clean.replace(/^[^_]+_/, "");
+    await client.execute({
+      sql: `DELETE FROM deleted_records WHERE id = ? OR original_doc_id = ? OR id = ?`,
+      args: [clean, clean, rawClean],
+    });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function purgeAllDeletedRecordsFromTurso(collectionName = null) {
+  if (!client) return { success: false, deletedCount: 0 };
+  try {
+    let res;
+    if (collectionName) {
+      res = await client.execute({
+        sql: "DELETE FROM deleted_records WHERE collection_name = ?",
+        args: [String(collectionName).toLowerCase().trim()],
+      });
+    } else {
+      res = await client.execute("DELETE FROM deleted_records");
+    }
+    return { success: true, deletedCount: Number(res.rowsAffected || 0) };
+  } catch (err) {
+    return { success: false, error: err.message, deletedCount: 0 };
+  }
 }
 
 /**
@@ -466,5 +731,16 @@ module.exports = {
   initTursoNotesCacheTables,
   updateUserNotesInTursoCache,
   pruneNotesCacheOlderThan,
+  // 🏷️ Subject-to-Telegram Forum Topic Mappings
+  saveSubjectTopicToTurso,
+  getSubjectTopicFromTurso,
+  getSubjectTopicByThreadIdFromTurso,
+  getAllSubjectTopicsFromTurso,
+  // 🗑️ Admin Recycle Bin & Universal Restore Vault
+  saveDeletedRecordToTurso,
+  getDeletedRecordFromTurso,
+  getAllDeletedRecordsFromTurso,
+  permanentlyDeleteRecordFromTurso,
+  purgeAllDeletedRecordsFromTurso,
 };
 
