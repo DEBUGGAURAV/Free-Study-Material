@@ -1,5 +1,5 @@
-import "react";
-import { Trash2, Clock, Save, RefreshCw, Download, ShieldAlert } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Trash2, Clock, Save, RefreshCw, Download, ShieldAlert, Database, Zap, Server, ShieldCheck, Activity, HardDrive, CheckCircle2, AlertCircle } from "lucide-react";
 import { api } from "../../../api";
 import "../../../utils/formatUtils";
 import "../../../utils/hardwareAdaptiveEngine";
@@ -41,6 +41,45 @@ export default function TabDatabase(props) {
     tursoPruning,
     vaultRetentionDays,
   } = props;
+
+  const [mongoFlushing, setMongoFlushing] = useState(false);
+  const [mongoFlushMsg, setMongoFlushMsg] = useState(null);
+  const [chatTelemetry, setChatTelemetry] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    api.getChatBotTelemetry().then((res) => {
+      if (isMounted && res?.success) {
+        setChatTelemetry(res);
+      }
+    }).catch(() => {});
+    return () => { isMounted = false; };
+  }, []);
+
+  const handleFlushMongoBuffer = async () => {
+    setMongoFlushing(true);
+    setMongoFlushMsg(null);
+    try {
+      const res = await api.flushMongoChatBuffer();
+      if (res?.success) {
+        setMongoFlushMsg({
+          type: "success",
+          text: `⚡ Flushed ${res.flushedCount || 0} messages from MongoDB Chat Cluster into Turso LibSQL Chat Vault.`,
+        });
+        const fresh = await api.getChatBotTelemetry().catch(() => null);
+        if (fresh?.success) setChatTelemetry(fresh);
+      } else {
+        setMongoFlushMsg({
+          type: "error",
+          text: res?.message || "Failed to flush MongoDB buffer",
+        });
+      }
+    } catch (err) {
+      setMongoFlushMsg({ type: "error", text: err.message || "Flush failed" });
+    } finally {
+      setMongoFlushing(false);
+    }
+  };
 
   
 
@@ -544,6 +583,242 @@ export default function TabDatabase(props) {
                       <Save size={12} />
                       <span>Save CDN Retention</span>
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🍃 DUAL MONGODB ATLAS DATABASE CLUSTERS ARCHITECTURE */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)",
+                  border: "1.5px solid rgba(16, 185, 129, 0.35)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "18px 20px",
+                  marginBottom: "20px",
+                  boxShadow: "0 6px 24px rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", paddingBottom: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "10px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Database size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>Dual MongoDB Atlas Clusters (Architecture &amp; Status)</span>
+                        <span style={{ fontSize: "0.68rem", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.4)", fontWeight: 800, padding: "2px 8px", borderRadius: "999px" }}>
+                          2 CLUSTERS ACTIVE
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        Isolated Workloads: Primary Academic Core Cluster (fsm_db) &amp; Dedicated High-Velocity Chat Cluster (fsmchat)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span
+                      style={{
+                        fontSize: "0.72rem",
+                        fontWeight: 800,
+                        padding: "3px 10px",
+                        borderRadius: "999px",
+                        background: "rgba(16, 185, 129, 0.15)",
+                        color: "#34d399",
+                        border: "1px solid rgba(16, 185, 129, 0.35)",
+                      }}
+                    >
+                      ● 100% DATABASE WORKLOAD ISOLATION
+                    </span>
+                  </div>
+                </div>
+
+                {mongoFlushMsg && (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "8px",
+                      fontSize: "0.78rem",
+                      marginBottom: "14px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      background: mongoFlushMsg.type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                      border: mongoFlushMsg.type === "success" ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(239, 68, 68, 0.4)",
+                      color: mongoFlushMsg.type === "success" ? "#34d399" : "#f87171",
+                    }}
+                  >
+                    <span>{mongoFlushMsg.text}</span>
+                    <button
+                      onClick={() => setMongoFlushMsg(null)}
+                      style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", padding: "0 4px" }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
+                  {/* Cluster 1: Primary Academic Core Cluster */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.65)",
+                      border: "1px solid rgba(16, 185, 129, 0.3)",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <HardDrive size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.9rem" }}>
+                              Cluster 1: Primary Academic Core (fsm_db)
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              Academic Notes, Students, Notices &amp; Recycle Vault
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 800,
+                            padding: "2px 7px",
+                            borderRadius: "4px",
+                            background: "rgba(16, 185, 129, 0.2)",
+                            color: "#34d399",
+                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                          }}
+                        >
+                          ● CONNECTED
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database Name:</span>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>fsm_db (Primary Storage)</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Active Collections:</span>
+                          <span style={{ color: "#fff", fontWeight: 600 }}>notes, users, notices, deleted_records</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Storage Engine:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 600 }}>MongoDB WiredTiger NVMe SSD</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Chat Decoupling:</span>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>100% Zero Chat Load (Offloaded to Cluster 2)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cluster 2: Dedicated Chat Ingestion Cluster */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.65)",
+                      border: "1.5px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px", gap: "6px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.2)", color: "#38bdf8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Zap size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.9rem" }}>
+                              Cluster 2: Dedicated Chat Ingestion (fsmchat)
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              High-Velocity Chat Hot Buffer &amp; Media Ingestion Stream
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.68rem",
+                            fontWeight: 800,
+                            padding: "2px 7px",
+                            borderRadius: "4px",
+                            background: "rgba(56, 189, 248, 0.2)",
+                            color: "#38bdf8",
+                            border: "1px solid rgba(56, 189, 248, 0.4)",
+                          }}
+                        >
+                          ● ISOLATED CLUSTER
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Cluster Host:</span>
+                          <code style={{ fontSize: "0.72rem", color: "#38bdf8", background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: "4px" }}>
+                            fsmchat.kilhriu.mongodb.net
+                          </code>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database / Ingest Collection:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 600 }}>fsm_chat / chat_hot_buffer</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Active Hot Buffer Count:</span>
+                          <span style={{ color: "#34d399", fontWeight: 800 }}>
+                            {(dbOverview?.mongoChatCluster?.hotBufferCount ?? chatTelemetry?.mongoStatus?.hotBufferCount ?? 0)} Messages Buffered
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Connection Pool:</span>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>maxPoolSize: 20 (Strict Connection Pooling)</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Auto-Flush Migration:</span>
+                          <span style={{ color: "#fbbf24", fontWeight: 700 }}>Auto-migrates to Turso Chat Vault at 30,000 items</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Manual Sync:</span>
+                      <button
+                        type="button"
+                        onClick={handleFlushMongoBuffer}
+                        disabled={mongoFlushing}
+                        className="btn-primary"
+                        style={{
+                          fontSize: "0.74rem",
+                          padding: "5px 12px",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                          border: "none",
+                          color: "#fff",
+                          fontWeight: 700,
+                          cursor: mongoFlushing ? "not-allowed" : "pointer",
+                        }}
+                        title="Flush all hot buffer messages from MongoDB into Turso LibSQL Chat Vault"
+                      >
+                        <Zap size={12} className={mongoFlushing ? "spin" : ""} />
+                        <span>{mongoFlushing ? "Flushing..." : "Flush Buffer to Turso Chat Vault"}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

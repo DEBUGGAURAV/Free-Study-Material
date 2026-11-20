@@ -173,7 +173,20 @@ export default function App() {
   // User & Notices
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
   const [notices, setNotices] = useState([]);
-  const [hideSecurityBanner, setHideSecurityBanner] = useState(false);
+  const [hideSecurityBanner, setHideSecurityBanner] = useState(() => {
+    try {
+      return localStorage.getItem("fsm_dismiss_security_policy") === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const dismissSecurityBanner = () => {
+    setHideSecurityBanner(true);
+    try {
+      localStorage.setItem("fsm_dismiss_security_policy", "true");
+    } catch (_) {}
+  };
 
   // Inactivity Auto-Logout State (30 Minutes = 1,800,000 ms)
   const [autoLogoutNotice, setAutoLogoutNotice] = useState(null);
@@ -2258,49 +2271,49 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* Account Lifecycle Security Policy Banner (Front Page After Login) */}
-            {!hideSecurityBanner && (
+            {/* Account Lifecycle Security Policy Banner (Only for regular students, never for Admin, and permanently dismissable) */}
+            {!hideSecurityBanner && currentUser && currentUser.role !== "admin" && currentUser.role !== "half_admin" && !currentUser.isMainAdmin && (
               <div
                 className="student-security-banner"
                 style={{
-                  background: "linear-gradient(120deg, #f0faf8, #f2f6ff)",
-                  border: "1px solid #d5e7e8",
+                  background: "linear-gradient(135deg, rgba(240, 250, 248, 0.95), rgba(242, 246, 255, 0.95))",
+                  border: "1px solid rgba(8, 124, 112, 0.22)",
                   borderRadius: "16px",
-                  padding: "10px 16px",
-                  margin: "0 0 10px 0",
+                  padding: "12px 16px",
+                  margin: "0 0 14px 0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: "16px",
-                  boxShadow: "0 12px 30px -24px rgba(29, 48, 77, 0.42)",
-                  flexWrap: "wrap",
+                  gap: "14px",
+                  boxShadow: "0 8px 24px -12px rgba(8, 124, 112, 0.18)",
                   position: "relative",
                   zIndex: 1,
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: "260px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
                   <div
                     style={{
-                      width: "40px",
-                      height: "40px",
-                      borderRadius: "12px",
-                      background: "#e5f5f1",
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "10px",
+                      background: "linear-gradient(135deg, #e5f5f1, #d0f0e8)",
                       border: "1px solid #cce8df",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       flexShrink: 0,
+                      marginTop: "2px",
                     }}
                   >
-                    <ShieldCheck size={19} color="#087c70" />
+                    <ShieldCheck size={18} color="#087c70" />
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#1d2b42", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#1d2b42", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                       <span>Account Security Policy: Active Student Protection</span>
                       <span
                         style={{
-                          fontSize: "0.68rem",
-                          padding: "2px 8px",
+                          fontSize: "0.65rem",
+                          padding: "2px 7px",
                           borderRadius: "999px",
                           background: "#e4f6ef",
                           color: "#087c70",
@@ -2311,30 +2324,28 @@ export default function App() {
                         Active &amp; Safe
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.78rem", color: "#526179", marginTop: "2px", lineHeight: "1.5" }}>
+                    <div style={{ fontSize: "0.78rem", color: "#526179", marginTop: "3px", lineHeight: "1.45" }}>
                       To protect student privacy and university resources, accounts that do not log in for <strong>90 consecutive days</strong> are automatically deleted. Simply sign in once every 90 days to keep your student account active.
                     </div>
                   </div>
                 </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <span style={{ fontSize: "0.75rem", color: "#087c70", fontWeight: 700 }}>
-                    Logged in as {currentUser?.name || currentUser?.email}
-                  </span>
+                <div className="student-security-banner-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
                   <button
                     className="student-security-dismiss"
-                    onClick={() => setHideSecurityBanner(true)}
+                    onClick={dismissSecurityBanner}
                     style={{
                       background: "#fff",
                       border: "1px solid #dce4ef",
                       color: "#526179",
-                      borderRadius: "9px",
-                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      padding: "6px 12px",
                       cursor: "pointer",
-                      fontSize: "0.72rem",
+                      fontSize: "0.75rem",
                       display: "flex",
                       alignItems: "center",
-                      gap: "4px",
+                      gap: "5px",
+                      fontWeight: 600,
                     }}
                     title="Dismiss notice"
                   >

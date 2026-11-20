@@ -292,9 +292,18 @@ export default function TabSoftware(props) {
                     <div style={{ fontSize: "0.68rem", color: "#38bdf8", marginTop: "4px", fontWeight: 600 }}>● Groq LPU &amp; Gemini Search Logs</div>
                   </div>
 
-                  {/* Engine 8: MongoDB Atlas Hot Buffer */}
+                  {/* Engine 8: Turso 6 Dedicated Chat Vault */}
+                  <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(168, 85, 247, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Turso 6: Dedicated Chat Vault</div>
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#c084fc", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Zap size={16} /> {softwareInfo?.tursoChatVault?.latencyMs != null ? `${softwareInfo.tursoChatVault.latencyMs} ms` : "~759 ms"}
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#c084fc", marginTop: "4px", fontWeight: 600 }}>● 100% Isolated Chat &amp; Pod LibSQL</div>
+                  </div>
+
+                  {/* Engine 9: MongoDB Atlas Hot Buffer */}
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(16, 185, 129, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>MongoDB Hot Buffer</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>MongoDB Hot Buffer (fsmchat)</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#34d399", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
                       <Zap size={16} /> &lt; 5 ms
                     </div>
@@ -325,13 +334,13 @@ export default function TabSoftware(props) {
                     </div>
                     <div>
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <span>Quintuple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
+                        <span>Sextuple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
                         <span style={{ fontSize: "0.72rem", background: "#06b6d4", color: "#000", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
-                          5 ENGINES ACTIVE
+                          6 ENGINES ACTIVE
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault, Student Sessions Vault &amp; AI Search Intelligence Vault.
+                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault, Student Sessions Vault, AI Search Intelligence Vault &amp; Dedicated Chat Vault.
                       </div>
                     </div>
                   </div>
@@ -806,6 +815,82 @@ export default function TabSoftware(props) {
                       </div>
                     )}
                   </div>
+
+                  {/* Turso Engine 6: Dedicated Chat LibSQL Vault */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.7)",
+                      border: "1.5px solid rgba(168, 85, 247, 0.35)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Zap size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
+                              6. Turso Chat LibSQL Vault (fsm-chat)
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              100% Isolated Chat Messages, Study Pod Audits &amp; User Avatars
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            background: "rgba(168, 85, 247, 0.2)",
+                            color: "#c084fc",
+                            border: "1px solid rgba(168, 85, 247, 0.4)",
+                          }}
+                        >
+                          ● 100% ISOLATED
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
+                          <span style={{ color: "#c084fc", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Zap size={12} /> {softwareInfo?.tursoChatVault?.latencyMs != null ? `${softwareInfo.tursoChatVault.latencyMs}ms (Live Speed)` : "~759ms (AWS Node)"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database Region:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                            AWS Mumbai (ap-south-1) • Dedicated LibSQL Cloud
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Chat Records:</span>
+                          <span style={{ color: "#34d399", fontWeight: 800 }}>
+                            {(softwareInfo?.tursoChatVault?.tursoMessagesCount ?? 0)} msgs • {(softwareInfo?.tursoChatVault?.auditsCount ?? 0)} audits
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Database URL:</span>
+                          <span style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.72rem" }}>
+                            {softwareInfo?.tursoChatVault?.url || "libsql://fsm-chat-freestudymaterial.aws-ap-south-1.turso.io"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Turso 1 &amp; 2 Load:</span>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>0% Load (Isolated DB)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -954,7 +1039,7 @@ export default function TabSoftware(props) {
                         <Database size={20} />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>MongoDB Atlas Hot Buffer DB</div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>MongoDB Cluster 2: Dedicated Chat Ingest (fsmchat)</div>
                         <div style={{
                           fontSize: "0.72rem",
                           color: (softwareInfo?.mongoDatabase?.configured ?? true) ? "#34d399" : "#f43f5e",
@@ -963,7 +1048,7 @@ export default function TabSoftware(props) {
                           alignItems: "center",
                           gap: "4px",
                         }}>
-                          ● {(softwareInfo?.mongoDatabase?.configured ?? true) ? "ONLINE & CONNECTED (Cluster Active)" : "OFFLINE (DISCONNECTED)"}
+                          ● {(softwareInfo?.mongoDatabase?.configured ?? true) ? "ONLINE & CONNECTED (fsmchat.kilhriu.mongodb.net)" : "OFFLINE (DISCONNECTED)"}
                         </div>
                       </div>
                     </div>

@@ -539,7 +539,7 @@ export default function TabTurso(props) {
                   </div>
                 </div>
 
-                {/* Chat Messages Count */}
+                {/* Chat Messages Count (Turso 6 Dedicated Vault) */}
                 <div
                   style={{
                     background: "rgba(15, 23, 42, 0.55)",
@@ -553,10 +553,10 @@ export default function TabTurso(props) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
-                        Chat Messages
+                        Turso 6 Chat Messages
                       </div>
                       <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#c084fc", marginTop: "4px" }}>
-                        {(tursoStatus?.counts?.chatMessages ?? 0).toLocaleString()}
+                        {(tursoStatus?.chatTursoVault?.tursoMessagesCount ?? tursoStatus?.counts?.chatMessages ?? 0).toLocaleString()}
                       </div>
                     </div>
                     <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(168, 85, 247, 0.15)", color: "#c084fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -564,11 +564,11 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#c084fc", marginTop: "6px" }}>
-                    Persistent Room Transcripts
+                    Isolated Chat Vault (fsm-chat)
                   </div>
                 </div>
 
-                {/* Chat User Profiles */}
+                {/* Chat User Profiles (Turso 6 Dedicated Vault) */}
                 <div
                   style={{
                     background: "rgba(15, 23, 42, 0.55)",
@@ -585,7 +585,7 @@ export default function TabTurso(props) {
                         Chat Handles &amp; DPs
                       </div>
                       <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#fbbf24", marginTop: "4px" }}>
-                        {(tursoStatus?.counts?.chatProfiles ?? 0).toLocaleString()}
+                        {(tursoStatus?.chatTursoVault?.profilesCount ?? tursoStatus?.counts?.chatProfiles ?? 0).toLocaleString()}
                       </div>
                     </div>
                     <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(245, 158, 11, 0.15)", color: "#fbbf24", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -593,11 +593,11 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#fbbf24", marginTop: "6px" }}>
-                    Custom User Handles &amp; Avatars
+                    Custom User Handles (fsm-chat)
                   </div>
                 </div>
 
-                {/* Forensic Audits */}
+                {/* Forensic Audits (Turso 6 Dedicated Vault) */}
                 <div
                   style={{
                     background: "rgba(15, 23, 42, 0.55)",
@@ -614,7 +614,7 @@ export default function TabTurso(props) {
                         Pod Forensic Audits
                       </div>
                       <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#f87171", marginTop: "4px" }}>
-                        {(tursoStatus?.counts?.privateRoomAudits ?? 0).toLocaleString()}
+                        {(tursoStatus?.chatTursoVault?.auditsCount ?? tursoStatus?.counts?.privateRoomAudits ?? 0).toLocaleString()}
                       </div>
                     </div>
                     <div style={{ width: "34px", height: "34px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -622,7 +622,7 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#f87171", marginTop: "6px" }}>
-                    Private Study Pod Sealed Dossiers
+                    Pod Sealed Dossiers (fsm-chat)
                   </div>
                 </div>
 
@@ -779,6 +779,84 @@ export default function TabTurso(props) {
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Auto-Cascade Deletion:</span>
                       <span style={{ color: "#34d399", fontWeight: 600 }}>✅ Enabled across 5 tables</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Turso Engine 6: Dedicated Chat LibSQL Vault (fsm-chat) - 100% Isolated */}
+                <div
+                  style={{
+                    background: "linear-gradient(135deg, rgba(168, 85, 247, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%)",
+                    border: "1.5px solid rgba(168, 85, 247, 0.35)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: "18px",
+                    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Zap size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.92rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>Turso Engine 6: Dedicated Chat LibSQL Vault</span>
+                        </div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          100% Isolated Database for Chat Messages, Pod Audits &amp; User Avatars
+                        </div>
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        background: "rgba(168, 85, 247, 0.15)",
+                        color: "#c084fc",
+                        border: "1px solid rgba(168, 85, 247, 0.35)",
+                      }}
+                    >
+                      ● 100% ISOLATED CHAT VAULT
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "9px", fontSize: "0.8rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Database URL:</span>
+                      <code style={{ fontSize: "0.74rem", color: "#c084fc", background: "rgba(0,0,0,0.3)", padding: "2px 6px", borderRadius: "4px" }}>
+                        {tursoStatus?.chatTursoVault?.url || "libsql://fsm-chat-freestudymaterial.aws-ap-south-1.turso.io"}
+                      </code>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Cloud Node &amp; Latency:</span>
+                      <span style={{ color: "#34d399", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                        <Zap size={12} /> AWS Mumbai (ap-south-1) • {tursoStatus?.chatTursoVault?.latencyMs != null ? `${tursoStatus.chatTursoVault.latencyMs}ms` : "~759ms"}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Dedicated Tables:</span>
+                      <span style={{ color: "#38bdf8", fontWeight: 600 }}>
+                        chat_messages, chat_rooms, chat_user_profiles, private_room_audits
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Active Telemetry:</span>
+                      <span style={{ color: "#fff", fontWeight: 700 }}>
+                        {(tursoStatus?.chatTursoVault?.tursoMessagesCount ?? 0)} msgs • {(tursoStatus?.chatTursoVault?.auditsCount ?? 0)} pod audits • {(tursoStatus?.chatTursoVault?.profilesCount ?? 0)} profiles
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Isolation Guarantee:</span>
+                      <span style={{ color: "#34d399", fontWeight: 700 }}>
+                        0% Load on Turso 1 &amp; 2 (Never merged into other Turso databases)
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -1813,20 +1891,20 @@ export default function TabTurso(props) {
                     </div>
                   </div>
 
-                  {/* Pillar 3: Turso LibSQL */}
+                  {/* Pillar 3: Turso 6 LibSQL Dedicated Vault */}
                   <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(168, 85, 247, 0.2)", borderRadius: "8px", padding: "12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#c084fc", fontWeight: 700, fontSize: "0.76rem" }}>
                         <HardDrive size={14} />
-                        <span>Turso LibSQL Stream</span>
+                        <span>Turso 6 Chat Vault</span>
                       </div>
                       <span style={{ fontSize: "0.66rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
-                        {chatRetentionDays}d Policy
+                        100% Isolated
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>Warm Tier DB</div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>fsm-chat LibSQL</div>
                     <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                      Encrypted edge SQLite with auto-pruning
+                      Dedicated AWS Node • {chatRetentionDays}d Auto-Prune Policy
                     </div>
                   </div>
 

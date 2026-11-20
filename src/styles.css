@@ -4192,9 +4192,21 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   .control-bar-wrapper { margin-top: 10px; }
   .navbar-content { border-radius: 22px; }
   .note-card { border-radius: 18px; }
-  .student-security-banner { align-items: stretch !important; }
-  .student-security-banner > div:first-child { min-width: 0 !important; }
-  .student-security-banner > div:last-child { justify-content: space-between; flex-wrap: wrap; }
+  .student-security-banner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding: 12px 14px !important;
+  }
+  .student-security-banner > div:first-child {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+  .student-security-banner .student-security-banner-actions {
+    display: flex !important;
+    justify-content: flex-end !important;
+    width: 100% !important;
+  }
   .app-footer > div { justify-content: center !important; }
   .visitor-landing { padding: 12px 0 36px !important; }
   .visitor-access-card { padding: clamp(22px, 6vw, 38px) !important; margin-bottom: 24px !important; border-radius: 22px !important; }
