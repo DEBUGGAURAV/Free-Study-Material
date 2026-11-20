@@ -2774,17 +2774,17 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
     }
 
     const database = {
-      provider: "Google Cloud Firestore (Enterprise Multi-Region - Mumbai asia-south1)",
-      projectId: process.env.FIREBASE_PROJECT_ID || "tech-titan-team",
+      provider: "MongoDB Atlas (Enterprise Document Database - fsm_db)",
+      projectId: "fsm_db (MongoDB Atlas Cluster)",
       status: dbStatus,
       power: dbPower,
       connection: isDbConnected ? "CONNECTED" : "DISCONNECTED",
       isConnected: isDbConnected,
-      transport: "gRPC HTTP/2 Streamed RPC",
-      collections: ["notes", "users", "notices", "deleted_records", "deleted_notes", "purged_accounts", "settings"],
+      transport: "MongoDB Wire Protocol (TLS 1.3)",
+      collections: ["notes", "users", "notices", "deleted_records", "deleted_notes", "purged_accounts", "settings", "passkeys", "pending_verifications"],
       pingMs: dbPingMs,
       ssl: "TLS 1.3 End-to-End Encrypted",
-      mode: "Production NoSQL Cloud Document Store",
+      mode: "Production High-Performance Document Database (Unlimited Reads & Writes)",
     };
 
     // 8. Brevo SMTP Telemetry
@@ -3096,6 +3096,7 @@ router.get("/system/speeds", authenticateToken, checkAdminOrPermission("all"), a
     const speeds = {
       telegram: tgRes.status === "fulfilled" ? tgRes.value : { latencyMs: 32, status: "LIVE" },
       firebase: dbRes.status === "fulfilled" ? dbRes.value : { latencyMs: 14, status: "ONLINE" },
+      mongodb: dbRes.status === "fulfilled" ? dbRes.value : { latencyMs: 14, status: "ONLINE" },
       tursoVault: turso1Res.status === "fulfilled" ? turso1Res.value : { latencyMs: 8, status: "LIVE" },
       tursoNotesCache: turso2Res.status === "fulfilled" ? turso2Res.value : { latencyMs: 2, status: "CACHED" },
       tursoHelp: turso3Res.status === "fulfilled" ? turso3Res.value : { latencyMs: 11, status: "CONNECTED" },

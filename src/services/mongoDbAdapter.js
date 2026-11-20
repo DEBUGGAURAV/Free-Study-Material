@@ -84,6 +84,13 @@ class QuerySnapshot {
     this.empty = docs.length === 0;
   }
 
+  docChanges() {
+    return this.docs.map((d) => ({
+      type: "added",
+      doc: d,
+    }));
+  }
+
   forEach(callback) {
     this.docs.forEach((d) => callback(d));
   }
@@ -161,6 +168,15 @@ class DocumentReference {
       return false;
     }
   }
+
+  onSnapshot(onNext, onError) {
+    this.get().then((snap) => {
+      if (typeof onNext === "function") onNext(snap);
+    }).catch((err) => {
+      if (typeof onError === "function") onError(err);
+    });
+    return () => {};
+  }
 }
 
 class Query {
@@ -237,6 +253,15 @@ class Query {
   startAt() { return this; }
   endAt() { return this; }
   endBefore() { return this; }
+
+  onSnapshot(onNext, onError) {
+    this.get().then((snap) => {
+      if (typeof onNext === "function") onNext(snap);
+    }).catch((err) => {
+      if (typeof onError === "function") onError(err);
+    });
+    return () => {};
+  }
 
   count() {
     return {

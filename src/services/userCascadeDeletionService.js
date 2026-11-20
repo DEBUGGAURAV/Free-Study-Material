@@ -420,50 +420,11 @@ async function cascadeDeleteUserAccount({
 let isWatcherInitialized = false;
 
 /**
- * 📡 Live Firestore User Deletion Watcher
- * Detects if an administrator deletes a student directly in the Firebase Console
- * and automatically cascades the deletion across Turso, Chatbot, and Supergroups!
+ * 📡 Live User Deletion Watcher (Legacy Firebase listener deprecated)
+ * Deletions now execute directly via MongoDB Atlas & API endpoints with automatic cascade.
  */
 function initFirebaseUserDeletionWatcher() {
-  if (isWatcherInitialized || !db) return;
-  try {
-    db.collection("users").onSnapshot(
-      (snapshot) => {
-        snapshot.docChanges().forEach(async (change) => {
-          if (change.type === "removed") {
-            const userId = change.doc.id;
-            if (recentlyDeletedUserIds.has(String(userId))) {
-              // Already handled by manual admin action or auto-purge
-              return;
-            }
-            markUserAsCascadeDeleted(userId);
-
-            console.log(`[FIREBASE-WATCHER] ⚠️ External user deletion detected directly in Firestore for user: ${userId}`);
-            const deletedData = change.doc.data() || {};
-            const decryptedUser = decryptUserObject(deletedData);
-
-            try {
-              await cascadeDeleteUserAccount({
-                userId,
-                targetUser: decryptedUser,
-                admin: { name: "Firebase Console Direct Action", email: "firebase-admin@console" },
-                reason: "Direct Deletion from Firebase Firestore Console",
-              });
-            } catch (err) {
-              console.warn(`[FIREBASE-WATCHER] Cascade error on external deletion of ${userId}:`, err.message);
-            }
-          }
-        });
-      },
-      (err) => {
-        console.warn("[FIREBASE-WATCHER] Firestore user watcher warning:", err.message);
-      }
-    );
-    isWatcherInitialized = true;
-    console.log("[FIREBASE-WATCHER] 📡 Live Firestore User Deletion Watcher active (Auto-cascades direct Firebase Console deletions).");
-  } catch (err) {
-    console.warn("[FIREBASE-WATCHER] Initialization notice:", err.message);
-  }
+  // Legacy Firebase listener deprecated - all deletions occur directly via MongoDB Atlas
 }
 
 module.exports = {
