@@ -764,84 +764,6 @@ export default function Navbar({
                 </div>
 
                 <div className="mobile-more-grid">
-                  {/* Notes Library */}
-                  <button
-                    type="button"
-                    className="mobile-more-card"
-                    onClick={() => {
-                      setShowMobileMoreSheet(false);
-                      const el = document.getElementById("study-materials");
-                      if (el) el.scrollIntoView({ behavior: "smooth" });
-                      else window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}
-                    style={{ background: "#ffffff", border: "1.5px solid #e2e8f0" }}
-                  >
-                    <div className="more-card-icon" style={{ background: "rgba(59, 130, 246, 0.12)", color: "#2563eb" }}>
-                      <BookOpen size={20} />
-                    </div>
-                    <div className="more-card-info">
-                      <strong style={{ color: "#1e293b" }}>Study Notes &amp; Library</strong>
-                      <small>Syllabus notes, PYQs &amp; curated PDFs</small>
-                    </div>
-                  </button>
-
-                  {/* AI Study Hub */}
-                  <button
-                    type="button"
-                    className="mobile-more-card"
-                    onClick={() => {
-                      setShowMobileMoreSheet(false);
-                      onOpenAiStudyPod();
-                    }}
-                    style={{ background: "linear-gradient(135deg, #faf5ff, #ffffff)", border: "1.5px solid #e9d5ff" }}
-                  >
-                    <div className="more-card-icon" style={{ background: "rgba(124, 58, 237, 0.12)", color: "#7c3aed" }}>
-                      <Sparkles size={20} />
-                    </div>
-                    <div className="more-card-info">
-                      <strong style={{ color: "#6d28d9" }}>AI Study Hub</strong>
-                      <small>Smart summaries, flashcards &amp; doubt solver</small>
-                    </div>
-                  </button>
-
-                  {/* Circle to Search */}
-                  <button
-                    type="button"
-                    className="mobile-more-card"
-                    onClick={() => {
-                      setShowMobileMoreSheet(false);
-                      onOpenCircleSearch && onOpenCircleSearch();
-                    }}
-                    style={{ background: "#ffffff", border: "1.5px solid #c7d2fe" }}
-                  >
-                    <div className="more-card-icon" style={{ background: "rgba(53, 82, 197, 0.12)", color: "#3552c5" }}>
-                      <GeminiIcon size={20} />
-                    </div>
-                    <div className="more-card-info">
-                      <strong style={{ color: "#1e293b" }}>Circle to Search</strong>
-                      <small>Ask questions &amp; solve diagrams with Gemini AI</small>
-                    </div>
-                  </button>
-
-                  {/* Student Chat */}
-                  <button
-                    type="button"
-                    className="mobile-more-card"
-                    onClick={() => {
-                      setShowMobileMoreSheet(false);
-                      onOpenChat();
-                    }}
-                    style={{ background: "#ffffff", border: "1.5px solid #bfdbfe" }}
-                  >
-                    <div className="more-card-icon" style={{ background: "rgba(37, 99, 235, 0.12)", color: "#2563eb" }}>
-                      <MessageSquare size={20} />
-                    </div>
-                    <div className="more-card-info">
-                      <strong style={{ color: "#1e293b" }}>Student Chat</strong>
-                      <small>Connect &amp; study with peers across campus</small>
-                    </div>
-                  </button>
-
                   {/* Swipe to Revise */}
                   <button
                     type="button"
@@ -867,21 +789,22 @@ export default function Navbar({
                     </div>
                   </button>
 
-                  {/* AirDrop */}
+                  {/* Circle to Search */}
                   <button
                     type="button"
                     className="mobile-more-card"
                     onClick={() => {
                       setShowMobileMoreSheet(false);
-                      onOpenAirDrop();
+                      onOpenCircleSearch && onOpenCircleSearch();
                     }}
+                    style={{ background: "#ffffff", border: "1.5px solid #c7d2fe" }}
                   >
-                    <div className="more-card-icon" style={{ background: "rgba(56, 189, 248, 0.12)", color: "#0284c7" }}>
-                      <Zap size={20} />
+                    <div className="more-card-icon" style={{ background: "rgba(53, 82, 197, 0.12)", color: "#3552c5" }}>
+                      <GeminiIcon size={20} />
                     </div>
                     <div className="more-card-info">
-                      <strong>Campus AirDrop</strong>
-                      <small>Offline P2P QR Mesh note transfer</small>
+                      <strong style={{ color: "#1e293b" }}>Circle to Search</strong>
+                      <small>Ask questions &amp; solve diagrams with Gemini AI</small>
                     </div>
                   </button>
 
@@ -989,67 +912,6 @@ export default function Navbar({
                       <small>24/7 technical &amp; syllabus assistance</small>
                     </div>
                   </button>
-
-                  {/* Install App */}
-                  {!isInstalled && (
-                    <button
-                      type="button"
-                      className="mobile-more-card"
-                      onClick={() => {
-                        setShowMobileMoreSheet(false);
-                        handleInstallClick();
-                      }}
-                    >
-                      <div className="more-card-icon" style={{ background: "rgba(139, 92, 246, 0.12)", color: "#7c3aed" }}>
-                        <Smartphone size={20} />
-                      </div>
-                      <div className="more-card-info">
-                        <strong>Install Offline App</strong>
-                        <small>Add PWA to home screen for 0ms launch</small>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Push Alerts */}
-                  {enableWebPush && pushStatus.supported && (
-                    <button
-                      type="button"
-                      className="mobile-more-card"
-                      onClick={() => {
-                        handleToggleWebPush();
-                      }}
-                      disabled={pushBusy}
-                    >
-                      <div className="more-card-icon" style={{ background: pushStatus.subscribed ? "rgba(16, 185, 129, 0.12)" : "rgba(100, 116, 139, 0.12)", color: pushStatus.subscribed ? "#059669" : "#475569" }}>
-                        <BellRing size={20} />
-                      </div>
-                      <div className="more-card-info">
-                        <strong>Push Notifications</strong>
-                        <small>{pushBusy ? "Updating..." : pushStatus.subscribed ? "Alerts Active (Tap to mute)" : "Tap to enable exam alerts"}</small>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Upload Class Notes */}
-                  {currentUser && (
-                    <button
-                      type="button"
-                      className="mobile-more-card"
-                      onClick={() => {
-                        setShowMobileMoreSheet(false);
-                        onOpenUpload();
-                      }}
-                      style={{ background: "#ffffff", border: "1.5px solid #e0e7ff" }}
-                    >
-                      <div className="more-card-icon" style={{ background: "rgba(99, 102, 241, 0.12)", color: "#4f46e5" }}>
-                        <UploadCloud size={20} />
-                      </div>
-                      <div className="more-card-info">
-                        <strong style={{ color: "#1e293b" }}>Upload Class Notes</strong>
-                        <small>Contribute PDFs, formulas &amp; PYQ solutions</small>
-                      </div>
-                    </button>
-                  )}
 
                   {/* My Profile & Settings */}
                   {currentUser && (
