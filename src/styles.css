@@ -81,20 +81,35 @@ p, span, h1, h2, h3, h4, h5, h6, label, td, th {
   word-wrap: break-word;
 }
 
-/* Custom Sleek Scrollbar */
+/* Custom Sleek Scrollbar - Completely hidden to eliminate the right-edge vertical line */
+html,
+body,
+#root,
+.app-container {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
 }
+
 ::-webkit-scrollbar-track {
-  background: #e9eef5;
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: var(--radius-full);
+  display: none !important;
+  background: transparent !important;
+  border: none !important;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-indigo);
+  background: transparent !important;
 }
 
 /* ---------------- Layout & Container ---------------- */
@@ -4051,15 +4066,18 @@ select option,
 .dock-item { color: #68778c; }
 .dock-item:hover, .dock-item:focus-visible { background: #edf2ff; color: #3d59c5; }
 .mobile-floating-island-dock .dock-item { color: #64748b !important; }
+.mobile-floating-island-dock .dock-upload { color: #4361ee !important; font-weight: 800 !important; }
+.mobile-floating-island-dock .dock-install { color: #7c3aed !important; font-weight: 800 !important; }
+.mobile-floating-island-dock .dock-airdrop { color: #087c70 !important; font-weight: 800 !important; }
+.mobile-floating-island-dock .dock-push { color: #d97706 !important; font-weight: 800 !important; }
+.mobile-floating-island-dock .dock-more { color: #475569 !important; font-weight: 800 !important; }
 .mobile-floating-island-dock .dock-ai { color: #5846b8 !important; }
 .mobile-floating-island-dock .dock-circle { color: #3552c5 !important; }
 .mobile-floating-island-dock .dock-admin { color: #4f46e5 !important; font-weight: 800 !important; }
-.mobile-floating-island-dock .dock-airdrop { color: #087c70 !important; }
 .mobile-floating-island-dock .dock-chat { color: #2563eb !important; font-weight: 800 !important; }
 .mobile-floating-island-dock .dock-notice { color: #3552c5 !important; }
 .mobile-floating-island-dock .dock-pod { color: #6449b4 !important; }
 .mobile-floating-island-dock .dock-help { color: #059669 !important; font-weight: 800 !important; }
-.mobile-floating-island-dock .dock-install { color: #8a5a10 !important; }
 .nav-feature-launchpad .live-pill { border-color: #10b981; background: #d1fae5; color: #065f46; font-size: 0.62rem; font-weight: 850; padding: 2px 7px; text-shadow: none; }
 .nav-feature-launchpad .pill-studypod:hover .live-pill { border-color: #059669; background: #a7f3d0; color: #064e3b; }
 .student-security-dismiss:hover { border-color: #c3d0ff !important; background: #edf2ff !important; color: #3552c5 !important; }
@@ -6502,6 +6520,30 @@ svg.lucide {
   .btn-spotlight-mobile {
     display: none !important;
   }
+}
+
+.mobile-nav-logout-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 4px 8px !important;
+  border-radius: 9999px !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.25) !important;
+  color: #dc2626 !important;
+  font-size: 0.72rem !important;
+  font-weight: 750 !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  transition: all 0.15s ease !important;
+  line-height: 1 !important;
+}
+
+.mobile-nav-logout-btn:hover,
+.mobile-nav-logout-btn:active {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
 }
 
 

@@ -214,36 +214,47 @@ export default function Navbar({
               </div>
             </div>
 
-            {/* Top-Right Cluster on Mobile: Profile Avatar or Auth (Clean, balanced) */}
+            {/* Top-Right Cluster on Mobile: Profile Avatar + Sign Out */}
             <div className="mobile-top-right">
               {currentUser ? (
-                <button
-                  type="button"
-                  className="mobile-profile-avatar-pill"
-                  onClick={onOpenProfile}
-                  onMouseEnter={handlePrefetchProfile}
-                  onTouchStart={handlePrefetchProfile}
-                  title={`Logged in as ${currentUser.name || "Student"} • Tap to View Profile & Settings`}
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
-                    border: "2px solid #ffffff",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#ffffff",
-                    fontWeight: 900,
-                    fontSize: "0.82rem",
-                    cursor: "pointer",
-                    boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
-                    flexShrink: 0,
-                    padding: 0,
-                  }}
-                >
-                  {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    className="mobile-profile-avatar-pill"
+                    onClick={onOpenProfile}
+                    onMouseEnter={handlePrefetchProfile}
+                    onTouchStart={handlePrefetchProfile}
+                    title={`Logged in as ${currentUser.name || "Student"} • Tap to View Profile & Settings`}
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      borderRadius: "50%",
+                      background: "linear-gradient(135deg, #4f46e5, #06b6d4)",
+                      border: "2px solid #ffffff",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#ffffff",
+                      fontWeight: 900,
+                      fontSize: "0.82rem",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px rgba(79, 70, 229, 0.35)",
+                      flexShrink: 0,
+                      padding: 0,
+                    }}
+                  >
+                    {currentUser.name ? currentUser.name[0].toUpperCase() : "U"}
+                  </button>
+                  <button
+                    type="button"
+                    className="mobile-nav-logout-btn"
+                    onClick={onLogout}
+                    title="Sign Out / Logout"
+                  >
+                    <LogOut size={12} strokeWidth={2.4} />
+                    <span>Logout</span>
+                  </button>
+                </div>
               ) : (
                 <div className="nav-auth-actions nav-auth-actions-mobile">
                   <button type="button" className="btn-signup-nav" onClick={() => onOpenAuth("signup")}>
@@ -637,64 +648,72 @@ export default function Navbar({
       </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MOBILE FLOATING BOTTOM DOCK (Streamlined 5-Tab Golden Ratio)
+          MOBILE FLOATING BOTTOM DOCK (5 Tabs: Upload, Install, AirDrop, Push, More)
           ══════════════════════════════════════════════════════════════════════ */}
       {currentUser && (
         <>
           <nav className="mobile-floating-island-dock" aria-label="Mobile Quick Navigation">
-            {/* 1. 📚 Notes / Home */}
+            {/* 1. 📤 Upload Notes */}
             <button
               type="button"
-              className="dock-item dock-notes"
-              onClick={() => {
-                const el = document.getElementById("study-materials");
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth" });
-                } else {
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }
-              }}
-              title="Explore Study Notes & Papers"
+              className="dock-item dock-upload"
+              onClick={onOpenUpload}
+              title="Upload Notes, PYQs or Solutions"
             >
-              <BookOpen size={18} />
-              <span>Notes</span>
+              <UploadCloud size={19} />
+              <span>Upload</span>
             </button>
 
-            {/* 2. ✨ AI Study */}
+            {/* 2. 📲 Install App */}
             <button
               type="button"
-              className="dock-item dock-ai"
-              onClick={onOpenAiStudyPod}
-              style={{ color: "#7c3aed" }}
-              title="AI Study (Flashcards, Summary, Notes Filter)"
+              className="dock-item dock-install"
+              onClick={handleInstallClick}
+              title="Install Free Study Material App (PWA)"
             >
-              <Sparkles size={18} color="#7c3aed" style={{ filter: "drop-shadow(0 0 6px rgba(124, 58, 237, 0.45))" }} />
-              <span style={{ fontWeight: 800, color: "#6d28d9" }}>AI Study</span>
+              <Smartphone size={19} />
+              <span>Install App</span>
             </button>
 
-            {/* 3. ♊ Circle to Search & Solve (Elevated Center Hub) */}
+            {/* 3. ⚡ Campus AirDrop */}
             <button
               type="button"
-              className="dock-item dock-circle dock-center-circle"
-              onClick={() => onOpenCircleSearch && onOpenCircleSearch()}
-              style={{ color: "#3552c5" }}
-              title="Circle to Search: Ask Question or Diagram with Gemini AI"
+              className="dock-item dock-airdrop"
+              onClick={onOpenAirDrop}
+              title="Campus AirDrop (Offline P2P Mesh File Sharing)"
             >
-              <div className="dock-gemini-orb">
-                <GeminiIcon size={18} withRing ringColor="#3552c5" color="#0f8b7e" />
+              <Zap size={19} />
+              <span>AirDrop</span>
+            </button>
+
+            {/* 4. 🔔 Push Notification */}
+            <button
+              type="button"
+              className="dock-item dock-push"
+              onClick={handleToggleWebPush}
+              title={pushStatus.subscribed ? "Push Notifications Active (Tap to Mute)" : "Enable Real-time Push Notifications"}
+            >
+              <div style={{ position: "relative", display: "inline-flex" }}>
+                {pushStatus.subscribed ? (
+                  <BellRing size={19} />
+                ) : (
+                  <Bell size={19} />
+                )}
+                {pushStatus.subscribed && (
+                  <span style={{
+                    position: "absolute",
+                    top: "-2px",
+                    right: "-3px",
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    border: "1.5px solid #ffffff",
+                    boxShadow: "0 0 6px #10b981",
+                  }} />
+                )}
               </div>
-              <span style={{ fontWeight: 750 }}>Circle</span>
-            </button>
-
-            {/* 4. 💬 Student Chat */}
-            <button
-              type="button"
-              className="dock-item dock-chat"
-              onClick={onOpenChat}
-              title="Student Study Chat"
-            >
-              <MessageSquare size={18} />
-              <span>Chat</span>
+              <span>{pushStatus.subscribed ? "Push On" : "Push Alert"}</span>
             </button>
 
             {/* 5. ⚡ More Hub (Drawer) */}
@@ -702,10 +721,10 @@ export default function Navbar({
               type="button"
               className="dock-item dock-more"
               onClick={() => setShowMobileMoreSheet(true)}
-              title="More Academic Tools (AirDrop, Pod, Notices, Admin)"
+              title="More Academic Tools (Notes, AI Study, Circle, Chat, Notices, Vault)"
             >
               <div style={{ position: "relative", display: "inline-flex" }}>
-                <LayoutGrid size={18} />
+                <LayoutGrid size={19} />
                 {noticeCount > 0 && (
                   <span className="dock-notice-dot">{noticeCount > 9 ? "9+" : noticeCount}</span>
                 )}
@@ -745,6 +764,84 @@ export default function Navbar({
                 </div>
 
                 <div className="mobile-more-grid">
+                  {/* Notes Library */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      const el = document.getElementById("study-materials");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                      else window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    style={{ background: "#ffffff", border: "1.5px solid #e2e8f0" }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(59, 130, 246, 0.12)", color: "#2563eb" }}>
+                      <BookOpen size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong style={{ color: "#1e293b" }}>Study Notes &amp; Library</strong>
+                      <small>Syllabus notes, PYQs &amp; curated PDFs</small>
+                    </div>
+                  </button>
+
+                  {/* AI Study Hub */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenAiStudyPod();
+                    }}
+                    style={{ background: "linear-gradient(135deg, #faf5ff, #ffffff)", border: "1.5px solid #e9d5ff" }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(124, 58, 237, 0.12)", color: "#7c3aed" }}>
+                      <Sparkles size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong style={{ color: "#6d28d9" }}>AI Study Hub</strong>
+                      <small>Smart summaries, flashcards &amp; doubt solver</small>
+                    </div>
+                  </button>
+
+                  {/* Circle to Search */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenCircleSearch && onOpenCircleSearch();
+                    }}
+                    style={{ background: "#ffffff", border: "1.5px solid #c7d2fe" }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(53, 82, 197, 0.12)", color: "#3552c5" }}>
+                      <GeminiIcon size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong style={{ color: "#1e293b" }}>Circle to Search</strong>
+                      <small>Ask questions &amp; solve diagrams with Gemini AI</small>
+                    </div>
+                  </button>
+
+                  {/* Student Chat */}
+                  <button
+                    type="button"
+                    className="mobile-more-card"
+                    onClick={() => {
+                      setShowMobileMoreSheet(false);
+                      onOpenChat();
+                    }}
+                    style={{ background: "#ffffff", border: "1.5px solid #bfdbfe" }}
+                  >
+                    <div className="more-card-icon" style={{ background: "rgba(37, 99, 235, 0.12)", color: "#2563eb" }}>
+                      <MessageSquare size={20} />
+                    </div>
+                    <div className="more-card-info">
+                      <strong style={{ color: "#1e293b" }}>Student Chat</strong>
+                      <small>Connect &amp; study with peers across campus</small>
+                    </div>
+                  </button>
+
                   {/* Swipe to Revise */}
                   <button
                     type="button"
