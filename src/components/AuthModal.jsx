@@ -1424,7 +1424,7 @@ export default function AuthModal({
                     ) : (
                       <>
                         <Fingerprint size={18} />
-                        <span>⚡ Enable Passkey (Recommended)</span>
+                        <span>⚡ Enable Passkey</span>
                       </>
                     )}
                   </button>
@@ -1446,7 +1446,7 @@ export default function AuthModal({
                       transition: "all 0.18s ease",
                     }}
                   >
-                    Skip for Now (Continue to Main Page ➔)
+                    Skip for Now ➔
                   </button>
                 </div>
               </div>
