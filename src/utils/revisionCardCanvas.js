@@ -71,18 +71,18 @@ export async function generateRevisionCardPngBlob({
   const ctx = canvas.getContext("2d");
 
   const cleaned = cleanMarkdownForCard(content) || "Key formulas & concepts saved for quick exam hall revision.";
-  ctx.font = "500 28px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "600 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   let bodyLines = wrapCanvasText(ctx, cleaned, BODY_W);
   if (bodyLines.length > 26) {
     bodyLines = [...bodyLines.slice(0, 25), "… Read complete notes & diagrams inside Free Study Material!"];
   }
 
-  ctx.font = "800 44px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "900 48px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   const titleLines = wrapCanvasText(ctx, String(title).slice(0, 110), WIDTH - PAD * 2).slice(0, 2);
 
-  const lineHeight = 40;
-  const headerH = 195 + titleLines.length * 52;
-  const contentBoxH = Math.max(240, bodyLines.length * lineHeight + 68);
+  const lineHeight = 44;
+  const headerH = 195 + titleLines.length * 56;
+  const contentBoxH = Math.max(240, bodyLines.length * lineHeight + 72);
   const footerH = 190;
   const HEIGHT = Math.min(2200, headerH + contentBoxH + footerH + 40);
 
@@ -112,31 +112,31 @@ export async function generateRevisionCardPngBlob({
   ctx.stroke();
 
   // 2. Top Badge Pill
-  ctx.font = "800 22px Inter, system-ui, -apple-system, sans-serif";
-  const badgeW = Math.min(WIDTH - PAD * 2, ctx.measureText(badgeText).width + 44);
-  const badgeGrad = ctx.createLinearGradient(PAD, 62, PAD + badgeW, 108);
+  ctx.font = "800 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  const badgeW = Math.min(WIDTH - PAD * 2, ctx.measureText(badgeText).width + 48);
+  const badgeGrad = ctx.createLinearGradient(PAD, 62, PAD + badgeW, 110);
   badgeGrad.addColorStop(0, "#4f46e5");
   badgeGrad.addColorStop(1, "#06b6d4");
   ctx.fillStyle = badgeGrad;
-  drawRoundedRect(ctx, PAD, 62, badgeW, 46, 23);
+  drawRoundedRect(ctx, PAD, 62, badgeW, 48, 24);
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(badgeText, PAD + 22, 92);
+  ctx.fillText(badgeText, PAD + 24, 94);
 
   // 3. Title & Subtitle
-  let curY = 160;
-  ctx.font = "800 44px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#0f172a";
+  let curY = 166;
+  ctx.font = "900 48px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#090d16";
   for (const tLine of titleLines) {
     ctx.fillText(tLine, PAD, curY);
-    curY += 54;
+    curY += 58;
   }
 
-  ctx.font = "600 24px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#4f46e5";
-  ctx.fillText(String(subtitle).slice(0, 72), PAD, curY + 4);
-  curY += 40;
+  ctx.font = "700 26px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#4338ca";
+  ctx.fillText(String(subtitle).slice(0, 72), PAD, curY + 6);
+  curY += 44;
 
   // 4. Inner Content Panel (Pure White Elevated Box)
   const boxY = curY;
@@ -147,8 +147,8 @@ export async function generateRevisionCardPngBlob({
   ctx.fill();
   ctx.stroke();
 
-  let textY = boxY + 52;
-  ctx.font = "500 27px Inter, system-ui, -apple-system, sans-serif";
+  let textY = boxY + 54;
+  ctx.font = "600 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   for (const bLine of bodyLines) {
     if (textY > boxY + contentBoxH - 22) break;
     if (bLine === "") {
@@ -157,7 +157,7 @@ export async function generateRevisionCardPngBlob({
     }
     const isBulletOrHeading = bLine.startsWith("•") || bLine.startsWith("📌") || bLine.startsWith("💡") || bLine.startsWith("⚡");
     ctx.fillStyle = isBulletOrHeading ? "#4338ca" : "#1e293b";
-    ctx.fillText(bLine, PAD + 26, textY);
+    ctx.fillText(bLine, PAD + 28, textY);
     textY += lineHeight;
   }
 
@@ -169,12 +169,12 @@ export async function generateRevisionCardPngBlob({
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = "800 28px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "900 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "#0f172a";
   ctx.fillText(`📚 ${siteName}`, PAD + 24, footerY + 46);
 
-  ctx.font = "500 21px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#64748b";
+  ctx.font = "600 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#475569";
   ctx.fillText("Scan QR to open full PDF notes, AI Tutor & PYQs", PAD + 24, footerY + 84);
 
   try {
@@ -319,53 +319,83 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
 
   // 3. Top Platform Badge (Vibrant Gradient Pill)
   const badgeText = "⚡ FREE STUDY MATERIAL VAULT";
-  ctx.font = "800 24px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "800 26px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   const badgeW = ctx.measureText(badgeText).width + 56;
-  const badgeGrad = ctx.createLinearGradient(PAD, 90, PAD + badgeW, 146);
+  const badgeGrad = ctx.createLinearGradient(PAD, 88, PAD + badgeW, 146);
   badgeGrad.addColorStop(0, "#4f46e5");
   badgeGrad.addColorStop(1, "#06b6d4");
   ctx.fillStyle = badgeGrad;
-  drawRoundedRect(ctx, PAD, 90, badgeW, 56, 28);
+  drawRoundedRect(ctx, PAD, 88, badgeW, 58, 29);
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(badgeText, PAD + 28, 127);
+  ctx.fillText(badgeText, PAD + 28, 126);
 
   // Verified Status Pill (Emerald Accent Card)
-  const verifiedText = "✓ VERIFIED ACADEMIC RESOURCE";
-  ctx.font = "800 20px Inter, system-ui, -apple-system, sans-serif";
-  const verW = ctx.measureText(verifiedText).width + 36;
+  const verifiedText = "✓ 100% FREE VAULT";
+  ctx.font = "800 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  const verW = ctx.measureText(verifiedText).width + 40;
   const verX = WIDTH - PAD - verW;
   ctx.fillStyle = "#ecfdf5";
   ctx.strokeStyle = "#a7f3d0";
-  ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, verX, 94, verW, 48, 24);
+  ctx.lineWidth = 1.8;
+  drawRoundedRect(ctx, verX, 92, verW, 50, 25);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#059669";
-  ctx.fillText(verifiedText, verX + 18, 126);
+  ctx.fillStyle = "#047857";
+  ctx.fillText(verifiedText, verX + 20, 125);
 
-  // 4. Branch / Course Subheader (Indigo Pill Badge)
-  let curY = 220;
-  const branchText = `${note.branch || "All Branches"} • ${note.course || "B.Tech"} • ${note.subject || "Academic Resource"}`;
-  ctx.font = "800 26px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#4f46e5";
-  ctx.fillText(branchText.toUpperCase(), PAD, curY);
+  // 4. Branch / Course Category Tag Pill (Elevated Luxury Pill)
+  let curY = 176;
+  const branchText = `${note.subject || "Academic Notes"} • ${note.course || "B.Tech"} • ${note.branch || "All Branches"}`;
+  ctx.font = "800 25px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  const catW = Math.min(WIDTH - PAD * 2, ctx.measureText(branchText.toUpperCase()).width + 44);
+  ctx.fillStyle = "rgba(79, 70, 229, 0.08)";
+  ctx.strokeStyle = "rgba(79, 70, 229, 0.28)";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, PAD, curY, catW, 46, 23);
+  ctx.fill();
+  ctx.stroke();
 
-  // 5. Huge Bold Note Title (Deep Dark Slate with Inter Font)
-  curY += 60;
-  ctx.font = "900 58px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#0f172a";
+  ctx.fillStyle = "#4338ca";
+  ctx.fillText(`📚 ${branchText.toUpperCase()}`, PAD + 20, curY + 32);
+
+  // 5. Huge Bold Note Title (High-Visibility Obsidian Black with Stylish Typography)
+  curY += 76;
+  ctx.font = "900 64px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#090d16";
   const titleLines = wrapCanvasText(ctx, note.title || "University Lecture Notes", WIDTH - PAD * 2).slice(0, 3);
   for (const tLine of titleLines) {
     ctx.fillText(tLine, PAD, curY);
-    curY += 74;
+    curY += 78;
   }
 
+  // 5B. Quick Metadata Badges Row (Pages / Rating / Free)
+  const metaBadges = [
+    `📄 ${note.pageCount || note.pagesCount || 15}+ Pages`,
+    `⭐ 4.9/5 Rating`,
+    `🎓 Verified Notes`,
+  ];
+  let metaX = PAD;
+  ctx.font = "700 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  for (const mText of metaBadges) {
+    const mW = ctx.measureText(mText).width + 32;
+    ctx.fillStyle = "#ffffff";
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1.5;
+    drawRoundedRect(ctx, metaX, curY + 6, mW, 42, 21);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#334155";
+    ctx.fillText(mText, metaX + 16, curY + 35);
+    metaX += mW + 14;
+  }
+  curY += 66;
+
   // 6. Highlighted Feature Cards Container (Pure White Elevated Card)
-  curY += 24;
-  const featureBoxH = 430;
+  const featureBoxH = 440;
   ctx.fillStyle = "#ffffff";
   ctx.strokeStyle = "rgba(226, 232, 240, 0.95)";
   ctx.lineWidth = 2;
@@ -375,9 +405,9 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
 
   // Features List inside container
   const features = [
-    { icon: "📖", title: "Comprehensive Semester Notes", desc: "Curated by top university students & professors" },
-    { icon: "🎯", title: "Solved Previous Year Papers (PYQs)", desc: "Step-by-step solutions for maximum exam marks" },
-    { icon: "📴", title: "0ms Instant Online Reader", desc: "Save 100% offline on your device — zero paywalls" },
+    { icon: "📖", title: "Comprehensive Semester Notes", desc: "Curated by top university students & professors for maximum marks" },
+    { icon: "🎯", title: "Solved Previous Year Papers (PYQs)", desc: "Step-by-step solutions with detailed diagrams & formulas" },
+    { icon: "📴", title: "0ms Instant Online Reader", desc: "Save 100% offline on your device — zero paywalls & zero ads" },
     { icon: "✨", title: "Interactive AI Study Assistant", desc: "Instant 3D flashcards, mind-maps & doubt solver" },
   ];
 
@@ -386,47 +416,47 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
     // Feature icon badge circle
     ctx.fillStyle = "#f8faff";
     ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = 1;
-    drawRoundedRect(ctx, PAD + 24, fY - 32, 48, 48, 12);
+    ctx.lineWidth = 1.2;
+    drawRoundedRect(ctx, PAD + 24, fY - 32, 50, 50, 14);
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = "28px Inter, sans-serif";
-    ctx.fillText(feat.icon, PAD + 32, fY + 2);
+    ctx.font = "28px 'Plus Jakarta Sans', sans-serif";
+    ctx.fillText(feat.icon, PAD + 34, fY + 4);
 
-    ctx.font = "800 28px Inter, system-ui, -apple-system, sans-serif";
+    ctx.font = "800 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
     ctx.fillStyle = "#0f172a";
-    ctx.fillText(feat.title, PAD + 88, fY - 4);
+    ctx.fillText(feat.title, PAD + 92, fY - 3);
 
-    ctx.font = "500 22px Inter, system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = "#64748b";
-    ctx.fillText(feat.desc, PAD + 88, fY + 28);
+    ctx.font = "600 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+    ctx.fillStyle = "#334155";
+    ctx.fillText(feat.desc, PAD + 92, fY + 30);
 
-    fY += 94;
+    fY += 96;
   }
 
   // 7. Centerpiece Scannable QR Code Hub (Pure White + Indigo Accent Card)
-  const qrBoxY = curY + featureBoxH + 48;
+  const qrBoxY = curY + featureBoxH + 42;
   const qrBoxH = 550;
   const qrBoxGrad = ctx.createLinearGradient(PAD, qrBoxY, WIDTH - PAD, qrBoxY + qrBoxH);
   qrBoxGrad.addColorStop(0, "#ffffff");
   qrBoxGrad.addColorStop(1, "#f5f7ff");
   ctx.fillStyle = qrBoxGrad;
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.38)";
   ctx.lineWidth = 2.5;
   drawRoundedRect(ctx, PAD, qrBoxY, WIDTH - PAD * 2, qrBoxH, 36);
   ctx.fill();
   ctx.stroke();
 
   // QR Code Header
-  ctx.font = "900 34px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "900 36px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "#0f172a";
   ctx.textAlign = "center";
-  ctx.fillText("📸 Scan with Phone Camera to Open Note", WIDTH / 2, qrBoxY + 68);
+  ctx.fillText("📸 Scan with Phone Camera to Open Note", WIDTH / 2, qrBoxY + 66);
 
-  ctx.font = "700 23px Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = "800 25px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
   ctx.fillStyle = "#4f46e5";
-  ctx.fillText("Instant 0ms Reader • Zero Login Required to Read", WIDTH / 2, qrBoxY + 108);
+  ctx.fillText("Instant 0ms Reader • Zero Login Required to Read", WIDTH / 2, qrBoxY + 106);
 
   // Synchronous Scannable QR Code
   const qrTargetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
@@ -435,7 +465,7 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
     const numModules = qr.modules.size;
     const qrSize = 270;
     const qrX = (WIDTH - qrSize) / 2;
-    const qrY = qrBoxY + 144;
+    const qrY = qrBoxY + 140;
     const cell = qrSize / numModules;
 
     // Draw clean white background with rounded corners & border
@@ -447,7 +477,7 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
     ctx.stroke();
 
     // Draw dark modules
-    ctx.fillStyle = "#0f172a";
+    ctx.fillStyle = "#090d16";
     for (let r = 0; r < numModules; r++) {
       const y1 = Math.round(qrY + r * cell);
       const y2 = Math.round(qrY + (r + 1) * cell);
@@ -463,17 +493,28 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
     console.warn("[CANVAS] QR draw error:", err);
   }
 
-  // Scannable URL text
+  // Scannable URL text Pill
   const displayHost = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "freestudymaterial.pages.dev";
+  const urlPillText = `🔗 ${displayHost}`;
+  ctx.font = "800 25px 'JetBrains Mono', Consolas, monospace";
+  const urlPillW = ctx.measureText(urlPillText).width + 48;
+  const urlPillX = (WIDTH - urlPillW) / 2;
+  const urlPillY = qrBoxY + 472;
+  ctx.fillStyle = "#eef2ff";
+  ctx.strokeStyle = "#c7d2fe";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, urlPillX, urlPillY, urlPillW, 46, 23);
+  ctx.fill();
+  ctx.stroke();
+
   ctx.textAlign = "center";
-  ctx.font = "800 24px 'JetBrains Mono', Consolas, monospace";
-  ctx.fillStyle = "#4338ca";
-  ctx.fillText(displayHost, WIDTH / 2, qrBoxY + 494);
+  ctx.fillStyle = "#3730a3";
+  ctx.fillText(urlPillText, WIDTH / 2, urlPillY + 32);
 
   // 8. Footer Branding
-  ctx.font = "600 21px Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.fillText("Shared from Free Study Material Cloud • 100% Free Lifetime Academic Vault", WIDTH / 2, HEIGHT - 80);
+  ctx.font = "700 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#475569";
+  ctx.fillText("📚 Free Study Material • 100% Free Lifetime Campus Vault", WIDTH / 2, HEIGHT - 78);
 
   ctx.textAlign = "left"; // reset alignment
   return canvas;
