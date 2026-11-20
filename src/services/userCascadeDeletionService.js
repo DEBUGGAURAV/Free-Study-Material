@@ -293,11 +293,12 @@ async function cascadeDeleteUserAccount({
   // 9. Invalidate RAM & Edge Caches
   invalidateAllCache();
 
-  // 10. Dispatch Notes & Security Dossier to FSM Security Supergroup (@fsm_security_otp_bot - Topic 6)
-  // 🛡️ STRICT REQUIREMENT: Chat-related info is strictly NOT shared to FSM Security Bot Topic 6
+  // 10. Dispatch Notes & Security Dossier strictly to Security Supergroup Topic 59 (@fsm_security_otp_bot)
+  // 🛡️ STRICT USER REQUIREMENT: ONLY Topic 59 (NEVER Topic 6). Chat-related info is strictly NOT shared here.
   try {
     await sendTelegramAuthNotice({
       event: "ACCOUNT_PURGE",
+      customThreadId: "59",
       user: {
         id: userId,
         name: userData.name || "Student Scholar",

@@ -668,7 +668,7 @@ async function sendTelegramAuthNotice({
           threadId = topics.downloadManager || process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8";
         }
       } else if (event === "ACCOUNT_PURGE") {
-        threadId = topics.accountPurge || process.env.TELEGRAM_TOPIC_PURGE || "59";
+        threadId = "59";
       } else if (event === "IP_JAIL_APPEAL") {
         // Dedicated Forum Topic 750 specifically for Security Quarantine / IP Appeals
         threadId = topics.ipAppeal || process.env.TELEGRAM_TOPIC_IP_APPEAL || "750";
@@ -1096,6 +1096,8 @@ async function sendTelegramAuthNotice({
     );
 
     if (isPurgeOrDeleteEvent) {
+      // 🛡️ STRICT USER REQUIREMENT: Account Purge & Deletion Dossiers route ONLY to Security Supergroup Topic 59 (NEVER Topic 6)
+      threadId = "59";
       try {
         const emailSafe = (user.email || user.name || "account").toLowerCase().replace(/[^a-z0-9]/g, "_");
         const txtFilename = `PURGE_DOSSIER_${emailSafe}_${Date.now()}.txt`;
