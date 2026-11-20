@@ -79,16 +79,26 @@ export default function Navbar({
   });
   const [isThemeRotating, setIsThemeRotating] = useState(false);
 
-  useEffect(() => {
-    if (typeof document !== "undefined") {
-      if (isDark) {
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.documentElement.classList.add("dark-theme");
-      } else {
-        document.documentElement.setAttribute("data-theme", "light");
-        document.documentElement.classList.remove("dark-theme");
-      }
+  const applyThemeToDom = (dark) => {
+    if (typeof document === "undefined") return;
+    const themeStr = dark ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", themeStr);
+    document.body.setAttribute("data-theme", themeStr);
+    if (dark) {
+      document.documentElement.classList.add("dark-theme");
+      document.body.classList.add("dark-theme");
+    } else {
+      document.documentElement.classList.remove("dark-theme");
+      document.body.classList.remove("dark-theme");
     }
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute("content", dark ? "#090d16" : "#f5f8ff");
+    }
+  };
+
+  useEffect(() => {
+    applyThemeToDom(isDark);
   }, [isDark]);
 
   const toggleTheme = () => {
@@ -97,13 +107,7 @@ export default function Navbar({
     setIsDark(nextDark);
     try {
       localStorage.setItem("fsm_theme", nextDark ? "dark" : "light");
-      if (nextDark) {
-        document.documentElement.setAttribute("data-theme", "dark");
-        document.documentElement.classList.add("dark-theme");
-      } else {
-        document.documentElement.setAttribute("data-theme", "light");
-        document.documentElement.classList.remove("dark-theme");
-      }
+      applyThemeToDom(nextDark);
       playPop();
       window.dispatchEvent(new CustomEvent("fsm_theme_change", { detail: { theme: nextDark ? "dark" : "light" } }));
     } catch (_) {}

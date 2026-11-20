@@ -14,6 +14,8 @@
           if (localStorage.getItem('fsm_theme') === 'dark') {
             document.documentElement.setAttribute('data-theme', 'dark');
             document.documentElement.classList.add('dark-theme');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#090d16');
           }
         } catch (_) {}
       })();
