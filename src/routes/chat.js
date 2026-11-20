@@ -20,7 +20,11 @@ const {
   isChatUsernameTaken,
   saveChatUserProfile,
   getAllChatProfiles,
+  getChatTursoClient,
 } = require("../services/tursoService");
+
+// Active Turso client for Chat operations (Dedicated or Primary)
+const getTursoClient = () => (typeof getChatTursoClient === "function" ? getChatTursoClient() : tursoClient);
 const { bufferChatMessage } = require("../services/mongoChatBufferService");
 const { decrypt } = require("../utils/cryptoVault");
 const {

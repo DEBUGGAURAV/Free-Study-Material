@@ -15,7 +15,7 @@ let dbInstance = null;
 let isConnecting = false;
 let connectionError = null;
 
-const MONGODB_URI = process.env.MONGODB_URI || "";
+const MONGODB_URI = (process.env.MONGODB_CHAT_URI || process.env.MONGODB_CHAT_URL || process.env.MONGODB_URI || "").trim();
 const DB_NAME = "fsm_chat";
 const COLLECTION_NAME = "chat_hot_buffer";
 

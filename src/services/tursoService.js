@@ -332,6 +332,101 @@ async function syncFromFirestore(dbInstance) {
   }
 }
 
+// 💬 Dedicated Turso Client for Chat (TURSO_CHAT_DATABASE_URL & TURSO_CHAT_AUTH_TOKEN)
+let chatDedicatedClient = null;
+function getChatTursoClient() {
+  if (chatDedicatedClient) return chatDedicatedClient;
+  const chatUrl = (process.env.TURSO_CHAT_DATABASE_URL || process.env.TURSO_CHAT_URL || "").trim();
+  const chatToken = (process.env.TURSO_CHAT_AUTH_TOKEN || "").trim();
+  if (chatUrl) {
+    try {
+      chatDedicatedClient = createClient({
+        url: chatUrl,
+        authToken: chatToken,
+      });
+      console.log(`[TURSO-CHAT] ⚡ Connected to Dedicated Chat Turso LibSQL Cloud`);
+      initChatTables(chatDedicatedClient).catch(() => {});
+      return chatDedicatedClient;
+    } catch (e) {
+      console.warn(`[TURSO-CHAT] Dedicated client fallback:`, e.message);
+    }
+  }
+  return client;
+}
+
+async function initChatTables(targetClient) {
+  if (!targetClient) return;
+  try {
+    await targetClient.execute(`
+      CREATE TABLE IF NOT EXISTS chat_rooms (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        description TEXT,
+        isPrivate INTEGER DEFAULT 0,
+        secretCode TEXT,
+        createdBy TEXT,
+        membersCount INTEGER DEFAULT 0,
+        createdAt TEXT
+      )
+    `).catch(() => {});
+
+    await targetClient.execute(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        roomId TEXT,
+        senderId TEXT,
+        senderName TEXT,
+        senderRole TEXT,
+        senderBranch TEXT,
+        senderYear TEXT,
+        text TEXT,
+        type TEXT DEFAULT 'text',
+        fileUrl TEXT,
+        fileName TEXT,
+        fileSize INTEGER,
+        isDeleted INTEGER DEFAULT 0,
+        createdAt TEXT
+      )
+    `).catch(() => {});
+    await targetClient.execute(`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(roomId, createdAt)`).catch(() => {});
+    await targetClient.execute(`CREATE INDEX IF NOT EXISTS idx_chat_messages_sender ON chat_messages(senderId)`).catch(() => {});
+
+    await targetClient.execute(`
+      CREATE TABLE IF NOT EXISTS private_room_audits (
+        roomId TEXT PRIMARY KEY,
+        name TEXT,
+        secretCode TEXT,
+        createdBy TEXT,
+        creatorName TEXT,
+        createdAt TEXT,
+        closedAt TEXT,
+        durationMins INTEGER DEFAULT 0,
+        participantsCount INTEGER DEFAULT 0,
+        participantsJson TEXT,
+        messagesCount INTEGER DEFAULT 0,
+        deletedMessagesCount INTEGER DEFAULT 0,
+        attachmentsCount INTEGER DEFAULT 0,
+        attachmentsJson TEXT,
+        transcriptText TEXT,
+        telegramSent INTEGER DEFAULT 0,
+        createdAtTimestamp INTEGER
+      )
+    `).catch(() => {});
+
+    await targetClient.execute(`
+      CREATE TABLE IF NOT EXISTS chat_user_profiles (
+        userId TEXT PRIMARY KEY,
+        chatUsername TEXT UNIQUE,
+        avatarUrl TEXT,
+        role TEXT DEFAULT 'student',
+        isBlocked INTEGER DEFAULT 0,
+        updatedAt TEXT,
+        avatarHistory TEXT
+      )
+    `).catch(() => {});
+  } catch (_) {}
+}
+
 // 🛡️ Dual-Engine MongoDB + Turso LibSQL storage for Chat & Forensic Audits
 const inMemoryChatProfiles = new Map();
 const inMemoryAudits = new Map();
@@ -348,9 +443,10 @@ async function savePrivateRoomAudit(auditData) {
     };
     inMemoryAudits.set(String(auditData.roomId), auditDoc);
 
-    // 1. Save to Turso LibSQL Cloud / Standby
-    if (client) {
-      await client.execute({
+    // 1. Save to Turso LibSQL Cloud / Standby (Dedicated Chat Client or Primary)
+    const targetClient = getChatTursoClient() || client;
+    if (targetClient) {
+      await targetClient.execute({
         sql: `
           INSERT OR REPLACE INTO private_room_audits (
             roomId, name, secretCode, createdBy, creatorName, createdAt, closedAt,
@@ -410,9 +506,10 @@ async function savePrivateRoomAudit(auditData) {
 async function recordChatMessageToTurso(msg) {
   if (!msg || !msg.id) return false;
   let tursoOk = false;
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      await client.execute({
+      await targetClient.execute({
         sql: `
           INSERT OR REPLACE INTO chat_messages (
             id, roomId, senderId, senderName, senderRole, senderBranch, senderYear,
@@ -483,13 +580,14 @@ async function deleteRoomFromTurso(roomId) {
   if (!roomId) return false;
   inMemoryAudits.delete(String(roomId));
 
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      await client.execute({
+      await targetClient.execute({
         sql: `DELETE FROM chat_rooms WHERE id = ?`,
         args: [String(roomId)],
       });
-      await client.execute({
+      await targetClient.execute({
         sql: `DELETE FROM chat_messages WHERE roomId = ?`,
         args: [String(roomId)],
       });
@@ -516,9 +614,10 @@ async function deleteRoomFromTurso(roomId) {
  */
 async function getPrivateRoomAudits(limit = 50) {
   const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      const res = await client.execute({
+      const res = await targetClient.execute({
         sql: `SELECT * FROM private_room_audits ORDER BY createdAtTimestamp DESC LIMIT ?`,
         args: [safeLimit],
       });
@@ -552,10 +651,11 @@ async function getPrivateRoomAudits(limit = 50) {
 async function pruneChatMessagesOlderThan(days = 7) {
   let deletedCount = 0;
   const cutoffIso = new Date(Date.now() - Number(days) * 86400000).toISOString();
+  const targetClient = getChatTursoClient() || client;
 
-  if (client) {
+  if (targetClient) {
     try {
-      const res = await client.execute({
+      const res = await targetClient.execute({
         sql: `DELETE FROM chat_messages WHERE createdAt < ?`,
         args: [cutoffIso],
       });
@@ -601,13 +701,14 @@ async function prunePrivateRoomAuditsOlderThan(days = 30) {
     }
   }
 
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
       let res;
       if (cutoffMs === Infinity) {
-        res = await client.execute({ sql: `DELETE FROM private_room_audits` });
+        res = await targetClient.execute({ sql: `DELETE FROM private_room_audits` });
       } else {
-        res = await client.execute({
+        res = await targetClient.execute({
           sql: `DELETE FROM private_room_audits WHERE createdAtTimestamp < ? OR closedAt < ?`,
           args: [cutoffMs, cutoffIso],
         });
@@ -641,9 +742,10 @@ async function deleteSinglePrivateRoomAudit(roomId) {
   inMemoryAudits.delete(String(roomId));
   let deletedCount = 0;
 
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      const res = await client.execute({
+      const res = await targetClient.execute({
         sql: `DELETE FROM private_room_audits WHERE roomId = ?`,
         args: [String(roomId)],
       });
@@ -683,17 +785,18 @@ async function getTursoChatTelemetry() {
   let tursoAuditCount = 0;
   let latencyMs = 1;
 
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
       const t0 = Date.now();
-      await client.execute("SELECT 1 AS ping");
+      await targetClient.execute("SELECT 1 AS ping");
       latencyMs = Date.now() - t0;
 
       const [mRes, aRes, rRes, pRes] = await Promise.all([
-        client.execute("SELECT COUNT(*) AS c FROM chat_messages").catch(() => ({ rows: [{ c: 0 }] })),
-        client.execute("SELECT COUNT(*) AS c FROM private_room_audits").catch(() => ({ rows: [{ c: 0 }] })),
-        client.execute("SELECT COUNT(*) AS c FROM chat_rooms").catch(() => ({ rows: [{ c: 0 }] })),
-        client.execute("SELECT COUNT(*) AS c FROM chat_user_profiles").catch(() => ({ rows: [{ c: 0 }] })),
+        targetClient.execute("SELECT COUNT(*) AS c FROM chat_messages").catch(() => ({ rows: [{ c: 0 }] })),
+        targetClient.execute("SELECT COUNT(*) AS c FROM private_room_audits").catch(() => ({ rows: [{ c: 0 }] })),
+        targetClient.execute("SELECT COUNT(*) AS c FROM chat_rooms").catch(() => ({ rows: [{ c: 0 }] })),
+        targetClient.execute("SELECT COUNT(*) AS c FROM chat_user_profiles").catch(() => ({ rows: [{ c: 0 }] })),
       ]);
 
       tursoChatCount = Number(mRes.rows[0]?.c || 0);
@@ -704,7 +807,7 @@ async function getTursoChatTelemetry() {
   }
 
   return {
-    connected: Boolean(client),
+    connected: Boolean(targetClient),
     isCloud,
     latencyMs,
     chatMessagesCount: Math.max(tursoChatCount, bufferCount),
@@ -713,8 +816,8 @@ async function getTursoChatTelemetry() {
     auditsCount: Math.max(tursoAuditCount, inMemoryAudits.size),
     roomsCount: Math.max(tursoRoomCount, 1),
     profilesCount: Math.max(tursoProfileCount, inMemoryChatProfiles.size),
-    storageTier: "Dual-Engine: MongoDB Atlas (Permanent Store) + Turso LibSQL (Edge Cache & Audits)",
-    url: isCloud && rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "local:cache/turso_vault.db",
+    storageTier: process.env.TURSO_CHAT_DATABASE_URL ? "Dedicated Chat LibSQL Database + MongoDB Atlas" : "Dual-Engine: MongoDB Atlas (Permanent Store) + Turso LibSQL (Edge Cache & Audits)",
+    url: targetClient && targetClient !== client && process.env.TURSO_CHAT_DATABASE_URL ? process.env.TURSO_CHAT_DATABASE_URL.replace(/(:\/\/[^@]*@)/, "://***@") : (isCloud && rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "local:cache/turso_vault.db"),
   };
 }
 
@@ -731,9 +834,10 @@ async function getChatUserProfile(userId) {
   }
 
   // 2. Check Turso LibSQL
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      const res = await client.execute({
+      const res = await targetClient.execute({
         sql: "SELECT * FROM chat_user_profiles WHERE userId = ? LIMIT 1",
         args: [cleanId],
       });
@@ -789,7 +893,8 @@ async function isChatUsernameTaken(username, excludeUserId = null) {
   }
 
   // 2. Turso LibSQL check
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
       let sql = "SELECT userId FROM chat_user_profiles WHERE LOWER(chatUsername) = LOWER(?)";
       const args = [clean];
@@ -798,7 +903,7 @@ async function isChatUsernameTaken(username, excludeUserId = null) {
         args.push(String(excludeUserId));
       }
       sql += " LIMIT 1";
-      const res = await client.execute({ sql, args });
+      const res = await targetClient.execute({ sql, args });
       if (res.rows && res.rows.length > 0) return true;
     } catch (err) {
       console.warn(`[TURSO] isChatUsernameTaken notice (${username}):`, err.message);
@@ -845,9 +950,10 @@ async function saveChatUserProfile(userId, data = {}) {
     };
     inMemoryChatProfiles.set(cleanId, profile);
 
-    // 1. Save to Turso LibSQL
-    if (client) {
-      await client.execute({
+    // 1. Save to Turso LibSQL (Dedicated Chat Client or Primary)
+    const targetClient = getChatTursoClient() || client;
+    if (targetClient) {
+      await targetClient.execute({
         sql: `
           INSERT INTO chat_user_profiles (userId, chatUsername, avatarUrl, role, isBlocked, updatedAt, avatarHistory)
           VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -884,9 +990,10 @@ async function saveChatUserProfile(userId, data = {}) {
  * Get all chat user profiles from Turso LibSQL with MongoDB Atlas fallback
  */
 async function getAllChatProfiles() {
-  if (client) {
+  const targetClient = getChatTursoClient() || client;
+  if (targetClient) {
     try {
-      const res = await client.execute("SELECT * FROM chat_user_profiles ORDER BY updatedAt DESC LIMIT 200");
+      const res = await targetClient.execute("SELECT * FROM chat_user_profiles ORDER BY updatedAt DESC LIMIT 200");
       if (res.rows && res.rows.length > 0) {
         return res.rows.map((row) => {
           let avatarHistory = [];
@@ -1793,5 +1900,6 @@ module.exports = {
   getSettingFromTurso,
   saveSettingToTurso,
   getAllSettingsFromTurso,
+  getChatTursoClient,
 };
 
