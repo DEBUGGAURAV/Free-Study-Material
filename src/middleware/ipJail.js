@@ -89,6 +89,12 @@ setInterval(async () => {
       const ip = item.ip;
       const incId = item.details?.incidentId;
 
+      // 1. Purge from Turso 4 (fsm-studet-session: Security Defense Vault)
+      try {
+        const { deleteTursoJailAppeal } = require("../services/tursoStudentVaultService");
+        deleteTursoJailAppeal(incId, ip).catch(() => {});
+      } catch (_) {}
+
       if (db) {
         try {
           if (incId) {

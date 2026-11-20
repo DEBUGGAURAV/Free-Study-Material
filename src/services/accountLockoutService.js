@@ -66,10 +66,31 @@ async function checkAccountLockout(identifier) {
     lockoutCache.delete(key);
   }
 
-  // 2. Firestore check (persists across server restarts and multi-instance)
+  // 2. Turso 4 Check (fsm-studet-session: Sub-millisecond Edge Check)
+  const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
+  try {
+    const { getTursoAccountLockout } = require("./tursoStudentVaultService");
+    const tursoLock = await getTursoAccountLockout(docId);
+    if (tursoLock && tursoLock.lockedUntil && tursoLock.lockedUntil > now) {
+      const remainingMs = tursoLock.lockedUntil - now;
+      lockoutCache.set(key, {
+        attempts: tursoLock.attempts || MAX_FAILED_ATTEMPTS,
+        lockedUntil: tursoLock.lockedUntil,
+        lastAttempt: tursoLock.lastAttempt || now,
+      });
+      return {
+        isLocked: true,
+        remainingMs,
+        remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
+      };
+    }
+  } catch (err) {
+    console.debug("[ACCOUNT-LOCKOUT] Turso 4 lookup notice:", err.message);
+  }
+
+  // 3. Database Fallback (if any)
   if (db) {
     try {
-      const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
       const snap = await db.collection("account_lockouts").doc(docId).get();
       if (snap.exists) {
         const data = snap.data();
@@ -87,9 +108,7 @@ async function checkAccountLockout(identifier) {
           };
         }
       }
-    } catch (err) {
-      console.warn("[ACCOUNT-LOCKOUT] Firestore lookup fallback:", err.message);
-    }
+    } catch (_) {}
   }
 
   return { isLocked: false, remainingMs: 0, remainingMinutes: 0 };
@@ -125,10 +144,26 @@ async function recordFailedAttempt(identifier, context = {}) {
 
   lockoutCache.set(key, state);
 
-  // Persist to Firestore
+  // 1. Persist to Turso 4 (fsm-studet-session: Dedicated Security Defense Vault)
+  const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
+  try {
+    const { saveTursoAccountLockout } = require("./tursoStudentVaultService");
+    await saveTursoAccountLockout({
+      id: docId,
+      identifier: key,
+      attempts: state.attempts,
+      lockedUntil: state.lockedUntil,
+      lastAttempt: now,
+      lastIp: context.ip || "Unknown",
+      lastUserAgent: context.userAgent || "Unknown",
+    });
+  } catch (err) {
+    console.debug("[ACCOUNT-LOCKOUT] Turso 4 persist notice:", err.message);
+  }
+
+  // 2. Persist to Database Fallback (if any)
   if (db) {
     try {
-      const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
       await db.collection("account_lockouts").doc(docId).set({
         identifier: key,
         attempts: state.attempts,
@@ -138,9 +173,7 @@ async function recordFailedAttempt(identifier, context = {}) {
         lastUserAgent: context.userAgent || "Unknown",
         updatedAt: new Date().toISOString(),
       }, { merge: true });
-    } catch (err) {
-      console.warn("[ACCOUNT-LOCKOUT] Failed to persist lockout record:", err.message);
-    }
+    } catch (_) {}
   }
 
   // Send real-time Security Alert to Telegram Supergroup Topic 6 on Lockout
@@ -174,17 +207,24 @@ async function clearFailedAttempts(identifier) {
   if (!key) return;
 
   lockoutCache.delete(key);
+  const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
 
+  // 1. Clear from Turso 4
+  try {
+    const { deleteTursoAccountLockout } = require("./tursoStudentVaultService");
+    await deleteTursoAccountLockout(docId);
+  } catch (_) {}
+
+  // 2. Clear from Database
   if (db) {
     try {
-      const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
       await db.collection("account_lockouts").doc(docId).delete().catch(() => {});
     } catch {}
   }
 }
 
 /**
- * Retrieves all currently active account lockouts (from RAM cache and Firestore)
+ * Retrieves all currently active account lockouts (from RAM cache, Turso 4, and Database)
  */
 async function getActiveLockouts() {
   const now = Date.now();
@@ -205,7 +245,26 @@ async function getActiveLockouts() {
     }
   }
 
-  // 2. From Firestore
+  // 2. From Turso 4 (fsm-studet-session)
+  try {
+    const { getActiveTursoLockouts } = require("./tursoStudentVaultService");
+    const tursoList = await getActiveTursoLockouts(50);
+    for (const d of tursoList) {
+      if (d && d.identifier && !seen.has(d.identifier)) {
+        seen.add(d.identifier);
+        list.push({
+          identifier: d.identifier,
+          attempts: d.attempts || MAX_FAILED_ATTEMPTS,
+          remainingMinutes: Math.max(1, Math.ceil((d.lockedUntil - now) / 60000)),
+          lockedUntil: new Date(d.lockedUntil).toISOString(),
+          lastAttempt: d.lastAttempt ? new Date(d.lastAttempt).toISOString() : new Date().toISOString(),
+          lastIp: d.lastIp || "Unknown",
+        });
+      }
+    }
+  } catch (_) {}
+
+  // 3. From Database (Fallback)
   if (db) {
     try {
       const snap = await db.collection("account_lockouts").where("lockedUntil", ">", now).limit(50).get();

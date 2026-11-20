@@ -1913,11 +1913,12 @@ let lastEdgePurgeTime = 0;
 let cdnSettingsLoaded = false;
 
 router.get("/cdn/stats", authenticateToken, checkAdminOrPermission("all"), async (req, res) => {
-  if (!cdnSettingsLoaded && db) {
+  if (!cdnSettingsLoaded) {
     try {
-      const cdnDoc = await db.collection("settings").doc("cdn").get();
-      if (cdnDoc.exists && cdnDoc.data()?.retentionDays) {
-        cdnRetentionDays = Number(cdnDoc.data().retentionDays) || 7;
+      const { getSettingFromTurso } = require("../services/tursoService");
+      const cdnData = await getSettingFromTurso("cdn");
+      if (cdnData && cdnData.retentionDays) {
+        cdnRetentionDays = Number(cdnData.retentionDays) || 7;
       }
       cdnSettingsLoaded = true;
     } catch (_) {}
@@ -2162,6 +2163,13 @@ router.post("/cdn/retention", authenticateToken, checkAdminOrPermission("all"), 
   if (!isNaN(parsed) && parsed >= 1) {
     cdnRetentionDays = Math.min(365, parsed);
     cdnSettingsLoaded = true;
+    try {
+      const { saveSettingToTurso } = require("../services/tursoService");
+      await saveSettingToTurso("cdn", {
+        retentionDays: cdnRetentionDays,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (_) {}
     if (db) {
       await db.collection("settings").doc("cdn").set({
         retentionDays: cdnRetentionDays,
@@ -4137,23 +4145,21 @@ function applyTechSettings(data) {
   } catch (_) {}
 }
 
-// Asynchronously load saved tech settings and listen for real-time changes
+// Asynchronously load saved tech settings from Turso 1 (free-study-material-freestudymaterial)
 (async function initTechSettings() {
   try {
+    const { getSettingFromTurso } = require("../services/tursoService");
+    const saved = await getSettingFromTurso("tech_controls");
+    if (saved) {
+      applyTechSettings(saved);
+      console.log("[TECH-NEXUS] Next-Gen tech settings successfully loaded from Turso 1 Core Vault.");
+      return;
+    }
     if (db) {
-      db.collection("settings").doc("tech_controls").onSnapshot((doc) => {
-        if (doc && doc.exists) {
-          applyTechSettings(doc.data());
-          console.log("[TECH-NEXUS] Live tech settings updated in real time via Firestore onSnapshot.");
-        }
-      }, (err) => {
-        console.debug("[TECH-NEXUS] Snapshot listener warning:", err.message);
-      });
-
       const doc = await db.collection("settings").doc("tech_controls").get();
       if (doc.exists) {
         applyTechSettings(doc.data());
-        console.log("[TECH-NEXUS] Next-Gen tech settings successfully loaded from Firestore.");
+        console.log("[TECH-NEXUS] Next-Gen tech settings successfully loaded from Database.");
       }
     }
   } catch (err) {
@@ -4210,8 +4216,15 @@ router.post("/tech-controls", authenticateToken, checkAdminOrPermission("all"), 
       updatedAt: new Date().toISOString(),
     };
 
+    // 1. Commit settings to Turso 1 (free-study-material-freestudymaterial: Core Vault)
+    try {
+      const { saveSettingToTurso } = require("../services/tursoService");
+      await saveSettingToTurso("tech_controls", techSettings);
+    } catch (_) {}
+
+    // 2. Database Fallback (if any)
     if (db) {
-      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
+      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true }).catch(() => {});
     }
 
     applyTechSettings(techSettings);
@@ -4351,8 +4364,15 @@ router.post("/download/toggle", authenticateToken, checkAdminOrPermission("manag
     if (schedule !== undefined && schedule.trim()) techSettings.downloadSchedule = schedule.trim();
     techSettings.updatedAt = new Date().toISOString();
 
+    // 1. Commit settings to Turso 1 (free-study-material-freestudymaterial: Core Vault)
+    try {
+      const { saveSettingToTurso } = require("../services/tursoService");
+      await saveSettingToTurso("tech_controls", techSettings);
+    } catch (_) {}
+
+    // 2. Database Fallback (if any)
     if (db) {
-      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
+      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true }).catch(() => {});
     }
 
     return res.json({
@@ -4382,8 +4402,15 @@ router.post("/maintenance/toggle", authenticateToken, checkAdminOrPermission("al
     if (estimatedEnd !== undefined) techSettings.maintenanceEstimatedEnd = estimatedEnd;
     techSettings.updatedAt = new Date().toISOString();
 
+    // 1. Commit settings to Turso 1 (free-study-material-freestudymaterial: Core Vault)
+    try {
+      const { saveSettingToTurso } = require("../services/tursoService");
+      await saveSettingToTurso("tech_controls", techSettings);
+    } catch (_) {}
+
+    // 2. Database Fallback (if any)
     if (db) {
-      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true });
+      await db.collection("settings").doc("tech_controls").set(techSettings, { merge: true }).catch(() => {});
     }
 
     applyTechSettings(techSettings);

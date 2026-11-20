@@ -8,11 +8,12 @@
  * ============================================================================
  */
 
-const { mongoAdapter, MongoFirestoreAdapter, getMongoDbInstance } = require("./services/mongoDbAdapter");
+const { mongoAdapter, MongoFirestoreAdapter, getMongoDbInstance, getDatabase } = require("./services/mongoDbAdapter");
 
 module.exports = {
   db: mongoAdapter,
   mongoAdapter,
   MongoFirestoreAdapter,
   getMongoDbInstance,
+  getDatabase: getMongoDbInstance,
 };

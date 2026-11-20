@@ -513,7 +513,22 @@ router.post("/jail-appeal", async (req, res) => {
       replyMarkup,
     });
 
-    // Save record to database if available
+    // Save record to Turso 4 (fsm-studet-session: Dedicated Security & Appeals Vault)
+    try {
+      const { saveTursoJailAppeal } = require("../services/tursoStudentVaultService");
+      await saveTursoJailAppeal({
+        incidentId: safeIncId,
+        name: name || "Student",
+        email: email || "",
+        mobile: mobile || "",
+        message: message || "",
+        ip: clientIp,
+        deviceId: effectiveDevId,
+        status: "pending",
+      });
+    } catch (_) {}
+
+    // Save record to database fallback if available
     if (db) {
       try {
         await db.collection("jail_appeals").add({

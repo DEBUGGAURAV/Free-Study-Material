@@ -49,7 +49,7 @@ try {
 }
 
 /**
- * Initialize Student Telemetry Tables
+ * Initialize Student Telemetry & Security Defense Tables
  */
 async function initStudentTursoTables() {
   if (!studentTursoClient) return;
@@ -77,7 +77,40 @@ async function initStudentTursoTables() {
         created_at INTEGER
       );
     `);
-    console.log("[TURSO-STUDENT-VAULT] ✅ Student telemetry tables verified.");
+
+    // 1. Account Brute-Force Lockouts (Security Defense - Decoupled from MongoDB)
+    await studentTursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS account_lockouts (
+        id TEXT PRIMARY KEY,
+        identifier TEXT,
+        attempts INTEGER DEFAULT 0,
+        locked_until INTEGER DEFAULT 0,
+        last_attempt INTEGER DEFAULT 0,
+        last_ip TEXT,
+        last_user_agent TEXT,
+        updated_at INTEGER
+      );
+    `);
+    await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_lockouts_until ON account_lockouts(locked_until);`).catch(() => {});
+
+    // 2. IP Quarantine & Jail Appeals (Decoupled from MongoDB)
+    await studentTursoClient.execute(`
+      CREATE TABLE IF NOT EXISTS jail_appeals (
+        incident_id TEXT PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        mobile TEXT,
+        message TEXT,
+        ip TEXT,
+        device_id TEXT,
+        status TEXT DEFAULT 'pending',
+        created_at INTEGER
+      );
+    `);
+    await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_jail_appeals_ip ON jail_appeals(ip);`).catch(() => {});
+    await studentTursoClient.execute(`CREATE INDEX IF NOT EXISTS idx_jail_appeals_status ON jail_appeals(status);`).catch(() => {});
+
+    console.log("[TURSO-STUDENT-VAULT] ✅ Student telemetry, account lockouts & jail appeals tables verified.");
   } catch (err) {
     console.warn("[TURSO-STUDENT-VAULT] Table init notice:", err.message);
   }
@@ -85,6 +118,172 @@ async function initStudentTursoTables() {
 
 // Auto-run schema initialization
 initStudentTursoTables().catch(() => {});
+
+/**
+ * 🛡️ Account Lockout Helpers (Turso 4)
+ */
+async function getTursoAccountLockout(id) {
+  if (!studentTursoClient || !id) return null;
+  try {
+    const res = await studentTursoClient.execute({
+      sql: "SELECT * FROM account_lockouts WHERE id = ? LIMIT 1",
+      args: [String(id)],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const r = res.rows[0];
+      return {
+        id: r.id,
+        identifier: r.identifier,
+        attempts: Number(r.attempts || 0),
+        lockedUntil: Number(r.locked_until || 0),
+        lastAttempt: Number(r.last_attempt || 0),
+        lastIp: r.last_ip || "",
+      };
+    }
+    return null;
+  } catch (err) {
+    return null;
+  }
+}
+
+async function saveTursoAccountLockout({ id, identifier, attempts, lockedUntil, lastAttempt, lastIp, lastUserAgent }) {
+  if (!studentTursoClient || !id) return false;
+  try {
+    await studentTursoClient.execute({
+      sql: `INSERT INTO account_lockouts (id, identifier, attempts, locked_until, last_attempt, last_ip, last_user_agent, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              attempts = excluded.attempts,
+              locked_until = excluded.locked_until,
+              last_attempt = excluded.last_attempt,
+              last_ip = excluded.last_ip,
+              last_user_agent = excluded.last_user_agent,
+              updated_at = excluded.updated_at`,
+      args: [
+        String(id),
+        String(identifier || id),
+        Number(attempts || 0),
+        Number(lockedUntil || 0),
+        Number(lastAttempt || Date.now()),
+        String(lastIp || ""),
+        String(lastUserAgent || ""),
+        Date.now(),
+      ],
+    });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function deleteTursoAccountLockout(id) {
+  if (!studentTursoClient || !id) return false;
+  try {
+    await studentTursoClient.execute({
+      sql: "DELETE FROM account_lockouts WHERE id = ?",
+      args: [String(id)],
+    });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function getActiveTursoLockouts(limit = 50) {
+  if (!studentTursoClient) return [];
+  try {
+    const now = Date.now();
+    const res = await studentTursoClient.execute({
+      sql: "SELECT * FROM account_lockouts WHERE locked_until > ? ORDER BY locked_until DESC LIMIT ?",
+      args: [now, Math.min(100, Math.max(1, limit))],
+    });
+    return (res.rows || []).map((r) => ({
+      id: r.id,
+      identifier: r.identifier,
+      attempts: Number(r.attempts || 0),
+      lockedUntil: Number(r.locked_until || 0),
+      lastAttempt: Number(r.last_attempt || 0),
+      lastIp: r.last_ip,
+    }));
+  } catch (err) {
+    return [];
+  }
+}
+
+/**
+ * ⚖️ Jail Appeals Helpers (Turso 4)
+ */
+async function saveTursoJailAppeal({ incidentId, name, email, mobile, message, ip, deviceId, status = "pending" }) {
+  if (!studentTursoClient || !incidentId) return false;
+  try {
+    await studentTursoClient.execute({
+      sql: `INSERT OR REPLACE INTO jail_appeals (incident_id, name, email, mobile, message, ip, device_id, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        String(incidentId),
+        String(name || "Student"),
+        String(email || ""),
+        String(mobile || ""),
+        String(message || ""),
+        String(ip || ""),
+        String(deviceId || ""),
+        String(status || "pending"),
+        Date.now(),
+      ],
+    });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function getTursoJailAppeals(limit = 100) {
+  if (!studentTursoClient) return [];
+  try {
+    const res = await studentTursoClient.execute({
+      sql: "SELECT * FROM jail_appeals ORDER BY created_at DESC LIMIT ?",
+      args: [Math.min(200, Math.max(1, limit))],
+    });
+    return (res.rows || []).map((r) => ({
+      incidentId: r.incident_id,
+      name: r.name,
+      email: r.email,
+      mobile: r.mobile,
+      message: r.message,
+      ip: r.ip,
+      deviceId: r.device_id,
+      status: r.status,
+      createdAt: r.created_at,
+    }));
+  } catch (err) {
+    return [];
+  }
+}
+
+async function deleteTursoJailAppeal(incidentId, ip = null) {
+  if (!studentTursoClient || (!incidentId && !ip)) return false;
+  try {
+    if (incidentId && ip) {
+      await studentTursoClient.execute({
+        sql: "DELETE FROM jail_appeals WHERE incident_id = ? OR ip = ?",
+        args: [String(incidentId), String(ip)],
+      });
+    } else if (incidentId) {
+      await studentTursoClient.execute({
+        sql: "DELETE FROM jail_appeals WHERE incident_id = ?",
+        args: [String(incidentId)],
+      });
+    } else if (ip) {
+      await studentTursoClient.execute({
+        sql: "DELETE FROM jail_appeals WHERE ip = ?",
+        args: [String(ip)],
+      });
+    }
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
 
 /**
  * ⚡ Live Speed & Health Telemetry for Tab 4 (Software & Maintenance)
@@ -95,12 +294,16 @@ async function getTursoStudentTelemetry() {
   let latencyMs = 0;
   let sessionsCount = 0;
   let logsCount = 0;
+  let lockoutsCount = 0;
+  let appealsCount = 0;
 
   if (studentTursoClient) {
     try {
-      const [sessRes, logsRes] = await Promise.all([
+      const [sessRes, logsRes, lockRes, appRes] = await Promise.all([
         studentTursoClient.execute("SELECT COUNT(*) as count FROM student_sessions").catch(() => null),
         studentTursoClient.execute("SELECT COUNT(*) as count FROM student_security_logs").catch(() => null),
+        studentTursoClient.execute("SELECT COUNT(*) as count FROM account_lockouts").catch(() => null),
+        studentTursoClient.execute("SELECT COUNT(*) as count FROM jail_appeals").catch(() => null),
       ]);
       latencyMs = Math.max(1, Date.now() - startTime);
       connected = true;
@@ -109,6 +312,12 @@ async function getTursoStudentTelemetry() {
       }
       if (logsRes && logsRes.rows && logsRes.rows[0]) {
         logsCount = Number(logsRes.rows[0].count) || 0;
+      }
+      if (lockRes && lockRes.rows && lockRes.rows[0]) {
+        lockoutsCount = Number(lockRes.rows[0].count) || 0;
+      }
+      if (appRes && appRes.rows && appRes.rows[0]) {
+        appealsCount = Number(appRes.rows[0].count) || 0;
       }
     } catch (_) {
       latencyMs = Math.max(1, Date.now() - startTime);
@@ -121,10 +330,12 @@ async function getTursoStudentTelemetry() {
     isCloud: isStudentCloud,
     latencyMs: `${latencyMs}ms`,
     url: studentTursoUrl || "cache/turso_student_vault.db",
-    database: studentTursoUrl ? studentTursoUrl.replace("libsql://", "").split("?")[0] : "fsm-student-telemetry.aws-ap-south-1.turso.io",
+    database: studentTursoUrl ? studentTursoUrl.replace("libsql://", "").split("?")[0] : "fsm-studet-session-freestudymaterial.aws-ap-south-1.turso.io",
     sessionsCount,
     logsCount,
-    engineName: "Turso 4: Student Sessions & Telemetry Vault",
+    lockoutsCount,
+    appealsCount,
+    engineName: "Turso 4: Student Sessions & Security Defense Vault",
   };
 }
 
@@ -141,9 +352,13 @@ async function cleanTursoStudentData() {
       sql: "DELETE FROM student_security_logs WHERE created_at < ?",
       args: [Date.now() - 30 * 86400000],
     });
+    await studentTursoClient.execute({
+      sql: "DELETE FROM account_lockouts WHERE locked_until < ?",
+      args: [Date.now()],
+    });
     return {
       success: true,
-      message: "Turso Student Vault cleaned successfully! Stale revoked sessions and old telemetry logs purged.",
+      message: "Turso Student Vault cleaned successfully! Stale revoked sessions, expired lockouts, and old telemetry logs purged.",
     };
   } catch (err) {
     // If tables don't exist yet, re-init
@@ -158,5 +373,12 @@ module.exports = {
   getTursoStudentTelemetry,
   cleanTursoStudentData,
   initStudentTursoTables,
+  getTursoAccountLockout,
+  saveTursoAccountLockout,
+  deleteTursoAccountLockout,
+  getActiveTursoLockouts,
+  saveTursoJailAppeal,
+  getTursoJailAppeals,
+  deleteTursoJailAppeal,
 };
 

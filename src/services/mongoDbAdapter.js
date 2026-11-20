@@ -517,4 +517,5 @@ module.exports = {
   MongoFirestoreAdapter,
   mongoAdapter,
   getMongoDbInstance: getDatabase,
+  getDatabase,
 };
