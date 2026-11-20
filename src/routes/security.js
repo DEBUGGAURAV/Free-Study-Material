@@ -576,22 +576,38 @@ router.get("/check-pardon", async (req, res) => {
   if (!pardoned && incidentId.startsWith("FSM-BAN-")) {
     const rawToken = incidentId.replace("FSM-BAN-", "").trim().toLowerCase();
     try {
+      let targetUser = null;
+
+      // 1. Check direct doc ID in Firestore
       if (db) {
-        const snap = await db.collection("users").get();
-        snap.forEach((doc) => {
-          const data = doc.data();
-          const cleanDocId = (doc.id || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase();
-          const cleanEmail = (data.email || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase();
-          if (cleanDocId === rawToken || cleanEmail === rawToken || doc.id.toLowerCase() === rawToken) {
-            // Target user located: verify if active in database and not blocked
-            if (data.isBlocked === false || !data.isBlocked) {
-              pardoned = true;
-              if (typeof addPardonedIncident === "function") {
-                addPardonedIncident(incidentId);
-              }
-            }
+        const directDoc = await db.collection("users").doc(rawToken).get().catch(() => null);
+        if (directDoc?.exists) {
+          targetUser = directDoc.data();
+        } else {
+          // 2. Query by email with limit(1)
+          const snap = await db.collection("users").where("email", "==", rawToken).limit(1).get().catch(() => null);
+          if (snap && !snap.empty) {
+            targetUser = snap.docs[0].data();
           }
-        });
+        }
+      }
+
+      // 3. Fallback: Check Turso User Cache (0ms Edge speed)
+      if (!targetUser) {
+        try {
+          const { getCachedUserByIdFromTurso, getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
+          targetUser = (await getCachedUserByIdFromTurso(rawToken)) || (await getCachedUserByEmailFromTurso(rawToken));
+        } catch (_) {}
+      }
+
+      if (targetUser) {
+        const isNotBlocked = targetUser.isBlocked === false || !targetUser.isBlocked;
+        if (isNotBlocked) {
+          pardoned = true;
+          if (typeof addPardonedIncident === "function") {
+            addPardonedIncident(incidentId);
+          }
+        }
       }
     } catch (e) {
       console.warn("[CHECK-PARDON] Error checking account unblock status in DB:", e.message);

@@ -97,7 +97,7 @@ router.post("/announce", (req, res) => {
 router.get("/peers/:noteId", (req, res) => {
   try {
     const { noteId } = req.params;
-    const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1";
+    const clientIp = getClientIp(req);
     const subnet = clientIp.split(".").slice(0, 3).join(".");
     const currentPeerId = req.query.peerId;
 

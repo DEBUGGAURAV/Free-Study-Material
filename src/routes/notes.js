@@ -1769,13 +1769,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       } catch {}
     }
 
-    const currentNoteDoc = await db.collection("notes").doc(id).get();
-    if (!currentNoteDoc.exists) {
-      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
-    }
-    note.isVisible = currentNoteDoc.data()?.isVisible !== false;
-    ramCache.set(`note_${id}`, note, 3 * 3600);
-    if (!note.isVisible && !isAdminUser(requestingUser)) {
+    if (note.isVisible === false && !isAdminUser(requestingUser)) {
       return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
 

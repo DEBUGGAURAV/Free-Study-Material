@@ -12,6 +12,7 @@ const { encrypt, decrypt, blindIndex, decryptUserObject } = require("../utils/cr
 const { getSiteDomain } = require("../config/siteConfig");
 const { getBackendClusterUrls } = require("../config/clusterConfig");
 const { createStepUpToken, requireStepUpAuth } = require("../middleware/adminStepUp");
+const { getClientIp } = require("../middleware/rateLimit");
 
 const safeRequire = (modPath, defaults = {}) => {
   try { return require(modPath) || defaults; } catch { return defaults; }
@@ -996,7 +997,7 @@ router.delete("/users/:id", authenticateToken, checkAdminOrPermission("manage_us
         id: req.user?.id,
         name: req.user?.name || "Administrator",
         email: req.user?.email || "Admin",
-        ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+        ip: getClientIp(req),
       },
       reason: `Admin Manual Deletion by ${req.user?.email || "Admin"}`,
       isAutoPurge: false,
@@ -1983,7 +1984,7 @@ router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("
       id: req.user?.id,
       name: req.user?.name || "Administrator",
       email: req.user?.email || "Admin",
-      ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+      ip: getClientIp(req),
     };
 
     for (const doc of snap.docs) {
@@ -2791,7 +2792,7 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
     const rawRay = req.headers["cf-ray"] || "";
     const edgePop = rawRay ? (rawRay.split("-")[1] || "CF-ANYCAST") : "DEL / BOM (Regional Edge)";
     const detectedCountry = req.headers["cf-ipcountry"] || req.headers["x-country"] || "IN (India / South Asia)";
-    const clientIp = req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "127.0.0.1";
+    const clientIp = getClientIp(req);
     const forwardedProto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
 
     const geographical = {
@@ -3039,6 +3040,14 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
       tursoAi = await getTursoAiTelemetry();
     } catch (err) {
       tursoAi = { connected: false, error: err.message, latencyMs: "< 5ms" };
+    }
+
+    let tursoChatVault = null;
+    try {
+      const { getTursoChatTelemetry } = require("../services/tursoService");
+      tursoChatVault = await getTursoChatTelemetry();
+    } catch (err) {
+      tursoChatVault = { connected: false, error: err.message, latencyMs: 0 };
     }
 
     let mongoTelemetry = null;
@@ -3652,7 +3661,7 @@ router.delete("/database/item/:collectionName/:id", authenticateToken, checkAdmi
           id: req.user?.id,
           name: req.user?.name || "Administrator",
           email: req.user?.email || "Admin",
-          ip: req.ip || req.headers["x-forwarded-for"] || "127.0.0.1",
+          ip: getClientIp(req),
         },
         reason: `Database Studio Deletion by ${req.user?.email || "Admin"}`,
         isAutoPurge: false,

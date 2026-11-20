@@ -14,7 +14,7 @@ const {
   DIRECT_MTPROTO_SIZE_BYTES,
 } = require("../utils/fileSecurityInspector");
 const { verifyTurnstileToken } = require("../utils/turnstileGuard");
-const { uploadLimiter } = require("../middleware/rateLimit");
+const { uploadLimiter, getClientIp } = require("../middleware/rateLimit");
 const { enqueueUpload, getJobStatus, recordPipelineStart } = require("../services/queueService");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { sendTelegramAuthNotice } = require("../services/emailService");
@@ -304,7 +304,7 @@ router.post(
         year: noteYear,
         uploaderEmail: req.user?.email || "student@freestudymaterial.com",
         uploaderName: req.user?.name || "Student Contributor",
-        uploaderIp: req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1",
+        uploaderIp: getClientIp(req),
         clientSpeed: req.body.clientSpeed || (isOver100MB ? "Direct MTProto Stream (>=100MB Zero-RAM)" : (isLargeFile ? "Async MTProto Direct Stream (>50MB)" : "High Speed Direct Transfer")),
         clientElapsed: req.body.clientElapsed || "1.2s",
       });

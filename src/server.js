@@ -100,6 +100,7 @@ app.use(
           "'self'",
           "'unsafe-inline'",
           "blob:",
+          "https://challenges.cloudflare.com",
           "https://accounts.google.com",
           "https://*.google.com",
           "https://apis.google.com",
@@ -124,6 +125,7 @@ app.use(
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         connectSrc: [
           "'self'",
+          "https://challenges.cloudflare.com",
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
           "https://accounts.google.com",
@@ -149,6 +151,7 @@ app.use(
           "'self'",
           "blob:",
           "data:",
+          "https://challenges.cloudflare.com",
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
           "https://accounts.google.com",

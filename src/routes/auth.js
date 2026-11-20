@@ -2339,7 +2339,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
  */
 router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body;
+    const { email, otp, newPassword, mobile } = req.body || {};
     if (!email || !otp || !newPassword) {
       return res.status(400).json({ success: false, message: "Email, OTP code, and new password are required." });
     }
@@ -2383,7 +2383,8 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     });
 
-    const targetKey = (email || "").trim().toLowerCase() || (mobile || "").replace(/\D/g, "").slice(-10);
+    const cleanMobile = mobile ? String(mobile).replace(/\D/g, "").slice(-10) : "";
+    const targetKey = cleanEmail || cleanMobile;
     if (targetKey) {
       await clearFailedAttempts(targetKey).catch(() => {});
       ramCache.delete(`auth_user_${targetKey}`);

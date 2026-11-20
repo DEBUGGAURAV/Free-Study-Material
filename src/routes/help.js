@@ -18,7 +18,7 @@ const router = express.Router();
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const { helpLimiter } = require("../middleware/rateLimit");
+const { helpLimiter, getClientIp } = require("../middleware/rateLimit");
 const { authenticateToken, requireAuth } = require("../middleware/auth");
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
@@ -310,15 +310,7 @@ router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
       }
     }
 
-    const clientIp = (
-      req.headers["x-forwarded-for"] ||
-      req.headers["x-real-ip"] ||
-      req.socket?.remoteAddress ||
-      "127.0.0.1"
-    )
-      .split(",")[0]
-      .trim()
-      .replace(/^::ffff:/, "");
+    const clientIp = getClientIp(req);
 
     const ticket = await createHelpTicket({
       name: user?.name || name || "Student Visitor",
