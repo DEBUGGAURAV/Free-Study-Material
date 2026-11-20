@@ -357,20 +357,14 @@ export default function AuthModal({
       localStorage.setItem("academic_vault_login_pref", "password");
     }
 
-    // Always ask user if they want to apply Passkey on this device (Google, Telegram Bot, or Email)
-    if (supportsPasskey && !authenticatedUser.hasPasskey) {
-      setPostRegUser(authenticatedUser);
-      setShowPostRegPasskeyPrompt(true);
-      setError(null);
-      setFieldErrors({});
-      setSuccessMsg(null);
-    } else {
-      // If passkey is not supported or already setup, immediately authenticate & land on notes page!
-      if (onAuthSuccess) {
-        onAuthSuccess(authenticatedUser);
-      }
-      onClose();
+    setShowPostRegPasskeyPrompt(false);
+    setPostRegUser(null);
+
+    // Directly authenticate & immediately land on the main page!
+    if (onAuthSuccess) {
+      onAuthSuccess(authenticatedUser);
     }
+    onClose();
   };
 
   // Forgot Password State
