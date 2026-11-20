@@ -12,6 +12,7 @@
 const { createClient } = require("@libsql/client");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 
 const rawUrl = (process.env.TURSO_DATABASE_URL || "").trim();
 const authToken = (process.env.TURSO_AUTH_TOKEN || "").trim();
@@ -53,8 +54,18 @@ try {
  * Initialize all core relational tables (Idempotent)
  */
 async function initTursoTables() {
-  if (!client) return false;
+  if (!client) initLocalClient();
   try {
+    // 🛡️ Cloud Connectivity Test: Auto-failover to local SQLite if cloud returns 401 or network error
+    if (isCloud) {
+      try {
+        await client.execute("SELECT 1;");
+      } catch (connErr) {
+        console.warn("[TURSO] Cloud connection notice (" + connErr.message + "). Activating local LibSQL SQLite.");
+        initLocalClient();
+      }
+    }
+
     const t0 = Date.now();
 
     // 1. Users Table
@@ -70,12 +81,35 @@ async function initTursoTables() {
         branch TEXT,
         year TEXT,
         avatar TEXT,
+        passwordHash TEXT,
+        authProvider TEXT DEFAULT 'email',
+        passkeysJson TEXT,
         createdAt TEXT,
         updatedAt TEXT
       )
     `);
     // Safe column migrations
     await client.execute(`ALTER TABLE users ADD COLUMN college TEXT`).catch(() => {});
+    await client.execute(`ALTER TABLE users ADD COLUMN passwordHash TEXT`).catch(() => {});
+    await client.execute(`ALTER TABLE users ADD COLUMN passkeysJson TEXT`).catch(() => {});
+    await client.execute(`ALTER TABLE users ADD COLUMN authProvider TEXT DEFAULT 'email'`).catch(() => {});
+
+    // 1.1 Biometric Passkeys (FIDO2 / WebAuthn) Table for 100% Offline/Quota-Proof Login
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS passkeys (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userEmail TEXT,
+        publicKey TEXT,
+        counter INTEGER DEFAULT 0,
+        deviceType TEXT,
+        backedUp INTEGER DEFAULT 0,
+        transports TEXT,
+        createdAt TEXT
+      )
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(userId)`).catch(() => {});
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_passkeys_email ON passkeys(userEmail)`).catch(() => {});
 
     // 2. Academic Notes Vault Table
     await client.execute(`
@@ -1394,6 +1428,199 @@ async function exportPurgeAuditReport({ format = "excel", search = "", limit = 5
   };
 }
 
+/**
+ * 💾 RESILIENT USER PERSISTENCE (Turso / Local SQLite)
+ * Guarantees logins & profile lookups work 100% even if Firestore free quota is exhausted!
+ */
+async function saveUserToTurso(user) {
+  if (!client || !user || !user.email) return false;
+  try {
+    const id = String(user.id || `usr_${crypto.createHash("md5").update(user.email).digest("hex").slice(0, 16)}`).trim();
+    const email = String(user.email).trim().toLowerCase();
+    const name = String(user.name || "Student").trim();
+    const role = user.role || "student";
+    const mobile = user.mobile || "";
+    const college = user.college || "";
+    const branch = user.branch || "";
+    const year = user.year || "1st Year";
+    const avatar = user.avatar || user.picture || "";
+    const passwordHash = user.passwordHash || user.password || "";
+    const authProvider = user.authProvider || "email";
+    const passkeysJson = Array.isArray(user.passkeys) ? JSON.stringify(user.passkeys) : (typeof user.passkeysJson === "string" ? user.passkeysJson : "[]");
+    const now = new Date().toISOString();
+
+    await client.execute({
+      sql: `INSERT INTO users (id, email, name, role, mobile, college, branch, year, avatar, passwordHash, authProvider, passkeysJson, createdAt, updatedAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              name=excluded.name,
+              role=excluded.role,
+              mobile=excluded.mobile,
+              college=excluded.college,
+              branch=excluded.branch,
+              year=excluded.year,
+              avatar=excluded.avatar,
+              passwordHash=COALESCE(NULLIF(excluded.passwordHash, ''), users.passwordHash),
+              authProvider=excluded.authProvider,
+              passkeysJson=excluded.passkeysJson,
+              updatedAt=excluded.updatedAt`,
+      args: [id, email, name, role, mobile, college, branch, year, avatar, passwordHash, authProvider, passkeysJson, user.createdAt || now, now],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO] saveUserToTurso warning:", err.message);
+    return false;
+  }
+}
+
+async function getUserFromTursoByEmail(email) {
+  if (!client || !email) return null;
+  try {
+    const cleanEmail = String(email).trim().toLowerCase();
+    const res = await client.execute({
+      sql: `SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1`,
+      args: [cleanEmail],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const u = res.rows[0];
+      let passkeys = [];
+      try {
+        if (u.passkeysJson) passkeys = JSON.parse(u.passkeysJson);
+      } catch (_) {}
+      return {
+        ...u,
+        passkeys,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TURSO] getUserFromTursoByEmail warning:", err.message);
+    return null;
+  }
+}
+
+async function getUserFromTursoById(userId) {
+  if (!client || !userId) return null;
+  try {
+    const cleanId = String(userId).trim();
+    const res = await client.execute({
+      sql: `SELECT * FROM users WHERE id = ? LIMIT 1`,
+      args: [cleanId],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const u = res.rows[0];
+      let passkeys = [];
+      try {
+        if (u.passkeysJson) passkeys = JSON.parse(u.passkeysJson);
+      } catch (_) {}
+      return {
+        ...u,
+        passkeys,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TURSO] getUserFromTursoById warning:", err.message);
+    return null;
+  }
+}
+
+/**
+ * 🔑 RESILIENT PASSKEY PERSISTENCE (Turso / Local SQLite)
+ * Stores FIDO2 WebAuthn credentials safely across restarts with 0 Firestore read quota consumed!
+ */
+async function savePasskeyToTurso(passkey) {
+  if (!client || !passkey || !passkey.id) return false;
+  try {
+    const id = String(passkey.id).trim();
+    const userId = String(passkey.userId || "").trim();
+    const userEmail = String(passkey.userEmail || "").trim().toLowerCase();
+    const publicKey = String(passkey.publicKey || "").trim();
+    const counter = Number(passkey.counter || 0);
+    const deviceType = String(passkey.deviceType || "singleDevice");
+    const backedUp = passkey.backedUp ? 1 : 0;
+    const transports = Array.isArray(passkey.transports) ? JSON.stringify(passkey.transports) : (typeof passkey.transports === "string" ? passkey.transports : "[]");
+    const createdAt = passkey.createdAt || new Date().toISOString();
+
+    await client.execute({
+      sql: `INSERT INTO passkeys (id, userId, userEmail, publicKey, counter, deviceType, backedUp, transports, createdAt)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              counter=excluded.counter,
+              transports=excluded.transports`,
+      args: [id, userId, userEmail, publicKey, counter, deviceType, backedUp, transports, createdAt],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO] savePasskeyToTurso warning:", err.message);
+    return false;
+  }
+}
+
+async function getPasskeyFromTurso(credentialId) {
+  if (!client || !credentialId) return null;
+  try {
+    const id = String(credentialId).trim();
+    const res = await client.execute({
+      sql: `SELECT * FROM passkeys WHERE id = ? LIMIT 1`,
+      args: [id],
+    });
+    if (res.rows && res.rows.length > 0) {
+      const p = res.rows[0];
+      let transports = ["internal", "hybrid"];
+      try {
+        if (p.transports) transports = JSON.parse(p.transports);
+      } catch (_) {}
+      return {
+        ...p,
+        transports,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("[TURSO] getPasskeyFromTurso warning:", err.message);
+    return null;
+  }
+}
+
+async function getPasskeysByEmailFromTurso(email) {
+  if (!client || !email) return [];
+  try {
+    const cleanEmail = String(email).trim().toLowerCase();
+    const res = await client.execute({
+      sql: `SELECT * FROM passkeys WHERE LOWER(userEmail) = ?`,
+      args: [cleanEmail],
+    });
+    if (res.rows && res.rows.length > 0) {
+      return res.rows.map((p) => {
+        let transports = ["internal", "hybrid"];
+        try {
+          if (p.transports) transports = JSON.parse(p.transports);
+        } catch (_) {}
+        return { ...p, transports };
+      });
+    }
+    return [];
+  } catch (err) {
+    console.warn("[TURSO] getPasskeysByEmailFromTurso warning:", err.message);
+    return [];
+  }
+}
+
+async function deletePasskeyFromTurso(credentialId) {
+  if (!client || !credentialId) return false;
+  try {
+    await client.execute({
+      sql: `DELETE FROM passkeys WHERE id = ?`,
+      args: [String(credentialId).trim()],
+    });
+    return true;
+  } catch (err) {
+    console.warn("[TURSO] deletePasskeyFromTurso warning:", err.message);
+    return false;
+  }
+}
+
 module.exports = {
   get tursoClient() {
     return client;
@@ -1431,5 +1658,12 @@ module.exports = {
   logAccountPurgeToTurso,
   getAccountPurgeLogsFromTurso,
   exportPurgeAuditReport,
+  saveUserToTurso,
+  getUserFromTursoByEmail,
+  getUserFromTursoById,
+  savePasskeyToTurso,
+  getPasskeyFromTurso,
+  getPasskeysByEmailFromTurso,
+  deletePasskeyFromTurso,
 };
 

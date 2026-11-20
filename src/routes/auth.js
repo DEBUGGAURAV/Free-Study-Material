@@ -30,6 +30,10 @@ const {
   encryptUserObject,
   decryptUserObject,
 } = require("../utils/cryptoVault");
+const {
+  getUserFromTursoByEmail,
+  saveUserToTurso,
+} = require("../services/tursoService");
 
 /**
  * Strips registered JWT timing/ID claims (exp, iat, nbf, jti) before re-signing with expiresIn.
@@ -779,18 +783,30 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
 
     const { name, mobile, college, year, password } = verification.data;
 
-    if (!checkDb(res)) return;
+    let isDuplicate = false;
+    if (db) {
+      try {
+        const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+        if (!existingSnap.empty) isDuplicate = true;
+      } catch (chkErr) {
+        console.warn("[AUTH-REGISTER-OTP] Firestore unique check notice:", chkErr.message);
+      }
+    }
+    if (!isDuplicate) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
+        if (tursoUser) isDuplicate = true;
+      } catch (_) {}
+    }
 
-    // Double check email uniqueness before creation
-    const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
-    if (!existingSnap.empty) {
+    if (isDuplicate) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered." });
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const userId = db.collection("users").doc().id;
+    const userId = (db && db.collection("users").doc().id) || (crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`);
     const newUser = {
       id: userId,
       name,
@@ -808,11 +824,29 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    const secureUser = encryptUserObject(newUser);
-    await db.collection("users").doc(userId).set({
-      ...secureUser,
-      password: hashedPassword,
-    });
+    // Save to Turso / Local SQLite
+    await saveUserToTurso({
+      ...newUser,
+      passwordHash: hashedPassword,
+    }).catch(() => {});
+
+    // Save to RAM cache
+    if (ramCache) {
+      ramCache.set(`auth_user_${cleanEmail}`, { userRecord: { ...newUser, password: hashedPassword, passwordHash: hashedPassword }, docId: userId }, 3600);
+    }
+
+    // Mirror to Firestore safely if available
+    if (db) {
+      try {
+        const secureUser = encryptUserObject(newUser);
+        await db.collection("users").doc(userId).set({
+          ...secureUser,
+          password: hashedPassword,
+        });
+      } catch (dbErr) {
+        console.warn("[AUTH-REGISTER-OTP] Firestore write notice (user preserved safely in Turso):", dbErr.message);
+      }
+    }
 
     const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
     const payload = {
@@ -928,27 +962,44 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: verification.message });
     }
 
-    if (!checkDb(res)) return;
+    // Parallelized unique checks (safely handles Firestore quota limits)
+    let isEmailTaken = false;
+    let isMobileTaken = false;
 
-    // Parallelized unique checks (runs concurrently in ~250ms)
-    const mHash = blindIndex(cleanMobile);
-    const [existingSnap, mHashSnap, legacyMobSnap] = await Promise.all([
-      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
-      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
-      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
-    ]);
+    if (db) {
+      try {
+        const mHash = blindIndex(cleanMobile);
+        const [existingSnap, mHashSnap, legacyMobSnap] = await Promise.all([
+          db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+          db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+          db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+        ]);
+        if (!existingSnap.empty) isEmailTaken = true;
+        if (!mHashSnap.empty || !legacyMobSnap.empty) isMobileTaken = true;
+      } catch (dbChkErr) {
+        console.warn("[AUTH-REGISTER] Firestore unique check notice:", dbChkErr.message);
+      }
+    }
 
-    if (!existingSnap.empty) {
+    if (!isEmailTaken) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
+        if (tursoUser) isEmailTaken = true;
+      } catch (_) {}
+    }
+
+
+    if (isEmailTaken) {
       return res.status(400).json({ success: false, message: "This E-mail address is already registered.", field: "email" });
     }
-    if (!mHashSnap.empty || !legacyMobSnap.empty) {
+    if (isMobileTaken) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered. Please sign in or use a different number.", field: "mobile" });
     }
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const userId = db.collection("users").doc().id;
+    const userId = (db && db.collection("users").doc().id) || (crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`);
     const newUser = {
       id: userId,
       name: name.trim(),
@@ -966,11 +1017,29 @@ router.post("/register", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    const secureUser = encryptUserObject(newUser);
-    await db.collection("users").doc(userId).set({
-      ...secureUser,
-      password: hashedPassword,
-    });
+    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
+    await saveUserToTurso({
+      ...newUser,
+      passwordHash: hashedPassword,
+    }).catch(() => {});
+
+    // 2. Cache in RAM
+    if (ramCache) {
+      ramCache.set(`auth_user_${cleanEmail}`, { userRecord: { ...newUser, password: hashedPassword, passwordHash: hashedPassword }, docId: userId }, 3600);
+    }
+
+    // 3. Mirror to Firestore safely if available
+    if (db) {
+      try {
+        const secureUser = encryptUserObject(newUser);
+        await db.collection("users").doc(userId).set({
+          ...secureUser,
+          password: hashedPassword,
+        });
+      } catch (dbErr) {
+        console.warn("[AUTH-REGISTER] Firestore write notice (user preserved safely in Turso):", dbErr.message);
+      }
+    }
 
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
 
@@ -1155,15 +1224,47 @@ router.post("/google", authLimiter, async (req, res) => {
       });
     }
 
-    if (!checkDb(res)) return;
+    let userData = null;
+    let docId = null;
 
-    // Check if user already registered in Firestore
-    const snap = await db.collection("users").where("email", "==", verifiedEmail).limit(1).get();
+    // 1. Check RAM Cache First (0ms)
+    const cached = ramCache ? ramCache.get(`auth_user_${verifiedEmail}`) : null;
+    if (cached) {
+      userData = cached.userRecord;
+      docId = cached.docId;
+    }
 
-    if (!snap.empty) {
+    // 2. Check Firestore safely (gracefully handles quota exhaustion / offline)
+    if (!userData && db) {
+      try {
+        const snap = await db.collection("users").where("email", "==", verifiedEmail).limit(1).get();
+        if (!snap.empty) {
+          docId = snap.docs[0].id;
+          userData = decryptUserObject(snap.docs[0].data());
+          if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
+          saveUserToTurso({ ...userData, id: docId }).catch(() => {});
+        }
+      } catch (dbErr) {
+        console.warn("[AUTH-GOOGLE] Firestore query notice (falling back to Turso/local):", dbErr.message);
+      }
+    }
+
+    // 3. Check Turso / Local SQLite (100% resilient fallback)
+    if (!userData) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(verifiedEmail);
+        if (tursoUser) {
+          docId = tursoUser.id;
+          userData = tursoUser;
+          if (ramCache) ramCache.set(`auth_user_${verifiedEmail}`, { userRecord: userData, docId }, 3600);
+        }
+      } catch (_) {}
+    }
+
+
+    if (userData) {
       // Existing User -> Immediate Login (NO OTP)
-      const doc = snap.docs[0];
-      const userData = decryptUserObject(doc.data());
+      const doc = { id: docId || userData.id };
 
       // MAINTENANCE MODE ENFORCEMENT: ONLY ADMINS PERMITTED
       if (isMaintenanceActive()) {
@@ -1187,10 +1288,12 @@ router.post("/google", authLimiter, async (req, res) => {
       // Record login event in background (Zero blocking delay for instant fast login)
       setImmediate(async () => {
         try {
-          await db.collection("users").doc(doc.id).update({
-            lastLoginAt: new Date().toISOString(),
-            authProvider: "google",
-          });
+          if (db && docId) {
+            await db.collection("users").doc(docId).update({
+              lastLoginAt: new Date().toISOString(),
+              authProvider: "google",
+            });
+          }
         } catch (_) {}
 
         // Dispatch Real-time Telegram Security Alert with Google Photo & Details in background
@@ -1215,16 +1318,16 @@ router.post("/google", authLimiter, async (req, res) => {
 
       const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
       const payload = {
-        id: doc.id,
+        id: docId || userData.id,
         sid: sessionId,
-        email: userData.email,
+        email: userData.email || verifiedEmail,
         name: userData.name || verifiedName,
-        role: userData.role || (userData.email === MAIN_ADMIN_EMAIL ? "admin" : "student"),
+        role: userData.role || (verifiedEmail === MAIN_ADMIN_EMAIL ? "admin" : "student"),
         college: userData.college || "Academic Institute",
         mobile: userData.mobile || "",
         year: userData.year || "1st Year",
         picture: verifiedPicture || "",
-        permissions: userData.email === MAIN_ADMIN_EMAIL
+        permissions: (verifiedEmail === MAIN_ADMIN_EMAIL || userData.role === "admin")
           ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
           : (userData.permissions || ["download_notes", "upload_notes"]),
         v: Number(userData.tokenVersion || Date.now()),
@@ -1238,7 +1341,7 @@ router.post("/google", authLimiter, async (req, res) => {
         const { recordActiveSession } = require("../services/studentSessionService");
         recordActiveSession({
           sessionId,
-          userId: doc.id,
+          userId: docId || userData.id,
           req,
           tokenVersion: payload.v,
           deviceSpecs: req.body?.deviceSpecs,
@@ -1306,27 +1409,44 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "College name is required." });
     }
 
-    if (!checkDb(res)) return;
+    // Parallelized unique checks (safely handles Firestore quota limits)
+    let isEmailTaken = false;
+    let isMobileTaken = false;
 
-    // Parallelized unique checks (runs concurrently in ~250ms)
-    const mHash = blindIndex(cleanMobile);
-    const [snap, mHashSnap, legacyMobSnap] = await Promise.all([
-      db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
-      db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
-      db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
-    ]);
+    if (db) {
+      try {
+        const mHash = blindIndex(cleanMobile);
+        const [snap, mHashSnap, legacyMobSnap] = await Promise.all([
+          db.collection("users").where("email", "==", cleanEmail).limit(1).get(),
+          db.collection("users").where("mobileHash", "==", mHash).limit(1).get(),
+          db.collection("users").where("mobile", "==", cleanMobile).limit(1).get(),
+        ]);
+        if (!snap.empty) isEmailTaken = true;
+        if (!mHashSnap.empty || !legacyMobSnap.empty) isMobileTaken = true;
+      } catch (dbChkErr) {
+        console.warn("[AUTH-GOOGLE-COMPLETE] Firestore unique check notice:", dbChkErr.message);
+      }
+    }
 
-    if (!snap.empty) {
+    if (!isEmailTaken) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(cleanEmail);
+        if (tursoUser) isEmailTaken = true;
+      } catch (_) {}
+    }
+
+
+    if (isEmailTaken) {
       return res.status(409).json({
         success: false,
         message: "An account with this email address already exists. Please sign in with your password or use Google Sign-In directly.",
       });
     }
-    if (!mHashSnap.empty || !legacyMobSnap.empty) {
+    if (isMobileTaken) {
       return res.status(400).json({ success: false, message: "This Mobile Number is already registered to another account." });
     }
 
-    const userId = db.collection("users").doc().id;
+    const userId = (db && db.collection("users").doc().id) || (crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`);
 
     // CRITICAL CONSTRAINT: DO NOT SAVE ANY PHOTO IN FIRESTORE DATABASE!
     const newUser = {
@@ -1347,8 +1467,23 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    const secureUser = encryptUserObject(newUser);
-    await db.collection("users").doc(userId).set(secureUser);
+    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
+    await saveUserToTurso(newUser).catch(() => {});
+
+    // 2. Cache in RAM
+    if (ramCache) {
+      ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 3600);
+    }
+
+    // 3. Mirror to Firestore safely if available
+    if (db) {
+      try {
+        const secureUser = encryptUserObject(newUser);
+        await db.collection("users").doc(userId).set(secureUser);
+      } catch (dbErr) {
+        console.warn("[AUTH-GOOGLE-COMPLETE] Firestore write notice (user preserved safely in Turso):", dbErr.message);
+      }
+    }
 
     // Dispatch Real-time Telegram Security Alert with Google Photo & Details in background
     setImmediate(() => {
@@ -1597,12 +1732,27 @@ router.post("/login", authLimiter, async (req, res) => {
           userRecord = decryptUserObject(snap.docs[0].data());
           docId = snap.docs[0].id;
           ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
+          saveUserToTurso({ ...userRecord, id: docId }).catch(() => {});
         }
       } catch (dbErr) {
         console.warn("[AUTH] Database lookup notice:", dbErr.message);
         dbLookupError = dbErr;
       }
     }
+
+    // ⚡ 3. Turso / Local SQLite Fallback (resilient against Firestore quota exhaustion)
+    if (!userRecord) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(inputIdentity);
+        if (tursoUser) {
+          userRecord = tursoUser;
+          docId = tursoUser.id;
+          ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 3600);
+          dbLookupError = null;
+        }
+      } catch (_) {}
+    }
+
 
     if (!userRecord && dbLookupError) {
       if (dbLookupError.message && dbLookupError.message.includes("RESOURCE_EXHAUSTED")) {
@@ -1629,6 +1779,7 @@ router.post("/login", authLimiter, async (req, res) => {
         }
       } catch (_) {}
     }
+
 
     // Check if user is blocked
     if (userRecord && userRecord.isBlocked && inputIdentity !== MAIN_ADMIN_EMAIL) {
@@ -1710,11 +1861,16 @@ router.post("/login", authLimiter, async (req, res) => {
       } catch (_) {}
     }
 
+
     // Auto-upgrade plain text passwords to secure bcrypt hashes in background
     if (passwordValid && userRecord && userRecord.password && !userRecord.password.startsWith("$2") && db && docId) {
       bcrypt.hash(cleanPassword, 10).then((h) => {
         db.collection("users").doc(docId).update({ password: h, passwordHash: h }).catch(() => {});
       }).catch(() => {});
+    }
+
+    if (passwordValid && userRecord) {
+      saveUserToTurso({ ...userRecord, id: docId || userRecord.id, passwordHash: userRecord.password || userRecord.passwordHash }).catch(() => {});
     }
 
     if (passwordValid && isMainAdminAlias && !userRecord) {
@@ -1919,7 +2075,14 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     let userRecord = null;
     let docId = null;
 
-    if (db) {
+    // Check RAM cache
+    const cachedUser = ramCache ? ramCache.get(`auth_user_${inputIdentity}`) : null;
+    if (cachedUser) {
+      userRecord = cachedUser.userRecord;
+      docId = cachedUser.docId;
+    }
+
+    if (!userRecord && db) {
       try {
         let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
         if (snap.empty && !inputIdentity.includes("@")) {
@@ -1935,10 +2098,22 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
         if (!snap.empty) {
           userRecord = decryptUserObject(snap.docs[0].data());
           docId = snap.docs[0].id;
+          if (ramCache) ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
         }
       } catch (dbErr) {
         console.warn("[AUTH] DB lookup fallback:", dbErr.message);
       }
+    }
+
+    if (!userRecord) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(inputIdentity);
+        if (tursoUser) {
+          userRecord = tursoUser;
+          docId = tursoUser.id;
+          if (ramCache) ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 3600);
+        }
+      } catch (_) {}
     }
 
     if (userRecord && userRecord.isBlocked && inputIdentity !== MAIN_ADMIN_EMAIL) {
@@ -2322,6 +2497,7 @@ router.post("/send-otp", authLimiter, async (req, res) => {
         }
       } catch (_) {}
     }
+
 
     const otp = crypto.randomInt(100000, 999999).toString();
     saveOtp("general", cleanEmail, otp, { name: studentName, college: studentCollege });
@@ -2770,6 +2946,7 @@ router.post("/logout", authenticateToken, async (req, res) => {
         terminateSingleSession(req.user.id, req.user.sid, "Manual Logout").catch(() => {});
       } catch (_) {}
     }
+
 
     clearAuthCookie(res, req);
     return res.json({

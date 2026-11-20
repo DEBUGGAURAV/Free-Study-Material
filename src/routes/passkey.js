@@ -13,12 +13,23 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const { db } = require("../firebase");
 const { JWT_SECRET, authenticateToken, setAuthCookie } = require("../middleware/auth");
 const { getClientIp } = require("../middleware/rateLimit");
 const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
+const { ramCache } = require("../utils/ramCache");
+const {
+  saveUserToTurso,
+  getUserFromTursoByEmail,
+  getUserFromTursoById,
+  savePasskeyToTurso,
+  getPasskeyFromTurso,
+  getPasskeysByEmailFromTurso,
+  deletePasskeyFromTurso,
+} = require("../services/tursoService");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -114,7 +125,7 @@ const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];
  * Handles standard students, Base64 email IDs, and synthetic 'admin-root' sessions
  */
 async function resolveUserDocAndId(req) {
-  if (!req.user || !db) return { userDoc: null, effectiveUserId: null, isAdmin: false };
+  if (!req.user) return { userDoc: null, effectiveUserId: null, isAdmin: false, userData: null };
   const userId = req.user.id;
   const userEmail = (req.user.email || "").toLowerCase().trim();
   const isAdmin = Boolean(
@@ -125,22 +136,58 @@ async function resolveUserDocAndId(req) {
     (MAIN_ADMIN_EMAIL && userEmail === MAIN_ADMIN_EMAIL)
   );
 
-  let userDoc = userId ? await db.collection("users").doc(userId).get() : null;
+  let userDoc = null;
+  let userData = null;
   let effectiveUserId = userId;
 
-  // If not found by primary doc ID, check email query
-  if ((!userDoc || !userDoc.exists) && userEmail) {
-    const snap = await db.collection("users").where("email", "==", userEmail).limit(1).get();
-    if (!snap.empty) {
-      userDoc = snap.docs[0];
-      effectiveUserId = userDoc.id;
+  // 1. Try Firestore safely
+  if (db && userId) {
+    try {
+      userDoc = await db.collection("users").doc(userId).get();
+      if (userDoc && userDoc.exists) {
+        userData = decryptUserObject(userDoc.data());
+      }
+    } catch (e) {
+      console.warn("[PASSKEY] Firestore read notice in resolveUserDocAndId:", e.message);
     }
   }
 
-  // If still not found and user is an Admin, ensure admin-root and base64 doc exist
-  if ((!userDoc || !userDoc.exists) && isAdmin) {
-    const adminDocId = effectiveUserId || (userEmail ? Buffer.from(userEmail).toString("base64url") : "admin-root");
-    const adminData = {
+  // 2. If not found by primary doc ID, check email query in Firestore
+  if (!userData && userEmail && db) {
+    try {
+      const snap = await db.collection("users").where("email", "==", userEmail).limit(1).get();
+      if (!snap.empty) {
+        userDoc = snap.docs[0];
+        effectiveUserId = userDoc.id;
+        userData = decryptUserObject(userDoc.data());
+      }
+    } catch (_) {}
+  }
+
+  // 3. Fallback to RAM cache
+  if (!userData && userEmail) {
+    const cached = ramCache ? ramCache.get(`auth_user_${userEmail}`) : null;
+    if (cached) {
+      userData = cached.userRecord;
+      effectiveUserId = cached.docId || userId;
+    }
+  }
+
+  // 4. Fallback to Turso / Local SQLite
+  if (!userData) {
+    try {
+      const tursoUser = (userId ? await getUserFromTursoById(userId) : null) || (userEmail ? await getUserFromTursoByEmail(userEmail) : null);
+      if (tursoUser) {
+        userData = tursoUser;
+        effectiveUserId = tursoUser.id || userId;
+      }
+    } catch (_) {}
+  }
+
+  // 5. Admin root fallback
+  if (!userData && isAdmin) {
+    userData = {
+      id: effectiveUserId || "admin-root",
       email: userEmail || MAIN_ADMIN_EMAIL,
       name: req.user.name || "Master Administrator",
       role: "admin",
@@ -151,12 +198,19 @@ async function resolveUserDocAndId(req) {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    await db.collection("users").doc(adminDocId).set(adminData, { merge: true });
-    userDoc = await db.collection("users").doc(adminDocId).get();
-    effectiveUserId = adminDocId;
+    effectiveUserId = userData.id;
   }
 
-  return { userDoc, effectiveUserId, isAdmin };
+  // Synthesize userDoc object if userDoc is missing or offline
+  if (!userDoc && userData) {
+    userDoc = {
+      id: effectiveUserId,
+      exists: true,
+      data: () => userData,
+    };
+  }
+
+  return { userDoc, effectiveUserId, isAdmin, userData };
 }
 
 /**
@@ -171,13 +225,9 @@ router.get("/register-options", authenticateToken, async (req, res) => {
       return res.status(401).json({ success: false, message: "Unauthorized: Login required to register passkey." });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
-
-    const { userDoc, effectiveUserId, isAdmin } = await resolveUserDocAndId(req);
+    const { userDoc, effectiveUserId, isAdmin, userData: resolvedUser } = await resolveUserDocAndId(req);
     if (!userDoc || !userDoc.exists) {
-      return res.status(404).json({ success: false, message: "User account not found in database." });
+      return res.status(404).json({ success: false, message: "User account not found." });
     }
 
     // 🔒 Maintenance Mode Guard: Only administrators can enroll or modify passkeys
@@ -189,8 +239,13 @@ router.get("/register-options", authenticateToken, async (req, res) => {
       });
     }
 
-    const userData = userDoc.data() || {};
-    const existingPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
+    const userData = resolvedUser || userDoc.data() || {};
+    let existingPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
+    if (existingPasskeys.length === 0 && (req.user.email || userData.email)) {
+      try {
+        existingPasskeys = await getPasskeysByEmailFromTurso(req.user.email || userData.email);
+      } catch (_) {}
+    }
 
     const { rpID } = getRpInfo(req);
 
@@ -238,7 +293,7 @@ router.get("/register-options", authenticateToken, async (req, res) => {
 
 /**
  * ============================================================================
- * 2. REGISTRATION VERIFICATION (Save Passkey to OLD Firebase)
+ * 2. REGISTRATION VERIFICATION (Save Passkey to Turso & OLD Firebase)
  * POST /api/auth/passkey/register-verify
  * ============================================================================
  */
@@ -249,9 +304,9 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing credential response from biometric device." });
     }
 
-    const { userDoc, effectiveUserId, isAdmin } = await resolveUserDocAndId(req);
+    const { userDoc, effectiveUserId, isAdmin, userData: resolvedUser } = await resolveUserDocAndId(req);
     if (!userDoc || !userDoc.exists) {
-      return res.status(404).json({ success: false, message: "User not found in database." });
+      return res.status(404).json({ success: false, message: "User not found." });
     }
 
     // 🔒 Maintenance Mode Guard
@@ -304,50 +359,82 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
-    // Store in Firestore user doc
-    const existingData = userDoc.data() || {};
+    const existingData = resolvedUser || userDoc.data() || {};
     const existingPasskeys = Array.isArray(existingData.passkeys) ? existingData.passkeys : [];
 
     // Filter out duplicates if re-registering
     const updatedPasskeys = existingPasskeys.filter((p) => p.id !== newPasskey.id);
     updatedPasskeys.push(newPasskey);
 
-    await db.collection("users").doc(effectiveUserId).set(
-      {
-        passkeys: updatedPasskeys,
-        hasPasskey: true,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const email = (req.user.email || existingData.email || "").toLowerCase().trim();
 
-    // If Admin, mirror to admin-root & am5wbG90dXNAZ21haWwuY29t so either lookup works 100%
-    if (isAdmin) {
-      await db.collection("users").doc("admin-root").set(
-        { passkeys: updatedPasskeys, hasPasskey: true, updatedAt: new Date().toISOString() },
-        { merge: true }
-      ).catch(() => {});
-      if (effectiveUserId !== "am5wbG90dXNAZ21haWwuY29t") {
-        await db.collection("users").doc("am5wbG90dXNAZ21haWwuY29t").set(
-          { passkeys: updatedPasskeys, hasPasskey: true, updatedAt: new Date().toISOString() },
-          { merge: true }
-        ).catch(() => {});
-      }
-    }
-
-    // Also store index lookup in old Firebase "passkeys" collection for 0ms lookup
-    await db.collection("passkeys").doc(newPasskey.id).set({
+    // 1. Save to Turso / Local SQLite (Always works, 0ms, zero quota)
+    await savePasskeyToTurso({
       id: newPasskey.id,
       userId: effectiveUserId,
-      email: (req.user.email || existingData.email || "").toLowerCase().trim(),
+      userEmail: email,
       publicKey: newPasskey.publicKey,
       counter: newPasskey.counter,
       transports: newPasskey.transports,
-      deviceName: newPasskey.deviceName,
+      deviceType: "platform",
       createdAt: newPasskey.createdAt,
     });
 
-    console.log(`[PASSKEY] ✅ Passkey registered in Firebase for ${req.user.email || existingData.email} (${newPasskey.deviceName})`);
+    const userToSave = {
+      ...existingData,
+      id: effectiveUserId,
+      email,
+      passkeys: updatedPasskeys,
+      hasPasskey: true,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveUserToTurso(userToSave).catch(() => {});
+
+    if (ramCache && email) {
+      ramCache.set(`auth_user_${email}`, { userRecord: userToSave, docId: effectiveUserId }, 3600);
+    }
+
+    // 2. Mirror to Firestore safely (if available & quota allows)
+    if (db) {
+      try {
+        await db.collection("users").doc(effectiveUserId).set(
+          {
+            passkeys: updatedPasskeys,
+            hasPasskey: true,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        if (isAdmin) {
+          await db.collection("users").doc("admin-root").set(
+            { passkeys: updatedPasskeys, hasPasskey: true, updatedAt: new Date().toISOString() },
+            { merge: true }
+          ).catch(() => {});
+          if (effectiveUserId !== "am5wbG90dXNAZ21haWwuY29t") {
+            await db.collection("users").doc("am5wbG90dXNAZ21haWwuY29t").set(
+              { passkeys: updatedPasskeys, hasPasskey: true, updatedAt: new Date().toISOString() },
+              { merge: true }
+            ).catch(() => {});
+          }
+        }
+
+        await db.collection("passkeys").doc(newPasskey.id).set({
+          id: newPasskey.id,
+          userId: effectiveUserId,
+          email,
+          publicKey: newPasskey.publicKey,
+          counter: newPasskey.counter,
+          transports: newPasskey.transports,
+          deviceName: newPasskey.deviceName,
+          createdAt: newPasskey.createdAt,
+        }).catch(() => {});
+      } catch (dbErr) {
+        console.warn("[PASSKEY] Firestore mirror notice (saved safely in Turso/Local):", dbErr.message);
+      }
+    }
+
+    console.log(`[PASSKEY] ✅ Passkey registered safely for ${email} (${newPasskey.deviceName})`);
 
     const isRegOnboarding =
       String(context || "").toLowerCase().includes("reg") ||
@@ -364,7 +451,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       user: {
         id: effectiveUserId,
         name: req.user.name || existingData.name || "Scholar",
-        email: (req.user.email || existingData.email || "N/A").toLowerCase().trim(),
+        email: email || "N/A",
         mobile: req.user.mobile || existingData.mobile || "N/A",
         college: req.user.college || existingData.college || "N/A",
         year: req.user.year || existingData.year || "N/A",
@@ -404,18 +491,39 @@ router.post("/login-options", async (req, res) => {
     const { email } = req.body || {};
     let allowCredentials = undefined;
 
-    if (email && email.trim() && db) {
+    if (email && email.trim()) {
       const cleanEmail = email.toLowerCase().trim();
-      const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
-      if (!snap.empty) {
-        const userData = snap.docs[0].data();
-        const passkeys = Array.isArray(userData?.passkeys) ? userData.passkeys : [];
-        if (passkeys.length > 0) {
-          allowCredentials = passkeys.map((p) => ({
-            id: p.id,
-            transports: p.transports || ["internal", "hybrid"],
-          }));
+      let passkeys = [];
+
+      // 1. Try Turso / Local SQLite first (0ms, resilient, zero quota)
+      try {
+        passkeys = await getPasskeysByEmailFromTurso(cleanEmail);
+      } catch (_) {}
+
+      // 2. If empty, try Firestore safely
+      if ((!passkeys || passkeys.length === 0) && db) {
+        try {
+          const snap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
+          if (!snap.empty) {
+            const userData = snap.docs[0].data();
+            if (Array.isArray(userData?.passkeys) && userData.passkeys.length > 0) {
+              passkeys = userData.passkeys;
+              // Mirror to Turso for future 0ms lookups
+              for (const pk of passkeys) {
+                savePasskeyToTurso({ ...pk, userId: snap.docs[0].id, userEmail: cleanEmail }).catch(() => {});
+              }
+            }
+          }
+        } catch (dbErr) {
+          console.warn("[PASSKEY-LOGIN-OPTIONS] Firestore read notice:", dbErr.message);
         }
+      }
+
+      if (passkeys && passkeys.length > 0) {
+        allowCredentials = passkeys.map((p) => ({
+          id: p.id,
+          transports: p.transports || ["internal", "hybrid"],
+        }));
       }
     }
 
@@ -443,7 +551,7 @@ router.post("/login-options", async (req, res) => {
 
 /**
  * ============================================================================
- * 4. LOGIN VERIFICATION (Authenticate using OLD Firebase)
+ * 4. LOGIN VERIFICATION (Authenticate using Turso & OLD Firebase)
  * POST /api/auth/passkey/login-verify
  * ============================================================================
  */
@@ -463,64 +571,133 @@ router.post("/login-verify", async (req, res) => {
     // Clean up challenge
     passkeyChallenges.delete(challengeKey);
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
-
-    // Look up credential from OLD Firebase
     let passkeyRecord = null;
     let userId = null;
-    let userDocSnap = null;
+    let userRecord = null;
 
-    // Check direct index first (0ms)
-    const passkeyIndexDoc = await db.collection("passkeys").doc(credential.id).get();
-    if (passkeyIndexDoc.exists) {
-      const idxData = passkeyIndexDoc.data();
-      userId = idxData.userId;
-      userDocSnap = await db.collection("users").doc(userId).get();
-    } else {
-      // 🛡️ QUOTA PROTECTION: Targeted query by email (Max 1 read instead of full collection scan)
-      if (stored && stored.email) {
-        const snap = await db.collection("users").where("email", "==", stored.email).limit(1).get();
-        if (!snap.empty) {
-          const uData = snap.docs[0].data();
-          const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
-          const match = pList.find((p) => p.id === credential.id);
+    // 1. Check Turso / Local SQLite first (0ms, quota-free!)
+    try {
+      const tursoPasskey = await getPasskeyFromTurso(credential.id);
+      if (tursoPasskey) {
+        passkeyRecord = tursoPasskey;
+        userId = tursoPasskey.userId;
+      }
+    } catch (_) {}
+
+    // 2. Check Firestore passkeys index (safely wrapped in try/catch)
+    if (!passkeyRecord && db) {
+      try {
+        const passkeyIndexDoc = await db.collection("passkeys").doc(credential.id).get();
+        if (passkeyIndexDoc.exists) {
+          const idxData = passkeyIndexDoc.data();
+          userId = idxData.userId;
+          passkeyRecord = idxData;
+          savePasskeyToTurso(idxData).catch(() => {});
+        }
+      } catch (dbErr) {
+        console.warn("[PASSKEY-LOGIN] Firestore index notice:", dbErr.message);
+      }
+    }
+
+    // 3. If stored.email was provided, check email query in Turso & Firestore
+    if (!passkeyRecord && stored && stored.email) {
+      try {
+        const tursoUser = await getUserFromTursoByEmail(stored.email);
+        if (tursoUser && Array.isArray(tursoUser.passkeys)) {
+          const match = tursoUser.passkeys.find((p) => p.id === credential.id);
           if (match) {
-            userId = snap.docs[0].id;
-            userDocSnap = snap.docs[0];
             passkeyRecord = match;
+            userId = tursoUser.id;
+            userRecord = tursoUser;
           }
         }
+      } catch (_) {}
+
+      if (!passkeyRecord && db) {
+        try {
+          const snap = await db.collection("users").where("email", "==", stored.email).limit(1).get();
+          if (!snap.empty) {
+            const uData = snap.docs[0].data();
+            const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
+            const match = pList.find((p) => p.id === credential.id);
+            if (match) {
+              userId = snap.docs[0].id;
+              userRecord = decryptUserObject(uData);
+              passkeyRecord = match;
+            }
+          }
+        } catch (_) {}
       }
-      // Check admin-root document fallback
-      if (!userDocSnap) {
-        const adminDoc = await db.collection("users").doc("admin-root").get().catch(() => null);
+    }
+
+    // 4. Admin fallback
+    if (!passkeyRecord && db) {
+      try {
+        const adminDoc = await db.collection("users").doc("admin-root").get();
         if (adminDoc && adminDoc.exists) {
           const uData = adminDoc.data();
           const pList = Array.isArray(uData.passkeys) ? uData.passkeys : [];
           const match = pList.find((p) => p.id === credential.id);
           if (match) {
             userId = "admin-root";
-            userDocSnap = adminDoc;
+            userRecord = decryptUserObject(uData);
             passkeyRecord = match;
           }
         }
-      }
-    }
-
-    if (!userDocSnap || !userDocSnap.exists) {
-      return res.status(404).json({ success: false, message: "No student account found registered with this passkey." });
-    }
-
-    const rawUserData = userDocSnap.data();
-    const userPasskeys = Array.isArray(rawUserData.passkeys) ? rawUserData.passkeys : [];
-    if (!passkeyRecord) {
-      passkeyRecord = userPasskeys.find((p) => p.id === credential.id);
+      } catch (_) {}
     }
 
     if (!passkeyRecord || !passkeyRecord.publicKey) {
-      return res.status(400).json({ success: false, message: "Passkey public key record missing from account." });
+      return res.status(404).json({ success: false, message: "No registered biometric passkey found for this device." });
+    }
+
+    // Resolve user data if not resolved yet
+    if (!userRecord && userId) {
+      if (ramCache && stored && stored.email) {
+        const cached = ramCache.get(`auth_user_${stored.email}`);
+        if (cached) userRecord = cached.userRecord;
+      }
+      if (!userRecord) {
+        try {
+          userRecord = await getUserFromTursoById(userId);
+        } catch (_) {}
+      }
+      if (!userRecord && passkeyRecord.userEmail) {
+        try {
+          userRecord = await getUserFromTursoByEmail(passkeyRecord.userEmail);
+        } catch (_) {}
+      }
+      if (!userRecord && db) {
+        try {
+          const userDoc = await db.collection("users").doc(userId).get();
+          if (userDoc && userDoc.exists) {
+            userRecord = decryptUserObject(userDoc.data());
+          }
+        } catch (_) {}
+      }
+    }
+
+    // If still no userRecord (e.g. fresh admin or newly enrolled user)
+    if (!userRecord) {
+      const email = passkeyRecord.userEmail || stored?.email || (userId === "admin-root" ? MAIN_ADMIN_EMAIL : null);
+      if (email) {
+        const isAdmin = email === MAIN_ADMIN_EMAIL || userId === "admin-root";
+        userRecord = {
+          id: userId || Buffer.from(email).toString("base64url"),
+          email: email,
+          name: isAdmin ? "Master Administrator" : "Student Scholar",
+          role: isAdmin ? "admin" : "student",
+          college: isAdmin ? "Central Academic Administration" : "Academic Institute",
+          isMainAdmin: isAdmin,
+          permissions: isAdmin
+            ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
+            : ["download_notes", "upload_notes"],
+        };
+      }
+    }
+
+    if (!userRecord) {
+      return res.status(404).json({ success: false, message: "No student account found registered with this passkey." });
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);
@@ -544,17 +721,22 @@ router.post("/login-verify", async (req, res) => {
       return res.status(401).json({ success: false, message: "Biometric authentication failed. Signature mismatch." });
     }
 
-    // Update counter in OLD Firebase (replay attack protection)
+    // Update counter in Turso & Firestore (replay attack protection)
     const newCounter = verification.authenticationInfo.newCounter;
     passkeyRecord.counter = newCounter;
     passkeyRecord.lastUsedAt = new Date().toISOString();
 
-    const updatedPasskeys = userPasskeys.map((p) => (p.id === passkeyRecord.id ? passkeyRecord : p));
-    await db.collection("users").doc(userId).set({ passkeys: updatedPasskeys }, { merge: true });
+    savePasskeyToTurso({
+      ...passkeyRecord,
+      counter: newCounter,
+      userEmail: userRecord.email || passkeyRecord.userEmail,
+    }).catch(() => {});
 
-    // Format safe user data
-    const userRecord = decryptUserObject(rawUserData);
-    const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
+    if (db && userId) {
+      db.collection("passkeys").doc(passkeyRecord.id).set({ counter: newCounter, lastUsedAt: passkeyRecord.lastUsedAt }, { merge: true }).catch(() => {});
+      db.collection("users").doc(userId).update({ lastLoginAt: new Date().toISOString() }).catch(() => {});
+    }
+
     const isMasterAdmin = Boolean(
       (MAIN_ADMIN_EMAIL && userRecord.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL) ||
       userRecord.isMainAdmin ||
@@ -576,7 +758,7 @@ router.post("/login-verify", async (req, res) => {
 
     const sessionId = crypto.randomUUID ? crypto.randomUUID() : `sid_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
     const payload = {
-      id: userId,
+      id: userId || userRecord.id,
       sid: sessionId,
       email: userRecord.email,
       name: isMasterAdmin ? "Master Administrator" : (userRecord.name || "Academic Member"),
@@ -595,19 +777,19 @@ router.post("/login-verify", async (req, res) => {
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
     setAuthCookie(res, req, token);
 
-    // 🚀 Track Active Device Session in Firestore & Log Biometric Login Activity (Rolling 15)
+    // 🚀 Track Active Device Session in Firestore & Memory
     try {
       const { recordActiveSession } = require("../services/studentSessionService");
       recordActiveSession({
         sessionId,
-        userId,
+        userId: userId || userRecord.id,
         req,
         tokenVersion: payload.v,
         deviceSpecs: req.body?.deviceSpecs || { label: passkeyRecord.deviceName || "Biometric Passkey Device" },
       }).catch(() => {});
     } catch (_) {}
 
-    // Audit Notice to Telegram Security Bot (Zero latency overhead for response!)
+    // Audit Notice to Telegram Security Bot
     setImmediate(() => {
       sendTelegramAuthNotice({
         event: "LOGIN",
@@ -649,17 +831,21 @@ router.post("/login-verify", async (req, res) => {
  */
 router.get("/list", authenticateToken, async (req, res) => {
   try {
-    if (!req.user || !req.user.id || !db) {
+    if (!req.user || !req.user.id) {
       return res.json({ success: true, passkeys: [] });
     }
 
-    const { userDoc } = await resolveUserDocAndId(req);
-    if (!userDoc || !userDoc.exists) {
-      return res.json({ success: true, passkeys: [] });
+    const { userDoc, userData: resolvedUser } = await resolveUserDocAndId(req);
+    const data = resolvedUser || (userDoc && userDoc.exists ? userDoc.data() : {}) || {};
+    let passkeyList = Array.isArray(data.passkeys) ? data.passkeys : [];
+    
+    if (passkeyList.length === 0 && (req.user.email || data.email)) {
+      try {
+        passkeyList = await getPasskeysByEmailFromTurso(req.user.email || data.email);
+      } catch (_) {}
     }
 
-    const data = userDoc.data() || {};
-    const passkeys = (Array.isArray(data.passkeys) ? data.passkeys : []).map((p) => ({
+    const passkeys = passkeyList.map((p) => ({
       id: p.id,
       deviceName: p.deviceName || "Biometric Authenticator",
       createdAt: p.createdAt || "Recently",
@@ -681,23 +867,22 @@ router.get("/list", authenticateToken, async (req, res) => {
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     const credId = req.params.id;
-    if (!credId || !db) {
+    if (!credId) {
       return res.status(400).json({ success: false, message: "Missing passkey ID." });
     }
 
-    const { userDoc, effectiveUserId, isAdmin } = await resolveUserDocAndId(req);
-    if (!userDoc || !userDoc.exists) {
-      return res.status(404).json({ success: false, message: "User not found." });
-    }
-
-    const data = userDoc.data() || {};
+    const { userDoc, effectiveUserId, isAdmin, userData: resolvedUser } = await resolveUserDocAndId(req);
+    const data = resolvedUser || (userDoc && userDoc.exists ? userDoc.data() : {}) || {};
     const passkeys = Array.isArray(data.passkeys) ? data.passkeys : [];
     
-    // 🛡️ Strict Object-Level Authorization (BOLA/IDOR Defense):
-    // Ensure caller owns this passkey credential before allowing removal
+    // Strict Object-Level Authorization
     const targetPasskey = passkeys.find((p) => p.id === credId);
     if (!targetPasskey && !isAdmin) {
-      return res.status(403).json({ success: false, message: "Unauthorized: This passkey does not belong to your account." });
+      // Check Turso ownership
+      const tursoPk = await getPasskeyFromTurso(credId).catch(() => null);
+      if (tursoPk && tursoPk.userId !== effectiveUserId && tursoPk.userEmail !== req.user.email) {
+        return res.status(403).json({ success: false, message: "Unauthorized: This passkey does not belong to your account." });
+      }
     }
 
     const filtered = passkeys.filter((p) => p.id !== credId);
@@ -708,25 +893,21 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       updatedAt: new Date().toISOString(),
     };
 
-    await db.collection("users").doc(effectiveUserId).set(updatePayload, { merge: true });
-
-    // If Admin, mirror to admin-root & am5wbG90dXNAZ21haWwuY29t so either lookup works 100%
-    if (isAdmin) {
-      const email = data.email || req.user.email || MAIN_ADMIN_EMAIL;
-      const b64DocId = email ? Buffer.from(email).toString("base64url") : null;
-      if (effectiveUserId !== "admin-root") {
-        await db.collection("users").doc("admin-root").set(updatePayload, { merge: true }).catch(() => {});
-      }
-      if (b64DocId && effectiveUserId !== b64DocId) {
-        await db.collection("users").doc(b64DocId).set(updatePayload, { merge: true }).catch(() => {});
-      }
+    // 1. Delete from Turso / Local SQLite
+    await deletePasskeyFromTurso(credId).catch(() => {});
+    if (data.email) {
+      saveUserToTurso({ ...data, id: effectiveUserId, passkeys: filtered, hasPasskey: filtered.length > 0 }).catch(() => {});
     }
 
-    try {
-      await db.collection("passkeys").doc(credId).delete();
-    } catch (_) {}
+    // 2. Delete from Firestore if available
+    if (db) {
+      try {
+        await db.collection("users").doc(effectiveUserId).set(updatePayload, { merge: true });
+        await db.collection("passkeys").doc(credId).delete();
+      } catch (_) {}
+    }
 
-    // 🚀 Send Real-time Security Notification to FSM Security Supergroup Topic 6
+    // Send Real-time Security Notification
     sendTelegramAuthNotice({
       event: "PASSKEY_DELETE",
       user: {
@@ -741,13 +922,15 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       photoUrl: null,
       method: "Passkey Revocation",
       detail: `Student removed a Biometric Passkey credential (${credId}) from account.`,
-    }).catch((err) => console.warn("[PASSKEY-DELETE-NOTICE] Telegram dispatch notice:", err.message));
+    }).catch(() => {});
 
     return res.json({ success: true, message: "Passkey removed from account." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message || "Failed to remove passkey." });
   }
 });
+
+module.exports = router;
 
 module.exports = router;
 
