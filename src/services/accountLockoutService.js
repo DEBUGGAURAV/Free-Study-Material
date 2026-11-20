@@ -50,15 +50,21 @@ async function checkAccountLockout(identifier) {
 
   const now = Date.now();
 
-  // 1. In-memory check first (fastest)
+  // 1. In-memory check first (fastest - 0ms)
   const cached = lockoutCache.get(key);
-  if (cached && cached.lockedUntil && cached.lockedUntil > now) {
-    const remainingMs = cached.lockedUntil - now;
-    return {
-      isLocked: true,
-      remainingMs,
-      remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
-    };
+  if (cached) {
+    if (cached.lockedUntil && cached.lockedUntil > now) {
+      const remainingMs = cached.lockedUntil - now;
+      return {
+        isLocked: true,
+        remainingMs,
+        remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
+      };
+    }
+    // Clean account cached in RAM recently (< 60s) -> return 0ms instant verdict
+    if (now - (cached.lastAttempt || 0) < 60000 && (!cached.lockedUntil || cached.lockedUntil <= now)) {
+      return { isLocked: false, remainingMs: 0, remainingMinutes: 0 };
+    }
   }
 
   // If cached lock expired, clean it up
@@ -216,20 +222,24 @@ async function clearFailedAttempts(identifier) {
   const key = normalizeIdentifier(identifier);
   if (!key) return;
 
-  lockoutCache.delete(key);
+  const hadState = lockoutCache.has(key);
+  // Mark clean in RAM immediately (0ms)
+  lockoutCache.set(key, { attempts: 0, lockedUntil: 0, lastAttempt: Date.now() });
   const docId = key.replace(/[^a-zA-Z0-9]/g, "_");
 
-  // 1. Clear from Turso 4
-  try {
-    const { deleteTursoAccountLockout } = require("./tursoStudentVaultService");
-    await deleteTursoAccountLockout(docId);
-  } catch (_) {}
-
-  // 2. Clear from Database
-  if (db) {
-    try {
-      await db.collection("account_lockouts").doc(docId).delete().catch(() => {});
-    } catch {}
+  // Non-blocking background remote cleanup only if there was previous state
+  if (hadState) {
+    setImmediate(async () => {
+      try {
+        const { deleteTursoAccountLockout } = require("./tursoStudentVaultService");
+        await deleteTursoAccountLockout(docId);
+      } catch (_) {}
+      if (db) {
+        try {
+          await db.collection("account_lockouts").doc(docId).delete().catch(() => {});
+        } catch {}
+      }
+    });
   }
 }
 

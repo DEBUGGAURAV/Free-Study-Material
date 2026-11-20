@@ -406,6 +406,21 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
       }
     }
 
+    // Cache passkey in Turso Edge Cloud / Local LibSQL for instant sub-5ms login
+    try {
+      const { savePasskeyToTurso } = require("../services/tursoService");
+      savePasskeyToTurso({
+        id: newPasskey.id,
+        userId: effectiveUserId,
+        userEmail: email,
+        publicKey: newPasskey.publicKey,
+        counter: newPasskey.counter,
+        transports: newPasskey.transports,
+        deviceName: newPasskey.deviceName,
+        createdAt: newPasskey.createdAt,
+      }).catch(() => {});
+    } catch (_) {}
+
     console.log(`[PASSKEY] ✅ Passkey registered safely for ${email} (${newPasskey.deviceName})`);
 
     const isRegOnboarding =
@@ -575,6 +590,10 @@ router.post("/login-verify", async (req, res) => {
           const idxData = passkeyIndexDoc.data();
           userId = idxData.userId;
           passkeyRecord = idxData;
+          try {
+            const { savePasskeyToTurso } = require("../services/tursoService");
+            savePasskeyToTurso(idxData).catch(() => {});
+          } catch (_) {}
         }
       } catch (dbErr) {
         console.warn("[PASSKEY-LOGIN] Database index notice:", dbErr.message);
@@ -706,6 +725,15 @@ router.post("/login-verify", async (req, res) => {
       db.collection("passkeys").doc(passkeyRecord.id).set({ counter: newCounter, lastUsedAt: passkeyRecord.lastUsedAt }, { merge: true }).catch(() => {});
       db.collection("users").doc(userId).update({ lastLoginAt: new Date().toISOString() }).catch(() => {});
     }
+
+    try {
+      const { savePasskeyToTurso } = require("../services/tursoService");
+      savePasskeyToTurso({
+        ...passkeyRecord,
+        counter: newCounter,
+        lastUsedAt: passkeyRecord.lastUsedAt,
+      }).catch(() => {});
+    } catch (_) {}
 
     const isMasterAdmin = Boolean(
       (MAIN_ADMIN_EMAIL && userRecord.email?.toLowerCase().trim() === MAIN_ADMIN_EMAIL) ||
