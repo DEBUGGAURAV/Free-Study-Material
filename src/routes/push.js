@@ -18,21 +18,6 @@ const {
   broadcastPushNotification,
 } = require("../services/webPushService");
 
-function tryDecodeUser(req) {
-  try {
-    const jwt = require("jsonwebtoken");
-    const { JWT_SECRET } = require("../middleware/auth");
-    const cookieToken = req.cookies?.fsm_token || req.cookies?.token || req.cookies?.vault_token;
-    const authHeader = req.headers?.authorization;
-    const headerToken = authHeader && typeof authHeader === "string" ? authHeader.split(" ")[1] : null;
-    const raw = cookieToken || headerToken;
-    if (!raw) return null;
-    return jwt.verify(raw, JWT_SECRET);
-  } catch {
-    return null;
-  }
-}
-
 // 1. Public VAPID Key endpoint (Zero DB cost after boot init)
 router.get("/vapid-key", async (req, res) => {
   try {
@@ -49,10 +34,10 @@ router.get("/vapid-key", async (req, res) => {
 });
 
 // 2. Subscribe current browser/device PushSubscription
-router.post("/subscribe", async (req, res) => {
+router.post("/subscribe", authenticateToken, async (req, res) => {
   try {
     const subscription = req.body?.subscription || req.body;
-    const user = tryDecodeUser(req);
+    const user = req.user;
     const result = await subscribeDevice(subscription, {
       userId: user?.id || null,
       userEmail: user?.email || null,

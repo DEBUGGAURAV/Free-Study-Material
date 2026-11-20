@@ -11,6 +11,17 @@ const meshSeeders = new Map();
 // Signaling message queues: peerId -> Array of signals
 const signalQueue = new Map();
 
+/**
+ * Robust IPv4/IPv6 subnet parser for Wi-Fi / LAN peer grouping
+ */
+function getSubnet(ip) {
+  if (!ip || typeof ip !== "string") return "unknown";
+  if (ip.includes(":")) {
+    return ip.split(":").slice(0, 4).join(":"); // IPv6 /64 prefix
+  }
+  return ip.split(".").slice(0, 3).join("."); // IPv4 /24 prefix
+}
+
 // Cleanup inactive peers every 30 seconds (peers not heard from in 45s)
 setInterval(() => {
   const now = Date.now();
@@ -53,7 +64,7 @@ router.post("/announce", (req, res) => {
     }
 
     const clientIp = getClientIp(req);
-    const subnet = clientIp.split(".").slice(0, 3).join("."); // Group by local subnet / Wi-Fi range
+    const subnet = getSubnet(clientIp); // Group by local subnet / Wi-Fi range
 
     if (!meshSeeders.has(noteId)) {
       if (meshSeeders.size >= 1000) {
@@ -98,7 +109,7 @@ router.get("/peers/:noteId", (req, res) => {
   try {
     const { noteId } = req.params;
     const clientIp = getClientIp(req);
-    const subnet = clientIp.split(".").slice(0, 3).join(".");
+    const subnet = getSubnet(clientIp);
     const currentPeerId = req.query.peerId;
 
     const peersMap = meshSeeders.get(noteId);

@@ -2401,63 +2401,6 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
 });
 
 /**
- * POST /api/auth/send-otp
- * Generic OTP dispatch using Brevo SMTP
- */
-router.post("/send-otp", authLimiter, async (req, res) => {
-  try {
-    const { email } = req.body;
-    const cleanEmail = (email || "").trim().toLowerCase();
-
-    // 🔒 Maintenance Mode Guard
-    const isTargetAdmin = Boolean(
-      cleanEmail === MAIN_ADMIN_EMAIL ||
-      ADMIN_ALIASES.includes(cleanEmail)
-    );
-    if (isMaintenanceActive() && !isTargetAdmin) {
-      return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
-    }
-
-    if (!cleanEmail || !isGmail(cleanEmail)) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter a valid registered email address.",
-      });
-    }
-
-    let studentName = "Scholar";
-    let studentCollege = "Academic Institute";
-    if (db) {
-      try {
-        const uSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
-        if (!uSnap.empty) {
-          const uDoc = uSnap.docs[0].data();
-          if (uDoc.name) studentName = uDoc.name;
-          if (uDoc.college) studentCollege = uDoc.college;
-        }
-      } catch (_) {}
-    }
-
-
-    const otp = crypto.randomInt(100000, 999999).toString();
-    saveOtp("general", cleanEmail, otp, { name: studentName, college: studentCollege });
-
-    try {
-      await sendLoginOtpEmail(cleanEmail, otp, studentName, studentCollege);
-    } catch (e) {}
-
-    return res.json({
-      success: true,
-      message: `A 6-digit verification code has been dispatched to ${cleanEmail}.`,
-      email: cleanEmail,
-      spamNotice: "⚠️ IMPORTANT NOTICE: If you do not see the email in your Primary Inbox, please check your Spam / Junk / Promotions folder. Mark as 'Not Spam' for instant future delivery.",
-    });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-/**
  * POST /api/auth/profile/request-mobile-otp
  * Dispatches a 6-digit verification passcode to user's registered email before allowing mobile number change
  */

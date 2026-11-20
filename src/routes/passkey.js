@@ -831,6 +831,12 @@ router.delete("/:id", authenticateToken, async (req, res) => {
       } catch (_) {}
     }
 
+    // Delete from Turso to prevent orphan records
+    try {
+      const { deletePasskeyFromTurso } = require("../services/tursoService");
+      await deletePasskeyFromTurso(credId);
+    } catch (_) {}
+
     // Send Real-time Security Notification
     sendTelegramAuthNotice({
       event: "PASSKEY_DELETE",
@@ -853,8 +859,6 @@ router.delete("/:id", authenticateToken, async (req, res) => {
     return res.status(500).json({ success: false, message: err.message || "Failed to remove passkey." });
   }
 });
-
-module.exports = router;
 
 module.exports = router;
 

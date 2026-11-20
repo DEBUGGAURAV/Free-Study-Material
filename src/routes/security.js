@@ -407,7 +407,7 @@ router.post("/tamper-alert", apiLimiter, async (req, res) => {
  * POST /api/security/anti-bot-alert
  * Dispatches Anti-Bot & Multi-Account Forensics Alert strictly to FSM Security Bot Topic 6
  */
-router.post("/anti-bot-alert", async (req, res) => {
+router.post("/anti-bot-alert", apiLimiter, async (req, res) => {
   try {
     const clientIp = getClientIp(req);
     const { user, reason, deviceSpecs, accountsDetected } = req.body || {};
@@ -447,7 +447,7 @@ router.post("/anti-bot-alert", async (req, res) => {
  * Allows a quarantined user or shared-campus student to appeal detention
  * Strictly dispatches to Topic 750 (🛡️ IP Jail & Security Appeals)
  */
-router.post("/jail-appeal", async (req, res) => {
+router.post("/jail-appeal", apiLimiter, async (req, res) => {
   try {
     const clientIp = getClientIp(req);
     const { incidentId, name, email, mobile, message, deviceId } = req.body || {};

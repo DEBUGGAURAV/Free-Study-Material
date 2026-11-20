@@ -694,7 +694,7 @@ ${enrichedContext.slice(0, 9500) || cleanTitle}`;
 /**
  * ⭕ GET /api/ai/circle-search/telemetry
  */
-router.get("/circle-search/telemetry", async (req, res) => {
+router.get("/circle-search/telemetry", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const stats = await getCircleSearchTelemetry();
     return res.json({ success: true, ...stats });

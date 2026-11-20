@@ -771,12 +771,6 @@ export const api = {
       body: JSON.stringify({ email, otp, newPassword }),
     }),
 
-  sendOtp: (email) =>
-    request("/auth/send-otp", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    }),
-
   // Notes
   getBranches: async () => {
     const cached = clientMemoryCache.get("branches");

@@ -19,6 +19,14 @@ try {
   threatReporter = require("./ipJail").incrementScrubbedCount;
 } catch (_) {}
 
+function isDangerousKey(key) {
+  if (typeof key !== "string") return null;
+  if (DANGEROUS_KEYS.has(key)) return "Prototype Pollution";
+  if (key.startsWith("$")) return "NoSQL Operator Injection ($)";
+  if (key.includes(".")) return "NoSQL Dotted-Key Injection (.)";
+  return null;
+}
+
 function scrubValue(val, clientIp = "unknown", depth = 0) {
   if (depth > 10) return val; // 🛡️ Prevent Call Stack Overflow / ReDoS from deeply nested JSON
 
@@ -51,11 +59,12 @@ function scrubValue(val, clientIp = "unknown", depth = 0) {
   if (val !== null && typeof val === "object") {
     const cleanObj = {};
     for (const key of Object.keys(val)) {
-      if (!DANGEROUS_KEYS.has(key)) {
+      const threatType = isDangerousKey(key);
+      if (!threatType) {
         cleanObj[key] = scrubValue(val[key], clientIp, depth + 1);
       } else {
         if (typeof threatReporter === "function") {
-          threatReporter(1, clientIp, `Prototype Pollution: "${key}"`);
+          threatReporter(1, clientIp, `${threatType}: "${key.slice(0, 32)}"`);
         }
       }
     }

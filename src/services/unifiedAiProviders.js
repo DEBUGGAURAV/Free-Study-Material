@@ -167,12 +167,18 @@ async function queryOpenRouter(query, context = "", imageBase64 = null, imageMim
       signal: controller.signal,
     });
 
+    const rawBody = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenRouter Error (${res.status}): ${errText.slice(0, 200)}`);
+      throw new Error(`OpenRouter Error (${res.status}): ${rawBody.slice(0, 200)}`);
     }
 
-    const data = await res.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch (_) {
+      throw new Error(`OpenRouter returned a non-JSON reply (HTTP ${res.status}: "${rawBody.trim().slice(0, 40)}") - service unavailable or gateway error`);
+    }
+
     const answer = (data.choices?.[0]?.message?.content || "").trim();
     if (!answer) throw new Error("Empty OpenRouter response");
     const resolvedModel = data.model || payload.model || "openrouter-free";
@@ -221,12 +227,18 @@ async function queryNvidiaText(query, context = "", options = {}) {
       signal: controller.signal,
     });
 
+    const rawBody = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`NVIDIA NIM Error (${res.status}): ${errText.slice(0, 200)}`);
+      throw new Error(`NVIDIA NIM Error (${res.status}): ${rawBody.slice(0, 200)}`);
     }
 
-    const data = await res.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch (_) {
+      throw new Error(`NVIDIA NIM returned a non-JSON reply (HTTP ${res.status}: "${rawBody.trim().slice(0, 40)}") - service unavailable or gateway error`);
+    }
+
     const answer = (data.choices?.[0]?.message?.content || "").trim();
     if (!answer) throw new Error("Empty NVIDIA NIM response");
     return { answer, model, provider: "nvidia" };
@@ -265,12 +277,18 @@ async function queryNvidiaVision(query, context = "", imageBase64, imageMimeType
       signal: controller.signal,
     });
 
+    const rawBody = await res.text();
     if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`NVIDIA NIM Vision Error (${res.status}): ${errText.slice(0, 200)}`);
+      throw new Error(`NVIDIA NIM Vision Error (${res.status}): ${rawBody.slice(0, 200)}`);
     }
 
-    const data = await res.json();
+    let data;
+    try {
+      data = JSON.parse(rawBody);
+    } catch (_) {
+      throw new Error(`NVIDIA NIM Vision returned a non-JSON reply (HTTP ${res.status}: "${rawBody.trim().slice(0, 40)}") - service unavailable or gateway error`);
+    }
+
     const answer = (data.choices?.[0]?.message?.content || "").trim();
     if (!answer) throw new Error("Empty NVIDIA NIM Vision response");
     return { answer, model, provider: "nvidia_vision" };

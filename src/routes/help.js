@@ -221,7 +221,11 @@ router.post("/upload-attachment", helpLimiter, uploadHelpAttachment.single("file
  */
 router.get("/attachment/:filename", (req, res) => {
   try {
-    const filename = path.basename(req.params.filename);
+    const rawFilename = path.basename(req.params.filename || "");
+    const filename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, "");
+    if (!filename) {
+      return res.status(400).json({ success: false, message: "Invalid attachment filename." });
+    }
     const resolvedPath = path.resolve(HELP_ATTACHMENTS_DIR, filename);
     if (!resolvedPath.startsWith(path.resolve(HELP_ATTACHMENTS_DIR)) || !fs.existsSync(resolvedPath)) {
       return res.status(404).json({ success: false, message: "Attachment not found." });

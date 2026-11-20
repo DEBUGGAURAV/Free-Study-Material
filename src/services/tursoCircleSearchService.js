@@ -237,9 +237,13 @@ async function getCircleSearchTelemetry() {
     } catch (_) {}
   }
 
+  const safeDbUrl = cacheDbUrl
+    ? cacheDbUrl.replace(/(:\/\/[^@:]+)(:[^@]+)?@/, "://***@")
+    : "cache/turso_circle_search.db";
+
   return {
     isCloud,
-    databaseUrl: cacheDbUrl || "cache/turso_circle_search.db",
+    databaseUrl: safeDbUrl,
     totalCachedQueries: count,
     ramCachedEntries: ramCircleCache.size,
     totalHits,
