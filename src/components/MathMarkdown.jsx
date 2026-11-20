@@ -322,7 +322,7 @@ function renderMarkdownBlockToHtml(content = "") {
       } else if (level === 2) {
         headerStyle = "margin: 18px 0 8px 0; font-size: 1.08rem; font-weight: 750; background: linear-gradient(135deg, #a78bfa 0%, #34d399 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 7px;";
       } else {
-        headerStyle = "margin: 14px 0 6px 0; font-size: 0.96rem; font-weight: 700; color: #f1f5f9; border-left: 3px solid #38bdf8; padding-left: 8px; display: flex; align-items: center; gap: 6px;";
+        headerStyle = "margin: 14px 0 6px 0; font-size: 0.96rem; font-weight: 700; color: inherit; border-left: 3px solid #38bdf8; padding-left: 8px; display: flex; align-items: center; gap: 6px;";
       }
 
       blocks.push(
@@ -363,7 +363,7 @@ function renderMarkdownBlockToHtml(content = "") {
       }
 
       blocks.push(
-        `<div style="margin: 18px 0 12px 0; padding: 9px 16px; background: ${bgAccent}; border: 1px solid ${borderAccent}; border-left: 4px solid ${textAccent}; border-radius: 10px; font-weight: 800; font-size: 0.94rem; color: ${textAccent}; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);"><span style="font-size: 1.1rem;">${iconBadge}</span><span>${formatInlineMarkdown(innerText)}</span></div>`
+        `<div style="margin: 18px 0 12px 0; padding: 9px 16px; background: ${bgAccent}; border: 1px solid ${borderAccent}; border-left: 4px solid ${textAccent}; border-radius: 10px; font-weight: 800; font-size: 0.94rem; color: ${textAccent}; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);"><span style="font-size: 1.1rem;">${iconBadge}</span><span>${formatInlineMarkdown(innerText)}</span></div>`
       );
       continue;
     }
@@ -373,7 +373,7 @@ function renderMarkdownBlockToHtml(content = "") {
       inList = true;
       const text = trimmed.replace(/^[-*•]\s+/, "");
       listItems.push(
-        `<li style="line-height: 1.7; color: #f1f5f9; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
+        `<li style="line-height: 1.7; color: inherit; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
       );
       continue;
     }
@@ -383,7 +383,7 @@ function renderMarkdownBlockToHtml(content = "") {
       inList = true;
       const text = trimmed.replace(/^\d+\.\s+/, "");
       listItems.push(
-        `<li style="line-height: 1.7; color: #f1f5f9; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
+        `<li style="line-height: 1.7; color: inherit; font-size: 0.88rem; margin-bottom: 4px;">${formatInlineMarkdown(text)}</li>`
       );
       continue;
     }
@@ -393,7 +393,7 @@ function renderMarkdownBlockToHtml(content = "") {
       flushList();
       const text = trimmed.replace(/^>\s+/, "");
       blocks.push(
-        `<blockquote style="margin: 12px 0; padding: 10px 16px; border-left: 3.5px solid #8b5cf6; background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.05)); border-radius: 0 10px 10px 0; color: #e2e8f0; font-style: italic; box-shadow: 0 2px 10px rgba(0,0,0,0.2);">${formatInlineMarkdown(text)}</blockquote>`
+        `<blockquote style="margin: 12px 0; padding: 10px 16px; border-left: 3.5px solid #8b5cf6; background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.05)); border-radius: 0 10px 10px 0; color: inherit; font-style: italic; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">${formatInlineMarkdown(text)}</blockquote>`
       );
       continue;
     }
@@ -401,7 +401,7 @@ function renderMarkdownBlockToHtml(content = "") {
     // 6. Normal paragraph
     flushList();
     blocks.push(
-      `<p style="margin: 9px 0; line-height: 1.7; color: #f1f5f9; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
+      `<p style="margin: 9px 0; line-height: 1.7; color: inherit; font-size: 0.88rem;">${formatInlineMarkdown(trimmed)}</p>`
     );
   }
 

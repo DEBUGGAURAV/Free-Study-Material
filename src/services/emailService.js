@@ -827,12 +827,17 @@ async function sendTelegramAuthNotice({
         `📧 <b>Email Address:</b> <code>${user.email}</code>\n` +
         (user.mobile ? `📱 <b>Mobile Number:</b> <code>${user.mobile}</code>\n` : "") +
         (user.college ? `🏛️ <b>College / Institute:</b> <code>${user.college}</code>\n` : "") +
-        (user.year ? `🎓 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
+        (user.course ? `🎓 <b>Course & Branch:</b> <code>${user.course}${user.branch ? " - " + user.branch : ""}</code>\n` : (user.branch ? `🎓 <b>Branch:</b> <code>${user.branch}</code>\n` : "")) +
+        (user.year ? `📚 <b>Academic Year:</b> <code>${user.year}</code>\n` : "") +
+        (user.rollNumber && user.rollNumber !== "N/A" ? `🆔 <b>Roll Number:</b> <code>${user.rollNumber}</code>\n` : "") +
+        (user.ip && user.ip !== "N/A" ? `🌐 <b>Last Known IP:</b> <code>${user.ip}</code>\n` : "") +
+        (deviceInfo ? `📱 <b>Device:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Storage:</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") : (user.storage ? `💾 <b>Storage:</b> <code>${escapeHtml(user.storage)}</code>\n` : "")) +
         (user.telegramDetails?.username ? `🤖 <b>Telegram Account:</b> @${user.telegramDetails.username}\n` : (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "")) +
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         `📅 <b>Registration Date:</b> <code>${user.registeredDate || "N/A"}</code>\n` +
         `⏰ <b>Last Login Date:</b> <code>${user.lastLoginDate || "Never Logged In"}</code>\n` +
-        (user.inactivityDays !== undefined && !isAdminAction ? `⌛ <b>Total Inactivity:</b> <code>${user.inactivityDays} Days (Exceeded ${user.thresholdDays || 90}-Day Limit)</code>\n\n` : "\n") +
+        (user.inactivityDays !== undefined && !isAdminAction ? `⌛ <b>Total Inactivity:</b> <code>${user.inactivityDays} Days (Exceeded ${user.thresholdDays || 90}-Day Limit)</code>\n` : "") +
+        (user.reason ? `📌 <b>Deletion Reason:</b> <code>${user.reason}</code>\n\n` : "\n") +
         `📚 <b>Notes Uploaded by Student (Preserved in Vault):</b>\n` +
         `${notesSnippet}\n\n` +
         `📥 <b>Downloaded Notes Count:</b> <code>${user.downloadsCount || 0} documents</code>\n` +
@@ -1097,42 +1102,61 @@ async function sendTelegramAuthNotice({
 
         const cleanTxtContent = [
           "================================================================================",
-          "        FREE STUDY MATERIAL — ACCOUNT PURGE & DATABASE DELETE AUDIT DOSSIER     ",
+          "        FREE STUDY MATERIAL — STUDENT ACCOUNT DELETION & AUDIT DOSSIER          ",
           "================================================================================",
           `Generated At        : ${timeStr} IST`,
           `Event Identifier    : ${event}`,
-          `Action Type         : ${user.actionType === "ADMIN_DELETE" ? "Manual Administrator Account Deletion" : "Automated Inactivity Purge"}`,
+          `Action Type         : ${user.actionType === "ADMIN_DELETE" ? "Manual Administrator Account Deletion" : (user.actionType === "USER_DELETE" ? "Self User Account Deletion" : "Automated Inactivity Purge")}`,
           `Executed By         : ${admin ? `${admin.name || "Admin"} (${admin.email || "admin"})` : (method || "Automated Lifecycle Sweeper")}`,
+          `Deletion Reason     : ${user.reason || "Account Cascaded & Purged"}`,
           "--------------------------------------------------------------------------------",
-          "STUDENT IDENTIFIER & CREDENTIALS:",
+          "STUDENT IDENTIFIER & ACADEMIC CREDENTIALS:",
           `  • Student Name     : ${user.name || "Scholar"}`,
           `  • Email Address    : ${user.email || "N/A"}`,
           `  • Mobile Number    : ${user.mobile || "N/A"}`,
           `  • College / Inst.  : ${user.college || "N/A"}`,
+          `  • Course & Branch  : ${user.course || "N/A"}${user.branch ? " - " + user.branch : ""}`,
           `  • Academic Year    : ${user.year || "N/A"}`,
-          `  • Telegram ID      : ${user.telegramDetails?.id || "N/A"}`,
+          `  • Roll Number      : ${user.rollNumber || "N/A"}`,
+          `  • Student ID       : ${user.id || "N/A"}`,
+          "--------------------------------------------------------------------------------",
+          "TELEMETRY, HARDWARE & SYSTEM FORENSICS:",
+          `  • Last Known IP    : ${user.ip || (deviceInfo?.clientIp) || "N/A"}`,
+          `  • Device Model     : ${deviceInfo?.deviceName || user.deviceInfo?.deviceName || "N/A"}`,
+          `  • Hardware Cap.    : ${deviceInfo?.hardwareCapability || user.deviceInfo?.hardwareCapability || "N/A"}`,
+          `  • System Storage   : ${deviceInfo?.storage || user.storage || user.deviceInfo?.storage || "N/A"}`,
+          "--------------------------------------------------------------------------------",
+          "TELEGRAM IDENTITY & BOT INTEGRATION:",
+          `  • Telegram User ID : ${user.telegramDetails?.id || user.telegramId || "N/A"}`,
           `  • Telegram Handle  : ${user.telegramDetails?.username ? `@${user.telegramDetails.username}` : (user.telegramName || "N/A")}`,
+          `  • Telegram Name    : ${[user.telegramDetails?.first_name, user.telegramDetails?.last_name].filter(Boolean).join(" ") || (user.telegramName || "N/A")}`,
+          "--------------------------------------------------------------------------------",
+          "ACCOUNT ACTIVITY & LIFECYCLE TIMELINE:",
           `  • Registration Date: ${user.registeredDate || "N/A"}`,
           `  • Last Login Date  : ${user.lastLoginDate || "Never Logged In"}`,
-          user.inactivityDays !== undefined ? `  • Inactivity Days  : ${user.inactivityDays} Days (Threshold: ${user.thresholdDays || 90} Days)` : null,
+          user.inactivityDays !== undefined ? `  • Inactivity Period: ${user.inactivityDays} Days (Threshold Limit: ${user.thresholdDays || 90} Days)` : null,
+          `  • Total Downloads  : ${user.downloadsCount || user.downloadedNotes?.length || 0} documents`,
+          `  • Total Uploads    : ${user.uploadedNotes?.length || 0} study materials`,
+          `  • Total Activities : ${user.totalActivities || "N/A"} events logged`,
           "--------------------------------------------------------------------------------",
-          "DATABASE CASCADE & PURGE STATUS:",
-          "  • Firebase Firestore : User document deleted from 'users' collection",
-          "  • Turso LibSQL Cloud : Associated profile, chat records & telemetry expunged",
-          "  • WebAuthn / Passkeys: Biometric keys revoked and deleted",
-          "  • Active Sessions    : All JWT tokens and session records invalidated",
+          "DATABASE CASCADE & SECURITY EXPUNGEMENT BREAKDOWN:",
+          "  • Firebase Firestore : User document permanently purged from 'users' collection",
+          "  • Turso LibSQL Cloud : Profile records, chat messages, bookmarks & query cache expunged",
+          "  • WebAuthn / Passkeys: Registered biometric passkeys and security credentials revoked",
+          "  • Active Sessions    : All JWT authentication tokens, cookies & refresh tokens invalidated",
+          "  • Cloud Vault Study  : Uploaded lecture notes preserved in vault with anonymous attribution",
           "--------------------------------------------------------------------------------",
           `STUDY NOTES UPLOADED BY STUDENT (${user.uploadedNotes?.length || 0} Total - Preserved in Vault):`,
           user.uploadedNotes && user.uploadedNotes.length > 0
-            ? user.uploadedNotes.map((n, i) => `  [${i + 1}] ${n.title} | ${n.course || "Course"} | ${n.branch || "Branch"} | ${formatRealSize(n.fileSize)} | ID: ${n.id || "N/A"}`).join("\n")
+            ? user.uploadedNotes.map((n, i) => `  [${i + 1}] Title: ${n.title}\n      Subject: ${n.subject || "General"} | Course: ${n.course || "B.Tech"} | Branch: ${n.branch || "General"}\n      File Size: ${formatRealSize(n.fileSize)} | Downloads: ${n.downloads || 0} | ID: ${n.id || "N/A"}`).join("\n")
             : "  (No study notes uploaded by this student)",
           "--------------------------------------------------------------------------------",
           `DOCUMENTS DOWNLOADED BY STUDENT (${user.downloadedNotes?.length || user.downloadsCount || 0} Total):`,
           user.downloadedNotes && user.downloadedNotes.length > 0
-            ? user.downloadedNotes.map((d, i) => `  [${i + 1}] ${d.title} | Subject: ${d.subject || "General"} | ID: ${d.id || "N/A"}`).join("\n")
+            ? user.downloadedNotes.map((d, i) => `  [${i + 1}] Title: ${d.title}\n      Subject: ${d.subject || "General"} | ID: ${d.id || "N/A"}`).join("\n")
             : "  (No download records found)",
           "================================================================================",
-          "END OF AUDIT DOSSIER — FREE STUDY MATERIAL SECURITY GUARDIAN",
+          "END OF AUDIT DOSSIER — FREE STUDY MATERIAL SECURITY & COMPLIANCE GUARDIAN",
           "================================================================================",
         ].filter(Boolean).join("\n");
 
@@ -1147,10 +1171,11 @@ async function sendTelegramAuthNotice({
           `🕒 <b>Timestamp:</b> <code>${timeStr} IST</code>`,
           `━━━━━━━━━━━━━━━━━━━━`,
           `📎 <b>Dossier File:</b> <code>${txtFilename}</code>`,
-          `<i>Full forensic audit dossier attached in TXT file format.</i>`,
+          `<i>Full forensic audit dossier attached in TXT file format. Full report also sent in chat.</i>`,
         ].filter(Boolean).join("\n");
 
-        const ok = await sendTelegramTxtDocument({
+        // 1. Dispatch TXT document to Telegram Audit Topic
+        await sendTelegramTxtDocument({
           botToken,
           chatId: targetChatId,
           threadId,
@@ -1159,10 +1184,49 @@ async function sendTelegramAuthNotice({
           caption: shortCaption,
         });
 
-        if (ok) {
-          console.log(`[TELEGRAM-AUTH-NOTICE] 📄 Purge Dossier TXT file successfully dispatched for ${user.email} [Topic: ${threadId || "General"}]`);
-          return;
+        // 2. ALSO send full HTML report in the chat topic so all information is readable directly in chat
+        if (caption) {
+          const chatMsgPayload = {
+            chat_id: targetChatId,
+            text: caption,
+            parse_mode: "HTML",
+          };
+          if (threadId && !isNaN(Number(threadId))) {
+            chatMsgPayload.message_thread_id = Number(threadId);
+          }
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(chatMsgPayload),
+            signal: AbortSignal.timeout(8000),
+          }).catch((err) => console.warn("[TELEGRAM-AUTH-NOTICE] Full chat report notice error:", err.message));
         }
+
+        // 3. ALSO dispatch deletion notice & TXT report to student's personal Telegram chat if linked
+        const studentTgId = user.telegramDetails?.id || user.telegramId || user.tgId;
+        if (studentTgId && String(studentTgId) !== String(targetChatId)) {
+          const studentFarewellCaption = [
+            `👋 <b>Free Study Material — Account Deletion Receipt</b>`,
+            `━━━━━━━━━━━━━━━━━━━━`,
+            `Dear <b>${user.name || "Scholar"}</b>,`,
+            `Your Free Study Material student account (<code>${user.email || "N/A"}</code>) has been ${user.actionType === "ADMIN_DELETE" ? "removed by administrator" : "safely purged due to inactivity"}.`,
+            ``,
+            `All personal credentials have been expunged from the database for your privacy and security.`,
+            `Your complete account activity and deletion audit dossier is attached below in .txt format for your records.`,
+            `Thank you for being part of our academic community! 🎓`,
+          ].join("\n");
+
+          await sendTelegramTxtDocument({
+            botToken,
+            chatId: String(studentTgId),
+            filename: txtFilename,
+            content: cleanTxtContent,
+            caption: studentFarewellCaption,
+          }).catch((err) => console.warn("[TELEGRAM-AUTH-NOTICE] Student DM error:", err.message));
+        }
+
+        console.log(`[TELEGRAM-AUTH-NOTICE] 📄 Purge Dossier TXT + Full Chat Report successfully dispatched for ${user.email} [Topic: ${threadId || "General"}]`);
+        return;
       } catch (txtErr) {
         console.warn("[TELEGRAM-AUTH-NOTICE] Purge TXT dispatch error:", txtErr.message);
       }

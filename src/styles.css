@@ -6019,41 +6019,12 @@ svg.lucide {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
-/* Mobile Responsiveness: Pure Compact 3D Round Floating Orbs (Icon-Only) */
-@media (max-width: 640px) {
+/* Mobile Responsiveness: Floating widgets are hidden on mobile (< 768px) to prevent blocking screen cards, since mobile already has the 6-tab dock (Chat, AirDrop, Upload, Install, More) */
+@media (max-width: 768px) {
   .movable-3d-widget {
-    touch-action: none !important;
-  }
-  .movable-3d-inner {
-    width: 44px !important;
-    height: 44px !important;
-    min-width: 44px !important;
-    min-height: 44px !important;
-    max-width: 44px !important;
-    max-height: 44px !important;
-    padding: 0 !important;
-    border-radius: 50% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 0 !important;
-    box-sizing: border-box !important;
-    touch-action: none !important;
-  }
-  .movable-3d-label {
     display: none !important;
-  }
-  .movable-3d-icon-wrap {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 100% !important;
-    height: 100% !important;
     pointer-events: none !important;
-  }
-  .movable-3d-icon-wrap svg {
-    width: 20px !important;
-    height: 20px !important;
+    visibility: hidden !important;
   }
 }
 
@@ -6827,6 +6798,70 @@ body.dark-theme {
 [data-theme="dark"] .mobile-floating-island-dock .dock-item span,
 .dark-theme .mobile-floating-island-dock .dock-item span {
   color: #94a3b8 !important;
+}
+
+/* ==========================================================================
+   ✨ AI Study Pod Modal (Pure Crystal White Theme & High-Contrast Formulas)
+   ========================================================================== */
+.ai-study-pod-surface {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.ai-study-pod-surface .math-markdown-container {
+  color: #0f172a !important;
+}
+
+.ai-study-pod-surface .math-markdown-container p,
+.ai-study-pod-surface .math-markdown-container li {
+  color: #1e293b !important;
+}
+
+.ai-study-pod-surface .math-markdown-container strong {
+  color: #0f172a !important;
+}
+
+/* Stylish High-Contrast Formula Cards for KaTeX */
+.ai-study-pod-surface .katex-block-wrapper {
+  background: #ffffff !important;
+  border: 1.5px solid #e2e8f0 !important;
+  border-left: 4px solid #6366f1 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 4px 16px -2px rgba(15, 23, 42, 0.06), 0 2px 6px rgba(0, 0, 0, 0.03) !important;
+  color: #0f172a !important;
+  padding: 14px 20px !important;
+}
+
+.ai-study-pod-surface .katex-block-wrapper .katex {
+  color: #0f172a !important;
+  font-size: 1.05em !important;
+}
+
+/* OLED Dark Mode override if toggled */
+[data-theme="dark"] .ai-study-pod-surface {
+  background: #0b0f19 !important;
+  color: #f8fafc !important;
+  border-color: rgba(139, 92, 246, 0.35) !important;
+}
+
+[data-theme="dark"] .ai-study-pod-surface .math-markdown-container p,
+[data-theme="dark"] .ai-study-pod-surface .math-markdown-container li {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .ai-study-pod-surface .math-markdown-container strong {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .ai-study-pod-surface .katex-block-wrapper {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.88)) !important;
+  border: 1px solid rgba(139, 92, 246, 0.35) !important;
+  border-left: 4px solid #8b5cf6 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .ai-study-pod-surface .katex-block-wrapper .katex {
+  color: #f8fafc !important;
 }
 
 

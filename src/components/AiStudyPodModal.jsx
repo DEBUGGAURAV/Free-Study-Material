@@ -27,7 +27,7 @@ export default function AiStudyPodModal({
   initialTab = null,
   onOpenCircleSearch,
 }) {
-  const VALID_TABS = ["chat", "search_notes", "flashcards", "summary", "session_history"];
+  const VALID_TABS = ["chat", "flashcards", "mindmaps", "summary", "search_notes", "session_history"];
   const resolveDefaultTab = (tabProp) =>
     typeof tabProp === "string" && VALID_TABS.includes(tabProp) ? tabProp : "chat";
 
@@ -407,6 +407,56 @@ export default function AiStudyPodModal({
       console.warn("[STUDY-POD] Summary generation notice:", err.message);
     } finally {
       setLoadingSummary(false);
+    }
+  };
+
+  // 🗺️ Mind-Maps & Architecture Flowchart State
+  const [mindmapCode, setMindmapCode] = useState("");
+  const [loadingMindmap, setLoadingMindmap] = useState(false);
+  const [mindmapSource, setMindmapSource] = useState(null);
+
+  const handleGenerateMindmap = async (forceFresh = false) => {
+    setLoadingMindmap(true);
+    try {
+      const selectedNoteObj = currentNoteId
+        ? fetchedNotes.find((n) => (n.id || n.noteId) === currentNoteId)
+        : null;
+      const noteCtx = context || selectedNoteObj?.ocrText || "";
+      const prompt = `Generate a detailed visual Mermaid.js mind-map / flowchart diagram (using \`\`\`mermaid graph TD ... \`\`\` or \`\`\`mermaid mindmap ... \`\`\`) visualizing the complete concept hierarchy, core formulas, and logical working flow of "${currentTitle}${currentSubject ? ` (${currentSubject})` : ""}". Return the diagram in a clean \`\`\`mermaid code block followed by brief, high-yield bullet explanations.`;
+
+      const res = await api.askAiQuestion(
+        prompt,
+        `Active Note: ${currentTitle}\n${String(noteCtx).slice(0, 9000)}`,
+        currentNoteId || null,
+        currentSubject || "",
+        { skipCache: forceFresh }
+      );
+
+      if (res?.answer) {
+        setMindmapCode(res.answer);
+        setMindmapSource({
+          cached: Boolean(res?.cached),
+          provider: res?.provider || "Cloud AI",
+          latencyMs: res?.latencyMs || 0,
+        });
+
+        // Add to in-session history
+        const updated = addStudySessionItem({
+          type: "mindmap",
+          title: currentTitle,
+          noteId: currentNoteId || "",
+          query: `🗺️ Mind-Map Diagram`,
+          data: res.answer,
+          provider: res.provider,
+          model: res.model,
+          cached: res.cached,
+        });
+        setSessionHistory(updated);
+      }
+    } catch (err) {
+      console.warn("[STUDY-POD] Mindmap generation notice:", err.message);
+    } finally {
+      setLoadingMindmap(false);
     }
   };
 
