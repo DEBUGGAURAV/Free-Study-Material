@@ -3099,7 +3099,9 @@ router.get("/system/software", authenticateToken, checkAdminOrPermission("all"),
         tursoHelp,
         tursoStudentVault,
         tursoAi,
+        tursoChatVault,
         mongoDatabase: mongoTelemetry,
+        mongoChatDatabase: mongoTelemetry,
         helpBot,
         smtp,
         securityShield,
@@ -3429,6 +3431,12 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("data
       db.collection("deleted_records").get(),
     ]);
 
+    let mongoChatCluster = null;
+    try {
+      const mongoChatBuffer = require("../services/mongoChatBufferService");
+      mongoChatCluster = await mongoChatBuffer.getMongoTelemetry();
+    } catch (_) {}
+
     return res.json({
       success: true,
       collections: {
@@ -3438,6 +3446,7 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("data
         deleted_notes: { count: deletedSnap.size, size: deletedSnap.size },
         deleted_records: { count: deletedRecordsSnap.size, size: deletedRecordsSnap.size },
       },
+      mongoChatCluster,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -4933,7 +4942,12 @@ router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) =>
       const { getHelpTursoTelemetry } = require("../services/helpTicketService");
       helpVault = await getHelpTursoTelemetry();
     } catch (_) {}
-    res.json({ success: true, ...status, cacheStats, userCacheStats, helpVault });
+    let chatTursoVault = null;
+    try {
+      const { getTursoChatTelemetry } = require("../services/tursoService");
+      chatTursoVault = await getTursoChatTelemetry();
+    } catch (_) {}
+    res.json({ success: true, ...status, cacheStats, userCacheStats, helpVault, chatTursoVault });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
