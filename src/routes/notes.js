@@ -92,7 +92,7 @@ setInterval(() => {
   for (const [ticket, meta] of ephemeralStreamTickets.entries()) {
     if (meta.expires < now) ephemeralStreamTickets.delete(ticket);
   }
-}, 30000);
+}, 30000).unref();
 
 // Persistent Local Disk Cache for CDN Buffers (Ensures notes remain on CDN across server restarts and refreshes)
 const CDN_CACHE_DIR = path.join(process.cwd(), "cache", "cdn");
@@ -275,6 +275,15 @@ async function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) 
         reject(new Error("Telegram Bot file download timeout"));
       }
     });
+
+    if (res && typeof res.on === "function") {
+      res.on("close", () => {
+        if (!resolved) {
+          resolved = true;
+          fileReq.destroy();
+        }
+      });
+    }
   });
 }
 
@@ -415,6 +424,16 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
     });
 
     fileReq.on("error", reject);
+
+    if (res && typeof res.on === "function") {
+      res.on("close", () => {
+        fileReq.destroy();
+        if (diskStream) {
+          diskStream.destroy();
+          try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+        }
+      });
+    }
   });
 }
 

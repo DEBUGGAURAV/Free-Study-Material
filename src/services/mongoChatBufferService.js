@@ -110,16 +110,20 @@ async function flushBufferToTurso() {
 
     // Import tursoService for batch writing
     const { batchInsertChatMessages } = require("./tursoService");
+    let insertedCount = 0;
     if (typeof batchInsertChatMessages === "function") {
-      await batchInsertChatMessages(messages);
+      const res = await batchInsertChatMessages(messages);
+      insertedCount = res?.inserted || 0;
     }
 
-    // Delete flushed documents
-    const ids = messages.map((m) => m._id);
-    await collection.deleteMany({ _id: { $in: ids } });
+    // Delete only documents that were safely written to prevent chat message loss
+    if (insertedCount > 0) {
+      const ids = messages.slice(0, insertedCount).map((m) => m._id);
+      await collection.deleteMany({ _id: { $in: ids } });
+    }
 
-    console.log(`[MONGO-BUFFER] ⚡ Flushed ${messages.length} messages from MongoDB to Turso LibSQL.`);
-    return { flushedCount: messages.length, status: "success" };
+    console.log(`[MONGO-BUFFER] ⚡ Flushed ${insertedCount} messages from MongoDB to Turso LibSQL.`);
+    return { flushedCount: insertedCount, status: "success" };
   } catch (err) {
     console.warn("[MONGO-BUFFER] Flush error:", err.message);
     return { flushedCount: 0, error: err.message };
@@ -168,7 +172,7 @@ async function getMongoTelemetry() {
   return {
     configured,
     status,
-    maskedUri: configured ? MONGODB_URI.replace(/:([^@]+)@/, ":****@") : "Standby Mode (Turso LibSQL Direct)",
+    maskedUri: configured ? MONGODB_URI.replace(/(:\/\/[^:]+:)([^@]+)@/, "$1****@") : "Standby Mode (Turso LibSQL Direct)",
     hotBufferCount,
     autoFlushThreshold: 30000,
     poolSize: 20,

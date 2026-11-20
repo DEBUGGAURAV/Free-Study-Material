@@ -45,7 +45,7 @@ setInterval(() => {
   for (const [k, time] of telegramAlertCooldown.entries()) {
     if (now - time > 60 * 1000) telegramAlertCooldown.delete(k);
   }
-}, 60 * 60 * 1000);
+}, 60 * 60 * 1000).unref();
 
 function safeHtml(str) {
   if (!str) return "";

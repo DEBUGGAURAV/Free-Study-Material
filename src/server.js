@@ -314,6 +314,10 @@ app.use(checkMaintenanceMode);
 // Rate limiter for standard API routes
 app.use("/api", globalLimiter);
 
+// 🛡️ Category 2 Feature 4: Same-Origin & CSRF Guard for Mutating Requests
+const { sameOriginGuard } = require("./middleware/csrfGuard");
+app.use("/api", sameOriginGuard);
+
 // API Routing
 app.use("/api/auth/passkey", passkeyRoutes);
 app.use("/api/auth", authRoutes);

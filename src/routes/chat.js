@@ -1476,8 +1476,10 @@ function initChatWebSocket(server) {
           const { text, messageType = "text", fileUrl, fileName, fileSize, replyTo, noteData, audioDuration } = data;
           if (!text && !fileUrl && !noteData) return;
 
-          // Clean XSS injection
-          const sanitizedText = (text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+          // Clean XSS injection and enforce memory bounds (5,000 char text limit, 255 char filename)
+          const boundedText = typeof text === "string" ? text.slice(0, 5000) : "";
+          const sanitizedText = boundedText.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+          const safeFileName = typeof fileName === "string" ? fileName.slice(0, 255) : null;
 
           const currentRoom = activeRooms.get(roomId);
           const pInfo = currentRoom?.participantsMap?.get(user.id) || {};
@@ -1498,7 +1500,7 @@ function initChatWebSocket(server) {
             text: sanitizedText,
             type: messageType,
             fileUrl: fileUrl || null,
-            fileName: fileName || null,
+            fileName: safeFileName,
             fileSize: fileSize || null,
             replyTo: replyTo || null, // { id, text, senderName, type }
             noteData: noteData || null, // { id, title, subject, branch, year, fileSize, fileUrl }
