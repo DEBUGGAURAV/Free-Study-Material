@@ -21,6 +21,7 @@ const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
 const { ramCache } = require("../utils/ramCache");
+const { getCachedUserByEmailFromTurso, cacheUserInTurso } = require("../services/tursoUserCacheService");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -155,12 +156,20 @@ async function resolveUserDocAndId(req) {
     } catch (_) {}
   }
 
-  // 3. Fallback to RAM cache
+  // 3. Fallback to RAM cache & Turso User Cache
   if (!userData && userEmail) {
     const cached = ramCache ? ramCache.get(`auth_user_${userEmail}`) : null;
     if (cached) {
       userData = cached.userRecord;
       effectiveUserId = cached.docId || userId;
+    } else {
+      try {
+        const tursoCached = await getCachedUserByEmailFromTurso(userEmail);
+        if (tursoCached) {
+          userData = tursoCached;
+          effectiveUserId = tursoCached.id || userId;
+        }
+      } catch (_) {}
     }
   }
 

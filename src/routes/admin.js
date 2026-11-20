@@ -4685,6 +4685,7 @@ function isDownloadAllowed() {
 // ============================================================================
 const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan, deleteSinglePrivateRoomAudit, pruneChatMessagesOlderThan } = require("../services/tursoService");
 const { getTursoNotesCacheStats, refreshCacheFromFirestore, pruneNotesCacheOlderThan, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+const { getTursoUserCacheStats, syncAllUsersToTursoCache } = require("../services/tursoUserCacheService");
 
 router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -4695,12 +4696,18 @@ router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) =>
         cacheStats = getTursoNotesCacheStats();
       }
     } catch (_) {}
+    let userCacheStats = null;
+    try {
+      if (typeof getTursoUserCacheStats === "function") {
+        userCacheStats = await getTursoUserCacheStats();
+      }
+    } catch (_) {}
     let helpVault = null;
     try {
       const { getHelpTursoTelemetry } = require("../services/helpTicketService");
       helpVault = await getHelpTursoTelemetry();
     } catch (_) {}
-    res.json({ success: true, ...status, cacheStats, helpVault });
+    res.json({ success: true, ...status, cacheStats, userCacheStats, helpVault });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

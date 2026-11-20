@@ -49,6 +49,8 @@ startRamBufferGuard(path.join(__dirname, "../temp")); // Dynamic Self-Adapting R
 initTursoTables().catch((err) => console.warn("[TURSO] Boot init warning:", err.message));
 const { initTursoNoticesCacheTables } = require("./services/tursoNoticesCacheService");
 initTursoNoticesCacheTables().catch((err) => console.warn("[TURSO-NOTICES-CACHE] Boot init warning:", err.message));
+const { initTursoUsersCacheTables, syncAllUsersToTursoCache } = require("./services/tursoUserCacheService");
+initTursoUsersCacheTables().then(() => syncAllUsersToTursoCache()).catch((err) => console.warn("[TURSO-USERS-CACHE] Boot init warning:", err.message));
 const { initTursoCircleSearchTables } = require("./services/tursoCircleSearchService");
 initTursoCircleSearchTables().catch((err) => console.warn("[TURSO-CIRCLE-SEARCH] Boot init warning:", err.message));
 

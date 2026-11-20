@@ -30,6 +30,11 @@ const {
   encryptUserObject,
   decryptUserObject,
 } = require("../utils/cryptoVault");
+const {
+  cacheUserInTurso,
+  getCachedUserByEmailFromTurso,
+  invalidateUserCacheInTurso,
+} = require("../services/tursoUserCacheService");
 
 /**
  * Strips registered JWT timing/ID claims (exp, iat, nbf, jti) before re-signing with expiresIn.
@@ -818,6 +823,8 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
     if (ramCache) {
       ramCache.set(`auth_user_${cleanEmail}`, { userRecord: { ...newUser, password: hashedPassword, passwordHash: hashedPassword }, docId: userId }, 3600);
     }
+    // Cache user metadata in dedicated Turso Cache Database
+    cacheUserInTurso({ ...newUser, id: userId, passwordHash: hashedPassword }).catch(() => {});
 
     // Mirror to Firestore safely if available
     if (db) {
@@ -997,6 +1004,8 @@ router.post("/register", authLimiter, async (req, res) => {
     if (ramCache) {
       ramCache.set(`auth_user_${cleanEmail}`, { userRecord: { ...newUser, password: hashedPassword, passwordHash: hashedPassword }, docId: userId }, 3600);
     }
+    // Cache user metadata in dedicated Turso Cache Database
+    cacheUserInTurso({ ...newUser, id: userId, passwordHash: hashedPassword }).catch(() => {});
 
     // 3. Mirror to Firestore safely if available
     if (db) {
@@ -1419,6 +1428,8 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
     if (ramCache) {
       ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 3600);
     }
+    // Cache user metadata in dedicated Turso Cache Database
+    cacheUserInTurso({ ...newUser, id: userId }).catch(() => {});
 
     // 3. Mirror to Firestore safely if available
     if (db) {
@@ -1655,32 +1666,45 @@ router.post("/login", authLimiter, async (req, res) => {
     if (cachedUser) {
       userRecord = cachedUser.userRecord;
       docId = cachedUser.docId;
-    } else if (db) {
+    } else {
+      // ⚡ 2.1 TURSO USERS CACHE DATABASE (sub-5ms cold-start lookup):
       try {
-        let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
-        // Also check raw non-lowercased email if snap was empty
-        const rawEmail = (identifier || email || "").trim();
-        if (snap.empty && rawEmail && rawEmail !== inputIdentity) {
-          snap = await db.collection("users").where("email", "==", rawEmail).limit(1).get();
-        }
-        if (snap.empty && !inputIdentity.includes("@")) {
-          const mobDigits = inputIdentity.replace(/\D/g, "").slice(-10);
-          if (mobDigits.length === 10) {
-            const mHash = blindIndex(mobDigits);
-            snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
-            if (snap.empty) {
-              snap = await db.collection("users").where("mobile", "==", mobDigits).limit(1).get();
-            }
-          }
-        }
-        if (!snap.empty) {
-          userRecord = decryptUserObject(snap.docs[0].data());
-          docId = snap.docs[0].id;
+        const tursoCached = await getCachedUserByEmailFromTurso(inputIdentity);
+        if (tursoCached) {
+          userRecord = tursoCached;
+          docId = tursoCached.id;
           ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
         }
-      } catch (dbErr) {
-        console.warn("[AUTH] Database lookup notice:", dbErr.message);
-        dbLookupError = dbErr;
+      } catch (_) {}
+
+      if (!userRecord && db) {
+        try {
+          let snap = await db.collection("users").where("email", "==", inputIdentity).limit(1).get();
+          // Also check raw non-lowercased email if snap was empty
+          const rawEmail = (identifier || email || "").trim();
+          if (snap.empty && rawEmail && rawEmail !== inputIdentity) {
+            snap = await db.collection("users").where("email", "==", rawEmail).limit(1).get();
+          }
+          if (snap.empty && !inputIdentity.includes("@")) {
+            const mobDigits = inputIdentity.replace(/\D/g, "").slice(-10);
+            if (mobDigits.length === 10) {
+              const mHash = blindIndex(mobDigits);
+              snap = await db.collection("users").where("mobileHash", "==", mHash).limit(1).get();
+              if (snap.empty) {
+                snap = await db.collection("users").where("mobile", "==", mobDigits).limit(1).get();
+              }
+            }
+          }
+          if (!snap.empty) {
+            userRecord = decryptUserObject(snap.docs[0].data());
+            docId = snap.docs[0].id;
+            ramCache.set(`auth_user_${inputIdentity}`, { userRecord, docId }, 300);
+            cacheUserInTurso({ ...userRecord, id: docId }).catch(() => {});
+          }
+        } catch (dbErr) {
+          console.warn("[AUTH] Database lookup notice:", dbErr.message);
+          dbLookupError = dbErr;
+        }
       }
     }
 
