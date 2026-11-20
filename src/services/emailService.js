@@ -1174,7 +1174,7 @@ async function sendTelegramAuthNotice({
           `<i>Full forensic audit dossier attached in TXT file format. Full report also sent in chat.</i>`,
         ].filter(Boolean).join("\n");
 
-        // 1. Dispatch TXT document to Telegram Audit Topic
+        // 1. Dispatch TXT document to Security Audit Topic (@fsm_security_otp_bot)
         await sendTelegramTxtDocument({
           botToken,
           chatId: targetChatId,
@@ -1184,7 +1184,7 @@ async function sendTelegramAuthNotice({
           caption: shortCaption,
         });
 
-        // 2. ALSO send full HTML report in the chat topic so all information is readable directly in chat
+        // 2. ALSO send full HTML report in the Security chat topic so all information is readable directly in chat
         if (caption) {
           const chatMsgPayload = {
             chat_id: targetChatId,
@@ -1202,30 +1202,7 @@ async function sendTelegramAuthNotice({
           }).catch((err) => console.warn("[TELEGRAM-AUTH-NOTICE] Full chat report notice error:", err.message));
         }
 
-        // 3. ALSO dispatch deletion notice & TXT report to student's personal Telegram chat if linked
-        const studentTgId = user.telegramDetails?.id || user.telegramId || user.tgId;
-        if (studentTgId && String(studentTgId) !== String(targetChatId)) {
-          const studentFarewellCaption = [
-            `👋 <b>Free Study Material — Account Deletion Receipt</b>`,
-            `━━━━━━━━━━━━━━━━━━━━`,
-            `Dear <b>${user.name || "Scholar"}</b>,`,
-            `Your Free Study Material student account (<code>${user.email || "N/A"}</code>) has been ${user.actionType === "ADMIN_DELETE" ? "removed by administrator" : "safely purged due to inactivity"}.`,
-            ``,
-            `All personal credentials have been expunged from the database for your privacy and security.`,
-            `Your complete account activity and deletion audit dossier is attached below in .txt format for your records.`,
-            `Thank you for being part of our academic community! 🎓`,
-          ].join("\n");
-
-          await sendTelegramTxtDocument({
-            botToken,
-            chatId: String(studentTgId),
-            filename: txtFilename,
-            content: cleanTxtContent,
-            caption: studentFarewellCaption,
-          }).catch((err) => console.warn("[TELEGRAM-AUTH-NOTICE] Student DM error:", err.message));
-        }
-
-        console.log(`[TELEGRAM-AUTH-NOTICE] 📄 Purge Dossier TXT + Full Chat Report successfully dispatched for ${user.email} [Topic: ${threadId || "General"}]`);
+        console.log(`[TELEGRAM-AUTH-NOTICE] 📄 Security Purge Dossier TXT + Full Chat Report successfully dispatched for ${user.email} [Security Topic: ${threadId || "General"}]`);
         return;
       } catch (txtErr) {
         console.warn("[TELEGRAM-AUTH-NOTICE] Purge TXT dispatch error:", txtErr.message);

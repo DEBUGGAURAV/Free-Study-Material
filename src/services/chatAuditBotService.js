@@ -3514,11 +3514,10 @@ async function dispatchUserDeletionChatReportToTelegram({ user, admin, chatSumma
       });
 
       if (docRes.ok) {
-        console.log(`[CHAT-AUDIT-BOT] 📄 User deletion report TXT file successfully sent to ${chatId} (Topic #${threadId || "General"})`);
-        continue;
+        console.log(`[CHAT-AUDIT-BOT] 📄 User deletion report TXT file successfully sent to ${chatId} (Chat Topic #${threadId || "114"})`);
       }
 
-      // Fallback: If sendDocument fails, fallback to sendMessage
+      // 💬 STRICT REQUIREMENT: ALSO send the full report text in Chat Topic 114 so everything is visible directly in chat
       const body = {
         chat_id: chatId,
         text: textHtml,
