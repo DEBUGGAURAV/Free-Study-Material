@@ -705,8 +705,17 @@ router.get("/subjects", async (req, res) => {
 
     const subjectSet = new Set();
 
+    // 1. Fetch from Turso 2 Edge Cache (fsm-cache-freestudymaterial: 0ms Edge Speed)
+    try {
+      const { getAllSubjectTopicsFromTurso } = require("../services/tursoNotesCacheService");
+      const tursoTopics = await getAllSubjectTopicsFromTurso();
+      tursoTopics.forEach((t) => {
+        if (t.subject && t.subject.trim()) subjectSet.add(t.subject.trim());
+      });
+    } catch (_) {}
+
     if (db) {
-      // 1. Fetch from Telegram Supergroup Forum Topics
+      // 2. Fetch from Database Fallback
       try {
         const topicsSnap = await db.collection("subject_forum_topics").get();
         topicsSnap.forEach((doc) => {

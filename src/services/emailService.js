@@ -142,6 +142,18 @@ async function getSubjectFromThreadId(threadId) {
     if (cached) return cached;
   }
 
+  // 1. Check Turso 2 Edge Cache (fsm-cache-freestudymaterial: 0ms Edge speed)
+  try {
+    const { getSubjectTopicByThreadIdFromTurso } = require("./tursoNotesCacheService");
+    const tTopic = await getSubjectTopicByThreadIdFromTurso(numThreadId);
+    if (tTopic && (tTopic.subject || tTopic.topicName)) {
+      const subject = tTopic.subject || tTopic.topicName;
+      if (ramCache) ramCache.set("tg_topic_sub_" + numThreadId, subject, 86400);
+      return subject;
+    }
+  } catch (_) {}
+
+  // 2. Database Fallback (if any)
   try {
     const { db } = require("../firebase");
     if (db) {
@@ -192,7 +204,21 @@ async function getOrCreateSubjectForumTopic(subjectName, targetChatId = null, bo
       if (cachedThreadId) return Number(cachedThreadId);
     }
 
-    // 2. Check Firestore Database (by normalizedKey and subject exact match)
+    // 2. Check Turso 2 Edge Cache (fsm-cache-freestudymaterial: sub-5ms)
+    try {
+      const { getSubjectTopicFromTurso } = require("./tursoNotesCacheService");
+      const tTopic = await getSubjectTopicFromTurso(normalizedKey);
+      if (tTopic && tTopic.threadId) {
+        const threadNum = Number(tTopic.threadId);
+        if (ramCache) {
+          ramCache.set("tg_sub_topic_" + normalizedKey, threadNum, 86400);
+          ramCache.set("tg_topic_sub_" + threadNum, cleanSubject, 86400);
+        }
+        return threadNum;
+      }
+    } catch (_) {}
+
+    // 3. Check Database Fallback (by normalizedKey and subject exact match)
     try {
       const { db } = require("../firebase");
       if (db) {
