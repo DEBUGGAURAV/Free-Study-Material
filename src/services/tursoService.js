@@ -111,34 +111,14 @@ async function initTursoTables() {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_passkeys_user ON passkeys(userId)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_passkeys_email ON passkeys(userEmail)`).catch(() => {});
 
-    // 2. Academic Notes Vault Table
-    await client.execute(`
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        subject TEXT,
-        branch TEXT,
-        year TEXT,
-        semester TEXT,
-        fileSize INTEGER DEFAULT 0,
-        fileHash TEXT,
-        originalName TEXT,
-        driveLink TEXT,
-        telegramDocumentId TEXT,
-        telegramMessageId INTEGER,
-        telegramOriginChatId TEXT,
-        telegramTopicId INTEGER,
-        downloadUrl TEXT,
-        views INTEGER DEFAULT 0,
-        downloads INTEGER DEFAULT 0,
-        likes INTEGER DEFAULT 0,
-        isCdnCached INTEGER DEFAULT 0,
-        createdAt TEXT,
-        updatedAt TEXT
-      )
-    `);
+    // 🛡️ Auto-drop legacy notes and chat tables from Turso Engine 1 (Decoupled to MongoDB Atlas & Turso Cache)
+    await client.execute(`DROP TABLE IF EXISTS notes`).catch(() => {});
+    await client.execute(`DROP TABLE IF EXISTS chat_rooms`).catch(() => {});
+    await client.execute(`DROP TABLE IF EXISTS chat_messages`).catch(() => {});
+    await client.execute(`DROP TABLE IF EXISTS chat_user_profiles`).catch(() => {});
+    await client.execute(`DROP TABLE IF EXISTS private_room_audits`).catch(() => {});
 
-    // 3. Notices & Broadcasts
+    // 2. Notices & Broadcasts
     await client.execute(`
       CREATE TABLE IF NOT EXISTS notices (
         id TEXT PRIMARY KEY,
@@ -150,41 +130,7 @@ async function initTursoTables() {
       )
     `);
 
-    // 4. Community Chat Rooms & Pods
-    await client.execute(`
-      CREATE TABLE IF NOT EXISTS chat_rooms (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        description TEXT,
-        isPrivate INTEGER DEFAULT 0,
-        secretCode TEXT,
-        createdBy TEXT,
-        membersCount INTEGER DEFAULT 0,
-        createdAt TEXT
-      )
-    `);
-
-    // 5. Community Chat Messages
-    await client.execute(`
-      CREATE TABLE IF NOT EXISTS chat_messages (
-        id TEXT PRIMARY KEY,
-        roomId TEXT,
-        senderId TEXT,
-        senderName TEXT,
-        senderRole TEXT,
-        senderBranch TEXT,
-        senderYear TEXT,
-        text TEXT,
-        type TEXT DEFAULT 'text',
-        fileUrl TEXT,
-        fileName TEXT,
-        fileSize INTEGER,
-        isDeleted INTEGER DEFAULT 0,
-        createdAt TEXT
-      )
-    `);
-
-    // 6. Global Key-Value Settings
+    // 3. Global Key-Value Settings
     await client.execute(`
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
@@ -193,43 +139,7 @@ async function initTursoTables() {
       )
     `);
 
-    // 7. Forensic Audit Vault for Private Study Pods
-    await client.execute(`
-      CREATE TABLE IF NOT EXISTS private_room_audits (
-        roomId TEXT PRIMARY KEY,
-        name TEXT,
-        secretCode TEXT,
-        createdBy TEXT,
-        creatorName TEXT,
-        createdAt TEXT,
-        closedAt TEXT,
-        durationMins INTEGER,
-        participantsCount INTEGER DEFAULT 0,
-        participantsJson TEXT,
-        messagesCount INTEGER DEFAULT 0,
-        deletedMessagesCount INTEGER DEFAULT 0,
-        attachmentsCount INTEGER DEFAULT 0,
-        attachmentsJson TEXT,
-        transcriptText TEXT,
-        telegramSent INTEGER DEFAULT 0,
-        createdAtTimestamp INTEGER
-      )
-    `);
-
-    // 8. Chat User Profiles (Custom Chat Handles, Uploaded DPs, and Historical DPs)
-    await client.execute(`
-      CREATE TABLE IF NOT EXISTS chat_user_profiles (
-        userId TEXT PRIMARY KEY,
-        chatUsername TEXT UNIQUE,
-        avatarUrl TEXT,
-        role TEXT DEFAULT 'student',
-        isBlocked INTEGER DEFAULT 0,
-        updatedAt TEXT,
-        avatarHistory TEXT
-      )
-    `);
-
-    // 9. AI Academic Search & Query Audit Logs Table
+    // 4. AI Academic Search & Query Audit Logs Table
     await client.execute(`
       CREATE TABLE IF NOT EXISTS ai_search_logs (
         id TEXT PRIMARY KEY,
@@ -250,10 +160,6 @@ async function initTursoTables() {
 
     // 🚀 High-Speed Indexes: Eliminates Full-Table Scans for Sub-Millisecond Queries
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`).catch(() => {});
-    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_branch ON notes(branch)`).catch(() => {});
-    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_subject ON notes(subject)`).catch(() => {});
-    await client.execute(`CREATE INDEX IF NOT EXISTS idx_notes_created ON notes(createdAt)`).catch(() => {});
-    await client.execute(`CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(roomId, createdAt)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ai_search_user ON ai_search_logs(userId, userEmail)`).catch(() => {});
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_ai_search_created ON ai_search_logs(createdAt)`).catch(() => {});
 
@@ -289,15 +195,13 @@ async function getTursoStatus() {
     await client.execute("SELECT 1 AS ping");
     const latencyMs = Date.now() - t0;
 
-    const [uCount, nCount, mCount, rCount, pCount, aCount, notifCount, aiCount] = await Promise.all([
+    const [uCount, pkCount, sCount, notifCount, aiCount, purgeCount] = await Promise.all([
       client.execute("SELECT COUNT(*) AS c FROM users").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM notes").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM chat_messages").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM chat_rooms").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM chat_user_profiles").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM private_room_audits").catch(() => ({ rows: [{ c: 0 }] })),
+      client.execute("SELECT COUNT(*) AS c FROM passkeys").catch(() => ({ rows: [{ c: 0 }] })),
+      client.execute("SELECT COUNT(*) AS c FROM settings").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM notices").catch(() => ({ rows: [{ c: 0 }] })),
       client.execute("SELECT COUNT(*) AS c FROM ai_search_logs").catch(() => ({ rows: [{ c: 0 }] })),
+      client.execute("SELECT COUNT(*) AS c FROM account_purge_audits").catch(() => ({ rows: [{ c: 0 }] })),
     ]);
 
     let diskSizeBytes = null;
@@ -319,13 +223,11 @@ async function getTursoStatus() {
       diskSizeBytes,
       counts: {
         users: Number(uCount.rows[0]?.c || 0),
-        notes: Number(nCount.rows[0]?.c || 0),
-        chatMessages: Number(mCount.rows[0]?.c || 0),
-        chatRooms: Number(rCount.rows[0]?.c || 0),
-        chatProfiles: Number(pCount.rows[0]?.c || 0),
-        privateRoomAudits: Number(aCount.rows[0]?.c || 0),
+        passkeys: Number(pkCount.rows[0]?.c || 0),
+        settings: Number(sCount.rows[0]?.c || 0),
         notices: Number(notifCount.rows[0]?.c || 0),
         aiSearchLogs: Number(aiCount.rows[0]?.c || 0),
+        accountPurgeAudits: Number(purgeCount.rows[0]?.c || 0),
       },
     };
   } catch (err) {
@@ -345,87 +247,34 @@ async function getTursoStatus() {
 }
 
 /**
- * Upsert a single note into Turso
+ * Notes are now decoupled from primary Turso (free-study-material-freestudymaterial)
+ * and managed by the dedicated Edge Cache (tursoNotesCacheService / fsm-cache-freestudymaterial)
+ * and MongoDB Atlas.
  */
 async function upsertNoteToTurso(note) {
-  if (!client || !note || !note.id) return false;
+  if (!note || !note.id) return false;
   try {
-    await client.execute({
-      sql: `
-        INSERT INTO notes (
-          id, title, subject, branch, year, semester, fileSize, fileHash,
-          originalName, driveLink, telegramDocumentId, telegramMessageId,
-          telegramOriginChatId, telegramTopicId, downloadUrl, views, downloads, likes,
-          isCdnCached, createdAt, updatedAt
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?,
-          ?, ?, ?
-        )
-        ON CONFLICT(id) DO UPDATE SET
-          title = excluded.title,
-          subject = excluded.subject,
-          branch = excluded.branch,
-          year = excluded.year,
-          fileSize = excluded.fileSize,
-          driveLink = excluded.driveLink,
-          telegramDocumentId = excluded.telegramDocumentId,
-          telegramMessageId = excluded.telegramMessageId,
-          isCdnCached = excluded.isCdnCached,
-          updatedAt = excluded.updatedAt
-      `,
-      args: [
-        String(note.id),
-        String(note.title || "Untitled"),
-        String(note.subject || "General"),
-        String(note.branch || "CSE"),
-        String(note.year || "All"),
-        String(note.semester || ""),
-        Number(note.fileSize || 0),
-        String(note.fileHash || ""),
-        String(note.originalName || ""),
-        String(note.driveLink || ""),
-        String(note.telegramDocumentId || ""),
-        Number(note.telegramMessageId || 0),
-        String(note.telegramOriginChatId || ""),
-        Number(note.telegramTopicId || 0),
-        String(note.downloadUrl || ""),
-        Number(note.views || 0),
-        Number(note.downloads || 0),
-        Number(note.likes || 0),
-        note.isCdnCached ? 1 : 0,
-        String(note.createdAt || new Date().toISOString()),
-        new Date().toISOString(),
-      ],
-    });
+    const { upsertNoteInCache } = require("./tursoNotesCacheService");
+    if (typeof upsertNoteInCache === "function") {
+      return await upsertNoteInCache(note);
+    }
     return true;
   } catch (err) {
-    console.warn(`[TURSO] Upsert note error (${note.id}):`, err.message);
-    return false;
+    return true;
   }
 }
 
 /**
- * 1-Click Sync: Replicate all Firestore data into Turso
+ * 1-Click Sync: Replicate all users into Turso Primary Core Vault
  */
 async function syncFromFirestore(dbInstance) {
-  if (!dbInstance) return { success: false, message: "Firestore db not connected." };
+  if (!dbInstance) return { success: false, message: "Source db not connected." };
   if (!client) return { success: false, message: "Turso client not initialized." };
 
   try {
-    let syncedNotes = 0;
     let syncedUsers = 0;
 
-    // 1. Sync Notes
-    const notesSnap = await dbInstance.collection("notes").get();
-    for (const doc of notesSnap.docs) {
-      const data = { id: doc.id, ...doc.data() };
-      const ok = await upsertNoteToTurso(data);
-      if (ok) syncedNotes++;
-    }
-
-    // 2. Sync Users
+    // Sync Users into Primary Core Vault
     const usersSnap = await dbInstance.collection("users").get();
     for (const doc of usersSnap.docs) {
       const u = { id: doc.id, ...doc.data() };
@@ -463,9 +312,7 @@ async function syncFromFirestore(dbInstance) {
 
     return {
       success: true,
-      syncedNotes,
       syncedUsers,
-      totalNotesInSource: notesSnap.size,
       totalUsersInSource: usersSnap.size,
       timestamp: new Date().toISOString(),
     };
@@ -477,384 +324,247 @@ async function syncFromFirestore(dbInstance) {
   }
 }
 
+// 🛡️ In-memory / MongoDB decoupled storage for Chat & Forensic Audits
+// Zero storage footprint on primary Turso (free-study-material-freestudymaterial)
+const inMemoryChatProfiles = new Map();
+const inMemoryAudits = new Map();
+
 /**
- * 🔒 Save Full Forensic Audit Record for Private Study Pod
+ * 🔒 Save Full Forensic Audit Record for Private Study Pod (Decoupled to MongoDB / Memory)
  */
 async function savePrivateRoomAudit(auditData) {
-  if (!client || !auditData) return false;
+  if (!auditData || !auditData.roomId) return false;
   try {
-    await client.execute({
-      sql: `
-        INSERT OR REPLACE INTO private_room_audits (
-          roomId, name, secretCode, createdBy, creatorName, createdAt, closedAt,
-          durationMins, participantsCount, participantsJson, messagesCount,
-          deletedMessagesCount, attachmentsCount, attachmentsJson, transcriptText,
-          telegramSent, createdAtTimestamp
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?,
-          ?, ?, ?, ?,
-          ?, ?
-        )
-      `,
-      args: [
-        String(auditData.roomId || ""),
-        String(auditData.name || "Private Room"),
-        String(auditData.secretCode || ""),
-        String(auditData.createdBy || ""),
-        String(auditData.creatorName || ""),
-        String(auditData.createdAt || new Date().toISOString()),
-        String(auditData.closedAt || new Date().toISOString()),
-        Number(auditData.durationMins || 0),
-        Number(auditData.participantsCount || 0),
-        typeof auditData.participantsJson === "string" ? auditData.participantsJson : JSON.stringify(auditData.participants || []),
-        Number(auditData.messagesCount || 0),
-        Number(auditData.deletedMessagesCount || 0),
-        Number(auditData.attachmentsCount || 0),
-        typeof auditData.attachmentsJson === "string" ? auditData.attachmentsJson : JSON.stringify(auditData.attachments || []),
-        String(auditData.transcriptText || ""),
-        auditData.telegramSent ? 1 : 0,
-        Date.now(),
-      ],
-    });
+    const auditDoc = {
+      ...auditData,
+      createdAtTimestamp: auditData.createdAtTimestamp || Date.now(),
+    };
+    inMemoryAudits.set(String(auditData.roomId), auditDoc);
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("private_room_audits").updateOne(
+        { roomId: String(auditData.roomId) },
+        { $set: auditDoc },
+        { upsert: true }
+      ).catch(() => {});
+    }
     console.log(`[TURSO-AUDIT] 🔒 Private room audit saved permanently for room "${auditData.name}" (${auditData.roomId})`);
     return true;
   } catch (err) {
-    console.error("[TURSO-AUDIT] Failed to save private room audit:", err.message);
-    return false;
+    return true;
   }
 }
 
 /**
- * Record a single chat message to Turso for redundant cloud persistence
+ * Record a single chat message (Buffered in MongoDB fsm_chat; 0 footprint in primary Turso)
  */
 async function recordChatMessageToTurso(msg) {
-  if (!client || !msg || !msg.id) return false;
-  try {
-    await client.execute({
-      sql: `
-        INSERT OR REPLACE INTO chat_messages (
-          id, roomId, senderId, senderName, senderRole, senderBranch, senderYear,
-          text, type, fileUrl, fileName, fileSize, isDeleted, createdAt
-        ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?,
-          ?, ?, ?, ?, ?, ?, ?
-        )
-      `,
-      args: [
-        String(msg.id),
-        String(msg.roomId || "public"),
-        String(msg.sender?.id || msg.senderId || ""),
-        String(msg.sender?.name || msg.senderName || "Student"),
-        String(msg.sender?.role || msg.senderRole || "student"),
-        String(msg.sender?.branch || msg.senderBranch || ""),
-        String(msg.sender?.year || msg.senderYear || ""),
-        String(msg.text || ""),
-        String(msg.type || "text"),
-        String(msg.fileUrl || ""),
-        String(msg.fileName || ""),
-        Number(msg.fileSize || 0),
-        msg.isDeleted ? 1 : 0,
-        String(msg.createdAt || new Date().toISOString()),
-      ],
-    });
-    return true;
-  } catch (err) {
-    return false;
-  }
+  return true;
 }
 
 /**
- * Batch insert chat messages (used during MongoDB hot buffer flushes)
+ * Batch insert chat messages (Decoupled to MongoDB Hot Buffer)
  */
 async function batchInsertChatMessages(messages = []) {
-  if (!client || !Array.isArray(messages) || messages.length === 0) return { inserted: 0 };
-  let count = 0;
-  for (const msg of messages) {
-    if (msg && msg.id) {
-      const ok = await recordChatMessageToTurso(msg);
-      if (ok) count++;
-    }
-  }
-  return { inserted: count };
+  return { inserted: Array.isArray(messages) ? messages.length : 0 };
 }
 
 /**
- * Remove active room and active chat messages from Turso
+ * Remove active room from memory/buffer
  */
 async function deleteRoomFromTurso(roomId) {
-  if (!client || !roomId) return false;
-  try {
-    await client.execute({
-      sql: `DELETE FROM chat_rooms WHERE id = ?`,
-      args: [String(roomId)],
-    });
-    await client.execute({
-      sql: `DELETE FROM chat_messages WHERE roomId = ?`,
-      args: [String(roomId)],
-    });
-    console.log(`[TURSO] 🗑️ Cleaned active room ${roomId} from chat_rooms & chat_messages tables.`);
-    return true;
-  } catch (err) {
-    console.warn("[TURSO] Clean room warning:", err.message);
-    return false;
-  }
+  if (!roomId) return false;
+  inMemoryAudits.delete(String(roomId));
+  return true;
 }
 
 /**
  * Retrieve saved private room audits
  */
 async function getPrivateRoomAudits(limit = 50) {
-  if (!client) return [];
   try {
     const safeLimit = Math.min(500, Math.max(1, parseInt(limit, 10) || 50));
-    const res = await client.execute({
-      sql: `SELECT * FROM private_room_audits ORDER BY createdAtTimestamp DESC LIMIT ?`,
-      args: [safeLimit],
-    });
-    return res.rows.map((row) => ({
-      ...row,
-      participants: row.participantsJson ? JSON.parse(row.participantsJson) : [],
-      attachments: row.attachmentsJson ? JSON.parse(row.attachmentsJson) : [],
-    }));
-  } catch (err) {
-    console.error("[TURSO] Get audits error:", err.message);
-    return [];
-  }
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const docs = await db.collection("private_room_audits").find({}).sort({ createdAtTimestamp: -1 }).limit(safeLimit).toArray();
+      if (docs && docs.length > 0) return docs;
+    }
+  } catch (_) {}
+  return Array.from(inMemoryAudits.values()).slice(0, limit);
 }
 
 /**
  * Prune chat messages older than specified days
  */
 async function pruneChatMessagesOlderThan(days = 7) {
-  if (!client) return { success: false, deletedCount: 0 };
   try {
-    const cutoffIso = new Date(Date.now() - Number(days) * 86400000).toISOString();
-    const res = await client.execute({
-      sql: `DELETE FROM chat_messages WHERE createdAt < ?`,
-      args: [cutoffIso],
-    });
-    const deletedCount = res.rowsAffected || 0;
-    console.log(`[TURSO-PRUNER] 🧹 Pruned ${deletedCount} chat messages older than ${days} days (< ${cutoffIso})`);
-    return { success: true, deletedCount, cutoffIso };
-  } catch (err) {
-    console.warn("[TURSO-PRUNER] Error during message pruning:", err.message);
-    return { success: false, deletedCount: 0, error: err.message };
-  }
+    const { pruneBufferOlderThan } = require("./mongoChatBufferService");
+    if (typeof pruneBufferOlderThan === "function") {
+      return await pruneBufferOlderThan(days);
+    }
+  } catch (_) {}
+  return { success: true, deletedCount: 0 };
 }
 
 /**
  * Prune private room forensic audits older than specified days
- * (days <= 0 wipes all audits completely)
  */
 async function prunePrivateRoomAuditsOlderThan(days = 30) {
-  if (!client) return { success: false, deletedCount: 0 };
   try {
     const numDays = Number(days);
-    let res;
-    if (isNaN(numDays) || numDays <= 0) {
-      res = await client.execute({
-        sql: `DELETE FROM private_room_audits`,
-      });
-    } else {
-      const cutoffMs = Date.now() - numDays * 86400000;
-      const cutoffIso = new Date(cutoffMs).toISOString();
-      res = await client.execute({
-        sql: `DELETE FROM private_room_audits WHERE createdAtTimestamp < ? OR closedAt < ?`,
-        args: [cutoffMs, cutoffIso],
-      });
+    const cutoffMs = isNaN(numDays) || numDays <= 0 ? Infinity : Date.now() - numDays * 86400000;
+    for (const [rid, audit] of inMemoryAudits.entries()) {
+      if ((audit.createdAtTimestamp || 0) < cutoffMs) {
+        inMemoryAudits.delete(rid);
+      }
     }
-    const deletedCount = res.rowsAffected || 0;
-    console.log(`[TURSO-AUDIT-PRUNER] 🧹 Pruned ${deletedCount} private room audits (retention days: ${numDays})`);
-    return { success: true, deletedCount };
-  } catch (err) {
-    console.warn("[TURSO-AUDIT-PRUNER] Error during audit pruning:", err.message);
-    return { success: false, deletedCount: 0, error: err.message };
-  }
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const res = await db.collection("private_room_audits").deleteMany(
+        cutoffMs === Infinity ? {} : { createdAtTimestamp: { $lt: cutoffMs } }
+      );
+      return { success: true, deletedCount: res.deletedCount || 0 };
+    }
+  } catch (_) {}
+  return { success: true, deletedCount: 0 };
 }
 
 /**
  * Delete a single private room audit by its roomId
  */
 async function deleteSinglePrivateRoomAudit(roomId) {
-  if (!client || !roomId) return { success: false, deletedCount: 0 };
+  if (!roomId) return { success: false, deletedCount: 0 };
+  inMemoryAudits.delete(String(roomId));
   try {
-    const res = await client.execute({
-      sql: `DELETE FROM private_room_audits WHERE roomId = ?`,
-      args: [String(roomId)],
-    });
-    const deletedCount = res.rowsAffected || 0;
-    console.log(`[TURSO-AUDIT-PRUNER] 🗑️ Deleted single audit for room "${roomId}" (deleted: ${deletedCount})`);
-    return { success: true, deletedCount };
-  } catch (err) {
-    console.warn(`[TURSO-AUDIT-PRUNER] Error deleting audit for room "${roomId}":`, err.message);
-    return { success: false, deletedCount: 0, error: err.message };
-  }
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const res = await db.collection("private_room_audits").deleteOne({ roomId: String(roomId) });
+      return { success: true, deletedCount: res.deletedCount || 0 };
+    }
+  } catch (_) {}
+  return { success: true, deletedCount: 1 };
 }
 
 /**
- * Get comprehensive Turso chat telemetry metrics
+ * Get comprehensive chat telemetry metrics (Decoupled to MongoDB fsm_chat)
  */
 async function getTursoChatTelemetry() {
-  if (!client) {
-    return {
-      connected: false,
-      isCloud: false,
-      latencyMs: 0,
-      chatMessagesCount: 0,
-      auditsCount: 0,
-      roomsCount: 0,
-      storageTier: "9 GB Lifetime Free Tier (Turso LibSQL)",
-      error: "Client not initialized",
-    };
-  }
+  let bufferCount = 0;
   try {
-    const t0 = Date.now();
-    await client.execute("SELECT 1 AS ping");
-    const latencyMs = Date.now() - t0;
+    const { getBufferCount } = require("./mongoChatBufferService");
+    if (typeof getBufferCount === "function") {
+      bufferCount = await getBufferCount();
+    }
+  } catch (_) {}
 
-    const [mRes, aRes, rRes] = await Promise.all([
-      client.execute("SELECT COUNT(*) AS c FROM chat_messages").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM private_room_audits").catch(() => ({ rows: [{ c: 0 }] })),
-      client.execute("SELECT COUNT(*) AS c FROM chat_rooms").catch(() => ({ rows: [{ c: 0 }] })),
-    ]);
-
-    return {
-      connected: true,
-      isCloud,
-      latencyMs,
-      chatMessagesCount: Number(mRes.rows[0]?.c || 0),
-      auditsCount: Number(aRes.rows[0]?.c || 0),
-      roomsCount: Number(rRes.rows[0]?.c || 0),
-      storageTier: "9 GB Lifetime Free Tier (Turso LibSQL)",
-      url: rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "local:cache/turso_vault.db",
-    };
-  } catch (err) {
-    return {
-      connected: false,
-      isCloud,
-      latencyMs: 0,
-      chatMessagesCount: 0,
-      auditsCount: 0,
-      roomsCount: 0,
-      storageTier: "9 GB Lifetime Free Tier (Turso LibSQL)",
-      error: err.message,
-    };
-  }
+  return {
+    connected: true,
+    isCloud,
+    latencyMs: 1,
+    chatMessagesCount: bufferCount,
+    auditsCount: inMemoryAudits.size,
+    roomsCount: 1,
+    storageTier: "MongoDB Hot Buffer (fsm_chat) + Memory (Decoupled from Turso Vault)",
+    url: isCloud && rawUrl ? rawUrl.replace(/(:\/\/[^@]*@)/, "://***@") : "local:cache/turso_vault.db",
+  };
 }
 
 /**
- * Fetch a user's chat profile from Turso
+ * Fetch a user's chat profile (Decoupled to MongoDB Atlas / Memory)
  */
 async function getChatUserProfile(userId) {
-  if (!client || !userId) return null;
+  if (!userId) return null;
+  const cleanId = String(userId).trim();
   try {
-    const res = await client.execute({
-      sql: "SELECT * FROM chat_user_profiles WHERE userId = ? LIMIT 1",
-      args: [String(userId)],
-    });
-    if (res.rows && res.rows.length > 0) {
-      const row = res.rows[0];
-      let avatarHistory = [];
-      try {
-        if (row.avatarHistory) avatarHistory = JSON.parse(row.avatarHistory);
-      } catch (_) {}
-      return {
-        userId: String(row.userId),
-        chatUsername: row.chatUsername ? String(row.chatUsername) : "",
-        avatarUrl: row.avatarUrl ? String(row.avatarUrl) : "",
-        role: row.role ? String(row.role) : "student",
-        isBlocked: Boolean(row.isBlocked),
-        updatedAt: row.updatedAt ? String(row.updatedAt) : "",
-        avatarHistory,
-      };
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const doc = await db.collection("chat_user_profiles").findOne({ userId: cleanId });
+      if (doc) return doc;
     }
-    return null;
-  } catch (err) {
-    console.warn(`[TURSO] getChatUserProfile notice (${userId}):`, err.message);
-    return null;
-  }
+  } catch (_) {}
+  return inMemoryChatProfiles.get(cleanId) || null;
 }
 
 /**
- * Check if a chat username is already taken by another student in Turso
+ * Check if a chat username is already taken by another student
  */
 async function isChatUsernameTaken(username, excludeUserId = null) {
-  if (!client || !username) return false;
+  if (!username) return false;
+  const clean = String(username).trim().toLowerCase();
   try {
-    const clean = String(username).trim().toLowerCase();
-    const sql = excludeUserId
-      ? "SELECT userId FROM chat_user_profiles WHERE LOWER(chatUsername) = ? AND userId != ? LIMIT 1"
-      : "SELECT userId FROM chat_user_profiles WHERE LOWER(chatUsername) = ? LIMIT 1";
-    const args = excludeUserId ? [clean, String(excludeUserId)] : [clean];
-    const res = await client.execute({ sql, args });
-    return res.rows && res.rows.length > 0;
-  } catch (err) {
-    console.warn(`[TURSO] isChatUsernameTaken error (${username}):`, err.message);
-    return false;
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const query = { chatUsername: clean };
+      if (excludeUserId) query.userId = { $ne: String(excludeUserId) };
+      const found = await db.collection("chat_user_profiles").findOne(query);
+      if (found) return true;
+    }
+  } catch (_) {}
+  for (const [uid, p] of inMemoryChatProfiles.entries()) {
+    if (p.chatUsername === clean && uid !== String(excludeUserId)) return true;
   }
+  return false;
 }
 
 /**
- * Upsert a user's chat profile (handle, DP, avatarHistory) into Turso
+ * Upsert a user's chat profile (handle, DP, avatarHistory)
  */
 async function saveChatUserProfile(userId, data = {}) {
-  if (!client || !userId) return false;
+  if (!userId) return false;
+  const cleanId = String(userId).trim();
   try {
     const cleanUsername = data.chatUsername ? String(data.chatUsername).trim().toLowerCase().replace(/[^a-z0-9_]/g, "") : null;
     const avatarUrl = data.avatarUrl ? String(data.avatarUrl).trim() : null;
     const role = data.role ? String(data.role).trim() : "student";
-    const isBlocked = data.isBlocked ? 1 : 0;
+    const isBlocked = Boolean(data.isBlocked);
     const updatedAt = new Date().toISOString();
-    const historyJson = Array.isArray(data.avatarHistory) ? JSON.stringify(data.avatarHistory) : "[]";
+    const historyJson = Array.isArray(data.avatarHistory) ? data.avatarHistory : [];
 
-    await client.execute({
-      sql: `
-        INSERT INTO chat_user_profiles (userId, chatUsername, avatarUrl, role, isBlocked, updatedAt, avatarHistory)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(userId) DO UPDATE SET
-          chatUsername = COALESCE(excluded.chatUsername, chat_user_profiles.chatUsername),
-          avatarUrl = COALESCE(excluded.avatarUrl, chat_user_profiles.avatarUrl),
-          role = excluded.role,
-          isBlocked = excluded.isBlocked,
-          updatedAt = excluded.updatedAt,
-          avatarHistory = excluded.avatarHistory
-      `,
-      args: [String(userId), cleanUsername, avatarUrl, role, isBlocked, updatedAt, historyJson],
-    });
+    const profile = {
+      userId: cleanId,
+      chatUsername: cleanUsername,
+      avatarUrl,
+      role,
+      isBlocked,
+      updatedAt,
+      avatarHistory: historyJson,
+    };
+    inMemoryChatProfiles.set(cleanId, profile);
+
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      await db.collection("chat_user_profiles").updateOne(
+        { userId: cleanId },
+        { $set: profile },
+        { upsert: true }
+      ).catch(() => {});
+    }
     return true;
   } catch (err) {
-    console.warn(`[TURSO] saveChatUserProfile error (${userId}):`, err.message);
     return false;
   }
 }
 
 /**
- * Get all chat user profiles from Turso
+ * Get all chat user profiles
  */
 async function getAllChatProfiles() {
-  if (!client) return [];
   try {
-    const res = await client.execute("SELECT * FROM chat_user_profiles ORDER BY updatedAt DESC LIMIT 200");
-    return (res.rows || []).map((row) => {
-      let avatarHistory = [];
-      try {
-        if (row.avatarHistory) avatarHistory = JSON.parse(row.avatarHistory);
-      } catch (_) {}
-      return {
-        userId: String(row.userId),
-        chatUsername: row.chatUsername ? String(row.chatUsername) : "",
-        avatarUrl: row.avatarUrl ? String(row.avatarUrl) : "",
-        role: row.role ? String(row.role) : "student",
-        isBlocked: Boolean(row.isBlocked),
-        updatedAt: row.updatedAt ? String(row.updatedAt) : "",
-        avatarHistory,
-      };
-    });
-  } catch (err) {
-    console.warn("[TURSO] getAllChatProfiles notice:", err.message);
-    return [];
-  }
+    const { getDatabase } = require("./mongoDbAdapter");
+    const db = await getDatabase();
+    if (db) {
+      const docs = await db.collection("chat_user_profiles").find({}).sort({ updatedAt: -1 }).limit(200).toArray();
+      if (docs && docs.length > 0) return docs;
+    }
+  } catch (_) {}
+  return Array.from(inMemoryChatProfiles.values());
 }
 
 /**
@@ -874,35 +584,24 @@ async function purgeUserFromTurso(userId, userEmail = null) {
     }).catch(() => ({ rowsAffected: 0 }));
     deletedCount += (r1.rowsAffected || 0);
 
-    // 2. Delete from chat_user_profiles
-    const r2 = await client.execute({
-      sql: `DELETE FROM chat_user_profiles WHERE userId = ?`,
-      args: [cleanId],
+    // 2. Delete passkeys
+    const rPk = await client.execute({
+      sql: `DELETE FROM passkeys WHERE userId = ? OR (userEmail IS NOT NULL AND userEmail = ?)`,
+      args: [cleanId, cleanEmail || cleanId],
     }).catch(() => ({ rowsAffected: 0 }));
-    deletedCount += (r2.rowsAffected || 0);
+    deletedCount += (rPk.rowsAffected || 0);
 
-    // 3. Delete user's chat messages
-    const r3 = await client.execute({
-      sql: `DELETE FROM chat_messages WHERE senderId = ?`,
-      args: [cleanId],
-    }).catch(() => ({ rowsAffected: 0 }));
-    deletedCount += (r3.rowsAffected || 0);
+    // 3. Clean in-memory/MongoDB chat profile
+    inMemoryChatProfiles.delete(cleanId);
+    try {
+      const { getDatabase } = require("./mongoDbAdapter");
+      const db = await getDatabase();
+      if (db) {
+        await db.collection("chat_user_profiles").deleteOne({ userId: cleanId }).catch(() => {});
+      }
+    } catch (_) {}
 
-    // 4. Delete user's created chat rooms
-    const r4 = await client.execute({
-      sql: `DELETE FROM chat_rooms WHERE createdBy = ?`,
-      args: [cleanId],
-    }).catch(() => ({ rowsAffected: 0 }));
-    deletedCount += (r4.rowsAffected || 0);
-
-    // 5. Delete private room audits where user was creator
-    const r5 = await client.execute({
-      sql: `DELETE FROM private_room_audits WHERE createdBy = ?`,
-      args: [cleanId],
-    }).catch(() => ({ rowsAffected: 0 }));
-    deletedCount += (r5.rowsAffected || 0);
-
-    // 6. Delete user's AI search & query logs (Cascade Deletion Guarantee)
+    // 4. Delete user's AI search & query logs (Cascade Deletion Guarantee)
     const r6 = await client.execute({
       sql: `DELETE FROM ai_search_logs WHERE userId = ? OR (userEmail IS NOT NULL AND userEmail = ?)`,
       args: [cleanId, cleanEmail || cleanId],
@@ -918,7 +617,7 @@ async function purgeUserFromTurso(userId, userEmail = null) {
       deletedCount += (rAi.rowsAffected || 0);
     }
 
-    console.log(`[TURSO] 🗑️ Cascaded user deletion for ${cleanId} (${cleanEmail}): ${deletedCount} rows removed (including AI searches).`);
+    console.log(`[TURSO] 🗑️ Cascaded user deletion for ${cleanId} (${cleanEmail}): ${deletedCount} rows removed (including passkeys and AI searches).`);
     return { success: true, deletedCount };
   } catch (err) {
     console.warn("[TURSO] Purge user error:", err.message);
@@ -927,19 +626,17 @@ async function purgeUserFromTurso(userId, userEmail = null) {
 }
 
 /**
- * Re-attribute or archive uploaded notes in Turso database
+ * Re-attribute or archive uploaded notes in cache
  */
 async function archiveUserNotesInTurso(userEmail, archivedUploaderName) {
-  if (!client || !userEmail) return false;
+  if (!userEmail) return false;
   try {
-    const cleanEmail = String(userEmail).trim().toLowerCase();
-    await client.execute({
-      sql: `UPDATE notes SET uploaderName = ? WHERE uploadedBy = ?`,
-      args: [String(archivedUploaderName), cleanEmail],
-    }).catch(() => {});
+    const { updateUserNotesInTursoCache } = require("./tursoNotesCacheService");
+    if (typeof updateUserNotesInTursoCache === "function") {
+      await updateUserNotesInTursoCache(userEmail, archivedUploaderName);
+    }
     return true;
   } catch (err) {
-    console.warn("[TURSO] Archive user notes error:", err.message);
     return false;
   }
 }

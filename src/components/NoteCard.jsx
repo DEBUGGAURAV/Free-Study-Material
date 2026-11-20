@@ -373,20 +373,6 @@ function NoteCard({
     e.preventDefault();
     e.stopPropagation();
     playPop();
-    const isAuthed = Boolean(
-      currentUser ||
-      (typeof window !== "undefined" && (window.__FSM_AUTH_TOKEN__ || window.__FSM_CURRENT_USER__)) ||
-      (typeof getAuthToken === "function" ? getAuthToken() : null)
-    );
-    if (!isAuthed) {
-      // 📴 Offline Vault Resilience: If note is already cached in local device storage, allow reading offline
-      if (isCachedOffline) {
-        onPreview(note);
-        return;
-      }
-      if (onRequireAuth) onRequireAuth("signin");
-      return;
-    }
     onPreview(note);
   };
 
