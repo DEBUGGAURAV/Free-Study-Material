@@ -5393,8 +5393,28 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
       }
     }
 
-    // 🛡️ Fetch recent Student Security / IP Jail Appeals
+    // 🛡️ Fetch recent Student Security / IP Jail Appeals (Dual-Layer: Turso 4 + Firestore Failover)
     let jailAppeals = [];
+    try {
+      const { getTursoJailAppeals } = require("../services/tursoStudentVaultService");
+      const tursoAppeals = await getTursoJailAppeals(30);
+      (tursoAppeals || []).forEach((a) => {
+        jailAppeals.push({
+          id: a.id || a.incidentId,
+          incidentId: a.incidentId,
+          name: a.name,
+          email: a.email,
+          mobile: a.mobile,
+          message: a.message,
+          ip: a.ip,
+          deviceId: a.deviceId,
+          status: a.status,
+          createdAt: a.createdAt ? new Date(a.createdAt).toISOString() : new Date().toISOString(),
+          source: "turso-session",
+        });
+      });
+    } catch (_) {}
+
     if (db) {
       try {
         const appealSnap = await db.collection("jail_appeals")
@@ -5407,15 +5427,20 @@ router.get("/threats/realtime", authenticateToken, requireAdmin, async (req, res
             if (d.status === "pardoned" || d.status === "dismissed") {
               await doc.ref.delete().catch(() => {});
             } else {
-              jailAppeals.push({ id: doc.id, ...d });
+              const alreadyExists = jailAppeals.some(
+                (a) => (a.incidentId && d.incidentId && a.incidentId === d.incidentId) || a.id === doc.id
+              );
+              if (!alreadyExists) {
+                jailAppeals.push({ id: doc.id, ...d });
+              }
             }
           }
-          jailAppeals.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         }
       } catch (err) {
         console.warn("[ADMIN-THREATS] Error fetching jail appeals:", err.message);
       }
     }
+    jailAppeals.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
     const webSecurityShields = {
       turnstile: { name: "Cloudflare Turnstile", status: "ACTIVE", type: "Anti-Bot Smart Challenge", icon: "🛡️" },
@@ -5622,6 +5647,12 @@ router.post("/threats/unjail", authenticateToken, requireAdmin, async (req, res)
       }
     }
 
+    // 🛡️ Clean up appeal from Turso 4 Security Defense Vault as well
+    try {
+      const { deleteTursoJailAppeal } = require("../services/tursoStudentVaultService");
+      await deleteTursoJailAppeal(incidentId, ip);
+    } catch (_) {}
+
     // 🛡️ Dispatch release report to Topic 750
     try {
       const { sendTelegramAuthNotice } = require("../services/emailService");
@@ -5671,6 +5702,11 @@ router.post("/threats/dismiss-appeal", authenticateToken, requireAdmin, async (r
     if (db) {
       await db.collection("jail_appeals").doc(appealId).delete();
     }
+    // Clean up from Turso 4
+    try {
+      const { deleteTursoJailAppeal } = require("../services/tursoStudentVaultService");
+      await deleteTursoJailAppeal(appealId, null);
+    } catch (_) {}
     return res.json({ success: true, message: "Appeal dismissed and permanently deleted from database." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

@@ -956,6 +956,12 @@ async function startSecurityBotPoller() {
                 console.warn("[SECURITY-BOT] DB delete notice:", dbErr.message);
               }
 
+              // Also delete from Turso 4 Security Defense Vault
+              try {
+                const { deleteTursoJailAppeal } = require("./tursoStudentVaultService");
+                await deleteTursoJailAppeal(incidentId, targetVal);
+              } catch (_) {}
+
               // Dispatch release report to Topic 750
               try {
                 const { sendTelegramAuthNotice } = require("./emailService");

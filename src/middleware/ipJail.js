@@ -133,6 +133,11 @@ setInterval(async () => {
       const devId = item.devId;
       const incId = item.details?.incidentId;
 
+      try {
+        const { deleteTursoJailAppeal } = require("../services/tursoStudentVaultService");
+        deleteTursoJailAppeal(incId, null).catch(() => {});
+      } catch (_) {}
+
       if (db && incId) {
         try {
           const snap = await db.collection("jail_appeals").where("incidentId", "==", incId).get();
