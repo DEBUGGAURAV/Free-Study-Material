@@ -704,7 +704,14 @@ export default function VirtualPdfReader({
   const [showSearchInline, setShowSearchInline] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pageRendering, setPageRendering] = useState(false);
-  const [nightMode, setNightMode] = useState(false); // Default to clean Pure White Light Mode
+  const [nightMode, setNightMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("fsm_theme") === "dark";
+    } catch (_) {
+      return false;
+    }
+  }); // Inherits universal theme or defaults to clean White Mode
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [error, setError] = useState(null);
   const [reloadTrigger, setReloadTrigger] = useState(0);

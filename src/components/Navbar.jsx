@@ -19,12 +19,15 @@ import {
   X,
   Flame,
   HardDrive,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { SITE_NAME, SITE_TAGLINE } from "../config/clientConfig";
 import GeminiIcon from "./GeminiIcon";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { getWebPushStatus, subscribeWebPush, unsubscribeWebPush } from "../utils/webPushClient";
 import { getCampusContributionTier } from "../utils/studentStudyContext";
+import { playPop } from "../utils/soundEffects";
 import SpotlightModal from "./SpotlightModal";
 
 function checkIsStandalone() {
@@ -64,6 +67,48 @@ export default function Navbar({
   const [showMobileMoreSheet, setShowMobileMoreSheet] = useState(false);
   const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [contributionTier, setContributionTier] = useState(() => getCampusContributionTier());
+
+  // ☀️ / 🌙 Universal Day & Night Theme State (Syncs across devices & reader)
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return localStorage.getItem("fsm_theme") === "dark";
+    } catch (_) {
+      return false;
+    }
+  });
+  const [isThemeRotating, setIsThemeRotating] = useState(false);
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (isDark) {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.classList.add("dark-theme");
+      } else {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.classList.remove("dark-theme");
+      }
+    }
+  }, [isDark]);
+
+  const toggleTheme = () => {
+    setIsThemeRotating(true);
+    const nextDark = !isDark;
+    setIsDark(nextDark);
+    try {
+      localStorage.setItem("fsm_theme", nextDark ? "dark" : "light");
+      if (nextDark) {
+        document.documentElement.setAttribute("data-theme", "dark");
+        document.documentElement.classList.add("dark-theme");
+      } else {
+        document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.classList.remove("dark-theme");
+      }
+      playPop();
+      window.dispatchEvent(new CustomEvent("fsm_theme_change", { detail: { theme: nextDark ? "dark" : "light" } }));
+    } catch (_) {}
+    setTimeout(() => setIsThemeRotating(false), 600);
+  };
 
   useEffect(() => {
     const handleTierUpdate = () => {
@@ -214,8 +259,23 @@ export default function Navbar({
               </div>
             </div>
 
-            {/* Top-Right Cluster on Mobile: Profile Avatar + Sign Out */}
+            {/* Top-Right Cluster on Mobile: Day/Night Toggle + Profile / Sign Out */}
             <div className="mobile-top-right">
+              {/* ☀️ / 🌙 Day & Night Universal Theme Toggle (Ultra-Visible on Mobile, Rotates 360° on Click) */}
+              <button
+                type="button"
+                className={`btn-theme-toggle mobile-theme-toggle ${isThemeRotating ? "theme-icon-rotate" : ""}`}
+                onClick={toggleTheme}
+                title={isDark ? "Switch to Day Mode (☀️ Light Workspace)" : "Switch to Night Mode (🌙 Dark OLED)"}
+                aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
+              >
+                {isDark ? (
+                  <Moon size={16} className="theme-icon moon-icon" strokeWidth={2.4} />
+                ) : (
+                  <Sun size={16} className="theme-icon sun-icon" strokeWidth={2.4} />
+                )}
+              </button>
+
               {currentUser ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   <button
@@ -379,6 +439,21 @@ export default function Navbar({
 
           {/* Right Section (Desktop): Core Publish, Admin & User Identity */}
           <div className="nav-core-right">
+            {/* ☀️ / 🌙 Desktop Day-Night Theme Toggle (Rotates 360° on Click) */}
+            <button
+              type="button"
+              className={`btn-theme-toggle desktop-theme-toggle ${isThemeRotating ? "theme-icon-rotate" : ""}`}
+              onClick={toggleTheme}
+              title={isDark ? "Switch to Day Mode (☀️ Light Workspace)" : "Switch to Night Mode (🌙 Dark OLED)"}
+              aria-label={isDark ? "Switch to Day Mode" : "Switch to Night Mode"}
+            >
+              {isDark ? (
+                <Moon size={16} className="theme-icon moon-icon" strokeWidth={2.4} />
+              ) : (
+                <Sun size={16} className="theme-icon sun-icon" strokeWidth={2.4} />
+              )}
+            </button>
+
             {currentUser && (
               <button
                 type="button"

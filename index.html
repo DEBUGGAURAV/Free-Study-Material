@@ -9,6 +9,14 @@
       if (window.location.pathname.startsWith('/dist')) {
         window.location.replace('/');
       }
+      (function() {
+        try {
+          if (localStorage.getItem('fsm_theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.classList.add('dark-theme');
+          }
+        } catch (_) {}
+      })();
     </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f8ff" />

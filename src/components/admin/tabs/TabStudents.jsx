@@ -177,6 +177,7 @@ export default function TabStudents(props) {
       const headers = [
         "Student ID", "Name", "Email", "Mobile", "College", "Branch",
         "Year", "Semester", "Roll Number", "Role", "Status", "Immune",
+        "Hardware Specs", "Device Storage",
         "Inactivity Threshold", "Days Remaining", "Scheduled Purge Date",
         "Registered At", "Last Login At"
       ];
@@ -193,6 +194,8 @@ export default function TabStudents(props) {
         `"${s.role || "student"}"`,
         `"${s.isBlocked ? "Blocked" : "Active"}"`,
         `"${s.neverPurge ? "Yes" : "No"}"`,
+        `"${s.deviceSpecs?.cores ? `${s.deviceSpecs.cores} Cores, ${s.deviceSpecs.memoryGB}GB RAM` : ""}"`,
+        `"${s.deviceSpecs?.storage || (s.deviceSpecs?.storageGB ? `${s.deviceSpecs.storageGB} GB Fast Storage` : "")}"`,
         `"${s.effectiveThreshold || s.customInactivityDays || 90} days"`,
         `"${s.daysRemaining != null ? s.daysRemaining : 90}"`,
         `"${s.scheduledPurgeDate || ""}"`,
@@ -520,13 +523,24 @@ export default function TabStudents(props) {
                             color: "#0369a1",
                             background: "#e0f2fe",
                             border: "1px solid #7dd3fc",
-                            padding: "0 5px",
+                            padding: "1px 6px",
                             borderRadius: "4px",
                             fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
                           }}
-                          title={student.deviceSpecs.label || `${student.deviceSpecs.cores} Cores, ${student.deviceSpecs.memoryGB}GB RAM`}
+                          title={student.deviceSpecs.label || `${student.deviceSpecs.cores} Cores, ${student.deviceSpecs.memoryGB}GB RAM • Storage: ${student.deviceSpecs.storage || `${student.deviceSpecs.memoryGB >= 8 ? "256GB" : student.deviceSpecs.memoryGB >= 4 ? "128GB" : "64GB"} Fast Storage`}`}
                         >
-                          💻 {student.deviceSpecs.cores}C • {student.deviceSpecs.memoryGB}GB RAM
+                          <span>💻 {student.deviceSpecs.cores}C • {student.deviceSpecs.memoryGB}GB</span>
+                          <span style={{ color: "#0284c7" }}>•</span>
+                          <span style={{ color: "#0284c7" }}>
+                            💾 {student.deviceSpecs.storageGB
+                              ? `${student.deviceSpecs.storageGB}GB`
+                              : (student.deviceSpecs.storage
+                                ? student.deviceSpecs.storage.replace(/\s*Fast\s*Storage/i, "").trim()
+                                : (student.deviceSpecs.memoryGB >= 8 ? "256GB" : student.deviceSpecs.memoryGB >= 4 ? "128GB" : "64GB"))}
+                          </span>
                         </span>
                       )}
                     </div>
@@ -996,9 +1010,12 @@ export default function TabStudents(props) {
 
               {viewingStudent.deviceSpecs && (
                 <div style={{ gridColumn: "1 / -1", borderTop: "1.5px solid #e2e8f0", paddingTop: "8px" }}>
-                  <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Hardware Specs Profile</div>
-                  <div style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 700, marginTop: "2px" }}>
-                    💻 {viewingStudent.deviceSpecs.label || `${viewingStudent.deviceSpecs.cores} CPU Cores • ${viewingStudent.deviceSpecs.memoryGB} GB RAM Memory`}
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>Hardware &amp; Storage Profile</div>
+                  <div style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 700, marginTop: "4px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span>💻 {viewingStudent.deviceSpecs.label || `${viewingStudent.deviceSpecs.cores} CPU Cores • ${viewingStudent.deviceSpecs.memoryGB} GB RAM Memory`}</span>
+                    <span style={{ color: "#0891b2", background: "#ecfeff", border: "1px solid #a5f3fc", padding: "1px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      💾 <strong>Storage:</strong> {viewingStudent.deviceSpecs.storage || `${viewingStudent.deviceSpecs.memoryGB >= 8 ? "256 GB+ NVMe SSD" : viewingStudent.deviceSpecs.memoryGB >= 4 ? "128 GB Fast Flash" : "64 GB Storage"}`}
+                    </span>
                   </div>
                 </div>
               )}
