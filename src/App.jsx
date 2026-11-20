@@ -180,6 +180,11 @@ export default function App() {
   const currentUserRef = useRef(currentUser);
   const lastActivityRef = useRef(Date.now());
   const lastStorageSyncRef = useRef(Date.now());
+  const previewNoteRef = useRef(previewNote);
+
+  useEffect(() => {
+    previewNoteRef.current = previewNote;
+  }, [previewNote]);
 
   // Active Background Upload Job
   const [activeJob, setActiveJob] = useState(null);
@@ -740,7 +745,7 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // 30-Minute Inactivity Auto-Logout Handler
+  // ⏱️ Inactivity Auto-Logout Handler (Public PC Shield)
   const triggerAutoLogout = useCallback(async () => {
     const userToLogout = currentUserRef.current;
     if (!userToLogout) return;
@@ -750,7 +755,7 @@ export default function App() {
     setIsUploadOpen(false);
     setIsAdminOpen(false);
     setIsProfileOpen(false);
-    setPreviewNote(null);
+    // Non-intrusive: Do NOT forcibly close previewNote so student can continue reading offline/cached material
     safeStorage.removeItem("vault_last_active");
 
     const timeString = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -762,28 +767,59 @@ export default function App() {
 
     // Notify backend to clear auth cookies and dispatch real-time Telegram security alert
     try {
-      await api.logout("Auto-Logout (30 Min Inactivity)", userToLogout);
+      await api.logout("Auto-Logout (Session Inactivity)", userToLogout);
     } catch (e) {
       console.warn("[AUTO-LOGOUT] Logout dispatch notice:", e.message);
     }
   }, []);
 
-  // Track Inactivity (30 min = 1,800,000 ms) with Complete Mobile OS Sleep/Resume Shield
+  // Track Inactivity with PWA Standalone Long Session Shield (30 Days for PWA vs 30 Mins for Public Browser)
   useEffect(() => {
     if (!currentUser) return;
 
+    // 📱 Helper to detect if student is in installed PWA standalone mode
+    const isPwaStandaloneMode = () => {
+      if (typeof window === "undefined") return false;
+      return Boolean(
+        (window.matchMedia && (
+          window.matchMedia("(display-mode: standalone)").matches ||
+          window.matchMedia("(display-mode: fullscreen)").matches ||
+          window.matchMedia("(display-mode: minimal-ui)").matches
+        )) ||
+        window.navigator?.standalone === true ||
+        document.referrer?.includes("android-app://") ||
+        window.__FSM_PWA_STANDALONE__ === true
+      );
+    };
+
     const getEffectiveTimeoutMs = () => {
       const setting = inactivitySettingRef.current;
-      if (setting === 0 || setting === "0") return 0; // Disabled
+      if (setting === 0 || setting === "0") return 0; // Explicitly Disabled in settings
       if (typeof setting === "number" && setting > 0) return setting * 60 * 1000;
       if (typeof setting === "string" && !isNaN(parseInt(setting, 10)) && parseInt(setting, 10) > 0) {
         return parseInt(setting, 10) * 60 * 1000;
       }
+
+      // 📱 Installed PWA on student's personal phone: 30-day persistent session (Kindle / Telegram Style)
+      if (isPwaStandaloneMode()) {
+        return 30 * 24 * 60 * 60 * 1000; // 30 Days (720 Hours)
+      }
+
+      // 💻 Normal Browser Tab (Library / Cyber Cafe shared computer safeguard)
       return 30 * 60 * 1000; // 30 Minutes standard
     };
 
     const checkInactivityAndTimeout = () => {
       if (!currentUserRef.current) return false;
+
+      // 📖 Deep Study Exemption: If student is actively inside the Virtual PDF Reader,
+      // pause auto-logout so their reading flow is never interrupted
+      if (previewNoteRef.current) {
+        lastActivityRef.current = Date.now();
+        safeStorage.setItem("vault_last_active", String(Date.now()));
+        return false;
+      }
+
       const timeoutMs = getEffectiveTimeoutMs();
       if (timeoutMs === 0) return false;
 
@@ -791,7 +827,8 @@ export default function App() {
       const effectiveLast = Math.max(lastActivityRef.current || 0, storedLast || 0);
 
       if (effectiveLast > 0 && Date.now() - effectiveLast >= timeoutMs) {
-        console.log(`[AUTO-LOGOUT] ⏱️ Mobile/Web inactivity timeout (${Math.round((Date.now() - effectiveLast) / 60000)}m >= ${timeoutMs / 60000}m). Logging out.`);
+        const elapsedMins = Math.round((Date.now() - effectiveLast) / 60000);
+        console.log(`[AUTO-LOGOUT] ⏱️ Inactivity timeout (${elapsedMins}m >= ${timeoutMs / 60000}m). Logging out.`);
         triggerAutoLogout();
         return true;
       }

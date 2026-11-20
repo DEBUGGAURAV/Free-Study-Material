@@ -1778,8 +1778,8 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // Gated Student Access: Only gate direct file downloads for unauthenticated users; allow reading / viewer streaming for all students
-    if (!requestingUser && isDownload) {
+    // 🛡️ Strict Student Access: Both streaming/reading and downloading strictly require an authenticated student account
+    if (!requestingUser) {
       const isHtmlRequest =
         req.headers["sec-fetch-dest"] === "document" ||
         req.headers["sec-fetch-mode"] === "navigate" ||
@@ -1791,7 +1791,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
       return res.status(401).json({
         success: false,
-        message: "Restricted Access: Free Study Material is exclusively for registered students. Please sign in or register.",
+        message: "Restricted Access: Free Study Material is exclusively for registered students. Please sign in or register to read or download notes.",
         authRequired: true,
         signInUrl: "/?auth=signin",
         signUpUrl: "/?auth=signup",
