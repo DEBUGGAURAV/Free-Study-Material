@@ -81,7 +81,7 @@ function isAiGloballyEnabled() {
  * Strictly prevents AI searches and Circle to Search from leaking into Help Active (6), Help Closed (7), or legacy topics.
  */
 function getAiSearchTopicId() {
-  const blockedTopics = new Set([6, 7, 14, 60, 70]);
+  const blockedTopics = new Set([6, 7, 14, 59, 60, 70]);
   const envTopic = parseInt(process.env.AI_SEARCH_TOPIC_ID || process.env.TELEGRAM_AI_SEARCH_TOPIC_ID || "", 10);
   if (!isNaN(envTopic) && envTopic > 0 && !blockedTopics.has(envTopic)) {
     return envTopic;

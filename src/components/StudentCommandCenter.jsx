@@ -898,14 +898,57 @@ export default function StudentCommandCenter({
                 </span>
               </div>
 
-              {/* Timer Display & Controls Row */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", margin: "14px 0" }}>
-                <div>
-                  <div style={{ fontSize: "2.3rem", fontWeight: 900, color: "#0f172a", fontFamily: "monospace", letterSpacing: "-0.04em", lineHeight: 1 }}>
-                    {formatTime(pomoSeconds)}
+              {/* Timer Display & Circular Focus Ring Controls Row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", margin: "14px 0", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  {/* Circular Animated Focus Ring */}
+                  <div style={{ position: "relative", width: "84px", height: "84px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="84" height="84" viewBox="0 0 84 84" style={{ transform: "rotate(-90deg)" }}>
+                      <circle
+                        cx="42"
+                        cy="42"
+                        r="36"
+                        stroke="#e2e8f0"
+                        strokeWidth="5"
+                        fill="none"
+                      />
+                      <circle
+                        cx="42"
+                        cy="42"
+                        r="36"
+                        stroke={isPomoRunning ? "url(#pomoGlowGrad)" : "#6366f1"}
+                        strokeWidth="5"
+                        fill="none"
+                        strokeDasharray={226.19}
+                        strokeDashoffset={226.19 - (Math.max(0, Math.min(100, (((pomoMode === "focus" ? 25 * 60 : 5 * 60) - pomoSeconds) / (pomoMode === "focus" ? 25 * 60 : 5 * 60)) * 100)) / 100) * 226.19}
+                        strokeLinecap="round"
+                        style={{ transition: "stroke-dashoffset 0.5s ease" }}
+                      />
+                      <defs>
+                        <linearGradient id="pomoGlowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#6366f1" />
+                          <stop offset="50%" stopColor="#06b6d4" />
+                          <stop offset="100%" stopColor="#10b981" />
+                        </linearGradient>
+                      </defs>
+                    </svg>
+                    <div style={{ position: "absolute", textAlign: "center" }}>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#0f172a", fontFamily: "monospace", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                        {formatTime(pomoSeconds)}
+                      </div>
+                      <div style={{ fontSize: "0.6rem", color: isPomoRunning ? "#059669" : "#64748b", fontWeight: 700, marginTop: "2px" }}>
+                        {isPomoRunning ? "LIVE ⚡" : "PAUSED"}
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: "0.76rem", color: "#64748b", fontWeight: 700, marginTop: "4px" }}>
-                    {pomoMode === "focus" ? "🎯 Deep Work Interval" : "☕ Chill Break Interval"}
+
+                  <div>
+                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
+                      {pomoMode === "focus" ? "🎯 Deep Focus Session" : "☕ Chill Break"}
+                    </div>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, marginTop: "2px" }}>
+                      {isPomoRunning ? "Stay locked in • 0 tab distraction" : "25 min Pomodoro study interval"}
+                    </div>
                   </div>
                 </div>
 

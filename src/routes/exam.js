@@ -68,7 +68,7 @@ router.post("/trigger-pulse", authenticateToken, requireAdmin, async (req, res) 
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const allowedChatId = process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
     const chatId = allowedChatId;
-    const threadId = req.body.threadId || process.env.SECURITY_BOT_TOPIC_ID || null;
+    const threadId = req.body.threadId || process.env.TELEGRAM_TOPIC_QUIZ || process.env.TELEGRAM_TOPIC_NOTES || null;
 
     if (!botToken || !chatId) {
       return res.status(400).json({ success: false, message: "Telegram botToken and chatId not configured." });
@@ -90,7 +90,7 @@ router.post("/trigger-quiz", authenticateToken, requireAdmin, async (req, res) =
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const allowedChatId = process.env.TELEGRAM_SUPERGROUP_CHAT_ID || process.env.TELEGRAM_CHAT_ID;
     const chatId = allowedChatId;
-    const threadId = req.body.threadId || process.env.SECURITY_BOT_TOPIC_ID || null;
+    const threadId = req.body.threadId || process.env.TELEGRAM_TOPIC_QUIZ || process.env.TELEGRAM_TOPIC_NOTES || null;
     const subjectCode = req.body.subjectCode || "KCS-503";
 
     if (!botToken || !chatId) {

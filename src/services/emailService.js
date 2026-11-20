@@ -652,7 +652,7 @@ async function sendTelegramAuthNotice({
       } else if (event === "OTP_AUDIT") {
         threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "70";
       } else if (event === "USER_OTP") {
-        threadId = topics.userOtp || topics.otpAudit || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
+        threadId = topics.userOtp || process.env.TELEGRAM_TOPIC_USER_OTP || "55";
       } else if (event === "NOTE_UPLOAD") {
         // Auto-Topic Creation: Check if dedicated topic exists for this note's Subject or auto-create it!
         const subjectName = (note?.subject || "").trim();
@@ -660,7 +660,7 @@ async function sendTelegramAuthNotice({
           threadId = await getOrCreateSubjectForumTopic(subjectName, targetChatId, botToken);
         }
         if (!threadId) {
-          threadId = topics.notesActivity || topics.securityUpdates || process.env.TELEGRAM_TOPIC_NOTES || null;
+          threadId = topics.notesActivity || process.env.TELEGRAM_TOPIC_NOTES || null;
         }
       } else if (event === "NOTE_DOWNLOAD" || event === "NOTE_PREVIEW") {
         // Route note downloads and previews to dedicated forum topic 8 (https://t.me/c/3943130538/8) in the bot supergroup
@@ -699,7 +699,7 @@ async function sendTelegramAuthNotice({
     } else if (event === "PASSKEY_DELETE") {
       titleIcon = "🛡️";
       eventTitle = "Biometric Passkey Revoked";
-    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT") {
+    } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "SECURITY_UPDATE" || event === "DEVTOOLS_VIOLATION") {
       titleIcon = "🚨";
       eventTitle = "Security & Profile Update";
     } else if (event === "OTP_AUDIT") {
@@ -1233,9 +1233,22 @@ async function sendTelegramAuthNotice({
     });
 
     // Fallback: If message_thread_id is invalid/closed, send without thread_id ONLY for non-restricted events
+    const isStrictTopicEvent = (
+      isNoteEvent ||
+      event === "IP_JAIL_APPEAL" ||
+      event === "ACCOUNT_PURGE" ||
+      event === "SECURITY_ALERT" ||
+      event === "SECURITY_UPDATE" ||
+      event === "DEVTOOLS_VIOLATION" ||
+      event === "PASSKEY_REGISTER" ||
+      event === "PASSKEY_DELETE" ||
+      event === "USER_OTP" ||
+      event === "OTP_AUDIT"
+    );
+
     if (!msgRes.ok && msgPayload.message_thread_id) {
-      if (isNoteEvent || event === "IP_JAIL_APPEAL") {
-        console.warn(`[TELEGRAM-AUTH-NOTICE] Dedicated topic ${threadId} send notice:`, await msgRes.text().catch(() => ""));
+      if (isStrictTopicEvent) {
+        console.warn(`[TELEGRAM-AUTH-NOTICE] Dedicated topic ${threadId} send notice (${msgRes.status}):`, await msgRes.text().catch(() => ""));
         return;
       }
       delete msgPayload.message_thread_id;

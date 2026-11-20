@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const os = require("os");
 const { db } = require("../firebase");
+const { requireDb, checkDb } = require("../middleware/dbGuard");
 const { authenticateToken, requireAdmin } = require("../middleware/auth");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
@@ -527,7 +528,7 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
 router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
     const { id } = req.params;
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const doc = await db.collection("users").doc(id).get();
     if (!doc.exists) {
@@ -613,7 +614,7 @@ router.get("/users/:id/activities", authenticateToken, checkAdminOrPermission("m
 router.delete("/users/:userId/activities/:activityId", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
     const { userId, activityId } = req.params;
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const docRef = db.collection("users").doc(userId);
     const doc = await docRef.get();
@@ -645,7 +646,7 @@ router.delete("/users/:userId/activities/:activityId", authenticateToken, checkA
 router.delete("/users/:userId/activities", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
     const { userId } = req.params;
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     await db.collection("users").doc(userId).update({
       activities: [],
@@ -741,7 +742,7 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     const { id } = req.params;
     const { name, mobile, college, year, role, permissions } = req.body;
 
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const docRef = db.collection("users").doc(id);
     const doc = await docRef.get();
@@ -913,7 +914,7 @@ router.patch("/users/:id/block", authenticateToken, checkAdminOrPermission("mana
     const { id } = req.params;
     const { isBlocked } = req.body;
 
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const docRef = db.collection("users").doc(id);
     const doc = await docRef.get();
@@ -956,7 +957,7 @@ router.patch("/users/:id/block", authenticateToken, checkAdminOrPermission("mana
 router.delete("/users/:id", authenticateToken, checkAdminOrPermission("manage_users"), async (req, res) => {
   try {
     const { id } = req.params;
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const { cascadeDeleteUserAccount } = require("../services/userCascadeDeletionService");
     const result = await cascadeDeleteUserAccount({
@@ -994,7 +995,7 @@ router.patch("/notes/:id/visibility", authenticateToken, checkAdminOrPermission(
     const { id } = req.params;
     const { isVisible } = req.body;
 
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     await db.collection("notes").doc(id).update({
       isVisible: Boolean(isVisible),
@@ -1013,7 +1014,7 @@ router.patch("/notes/:id/allow-download", authenticateToken, checkAdminOrPermiss
     const { id } = req.params;
     const { allowDownload, downloadDisabledReason } = req.body;
 
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const updateData = {
       allowDownload: Boolean(allowDownload),
@@ -1164,7 +1165,7 @@ router.post("/notes/bulk-allow-download", authenticateToken, checkAdminOrPermiss
     if (!Array.isArray(noteIds) || noteIds.length === 0) {
       return res.status(400).json({ success: false, message: "Valid noteIds array required" });
     }
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const isAllowed = Boolean(allowDownload);
     const updateData = {
@@ -1212,7 +1213,7 @@ router.post("/notes/bulk-allow-download", authenticateToken, checkAdminOrPermiss
 router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_notes"), async (req, res) => {
   try {
     const { id } = req.params;
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const doc = await db.collection("notes").doc(id).get();
     if (doc.exists) {
@@ -1316,7 +1317,7 @@ router.post("/notes/delete-all", authenticateToken, checkAdminOrPermission("mana
       return res.status(403).json({ success: false, message: "Security Verification Failed: Incorrect Admin Password." });
     }
 
-    if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
+    if (!checkDb(res, "Database unavailable")) return;
 
     const snap = await db.collection("notes").get();
     let archivedCount = 0;
@@ -1457,7 +1458,7 @@ router.get("/recycle-bin/notes", authenticateToken, checkAdminOrPermission("mana
 router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermission(["manage_notes", "manage_users", "all"]), async (req, res) => {
   try {
     const rawId = String(req.params.id || "").trim();
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
     const cleanId = rawId.replace(/^(notes_|users_|notices_)/, "");
 
     let recordDoc = null;
@@ -1555,7 +1556,7 @@ router.post("/recycle-bin/restore/:id", authenticateToken, checkAdminOrPermissio
  */
 router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermission(["manage_notes", "manage_users", "all"]), async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const [recSnap, notesSnap] = await Promise.all([
       db.collection("deleted_records").get(),
@@ -1641,7 +1642,7 @@ router.post("/recycle-bin/restore-all", authenticateToken, checkAdminOrPermissio
  */
 router.post("/notes/import-json", authenticateToken, checkAdminOrPermission(["manage_notes", "all"]), async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
+    if (!checkDb(res, "Database unavailable")) return;
     const notesToImport = Array.isArray(req.body?.catalog)
       ? req.body.catalog
       : Array.isArray(req.body?.notes)
@@ -1703,7 +1704,7 @@ router.post("/notes/import-json", authenticateToken, checkAdminOrPermission(["ma
 router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
     const rawId = String(req.params.id || "").trim();
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
     const cleanId = rawId.replace(/^(notes_|users_|notices_)/, "");
 
     const candidates = [rawId, `notes_${cleanId}`, `users_${cleanId}`, `notices_${cleanId}`, cleanId];
@@ -1747,7 +1748,7 @@ router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermi
  */
 router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const [recSnap, notesSnap] = await Promise.all([
       db.collection("deleted_records").get(),
@@ -1826,7 +1827,7 @@ router.delete("/recycle-bin/delete-all", authenticateToken, checkAdminOrPermissi
 
 router.delete("/users-all-students", authenticateToken, checkAdminOrPermission("delete_records"), async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
+    if (!checkDb(res, "Database unavailable")) return;
 
     const snap = await db.collection("users").get();
     let deletedCount = 0;
@@ -3282,7 +3283,7 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("data
 
 router.get("/database/export", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
-    if (!db) return res.status(503).json({ success: false, message: "DB unavailable" });
+    if (!checkDb(res, "DB unavailable")) return;
 
     const [notesSnap, usersSnap, noticesSnap, deletedSnap] = await Promise.all([
       db.collection("notes").get(),

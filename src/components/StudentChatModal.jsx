@@ -117,15 +117,15 @@ function AudioMessagePlayer({ fileUrl, duration, isMine }) {
           width: "38px",
           height: "38px",
           borderRadius: "50%",
-          background: isMine ? "#ffffff" : "var(--accent-cyan)",
-          color: isMine ? "#0284c7" : "#080c16",
+          background: isMine ? "#ffffff" : "linear-gradient(135deg, #0284c7, #4f46e5)",
+          color: isMine ? "#0284c7" : "#ffffff",
           border: "none",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
           flexShrink: 0,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+          boxShadow: isMine ? "0 2px 8px rgba(0,0,0,0.18)" : "0 4px 12px rgba(2, 132, 199, 0.35)",
         }}
         title={isPlaying ? "Pause Voice Note" : "Play Voice Note"}
       >
@@ -146,8 +146,8 @@ function AudioMessagePlayer({ fileUrl, duration, isMine }) {
                   height: `${h}%`,
                   borderRadius: "2px",
                   background: isFilled
-                    ? (isMine ? "#ffffff" : "var(--accent-cyan)")
-                    : (isMine ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.18)"),
+                    ? (isMine ? "#ffffff" : "#2563eb")
+                    : (isMine ? "rgba(255,255,255,0.35)" : "rgba(15, 23, 42, 0.14)"),
                   transition: "background 0.1s ease",
                 }}
               />
@@ -155,7 +155,7 @@ function AudioMessagePlayer({ fileUrl, duration, isMine }) {
           })}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", opacity: 0.85 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: isMine ? "rgba(255,255,255,0.85)" : "#64748b", fontWeight: 600 }}>
           <span>{formatSecs(currentTime)}</span>
           <span>{totalDuration ? formatSecs(totalDuration) : "0:00"}</span>
         </div>
@@ -3934,24 +3934,24 @@ export default function StudentChatModal({
                                         handleQuickReaction(emoji, msg);
                                       }}
                                       style={{
-                                        background: didIReact ? "rgba(6, 182, 212, 0.25)" : "rgba(15, 23, 42, 0.8)",
-                                        border: didIReact ? "1px solid rgba(6, 182, 212, 0.55)" : "1px solid rgba(255, 255, 255, 0.12)",
+                                        background: didIReact ? "rgba(99, 102, 241, 0.12)" : "#ffffff",
+                                        border: didIReact ? "1.5px solid #6366f1" : "1.5px solid #e2e8f0",
                                         borderRadius: "999px",
                                         padding: "2px 7px",
                                         fontSize: "0.72rem",
-                                        color: "#fff",
+                                        color: didIReact ? "#4338ca" : "#1e293b",
                                         cursor: "pointer",
                                         display: "inline-flex",
                                         alignItems: "center",
                                         gap: "4px",
-                                        boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                                        boxShadow: didIReact ? "0 2px 8px rgba(99, 102, 241, 0.25)" : "0 2px 6px rgba(15, 23, 42, 0.06)",
                                         transform: didIReact ? "scale(1.05)" : "scale(1)",
-                                        transition: "all 0.15s ease",
+                                        transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
                                       }}
                                       title={didIReact ? "You reacted. Tap to remove." : "Tap to react."}
                                     >
                                       <span>{emoji}</span>
-                                      <span style={{ fontSize: "0.68rem", fontWeight: 700, color: didIReact ? "var(--accent-cyan)" : "#cbd5e1" }}>
+                                      <span style={{ fontSize: "0.68rem", fontWeight: 700, color: didIReact ? "#4f46e5" : "#64748b" }}>
                                         {userIds.length}
                                       </span>
                                     </button>

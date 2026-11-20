@@ -6718,6 +6718,12 @@ export default function VirtualPdfReader({
                 position: "relative",
                 display: "inline-block",
                 margin: "auto",
+                padding: isTouchOrMobileDevice ? "4px" : "12px",
+                borderRadius: "16px",
+                background: nightMode ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.6)",
+                border: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(226, 232, 240, 0.85)",
+                boxShadow: nightMode ? "0 20px 60px rgba(0, 0, 0, 0.8)" : "0 20px 50px rgba(15, 23, 42, 0.08)",
+                transition: "all 0.3s ease",
               }}
             >
             <canvas
@@ -6725,8 +6731,8 @@ export default function VirtualPdfReader({
               ref={canvasRef}
               style={{
                 display: "block",
-                boxShadow: nightMode ? "0 8px 32px rgba(0,0,0,0.8)" : "0 8px 24px rgba(0,0,0,0.15)",
-                borderRadius: "4px",
+                boxShadow: nightMode ? "0 4px 24px rgba(0,0,0,0.7)" : "0 4px 18px rgba(0,0,0,0.08)",
+                borderRadius: "8px",
                 filter: nightMode ? "invert(0.9) hue-rotate(180deg) contrast(1.05)" : "none",
                 transition: "filter 0.2s ease",
               }}
@@ -7195,6 +7201,229 @@ export default function VirtualPdfReader({
             {isTouchOrMobileDevice ? `Pg ${currentPage}/${numPages}` : `Page ${currentPage} of ${numPages} • Night Mode ${nightMode ? "Active 🌙" : "Off ☀️"}`}
           </span>
         </div>
+      </div>
+
+      {/* 🏝️ Minimalist Dynamic Island Bottom Reader Toolbar */}
+      <div
+        data-dynamic-island="true"
+        className="virtual-reader-island"
+        style={{
+          position: "fixed",
+          bottom: isTouchOrMobileDevice ? "16px" : "24px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 140,
+          display: "flex",
+          alignItems: "center",
+          gap: isTouchOrMobileDevice ? "4px" : "6px",
+          padding: isTouchOrMobileDevice ? "5px 10px" : "6px 14px",
+          borderRadius: "9999px",
+          background: nightMode ? "rgba(15, 23, 42, 0.88)" : "rgba(255, 255, 255, 0.92)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: nightMode ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid rgba(226, 232, 240, 0.9)",
+          boxShadow: nightMode
+            ? "0 16px 40px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.15)"
+            : "0 16px 40px rgba(15, 23, 42, 0.12), 0 0 20px rgba(99, 102, 241, 0.08)",
+          transition: "all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)",
+          maxWidth: "calc(100vw - 20px)",
+          overflowX: "auto",
+          scrollbarWidth: "none",
+        }}
+      >
+        {/* Page Flip: Prev Button */}
+        <button
+          type="button"
+          onClick={() => changePage(currentPage - 1)}
+          disabled={currentPage <= 1 || loading}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: nightMode ? "#cbd5e1" : "#334155",
+            cursor: currentPage <= 1 ? "not-allowed" : "pointer",
+            opacity: currentPage <= 1 ? 0.35 : 1,
+            display: "flex",
+            alignItems: "center",
+            padding: "4px",
+            borderRadius: "50%",
+            transition: "transform 0.15s ease",
+          }}
+          title="Previous Page (◀)"
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        {/* Page Indicator Badge */}
+        <span
+          style={{
+            fontSize: isTouchOrMobileDevice ? "0.7rem" : "0.74rem",
+            fontWeight: 800,
+            fontFamily: "var(--font-mono)",
+            color: nightMode ? "#f8fafc" : "#0f172a",
+            padding: "2px 8px",
+            borderRadius: "999px",
+            background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {currentPage} / {numPages || 1}
+        </span>
+
+        {/* Page Flip: Next Button */}
+        <button
+          type="button"
+          onClick={() => changePage(currentPage + 1)}
+          disabled={currentPage >= (numPages || 1) || loading}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: nightMode ? "#cbd5e1" : "#334155",
+            cursor: currentPage >= (numPages || 1) ? "not-allowed" : "pointer",
+            opacity: currentPage >= (numPages || 1) ? 0.35 : 1,
+            display: "flex",
+            alignItems: "center",
+            padding: "4px",
+            borderRadius: "50%",
+            transition: "transform 0.15s ease",
+          }}
+          title="Next Page (▶)"
+        >
+          <ChevronRight size={16} />
+        </button>
+
+        {/* Vertical Divider */}
+        <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)", margin: "0 2px" }} />
+
+        {/* Zoom Stepper */}
+        <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+          <button
+            type="button"
+            onClick={() => setScale((s) => Math.max(0.5, Number((s - 0.15).toFixed(2))))}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: nightMode ? "#cbd5e1" : "#475569",
+              cursor: "pointer",
+              padding: "3px 5px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: "6px",
+            }}
+            title="Zoom Out (−)"
+          >
+            <ZoomOut size={13} />
+          </button>
+          <span
+            style={{
+              fontSize: "0.72rem",
+              fontWeight: 700,
+              fontFamily: "var(--font-mono)",
+              color: nightMode ? "#94a3b8" : "#64748b",
+              minWidth: "34px",
+              textAlign: "center",
+            }}
+          >
+            {Math.round(scale * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setScale((s) => Math.min(2.5, Number((s + 0.15).toFixed(2))))}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: nightMode ? "#cbd5e1" : "#475569",
+              cursor: "pointer",
+              padding: "3px 5px",
+              display: "flex",
+              alignItems: "center",
+              borderRadius: "6px",
+            }}
+            title="Zoom In (+)"
+          >
+            <ZoomIn size={13} />
+          </button>
+        </div>
+
+        {/* Vertical Divider */}
+        <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)", margin: "0 2px" }} />
+
+        {/* 🔖 Bookmark Button */}
+        <button
+          type="button"
+          onClick={handleToggleCurrentBookmark}
+          style={{
+            background: isCurrentPageBookmarked
+              ? "rgba(245, 158, 11, 0.15)"
+              : (nightMode ? "rgba(255, 255, 255, 0.05)" : "#f8fafc"),
+            border: isCurrentPageBookmarked
+              ? "1px solid #f59e0b"
+              : (nightMode ? "1px solid rgba(255, 255, 255, 0.1)" : "1px solid #e2e8f0"),
+            color: isCurrentPageBookmarked ? "#f59e0b" : (nightMode ? "#cbd5e1" : "#64748b"),
+            padding: "4px 8px",
+            borderRadius: "999px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            fontSize: "0.72rem",
+            fontWeight: 700,
+            transition: "all 0.2s ease",
+          }}
+          title={isCurrentPageBookmarked ? "Bookmarked (Tap to Remove)" : "Bookmark this Page"}
+        >
+          <Bookmark size={13} fill={isCurrentPageBookmarked ? "#f59e0b" : "none"} />
+          {!isTouchOrMobileDevice && <span>{isCurrentPageBookmarked ? "Saved" : "Save"}</span>}
+        </button>
+
+        {/* ☀️ / 🌙 Night Mode Toggle */}
+        <button
+          type="button"
+          onClick={() => setNightMode((prev) => !prev)}
+          style={{
+            background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#f8fafc",
+            border: nightMode ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid #e2e8f0",
+            color: nightMode ? "#facc15" : "#6366f1",
+            padding: "4px 7px",
+            borderRadius: "999px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.25s ease",
+          }}
+          title={nightMode ? "Switch to Day Mode (☀️)" : "Switch to Night Mode (🌙)"}
+        >
+          {nightMode ? <Sun size={14} style={{ transition: "transform 0.4s ease" }} /> : <Moon size={14} style={{ transition: "transform 0.4s ease" }} />}
+        </button>
+
+        {/* Vertical Divider */}
+        <div style={{ width: "1px", height: "16px", background: nightMode ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)", margin: "0 2px" }} />
+
+        {/* ✨ AI Doubt Solver / Study Pod Pill */}
+        <button
+          type="button"
+          onClick={handleOpenAiStudy}
+          style={{
+            background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%)",
+            border: "none",
+            color: "#ffffff",
+            padding: isTouchOrMobileDevice ? "4px 9px" : "5px 13px",
+            borderRadius: "999px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "5px",
+            fontSize: "0.72rem",
+            fontWeight: 800,
+            boxShadow: "0 4px 14px rgba(99, 102, 241, 0.4)",
+            transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            whiteSpace: "nowrap",
+          }}
+          title="Open AI Doubt Solver & Study Pod"
+        >
+          <Sparkles size={12} />
+          <span>✨ AI Doubt</span>
+        </button>
       </div>
 
       {/* 📥 Real-Time CDN Download Progress HUD */}

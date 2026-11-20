@@ -6864,4 +6864,37 @@ body.dark-theme {
   color: #f8fafc !important;
 }
 
+/* ==========================================================================
+   🏝️ Dynamic Island Virtual PDF Reader Toolbar & Ambient Frame
+   ========================================================================== */
+.virtual-reader-island {
+  animation: dynamicIslandSlideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes dynamicIslandSlideUp {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+.virtual-reader-island button:active {
+  transform: scale(0.92);
+}
+
+.virtual-reader-island button {
+  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.15s ease !important;
+}
+
+[data-theme="dark"] .virtual-reader-island {
+  background: rgba(15, 23, 42, 0.90) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 24px rgba(99, 102, 241, 0.2) !important;
+}
+
+
 

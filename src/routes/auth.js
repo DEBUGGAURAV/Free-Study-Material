@@ -4,6 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { db } = require("../firebase");
+const { requireDb, checkDb } = require("../middleware/dbGuard");
 const { ramCache } = require("../utils/ramCache");
 const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie, setRevokedTokenVersion } = require("../middleware/auth");
 const { validateStudentEmail, isDisposableEmail } = require("../utils/disposableEmailBlocker");
@@ -252,9 +253,7 @@ router.post("/register-telegram-initiate", authLimiter, async (req, res) => {
       });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Parallelized unique checks (runs concurrently in ~250ms)
     const mHash = blindIndex(cleanMobile);
@@ -332,9 +331,7 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Password must be at least 6 characters.", field: "signUpPassword" });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Double check email uniqueness before creation
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
@@ -526,9 +523,7 @@ router.post("/forgot-telegram-initiate", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "Valid registered @gmail.com address is mandatory." });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Step 1: Verify Mobile Number in database first (Blind Index + legacy fallback)!
     const mHash = blindIndex(cleanMobile);
@@ -610,9 +605,7 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: verification.message });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     let { userId } = verification.data || {};
     if (!userId) {
@@ -709,9 +702,7 @@ router.post("/register-request-otp", authLimiter, async (req, res) => {
       });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Parallelized unique checks (runs concurrently in ~250ms)
     const mHash = blindIndex(cleanMobile);
@@ -788,9 +779,7 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
 
     const { name, mobile, college, year, password } = verification.data;
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Double check email uniqueness before creation
     const existingSnap = await db.collection("users").where("email", "==", cleanEmail).limit(1).get();
@@ -939,9 +928,7 @@ router.post("/register", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: verification.message });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Parallelized unique checks (runs concurrently in ~250ms)
     const mHash = blindIndex(cleanMobile);
@@ -1168,9 +1155,7 @@ router.post("/google", authLimiter, async (req, res) => {
       });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Check if user already registered in Firestore
     const snap = await db.collection("users").where("email", "==", verifiedEmail).limit(1).get();
@@ -1321,9 +1306,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "College name is required." });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     // Parallelized unique checks (runs concurrently in ~250ms)
     const mHash = blindIndex(cleanMobile);
@@ -2168,9 +2151,7 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
       });
     }
 
-    if (!db) {
-      return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
-    }
+    if (!checkDb(res)) return;
 
     let snap = null;
     try {
@@ -2440,7 +2421,7 @@ router.put("/profile", authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: "Full Name is required." });
     }
 
-    if (!db) return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
+    if (!checkDb(res)) return;
 
     const isAdmin = req.user.id === "admin-root" || req.user.role === "admin" || (req.user.email && req.user.email.toLowerCase() === MAIN_ADMIN_EMAIL);
 
@@ -2616,7 +2597,7 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
       return res.status(400).json({ success: false, message: "New password must be at least 6 characters long." });
     }
 
-    if (!db) return res.status(503).json({ success: false, message: "Database temporarily unavailable." });
+    if (!checkDb(res)) return;
 
     if (req.user.id === "admin-root") {
       return res.json({ success: true, message: "Master admin password updated in session." });
