@@ -1071,6 +1071,136 @@ router.get("/:id/og-image.png", async (req, res) => {
   }
 });
 
+// ============================================================================
+// 📚 STUDENT PERSONAL VAULT ENDPOINTS (Turso 4: fsm-studet-session)
+// Zero-MongoDB storage footprint for Bookmarks, Recents, Downloads & Preferences
+// ============================================================================
+
+/**
+ * GET /api/notes/library/bookmarks
+ */
+router.get("/library/bookmarks", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { getStudentBookmarks } = require("../services/tursoStudentVaultService");
+    const bookmarks = await getStudentBookmarks(userId);
+    return res.json({ success: true, bookmarks });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/notes/library/bookmarks
+ */
+router.post("/library/bookmarks", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { noteId, title, subject } = req.body || {};
+    if (!noteId) return res.status(400).json({ success: false, message: "noteId is required" });
+    const { addStudentBookmark } = require("../services/tursoStudentVaultService");
+    const ok = await addStudentBookmark(userId, noteId, title, subject);
+    return res.json({ success: ok });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * DELETE /api/notes/library/bookmarks/:noteId
+ */
+router.delete("/library/bookmarks/:noteId", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { noteId } = req.params;
+    const { removeStudentBookmark } = require("../services/tursoStudentVaultService");
+    const ok = await removeStudentBookmark(userId, noteId);
+    return res.json({ success: ok });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/notes/library/recently-viewed
+ */
+router.get("/library/recently-viewed", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { getStudentRecentlyViewed } = require("../services/tursoStudentVaultService");
+    const recents = await getStudentRecentlyViewed(userId, req.query.limit);
+    return res.json({ success: true, recents });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/notes/library/recently-viewed
+ */
+router.post("/library/recently-viewed", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { noteId, title, subject } = req.body || {};
+    if (!noteId) return res.status(400).json({ success: false, message: "noteId is required" });
+    const { recordStudentRecentlyViewed } = require("../services/tursoStudentVaultService");
+    const ok = await recordStudentRecentlyViewed(userId, noteId, title, subject);
+    return res.json({ success: ok });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/notes/library/downloads
+ */
+router.get("/library/downloads", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { getStudentDownloads } = require("../services/tursoStudentVaultService");
+    const downloads = await getStudentDownloads(userId, req.query.limit);
+    return res.json({ success: true, downloads });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/notes/library/preferences
+ */
+router.get("/library/preferences", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { getStudentPreferences } = require("../services/tursoStudentVaultService");
+    const preferences = await getStudentPreferences(userId);
+    return res.json({ success: true, preferences });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * PUT /api/notes/library/preferences
+ */
+router.put("/library/preferences", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.email;
+    if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+    const { saveStudentPreferences } = require("../services/tursoStudentVaultService");
+    const ok = await saveStudentPreferences(userId, req.body || {});
+    return res.json({ success: ok });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 /**
  * GET /api/notes/:id
  * Single note details
@@ -1847,6 +1977,18 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     }
 
     const isActualDownload = Boolean(isDownload);
+
+    // ⚡ Auto-track Student Personal Vault in Turso 4 (Non-blocking, sub-1ms)
+    if (requestingUser && !isSubsequentRangeChunk) {
+      try {
+        const uid = requestingUser.id || requestingUser.email;
+        const { recordStudentRecentlyViewed, recordStudentDownload } = require("../services/tursoStudentVaultService");
+        recordStudentRecentlyViewed(uid, note.id, note.title, note.subject).catch(() => {});
+        if (isActualDownload) {
+          recordStudentDownload(uid, note.id, note.title).catch(() => {});
+        }
+      } catch (_) {}
+    }
 
     // ⚡ Zero-Render Bandwidth Offloader:
     // When downloading a PDF, redirect top-level browser downloads to Cloudflare Edge Worker CDN unless the request came from the worker itself,
