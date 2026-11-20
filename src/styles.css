@@ -4927,14 +4927,14 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   }
 }
 
-/* Mobile Floating Dock 5-Tab Optimization (Compact, Zero Excess Space Inside or Outside) */
+/* Mobile Floating Dock 6-Tab Optimization (Compact, Zero Excess Space Inside or Outside) */
 @media (max-width: 768px) {
   .mobile-floating-island-dock {
     justify-content: space-around !important;
     align-items: center !important;
     gap: 0 !important;
     bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
-    padding: 4px 6px !important;
+    padding: 4px 4px !important;
     min-height: 0 !important;
     height: auto !important;
     background: rgba(255, 255, 255, 0.98) !important;
@@ -4946,7 +4946,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
   .mobile-floating-island-dock .dock-item {
     flex: 1 1 0 !important;
     min-width: 0 !important;
-    padding: 3px 2px !important;
+    padding: 3px 1px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -4954,7 +4954,7 @@ button:focus-visible, a:focus-visible, .note-showcase-box:focus-visible { outlin
     gap: 2px !important;
   }
   .mobile-floating-island-dock .dock-item span {
-    font-size: 0.68rem !important;
+    font-size: 0.62rem !important;
     font-weight: 750 !important;
     line-height: 1.15 !important;
     white-space: nowrap !important;

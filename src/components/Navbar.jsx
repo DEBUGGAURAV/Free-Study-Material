@@ -648,7 +648,7 @@ export default function Navbar({
       </header>
 
       {/* ══════════════════════════════════════════════════════════════════════
-          MOBILE FLOATING BOTTOM DOCK (5 Tabs: Upload, Install, AirDrop, Push, More)
+          MOBILE FLOATING BOTTOM DOCK (6 Tabs: Upload, Install, AirDrop, Push, Chat, More)
           ══════════════════════════════════════════════════════════════════════ */}
       {currentUser && (
         <>
@@ -660,7 +660,7 @@ export default function Navbar({
               onClick={onOpenUpload}
               title="Upload Notes, PYQs or Solutions"
             >
-              <UploadCloud size={19} />
+              <UploadCloud size={18} />
               <span>Upload</span>
             </button>
 
@@ -671,8 +671,8 @@ export default function Navbar({
               onClick={handleInstallClick}
               title="Install Free Study Material App (PWA)"
             >
-              <Smartphone size={19} />
-              <span>Install App</span>
+              <Smartphone size={18} />
+              <span>Install</span>
             </button>
 
             {/* 3. ⚡ Campus AirDrop */}
@@ -682,7 +682,7 @@ export default function Navbar({
               onClick={onOpenAirDrop}
               title="Campus AirDrop (Offline P2P Mesh File Sharing)"
             >
-              <Zap size={19} />
+              <Zap size={18} />
               <span>AirDrop</span>
             </button>
 
@@ -695,9 +695,9 @@ export default function Navbar({
             >
               <div style={{ position: "relative", display: "inline-flex" }}>
                 {pushStatus.subscribed ? (
-                  <BellRing size={19} />
+                  <BellRing size={18} />
                 ) : (
-                  <Bell size={19} />
+                  <Bell size={18} />
                 )}
                 {pushStatus.subscribed && (
                   <span style={{
@@ -716,15 +716,26 @@ export default function Navbar({
               <span>{pushStatus.subscribed ? "Push On" : "Push Alert"}</span>
             </button>
 
-            {/* 5. ⚡ More Hub (Drawer) */}
+            {/* 5. 💬 Student Chat */}
+            <button
+              type="button"
+              className="dock-item dock-chat"
+              onClick={onOpenChat}
+              title="Student Study Chat"
+            >
+              <MessageSquare size={18} />
+              <span>Chat</span>
+            </button>
+
+            {/* 6. ⚡ More Hub (Drawer) */}
             <button
               type="button"
               className="dock-item dock-more"
               onClick={() => setShowMobileMoreSheet(true)}
-              title="More Academic Tools (Notes, AI Study, Circle, Chat, Notices, Vault)"
+              title="More Academic Tools (Vault, Notices, Pod, Help, Settings)"
             >
               <div style={{ position: "relative", display: "inline-flex" }}>
-                <LayoutGrid size={19} />
+                <LayoutGrid size={18} />
                 {noticeCount > 0 && (
                   <span className="dock-notice-dot">{noticeCount > 9 ? "9+" : noticeCount}</span>
                 )}
