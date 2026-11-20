@@ -602,34 +602,45 @@ export default function AiStudyPodModal({
       onClick={onClose}
     >
       <div
-        className="dark-modal-surface"
+        className="white-modal-surface ai-study-pod-surface"
         style={{
           width: "100%",
-          maxWidth: "780px",
+          maxWidth: "840px",
           height: "92vh",
-          maxHeight: "840px",
-          background: "radial-gradient(ellipse at top left, #121829 0%, #080c16 100%)",
-          border: "1.5px solid rgba(139, 92, 246, 0.45)",
+          maxHeight: "860px",
+          background: "#ffffff",
+          border: "1.5px solid rgba(226, 232, 240, 0.95)",
           borderRadius: "26px",
-          boxShadow: "0 30px 80px rgba(0,0,0,0.95), 0 0 45px rgba(139, 92, 246, 0.28), inset 0 1px 0 rgba(255,255,255,0.15)",
+          boxShadow: "0 30px 80px -15px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.9) inset, 0 12px 36px -4px rgba(99, 102, 241, 0.16)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          color: "#fff",
+          color: "#0f172a",
+          position: "relative",
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Top ambient rainbow sapphire glow accent strip */}
+        <div
+          style={{
+            height: "4px",
+            width: "100%",
+            background: "linear-gradient(90deg, #6366f1 0%, #8b5cf6 35%, #ec4899 70%, #06b6d4 100%)",
+            flexShrink: 0,
+          }}
+        />
+
         {/* ============================================================== */}
-        {/* Header Bar                                                     */}
+        {/* Header Bar (Pure Crystal White Luxury UI)                       */}
         {/* ============================================================== */}
         <div
           style={{
             padding: "16px 22px",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+            borderBottom: "1px solid #f1f5f9",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(6, 182, 212, 0.15))",
+            background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
             backdropFilter: "blur(14px)",
           }}
         >
@@ -643,27 +654,27 @@ export default function AiStudyPodModal({
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 4px 18px rgba(139, 92, 246, 0.55), inset 0 1px 0 rgba(255,255,255,0.4)",
+                boxShadow: "0 4px 14px rgba(99, 102, 241, 0.35)",
                 flexShrink: 0,
               }}
             >
-              <Sparkles size={22} color="#fff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.8))" }} />
+              <Sparkles size={22} color="#fff" />
             </div>
             <div style={{ minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span>AI Study</span>
+                <h3 style={{ margin: 0, fontSize: "1.15rem", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.3px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>AI Study Studio</span>
                 </h3>
                 <span
                   style={{
                     fontSize: "0.68rem",
                     padding: "2px 8px",
                     borderRadius: "999px",
-                    background: "rgba(52, 211, 153, 0.18)",
-                    color: "#34d399",
+                    background: "#ecfdf5",
+                    color: "#059669",
                     fontWeight: 700,
-                    border: "1px solid rgba(52, 211, 153, 0.35)",
-                    boxShadow: "0 0 10px rgba(52, 211, 153, 0.2)",
+                    border: "1px solid #a7f3d0",
+                    boxShadow: "0 1px 3px rgba(16, 185, 129, 0.1)",
                   }}
                 >
                   ⚡ 0ms Edge Cache Active
@@ -673,7 +684,7 @@ export default function AiStudyPodModal({
                 style={{
                   margin: "3px 0 0",
                   fontSize: "0.78rem",
-                  color: "#cbd5e1",
+                  color: "#64748b",
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -690,9 +701,9 @@ export default function AiStudyPodModal({
             type="button"
             onClick={onClose}
             style={{
-              background: "rgba(255, 255, 255, 0.08)",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#cbd5e1",
+              background: "#f1f5f9",
+              border: "1px solid #e2e8f0",
+              color: "#64748b",
               cursor: "pointer",
               borderRadius: "50%",
               width: "36px",
@@ -709,138 +720,188 @@ export default function AiStudyPodModal({
         </div>
 
         {/* ============================================================== */}
-        {/* Navigation Tabs Pill Bar                                       */}
+        {/* Navigation Tabs (Apple / Linear Segmented Pill Bar)             */}
         {/* ============================================================== */}
         <div
           className="ai-study-tabs-scroll"
           style={{
-            padding: "10px 20px",
-            background: "rgba(15, 23, 42, 0.7)",
-            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+            padding: "8px 18px",
+            background: "#f8fafc",
+            borderBottom: "1px solid #e2e8f0",
             display: "flex",
+            alignItems: "center",
             gap: "8px",
             overflowX: "auto",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
           }}
         >
-          {/* 💬 TAB 0 (DEFAULT FIRST): AI Conversation Chatbox */}
-          <button
-            type="button"
-            onClick={() => setActiveTab("chat")}
+          {/* Segmented Wrapper for Apple/Linear Feel */}
+          <div
             style={{
-              background: activeTab === "chat" ? "linear-gradient(135deg, #6366f1, #06b6d4)" : "rgba(255, 255, 255, 0.05)",
-              color: activeTab === "chat" ? "#fff" : "var(--text-dim)",
-              border: "none",
-              borderRadius: "10px",
-              padding: "7px 14px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
+              background: "#e2e8f0",
+              padding: "3px",
+              borderRadius: "12px",
+              gap: "3px",
+              flexShrink: 0,
             }}
           >
-            <MessageSquare size={14} />
-            <span>💬 AI Chat</span>
-          </button>
-
-          {/* 🔍 Search & Filter Notes Tab (Shown on Home Page, Hidden inside PDF Reader) */}
-          {!isInsidePdf && (
+            {/* 💬 TAB: AI Tutor Chat */}
             <button
               type="button"
-              onClick={() => setActiveTab("search_notes")}
+              onClick={() => setActiveTab("chat")}
               style={{
-                background: activeTab === "search_notes" ? "linear-gradient(135deg, #f59e0b, #d97706)" : "rgba(255, 255, 255, 0.05)",
-                color: activeTab === "search_notes" ? "#fff" : "var(--text-dim)",
+                background: activeTab === "chat" ? "#ffffff" : "transparent",
+                color: activeTab === "chat" ? "#4f46e5" : "#475569",
                 border: "none",
-                borderRadius: "10px",
-                padding: "7px 14px",
+                borderRadius: "9px",
+                padding: "6px 14px",
                 fontSize: "0.78rem",
-                fontWeight: 700,
+                fontWeight: activeTab === "chat" ? 800 : 600,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "6px",
                 whiteSpace: "nowrap",
-                transition: "all 0.2s ease",
+                boxShadow: activeTab === "chat" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.15s ease",
               }}
             >
-              <Filter size={14} />
-              <span>🔍 Filter Notes ({fetchedNotes.length})</span>
+              <MessageSquare size={14} />
+              <span>💬 AI Tutor Chat</span>
+            </button>
+
+            {/* 🗂️ TAB: Flashcards */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("flashcards")}
+              style={{
+                background: activeTab === "flashcards" ? "#ffffff" : "transparent",
+                color: activeTab === "flashcards" ? "#7c3aed" : "#475569",
+                border: "none",
+                borderRadius: "9px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: activeTab === "flashcards" ? 800 : 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap",
+                boxShadow: activeTab === "flashcards" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Layers size={14} />
+              <span>🗂️ Flashcards{flashcards.length > 0 ? ` (${flashcards.length})` : ""}</span>
+            </button>
+
+            {/* 🗺️ TAB: Mind-Maps */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("mindmaps");
+                if (!mindmapCode && !loadingMindmap) {
+                  handleGenerateMindmap();
+                }
+              }}
+              style={{
+                background: activeTab === "mindmaps" ? "#ffffff" : "transparent",
+                color: activeTab === "mindmaps" ? "#0284c7" : "#475569",
+                border: "none",
+                borderRadius: "9px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: activeTab === "mindmaps" ? 800 : 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap",
+                boxShadow: activeTab === "mindmaps" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <span>🗺️ Mind-Maps</span>
+            </button>
+
+            {/* 📝 TAB: 1-Page Summary */}
+            <button
+              type="button"
+              onClick={() => setActiveTab("summary")}
+              style={{
+                background: activeTab === "summary" ? "#ffffff" : "transparent",
+                color: activeTab === "summary" ? "#059669" : "#475569",
+                border: "none",
+                borderRadius: "9px",
+                padding: "6px 14px",
+                fontSize: "0.78rem",
+                fontWeight: activeTab === "summary" ? 800 : 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                whiteSpace: "nowrap",
+                boxShadow: activeTab === "summary" ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <FileText size={14} />
+              <span>📝 1-Page Summary</span>
+            </button>
+          </div>
+
+          {/* Secondary tabs */}
+          {!isInsidePdf && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("search_notes")}
+              style={{
+                background: activeTab === "search_notes" ? "#fef3c7" : "transparent",
+                color: activeTab === "search_notes" ? "#b45309" : "#64748b",
+                border: activeTab === "search_notes" ? "1px solid #fde68a" : "1px solid transparent",
+                borderRadius: "10px",
+                padding: "6px 12px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                whiteSpace: "nowrap",
+                transition: "all 0.15s ease",
+                flexShrink: 0,
+              }}
+            >
+              <Filter size={13} />
+              <span>🔍 Notes ({fetchedNotes.length})</span>
             </button>
           )}
 
           <button
             type="button"
-            onClick={() => setActiveTab("flashcards")}
-            style={{
-              background: activeTab === "flashcards" ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "rgba(255, 255, 255, 0.05)",
-              color: activeTab === "flashcards" ? "#fff" : "var(--text-dim)",
-              border: "none",
-              borderRadius: "10px",
-              padding: "7px 14px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <Layers size={14} />
-            <span>🗂️ Flashcards ({flashcards.length})</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("summary")}
-            style={{
-              background: activeTab === "summary" ? "linear-gradient(135deg, #0284c7, #06b6d4)" : "rgba(255, 255, 255, 0.05)",
-              color: activeTab === "summary" ? "#fff" : "var(--text-dim)",
-              border: "none",
-              borderRadius: "10px",
-              padding: "7px 14px",
-              fontSize: "0.78rem",
-              fontWeight: 700,
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
-            }}
-          >
-            <FileText size={14} />
-            <span>📄 Executive Summary</span>
-          </button>
-
-          <button
-            type="button"
             onClick={() => setActiveTab("session_history")}
             style={{
-              background: activeTab === "session_history" ? "linear-gradient(135deg, #10b981, #059669)" : "rgba(255, 255, 255, 0.05)",
-              color: activeTab === "session_history" ? "#fff" : "var(--text-dim)",
-              border: "none",
+              background: activeTab === "session_history" ? "#ecfdf5" : "transparent",
+              color: activeTab === "session_history" ? "#059669" : "#64748b",
+              border: activeTab === "session_history" ? "1px solid #a7f3d0" : "1px solid transparent",
               borderRadius: "10px",
-              padding: "7px 14px",
-              fontSize: "0.78rem",
+              padding: "6px 12px",
+              fontSize: "0.76rem",
               fontWeight: 700,
               cursor: "pointer",
               display: "inline-flex",
               alignItems: "center",
-              gap: "6px",
+              gap: "5px",
               whiteSpace: "nowrap",
-              transition: "all 0.2s ease",
+              transition: "all 0.15s ease",
+              flexShrink: 0,
             }}
           >
-            <Clock size={14} />
-            <span>🕒 Session History ({sessionHistory.length})</span>
+            <Clock size={13} />
+            <span>🕒 History ({sessionHistory.length})</span>
           </button>
 
           {/* ⭕ Circle to Search & Visual AI Quick Launch */}
@@ -852,23 +913,25 @@ export default function AiStudyPodModal({
                 onOpenCircleSearch();
               }}
               style={{
-                background: "linear-gradient(135deg, rgba(2, 132, 199, 0.22), rgba(99, 102, 241, 0.22))",
-                color: "#38bdf8",
-                border: "1px solid rgba(56, 189, 248, 0.45)",
+                background: "#f0f9ff",
+                color: "#0284c7",
+                border: "1px solid #bae6fd",
                 borderRadius: "10px",
-                padding: "7px 14px",
-                fontSize: "0.78rem",
+                padding: "6px 12px",
+                fontSize: "0.76rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
-                gap: "6px",
+                gap: "5px",
                 whiteSpace: "nowrap",
-                transition: "all 0.2s ease",
+                marginLeft: "auto",
+                transition: "all 0.15s ease",
+                flexShrink: 0,
               }}
               title="Open Circle to Search: Ask Question or Diagram with Gemini AI"
             >
-              <GeminiIcon size={15} withRing />
+              <GeminiIcon size={14} withRing />
               <span>Circle to Search</span>
             </button>
           )}
@@ -896,8 +959,8 @@ export default function AiStudyPodModal({
               <div
                 style={{
                   padding: "8px 18px",
-                  background: "rgba(15, 23, 42, 0.55)",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
+                  background: "#f8fafc",
+                  borderBottom: "1px solid #e2e8f0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
@@ -909,7 +972,7 @@ export default function AiStudyPodModal({
                   <span
                     style={{
                       fontSize: "0.73rem",
-                      color: currentNoteId ? "#a5b4fc" : "#94a3b8",
+                      color: currentNoteId ? "#4f46e5" : "#64748b",
                       fontWeight: 600,
                       whiteSpace: "nowrap",
                       overflow: "hidden",
@@ -930,9 +993,9 @@ export default function AiStudyPodModal({
                         setCurrentSubject("");
                       }}
                       style={{
-                        background: "rgba(255,255,255,0.08)",
+                        background: "#e2e8f0",
                         border: "none",
-                        color: "#cbd5e1",
+                        color: "#475569",
                         borderRadius: "6px",
                         padding: "2px 7px",
                         fontSize: "0.68rem",
@@ -954,9 +1017,9 @@ export default function AiStudyPodModal({
                         onOpenCircleSearch();
                       }}
                       style={{
-                        background: "rgba(56, 189, 248, 0.15)",
-                        border: "1px solid rgba(56, 189, 248, 0.4)",
-                        color: "#38bdf8",
+                        background: "#f0f9ff",
+                        border: "1px solid #bae6fd",
+                        color: "#0284c7",
                         borderRadius: "8px",
                         padding: "4px 10px",
                         fontSize: "0.72rem",
@@ -977,9 +1040,9 @@ export default function AiStudyPodModal({
                       type="button"
                       onClick={() => setChatMessages([])}
                       style={{
-                        background: "rgba(244, 63, 94, 0.14)",
-                        border: "1px solid rgba(244, 63, 94, 0.3)",
-                        color: "#fda4af",
+                        background: "#fff1f2",
+                        border: "1px solid #fecdd3",
+                        color: "#e11d48",
                         borderRadius: "8px",
                         padding: "4px 9px",
                         fontSize: "0.72rem",
@@ -1025,20 +1088,21 @@ export default function AiStudyPodModal({
                         width: "52px",
                         height: "52px",
                         borderRadius: "16px",
-                        background: "linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(6, 182, 212, 0.25))",
-                        border: "1.5px solid rgba(139, 92, 246, 0.45)",
+                        background: "linear-gradient(135deg, #eef2ff, #f0fdf4)",
+                        border: "1.5px solid #c7d2fe",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
+                        boxShadow: "0 4px 12px rgba(99, 102, 241, 0.15)",
                       }}
                     >
-                      <Sparkles size={26} color="#a5b4fc" />
+                      <Sparkles size={26} color="#6366f1" />
                     </div>
                     <div>
-                      <div style={{ fontSize: "1.02rem", fontWeight: 800, color: "#f8fafc" }}>
+                      <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a" }}>
                         Start Your AI Study Conversation
                       </div>
-                      <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: "4px auto 0", maxWidth: "460px" }}>
+                      <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "4px auto 0", maxWidth: "460px" }}>
                         Ask doubts in English or Hinglish, solve numericals step-by-step, paste diagrams, or have a continuous study discussion!
                       </p>
                     </div>
@@ -1060,9 +1124,9 @@ export default function AiStudyPodModal({
                           prompt: currentNoteId
                             ? `Extract all critical formulas, mathematical laws & theorems from ${currentTitle}`
                             : "Derive Laplace transform of e^(2t) sin(3t) step-by-step with proofs",
-                          accent: "#fbbf24",
-                          border: "rgba(245, 158, 11, 0.35)",
-                          bg: "linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(217, 119, 6, 0.04))",
+                          accent: "#d97706",
+                          border: "#fde68a",
+                          bg: "linear-gradient(135deg, #fffbeb 0%, #ffffff 100%)",
                         },
                         {
                           icon: "🎯",
@@ -1070,9 +1134,9 @@ export default function AiStudyPodModal({
                           prompt: currentNoteId
                             ? `What are the top 5 most recurring semester exam questions from ${currentTitle}? Provide complete answers.`
                             : "Solve Banker's Algorithm safe sequence with an actual 5-process university exam numerical",
-                          accent: "#c084fc",
-                          border: "rgba(139, 92, 246, 0.35)",
-                          bg: "linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(99, 102, 241, 0.04))",
+                          accent: "#7c3aed",
+                          border: "#e9d5ff",
+                          bg: "linear-gradient(135deg, #faf5ff 0%, #ffffff 100%)",
                         },
                         {
                           icon: "🧠",
@@ -1080,9 +1144,9 @@ export default function AiStudyPodModal({
                           prompt: currentNoteId
                             ? `Generate a crisp Mermaid architecture flowchart / mind-map diagram summarizing ${currentTitle}`
                             : "Draw a Mermaid architecture diagram explaining TCP 3-way handshake and connection teardown",
-                          accent: "#38bdf8",
-                          border: "rgba(56, 189, 248, 0.35)",
-                          bg: "linear-gradient(135deg, rgba(56, 189, 248, 0.1), rgba(14, 165, 233, 0.04))",
+                          accent: "#0284c7",
+                          border: "#bae6fd",
+                          bg: "linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)",
                         },
                         {
                           icon: "💡",
@@ -1090,9 +1154,9 @@ export default function AiStudyPodModal({
                           prompt: currentNoteId
                             ? `Explain all core concepts of ${currentTitle} in crystal-clear simple Hinglish with practical analogies`
                             : "Explain Database Normalization (1NF to BCNF) in practical Hinglish with real table examples",
-                          accent: "#34d399",
-                          border: "rgba(52, 211, 153, 0.35)",
-                          bg: "linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(16, 185, 129, 0.04))",
+                          accent: "#059669",
+                          border: "#a7f3d0",
+                          bg: "linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%)",
                         },
                       ].map((item, idx) => (
                         <button
@@ -1101,7 +1165,7 @@ export default function AiStudyPodModal({
                           onClick={() => handleSendChatMessage(item.prompt)}
                           style={{
                             background: item.bg,
-                            border: `1px solid ${item.border}`,
+                            border: `1.5px solid ${item.border}`,
                             borderRadius: "14px",
                             padding: "12px 14px",
                             cursor: "pointer",
@@ -1110,22 +1174,22 @@ export default function AiStudyPodModal({
                             flexDirection: "column",
                             gap: "4px",
                             transition: "all 0.2s ease",
-                            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.25)",
+                            boxShadow: "0 2px 8px rgba(15, 23, 42, 0.04)",
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = "translateY(-2px)";
-                            e.currentTarget.style.borderColor = item.accent;
+                            e.currentTarget.style.boxShadow = "0 6px 16px rgba(15, 23, 42, 0.08)";
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.transform = "translateY(0)";
-                            e.currentTarget.style.borderColor = item.border;
+                            e.currentTarget.style.boxShadow = "0 2px 8px rgba(15, 23, 42, 0.04)";
                           }}
                         >
                           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 750, fontSize: "0.82rem", color: item.accent }}>
                             <span>{item.icon}</span>
                             <span>{item.title}</span>
                           </div>
-                          <span style={{ fontSize: "0.74rem", color: "#94a3b8", lineHeight: 1.4 }}>
+                          <span style={{ fontSize: "0.74rem", color: "#64748b", lineHeight: 1.4 }}>
                             {item.prompt.slice(0, 75)}...
                           </span>
                         </button>
@@ -1139,13 +1203,13 @@ export default function AiStudyPodModal({
                         <div
                           style={{
                             maxWidth: "84%",
-                            background: "linear-gradient(135deg, rgba(99, 102, 241, 0.32), rgba(6, 182, 212, 0.26))",
-                            border: "1px solid rgba(139, 92, 246, 0.45)",
+                            background: "linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)",
                             borderRadius: "16px 16px 4px 16px",
-                            padding: "10px 14px",
-                            color: "#f8fafc",
-                            fontSize: "0.85rem",
+                            padding: "10px 15px",
+                            color: "#ffffff",
+                            fontSize: "0.86rem",
                             lineHeight: 1.5,
+                            boxShadow: "0 4px 14px rgba(99, 102, 241, 0.28)",
                           }}
                         >
                           {msg.image && (
@@ -1158,7 +1222,7 @@ export default function AiStudyPodModal({
                                 borderRadius: "8px",
                                 display: "block",
                                 marginBottom: "6px",
-                                border: "1px solid rgba(255,255,255,0.2)",
+                                border: "1px solid rgba(255,255,255,0.4)",
                               }}
                             />
                           )}
@@ -1170,13 +1234,13 @@ export default function AiStudyPodModal({
                         key={msg.id}
                         style={{
                           background: "#ffffff",
-                          border: "1.5px solid #cbd5e1",
+                          border: "1.5px solid #e2e8f0",
                           borderRadius: "18px 18px 18px 4px",
                           padding: "16px 18px",
                           fontSize: "0.88rem",
                           lineHeight: 1.7,
                           color: "#0f172a",
-                          boxShadow: "0 10px 30px -10px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(0, 0, 0, 0.05)",
+                          boxShadow: "0 10px 30px -10px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(0, 0, 0, 0.03)",
                         }}
                       >
                         <div
@@ -1186,7 +1250,7 @@ export default function AiStudyPodModal({
                             alignItems: "center",
                             marginBottom: "10px",
                             paddingBottom: "8px",
-                            borderBottom: "1px solid #e2e8f0",
+                            borderBottom: "1px solid #f1f5f9",
                             gap: "8px",
                             flexWrap: "wrap",
                           }}
@@ -1231,9 +1295,9 @@ export default function AiStudyPodModal({
                                 disabled={sharingCardId === `chat_${msg.id}`}
                                 title="Download or Share HD Revision Card (PNG)"
                                 style={{
-                                  background: "linear-gradient(135deg, rgba(56, 189, 248, 0.18), rgba(99, 102, 241, 0.18))",
-                                  border: "1px solid rgba(56, 189, 248, 0.4)",
-                                  color: "#38bdf8",
+                                  background: "#f0f9ff",
+                                  border: "1px solid #bae6fd",
+                                  color: "#0284c7",
                                   borderRadius: "7px",
                                   padding: "4px 9px",
                                   fontSize: "0.72rem",
@@ -1257,9 +1321,9 @@ export default function AiStudyPodModal({
                                 setTimeout(() => setCopiedChatId(null), 1800);
                               }}
                               style={{
-                                background: "rgba(255, 255, 255, 0.08)",
-                                border: "1px solid rgba(255, 255, 255, 0.15)",
-                                color: copiedChatId === msg.id ? "#34d399" : "#cbd5e1",
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
+                                color: copiedChatId === msg.id ? "#059669" : "#64748b",
                                 borderRadius: "7px",
                                 padding: "4px 9px",
                                 fontSize: "0.72rem",
@@ -1287,7 +1351,7 @@ export default function AiStudyPodModal({
                             gap: "6px",
                             marginTop: "14px",
                             paddingTop: "10px",
-                            borderTop: "1px dashed rgba(255, 255, 255, 0.1)",
+                            borderTop: "1px dashed #e2e8f0",
                             alignItems: "center",
                           }}
                         >
@@ -1306,12 +1370,12 @@ export default function AiStudyPodModal({
                               onClick={() => handleSendChatMessage(chip.prompt)}
                               disabled={isSendingChat}
                               style={{
-                                background: "rgba(255, 255, 255, 0.05)",
-                                border: "1px solid rgba(139, 92, 246, 0.35)",
+                                background: "#f8fafc",
+                                border: "1px solid #e2e8f0",
                                 borderRadius: "999px",
-                                padding: "3px 9px",
-                                fontSize: "0.71rem",
-                                color: "#c4b5fd",
+                                padding: "3px 10px",
+                                fontSize: "0.72rem",
+                                color: "#4f46e5",
                                 cursor: isSendingChat ? "not-allowed" : "pointer",
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -1320,12 +1384,12 @@ export default function AiStudyPodModal({
                                 transition: "all 0.15s ease",
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.background = "rgba(139, 92, 246, 0.2)";
-                                e.currentTarget.style.borderColor = "#a855f7";
+                                e.currentTarget.style.background = "#eef2ff";
+                                e.currentTarget.style.borderColor = "#c7d2fe";
                               }}
                               onMouseLeave={(e) => {
-                                e.currentTarget.style.background = "rgba(255, 255, 255, 0.05)";
-                                e.currentTarget.style.borderColor = "rgba(139, 92, 246, 0.35)";
+                                e.currentTarget.style.background = "#f8fafc";
+                                e.currentTarget.style.borderColor = "#e2e8f0";
                               }}
                             >
                               <span>{chip.icon}</span>
@@ -1345,15 +1409,16 @@ export default function AiStudyPodModal({
                       alignItems: "center",
                       gap: "10px",
                       padding: "10px 14px",
-                      background: "rgba(139, 92, 246, 0.12)",
-                      border: "1px solid rgba(139, 92, 246, 0.3)",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
                       borderRadius: "14px",
                       fontSize: "0.8rem",
-                      color: "#ddd6fe",
+                      color: "#4f46e5",
                       alignSelf: "flex-start",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                     }}
                   >
-                    <RotateCw size={15} className="animate-spin" color="#a78bfa" />
+                    <RotateCw size={15} className="animate-spin" color="#6366f1" />
                     <span>AI Study Tutor is thinking...</span>
                   </div>
                 )}
@@ -1365,8 +1430,8 @@ export default function AiStudyPodModal({
               <div
                 style={{
                   padding: "12px 18px",
-                  borderTop: "1px solid rgba(255, 255, 255, 0.1)",
-                  background: "rgba(11, 15, 25, 0.96)",
+                  borderTop: "1px solid #f1f5f9",
+                  background: "#ffffff",
                 }}
               >
                 {chatImage && (
@@ -1375,15 +1440,15 @@ export default function AiStudyPodModal({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "8px",
-                      background: "rgba(255,255,255,0.06)",
-                      border: "1px solid rgba(255,255,255,0.15)",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
                       borderRadius: "10px",
                       padding: "5px 10px",
                       marginBottom: "8px",
                     }}
                   >
                     <img src={chatImage} alt="Preview" style={{ height: "38px", borderRadius: "6px" }} />
-                    <span style={{ fontSize: "0.72rem", color: "#cbd5e1" }}>Image attached</span>
+                    <span style={{ fontSize: "0.72rem", color: "#64748b" }}>Image attached</span>
                     <button
                       type="button"
                       onClick={() => setChatImage(null)}
@@ -1414,9 +1479,9 @@ export default function AiStudyPodModal({
                     type="button"
                     onClick={() => chatFileInputRef.current?.click()}
                     style={{
-                      background: "rgba(255, 255, 255, 0.07)",
-                      border: "1px solid rgba(255, 255, 255, 0.15)",
-                      color: "#cbd5e1",
+                      background: "#f8fafc",
+                      border: "1.5px solid #e2e8f0",
+                      color: "#64748b",
                       borderRadius: "11px",
                       width: "40px",
                       height: "40px",
@@ -1444,11 +1509,11 @@ export default function AiStudyPodModal({
                     placeholder="Ask any question, follow-up doubt, derivation, or paste image..."
                     style={{
                       flex: 1,
-                      background: "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(139, 92, 246, 0.4)",
+                      background: "#f8fafc",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "12px",
                       padding: "10px 14px",
-                      color: "#fff",
+                      color: "#0f172a",
                       fontSize: "0.86rem",
                       outline: "none",
                     }}
@@ -1459,7 +1524,7 @@ export default function AiStudyPodModal({
                     onClick={() => handleSendChatMessage()}
                     disabled={isSendingChat || (!chatInput.trim() && !chatImage)}
                     style={{
-                      background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
+                      background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
                       border: "none",
                       color: "#fff",
                       borderRadius: "12px",
@@ -1470,6 +1535,7 @@ export default function AiStudyPodModal({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "6px",
+                      boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
                       opacity: isSendingChat || (!chatInput.trim() && !chatImage) ? 0.55 : 1,
                       flexShrink: 0,
                     }}
@@ -1483,14 +1549,14 @@ export default function AiStudyPodModal({
           )}
 
           {/* ============================================================ */}
-          {/* TAB 1: 🗂️ REVISION FLASHCARDS                                  */}
+          {/* TAB 1: 🗂️ REVISION FLASHCARDS (Pure White 3D View)            */}
           {/* ============================================================ */}
           {activeTab === "flashcards" && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "16px", overflowX: "hidden" }}>
               {/* Card Header Sub-Bar */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+                  <span style={{ fontSize: "0.8rem", color: "#64748b" }}>
                     Card <strong>{flashcards.length > 0 ? currentCardIndex + 1 : 0}</strong> of{" "}
                     <strong>{flashcards.length}</strong>
                   </span>
@@ -1501,8 +1567,9 @@ export default function AiStudyPodModal({
                         borderRadius: "6px",
                         fontSize: "0.68rem",
                         fontWeight: 700,
-                        background: "rgba(139, 92, 246, 0.2)",
-                        color: "#c4b5fd",
+                        background: "#faf5ff",
+                        border: "1px solid #e9d5ff",
+                        color: "#7c3aed",
                       }}
                     >
                       {currentCard.category}
@@ -1512,7 +1579,7 @@ export default function AiStudyPodModal({
                     <span
                       style={{
                         fontSize: "0.68rem",
-                        color: cardSource.cached ? "#34d399" : "#38bdf8",
+                        color: cardSource.cached ? "#059669" : "#0284c7",
                         fontWeight: 600,
                       }}
                     >
@@ -1526,18 +1593,18 @@ export default function AiStudyPodModal({
                   <div
                     style={{
                       display: "inline-flex",
-                      background: "rgba(255, 255, 255, 0.06)",
+                      background: "#e2e8f0",
                       borderRadius: "8px",
                       padding: "2px",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      gap: "2px",
                     }}
                   >
                     <button
                       type="button"
                       onClick={() => setFlashcardMode("tinder")}
                       style={{
-                        background: flashcardMode === "tinder" ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "transparent",
-                        color: flashcardMode === "tinder" ? "#fff" : "#94a3b8",
+                        background: flashcardMode === "tinder" ? "#ffffff" : "transparent",
+                        color: flashcardMode === "tinder" ? "#7c3aed" : "#64748b",
                         border: "none",
                         borderRadius: "6px",
                         padding: "4px 9px",
@@ -1547,6 +1614,7 @@ export default function AiStudyPodModal({
                         display: "flex",
                         alignItems: "center",
                         gap: "4px",
+                        boxShadow: flashcardMode === "tinder" ? "0 2px 5px rgba(0,0,0,0.06)" : "none",
                       }}
                       title="Dopamine Swipe Mode: Swipe 👉 Master, 👈 Revise, 👆 Star"
                     >
@@ -1556,8 +1624,8 @@ export default function AiStudyPodModal({
                       type="button"
                       onClick={() => setFlashcardMode("classic")}
                       style={{
-                        background: flashcardMode === "classic" ? "linear-gradient(135deg, #8b5cf6, #6366f1)" : "transparent",
-                        color: flashcardMode === "classic" ? "#fff" : "#94a3b8",
+                        background: flashcardMode === "classic" ? "#ffffff" : "transparent",
+                        color: flashcardMode === "classic" ? "#7c3aed" : "#64748b",
                         border: "none",
                         borderRadius: "6px",
                         padding: "4px 9px",
@@ -1567,6 +1635,7 @@ export default function AiStudyPodModal({
                         display: "flex",
                         alignItems: "center",
                         gap: "4px",
+                        boxShadow: flashcardMode === "classic" ? "0 2px 5px rgba(0,0,0,0.06)" : "none",
                       }}
                       title="Traditional 3D Flip Card View"
                     >
@@ -1582,9 +1651,9 @@ export default function AiStudyPodModal({
                         if (found) onOpenNote(found);
                       }}
                       style={{
-                        background: "rgba(16, 185, 129, 0.15)",
-                        border: "1px solid rgba(16, 185, 129, 0.4)",
-                        color: "#34d399",
+                        background: "#ecfdf5",
+                        border: "1px solid #a7f3d0",
+                        color: "#059669",
                         borderRadius: "8px",
                         padding: "5px 10px",
                         fontSize: "0.72rem",
@@ -1605,9 +1674,9 @@ export default function AiStudyPodModal({
                     onClick={handleShuffleCards}
                     disabled={flashcards.length <= 1}
                     style={{
-                      background: "rgba(255, 255, 255, 0.05)",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
-                      color: "#94a3b8",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      color: "#64748b",
                       borderRadius: "8px",
                       padding: "5px 10px",
                       fontSize: "0.72rem",
@@ -1625,9 +1694,9 @@ export default function AiStudyPodModal({
                     onClick={() => handleGenerateFlashcards(true)}
                     disabled={loadingCards}
                     style={{
-                      background: "rgba(139, 92, 246, 0.15)",
-                      border: "1px solid rgba(139, 92, 246, 0.35)",
-                      color: "#c4b5fd",
+                      background: "#faf5ff",
+                      border: "1px solid #ddd6fe",
+                      color: "#7c3aed",
                       borderRadius: "8px",
                       padding: "5px 10px",
                       fontSize: "0.72rem",
@@ -1654,16 +1723,16 @@ export default function AiStudyPodModal({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "12px",
-                      background: "rgba(15, 23, 42, 0.4)",
+                      background: "#f8fafc",
                       borderRadius: "16px",
-                      border: "1px dashed rgba(255, 255, 255, 0.15)",
+                      border: "1.5px dashed #cbd5e1",
                     }}
                   >
-                    <RotateCw size={28} className="animate-spin" color="#a78bfa" />
-                    <div style={{ fontSize: "0.9rem", color: "#c4b5fd", fontWeight: 600 }}>
+                    <RotateCw size={28} className="animate-spin" color="#7c3aed" />
+                    <div style={{ fontSize: "0.9rem", color: "#7c3aed", fontWeight: 700 }}>
                       Synthesizing High-Yield Exam Flashcards...
                     </div>
-                    <div style={{ fontSize: "0.74rem", color: "#94a3b8" }}>
+                    <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
                       Checking Turso 0ms Cache • Formatting Definitions &amp; Formulas
                     </div>
                   </div>
@@ -1676,24 +1745,23 @@ export default function AiStudyPodModal({
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "14px",
-                      background: "rgba(15, 23, 42, 0.4)",
+                      background: "#f8fafc",
                       borderRadius: "16px",
-                      border: "1px dashed rgba(255, 255, 255, 0.15)",
+                      border: "1.5px dashed #cbd5e1",
                       padding: "30px",
                       textAlign: "center",
                     }}
                   >
-                    <Layers size={36} color="#8b5cf6" />
-                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
+                    <Layers size={36} color="#7c3aed" />
+                    <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
                       Ready to generate Revision Flashcards
                     </div>
-                    <p style={{ fontSize: "0.78rem", color: "#94a3b8", maxWidth: "420px", margin: 0 }}>
+                    <p style={{ fontSize: "0.78rem", color: "#64748b", maxWidth: "420px", margin: 0 }}>
                       Extract key definitions, formulas, and high-yield questions for <strong>{currentTitle}</strong> in one click.
                     </p>
                     <button
                       type="button"
                       onClick={handleGenerateFlashcards}
-                      className="btn-primary"
                       style={{
                         padding: "8px 18px",
                         fontSize: "0.82rem",
@@ -1703,6 +1771,7 @@ export default function AiStudyPodModal({
                         color: "#fff",
                         fontWeight: 700,
                         cursor: "pointer",
+                        boxShadow: "0 4px 14px rgba(139, 92, 246, 0.3)",
                       }}
                     >
                       ⚡ Generate 8 Flashcards
@@ -1751,14 +1820,14 @@ export default function AiStudyPodModal({
                       overflow: "hidden",
                       transition: "transform 0.25s ease, box-shadow 0.25s ease",
                       background: isFlipped
-                        ? "linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95))"
-                        : "linear-gradient(145deg, rgba(88, 28, 135, 0.25), rgba(15, 23, 42, 0.95))",
+                        ? "linear-gradient(145deg, #f0fdf4 0%, #ffffff 100%)"
+                        : "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
                       border: isFlipped
-                        ? "1.5px solid rgba(52, 211, 153, 0.5)"
-                        : "1.5px solid rgba(139, 92, 246, 0.45)",
+                        ? "1.5px solid #86efac"
+                        : "1.5px solid #c7d2fe",
                       boxShadow: isFlipped
-                        ? "0 12px 35px rgba(52, 211, 153, 0.15)"
-                        : "0 12px 35px rgba(139, 92, 246, 0.15)",
+                        ? "0 12px 35px rgba(16, 185, 129, 0.12)"
+                        : "0 12px 35px rgba(99, 102, 241, 0.12)",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -1768,8 +1837,9 @@ export default function AiStudyPodModal({
                           fontWeight: 700,
                           padding: "3px 9px",
                           borderRadius: "8px",
-                          background: isFlipped ? "rgba(52, 211, 153, 0.18)" : "rgba(139, 92, 246, 0.2)",
-                          color: isFlipped ? "#34d399" : "#c4b5fd",
+                          background: isFlipped ? "#ecfdf5" : "#faf5ff",
+                          color: isFlipped ? "#059669" : "#7c3aed",
+                          border: isFlipped ? "1px solid #a7f3d0" : "1px solid #e9d5ff",
                         }}
                       >
                         {isFlipped ? "💡 SOLUTION / EXPLANATION" : "❓ EXAM CONCEPT / QUESTION"}
@@ -1782,9 +1852,9 @@ export default function AiStudyPodModal({
                           handleToggleMastered(currentCardIndex);
                         }}
                         style={{
-                          background: isCardMastered ? "rgba(52, 211, 153, 0.2)" : "rgba(255, 255, 255, 0.05)",
-                          border: isCardMastered ? "1px solid rgba(52, 211, 153, 0.4)" : "1px solid rgba(255, 255, 255, 0.1)",
-                          color: isCardMastered ? "#34d399" : "#94a3b8",
+                          background: isCardMastered ? "#ecfdf5" : "#f1f5f9",
+                          border: isCardMastered ? "1px solid #a7f3d0" : "1px solid #e2e8f0",
+                          color: isCardMastered ? "#059669" : "#64748b",
                           borderRadius: "999px",
                           padding: "3px 10px",
                           fontSize: "0.7rem",
@@ -1816,7 +1886,7 @@ export default function AiStudyPodModal({
                           fontSize: isFlipped ? "1.05rem" : "1.15rem",
                           fontWeight: isFlipped ? 500 : 700,
                           lineHeight: 1.6,
-                          color: isFlipped ? "#f1f5f9" : "#fff",
+                          color: isFlipped ? "#065f46" : "#0f172a",
                           wordBreak: "break-word",
                           overflowWrap: "anywhere",
                         }}
@@ -1825,7 +1895,7 @@ export default function AiStudyPodModal({
                       </div>
                     </div>
 
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#94a3b8" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.72rem", color: "#64748b" }}>
                       <span>Tap card to {isFlipped ? "see question" : "reveal answer"}</span>
                       <span>(Spacebar / Click to flip)</span>
                     </div>
@@ -1840,9 +1910,9 @@ export default function AiStudyPodModal({
                     type="button"
                     onClick={handlePrevCard}
                     style={{
-                      background: "rgba(255, 255, 255, 0.08)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      color: "#fff",
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      color: "#0f172a",
                       borderRadius: "12px",
                       padding: "10px 18px",
                       fontSize: "0.82rem",
@@ -1857,8 +1927,8 @@ export default function AiStudyPodModal({
                     <span>Previous</span>
                   </button>
 
-                  <div style={{ fontSize: "0.78rem", color: "#94a3b8" }}>
-                    Mastered: <strong style={{ color: "#34d399" }}>{masteredCards.size}</strong> / {flashcards.length}
+                  <div style={{ fontSize: "0.78rem", color: "#64748b" }}>
+                    Mastered: <strong style={{ color: "#059669" }}>{masteredCards.size}</strong> / {flashcards.length}
                   </div>
 
                   <button
@@ -1876,7 +1946,7 @@ export default function AiStudyPodModal({
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "6px",
-                      boxShadow: "0 4px 14px rgba(139, 92, 246, 0.4)",
+                      boxShadow: "0 4px 14px rgba(139, 92, 246, 0.35)",
                     }}
                   >
                     <span>Next Card</span>
@@ -1888,16 +1958,139 @@ export default function AiStudyPodModal({
           )}
 
           {/* ============================================================ */}
-          {/* TAB 2: 📄 EXECUTIVE SUMMARY                                    */}
+          {/* TAB 2: 🗺️ VISUAL MIND-MAPS & ARCHITECTURE FLOWCHARTS          */}
+          {/* ============================================================ */}
+          {activeTab === "mindmaps" && (
+            <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "14px", overflowY: "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                    🗺️ Visual Concept Mind-Map &amp; Architecture
+                  </h4>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>
+                    {mindmapSource?.cached ? "⚡ 0ms Lightning Cache Hit" : "AI Hierarchical Concept Graph &amp; Process Architecture"}
+                  </p>
+                </div>
+
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateMindmap(true)}
+                    disabled={loadingMindmap}
+                    style={{
+                      background: "#f0f9ff",
+                      border: "1px solid #bae6fd",
+                      color: "#0284c7",
+                      borderRadius: "8px",
+                      padding: "6px 12px",
+                      fontSize: "0.74rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <RotateCw size={12} className={loadingMindmap ? "animate-spin" : ""} />
+                    <span>Regenerate Mind-Map</span>
+                  </button>
+                </div>
+              </div>
+
+              {loadingMindmap ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: "260px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "12px",
+                    background: "#f8fafc",
+                    borderRadius: "16px",
+                    border: "1.5px dashed #cbd5e1",
+                    padding: "30px",
+                  }}
+                >
+                  <RotateCw size={28} className="animate-spin" color="#0284c7" />
+                  <div style={{ fontSize: "0.9rem", color: "#0284c7", fontWeight: 700 }}>
+                    Generating Hierarchical Concept Mind-Map...
+                  </div>
+                  <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
+                    Parsing document structure and synthesizing interactive Mermaid diagram
+                  </div>
+                </div>
+              ) : !mindmapCode ? (
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: "260px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "14px",
+                    background: "#f8fafc",
+                    borderRadius: "16px",
+                    border: "1.5px dashed #cbd5e1",
+                    padding: "30px",
+                    textAlign: "center",
+                  }}
+                >
+                  <span style={{ fontSize: "2.4rem" }}>🗺️</span>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                    Synthesize Interactive Visual Mind-Map
+                  </div>
+                  <p style={{ fontSize: "0.78rem", color: "#64748b", maxWidth: "420px", margin: 0 }}>
+                    Turn complex lecture topics from <strong>{currentTitle}</strong> into a clean, zoomable visual diagram and knowledge graph.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateMindmap(false)}
+                    style={{
+                      padding: "8px 20px",
+                      fontSize: "0.82rem",
+                      background: "linear-gradient(135deg, #0284c7, #06b6d4)",
+                      border: "none",
+                      borderRadius: "10px",
+                      color: "#fff",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(2, 132, 199, 0.3)",
+                    }}
+                  >
+                    ⚡ Generate Mind-Map
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    background: "#ffffff",
+                    border: "1.5px solid #e2e8f0",
+                    borderRadius: "16px",
+                    padding: "20px",
+                    boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)",
+                  }}
+                >
+                  <MathMarkdown content={mindmapCode} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============================================================ */}
+          {/* TAB 3: 📝 1-PAGE EXECUTIVE SUMMARY                            */}
           {/* ============================================================ */}
           {activeTab === "summary" && (
             <div style={{ display: "flex", flexDirection: "column", height: "100%", gap: "12px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
-                    Executive Exam Summary
+                  <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
+                    📝 1-Page Executive Exam Summary
                   </h4>
-                  <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#94a3b8" }}>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.74rem", color: "#64748b" }}>
                     {summarySource?.cached ? "⚡ 0ms Turso Cache Hit (0 Tokens Burned)" : "Cloud AI Synthesized from Full PDF OCR"}
                   </p>
                 </div>
@@ -1911,9 +2104,9 @@ export default function AiStudyPodModal({
                         if (found) onOpenNote(found);
                       }}
                       style={{
-                        background: "rgba(16, 185, 129, 0.15)",
-                        border: "1px solid rgba(16, 185, 129, 0.4)",
-                        color: "#34d399",
+                        background: "#ecfdf5",
+                        border: "1px solid #a7f3d0",
+                        color: "#059669",
                         borderRadius: "8px",
                         padding: "6px 12px",
                         fontSize: "0.74rem",
@@ -1934,9 +2127,9 @@ export default function AiStudyPodModal({
                       onClick={() => handleExportRevisionCard("summary_card", displaySummary || summary, `${currentSubject || "Exam"} • Quick Revision Card`)}
                       disabled={sharingCardId === "summary_card"}
                       style={{
-                        background: "linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(56, 189, 248, 0.22))",
-                        border: "1px solid rgba(52, 211, 153, 0.45)",
-                        color: "#6ee7b7",
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                        color: "#16a34a",
                         borderRadius: "8px",
                         padding: "6px 12px",
                         fontSize: "0.74rem",
@@ -1957,9 +2150,9 @@ export default function AiStudyPodModal({
                       type="button"
                       onClick={handleCopySummary}
                       style={{
-                        background: copiedSummary ? "rgba(52, 211, 153, 0.2)" : "rgba(255, 255, 255, 0.06)",
-                        border: copiedSummary ? "1px solid rgba(52, 211, 153, 0.4)" : "1px solid rgba(255, 255, 255, 0.12)",
-                        color: copiedSummary ? "#34d399" : "#fff",
+                        background: copiedSummary ? "#ecfdf5" : "#f8fafc",
+                        border: copiedSummary ? "1px solid #a7f3d0" : "1px solid #e2e8f0",
+                        color: copiedSummary ? "#059669" : "#475569",
                         borderRadius: "8px",
                         padding: "6px 12px",
                         fontSize: "0.74rem",
@@ -1978,9 +2171,9 @@ export default function AiStudyPodModal({
                     onClick={() => handleGenerateSummary(true)}
                     disabled={loadingSummary}
                     style={{
-                      background: "rgba(2, 132, 199, 0.15)",
-                      border: "1px solid rgba(2, 132, 199, 0.35)",
-                      color: "#38bdf8",
+                      background: "#f0f9ff",
+                      border: "1px solid #bae6fd",
+                      color: "#0284c7",
                       borderRadius: "8px",
                       padding: "6px 12px",
                       fontSize: "0.74rem",
@@ -1998,7 +2191,7 @@ export default function AiStudyPodModal({
 
               {/* 🌟 User-Friendly Interactive Sub-Toolbar for Summary */}
               {summary && !loadingSummary && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px", background: "rgba(0, 0, 0, 0.25)", padding: "10px 14px", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.06)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", background: "#f8fafc", padding: "10px 14px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
                   <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
                     {[
                       { id: "all", label: "🌟 All Sections" },
@@ -2018,9 +2211,9 @@ export default function AiStudyPodModal({
                           borderRadius: "999px",
                           fontSize: "0.72rem",
                           fontWeight: 700,
-                          border: summarySectionFilter === sec.id ? "1px solid #38bdf8" : "1px solid rgba(255, 255, 255, 0.1)",
-                          background: summarySectionFilter === sec.id ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.04)",
-                          color: summarySectionFilter === sec.id ? "#38bdf8" : "#94a3b8",
+                          border: summarySectionFilter === sec.id ? "1px solid #0284c7" : "1px solid #e2e8f0",
+                          background: summarySectionFilter === sec.id ? "#0284c7" : "#ffffff",
+                          color: summarySectionFilter === sec.id ? "#ffffff" : "#64748b",
                           cursor: "pointer",
                           whiteSpace: "nowrap",
                           transition: "all 0.15s ease",
@@ -2043,10 +2236,10 @@ export default function AiStudyPodModal({
                         width: "100%",
                         padding: "5px 10px 5px 30px",
                         fontSize: "0.75rem",
-                        background: "rgba(0, 0, 0, 0.3)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        background: "#ffffff",
+                        border: "1px solid #cbd5e1",
                         borderRadius: "6px",
-                        color: "#fff",
+                        color: "#0f172a",
                       }}
                     />
                     {summaryKeywordSearch && (
@@ -2060,7 +2253,7 @@ export default function AiStudyPodModal({
                           transform: "translateY(-50%)",
                           background: "none",
                           border: "none",
-                          color: "#94a3b8",
+                          color: "#64748b",
                           cursor: "pointer",
                           fontSize: "0.75rem",
                         }}
@@ -2081,16 +2274,16 @@ export default function AiStudyPodModal({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "12px",
-                    background: "rgba(15, 23, 42, 0.4)",
+                    background: "#f8fafc",
                     borderRadius: "16px",
-                    border: "1px dashed rgba(255, 255, 255, 0.15)",
+                    border: "1.5px dashed #cbd5e1",
                   }}
                 >
-                  <RotateCw size={28} className="animate-spin" color="#38bdf8" />
-                  <div style={{ fontSize: "0.9rem", color: "#38bdf8", fontWeight: 600 }}>
+                  <RotateCw size={28} className="animate-spin" color="#0284c7" />
+                  <div style={{ fontSize: "0.9rem", color: "#0284c7", fontWeight: 700 }}>
                     Synthesizing Executive Exam Summary...
                   </div>
-                  <div style={{ fontSize: "0.74rem", color: "#94a3b8" }}>
+                  <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
                     Extracting Core Bullet Points, Theorems &amp; Formulas
                   </div>
                 </div>
@@ -2103,24 +2296,23 @@ export default function AiStudyPodModal({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "14px",
-                    background: "rgba(15, 23, 42, 0.4)",
+                    background: "#f8fafc",
                     borderRadius: "16px",
-                    border: "1px dashed rgba(255, 255, 255, 0.15)",
+                    border: "1.5px dashed #cbd5e1",
                     padding: "30px",
                     textAlign: "center",
                   }}
                 >
                   <FileText size={36} color="#0284c7" />
-                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#fff" }}>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0f172a" }}>
                     Generate Executive Summary
                   </div>
-                  <p style={{ fontSize: "0.78rem", color: "#94a3b8", maxWidth: "420px", margin: 0 }}>
+                  <p style={{ fontSize: "0.78rem", color: "#64748b", maxWidth: "420px", margin: 0 }}>
                     Get a concise, exam-focused synthesis of <strong>{currentTitle}</strong> highlighting key theorems and formulas.
                   </p>
                   <button
                     type="button"
                     onClick={handleGenerateSummary}
-                    className="btn-primary"
                     style={{
                       padding: "8px 18px",
                       fontSize: "0.82rem",
@@ -2130,6 +2322,7 @@ export default function AiStudyPodModal({
                       color: "#fff",
                       fontWeight: 700,
                       cursor: "pointer",
+                      boxShadow: "0 4px 14px rgba(2, 132, 199, 0.3)",
                     }}
                   >
                     ⚡ Generate Summary
@@ -2139,10 +2332,11 @@ export default function AiStudyPodModal({
                 <div
                   style={{
                     flex: 1,
-                    background: "rgba(15, 23, 42, 0.6)",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    background: "#ffffff",
+                    border: "1.5px solid #e2e8f0",
                     borderRadius: "16px",
                     padding: "20px",
+                    boxShadow: "0 4px 16px rgba(15, 23, 42, 0.05)",
                     overflowY: "auto",
                   }}
                 >
@@ -2153,13 +2347,13 @@ export default function AiStudyPodModal({
           )}
 
           {/* ============================================================ */}
-          {/* TAB 3: 🔍 FILTER & SEARCH NOTES                                */}
+          {/* TAB 4: 🔍 FILTER & SEARCH NOTES                                */}
           {/* ============================================================ */}
           {activeTab === "search_notes" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "14px", height: "100%" }}>
               {/* Search input */}
               <div style={{ position: "relative" }}>
-                <Search size={16} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} />
+                <Search size={16} style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#64748b" }} />
                 <input
                   type="text"
                   value={noteSearchQuery}
@@ -2170,22 +2364,22 @@ export default function AiStudyPodModal({
                     padding: "10px 14px 10px 40px",
                     fontSize: "0.82rem",
                     borderRadius: "12px",
-                    border: "1px solid rgba(245, 158, 11, 0.3)",
-                    background: "rgba(0, 0, 0, 0.35)",
-                    color: "#fff",
+                    border: "1.5px solid #cbd5e1",
+                    background: "#f8fafc",
+                    color: "#0f172a",
                   }}
                   autoFocus
                 />
               </div>
 
-              <div style={{ fontSize: "0.74rem", color: "#94a3b8" }}>
+              <div style={{ fontSize: "0.74rem", color: "#64748b" }}>
                 Found <strong>{filteredNotes.length}</strong> matching notes: Click any note to instantly load its Flashcards &amp; Summary.
               </div>
 
               {/* Filtered Notes List */}
               <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
                 {filteredNotes.length === 0 ? (
-                  <div style={{ padding: "30px", textAlign: "center", color: "#94a3b8", fontSize: "0.82rem" }}>
+                  <div style={{ padding: "30px", textAlign: "center", color: "#64748b", fontSize: "0.82rem" }}>
                     No notes matched your search query. Try another keyword.
                   </div>
                 ) : (
@@ -2198,20 +2392,21 @@ export default function AiStudyPodModal({
                         style={{
                           padding: "12px 16px",
                           borderRadius: "12px",
-                          background: isSelected ? "rgba(245, 158, 11, 0.15)" : "rgba(255, 255, 255, 0.03)",
-                          border: isSelected ? "1.5px solid #f59e0b" : "1px solid rgba(255, 255, 255, 0.06)",
+                          background: isSelected ? "#fffbeb" : "#ffffff",
+                          border: isSelected ? "1.5px solid #f59e0b" : "1px solid #e2e8f0",
                           cursor: "pointer",
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
                           transition: "all 0.15s ease",
+                          boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
                         }}
                       >
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 700, fontSize: "0.86rem", color: isSelected ? "#fbbf24" : "#f8fafc" }}>
+                          <div style={{ fontWeight: 700, fontSize: "0.86rem", color: isSelected ? "#b45309" : "#0f172a" }}>
                             📄 {n.title}
                           </div>
-                          <div style={{ display: "flex", gap: "8px", fontSize: "0.7rem", color: "#94a3b8", marginTop: "3px" }}>
+                          <div style={{ display: "flex", gap: "8px", fontSize: "0.7rem", color: "#64748b", marginTop: "3px" }}>
                             {n.subject && <span>📚 {n.subject}</span>}
                             {n.branch && <span>🎓 {n.branch}</span>}
                             {n.semester && <span>Sem {n.semester}</span>}
@@ -2227,9 +2422,9 @@ export default function AiStudyPodModal({
                               setActiveTab("flashcards");
                             }}
                             style={{
-                              background: "rgba(139, 92, 246, 0.2)",
-                              border: "1px solid rgba(139, 92, 246, 0.45)",
-                              color: "#c4b5fd",
+                              background: "#faf5ff",
+                              border: "1px solid #e9d5ff",
+                              color: "#7c3aed",
                               borderRadius: "8px",
                               padding: "6px 10px",
                               fontSize: "0.72rem",
@@ -2253,9 +2448,9 @@ export default function AiStudyPodModal({
                               setActiveTab("summary");
                             }}
                             style={{
-                              background: "rgba(2, 132, 199, 0.2)",
-                              border: "1px solid rgba(2, 132, 199, 0.45)",
-                              color: "#38bdf8",
+                              background: "#f0f9ff",
+                              border: "1px solid #bae6fd",
+                              color: "#0284c7",
                               borderRadius: "8px",
                               padding: "6px 10px",
                               fontSize: "0.72rem",
@@ -2279,9 +2474,9 @@ export default function AiStudyPodModal({
                                 onOpenNote(n);
                               }}
                               style={{
-                                background: "rgba(16, 185, 129, 0.18)",
-                                border: "1px solid rgba(16, 185, 129, 0.45)",
-                                color: "#34d399",
+                                background: "#ecfdf5",
+                                border: "1px solid #a7f3d0",
+                                color: "#059669",
                                 borderRadius: "8px",
                                 padding: "6px 10px",
                                 fontSize: "0.72rem",
@@ -2307,18 +2502,18 @@ export default function AiStudyPodModal({
           )}
 
           {/* ============================================================ */}
-          {/* TAB 4: 🕒 SESSION HISTORY (Online login session-scoped)        */}
+          {/* TAB 5: 🕒 SESSION HISTORY (Online login session-scoped)        */}
           {/* ============================================================ */}
           {activeTab === "session_history" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", height: "100%" }}>
               <div
                 style={{
                   padding: "10px 14px",
-                  background: "rgba(16, 185, 129, 0.1)",
-                  border: "1px solid rgba(16, 185, 129, 0.25)",
+                  background: "#ecfdf5",
+                  border: "1px solid #a7f3d0",
                   borderRadius: "10px",
                   fontSize: "0.74rem",
-                  color: "#34d399",
+                  color: "#065f46",
                   display: "flex",
                   alignItems: "center",
                   gap: "8px",
@@ -2332,8 +2527,8 @@ export default function AiStudyPodModal({
 
               <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
                 {sessionHistory.length === 0 ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "0.82rem" }}>
-                    No AI queries or flashcards generated in this session yet. Generate cards or summary above to see your session history here.
+                  <div style={{ padding: "40px", textAlign: "center", color: "#64748b", fontSize: "0.82rem" }}>
+                    No AI queries or flashcards generated in this session yet. Generate cards, mind-maps, or summary above to see your session history here.
                   </div>
                 ) : (
                   sessionHistory.map((item) => (
@@ -2341,12 +2536,13 @@ export default function AiStudyPodModal({
                       key={item.id}
                       style={{
                         padding: "12px 16px",
-                        background: "rgba(255, 255, 255, 0.03)",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        background: "#ffffff",
+                        border: "1px solid #e2e8f0",
                         borderRadius: "12px",
                         display: "flex",
                         justifyContent: "space-between",
                         alignItems: "center",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
                       }}
                     >
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -2356,16 +2552,17 @@ export default function AiStudyPodModal({
                               fontSize: "0.68rem",
                               padding: "2px 6px",
                               borderRadius: "4px",
-                              background: item.type === "flashcard" ? "rgba(139, 92, 246, 0.2)" : (item.type === "summary" ? "rgba(2, 132, 199, 0.2)" : "rgba(245, 158, 11, 0.2)"),
-                              color: item.type === "flashcard" ? "#c4b5fd" : (item.type === "summary" ? "#38bdf8" : "#fbbf24"),
+                              background: item.type === "flashcard" ? "#faf5ff" : (item.type === "mindmap" ? "#f0f9ff" : (item.type === "summary" ? "#ecfdf5" : "#fef3c7")),
+                              color: item.type === "flashcard" ? "#7c3aed" : (item.type === "mindmap" ? "#0284c7" : (item.type === "summary" ? "#059669" : "#b45309")),
+                              border: `1px solid ${item.type === "flashcard" ? "#e9d5ff" : (item.type === "mindmap" ? "#bae6fd" : (item.type === "summary" ? "#a7f3d0" : "#fde68a"))}`,
                               fontWeight: 700,
                             }}
                           >
                             {String(item.type).toUpperCase()}
                           </span>
-                          <strong style={{ fontSize: "0.82rem", color: "#f8fafc" }}>{item.title}</strong>
+                          <strong style={{ fontSize: "0.82rem", color: "#0f172a" }}>{item.title}</strong>
                         </div>
-                        <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "3px" }}>
+                        <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "3px" }}>
                           {item.query} • {new Date(item.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </div>
@@ -2381,6 +2578,10 @@ export default function AiStudyPodModal({
                             setCurrentCardIndex(0);
                             setCurrentTitle(item.title);
                             setActiveTab("flashcards");
+                          } else if (item.type === "mindmap" && typeof item.data === "string") {
+                            setMindmapCode(item.data);
+                            setCurrentTitle(item.title);
+                            setActiveTab("mindmaps");
                           } else if (item.type === "summary" && typeof item.data === "string") {
                             setSummary(item.data);
                             setCurrentTitle(item.title);
@@ -2388,13 +2589,13 @@ export default function AiStudyPodModal({
                           }
                         }}
                         style={{
-                          background: "rgba(255, 255, 255, 0.08)",
-                          color: "#fff",
-                          border: "none",
+                          background: "#f1f5f9",
+                          color: "#0f172a",
+                          border: "1px solid #e2e8f0",
                           borderRadius: "8px",
                           padding: "5px 12px",
                           fontSize: "0.72rem",
-                          fontWeight: 600,
+                          fontWeight: 700,
                           cursor: "pointer",
                         }}
                       >

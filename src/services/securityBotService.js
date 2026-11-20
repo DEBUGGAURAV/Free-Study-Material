@@ -92,7 +92,7 @@ let botSettings = {
     newRegistration: process.env.TELEGRAM_TOPIC_REGISTRATION || "2",       // 🟢 Topic ID for New Registrations
     logins: process.env.TELEGRAM_TOPIC_LOGIN || "3",                // 🔐 Topic ID for Logins
     logouts: process.env.TELEGRAM_TOPIC_LOGOUT || "5",               // 🚪 Topic ID for Logouts
-    securityUpdates: process.env.TELEGRAM_TOPIC_SECURITY || "60",     // 🚨 Topic ID for Security & Profile Updates (Dedicated non-colliding fallback)
+    securityUpdates: process.env.TELEGRAM_TOPIC_SECURITY || "6",     // 🚨 Topic ID strictly for Security & Profile Updates (Topic 6)
     otpAudit: process.env.TELEGRAM_TOPIC_OTP_AUDIT || "70",            // 🔑 Topic ID for OTP Audit Logs (Dedicated non-colliding fallback)
     notesActivity: process.env.TELEGRAM_TOPIC_NOTES || "8",         // 📚 Topic ID for Notes Activity (Uploads)
     downloadManager: process.env.TELEGRAM_TOPIC_DOWNLOAD_MANAGER || "8", // 📥 Topic ID for Notes Downloads (https://t.me/c/3943130538/8)

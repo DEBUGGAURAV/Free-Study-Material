@@ -94,12 +94,12 @@ function getHelpAdminChatId() {
 const dynamicHelpTopicIds = { active: null, closed: null };
 const creatingHelpTopicLocks = { active: null, closed: null };
 
-// Supergroup Topic 6: Active Support Tickets
+// Supergroup Topic: Active Support Tickets (Topic 6 is strictly reserved for Security Updates only)
 function getHelpActiveTopicId() {
   if (dynamicHelpTopicIds.active) return dynamicHelpTopicIds.active;
   const topic = process.env.HELP_TOPIC_ACTIVE_ID || process.env.HELP_TOPIC_ID || process.env.TELEGRAM_HELP_TOPIC_ID;
-  const parsed = topic ? parseInt(topic, 10) : 6;
-  return !isNaN(parsed) && parsed > 0 ? parsed : 6;
+  const parsed = topic ? parseInt(topic, 10) : 18;
+  return !isNaN(parsed) && parsed > 0 && parsed !== 6 ? parsed : 18;
 }
 
 // Supergroup Topic 7: Closed & Resolved Tickets Report
@@ -692,7 +692,7 @@ async function dispatchTelegramHelpNotice(ticket) {
     attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
-    `• Reply in Topic 6 / Bot DM to answer the student`,
+    `• Reply in Support Topic / Bot DM to answer the student`,
     `• Single-click below to close and archive to Topic 7:`,
   ]
     .filter(Boolean)
@@ -1547,7 +1547,7 @@ async function dispatchStudentReplyNotice(ticket, replyText, attachments = []) {
     attachmentNotice,
     `━━━━━━━━━━━━━━━━━━━━━━`,
     `⚡ <b>Quick Actions:</b>`,
-    `• Reply in Topic 6 / Bot DM to answer student`,
+    `• Reply in Support Topic / Bot DM to answer student`,
     `• Single-click below to close ticket:`,
   ]
     .filter(Boolean)

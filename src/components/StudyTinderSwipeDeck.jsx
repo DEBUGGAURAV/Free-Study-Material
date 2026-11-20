@@ -391,11 +391,11 @@ export default function StudyTinderSwipeDeck({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "6px 8px",
+          padding: "6px 10px",
           marginBottom: "10px",
           borderRadius: "14px",
-          background: "rgba(15, 23, 42, 0.4)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
           flexWrap: "wrap",
           gap: "8px",
         }}
@@ -411,20 +411,20 @@ export default function StudyTinderSwipeDeck({
               borderRadius: "999px",
               background:
                 streak >= 3
-                  ? "linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(245, 158, 11, 0.25))"
-                  : "rgba(255, 255, 255, 0.05)",
+                  ? "linear-gradient(135deg, #fff7ed, #fef2f2)"
+                  : "#f1f5f9",
               border:
                 streak >= 3
-                  ? "1px solid rgba(245, 158, 11, 0.5)"
-                  : "1px solid rgba(255, 255, 255, 0.1)",
-              color: streak >= 3 ? "#f59e0b" : "#94a3b8",
+                  ? "1px solid #fed7aa"
+                  : "1px solid #e2e8f0",
+              color: streak >= 3 ? "#ea580c" : "#64748b",
               fontSize: "0.76rem",
               fontWeight: 800,
-              boxShadow: streak >= 3 ? "0 0 12px rgba(245, 158, 11, 0.3)" : "none",
+              boxShadow: streak >= 3 ? "0 0 10px rgba(245, 158, 11, 0.2)" : "none",
             }}
             title={`Current Study Streak: ${streak} cards in a row without a hint! Best: ${bestStreak}`}
           >
-            <Flame size={14} className={streak >= 3 ? "animate-pulse" : ""} color="#f59e0b" />
+            <Flame size={14} className={streak >= 3 ? "animate-pulse" : ""} color="#ea580c" />
             <span>
               {streak} {streak === 1 ? "Streak" : "Streak"}
             </span>
@@ -438,22 +438,22 @@ export default function StudyTinderSwipeDeck({
               gap: "4px",
               padding: "4px 9px",
               borderRadius: "999px",
-              background: "rgba(245, 158, 11, 0.12)",
-              border: "1px solid rgba(245, 158, 11, 0.3)",
-              color: "#fbbf24",
+              background: "#fffbeb",
+              border: "1px solid #fde68a",
+              color: "#b45309",
               fontSize: "0.72rem",
               fontWeight: 700,
             }}
             title="Questions marked as '⭐ Exam me Pakka Aayega!'"
           >
-            <Star size={12} fill="#fbbf24" color="#fbbf24" />
+            <Star size={12} fill="#d97706" color="#d97706" />
             <span>{goldStarredIds.size} Starred</span>
           </div>
         </div>
 
         {/* Card Progress & Sound Control */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>
+          <span style={{ fontSize: "0.75rem", color: "#64748b" }}>
             Card <strong>{Math.min(currentIndex + 1, deck.length)}</strong> /{" "}
             <strong>{deck.length}</strong>
           </span>
@@ -462,9 +462,9 @@ export default function StudyTinderSwipeDeck({
             type="button"
             onClick={() => setSoundEnabled((s) => !s)}
             style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              border: "1px solid rgba(255, 255, 255, 0.1)",
-              color: soundEnabled ? "#38bdf8" : "#64748b",
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              color: soundEnabled ? "#0284c7" : "#94a3b8",
               borderRadius: "8px",
               padding: "4px 8px",
               fontSize: "0.7rem",
@@ -485,7 +485,7 @@ export default function StudyTinderSwipeDeck({
         style={{
           width: "100%",
           height: "4px",
-          background: "rgba(255, 255, 255, 0.08)",
+          background: "#e2e8f0",
           borderRadius: "999px",
           marginBottom: "12px",
           overflow: "hidden",
@@ -681,10 +681,10 @@ export default function StudyTinderSwipeDeck({
                   height: "100%",
                   maxHeight: "410px",
                   borderRadius: "24px",
-                  background: "rgba(15, 23, 42, 0.7)",
-                  border: "1px solid rgba(255, 255, 255, 0.04)",
+                  background: "#f1f5f9",
+                  border: "1px solid #e2e8f0",
                   transform: "translateY(24px) scale(0.91)",
-                  opacity: 0.35,
+                  opacity: 0.5,
                   pointerEvents: "none",
                   zIndex: 1,
                 }}
@@ -701,13 +701,13 @@ export default function StudyTinderSwipeDeck({
                   height: "100%",
                   maxHeight: "410px",
                   borderRadius: "24px",
-                  background: "linear-gradient(145deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.9))",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "linear-gradient(145deg, #ffffff, #f8fafc)",
+                  border: "1px solid #cbd5e1",
                   transform: "translateY(12px) scale(0.96)",
-                  opacity: 0.75,
+                  opacity: 0.85,
                   pointerEvents: "none",
                   zIndex: 2,
-                  boxShadow: "0 10px 25px rgba(0, 0, 0, 0.3)",
+                  boxShadow: "0 10px 25px rgba(15, 23, 42, 0.06)",
                 }}
               />
             )}
@@ -736,14 +736,14 @@ export default function StudyTinderSwipeDeck({
                     ? "transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.28s ease"
                     : "transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
                   background: isFlipped
-                    ? "linear-gradient(145deg, rgba(30, 41, 59, 0.97), rgba(15, 23, 42, 0.99))"
-                    : "linear-gradient(145deg, rgba(88, 28, 135, 0.32), rgba(15, 23, 42, 0.98))",
+                    ? "linear-gradient(145deg, #f0fdf4 0%, #ffffff 100%)"
+                    : "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)",
                   border: isFlipped
-                    ? "1.5px solid rgba(52, 211, 153, 0.55)"
-                    : "1.5px solid rgba(139, 92, 246, 0.45)",
+                    ? "1.5px solid #86efac"
+                    : "1.5px solid #c7d2fe",
                   boxShadow: isFlipped
-                    ? "0 16px 40px rgba(52, 211, 153, 0.18), 0 0 20px rgba(52, 211, 153, 0.1)"
-                    : "0 16px 40px rgba(139, 92, 246, 0.22), 0 0 20px rgba(139, 92, 246, 0.1)",
+                    ? "0 16px 40px rgba(16, 185, 129, 0.12), 0 2px 10px rgba(0, 0, 0, 0.03)"
+                    : "0 16px 40px rgba(99, 102, 241, 0.12), 0 2px 10px rgba(0, 0, 0, 0.03)",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
@@ -835,8 +835,9 @@ export default function StudyTinderSwipeDeck({
                       fontWeight: 800,
                       padding: "4px 10px",
                       borderRadius: "8px",
-                      background: isFlipped ? "rgba(52, 211, 153, 0.18)" : "rgba(139, 92, 246, 0.22)",
-                      color: isFlipped ? "#34d399" : "#c4b5fd",
+                      background: isFlipped ? "#ecfdf5" : "#faf5ff",
+                      color: isFlipped ? "#059669" : "#7c3aed",
+                      border: isFlipped ? "1px solid #a7f3d0" : "1px solid #e9d5ff",
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "5px",
@@ -860,8 +861,9 @@ export default function StudyTinderSwipeDeck({
                     <span
                       style={{
                         fontSize: "0.68rem",
-                        color: "#94a3b8",
-                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "#64748b",
+                        background: "#f1f5f9",
+                        border: "1px solid #e2e8f0",
                         padding: "3px 8px",
                         borderRadius: "6px",
                         fontWeight: 600,
@@ -887,7 +889,7 @@ export default function StudyTinderSwipeDeck({
                       fontSize: isFlipped ? "1.02rem" : "1.15rem",
                       fontWeight: isFlipped ? 500 : 700,
                       lineHeight: 1.6,
-                      color: isFlipped ? "#f1f5f9" : "#ffffff",
+                      color: isFlipped ? "#065f46" : "#0f172a",
                       wordBreak: "break-word",
                     }}
                   >
@@ -907,15 +909,15 @@ export default function StudyTinderSwipeDeck({
                         marginTop: "14px",
                         padding: "10px 14px",
                         borderRadius: "10px",
-                        background: "rgba(245, 158, 11, 0.1)",
-                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
                         display: "flex",
                         alignItems: "flex-start",
                         gap: "8px",
                       }}
                     >
-                      <Lightbulb size={16} color="#fbbf24" style={{ flexShrink: 0, marginTop: "2px" }} />
-                      <div style={{ fontSize: "0.78rem", color: "#fde68a", lineHeight: 1.4 }}>
+                      <Lightbulb size={16} color="#d97706" style={{ flexShrink: 0, marginTop: "2px" }} />
+                      <div style={{ fontSize: "0.78rem", color: "#92400e", lineHeight: 1.4 }}>
                         <strong>Exam Trick / Tip:</strong> {currentCard.trick || currentCard.tip}
                       </div>
                     </div>
@@ -929,8 +931,8 @@ export default function StudyTinderSwipeDeck({
                     justifyContent: "space-between",
                     alignItems: "center",
                     fontSize: "0.7rem",
-                    color: "#94a3b8",
-                    borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+                    color: "#64748b",
+                    borderTop: "1px solid #f1f5f9",
                     paddingTop: "10px",
                   }}
                 >
@@ -967,9 +969,9 @@ export default function StudyTinderSwipeDeck({
               width: "42px",
               height: "42px",
               borderRadius: "50%",
-              background: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
-              color: historyStack.length > 0 ? "#cbd5e1" : "#475569",
+              background: "#f1f5f9",
+              border: "1px solid #cbd5e1",
+              color: historyStack.length > 0 ? "#0f172a" : "#94a3b8",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -989,15 +991,15 @@ export default function StudyTinderSwipeDeck({
               width: "56px",
               height: "56px",
               borderRadius: "50%",
-              background: "linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(225, 29, 72, 0.25))",
-              border: "2px solid rgba(244, 63, 94, 0.5)",
-              color: "#f43f5e",
+              background: "#fff1f2",
+              border: "2px solid #fda4af",
+              color: "#e11d48",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              boxShadow: "0 6px 18px rgba(244, 63, 94, 0.25)",
+              boxShadow: "0 4px 14px rgba(225, 29, 72, 0.18)",
               transition: "transform 0.15s ease, box-shadow 0.15s ease",
             }}
             title="Nahi Pata: Flip to read explanation (Hotkey: 🠄 Left Arrow)"
@@ -1014,20 +1016,20 @@ export default function StudyTinderSwipeDeck({
               width: "48px",
               height: "48px",
               borderRadius: "50%",
-              background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(217, 119, 6, 0.25))",
-              border: "2px solid rgba(245, 158, 11, 0.5)",
-              color: "#fbbf24",
+              background: "#fffbeb",
+              border: "2px solid #fde68a",
+              color: "#d97706",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              boxShadow: "0 6px 18px rgba(245, 158, 11, 0.25)",
+              boxShadow: "0 4px 14px rgba(217, 119, 6, 0.18)",
               transition: "transform 0.15s ease",
             }}
             title="Exam me Pakka Aayega! Gold Bookmark (Hotkey: 🠅 Up Arrow)"
           >
-            <Star size={18} fill="#fbbf24" />
+            <Star size={18} fill="#d97706" />
           </button>
 
           {/* 🟢 Swipe Right: ✅ Pata Hai! */}
@@ -1038,15 +1040,15 @@ export default function StudyTinderSwipeDeck({
               width: "56px",
               height: "56px",
               borderRadius: "50%",
-              background: "linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.25))",
-              border: "2px solid rgba(16, 185, 129, 0.55)",
-              color: "#10b981",
+              background: "#ecfdf5",
+              border: "2px solid #a7f3d0",
+              color: "#059669",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               cursor: "pointer",
-              boxShadow: "0 6px 18px rgba(16, 185, 129, 0.25)",
+              boxShadow: "0 4px 14px rgba(5, 150, 105, 0.18)",
               transition: "transform 0.15s ease, box-shadow 0.15s ease",
             }}
             title="Pata Hai! Mastered concept + Streak (Hotkey: 🠆 Right Arrow)"

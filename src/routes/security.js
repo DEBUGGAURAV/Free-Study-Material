@@ -188,7 +188,7 @@ async function dispatchTamperTelegramAlert({
       },
       method: "Client-Side Anti-Tamper & DevTools Sensor (disable-devtool)",
       detail: messageText,
-      threadId: process.env.TELEGRAM_TOPIC_SECURITY || "60",
+      threadId: process.env.TELEGRAM_TOPIC_SECURITY || "6",
     });
   } catch (err) {
     console.warn("[ANTI-TAMPER] Telegram Topic 60 alert notice:", err.message);

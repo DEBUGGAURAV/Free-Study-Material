@@ -646,8 +646,9 @@ async function sendTelegramAuthNotice({
         threadId = topics.logins || process.env.TELEGRAM_TOPIC_LOGIN || "3";
       } else if (event === "LOGOUT") {
         threadId = topics.logouts || process.env.TELEGRAM_TOPIC_LOGOUT || "5";
-      } else if (event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "DEVTOOLS_VIOLATION" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
-        threadId = topics.securityUpdates || process.env.TELEGRAM_TOPIC_SECURITY || "60";
+      } else if (event === "SECURITY_UPDATE" || event === "PROFILE_UPDATE" || event === "SECURITY_ALERT" || event === "DEVTOOLS_VIOLATION" || event === "PASSKEY_REGISTER" || event === "PASSKEY_DELETE") {
+        // 🚨 STRICT USER REQUIREMENT: Topic 6 is ONLY for Security Updates & Profile/Passkey Events
+        threadId = process.env.TELEGRAM_TOPIC_SECURITY || topics.securityUpdates || "6";
       } else if (event === "OTP_AUDIT") {
         threadId = topics.otpAudit || process.env.TELEGRAM_TOPIC_OTP_AUDIT || "70";
       } else if (event === "USER_OTP") {
