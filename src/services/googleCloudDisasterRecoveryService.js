@@ -186,6 +186,23 @@ async function executeDisasterBackup(options = {}) {
 
     // 2. Write snapshot to Google Cloud Firestore via REST API
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/fsm_disaster_recovery_backups/${snapshotId}`;
+    
+    // Safely embed catalog JSON under Firestore's 1MB single document threshold
+    const rawCatalog = JSON.stringify({
+      notes: notesSummary,
+      users: usersSummary,
+      notices: noticesSummary,
+    });
+    const safeCatalogString = rawCatalog.length < 850000 
+      ? rawCatalog 
+      : JSON.stringify({
+          notes: notesSummary.slice(0, 200),
+          users: usersSummary.slice(0, 100),
+          notices: noticesSummary,
+          truncated: true,
+          totalNotes: notesSummary.length,
+        });
+
     const restPayload = {
       fields: {
         snapshotId: { stringValue: snapshotId },
@@ -197,6 +214,7 @@ async function executeDisasterBackup(options = {}) {
         cloudEngine: { stringValue: "Google Cloud Firestore" },
         status: { stringValue: "VERIFIED_COMPLETED" },
         durationMs: { integerValue: String(Date.now() - startTime) },
+        backupCatalogJson: { stringValue: safeCatalogString },
       },
     };
 
