@@ -286,6 +286,9 @@ router.get("/register-options", authenticateToken, async (req, res) => {
  */
 router.post("/register-verify", authenticateToken, async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: "Unauthorized: Login required to register passkey." });
+    }
     const { credential, deviceName, context } = req.body;
     if (!credential || !credential.id) {
       return res.status(400).json({ success: false, message: "Missing credential response from biometric device." });
@@ -874,6 +877,9 @@ router.get("/list", authenticateToken, async (req, res) => {
  */
 router.delete("/:id", authenticateToken, async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: "Unauthorized: Login required to delete passkey." });
+    }
     const credId = req.params.id;
     if (!credId) {
       return res.status(400).json({ success: false, message: "Missing passkey ID." });
