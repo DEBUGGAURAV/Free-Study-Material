@@ -553,7 +553,7 @@ export default function TabTurso(props) {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div>
                       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 700 }}>
-                        Turso 6 Chat Messages
+                        Turso Chat Messages
                       </div>
                       <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "#c084fc", marginTop: "4px" }}>
                         {(tursoStatus?.chatTursoVault?.tursoMessagesCount ?? tursoStatus?.counts?.chatMessages ?? 0).toLocaleString()}
@@ -564,11 +564,11 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#c084fc", marginTop: "6px" }}>
-                    Isolated Chat Vault (fsm-chat)
+                    LibSQL Chat Messages
                   </div>
                 </div>
 
-                {/* Chat User Profiles (Turso 6 Dedicated Vault) */}
+                {/* Chat User Profiles (Turso Dedicated Vault) */}
                 <div
                   style={{
                     background: "rgba(15, 23, 42, 0.55)",
@@ -593,11 +593,11 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#fbbf24", marginTop: "6px" }}>
-                    Custom User Handles (fsm-chat)
+                    Community Profiles
                   </div>
                 </div>
 
-                {/* Forensic Audits (Turso 6 Dedicated Vault) */}
+                {/* Forensic Audits (Turso Dedicated Vault) */}
                 <div
                   style={{
                     background: "rgba(15, 23, 42, 0.55)",
@@ -622,7 +622,7 @@ export default function TabTurso(props) {
                     </div>
                   </div>
                   <div style={{ fontSize: "0.7rem", color: "#f87171", marginTop: "6px" }}>
-                    Pod Sealed Dossiers (fsm-chat)
+                    Encrypted Room Dossiers
                   </div>
                 </div>
 
@@ -1813,18 +1813,18 @@ export default function TabTurso(props) {
                     </div>
                   </div>
 
-                  {/* Pillar 3: Turso 6 LibSQL Dedicated Vault */}
+                  {/* Pillar 3: Turso LibSQL Dedicated Vault */}
                   <div style={{ background: "rgba(0, 0, 0, 0.3)", border: "1px solid rgba(168, 85, 247, 0.2)", borderRadius: "8px", padding: "12px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#c084fc", fontWeight: 700, fontSize: "0.76rem" }}>
                         <HardDrive size={14} />
-                        <span>Turso 6 Chat Vault</span>
+                        <span>Turso Chat Vault</span>
                       </div>
                       <span style={{ fontSize: "0.66rem", color: "#c084fc", background: "rgba(168, 85, 247, 0.12)", padding: "1px 6px", borderRadius: "4px" }}>
                         100% Isolated
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>fsm-chat LibSQL</div>
+                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff" }}>LibSQL Chat Tier</div>
                     <div style={{ fontSize: "0.69rem", color: "var(--text-dim)", marginTop: "2px" }}>
                       Dedicated AWS Node • {chatRetentionDays}d Auto-Prune Policy
                     </div>

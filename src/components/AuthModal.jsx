@@ -303,56 +303,42 @@ export default function AuthModal({
     }
   };
 
-  // Register Passkey right after successful account signup
-  const handlePostRegEnablePasskey = async () => {
-    try {
-      setRegPasskeyLoading(true);
-      setError(null);
-      setFieldErrors({});
-      setSuccessMsg(null);
-      const res = await registerDevicePasskey("", "registration");
-      localStorage.setItem("academic_vault_has_passkey", "true");
-      localStorage.setItem("academic_vault_login_pref", "passkey");
-      setLoginViewMode("passkey");
-      setSuccessMsg(res?.message || "🎉 Passkey registered successfully! 1-Click login is now active.");
-      const finalUser = {
-        ...(postRegUser || {}),
-        hasPasskey: true,
-      };
-      if (onAuthSuccess && finalUser) onAuthSuccess(finalUser);
-      setShowPostRegPasskeyPrompt(false);
-      setPostRegUser(null);
-      setTab("signin");
-      resetAllFormFields();
-      onClose();
-      try {
-        const url = new URL(window.location.href);
-        if (url.searchParams.has("auth")) {
-          url.searchParams.delete("auth");
-          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
-        }
-      } catch (_) {}
-    } catch (err) {
-      if (err.message && (err.message.includes("cancelled") || err.message.includes("NotAllowedError"))) {
-        setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now' below to continue to notes.");
-      } else {
-        setError(err.message || "Failed to set up passkey on this device.");
-      }
-    } finally {
-      setRegPasskeyLoading(false);
-    }
-  };
+  const prevIsOpenRef = useRef(false);
 
-  const handlePostRegSkipPasskey = () => {
-    localStorage.setItem("academic_vault_login_pref", "password");
-    setLoginViewMode("password");
-    const userToLogin = postRegUser;
-    if (onAuthSuccess && userToLogin) onAuthSuccess(userToLogin);
+  // Helper: Transition cleanly to login page with pre-filled identifier & status
+  const transitionToLoginPage = (user, preferredMode = "password", message = "") => {
     setShowPostRegPasskeyPrompt(false);
     setPostRegUser(null);
+    setSignUpOtpStep(false);
+    setSignUpOtpCode("");
+    setRegTgStep(false);
+    setRegTgOtpCode("");
+    setIsGoogleOnboarding(false);
+
+    // Switch card to Sign In tab (front face)
     setTab("signin");
-    resetAllFormFields();
-    onClose();
+
+    // Set preferred login view mode
+    setLoginViewMode(preferredMode);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("academic_vault_login_pref", preferredMode);
+    }
+
+    // Pre-fill email or mobile into sign-in field
+    const userIdentifier = user?.email || user?.mobile || email.trim().toLowerCase() || mobile.trim() || "";
+    if (userIdentifier) {
+      setSignInIdentifier(userIdentifier);
+    }
+    setSignInPassword("");
+
+    // Clear errors and display friendly success message
+    setError(null);
+    setFieldErrors({});
+    if (message) {
+      setSuccessMsg(message);
+    }
+
+    // Clean URL query params if any
     try {
       const url = new URL(window.location.href);
       if (url.searchParams.has("auth")) {
@@ -362,15 +348,62 @@ export default function AuthModal({
     } catch (_) {}
   };
 
+  // Register Passkey right after successful account signup
+  const handlePostRegEnablePasskey = async () => {
+    try {
+      setRegPasskeyLoading(true);
+      setError(null);
+      setFieldErrors({});
+      setSuccessMsg(null);
+      const res = await registerDevicePasskey("", "registration");
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("academic_vault_has_passkey", "true");
+        localStorage.setItem("academic_vault_login_pref", "passkey");
+      }
+      const savedUser = postRegUser;
+      transitionToLoginPage(
+        savedUser,
+        "passkey",
+        res?.message || "🎉 Passkey registered successfully! 1-Click biometric sign-in is ready."
+      );
+    } catch (err) {
+      if (err.message && (err.message.includes("cancelled") || err.message.includes("NotAllowedError"))) {
+        setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now' below to continue to login.");
+      } else {
+        setError(err.message || "Failed to set up passkey on this device.");
+      }
+    } finally {
+      setRegPasskeyLoading(false);
+    }
+  };
+
+  const handlePostRegSkipPasskey = () => {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem("academic_vault_login_pref", "password");
+    }
+    const savedUser = postRegUser;
+    transitionToLoginPage(
+      savedUser,
+      "password",
+      "✅ Account created successfully! Please enter your password to sign in."
+    );
+  };
+
   const handleRegistrationSuccess = (authenticatedUser) => {
     if (!authenticatedUser) {
-      onClose();
+      transitionToLoginPage(null, "password", "✅ Account created successfully! Please sign in.");
       return;
     }
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("vault_last_active", String(Date.now()));
       localStorage.setItem("academic_vault_login_pref", "password");
     }
+
+    // Automatic close of all signup OTP steps
+    setSignUpOtpStep(false);
+    setSignUpOtpCode("");
+    setRegTgStep(false);
+    setRegTgOtpCode("");
 
     // Always ask user if they want to activate 1-Click Biometric Passkey on this device (Telegram Bot, Email OTP, Google)
     if (supportsPasskey && !authenticatedUser.hasPasskey) {
@@ -382,22 +415,12 @@ export default function AuthModal({
       setFieldErrors({});
       setSuccessMsg(null);
     } else {
-      // If passkey is not supported or already setup, immediately authenticate & land on main page!
-      if (onAuthSuccess) {
-        onAuthSuccess(authenticatedUser);
-      }
-      setShowPostRegPasskeyPrompt(false);
-      setPostRegUser(null);
-      setTab("signin");
-      resetAllFormFields();
-      onClose();
-      try {
-        const url = new URL(window.location.href);
-        if (url.searchParams.has("auth")) {
-          url.searchParams.delete("auth");
-          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
-        }
-      } catch (_) {}
+      // If passkey is not supported or already setup, immediately transition directly to login page!
+      transitionToLoginPage(
+        authenticatedUser,
+        authenticatedUser.hasPasskey ? "passkey" : "password",
+        "✅ Account created successfully! Please sign in with your credentials."
+      );
     }
   };
 
@@ -519,7 +542,7 @@ export default function AuthModal({
   };
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !prevIsOpenRef.current) {
       if (currentUser && !showPostRegPasskeyPrompt) {
         onClose();
         return;
@@ -531,8 +554,11 @@ export default function AuthModal({
         (localStorage.getItem("academic_vault_login_pref") === "passkey" ||
           localStorage.getItem("academic_vault_has_passkey") === "true");
       setLoginViewMode(hasPasskeyPref ? "passkey" : "password");
+    } else if (isOpen && currentUser && !showPostRegPasskeyPrompt && !postRegUser) {
+      onClose();
     }
-  }, [isOpen, currentUser, showPostRegPasskeyPrompt, initialTab, isMaintenanceMode, onClose]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen, currentUser, showPostRegPasskeyPrompt, initialTab, isMaintenanceMode, onClose, postRegUser]);
 
   // Clear any legacy session storage on mount to guarantee fresh forms
   useEffect(() => {
@@ -588,6 +614,7 @@ export default function AuthModal({
             setRegTgOtpCode(cleanOtp);
             clearFieldError("regTgOtpCode");
             setSuccessMsg(`✅ Mobile verified via Telegram! Passcode auto-filled: ${cleanOtp}`);
+            handleSignUpTelegramVerify(null, cleanOtp);
           }
         }
       } catch (_) {}
@@ -908,10 +935,11 @@ export default function AuthModal({
 
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
+        setIsGoogleOnboarding(false);
         setSuccessMsg("Profile completed! Welcome to Academic Vault.");
         handleRegistrationSuccess(authenticatedUser);
       } else {
-        onClose();
+        transitionToLoginPage(null, "password", "✅ Profile completed! Please sign in.");
       }
     } catch (err) {
       setFormError(err);
@@ -1144,9 +1172,10 @@ export default function AuthModal({
   };
 
   // 3. Student Sign Up (Option 2: Telegram Bot Verification) - Step 2: Verify & Create
-  const handleSignUpTelegramVerify = async (e) => {
-    e.preventDefault();
-    if (!regTgOtpCode.trim() || regTgOtpCode.trim().length < 6) {
+  const handleSignUpTelegramVerify = async (e, directOtp = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const cleanOtp = String(directOtp || regTgOtpCode || "").trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
       return setFormError("Please enter the 6-digit verification code from Telegram.", "regTgOtpCode");
     }
 
@@ -1159,17 +1188,18 @@ export default function AuthModal({
         regToken: regTgToken,
         mobile: mobile.trim(),
         email: email.trim().toLowerCase(),
-        otp: regTgOtpCode.trim(),
+        otp: cleanOtp,
         password: signUpPassword,
         name: name.trim(),
         college: college.trim(),
         year: year.trim(),
       });
       const authenticatedUser = res?.user;
+      // Automatic close OTP step
+      setRegTgStep(false);
+      setRegTgOtpCode("");
       if (authenticatedUser) {
-        setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        setRegTgStep(false);
-        setRegTgOtpCode("");
+        setSuccessMsg("Account verified & created successfully!");
         try {
           const url = new URL(window.location.href);
           if (url.searchParams.has("auth")) {
@@ -1179,7 +1209,7 @@ export default function AuthModal({
         } catch (_) {}
         handleRegistrationSuccess(authenticatedUser);
       } else {
-        onClose();
+        transitionToLoginPage(null, "password", "✅ Account created successfully! Please sign in with your credentials.");
       }
     } catch (err) {
       setFormError(err, "regTgOtpCode");
@@ -1243,9 +1273,10 @@ export default function AuthModal({
   };
 
   // 3. Student Sign Up - Step 2: Verify OTP & Create Account
-  const handleVerifySignUpOtp = async (e) => {
-    e.preventDefault();
-    if (!signUpOtpCode.trim() || signUpOtpCode.trim().length < 6) {
+  const handleVerifySignUpOtp = async (e, directOtp = null) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const cleanOtp = String(directOtp || signUpOtpCode || "").trim();
+    if (!cleanOtp || cleanOtp.length < 6) {
       return setFormError("Please enter the 6-digit verification OTP code.", "signUpOtpCode");
     }
 
@@ -1254,12 +1285,13 @@ export default function AuthModal({
     setFieldErrors({});
 
     try {
-      const res = await api.verifyRegisterOtp(email.trim().toLowerCase(), signUpOtpCode.trim());
+      const res = await api.verifyRegisterOtp(email.trim().toLowerCase(), cleanOtp);
       const authenticatedUser = res?.user;
+      // Automatic close OTP step
+      setSignUpOtpStep(false);
+      setSignUpOtpCode("");
       if (authenticatedUser) {
-        setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
-        setSignUpOtpStep(false);
-        setSignUpOtpCode("");
+        setSuccessMsg("Account verified & created successfully!");
         try {
           const url = new URL(window.location.href);
           if (url.searchParams.has("auth")) {
@@ -1269,7 +1301,7 @@ export default function AuthModal({
         } catch (_) {}
         handleRegistrationSuccess(authenticatedUser);
       } else {
-        onClose();
+        transitionToLoginPage(null, "password", "✅ Account created successfully! Please sign in with your credentials.");
       }
     } catch (err) {
       setFormError(err, "signUpOtpCode");
@@ -1346,7 +1378,7 @@ export default function AuthModal({
                     className="modal-close-btn"
                     onClick={handlePostRegSkipPasskey}
                     type="button"
-                    title="Skip and go to main page"
+                    title="Skip and go to sign in"
                   >
                     <X size={16} />
                   </button>
@@ -1477,7 +1509,7 @@ export default function AuthModal({
                     ) : (
                       <>
                         <Fingerprint size={18} />
-                        <span>⚡ Enable Passkey</span>
+                        <span>⚡ Enable Passkey (Recommended)</span>
                       </>
                     )}
                   </button>
@@ -1499,7 +1531,7 @@ export default function AuthModal({
                       transition: "all 0.18s ease",
                     }}
                   >
-                    Skip for Now ➔
+                    Skip for Now
                   </button>
                 </div>
               </div>
@@ -3266,8 +3298,12 @@ export default function AuthModal({
                         placeholder="• • • • • •"
                         value={regTgOtpCode}
                         onChange={(e) => {
-                          setRegTgOtpCode(e.target.value.replace(/\D/g, ""));
+                          const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          setRegTgOtpCode(val);
                           clearFieldError("regTgOtpCode");
+                          if (val.length === 6 && !loading) {
+                            handleSignUpTelegramVerify(null, val);
+                          }
                         }}
                         style={{
                           textAlign: "center",
@@ -3542,8 +3578,12 @@ export default function AuthModal({
                         placeholder="• • • • • •"
                         value={signUpOtpCode}
                         onChange={(e) => {
-                          setSignUpOtpCode(e.target.value.replace(/\D/g, ""));
+                          const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                          setSignUpOtpCode(val);
                           clearFieldError("signUpOtpCode");
+                          if (val.length === 6 && !loading) {
+                            handleVerifySignUpOtp(null, val);
+                          }
                         }}
                         style={{
                           textAlign: "center",
