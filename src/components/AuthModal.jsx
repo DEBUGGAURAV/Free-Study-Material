@@ -291,10 +291,8 @@ export default function AuthModal({
         localStorage.setItem("academic_vault_has_passkey", "true");
         localStorage.setItem("academic_vault_login_pref", "passkey");
         setSuccessMsg(res.message || "Passkey biometric authentication successful!");
-        setTimeout(() => {
-          if (onAuthSuccess) onAuthSuccess(res.user, res.token);
-          onClose();
-        }, 400);
+        if (onAuthSuccess) onAuthSuccess(res.user, res.token);
+        onClose();
       }
     } catch (err) {
       if (err.message && !err.message.includes("cancelled")) {

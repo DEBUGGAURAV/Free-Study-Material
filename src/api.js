@@ -424,10 +424,13 @@ export function estimateRealDeviceRom({
   return { romGB: 32, storage: "32 GB ROM", type: "eMMC ROM" };
 }
 
+let _memoizedDeviceSpecs = null;
+
 /**
  * Capture crystal-clear hardware specifications and human-readable device model
  */
 export function getClientDeviceSpecs() {
+  if (_memoizedDeviceSpecs) return _memoizedDeviceSpecs;
   if (typeof window === "undefined" || typeof navigator === "undefined") {
     return {
       deviceName: "Desktop Web",
@@ -603,7 +606,7 @@ export function getClientDeviceSpecs() {
       os,
     });
 
-    return {
+    _memoizedDeviceSpecs = {
       deviceName,
       brand: brand || "Student Device",
       model: model || "",
@@ -624,6 +627,7 @@ export function getClientDeviceSpecs() {
       tier: memoryGB >= 8 && cores >= 8 ? "high" : (memoryGB <= 2 || cores <= 2 ? "ultra_low" : "mid"),
       label: deviceName,
     };
+    return _memoizedDeviceSpecs;
   } catch (_) {
     return {
       deviceName: "Active Student Device",
