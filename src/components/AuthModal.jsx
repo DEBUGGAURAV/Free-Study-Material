@@ -648,9 +648,10 @@ export default function AuthModal({
       const res = await api.googleLogin(googlePayload);
       if (res.isNewUser) {
         const gUser = {
-          email: res.googleUser?.email || "",
-          name: res.googleUser?.name || "",
-          picture: res.googleUser?.picture || "",
+          email: res.googleUser?.email || googlePayload?.email || "",
+          name: res.googleUser?.name || googlePayload?.name || "",
+          picture: res.googleUser?.picture || res.googleUser?.photoUrl || googlePayload?.picture || "",
+          photoUrl: res.googleUser?.photoUrl || res.googleUser?.picture || googlePayload?.picture || "",
           signupToken: res.signupToken || "",
         };
         if (!gUser.picture && googlePayload?.credential) {
@@ -899,7 +900,8 @@ export default function AuthModal({
         mobile: cleanMobile,
         college: cleanCollege,
         year: googleYear,
-        picture: googleUser.picture || "",
+        picture: googleUser.picture || googleUser.photoUrl || "",
+        photoUrl: googleUser.picture || googleUser.photoUrl || "",
         signupToken: googleUser.signupToken || "",
       });
 

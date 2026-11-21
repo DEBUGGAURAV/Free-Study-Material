@@ -469,6 +469,48 @@ function escapeHtml(str = "") {
 }
 
 /**
+ * Truncates an HTML string safely to fit Telegram caption limits (max 1024 chars),
+ * ensuring tags are never cut mid-tag and all open HTML tags are cleanly closed in reverse order.
+ */
+function safeTruncateTelegramHtml(html, maxLen = 1000) {
+  if (!html || typeof html !== "string") return "";
+  if (html.length <= maxLen) return html;
+
+  // Cut cleanly before newline or whitespace
+  let cutoff = html.lastIndexOf("\n", maxLen - 30);
+  if (cutoff === -1 || cutoff < 350) cutoff = maxLen - 30;
+  let truncated = html.slice(0, cutoff).trim();
+
+  // If cutoff sliced in the middle of an HTML tag <...
+  const lastLt = truncated.lastIndexOf("<");
+  const lastGt = truncated.lastIndexOf(">");
+  if (lastLt > lastGt) {
+    truncated = truncated.slice(0, lastLt).trim();
+  }
+
+  // Track open tags and close them in reverse order
+  const tagRegex = /<\/?([a-zA-Z0-9]+)[^>]*>/g;
+  const openTags = [];
+  let match;
+  while ((match = tagRegex.exec(truncated)) !== null) {
+    const fullTag = match[0];
+    const tagName = match[1].toLowerCase();
+    if (fullTag.startsWith("</")) {
+      const idx = openTags.lastIndexOf(tagName);
+      if (idx !== -1) openTags.splice(idx, 1);
+    } else if (!fullTag.endsWith("/>")) {
+      openTags.push(tagName);
+    }
+  }
+
+  while (openTags.length > 0) {
+    const unclosed = openTags.pop();
+    truncated += `</${unclosed}>`;
+  }
+  return truncated;
+}
+
+/**
  * Resolves Device Name and Hardware Capability for Login, Register, and Logout notices
  */
 function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, directUserAgent = null) {
@@ -538,14 +580,19 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
   const tier = String(specs?.tier || "").toLowerCase();
 
   let storage = "";
-  if (specs?.storage && typeof specs.storage === "string" && specs.storage.trim()) {
+  if (specs?.romGB && Number(specs.romGB) >= 32) {
+    storage = `${specs.romGB} GB ROM (${isMobile ? "UFS Flash" : "SSD"})`;
+  } else if (specs?.storage && typeof specs.storage === "string" && specs.storage.trim() && !/^[0-9.]+\s*GB\s*Fast\s*Storage$/i.test(specs.storage.trim())) {
     storage = specs.storage.trim();
-  } else if (specs?.storageGB && Number(specs.storageGB) > 0) {
-    storage = `${specs.storageGB} GB Fast Storage`;
+  } else if (specs?.storageGB && Number(specs.storageGB) >= 32) {
+    storage = `${specs.storageGB} GB ROM (${isMobile ? "UFS Flash" : "SSD"})`;
   } else if (user?.storage && typeof user.storage === "string") {
     storage = user.storage.trim();
   } else {
-    storage = isMobile ? "Fast Flash Storage (UFS / eMMC)" : "Fast Solid-State Storage (NVMe / SSD)";
+    const inferredRom = !isMobile
+      ? (memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256)
+      : (memoryGB >= 12 ? 512 : memoryGB >= 8 ? 256 : memoryGB >= 4 ? 128 : 64);
+    storage = isMobile ? `${inferredRom} GB ROM (UFS High-Speed)` : `${inferredRom} GB Fast SSD`;
   }
 
   const storageSnippet = storage ? ` • ${storage}` : "";
@@ -1015,10 +1062,15 @@ async function sendTelegramAuthNotice({
           return false;
         }
         // Only allow trusted Google CDN avatar domains
-        return (
-          hostname.endsWith(".googleusercontent.com") ||
-          hostname.endsWith(".gstatic.com") ||
-          hostname.endsWith(".googleapis.com")
+        const allowedGoogleDomains = [
+          "googleusercontent.com",
+          "ggpht.com",
+          "gstatic.com",
+          "googleapis.com",
+          "google.com",
+        ];
+        return allowedGoogleDomains.some(
+          (d) => hostname === d || hostname.endsWith("." + d)
         );
       } catch (_) {
         return false;
@@ -1028,6 +1080,7 @@ async function sendTelegramAuthNotice({
     // 1. If photoUrl is available & verified safe (from Google OAuth):
     if (isSafePhotoUrl(photoUrl)) {
       let photoDelivered = false;
+      const safeCaption = safeTruncateTelegramHtml(caption, 1024);
 
       // Method A: Download photo buffer on server with browser User-Agent and dispatch binary file to Telegram
       // This solves Google's CDN blocking Telegram server crawlers with 403 Forbidden!
@@ -1037,7 +1090,7 @@ async function sendTelegramAuthNotice({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
           },
-          signal: AbortSignal.timeout(5000),
+          signal: AbortSignal.timeout(6000),
         });
 
         if (photoFetch.ok) {
@@ -1050,13 +1103,13 @@ async function sendTelegramAuthNotice({
               form.append("message_thread_id", String(threadId));
             }
             form.append("photo", new Blob([buffer], { type: "image/jpeg" }), "student_avatar.jpg");
-            form.append("caption", caption.slice(0, 1024));
+            form.append("caption", safeCaption);
             form.append("parse_mode", "HTML");
 
             const directPhotoRes = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
               method: "POST",
               body: form,
-              signal: AbortSignal.timeout(8000),
+              signal: AbortSignal.timeout(9000),
             });
 
             if (directPhotoRes.ok) {
@@ -1079,7 +1132,7 @@ async function sendTelegramAuthNotice({
           const photoPayload = {
             chat_id: targetChatId,
             photo: photoUrl,
-            caption: caption.slice(0, 1024),
+            caption: safeCaption,
             parse_mode: "HTML",
           };
           if (threadId && !isNaN(Number(threadId))) {

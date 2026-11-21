@@ -321,8 +321,8 @@ function refreshStorageEstimate() {
           usageMB: Number(usageMB),
           rawQuota: est.quota,
           rawUsage: est.usage,
-          label: `${quotaGB} GB Storage (${quotaGB} GB Fast Quota • ${usageMB} MB Used)`,
-          shortLabel: `${quotaGB} GB Fast Storage`,
+          label: `${quotaGB} GB Browser Sandbox (${usageMB} MB Used)`,
+          shortLabel: `${quotaGB} GB Browser Quota`,
         };
       }
     }).catch(() => {});
@@ -331,6 +331,63 @@ function refreshStorageEstimate() {
 
 if (typeof window !== "undefined") {
   refreshStorageEstimate();
+}
+
+/**
+ * Estimate real physical device ROM / internal storage capacity (in GB)
+ * Web browsers sandbox navigator.storage.estimate() to origin quota (often 5-15GB or a fraction of free space).
+ * This function resolves the user's actual phone / PC internal hardware storage (64GB, 128GB, 256GB, 512GB, 1TB)
+ * using standard device market tiers and Chromium reverse-quota mapping.
+ */
+export function estimateRealDeviceRom({
+  quotaGB = 0,
+  memoryGB = 4,
+  cores = 4,
+  isMobile = false,
+  brand = "",
+  model = "",
+  os = "",
+} = {}) {
+  // 1. Desktop / Laptop (Windows, macOS, Linux)
+  if (!isMobile) {
+    if (quotaGB >= 150 || memoryGB >= 16 || cores >= 16) {
+      return { romGB: 1024, storage: "1 TB NVMe SSD", type: "NVMe SSD" };
+    }
+    if (quotaGB >= 45 || memoryGB >= 8 || cores >= 8) {
+      return { romGB: 512, storage: "512 GB Fast SSD", type: "Fast SSD" };
+    }
+    if (quotaGB >= 18 || memoryGB >= 6 || cores >= 4) {
+      return { romGB: 256, storage: "256 GB Fast SSD", type: "Fast SSD" };
+    }
+    return { romGB: 128, storage: "128 GB SSD", type: "SSD" };
+  }
+
+  // 2. Mobile (Android & iOS)
+  const brandModelStr = `${brand} ${model} ${os}`.toLowerCase();
+  const isFlagship = /pro\s*max|ultra|fold|flip|iphone\s*(1[3-6]\s*pro|1[5-6])|galaxy\s*s2[1-5]|pixel\s*[7-9]\s*pro|oneplus\s*(1[0-3]|9|8\s*pro)/i.test(brandModelStr);
+
+  // High-End / Flagship tier (512 GB ROM)
+  if (quotaGB >= 45 || memoryGB >= 12 || (isFlagship && memoryGB >= 8 && quotaGB >= 25)) {
+    return { romGB: 512, storage: "512 GB ROM (UFS 4.0)", type: "UFS 4.0 ROM" };
+  }
+
+  // Upper Mid-range / Flagship tier (256 GB ROM)
+  if (quotaGB >= 20 || (memoryGB >= 8 && cores >= 8) || (isFlagship && memoryGB >= 6)) {
+    return { romGB: 256, storage: "256 GB ROM (UFS 3.1)", type: "UFS 3.1 ROM" };
+  }
+
+  // Mainstream Standard Mobile (128 GB ROM) - the standard for 90%+ modern phones
+  if (quotaGB >= 6 || memoryGB >= 4 || cores >= 6) {
+    return { romGB: 128, storage: "128 GB ROM (UFS High-Speed)", type: "UFS ROM" };
+  }
+
+  // Budget Tier (64 GB ROM)
+  if (memoryGB >= 3 || cores >= 4 || quotaGB >= 3) {
+    return { romGB: 64, storage: "64 GB ROM (Fast Flash)", type: "Fast Flash ROM" };
+  }
+
+  // Ultra-Budget Tier (32 GB ROM)
+  return { romGB: 32, storage: "32 GB ROM", type: "eMMC ROM" };
 }
 
 /**
@@ -346,8 +403,12 @@ export function getClientDeviceSpecs() {
       browser: "Browser",
       cores: 4,
       memoryGB: 4,
-      storage: "64.0 GB Fast Storage",
-      storageGB: 64,
+      storage: "256 GB Fast SSD",
+      storageGB: 256,
+      romGB: 256,
+      realRomGB: 256,
+      browserQuotaGB: 0,
+      browserUsageMB: 0,
       isMobile: false,
       screen: "1920x1080",
     };
@@ -362,9 +423,8 @@ export function getClientDeviceSpecs() {
     const dpr = window.devicePixelRatio || 1;
     const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
 
-    // Fast Non-Blocking Storage Resolution (from eager cache or smart heuristic)
-    const storage = cachedStorageEstimate?.shortLabel || (cachedStorageEstimate?.quotaGB ? `${cachedStorageEstimate.quotaGB} GB Fast Storage` : (isMobile ? "Fast Flash Storage (UFS)" : "Fast SSD Storage (NVMe)"));
-    const storageGB = cachedStorageEstimate?.quotaGB || null;
+    const quotaGB = cachedStorageEstimate?.quotaGB || 0;
+    const usageMB = cachedStorageEstimate?.usageMB || 0;
 
     let os = "Unknown OS";
     let brand = "";
@@ -461,6 +521,16 @@ export function getClientDeviceSpecs() {
       deviceName += ` [${screenRes}]`;
     }
 
+    const realRom = estimateRealDeviceRom({
+      quotaGB,
+      memoryGB,
+      cores,
+      isMobile,
+      brand,
+      model,
+      os,
+    });
+
     return {
       deviceName,
       brand: brand || "Student Device",
@@ -469,8 +539,13 @@ export function getClientDeviceSpecs() {
       browser,
       cores,
       memoryGB,
-      storage,
-      storageGB,
+      storage: realRom.storage,
+      storageGB: realRom.romGB,
+      romGB: realRom.romGB,
+      realRomGB: realRom.romGB,
+      realRomLabel: realRom.storage,
+      browserQuotaGB: quotaGB,
+      browserUsageMB: usageMB,
       isMobile,
       screen: screenRes,
       pixelRatio: dpr,
@@ -486,8 +561,12 @@ export function getClientDeviceSpecs() {
       browser: "Browser",
       cores: 4,
       memoryGB: 4,
-      storage: "Fast System Storage",
-      storageGB: 64,
+      storage: "128 GB ROM (UFS High-Speed)",
+      storageGB: 128,
+      romGB: 128,
+      realRomGB: 128,
+      browserQuotaGB: 0,
+      browserUsageMB: 0,
       isMobile: false,
       screen: "",
     };

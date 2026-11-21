@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { X, User, Lock, CheckCircle2, AlertCircle, Key, Shield, Eye, EyeOff, Trash2, Database, HardDrive, RefreshCw, FileText, Clock, Pin, LogOut, ShieldAlert, Smartphone, Laptop, Activity, Sparkles, Copy, Check, MessageSquare, Layers, Zap } from "lucide-react";
-import { api } from "../api";
+import { api, getClientDeviceSpecs } from "../api";
 import { registerDevicePasskey, isPasskeySupported } from "../utils/passkeyClient";
 import { detectClientHardwareProfile } from "../utils/hardwareAdaptiveEngine";
 import { getStorageUsage } from "../utils/p2pMesh";
@@ -257,13 +257,21 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
   useEffect(() => {
     if (isOpen && currentUser?.id && api.syncDeviceSpecs) {
-      api.syncDeviceSpecs({
-        cores: hwProfile.cores,
-        memoryGB: hwProfile.memoryGB,
-        tier: hwProfile.tier,
-        label: hwProfile.label,
-        isMobile: hwProfile.isMobile,
-      }).catch(() => {});
+      try {
+        const fullSpecs = getClientDeviceSpecs();
+        api.syncDeviceSpecs({
+          cores: hwProfile.cores,
+          memoryGB: hwProfile.memoryGB,
+          tier: hwProfile.tier,
+          label: hwProfile.label,
+          isMobile: hwProfile.isMobile,
+          storage: fullSpecs.storage,
+          storageGB: fullSpecs.storageGB,
+          romGB: fullSpecs.romGB,
+          realRomGB: fullSpecs.realRomGB,
+          browserQuotaGB: fullSpecs.browserQuotaGB,
+        }).catch(() => {});
+      } catch (_) {}
     }
   }, [isOpen, currentUser?.id]);
 
@@ -1477,6 +1485,48 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                 </button>
               </div>
 
+              {/* Physical Device ROM Specification */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  background: "#ffffff",
+                  border: "1px solid #bae6fd",
+                  borderRadius: "8px",
+                  marginBottom: "12px",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "1.1rem" }}>{hwProfile.isMobile ? "📱" : "💻"}</span>
+                  <div>
+                    <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "#0f172a" }}>
+                      Physical Device ROM / Storage
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
+                      {hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM • {hwProfile.isMobile ? "Internal UFS / Flash" : "High-Speed SSD"}
+                    </div>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontWeight: 800,
+                    fontSize: "0.85rem",
+                    color: "#0369a1",
+                    background: "#e0f2fe",
+                    border: "1px solid #7dd3fc",
+                    padding: "3px 10px",
+                    borderRadius: "6px",
+                    letterSpacing: "0.2px",
+                  }}
+                >
+                  💾 {hwProfile.realRomLabel || `${hwProfile.realRomGB || 128} GB ROM`}
+                </span>
+              </div>
+
               {/* Primary Metric: Stored Offline Notes Vault */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.82rem", marginBottom: "6px", flexWrap: "wrap", gap: "6px" }}>
                 <span style={{ color: "#334155", fontWeight: 600 }}>📚 Stored Offline Notes Vault:</span>
@@ -1487,13 +1537,13 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
 
               {/* Secondary Metric: Total Browser Origin Quota */}
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.74rem", color: "#475569", marginBottom: "4px" }}>
-                <span>Browser PWA Engine, WASM &amp; Font Cache:</span>
+                <span>Browser Sandbox Offline Quota &amp; Engine:</span>
                 <span style={{ color: "#0f172a", fontWeight: 700 }}>
-                  {storageInfo ? `${storageInfo.usageMB} MB` : "Calculating..."}
+                  {storageInfo ? `${storageInfo.usageMB} MB Used` : "Calculating..."}
                 </span>
               </div>
               <div style={{ fontSize: "0.68rem", color: "#475569", marginBottom: "8px", lineHeight: "1.4" }}>
-                ℹ️ Required by Chrome for 0ms offline launch &amp; PDF reader canvas. Your saved offline study notes use {totalNotesMB} MB.
+                ℹ️ Assigned by Chrome browser sandbox for offline study notes &amp; fast PDF canvas. Your saved offline study notes use {totalNotesMB} MB.
               </div>
 
               {/* Progress Bar */}

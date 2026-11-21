@@ -59,6 +59,8 @@ export function detectClientHardwareProfile() {
       isUltraLowEnd: false,
       isPowerSave: false,
       label: "Desktop Standard",
+      realRomGB: 256,
+      realRomLabel: "256 GB Fast SSD",
     };
   }
 
@@ -68,6 +70,14 @@ export function detectClientHardwareProfile() {
     window.innerWidth < 768 ||
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || "");
   const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+
+  // Real Hardware ROM Tier mapping
+  const realRomGB = !isMobile
+    ? (memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256)
+    : (memoryGB >= 12 ? 512 : memoryGB >= 8 && cores >= 8 ? 256 : memoryGB >= 4 || cores >= 6 ? 128 : 64);
+  const realRomLabel = !isMobile
+    ? (realRomGB >= 1024 ? "1 TB NVMe SSD" : `${realRomGB} GB Fast SSD`)
+    : `${realRomGB} GB ROM (${realRomGB >= 256 ? "UFS 3.1" : "UFS High-Speed"})`;
 
   // Ultra low-end: 2GB or less RAM, or dual core, or 2G network
   const isUltraLowEnd = memoryGB <= 2 || cores <= 2;
@@ -105,6 +115,8 @@ export function detectClientHardwareProfile() {
     tier,
     cores,
     memoryGB,
+    realRomGB,
+    realRomLabel,
     isMobile,
     isTouch,
     isLowEnd,

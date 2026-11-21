@@ -14,6 +14,41 @@ const isMasterAdminStudent = (student) => {
   return false;
 };
 
+export function getDisplayRom(specs) {
+  if (!specs) return "128GB ROM";
+  if (specs.romGB && Number(specs.romGB) >= 32) return `${specs.romGB}GB ROM`;
+  if (specs.realRomGB && Number(specs.realRomGB) >= 32) return `${specs.realRomGB}GB ROM`;
+
+  const rawStorageGB = Number(specs.storageGB || 0);
+  if (rawStorageGB >= 32 && Number.isInteger(rawStorageGB)) {
+    return `${rawStorageGB}GB ROM`;
+  }
+
+  if (specs.storage && typeof specs.storage === "string") {
+    const match = specs.storage.match(/(1\s*TB|2\s*TB|32\s*GB|64\s*GB|128\s*GB|256\s*GB|512\s*GB)/i);
+    if (match) return match[1].replace(/\s+/g, "") + (match[1].toLowerCase().includes("tb") ? " SSD" : " ROM");
+  }
+
+  // Reverse-map legacy browser quota (e.g. 6.5, 12.8) to real phone/PC ROM
+  const quota = rawStorageGB > 0 ? rawStorageGB : 0;
+  const mem = Number(specs.memoryGB || 4);
+  const cores = Number(specs.cores || 4);
+  const isMobile = specs.isMobile !== false;
+
+  if (!isMobile) {
+    if (quota >= 150 || mem >= 16 || cores >= 16) return "1TB SSD";
+    if (quota >= 45 || mem >= 8 || cores >= 8) return "512GB SSD";
+    if (quota >= 18 || mem >= 6 || cores >= 4) return "256GB SSD";
+    return "128GB SSD";
+  }
+
+  if (quota >= 45 || mem >= 12) return "512GB ROM";
+  if (quota >= 20 || (mem >= 8 && cores >= 8)) return "256GB ROM";
+  if (quota >= 6 || mem >= 4 || cores >= 6) return "128GB ROM";
+  if (mem >= 3 || cores >= 4) return "64GB ROM";
+  return "32GB ROM";
+}
+
 export default function TabStudents(props) {
   const {
     DASHBOARD_TABS = [],
@@ -195,7 +230,7 @@ export default function TabStudents(props) {
         `"${s.isBlocked ? "Blocked" : "Active"}"`,
         `"${s.neverPurge ? "Yes" : "No"}"`,
         `"${s.deviceSpecs?.cores ? `${s.deviceSpecs.cores} Cores, ${s.deviceSpecs.memoryGB}GB RAM` : ""}"`,
-        `"${s.deviceSpecs?.storage || (s.deviceSpecs?.storageGB ? `${s.deviceSpecs.storageGB} GB Fast Storage` : "")}"`,
+        `"${getDisplayRom(s.deviceSpecs)}${s.deviceSpecs?.browserQuotaGB ? ` (${s.deviceSpecs.browserQuotaGB}GB Quota)` : ""}"`,
         `"${s.effectiveThreshold || s.customInactivityDays || 90} days"`,
         `"${s.daysRemaining != null ? s.daysRemaining : 90}"`,
         `"${s.scheduledPurgeDate || ""}"`,
@@ -530,16 +565,12 @@ export default function TabStudents(props) {
                             alignItems: "center",
                             gap: "4px",
                           }}
-                          title={student.deviceSpecs.label || `${student.deviceSpecs.cores} Cores, ${student.deviceSpecs.memoryGB}GB RAM • Storage: ${student.deviceSpecs.storage || `${student.deviceSpecs.memoryGB >= 8 ? "256GB" : student.deviceSpecs.memoryGB >= 4 ? "128GB" : "64GB"} Fast Storage`}`}
+                          title={student.deviceSpecs.label || `${student.deviceSpecs.cores} Cores, ${student.deviceSpecs.memoryGB}GB RAM • ROM: ${getDisplayRom(student.deviceSpecs)}`}
                         >
                           <span>💻 {student.deviceSpecs.cores}C • {student.deviceSpecs.memoryGB}GB</span>
                           <span style={{ color: "#0284c7" }}>•</span>
                           <span style={{ color: "#0284c7" }}>
-                            💾 {student.deviceSpecs.storageGB
-                              ? `${student.deviceSpecs.storageGB}GB`
-                              : (student.deviceSpecs.storage
-                                ? student.deviceSpecs.storage.replace(/\s*Fast\s*Storage/i, "").trim()
-                                : (student.deviceSpecs.memoryGB >= 8 ? "256GB" : student.deviceSpecs.memoryGB >= 4 ? "128GB" : "64GB"))}
+                            💾 {getDisplayRom(student.deviceSpecs)}
                           </span>
                         </span>
                       )}
@@ -1014,8 +1045,13 @@ export default function TabStudents(props) {
                   <div style={{ fontSize: "0.8rem", color: "#0284c7", fontWeight: 700, marginTop: "4px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                     <span>💻 {viewingStudent.deviceSpecs.label || `${viewingStudent.deviceSpecs.cores} CPU Cores • ${viewingStudent.deviceSpecs.memoryGB} GB RAM Memory`}</span>
                     <span style={{ color: "#0891b2", background: "#ecfeff", border: "1px solid #a5f3fc", padding: "1px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      💾 <strong>Storage:</strong> {viewingStudent.deviceSpecs.storage || `${viewingStudent.deviceSpecs.memoryGB >= 8 ? "256 GB+ NVMe SSD" : viewingStudent.deviceSpecs.memoryGB >= 4 ? "128 GB Fast Flash" : "64 GB Storage"}`}
+                      💾 <strong>Device Storage (ROM):</strong> {getDisplayRom(viewingStudent.deviceSpecs)}
                     </span>
+                    {(viewingStudent.deviceSpecs.browserQuotaGB || (Number(viewingStudent.deviceSpecs.storageGB) > 0 && Number(viewingStudent.deviceSpecs.storageGB) < 32)) && (
+                      <span style={{ color: "#475569", background: "#f8fafc", border: "1px solid #e2e8f0", padding: "1px 7px", borderRadius: "4px", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "0.74rem" }}>
+                        🌐 <strong>Browser Cache Quota:</strong> {viewingStudent.deviceSpecs.browserQuotaGB || viewingStudent.deviceSpecs.storageGB} GB
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

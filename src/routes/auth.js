@@ -1195,6 +1195,11 @@ router.post("/google", authLimiter, async (req, res) => {
       }
     }
 
+    // Multi-source fallback for Google avatar image URL
+    if (!verifiedPicture) {
+      verifiedPicture = (picture || req.body.photoUrl || req.body.avatar || "").trim();
+    }
+
     // NOTE: For Google OAuth, ANY valid email domain is accepted (NOT restricted to @gmail.com)
     if (!verifiedEmail || !verifiedEmail.includes("@")) {
       return res.status(401).json({
@@ -1356,6 +1361,7 @@ router.post("/google", authLimiter, async (req, res) => {
         email: verifiedEmail,
         name: verifiedName || "Scholar",
         picture: verifiedPicture || "",
+        photoUrl: verifiedPicture || "",
       },
     });
   } catch (err) {
@@ -1377,6 +1383,14 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
     const cleanCollege = (college || "").trim();
     const cleanName = (name || "").trim();
     const cleanYear = (year || "1st Year").trim();
+    const avatarPhotoUrl = (
+      picture ||
+      req.body.photoUrl ||
+      req.body.avatar ||
+      req.body.image ||
+      (req.body.googleUser && (req.body.googleUser.picture || req.body.googleUser.photoUrl)) ||
+      ""
+    ).trim();
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       return res.status(400).json({ success: false, message: "Valid email address is required." });
@@ -1472,7 +1486,7 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
           deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
           userAgent: req.headers["user-agent"],
         },
-        photoUrl: picture || null,
+        photoUrl: avatarPhotoUrl || null,
         method: "Google Registration (Fast Onboarding)",
         deviceSpecs: req.body?.deviceSpecs || newUser.deviceSpecs,
         userAgent: req.headers["user-agent"],
@@ -1935,15 +1949,28 @@ router.post("/login", authLimiter, async (req, res) => {
 
     // Update Client Hardware Specs Asynchronously (Zero Extra Latency)
     if (req.body.deviceSpecs && docId && db) {
+      const rawSpecs = req.body.deviceSpecs;
+      const mem = Number(rawSpecs.memoryGB) || 4;
+      const cores = Number(rawSpecs.cores) || 4;
+      const isMob = Boolean(rawSpecs.isMobile);
+      const rawStorageGB = Number(rawSpecs.storageGB || rawSpecs.romGB || 0);
+      const romGB = Number(rawSpecs.romGB || rawSpecs.realRomGB) || (rawStorageGB >= 32 ? rawStorageGB : (!isMob ? (mem >= 8 ? 512 : 256) : (mem >= 8 ? 256 : mem >= 4 ? 128 : 64)));
+      const finalStorage = (rawSpecs.storage && !rawSpecs.storage.includes("Fast Storage"))
+        ? String(rawSpecs.storage)
+        : (isMob ? `${romGB} GB ROM (UFS High-Speed)` : `${romGB} GB Fast SSD`);
+
       db.collection("users").doc(docId).set({
         deviceSpecs: {
-          cores: Number(req.body.deviceSpecs.cores) || 4,
-          memoryGB: Number(req.body.deviceSpecs.memoryGB) || 4,
-          tier: String(req.body.deviceSpecs.tier || "mid"),
-          label: String(req.body.deviceSpecs.label || ""),
-          isMobile: Boolean(req.body.deviceSpecs.isMobile),
-          storage: String(req.body.deviceSpecs.storage || ""),
-          storageGB: Number(req.body.deviceSpecs.storageGB) || 0,
+          cores,
+          memoryGB: mem,
+          tier: String(rawSpecs.tier || "mid"),
+          label: String(rawSpecs.label || ""),
+          isMobile: isMob,
+          storage: finalStorage,
+          storageGB: romGB,
+          romGB,
+          realRomGB: romGB,
+          browserQuotaGB: Number(rawSpecs.browserQuotaGB || (rawStorageGB < 32 ? rawStorageGB : 0)),
           updatedAt: new Date().toISOString(),
         }
       }, { merge: true }).catch(() => {});
@@ -1990,15 +2017,27 @@ router.post("/sync-device", authenticateToken, async (req, res) => {
   try {
     const { deviceSpecs } = req.body;
     if (deviceSpecs && req.user?.id && db) {
+      const mem = Number(deviceSpecs.memoryGB) || 4;
+      const cores = Number(deviceSpecs.cores) || 4;
+      const isMob = Boolean(deviceSpecs.isMobile);
+      const rawStorageGB = Number(deviceSpecs.storageGB || deviceSpecs.romGB || 0);
+      const romGB = Number(deviceSpecs.romGB || deviceSpecs.realRomGB) || (rawStorageGB >= 32 ? rawStorageGB : (!isMob ? (mem >= 8 ? 512 : 256) : (mem >= 8 ? 256 : mem >= 4 ? 128 : 64)));
+      const finalStorage = (deviceSpecs.storage && !deviceSpecs.storage.includes("Fast Storage"))
+        ? String(deviceSpecs.storage)
+        : (isMob ? `${romGB} GB ROM (UFS High-Speed)` : `${romGB} GB Fast SSD`);
+
       db.collection("users").doc(req.user.id).set({
         deviceSpecs: {
-          cores: Number(deviceSpecs.cores) || 4,
-          memoryGB: Number(deviceSpecs.memoryGB) || 4,
+          cores,
+          memoryGB: mem,
           tier: String(deviceSpecs.tier || "mid"),
           label: String(deviceSpecs.label || ""),
-          isMobile: Boolean(deviceSpecs.isMobile),
-          storage: String(deviceSpecs.storage || ""),
-          storageGB: Number(deviceSpecs.storageGB) || 0,
+          isMobile: isMob,
+          storage: finalStorage,
+          storageGB: romGB,
+          romGB,
+          realRomGB: romGB,
+          browserQuotaGB: Number(deviceSpecs.browserQuotaGB || (rawStorageGB < 32 ? rawStorageGB : 0)),
           updatedAt: new Date().toISOString(),
         }
       }, { merge: true }).catch(() => {});
