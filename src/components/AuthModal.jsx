@@ -382,10 +382,13 @@ export default function AuthModal({
       localStorage.setItem("academic_vault_login_pref", "password");
     }
     const savedUser = postRegUser;
+    const isGoogle = savedUser?.authProvider === "google";
     transitionToLoginPage(
       savedUser,
-      "password",
-      "✅ Account created successfully! Please enter your password to sign in."
+      isGoogle ? "passkey" : "password",
+      isGoogle
+        ? "✅ Google account verified! Please sign in with Google or 1-Click Passkey."
+        : "✅ Account created successfully! Please enter your password to sign in."
     );
   };
 
@@ -702,8 +705,20 @@ export default function AuthModal({
         setTab("signin");
         setSuccessMsg("Google account verified! Please enter your mobile number and college to finish registration.");
       } else if (res.user) {
-        onAuthSuccess(res.user);
-        onClose();
+        const authedUser = res.user;
+        // Prompt for Passkey if device supports it and user has not enrolled a passkey yet
+        if (supportsPasskey && !authedUser.hasPasskey) {
+          setPostRegUser(authedUser);
+          setShowPostRegPasskeyPrompt(true);
+          setTab("signin");
+          setIsGoogleOnboarding(false);
+          setError(null);
+          setFieldErrors({});
+          setSuccessMsg(null);
+        } else {
+          onAuthSuccess(authedUser);
+          onClose();
+        }
       }
     } catch (err) {
       setError(err.message || "Failed to authenticate with Google.");

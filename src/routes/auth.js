@@ -392,6 +392,8 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
       college: newUser.college,
       mobile: newUser.mobile,
       year: newUser.year,
+      hasPasskey: false,
+      authProvider: "telegram",
       permissions: newUser.permissions,
       v: 1,
     };
@@ -864,6 +866,8 @@ router.post("/register-verify-otp", authLimiter, async (req, res) => {
       college: newUser.college,
       mobile: newUser.mobile,
       year: newUser.year,
+      hasPasskey: false,
+      authProvider: "email",
       permissions: newUser.permissions,
       v: 1,
     };
@@ -1051,6 +1055,8 @@ router.post("/register", authLimiter, async (req, res) => {
       college: newUser.college,
       mobile: newUser.mobile,
       year: newUser.year,
+      hasPasskey: false,
+      authProvider: "local",
       permissions: newUser.permissions,
       v: 1,
     };
@@ -1323,6 +1329,8 @@ router.post("/google", authLimiter, async (req, res) => {
         }).catch(() => {});
       });
 
+      const userPasskeys = Array.isArray(userData.passkeys) ? userData.passkeys : [];
+      const hasPasskey = userPasskeys.length > 0;
       const sessionId = `sess_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
       const payload = {
         id: docId || userData.id,
@@ -1334,6 +1342,8 @@ router.post("/google", authLimiter, async (req, res) => {
         mobile: userData.mobile || "",
         year: userData.year || "1st Year",
         picture: verifiedPicture || "",
+        hasPasskey,
+        authProvider: "google",
         permissions: (verifiedEmail === MAIN_ADMIN_EMAIL || userData.role === "admin")
           ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
           : (userData.permissions || ["download_notes", "upload_notes"]),
@@ -1524,6 +1534,8 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       college: newUser.college,
       mobile: newUser.mobile,
       year: newUser.year,
+      hasPasskey: false,
+      authProvider: "google",
       permissions: newUser.permissions,
       v: 1,
     };
