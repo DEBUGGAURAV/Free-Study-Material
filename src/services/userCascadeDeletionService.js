@@ -240,6 +240,54 @@ async function cascadeDeleteUserAccount({
     }
   } catch (_) {}
 
+  // 6b. Instant Auth Invalidation across RAM, Multi-Device Sessions & JWT
+  try {
+    const { setRevokedTokenVersion } = require("../middleware/auth");
+    if (typeof setRevokedTokenVersion === "function") {
+      setRevokedTokenVersion(userId, 999999999);
+    }
+  } catch (_) {}
+
+  try {
+    const { terminateAllUserSessions } = require("./studentSessionService");
+    if (typeof terminateAllUserSessions === "function") {
+      await terminateAllUserSessions(userId).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 6c. Purge MongoDB Hot Buffer (Cluster 2 fsmchat)
+  try {
+    const { purgeUserFromBuffer } = require("./mongoChatBufferService");
+    if (typeof purgeUserFromBuffer === "function") {
+      await purgeUserFromBuffer(userId, cleanEmail).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 6d. Purge Turso 4 Student Sessions & Security Logs
+  try {
+    const { purgeUserFromStudentVault } = require("./tursoStudentVaultService");
+    if (typeof purgeUserFromStudentVault === "function") {
+      await purgeUserFromStudentVault(userId, cleanEmail).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 6e. Invalidate Turso 5 User Edge Cache
+  try {
+    const { invalidateUserCacheInTurso } = require("./tursoUserCacheService");
+    if (typeof invalidateUserCacheInTurso === "function") {
+      await invalidateUserCacheInTurso(userId);
+      if (cleanEmail) await invalidateUserCacheInTurso(cleanEmail);
+    }
+  } catch (_) {}
+
+  // 6f. Purge Support Helpdesk Tickets
+  try {
+    const { purgeUserHelpTickets } = require("./helpTicketService");
+    if (typeof purgeUserHelpTickets === "function") {
+      await purgeUserHelpTickets(userId, cleanEmail).catch(() => {});
+    }
+  } catch (_) {}
+
   // Clean pending verifications for this user
   try {
     const cleanDigits = cleanMobile.replace(/\D/g, "").slice(-10);

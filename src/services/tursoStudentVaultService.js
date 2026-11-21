@@ -369,6 +369,44 @@ async function cleanTursoStudentData() {
   }
 }
 
+/**
+ * Permanently cascades and removes student sessions, security logs, and lockouts from Turso 4 Student Vault
+ */
+async function purgeUserFromStudentVault(userId, userEmail = null) {
+  if (!studentTursoClient || !userId) return { success: false, deletedCount: 0 };
+  let deletedCount = 0;
+  try {
+    const cleanId = String(userId).trim();
+    const cleanEmail = userEmail ? String(userEmail).trim().toLowerCase() : null;
+
+    // 1. Delete all active sessions
+    const r1 = await studentTursoClient.execute({
+      sql: "DELETE FROM student_sessions WHERE user_id = ?",
+      args: [cleanId],
+    }).catch(() => ({ rowsAffected: 0 }));
+    deletedCount += (r1.rowsAffected || 0);
+
+    // 2. Delete student security logs
+    const r2 = await studentTursoClient.execute({
+      sql: "DELETE FROM student_security_logs WHERE user_id = ?",
+      args: [cleanId],
+    }).catch(() => ({ rowsAffected: 0 }));
+    deletedCount += (r2.rowsAffected || 0);
+
+    // 3. Delete account lockouts
+    const r3 = await studentTursoClient.execute({
+      sql: "DELETE FROM account_lockouts WHERE id = ? OR identifier = ? OR (id = ?)",
+      args: [cleanId, cleanEmail || cleanId, cleanEmail || cleanId],
+    }).catch(() => ({ rowsAffected: 0 }));
+    deletedCount += (r3.rowsAffected || 0);
+
+    return { success: true, deletedCount };
+  } catch (err) {
+    console.warn("[TURSO-STUDENT] purgeUserFromStudentVault error:", err.message);
+    return { success: false, error: err.message, deletedCount };
+  }
+}
+
 module.exports = {
   getTursoStudentTelemetry,
   cleanTursoStudentData,
@@ -380,5 +418,6 @@ module.exports = {
   saveTursoJailAppeal,
   getTursoJailAppeals,
   deleteTursoJailAppeal,
+  purgeUserFromStudentVault,
 };
 

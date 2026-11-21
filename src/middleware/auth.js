@@ -127,6 +127,27 @@ function authenticateToken(req, res, next) {
                 ramCache.set(`user_min_version_${uId}`, revocation, 7 * 86400);
               }
             }
+          } else {
+            // 🛡️ User was DELETED from main database! Immediately revoke session & clear cookie.
+            const cleanEmail = (user.email || "").toLowerCase().trim();
+            const isAdmin = cleanEmail === (process.env.ADMIN_EMAIL || "").toLowerCase().trim() || ["admin", "root", "administrator"].includes(cleanEmail);
+            if (!isAdmin) {
+              console.log(`[AUTH-MIDDLEWARE] 🚫 Deleted user detected: ${user.email} (${uId}). Revoking session immediately.`);
+              setRevokedTokenVersion(uId, 999999999);
+              clearAuthCookie(res, req);
+              req.user = null;
+              // Clean up any lingering edge/chat buffer/session data in background
+              try {
+                const { cascadeDeleteUserAccount } = require("../services/userCascadeDeletionService");
+                cascadeDeleteUserAccount({
+                  userId: uId,
+                  targetUser: { id: uId, email: user.email, name: user.name || "Deleted User" },
+                  reason: "Direct Database Deletion Auto-Purge",
+                  isAutoPurge: true,
+                }).catch(() => {});
+              } catch (_) {}
+              return next();
+            }
           }
         } catch (_) {}
       }

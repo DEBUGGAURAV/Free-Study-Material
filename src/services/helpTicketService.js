@@ -2037,6 +2037,56 @@ async function sendTelegramReply(botToken, chatId, text, replyToMessageId = null
   } catch (_) {}
 }
 
+/**
+ * Cascade-purge helpdesk tickets for a deleted user (Turso & In-Memory)
+ */
+async function purgeUserHelpTickets(userId, userEmail = null) {
+  let deletedCount = 0;
+  try {
+    const cleanId = userId ? String(userId).trim() : null;
+    const cleanEmail = userEmail ? String(userEmail).trim().toLowerCase() : null;
+
+    // 1. Purge from in-memory Map
+    for (const [code, t] of inMemoryTickets.entries()) {
+      const matchId = cleanId && (t.user_id === cleanId || t.userId === cleanId);
+      const matchEmail = cleanEmail && ((t.user_email || "").toLowerCase() === cleanEmail || (t.userEmail || "").toLowerCase() === cleanEmail);
+      if (matchId || matchEmail) {
+        inMemoryTickets.delete(code);
+        deletedCount++;
+      }
+    }
+
+    // 2. Purge from Turso Database
+    if (helpTursoClient) {
+      const args = [];
+      let sql = "";
+      if (cleanId && cleanEmail) {
+        sql = "DELETE FROM help_tickets WHERE user_id = ? OR LOWER(user_email) = ?";
+        args.push(cleanId, cleanEmail);
+      } else if (cleanId) {
+        sql = "DELETE FROM help_tickets WHERE user_id = ?";
+        args.push(cleanId);
+      } else if (cleanEmail) {
+        sql = "DELETE FROM help_tickets WHERE LOWER(user_email) = ?";
+        args.push(cleanEmail);
+      }
+
+      if (sql) {
+        const res = await helpTursoClient.execute({ sql, args }).catch(() => ({ rowsAffected: 0 }));
+        deletedCount = Math.max(deletedCount, res.rowsAffected || 0);
+      }
+    }
+
+    if (deletedCount > 0) {
+      console.log(`[HELP-TURSO] 🗑️ Purged ${deletedCount} help ticket(s) for user ${cleanId || cleanEmail}`);
+    }
+    return { success: true, deletedCount };
+  } catch (err) {
+    console.warn("[HELP-TURSO] purgeUserHelpTickets error:", err.message);
+    return { success: false, error: err.message, deletedCount: 0 };
+  }
+}
+
 setTimeout(startHelpBotPoller, 3000);
 
 module.exports = {
@@ -2048,6 +2098,7 @@ module.exports = {
   setHelpTicketActive,
   deleteHelpTicket,
   purgeHelpTickets,
+  purgeUserHelpTickets,
   createTelegramForumTopics,
   getAllHelpTickets,
   getHelpBotToken,

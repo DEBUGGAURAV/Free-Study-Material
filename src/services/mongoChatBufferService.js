@@ -148,6 +148,42 @@ async function pruneBufferOlderThan(days = 7) {
 }
 
 /**
+ * Purge all buffered chat messages sent by a deleted user (Cascade Guarantee)
+ */
+async function purgeUserFromBuffer(userId, userEmail = null) {
+  try {
+    const db = await getMongoDb();
+    if (!db || !userId) return { deletedCount: 0 };
+
+    const cleanId = String(userId).trim();
+    const cleanEmail = userEmail ? String(userEmail).trim().toLowerCase() : null;
+    const collection = db.collection(COLLECTION_NAME);
+
+    const conditions = [
+      { "sender.id": cleanId },
+      { senderId: cleanId },
+      { "sender.userId": cleanId },
+      { userId: cleanId },
+    ];
+    if (cleanEmail) {
+      conditions.push({ "sender.email": cleanEmail });
+      conditions.push({ senderEmail: cleanEmail });
+      conditions.push({ userEmail: cleanEmail });
+    }
+
+    const res = await collection.deleteMany({ $or: conditions });
+    const deletedCount = res?.deletedCount || 0;
+    if (deletedCount > 0) {
+      console.log(`[MONGO-BUFFER] 🗑️ Purged ${deletedCount} buffered chat message(s) for user ${cleanId}`);
+    }
+    return { deletedCount };
+  } catch (err) {
+    console.warn("[MONGO-BUFFER] purgeUserFromBuffer error:", err.message);
+    return { deletedCount: 0, error: err.message };
+  }
+}
+
+/**
  * Get complete telemetry status for Admin Studio
  */
 async function getMongoTelemetry() {
@@ -186,5 +222,6 @@ module.exports = {
   getBufferCount,
   flushBufferToTurso,
   pruneBufferOlderThan,
+  purgeUserFromBuffer,
   getMongoTelemetry,
 };

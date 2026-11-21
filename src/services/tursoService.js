@@ -1135,6 +1135,22 @@ async function purgeUserFromTurso(userId, userEmail = null) {
     }).catch(() => ({ rowsAffected: 0 }));
     deletedCount += (r3.rowsAffected || 0);
 
+    // 4b. If Dedicated Chat Turso Database is active, delete from it as well
+    const chatTargetClient = typeof getChatTursoClient === "function" ? getChatTursoClient() : null;
+    if (chatTargetClient && chatTargetClient !== client) {
+      const rChatP = await chatTargetClient.execute({
+        sql: `DELETE FROM chat_user_profiles WHERE userId = ?`,
+        args: [cleanId],
+      }).catch(() => ({ rowsAffected: 0 }));
+      deletedCount += (rChatP.rowsAffected || 0);
+
+      const rChatM = await chatTargetClient.execute({
+        sql: `DELETE FROM chat_messages WHERE senderId = ?`,
+        args: [cleanId],
+      }).catch(() => ({ rowsAffected: 0 }));
+      deletedCount += (rChatM.rowsAffected || 0);
+    }
+
     // 5. Clean in-memory/MongoDB chat profile & messages
     inMemoryChatProfiles.delete(cleanId);
     try {
@@ -1143,6 +1159,41 @@ async function purgeUserFromTurso(userId, userEmail = null) {
       if (db) {
         await db.collection("chat_user_profiles").deleteOne({ userId: cleanId }).catch(() => {});
         await db.collection("chat_messages").deleteMany({ senderId: cleanId }).catch(() => {});
+      }
+    } catch (_) {}
+
+    // 5b. Clean MongoDB Hot Buffer (Cluster 2 fsmchat)
+    try {
+      const { purgeUserFromBuffer } = require("./mongoChatBufferService");
+      if (typeof purgeUserFromBuffer === "function") {
+        await purgeUserFromBuffer(cleanId, cleanEmail).catch(() => {});
+      }
+    } catch (_) {}
+
+    // 5c. Purge student sessions & lockouts from Turso 4 Student Vault
+    try {
+      const { purgeUserFromStudentVault } = require("./tursoStudentVaultService");
+      if (typeof purgeUserFromStudentVault === "function") {
+        const rVault = await purgeUserFromStudentVault(cleanId, cleanEmail);
+        deletedCount += (rVault?.deletedCount || 0);
+      }
+    } catch (_) {}
+
+    // 5d. Invalidate Turso 5 Edge User Metadata Cache
+    try {
+      const { invalidateUserCacheInTurso } = require("./tursoUserCacheService");
+      if (typeof invalidateUserCacheInTurso === "function") {
+        await invalidateUserCacheInTurso(cleanId);
+        if (cleanEmail) await invalidateUserCacheInTurso(cleanEmail);
+      }
+    } catch (_) {}
+
+    // 5e. Purge or anonymize support helpdesk tickets
+    try {
+      const { purgeUserHelpTickets } = require("./helpTicketService");
+      if (typeof purgeUserHelpTickets === "function") {
+        const rHelp = await purgeUserHelpTickets(cleanId, cleanEmail);
+        deletedCount += (rHelp?.deletedCount || 0);
       }
     } catch (_) {}
 

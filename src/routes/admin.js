@@ -1866,6 +1866,27 @@ router.delete("/recycle-bin/permanent/:id", authenticateToken, checkAdminOrPermi
       await permanentlyDeleteRecordFromTurso(cleanId);
     } catch (_) {}
 
+    // 🛡️ If user account, permanently cascade and clean from Turso, Chat Buffer, and Sessions
+    if (rawId.startsWith("users_") || (data && (data.collectionName === "users" || data.role || data.email))) {
+      try {
+        const { purgeUserFromTurso } = require("../services/tursoService");
+        await purgeUserFromTurso(cleanId, data?.email);
+      } catch (_) {}
+      try {
+        const { purgeUserFromBuffer } = require("../services/mongoChatBufferService");
+        await purgeUserFromBuffer(cleanId, data?.email);
+      } catch (_) {}
+      try {
+        const { purgeUserFromStudentVault } = require("../services/tursoStudentVaultService");
+        await purgeUserFromStudentVault(cleanId, data?.email);
+      } catch (_) {}
+      try {
+        const { invalidateUserCacheInTurso } = require("../services/tursoUserCacheService");
+        await invalidateUserCacheInTurso(cleanId);
+        if (data?.email) await invalidateUserCacheInTurso(data.email);
+      } catch (_) {}
+    }
+
     await Promise.all([
       db.collection("deleted_records").doc(rawId).delete().catch(() => {}),
       db.collection("deleted_records").doc(`notes_${cleanId}`).delete().catch(() => {}),
