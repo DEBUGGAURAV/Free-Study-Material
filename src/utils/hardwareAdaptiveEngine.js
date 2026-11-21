@@ -64,31 +64,55 @@ export function detectClientHardwareProfile() {
     };
   }
 
-  const cores = navigator.hardwareConcurrency || 4;
-  const memoryGB = navigator.deviceMemory || 4; // Note: deviceMemory reports approximate RAM (0.25, 0.5, 1, 2, 4, 8)
+  const ua = navigator.userAgent || "";
+  let cores = navigator.hardwareConcurrency || 4;
+  let memoryGB = navigator.deviceMemory || 4; // Note: deviceMemory reports approximate RAM (0.25, 0.5, 1, 2, 4, 8)
+  const isIphone = /iPhone/i.test(ua);
+  const isMac = /Macintosh|Mac OS X/i.test(ua) && !isIphone;
   const isMobile =
+    isIphone ||
     window.innerWidth < 768 ||
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent || "");
+    /Android|webOS|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua);
   const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
 
+  // Safari WebKit (iOS & macOS) does not expose navigator.deviceMemory. Resolve true specs:
+  if (!navigator.deviceMemory) {
+    if (isMac) {
+      memoryGB = cores >= 10 ? 18 : (cores >= 8 ? 16 : 8);
+    } else if (isIphone) {
+      cores = Math.max(cores, 6);
+      memoryGB = /Pro/i.test(ua) ? 8 : 6;
+    }
+  }
+
   // Real Hardware ROM Tier mapping
-  const realRomGB = !isMobile
-    ? (memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256)
-    : (memoryGB >= 12 ? 512 : memoryGB >= 8 && cores >= 8 ? 256 : memoryGB >= 4 || cores >= 6 ? 128 : 64);
-  const realRomLabel = !isMobile
-    ? (realRomGB >= 1024 ? "1 TB NVMe SSD" : `${realRomGB} GB Fast SSD`)
-    : `${realRomGB} GB ROM (${realRomGB >= 256 ? "UFS 3.1" : "UFS High-Speed"})`;
+  let realRomGB = 128;
+  let realRomLabel = "128 GB ROM";
+
+  if (isMac) {
+    realRomGB = cores >= 10 ? 1024 : (cores >= 8 ? 512 : 256);
+    realRomLabel = realRomGB >= 1024 ? "1 TB Apple Unified SSD" : `${realRomGB} GB Apple Unified SSD`;
+  } else if (isIphone) {
+    realRomGB = /Pro\s*Max/i.test(ua) ? 256 : 128;
+    realRomLabel = `${realRomGB} GB Apple NVMe Storage`;
+  } else if (!isMobile) {
+    realRomGB = memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256;
+    realRomLabel = realRomGB >= 1024 ? "1 TB NVMe SSD" : `${realRomGB} GB Fast SSD`;
+  } else {
+    realRomGB = memoryGB >= 12 ? 512 : memoryGB >= 8 && cores >= 8 ? 256 : memoryGB >= 4 || cores >= 6 ? 128 : 64;
+    realRomLabel = `${realRomGB} GB ROM (${realRomGB >= 256 ? "UFS 3.1" : "UFS High-Speed"})`;
+  }
 
   // Ultra low-end: 2GB or less RAM, or dual core, or 2G network
-  const isUltraLowEnd = memoryGB <= 2 || cores <= 2;
-  const isLowEnd = isUltraLowEnd || memoryGB < 4 || cores < 4 || (isMobile && memoryGB <= 3);
+  const isUltraLowEnd = !isMac && !isIphone && (memoryGB <= 2 || cores <= 2);
+  const isLowEnd = isUltraLowEnd || (!isMac && !isIphone && (memoryGB < 4 || cores < 4 || (isMobile && memoryGB <= 3)));
 
   let tier = "mid";
   if (isUltraLowEnd) {
     tier = "ultra_low";
   } else if (isLowEnd) {
     tier = "low";
-  } else if (cores >= 8 && memoryGB >= 8 && !isMobile) {
+  } else if (isMac || (cores >= 8 && memoryGB >= 8 && !isMobile)) {
     tier = "workstation";
   } else if (cores >= 6 && memoryGB >= 6) {
     tier = "high";
@@ -103,7 +127,11 @@ export function detectClientHardwareProfile() {
 
   const isMeteredOrSlow = networkProfile?.isSlow || networkProfile?.saveData;
 
-  const label = isUltraLowEnd
+  const label = isMac
+    ? `Apple Mac (${cores} Cores, ${memoryGB}GB Unified Memory)`
+    : isIphone
+    ? `iPhone (${cores} Cores, ${memoryGB}GB RAM)`
+    : isUltraLowEnd
     ? `Budget Mobile (${cores} Cores, ~${memoryGB}GB RAM)`
     : isLowEnd
     ? `Mobile / Entry PC (${cores} Cores, ${memoryGB}GB RAM)`

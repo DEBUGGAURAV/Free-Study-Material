@@ -1507,7 +1507,7 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                       Physical Device ROM / Storage
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
-                      {hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM • {hwProfile.isMobile ? "Internal UFS / Flash" : "High-Speed SSD"}
+                      {hwProfile.cores} Cores • {hwProfile.memoryGB} GB {hwProfile.label?.includes("Mac") ? "Unified Memory" : "RAM"} • {hwProfile.isMobile ? (hwProfile.label?.includes("iPhone") ? "Apple NVMe Flash" : "Internal UFS / Flash") : (hwProfile.label?.includes("Mac") ? "Apple Unified SSD" : "High-Speed SSD")}
                     </div>
                   </div>
                 </div>

@@ -16,24 +16,37 @@ const isMasterAdminStudent = (student) => {
 
 export function getDisplayRom(specs) {
   if (!specs) return "128GB ROM";
-  if (specs.romGB && Number(specs.romGB) >= 32) return `${specs.romGB}GB ROM`;
-  if (specs.realRomGB && Number(specs.realRomGB) >= 32) return `${specs.realRomGB}GB ROM`;
+  const label = `${specs.label || ""} ${specs.deviceName || ""} ${specs.brand || ""} ${specs.os || ""}`.toLowerCase();
+  const isApple = /apple|iphone|ipad|macintosh|mac\s*os|ios/i.test(label);
+  const isMobile = specs.isMobile !== false && !/macintosh|mac\s*os|macbook/i.test(label);
+
+  if (specs.romGB && Number(specs.romGB) >= 32) return `${specs.romGB}GB ${isMobile ? "ROM" : "SSD"}`;
+  if (specs.realRomGB && Number(specs.realRomGB) >= 32) return `${specs.realRomGB}GB ${isMobile ? "ROM" : "SSD"}`;
 
   const rawStorageGB = Number(specs.storageGB || 0);
   if (rawStorageGB >= 32 && Number.isInteger(rawStorageGB)) {
-    return `${rawStorageGB}GB ROM`;
+    return `${rawStorageGB}GB ${isMobile ? "ROM" : "SSD"}`;
   }
 
   if (specs.storage && typeof specs.storage === "string") {
     const match = specs.storage.match(/(1\s*TB|2\s*TB|32\s*GB|64\s*GB|128\s*GB|256\s*GB|512\s*GB)/i);
-    if (match) return match[1].replace(/\s+/g, "") + (match[1].toLowerCase().includes("tb") ? " SSD" : " ROM");
+    if (match) return match[1].replace(/\s+/g, "") + (match[1].toLowerCase().includes("tb") || !isMobile ? " SSD" : " ROM");
+  }
+
+  // Apple Mac & iPhone resolution
+  if (isApple) {
+    if (!isMobile) {
+      return (Number(specs.cores) >= 8 || Number(specs.memoryGB) >= 8) ? "512GB SSD" : "256GB SSD";
+    }
+    if (/pro\s*max/i.test(label) || /15\s*pro|16\s*pro/i.test(label)) return "256GB ROM";
+    if (/11|xr|x|8|se/i.test(label)) return "64GB ROM";
+    return "128GB ROM";
   }
 
   // Reverse-map legacy browser quota (e.g. 6.5, 12.8) to real phone/PC ROM
   const quota = rawStorageGB > 0 ? rawStorageGB : 0;
   const mem = Number(specs.memoryGB || 4);
   const cores = Number(specs.cores || 4);
-  const isMobile = specs.isMobile !== false;
 
   if (!isMobile) {
     if (quota >= 150 || mem >= 16 || cores >= 16) return "1TB SSD";

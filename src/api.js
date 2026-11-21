@@ -348,7 +348,42 @@ export function estimateRealDeviceRom({
   model = "",
   os = "",
 } = {}) {
-  // 1. Desktop / Laptop (Windows, macOS, Linux)
+  const brandModelStr = `${brand} ${model} ${os}`.toLowerCase();
+  const isApple = brand === "Apple" || /iphone|ipad|macintosh|mac\s*os|ios|darwin/i.test(brandModelStr);
+
+  // 1. Apple Ecosystem (MacBook, iMac, iPhone, iPad)
+  if (isApple) {
+    // A. Mac (macOS / MacBook / iMac / Mac mini / Mac Studio)
+    if (!isMobile || /macintosh|mac\s*os|macbook|apple\s*m\d/i.test(brandModelStr)) {
+      if (quotaGB >= 100 || cores >= 10 || memoryGB >= 18) {
+        return { romGB: 1024, storage: "1 TB Apple Unified SSD", type: "Apple Unified SSD" };
+      }
+      if (quotaGB >= 30 || cores >= 8 || memoryGB >= 8) {
+        return { romGB: 512, storage: "512 GB Apple Unified SSD", type: "Apple Unified SSD" };
+      }
+      return { romGB: 256, storage: "256 GB Apple Unified SSD", type: "Apple Unified SSD" };
+    }
+
+    // B. iPhone & iPad (iOS / iPadOS)
+    if (/pro\s*max/i.test(model) || /15.*pro\s*max|16.*pro\s*max/i.test(model)) {
+      return { romGB: 256, storage: "256 GB Apple NVMe Storage", type: "Apple NVMe Flash" };
+    }
+    if (/pro/i.test(model)) {
+      return { romGB: 256, storage: "256 GB Apple NVMe Storage", type: "Apple NVMe Flash" };
+    }
+    if (/iphone\s*(1[2-6]|se)/i.test(model) || /12|13|14|15|16/i.test(model)) {
+      return { romGB: 128, storage: "128 GB Apple NVMe Storage", type: "Apple NVMe Flash" };
+    }
+    if (/ipad/i.test(brandModelStr)) {
+      return { romGB: 128, storage: "128 GB Apple Fast Storage", type: "Apple Fast Storage" };
+    }
+    if (/iphone\s*(11|xr|x|xs|8|7)/i.test(model)) {
+      return { romGB: 64, storage: "64 GB Apple NVMe Storage", type: "Apple NVMe Flash" };
+    }
+    return { romGB: 128, storage: "128 GB Apple NVMe Storage", type: "Apple NVMe Flash" };
+  }
+
+  // 2. Desktop / Laptop (Windows, Linux)
   if (!isMobile) {
     if (quotaGB >= 150 || memoryGB >= 16 || cores >= 16) {
       return { romGB: 1024, storage: "1 TB NVMe SSD", type: "NVMe SSD" };
@@ -362,9 +397,8 @@ export function estimateRealDeviceRom({
     return { romGB: 128, storage: "128 GB SSD", type: "SSD" };
   }
 
-  // 2. Mobile (Android & iOS)
-  const brandModelStr = `${brand} ${model} ${os}`.toLowerCase();
-  const isFlagship = /pro\s*max|ultra|fold|flip|iphone\s*(1[3-6]\s*pro|1[5-6])|galaxy\s*s2[1-5]|pixel\s*[7-9]\s*pro|oneplus\s*(1[0-3]|9|8\s*pro)/i.test(brandModelStr);
+  // 3. Android Mobile
+  const isFlagship = /pro\s*max|ultra|fold|flip|galaxy\s*s2[1-5]|pixel\s*[7-9]\s*pro|oneplus\s*(1[0-3]|9|8\s*pro)/i.test(brandModelStr);
 
   // High-End / Flagship tier (512 GB ROM)
   if (quotaGB >= 45 || memoryGB >= 12 || (isFlagship && memoryGB >= 8 && quotaGB >= 25)) {
@@ -416,12 +450,23 @@ export function getClientDeviceSpecs() {
 
   try {
     const ua = navigator.userAgent || "";
-    const cores = navigator.hardwareConcurrency || 4;
-    const memoryGB = navigator.deviceMemory || 4;
+    let cores = navigator.hardwareConcurrency || 4;
+    let memoryGB = navigator.deviceMemory || 4;
     const isMobile = window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
     const screenRes = typeof screen !== "undefined" ? `${screen.width}x${screen.height}` : "";
     const dpr = window.devicePixelRatio || 1;
     const isTouch = "ontouchstart" in window || (navigator.maxTouchPoints || 0) > 0;
+
+    // Fast GPU Engine Detection (WebGL unmasked renderer probe for Apple Silicon / M-Series)
+    let gpuRenderer = "";
+    try {
+      const canvas = document.createElement("canvas");
+      const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+      if (gl) {
+        const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+        if (dbg) gpuRenderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "";
+      }
+    } catch (_) {}
 
     const quotaGB = cachedStorageEstimate?.quotaGB || 0;
     const usageMB = cachedStorageEstimate?.usageMB || 0;
@@ -438,18 +483,33 @@ export function getClientDeviceSpecs() {
       os = m ? `iOS ${m[1].replace(/_/g, ".")}` : "iOS";
       const maxDim = Math.max(screen.width, screen.height);
       const minDim = Math.min(screen.width, screen.height);
-      if (maxDim === 932 && minDim === 430) model = "iPhone 15/16 Pro Max";
-      else if (maxDim === 852 && minDim === 393) model = "iPhone 15/16 Pro";
+
+      if (maxDim === 956 && minDim === 440) model = "iPhone 16 Pro Max";
+      else if (maxDim === 874 && minDim === 402) model = "iPhone 16 Pro";
+      else if (maxDim === 932 && minDim === 430) model = "iPhone 14/15/16 Pro Max";
+      else if (maxDim === 852 && minDim === 393) model = "iPhone 14/15/16 Pro";
       else if (maxDim === 926 && minDim === 428) model = "iPhone 13/14 Pro Max";
       else if (maxDim === 844 && minDim === 390) model = "iPhone 12/13/14";
       else if (maxDim === 896 && minDim === 414) model = dpr >= 3 ? "iPhone 11 Pro Max" : "iPhone 11 / XR";
-      else if (maxDim === 812 && minDim === 375) model = "iPhone X / XS / 11 Pro";
+      else if (maxDim === 812 && minDim === 375) model = dpr >= 3 ? "iPhone X / XS / 11 Pro" : "iPhone 12/13 mini";
       else if (maxDim === 667 && minDim === 375) model = "iPhone SE / 8";
       else model = "iPhone";
+
+      // On iOS WebKit, navigator.deviceMemory is undefined. Resolve true iPhone hardware specs:
+      if (!navigator.deviceMemory) {
+        if (/16|Pro\s*Max|15\s*Pro/i.test(model)) memoryGB = 8;
+        else if (/Pro|14|15/i.test(model)) memoryGB = 6;
+        else memoryGB = 4;
+      }
+      if (!navigator.hardwareConcurrency || navigator.hardwareConcurrency < 6) {
+        cores = 6; // Apple A-series Bionic chips have 6 CPU Cores
+      }
     } else if (/iPad/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)) {
       brand = "Apple";
       os = "iPadOS";
       model = "iPad";
+      if (!navigator.deviceMemory) memoryGB = 8;
+      if (!navigator.hardwareConcurrency || navigator.hardwareConcurrency < 8) cores = 8;
     } else if (/Android/i.test(ua) || (isMobile && /Linux/i.test(ua))) {
       os = "Android";
       const m = ua.match(/Android\s([0-9\.]+)/i);
@@ -486,7 +546,19 @@ export function getClientDeviceSpecs() {
     } else if (/Macintosh|Mac OS X/i.test(ua)) {
       brand = "Apple";
       os = "macOS";
-      model = isTouch ? "iPad" : "MacBook";
+      const isAppleSilicon = /Apple M\d/i.test(gpuRenderer) || (cores >= 8 && !/Intel/i.test(gpuRenderer));
+      const mMatch = gpuRenderer.match(/Apple M\d(\s*(Pro|Max|Ultra))?/i);
+      const chipName = mMatch ? mMatch[0] : (isAppleSilicon ? "Apple Silicon" : "Intel Core");
+
+      model = isTouch ? "iPad" : `MacBook (${chipName})`;
+
+      // On macOS Safari, navigator.deviceMemory is undefined. Resolve true Mac RAM:
+      if (!navigator.deviceMemory) {
+        if (cores >= 12) memoryGB = 32;
+        else if (cores >= 10) memoryGB = 18;
+        else if (cores >= 8) memoryGB = 16;
+        else memoryGB = 8;
+      }
     } else if (/Linux/i.test(ua)) {
       brand = "Linux PC";
       os = "Linux";
