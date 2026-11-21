@@ -7632,13 +7632,96 @@ body.dark-theme [style*="color: #334155"],
 /* 5. Note Cards Complete Dark Mode Specs & Actions */
 [data-theme="dark"] .note-card,
 .dark-theme .note-card {
-  background: #0f172a !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: #0b1222 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
   color: #f8fafc !important;
+}
+[data-theme="dark"] .note-showcase-box,
+.dark-theme .note-showcase-box {
+  background: #131c31 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+[data-theme="dark"] .note-showcase-box:hover,
+.dark-theme .note-showcase-box:hover {
+  background: #1a2744 !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 10px 24px -10px rgba(99, 102, 241, 0.4) !important;
 }
 [data-theme="dark"] .note-title,
 .dark-theme .note-title {
   color: #ffffff !important;
+}
+[data-theme="dark"] .note-card:hover .note-title,
+.dark-theme .note-card:hover .note-title,
+[data-theme="dark"] .note-showcase-box:hover .note-title,
+.dark-theme .note-showcase-box:hover .note-title {
+  color: #60a5fa !important;
+}
+[data-theme="dark"] .showcase-verified-tag,
+.dark-theme .showcase-verified-tag {
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] .showcase-preview-cta,
+.dark-theme .showcase-preview-cta {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .note-showcase-box:hover .showcase-preview-cta,
+.dark-theme .note-showcase-box:hover .showcase-preview-cta {
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] .showcase-doc-icon,
+.dark-theme .showcase-doc-icon {
+  background: rgba(239, 68, 68, 0.14) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #f87171 !important;
+}
+[data-theme="dark"] .card-thumbnail-box,
+.dark-theme .card-thumbnail-box {
+  background: #090d16 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+[data-theme="dark"] .thumbnail-preview-chip,
+.dark-theme .thumbnail-preview-chip {
+  background: rgba(15, 23, 42, 0.85) !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] .note-badges-row .pill-course,
+.dark-theme .note-badges-row .pill-course {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .tech-pill,
+.dark-theme .tech-pill {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .tech-pill.branch,
+.dark-theme .tech-pill.branch {
+  background: rgba(14, 165, 233, 0.15) !important;
+  border-color: rgba(14, 165, 233, 0.3) !important;
+  color: #38bdf8 !important;
+}
+[data-theme="dark"] .admin-status-toggle.active,
+.dark-theme .admin-status-toggle.active {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+  color: #34d399 !important;
+}
+[data-theme="dark"] .admin-status-toggle.locked,
+.dark-theme .admin-status-toggle.locked {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #f87171 !important;
+}
+[data-theme="dark"] .pill-readonly,
+.dark-theme .pill-readonly {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  color: #f87171 !important;
 }
 [data-theme="dark"] .note-desc,
 .dark-theme .note-desc {
@@ -7792,11 +7875,13 @@ body.dark-theme [style*="color: #334155"],
 .dark-theme .command-center-card span:not([class*="badge"]):not([class*="tag"]):not([style*="background"]) {
   color: #cbd5e1 !important;
 }
+
+/* 7A. Telemetry Tiles */
 [data-theme="dark"] .telemetry-tile,
 .dark-theme .telemetry-tile {
-  background: #1e293b !important;
-  border-color: #334155 !important;
-  color: #f8fafc !important;
+  background: #111a2e !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
 }
 [data-theme="dark"] .telemetry-tile strong,
 .dark-theme .telemetry-tile strong,
@@ -7806,6 +7891,201 @@ body.dark-theme [style*="color: #334155"],
 }
 [data-theme="dark"] .telemetry-tile span,
 .dark-theme .telemetry-tile span {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .tile-amber-3d > div > div:first-child,
+.dark-theme .tile-amber-3d > div > div:first-child {
+  color: #fef3c7 !important;
+}
+[data-theme="dark"] .tile-amber-3d > div > div:last-child,
+.dark-theme .tile-amber-3d > div > div:last-child {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .tile-emerald-3d > div > div:first-child,
+.dark-theme .tile-emerald-3d > div > div:first-child {
+  color: #d1fae5 !important;
+}
+[data-theme="dark"] .tile-emerald-3d > div > div:last-child,
+.dark-theme .tile-emerald-3d > div > div:last-child {
+  color: #34d399 !important;
+}
+[data-theme="dark"] .tile-cyan-3d > div > div:first-child,
+.dark-theme .tile-cyan-3d > div > div:first-child {
+  color: #ccfbf1 !important;
+}
+[data-theme="dark"] .tile-cyan-3d > div > div:last-child,
+.dark-theme .tile-cyan-3d > div > div:last-child {
+  color: #38bdf8 !important;
+}
+
+/* 7B. Continue Learning & Navigation */
+[data-theme="dark"] .continue-progress-track,
+.dark-theme .continue-progress-track {
+  background: #1e293b !important;
+}
+[data-theme="dark"] .continue-compass-btn,
+.dark-theme .continue-compass-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .continue-compass-btn svg,
+.dark-theme .continue-compass-btn svg {
+  color: #cbd5e1 !important;
+}
+
+/* 7C. Study Tinder Mini Deck in Command Center */
+[data-theme="dark"] .command-center-mini-preview,
+.dark-theme .command-center-mini-preview,
+[data-theme="dark"] [style*="linear-gradient(145deg, #f8fafc, #ffffff)"],
+.dark-theme [style*="linear-gradient(145deg, #f8fafc, #ffffff)"] {
+  background: #131c31 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+[data-theme="dark"] .swipe-cards-left-badge,
+.dark-theme .swipe-cards-left-badge,
+[data-theme="dark"] [style*="background: #fef3c7"],
+.dark-theme [style*="background: #fef3c7"] {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+[data-theme="dark"] .swipe-subject-pill,
+.dark-theme .swipe-subject-pill,
+[data-theme="dark"] [style*="background: #e0e7ff"],
+.dark-theme [style*="background: #e0e7ff"] {
+  background: rgba(99, 102, 241, 0.2) !important;
+  color: #a5b4fc !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+}
+[data-theme="dark"] .swipe-chance-tag,
+.dark-theme .swipe-chance-tag {
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .swipe-card-question,
+.dark-theme .swipe-card-question {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .swipe-card-trick,
+.dark-theme .swipe-card-trick {
+  color: #cbd5e1 !important;
+}
+
+/* 7D. Exam Radar */
+[data-theme="dark"] .exam-countdown-badge,
+.dark-theme .exam-countdown-badge,
+[data-theme="dark"] [style*="background: #ffe4e6"],
+.dark-theme [style*="background: #ffe4e6"] {
+  background: rgba(244, 63, 94, 0.18) !important;
+  color: #fb7185 !important;
+  border: 1px solid rgba(244, 63, 94, 0.35) !important;
+}
+[data-theme="dark"] .exam-radar-sub-name,
+.dark-theme .exam-radar-sub-name,
+[data-theme="dark"] .command-center-card [style*="color: #334155"],
+.dark-theme .command-center-card [style*="color: #334155"] {
+  color: #e2e8f0 !important;
+}
+[data-theme="dark"] .exam-radar-track,
+.dark-theme .exam-radar-track {
+  background: #1e293b !important;
+}
+
+/* 7E. Campus Study Pod Pomodoro */
+[data-theme="dark"] .pomo-peers-badge,
+.dark-theme .pomo-peers-badge,
+[data-theme="dark"] [style*="background: #ecfdf5"],
+.dark-theme [style*="background: #ecfdf5"] {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+[data-theme="dark"] .pomo-ring-track,
+.dark-theme .pomo-ring-track,
+[data-theme="dark"] .pomodoro-widget circle[stroke="#e2e8f0"],
+.dark-theme .pomodoro-widget circle[stroke="#e2e8f0"] {
+  stroke: #334155 !important;
+}
+[data-theme="dark"] .pomo-time-text,
+.dark-theme .pomo-time-text {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .pomo-status-text,
+.dark-theme .pomo-status-text {
+  color: #34d399 !important;
+}
+[data-theme="dark"] .pomo-title-text,
+.dark-theme .pomo-title-text {
+  color: #ffffff !important;
+}
+[data-theme="dark"] .pomo-sub-text,
+.dark-theme .pomo-sub-text {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .pomo-reset-btn,
+.dark-theme .pomo-reset-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+}
+[data-theme="dark"] .pomo-reset-btn svg,
+.dark-theme .pomo-reset-btn svg {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .pomo-ambient-box,
+.dark-theme .pomo-ambient-box {
+  background: #131c31 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+[data-theme="dark"] .pomo-ambient-title,
+.dark-theme .pomo-ambient-title {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .pomo-ambient-sub,
+.dark-theme .pomo-ambient-sub {
+  color: #94a3b8 !important;
+}
+[data-theme="dark"] .pomo-ambient-toggle-btn,
+.dark-theme .pomo-ambient-toggle-btn {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #cbd5e1 !important;
+}
+[data-theme="dark"] .pomo-ambient-toggle-btn.active,
+.dark-theme .pomo-ambient-toggle-btn.active {
+  background: rgba(14, 165, 233, 0.22) !important;
+  border-color: rgba(14, 165, 233, 0.45) !important;
+  color: #38bdf8 !important;
+}
+
+/* 7F. Study Tinder Swipe Deck & AI Study Pod Interactive Cards */
+[data-theme="dark"] .tinder-interactive-card,
+.dark-theme .tinder-interactive-card,
+[data-theme="dark"] .tinder-under-card,
+.dark-theme .tinder-under-card,
+[data-theme="dark"] .ai-study-flashcard,
+.dark-theme .ai-study-flashcard {
+  background: #131c31 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5) !important;
+}
+[data-theme="dark"] .tinder-card-text-body,
+.dark-theme .tinder-card-text-body,
+[data-theme="dark"] .tinder-interactive-card [style*="color: #0f172a"],
+.dark-theme .tinder-interactive-card [style*="color: #0f172a"],
+[data-theme="dark"] .ai-study-flashcard [style*="color: #0f172a"],
+.dark-theme .ai-study-flashcard [style*="color: #0f172a"] {
+  color: #f8fafc !important;
+}
+[data-theme="dark"] .tinder-interactive-card [style*="color: #065f46"],
+.dark-theme .tinder-interactive-card [style*="color: #065f46"],
+[data-theme="dark"] .ai-study-flashcard [style*="color: #065f46"],
+.dark-theme .ai-study-flashcard [style*="color: #065f46"] {
+  color: #34d399 !important;
+}
+[data-theme="dark"] .tinder-category-chip,
+.dark-theme .tinder-category-chip {
+  background: #1e293b !important;
+  border-color: #334155 !important;
   color: #94a3b8 !important;
 }
 

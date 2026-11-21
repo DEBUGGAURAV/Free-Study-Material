@@ -694,6 +694,7 @@ export default function StudyTinderSwipeDeck({
             {/* 🥈 Layer 2 Underneath Card (Peek) */}
             {nextCard && (
               <div
+                className="tinder-under-card"
                 style={{
                   position: "absolute",
                   width: "100%",
@@ -716,6 +717,7 @@ export default function StudyTinderSwipeDeck({
             {currentCard && (
               <div
                 ref={cardRef}
+                className="tinder-interactive-card"
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
@@ -859,6 +861,7 @@ export default function StudyTinderSwipeDeck({
 
                   {currentCard.category && (
                     <span
+                      className="tinder-category-chip"
                       style={{
                         fontSize: "0.68rem",
                         color: "#64748b",
@@ -885,6 +888,7 @@ export default function StudyTinderSwipeDeck({
                   }}
                 >
                   <div
+                    className="tinder-card-text-body"
                     style={{
                       fontSize: isFlipped ? "1.02rem" : "1.15rem",
                       fontWeight: isFlipped ? 500 : 700,

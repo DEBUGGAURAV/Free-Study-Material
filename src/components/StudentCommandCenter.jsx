@@ -592,7 +592,7 @@ export default function StudentCommandCenter({
               </p>
 
               {/* Progress Bar */}
-              <div style={{ width: "100%", height: "8px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden", marginBottom: "20px" }}>
+              <div className="continue-progress-track" style={{ width: "100%", height: "8px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden", marginBottom: "20px" }}>
                 <div
                   style={{
                     width: `${readingProgress}%`,
@@ -625,7 +625,7 @@ export default function StudentCommandCenter({
 
               <button
                 type="button"
-                className="btn-3d-round"
+                className="btn-3d-round continue-compass-btn"
                 onClick={onBrowseMaterials}
                 title="Explore Full Syllabus"
                 style={{
@@ -683,13 +683,14 @@ export default function StudentCommandCenter({
                   <span>STUDY TINDER • SWIPE-TO-REVISE</span>
                 </span>
 
-                <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#92400e", background: "#fef3c7", padding: "2px 8px", borderRadius: "6px" }}>
+                <span className="swipe-cards-left-badge" style={{ fontSize: "0.72rem", fontWeight: 800, color: "#92400e", background: "#fef3c7", padding: "2px 8px", borderRadius: "6px" }}>
                   3 Cards Left
                 </span>
               </div>
 
               {/* Mini Card Preview Stack */}
               <div
+                className="command-center-mini-preview"
                 style={{
                   background: "linear-gradient(145deg, #f8fafc, #ffffff)",
                   borderRadius: "16px",
@@ -700,17 +701,17 @@ export default function StudentCommandCenter({
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4338ca", background: "#e0e7ff", padding: "2px 8px", borderRadius: "999px" }}>
+                  <span className="swipe-subject-pill" style={{ fontSize: "0.72rem", fontWeight: 800, color: "#4338ca", background: "#e0e7ff", padding: "2px 8px", borderRadius: "999px" }}>
                     B.Tech CSE • Sem 4
                   </span>
-                  <span style={{ fontSize: "0.7rem", fontWeight: 800, color: "#d97706" }}>
+                  <span className="swipe-chance-tag" style={{ fontSize: "0.7rem", fontWeight: 800, color: "#d97706" }}>
                     🔥 98% Exam Chance
                   </span>
                 </div>
-                <h4 style={{ fontSize: "0.96rem", fontWeight: 900, color: "#0f172a", margin: "0 0 6px" }}>
+                <h4 className="swipe-card-question" style={{ fontSize: "0.96rem", fontWeight: 900, color: "#0f172a", margin: "0 0 6px" }}>
                   Which 4 Coffman conditions are required for Deadlock?
                 </h4>
-                <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
+                <p className="swipe-card-trick" style={{ margin: 0, fontSize: "0.78rem", color: "#64748b", fontWeight: 600 }}>
                   💡 Desi Trick: &quot;M-H-N-C: Mera Hostel Nahi Chala&quot;
                 </p>
               </div>
@@ -781,6 +782,7 @@ export default function StudentCommandCenter({
               </span>
 
               <span
+                className="exam-countdown-badge"
                 style={{
                   fontSize: "0.74rem",
                   fontWeight: 900,
@@ -807,10 +809,10 @@ export default function StudentCommandCenter({
               {/* OS */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "4px" }}>
-                  <span style={{ color: "#334155" }}>Operating Systems</span>
+                  <span className="exam-radar-sub-name" style={{ color: "#334155" }}>Operating Systems</span>
                   <span style={{ color: "#059669", fontWeight: 800 }}>84% • 🔥 On Track</span>
                 </div>
-                <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
+                <div className="exam-radar-track" style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
                   <div style={{ width: "84%", height: "100%", background: "#10b981", borderRadius: "999px" }} />
                 </div>
               </div>
@@ -818,10 +820,10 @@ export default function StudentCommandCenter({
               {/* DBMS */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "4px" }}>
-                  <span style={{ color: "#334155" }}>Database Management (DBMS)</span>
+                  <span className="exam-radar-sub-name" style={{ color: "#334155" }}>Database Management (DBMS)</span>
                   <span style={{ color: "#2563eb", fontWeight: 800 }}>72% • ⚡ Moderate</span>
                 </div>
-                <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
+                <div className="exam-radar-track" style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
                   <div style={{ width: "72%", height: "100%", background: "#3b82f6", borderRadius: "999px" }} />
                 </div>
               </div>
@@ -829,10 +831,10 @@ export default function StudentCommandCenter({
               {/* CN */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 700, marginBottom: "4px" }}>
-                  <span style={{ color: "#334155" }}>Computer Networks</span>
+                  <span className="exam-radar-sub-name" style={{ color: "#334155" }}>Computer Networks</span>
                   <span style={{ color: "#dc2626", fontWeight: 900 }}>48% • ⚠️ Revision Due!</span>
                 </div>
-                <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
+                <div className="exam-radar-track" style={{ height: "6px", background: "#f1f5f9", borderRadius: "999px", overflow: "hidden" }}>
                   <div style={{ width: "48%", height: "100%", background: "#ef4444", borderRadius: "999px" }} />
                 </div>
               </div>
@@ -893,7 +895,7 @@ export default function StudentCommandCenter({
                 </span>
 
                 {/* Social indicator */}
-                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#059669", background: "#ecfdf5", padding: "2px 8px", borderRadius: "999px" }}>
+                <span className="pomo-peers-badge" style={{ fontSize: "0.72rem", fontWeight: 700, color: "#059669", background: "#ecfdf5", padding: "2px 8px", borderRadius: "999px" }}>
                   🟢 38 Peers Studying Now
                 </span>
               </div>
@@ -905,6 +907,7 @@ export default function StudentCommandCenter({
                   <div style={{ position: "relative", width: "84px", height: "84px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <svg width="84" height="84" viewBox="0 0 84 84" style={{ transform: "rotate(-90deg)" }}>
                       <circle
+                        className="pomo-ring-track"
                         cx="42"
                         cy="42"
                         r="36"
@@ -933,20 +936,20 @@ export default function StudentCommandCenter({
                       </defs>
                     </svg>
                     <div style={{ position: "absolute", textAlign: "center" }}>
-                      <div style={{ fontSize: "1.05rem", fontWeight: 900, color: "#0f172a", fontFamily: "monospace", letterSpacing: "-0.03em", lineHeight: 1 }}>
+                      <div className="pomo-time-text" style={{ fontSize: "1.05rem", fontWeight: 900, color: "#0f172a", fontFamily: "monospace", letterSpacing: "-0.03em", lineHeight: 1 }}>
                         {formatTime(pomoSeconds)}
                       </div>
-                      <div style={{ fontSize: "0.6rem", color: isPomoRunning ? "#059669" : "#64748b", fontWeight: 700, marginTop: "2px" }}>
+                      <div className="pomo-status-text" style={{ fontSize: "0.6rem", color: isPomoRunning ? "#059669" : "#64748b", fontWeight: 700, marginTop: "2px" }}>
                         {isPomoRunning ? "LIVE ⚡" : "PAUSED"}
                       </div>
                     </div>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
+                    <div className="pomo-title-text" style={{ fontSize: "0.92rem", fontWeight: 800, color: "#0f172a" }}>
                       {pomoMode === "focus" ? "🎯 Deep Focus Session" : "☕ Chill Break"}
                     </div>
-                    <div style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, marginTop: "2px" }}>
+                    <div className="pomo-sub-text" style={{ fontSize: "0.72rem", color: "#64748b", fontWeight: 600, marginTop: "2px" }}>
                       {isPomoRunning ? "Stay locked in • 0 tab distraction" : "25 min Pomodoro study interval"}
                     </div>
                   </div>
@@ -971,6 +974,7 @@ export default function StudentCommandCenter({
                     type="button"
                     onClick={resetPomodoro}
                     title="Reset Timer"
+                    className="pomo-reset-btn"
                     style={{
                       width: "38px",
                       height: "38px",
@@ -991,6 +995,7 @@ export default function StudentCommandCenter({
 
             {/* Offline Ambient Sound Generator (Web Audio Soft Rain) */}
             <div
+              className="pomo-ambient-box"
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -1004,10 +1009,10 @@ export default function StudentCommandCenter({
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 {isAmbientSoundOn ? <Volume2 size={16} color="#0284c7" /> : <VolumeX size={16} color="#94a3b8" />}
                 <div>
-                  <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "#1e293b" }}>
+                  <div className="pomo-ambient-title" style={{ fontSize: "0.78rem", fontWeight: 800, color: "#1e293b" }}>
                     🎧 Soft Rain Ambient Audio
                   </div>
-                  <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
+                  <div className="pomo-ambient-sub" style={{ fontSize: "0.68rem", color: "#64748b" }}>
                     Synthesized 100% Offline • 0 KB Data
                   </div>
                 </div>
@@ -1025,6 +1030,7 @@ export default function StudentCommandCenter({
               <button
                 type="button"
                 onClick={toggleAmbientSound}
+                className={`pomo-ambient-toggle-btn ${isAmbientSoundOn ? "active" : ""}`}
                 style={{
                   padding: "5px 12px",
                   borderRadius: "999px",
