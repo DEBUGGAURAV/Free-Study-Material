@@ -705,9 +705,17 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                   ⚡ Mode: {hwProfile.tier === "workstation" || hwProfile.tier === "high" ? "High-Performance Engine" : "Safe Dynamic Mode"}
                 </span>
               </div>
-              <div style={{ fontSize: "0.76rem", color: "#475569", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                <span>📱 Hardware: <strong style={{ color: "#0f172a" }}>{hwProfile.cores} Cores • {hwProfile.memoryGB} GB RAM</strong></span>
-                <span style={{ color: "#047857", fontWeight: 600 }}>(Auto-Clamping Enabled)</span>
+              <div style={{ fontSize: "0.76rem", color: "#475569", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                <span>💻 CPU &amp; RAM: <strong style={{ color: "#0f172a" }}>{hwProfile.cores} Cores • {hwProfile.memoryGB} GB {hwProfile.label?.includes("Mac") ? "Unified Memory" : "RAM"}</strong></span>
+                <span style={{ color: "#0284c7" }}>•</span>
+                <span>💾 Storage: <strong style={{ color: "#0f172a" }}>{hwProfile.realRomLabel || `${hwProfile.realRomGB || (hwProfile.isMobile ? 128 : 256)} GB ${hwProfile.isMobile ? "ROM" : "SSD"}`}</strong></span>
+                {hwProfile.gpuRenderer && (
+                  <>
+                    <span style={{ color: "#0284c7" }}>•</span>
+                    <span>🎮 GPU: <strong style={{ color: "#0f172a" }}>{hwProfile.gpuRenderer}</strong></span>
+                  </>
+                )}
+                <span style={{ color: "#047857", fontWeight: 600, background: "#ecfdf5", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: "4px" }}>Auto-Clamping Active</span>
               </div>
             </div>
 
@@ -1052,10 +1060,16 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "2px" }}>
+                          <div style={{ fontSize: "0.72rem", color: "#475569", marginTop: "3px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                             <span>{sess.location || "India"}</span>
-                            <span style={{ margin: "0 5px" }}>•</span>
+                            <span>•</span>
                             <span style={{ color: isCurrent ? "#047857" : "#475569", fontWeight: isCurrent ? 600 : 400 }}>{timeLabel}</span>
+                            <span style={{ color: "#0284c7", background: "#e0f2fe", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                              💻 {sess.hardwareCapability || (isCurrent ? `${hwProfile.cores}C • ${hwProfile.memoryGB}GB RAM` : (sess.cores ? `${sess.cores}C • ${sess.memoryGB}GB RAM` : "Multi-Core Client"))}
+                            </span>
+                            <span style={{ color: "#7c3aed", background: "#f5f3ff", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                              💾 {sess.storage || (isCurrent ? (hwProfile.realRomLabel || `${hwProfile.realRomGB || 128}GB ROM`) : (sess.romGB ? `${sess.romGB}GB ROM` : (sess.deviceType === "mobile" ? "128GB ROM" : "256GB SSD")))}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1377,8 +1391,15 @@ export default function ProfileModal({ isOpen, onClose, currentUser, onProfileUp
                           <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#0f172a" }}>
                             {p.deviceName}
                           </div>
-                          <div style={{ fontSize: "0.72rem", color: "#475569" }}>
-                            Added: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "Active"} • Encrypted &amp; Secure
+                          <div style={{ fontSize: "0.72rem", color: "#475569", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "2px" }}>
+                            <span>Added: {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : "Active"}</span>
+                            <span>•</span>
+                            <span style={{ color: "#0284c7", background: "#e0f2fe", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                              💻 FIDO2 / WebAuthn Sensor
+                            </span>
+                            <span style={{ color: "#047857", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                              🔒 Cryptographic Key Pair
+                            </span>
                           </div>
                         </div>
                       </div>

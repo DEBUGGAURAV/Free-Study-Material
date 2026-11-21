@@ -127,48 +127,55 @@ async function renderNoteOgPngBuffer(noteMeta) {
         <stop offset="100%" stop-color="#0d3b66"/>
       </linearGradient>
       <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="#4361ee"/>
-        <stop offset="100%" stop-color="#0f9f8f"/>
+        <stop offset="0%" stop-color="#4f46e5"/>
+        <stop offset="50%" stop-color="#06b6d4"/>
+        <stop offset="100%" stop-color="#10b981"/>
       </linearGradient>
+      <filter id="cardShadow" x="-5%" y="-5%" width="110%" height="110%">
+        <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.45"/>
+      </filter>
     </defs>
 
     <rect width="1200" height="630" fill="url(#bgGrad)"/>
-    <circle cx="1090" cy="110" r="240" fill="#4361ee" fill-opacity="0.16"/>
-    <circle cx="110" cy="560" r="210" fill="#0f9f8f" fill-opacity="0.14"/>
+    <circle cx="1090" cy="110" r="280" fill="#4f46e5" fill-opacity="0.22"/>
+    <circle cx="110" cy="560" r="240" fill="#06b6d4" fill-opacity="0.18"/>
 
-    <rect x="64" y="56" width="1072" height="518" rx="28" fill="#0f172a" fill-opacity="0.72" stroke="#38bdf8" stroke-opacity="0.28" stroke-width="2"/>
-    <rect x="64" y="56" width="1072" height="8" rx="4" fill="url(#accentGrad)"/>
+    <rect x="64" y="56" width="1072" height="518" rx="28" fill="#0f172a" fill-opacity="0.88" stroke="#38bdf8" stroke-opacity="0.45" stroke-width="2.5" filter="url(#cardShadow)"/>
+    <rect x="64" y="56" width="1072" height="10" rx="5" fill="url(#accentGrad)"/>
 
     <!-- Brand Pill -->
-    <rect x="110" y="106" width="375" height="44" rx="22" fill="#4361ee" fill-opacity="0.22" stroke="#60a5fa" stroke-opacity="0.45"/>
-    <text x="136" y="135" fill="#93c5fd" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="1.2">FREE STUDY MATERIAL VAULT</text>
+    <rect x="110" y="104" width="410" height="48" rx="24" fill="#4f46e5" fill-opacity="0.28" stroke="#818cf8" stroke-opacity="0.75" stroke-width="1.8"/>
+    <text x="138" y="136" fill="#c7d2fe" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="1.2">⚡ FREE STUDY MATERIAL VAULT</text>
 
     <!-- Subject Pill -->
-    <rect x="505" y="106" width="290" height="44" rx="22" fill="#0f9f8f" fill-opacity="0.22" stroke="#2dd4bf" stroke-opacity="0.45"/>
-    <text x="530" y="135" fill="#5eead4" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">${subjectText.slice(0, 22)}</text>
+    <rect x="540" y="104" width="320" height="48" rx="24" fill="#06b6d4" fill-opacity="0.25" stroke="#22d3ee" stroke-opacity="0.75" stroke-width="1.8"/>
+    <text x="566" y="136" fill="#a5f3fc" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="22" font-weight="800">${subjectText.slice(0, 22)}</text>
 
-    <!-- Note Title -->
-    <text x="110" y="242" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="52" font-weight="800">${titleLine1}</text>
-    ${titleLine2 ? `<text x="110" y="308" fill="#e2e8f0" font-family="Segoe UI, Arial, sans-serif" font-size="48" font-weight="800">${titleLine2}</text>` : ""}
+    <!-- Note Title (Crisp, High Contrast) -->
+    <text x="110" y="238" fill="#ffffff" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="56" font-weight="900">${titleLine1}</text>
+    ${titleLine2 ? `<text x="110" y="306" fill="#e0e7ff" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="50" font-weight="800">${titleLine2}</text>` : ""}
 
     <!-- Metadata Pills Row -->
-    <rect x="110" y="365" width="200" height="48" rx="12" fill="#1e293b" stroke="#475569"/>
-    <text x="132" y="396" fill="#cbd5e1" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">${courseText.slice(0, 14)}</text>
+    <rect x="110" y="362" width="210" height="52" rx="14" fill="#1e293b" stroke="#64748b" stroke-width="1.8"/>
+    <text x="134" y="396" fill="#f8fafc" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="700">${courseText.slice(0, 14)}</text>
 
-    <rect x="328" y="365" width="310" height="48" rx="12" fill="#1e293b" stroke="#475569"/>
-    <text x="350" y="396" fill="#38bdf8" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">${branchText.slice(0, 22)}</text>
+    <rect x="338" y="362" width="330" height="52" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="1.8"/>
+    <text x="362" y="396" fill="#38bdf8" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="700">${branchText.slice(0, 22)}</text>
 
-    <rect x="656" y="365" width="270" height="48" rx="12" fill="#1e293b" stroke="#475569"/>
-    <text x="678" y="396" fill="#fde047" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="600">${termText.slice(0, 20)}</text>
+    <rect x="686" y="362" width="280" height="52" rx="14" fill="#1e293b" stroke="#fbbf24" stroke-width="1.8"/>
+    <text x="710" y="396" fill="#fde047" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="700">${termText.slice(0, 20)}</text>
 
     <!-- Footer Info -->
-    <line x1="110" y1="468" x2="1090" y2="468" stroke="#334155" stroke-width="1.5"/>
-    <text x="110" y="518" fill="#94a3b8" font-family="Segoe UI, Arial, sans-serif" font-size="24" font-weight="600">College: ${collegeText.slice(0, 38)}${sizeText}</text>
-    <rect x="865" y="486" width="225" height="48" rx="24" fill="url(#accentGrad)"/>
-    <text x="900" y="518" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="700">Read Free PDF</text>
+    <line x1="110" y1="466" x2="1090" y2="466" stroke="#334155" stroke-width="2"/>
+    <text x="110" y="516" fill="#cbd5e1" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="700">🏫 ${collegeText.slice(0, 36)}${sizeText}</text>
+    <rect x="850" y="482" width="240" height="52" rx="26" fill="url(#accentGrad)"/>
+    <text x="888" y="516" fill="#ffffff" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="24" font-weight="900">📖 Read Free PDF</text>
   </svg>`;
 
-  const pngBuffer = await sharp(Buffer.from(svg)).png({ compressionLevel: 9 }).toBuffer();
+  const pngBuffer = await sharp(Buffer.from(svg), { density: 150 })
+    .resize(1200, 630, { fit: "contain" })
+    .png({ quality: 100, compressionLevel: 6 })
+    .toBuffer();
   ramCache.set(cacheKey, pngBuffer, 3600);
   return pngBuffer;
 }

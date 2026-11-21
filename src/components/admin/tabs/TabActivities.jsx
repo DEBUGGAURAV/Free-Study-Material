@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Activity, Trash2, LogOut, Smartphone, Laptop, Tablet, RefreshCw, CheckSquare, Square, AlertTriangle, CheckCircle2, MapPin, Globe, BookOpen, Download, Search } from "lucide-react";
 import { api } from "../../../api";
+import { getDisplayRom } from "../../../utils/hardwareAdaptiveEngine";
 
 export default function TabActivities(props) {
   const {
@@ -415,6 +416,12 @@ export default function TabActivities(props) {
                             <span>{sess.location}</span>
                           </span>
                         )}
+                        <span style={{ color: "#38bdf8", background: "rgba(56, 189, 248, 0.12)", border: "1px solid rgba(56, 189, 248, 0.25)", padding: "1px 6px", borderRadius: "4px", fontWeight: 700, fontSize: "0.68rem" }}>
+                          💻 {sess.hardwareCapability || (selectedStudentForActivity?.deviceSpecs?.cores ? `${selectedStudentForActivity.deviceSpecs.cores}C • ${selectedStudentForActivity.deviceSpecs.memoryGB}GB RAM` : "Multi-Core Client")}
+                        </span>
+                        <span style={{ color: "#a78bfa", background: "rgba(167, 139, 250, 0.12)", border: "1px solid rgba(167, 139, 250, 0.25)", padding: "1px 6px", borderRadius: "4px", fontWeight: 700, fontSize: "0.68rem" }}>
+                          💾 {sess.storage || (selectedStudentForActivity?.deviceSpecs ? getDisplayRom(selectedStudentForActivity.deviceSpecs) : (sess.deviceType === "mobile" ? "128GB ROM" : "256GB SSD"))}
+                        </span>
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "4px", fontSize: "0.68rem" }}>

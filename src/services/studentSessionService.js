@@ -372,6 +372,18 @@ async function recordActiveSession({ sessionId, userId, req, tokenVersion = 1, d
     const location = city && country ? `${city}, ${country}` : (country || "India");
 
     const now = Date.now();
+    const specs = deviceSpecs || req?.body?.deviceSpecs || null;
+    const hardwareCap = (specs && (specs.label || (specs.cores && `${specs.cores} Cores • ${specs.memoryGB}GB RAM`))) || "";
+    let storageLabel = "";
+    if (specs?.realRomLabel) {
+      storageLabel = specs.realRomLabel;
+    } else if (specs?.romGB && Number(specs.romGB) >= 32) {
+      storageLabel = `${specs.romGB}GB ROM`;
+    } else if (specs?.storage && typeof specs.storage === "string" && !specs.storage.includes("Fast Storage")) {
+      storageLabel = specs.storage;
+    } else if (specs?.storageGB && Number(specs.storageGB) >= 32) {
+      storageLabel = `${specs.storageGB}GB ROM`;
+    }
 
     const newSession = {
       sessionId: String(sessionId),
@@ -383,6 +395,12 @@ async function recordActiveSession({ sessionId, userId, req, tokenVersion = 1, d
       ipAddress: ip,
       location,
       tokenVersion: Number(tokenVersion),
+      hardwareCapability: hardwareCap,
+      storage: storageLabel,
+      cores: specs?.cores || null,
+      memoryGB: specs?.memoryGB || null,
+      romGB: specs?.romGB || specs?.realRomGB || null,
+      gpuRenderer: specs?.gpuRenderer || null,
       createdAt: now,
       lastActiveAt: now,
     };
@@ -753,8 +771,18 @@ async function getUserActiveSessions(userId, currentSessionId = "") {
     // Update in-memory sessions
     userMemorySessions.set(uId, sessions);
 
+    let fallbackHardware = "";
+    let fallbackStorage = "";
+    if (userData && userData.deviceSpecs) {
+      const ds = userData.deviceSpecs;
+      fallbackHardware = ds.label || (ds.cores ? `${ds.cores} Cores • ${ds.memoryGB}GB RAM` : "");
+      fallbackStorage = ds.realRomLabel || (ds.romGB ? `${ds.romGB}GB ROM` : (ds.storage || ""));
+    }
+
     return sessions.map(sess => ({
       ...sess,
+      hardwareCapability: sess.hardwareCapability || fallbackHardware || (sess.cores ? `${sess.cores} Cores • ${sess.memoryGB}GB RAM` : ""),
+      storage: sess.storage || fallbackStorage || (sess.romGB ? `${sess.romGB}GB ROM` : (sess.deviceType === "mobile" ? "128GB ROM" : "256GB SSD")),
       isCurrentDevice: Boolean((currentSessionId && sess.sessionId === currentSessionId) || sessions.length === 1),
     }));
   } catch (err) {

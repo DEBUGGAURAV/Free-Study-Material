@@ -1213,10 +1213,16 @@ export default function TabStudents(props) {
                                 <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#0f172a" }}>
                                   {sess.deviceName || "Student Device"}
                                 </div>
-                                <div style={{ fontSize: "0.7rem", color: "#64748b", display: "flex", gap: "8px", marginTop: "2px" }}>
+                                <div style={{ fontSize: "0.7rem", color: "#64748b", display: "flex", gap: "8px", marginTop: "3px", flexWrap: "wrap", alignItems: "center" }}>
                                   <span>🌐 {sess.ipAddress || "Active IP"}</span>
                                   {sess.location && <span>📍 {sess.location}</span>}
                                   <span>• Active: {sess.lastActiveAt ? new Date(sess.lastActiveAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : (sess.createdAt ? new Date(sess.createdAt).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: true }) : "Active")}</span>
+                                  <span style={{ color: "#0284c7", background: "#e0f2fe", border: "1px solid #bae6fd", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                                    💻 {sess.hardwareCapability || (logStudent?.deviceSpecs?.cores ? `${logStudent.deviceSpecs.cores}C • ${logStudent.deviceSpecs.memoryGB}GB RAM` : "Multi-Core Client")}
+                                  </span>
+                                  <span style={{ color: "#0891b2", background: "#ecfeff", border: "1px solid #a5f3fc", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                                    💾 {sess.storage || getDisplayRom(logStudent?.deviceSpecs)}
+                                  </span>
                                 </div>
                               </div>
                             </div>

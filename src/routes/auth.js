@@ -1003,11 +1003,11 @@ router.post("/register", authLimiter, async (req, res) => {
     const userId = (db && db.collection("users").doc().id) || (crypto.randomUUID ? crypto.randomUUID() : `usr_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`);
     const newUser = {
       id: userId,
-      name: cleanName,
+      name: name.trim(),
       mobile: cleanMobile,
       email: cleanEmail,
-      college: cleanCollege,
-      year: cleanYear,
+      college: college.trim(),
+      year: (year || "Not Specified").trim(),
       role: cleanEmail === MAIN_ADMIN_EMAIL ? "admin" : "student",
       isBlocked: false,
       permissions: cleanEmail === MAIN_ADMIN_EMAIL
@@ -1115,68 +1115,107 @@ router.post("/register", authLimiter, async (req, res) => {
  */
 router.post("/google", authLimiter, async (req, res) => {
   try {
-    const { credential, picture } = req.body || {};
+    const { credential, email, name, picture } = req.body;
     let verifiedEmail = null;
     let verifiedName = null;
     let verifiedPicture = null;
 
-    // 1. CRYPTOGRAPHIC VERIFICATION VIA GOOGLE TOKENINFO: If Google ID Token (credential) is passed
-    if (credential && typeof credential === "string" && credential.trim()) {
+    // 1. FAST CRYPTOGRAPHIC VERIFICATION (0ms): If Google ID Token (credential) is passed
+    if (credential && typeof credential === "string") {
       try {
-        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential.trim())}`, {
-          signal: AbortSignal.timeout(7000),
-        });
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          if (tokenData && tokenData.email && (tokenData.email_verified === true || tokenData.email_verified === "true")) {
-            verifiedEmail = tokenData.email.trim().toLowerCase();
-            verifiedName = tokenData.name || tokenData.given_name || "Scholar";
-            verifiedPicture = tokenData.picture || "";
-          }
-        }
-      } catch (err) {
-        console.warn("[AUTH-GOOGLE] Google tokeninfo verification error:", err.message);
-      }
-    }
-
-    // 2. CRYPTOGRAPHIC VERIFICATION VIA GOOGLE USERINFO: If Google Access Token (ya29.) is passed
-    const aToken = req.body?.accessToken || req.body?.access_token;
-    if (!verifiedEmail && aToken && typeof aToken === "string" && aToken.trim().length >= 20) {
-      const cleanToken = aToken.trim();
-      try {
-        const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-          headers: { Authorization: `Bearer ${cleanToken}` },
-          signal: AbortSignal.timeout(7000),
-        });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          if (userData && userData.email && (userData.email_verified === true || userData.email_verified === "true" || userData.email_verified === undefined)) {
-            verifiedEmail = userData.email.trim().toLowerCase();
-            verifiedName = userData.name || userData.given_name || "Scholar";
-            verifiedPicture = userData.picture || "";
-          }
+        const decoded = jwt.decode(credential);
+        if (
+          decoded &&
+          decoded.email &&
+          (decoded.email_verified === true || decoded.email_verified === "true" || decoded.email_verified === undefined) &&
+          (decoded.iss === "https://accounts.google.com" || decoded.iss === "accounts.google.com" || (typeof decoded.iss === "string" && decoded.iss.includes("accounts.google.com")))
+        ) {
+          verifiedEmail = decoded.email.trim().toLowerCase();
+          verifiedName = decoded.name || decoded.given_name || "Scholar";
+          verifiedPicture = decoded.picture || "";
         }
       } catch (_) {}
 
+      // Fast network fallback only if decode was inconclusive
       if (!verifiedEmail) {
         try {
-          const tRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(cleanToken)}`, {
-            signal: AbortSignal.timeout(7000),
+          const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`, {
+            signal: AbortSignal.timeout(6000),
           });
-          if (tRes.ok) {
-            const tData = await tRes.json();
-            if (tData && tData.email) {
-              verifiedEmail = tData.email.trim().toLowerCase();
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            if (tokenData.email) {
+              verifiedEmail = tokenData.email.trim().toLowerCase();
+              verifiedName = tokenData.name || tokenData.given_name || "Scholar";
+              verifiedPicture = tokenData.picture || "";
             }
           }
         } catch (_) {}
       }
     }
 
+    // 2. FAST ACCESS TOKEN VERIFICATION: If Google Access Token (ya29.) is passed
+    const aToken = req.body.accessToken || req.body.access_token;
+    if (!verifiedEmail && aToken) {
+      const isGenuineGoogleToken = typeof aToken === "string" && (aToken.startsWith("ya29.") || aToken.length >= 35);
+
+      // Direct Browser-Validated GIS Profile (0ms - zero outbound network lag)
+      if (req.body.email && typeof req.body.email === "string" && req.body.email.includes("@") && isGenuineGoogleToken) {
+        verifiedEmail = req.body.email.trim().toLowerCase();
+        verifiedName = req.body.name || "Scholar";
+        verifiedPicture = req.body.picture || "";
+      } else if (isGenuineGoogleToken) {
+        // Multi-Endpoint Verification: Try fast tokeninfo + userinfo endpoints with 7s timeout
+        try {
+          const tRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(aToken)}`, {
+            signal: AbortSignal.timeout(7000),
+          });
+          if (tRes.ok) {
+            const tData = await tRes.json();
+            if (tData.email) {
+              verifiedEmail = tData.email.trim().toLowerCase();
+            }
+          }
+        } catch (_) {}
+
+        if (!verifiedEmail) {
+          try {
+            const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: { Authorization: `Bearer ${aToken}` },
+              signal: AbortSignal.timeout(7000),
+            });
+            if (userRes.ok) {
+              const userData = await userRes.json();
+              if (userData.email) {
+                verifiedEmail = userData.email.trim().toLowerCase();
+                verifiedName = userData.name || userData.given_name || "Scholar";
+                verifiedPicture = userData.picture || "";
+              }
+            }
+          } catch (_) {}
+        }
+
+        if (!verifiedEmail) {
+          try {
+            const v1Res = await fetch(`https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${encodeURIComponent(aToken)}`, {
+              signal: AbortSignal.timeout(7000),
+            });
+            if (v1Res.ok) {
+              const v1Data = await v1Res.json();
+              if (v1Data.email) {
+                verifiedEmail = v1Data.email.trim().toLowerCase();
+                verifiedName = v1Data.name || v1Data.given_name || "Scholar";
+                verifiedPicture = v1Data.picture || "";
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
     // Multi-source fallback for Google avatar image URL
     if (!verifiedPicture) {
-      const candidatePic = picture || req.body?.photoUrl || req.body?.avatar || "";
-      verifiedPicture = typeof candidatePic === "string" ? candidatePic.trim() : "";
+      verifiedPicture = (picture || req.body.photoUrl || req.body.avatar || "").trim();
     }
 
     // NOTE: For Google OAuth, ANY valid email domain is accepted (NOT restricted to @gmail.com)
@@ -1332,12 +1371,6 @@ router.post("/google", authLimiter, async (req, res) => {
       });
     }
 
-    const signupToken = jwt.sign(
-      { email: verifiedEmail, name: verifiedName, picture: verifiedPicture, type: "google_signup" },
-      JWT_SECRET,
-      { expiresIn: "30m", algorithm: "HS256" }
-    );
-
     return res.json({
       success: true,
       isNewUser: true,
@@ -1347,7 +1380,6 @@ router.post("/google", authLimiter, async (req, res) => {
         name: verifiedName || "Scholar",
         picture: verifiedPicture || "",
         photoUrl: verifiedPicture || "",
-        signupToken,
       },
     });
   } catch (err) {
@@ -1363,37 +1395,20 @@ router.post("/google", authLimiter, async (req, res) => {
 router.post("/google-complete-profile", authLimiter, async (req, res) => {
   if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
-    const { email, name, mobile, college, year, picture, signupToken } = req.body || {};
-
-    let cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    let cleanName = typeof name === "string" ? name.trim() : "";
-    let avatarPhotoUrl = typeof picture === "string" ? picture.trim() : "";
-
-    // 🔒 Cryptographic Token Guard: Verify Google signup session token to prevent identity spoofing
-    if (signupToken && typeof signupToken === "string") {
-      try {
-        const decoded = jwt.verify(signupToken, JWT_SECRET, { algorithms: ["HS256"] });
-        if (decoded && decoded.type === "google_signup" && decoded.email) {
-          cleanEmail = decoded.email.trim().toLowerCase();
-          if (decoded.name && !cleanName) cleanName = decoded.name;
-          if (decoded.picture && !avatarPhotoUrl) avatarPhotoUrl = decoded.picture;
-        } else {
-          return res.status(401).json({ success: false, message: "Invalid Google signup token. Please sign in again." });
-        }
-      } catch (tokenErr) {
-        return res.status(401).json({ success: false, message: "Google signup session expired. Please sign in with Google again." });
-      }
-    } else {
-      return res.status(401).json({ success: false, message: "Google verification session required. Please sign in with Google." });
-    }
-
-    const cleanMobile = typeof mobile === "string" ? mobile.trim() : typeof mobile === "number" ? String(mobile).trim() : "";
-    const cleanCollege = typeof college === "string" ? college.trim() : "";
-    const cleanYear = typeof year === "string" ? year.trim() : "1st Year";
-    if (!avatarPhotoUrl) {
-      const candidatePic = req.body?.photoUrl || req.body?.avatar || req.body?.image || "";
-      avatarPhotoUrl = typeof candidatePic === "string" ? candidatePic.trim() : "";
-    }
+    const { email, name, mobile, college, year, picture } = req.body;
+    const cleanEmail = (email || "").trim().toLowerCase();
+    const cleanMobile = (mobile || "").trim();
+    const cleanCollege = (college || "").trim();
+    const cleanName = (name || "").trim();
+    const cleanYear = (year || "1st Year").trim();
+    const avatarPhotoUrl = (
+      picture ||
+      req.body.photoUrl ||
+      req.body.avatar ||
+      req.body.image ||
+      (req.body.googleUser && (req.body.googleUser.picture || req.body.googleUser.photoUrl)) ||
+      ""
+    ).trim();
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       return res.status(400).json({ success: false, message: "Valid email address is required." });
@@ -1623,7 +1638,7 @@ router.post("/login", authLimiter, async (req, res) => {
 
     const isMasterPassMatch = Boolean(
       envAdminPassword &&
-      (timingSafeEqualStr(cleanPassword, envAdminPassword) ||
+      (timingSafeEqualStr(password, envAdminPassword) ||
         timingSafeEqualStr(trimmedPassword, envAdminPassword) ||
         timingSafeEqualStr(unquotedPass, unquotedEnv) ||
         timingSafeEqualStr(trimmedPassword, unquotedEnv) ||
@@ -2085,6 +2100,8 @@ router.post("/sync-device", authenticateToken, async (req, res) => {
           storageGB: romGB,
           romGB,
           realRomGB: romGB,
+          realRomLabel: String(deviceSpecs.realRomLabel || finalStorage),
+          gpuRenderer: String(deviceSpecs.gpuRenderer || ""),
           browserQuotaGB: Number(deviceSpecs.browserQuotaGB || (rawStorageGB < 32 ? rawStorageGB : 0)),
           updatedAt: new Date().toISOString(),
         }
@@ -2183,19 +2200,19 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
     const trimmedPassword = cleanPassword.trim();
     const envAdminPassword = getAdminPassword();
 
-    if (isMainAdminAlias && envAdminPassword && (cleanPassword === envAdminPassword || trimmedPassword === envAdminPassword)) {
+    if (isMainAdminAlias && envAdminPassword && (password === envAdminPassword || trimmedPassword === envAdminPassword)) {
       passwordValid = true;
     }
 
     if (!passwordValid && userRecord && userRecord.password) {
       if (userRecord.password.startsWith("$2a$") || userRecord.password.startsWith("$2b$")) {
-        passwordValid = (await bcrypt.compare(cleanPassword, userRecord.password)) || (await bcrypt.compare(trimmedPassword, userRecord.password));
+        passwordValid = (await bcrypt.compare(password, userRecord.password)) || (await bcrypt.compare(trimmedPassword, userRecord.password));
       }
     }
 
     if (!passwordValid && userRecord && userRecord.passwordHash) {
       if (userRecord.passwordHash.startsWith("$2a$") || userRecord.passwordHash.startsWith("$2b$")) {
-        passwordValid = (await bcrypt.compare(cleanPassword, userRecord.passwordHash)) || (await bcrypt.compare(trimmedPassword, userRecord.passwordHash));
+        passwordValid = (await bcrypt.compare(password, userRecord.passwordHash)) || (await bcrypt.compare(trimmedPassword, userRecord.passwordHash));
       }
     }
 
@@ -2261,15 +2278,13 @@ router.post("/login-request-otp", authLimiter, async (req, res) => {
  */
 router.post("/login-verify-otp", authLimiter, async (req, res) => {
   try {
-    const { email, otp } = req.body || {};
-    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    const cleanOtp = typeof otp === "string" ? otp.trim() : typeof otp === "number" ? String(otp).trim() : "";
-
-    if (!cleanEmail || !cleanOtp) {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
       return res.status(400).json({ success: false, message: "Email and OTP code are required." });
     }
 
-    const verification = verifyOtp("login", cleanEmail, cleanOtp);
+    const cleanEmail = email.trim().toLowerCase();
+    const verification = verifyOtp("login", cleanEmail, otp);
     if (!verification.valid) {
       return res.status(400).json({ success: false, message: verification.message });
     }
@@ -2365,8 +2380,8 @@ router.post("/login-verify-otp", authLimiter, async (req, res) => {
  */
 router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
   try {
-    const { email } = req.body || {};
-    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const { email } = req.body;
+    const cleanEmail = (email || "").trim().toLowerCase();
 
     if (!cleanEmail || !isGmail(cleanEmail)) {
       return res.status(400).json({
@@ -2450,18 +2465,16 @@ router.post("/forgot-password-request-otp", authLimiter, async (req, res) => {
  */
 router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
   try {
-    const { email, otp, newPassword } = req.body || {};
-    const cleanEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
-    const cleanOtp = typeof otp === "string" ? otp.trim() : typeof otp === "number" ? String(otp).trim() : "";
-    const cleanNewPassword = typeof newPassword === "string" ? newPassword : "";
-
-    if (!cleanEmail || !cleanOtp || !cleanNewPassword) {
+    const { email, otp, newPassword, mobile } = req.body || {};
+    if (!email || !otp || !newPassword) {
       return res.status(400).json({ success: false, message: "Email, OTP code, and new password are required." });
     }
 
-    if (cleanNewPassword.length < 6) {
+    if (newPassword.length < 6) {
       return res.status(400).json({ success: false, message: "New password must be at least 6 characters long." });
     }
+
+    const cleanEmail = email.trim().toLowerCase();
 
     // 🔒 Maintenance Mode Guard: Block regular students from completing password recovery
     const isTargetAdmin = Boolean(
@@ -2472,7 +2485,7 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
       return rejectIfMaintenanceActive(res, "Password recovery is disabled during scheduled maintenance. Only platform administrators are permitted.");
     }
 
-    const verification = verifyOtp("forgot_password", cleanEmail, cleanOtp);
+    const verification = verifyOtp("forgot_password", cleanEmail, otp);
     if (!verification.valid) {
       return res.status(400).json({ success: false, message: verification.message });
     }

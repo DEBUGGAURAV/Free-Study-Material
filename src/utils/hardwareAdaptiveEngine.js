@@ -287,3 +287,38 @@ export function getEffectiveTechConfig(rawSettings = {}) {
   };
 }
 
+/**
+ * 💾 Universal Display ROM Helper: Converts device specs into realistic physical ROM / SSD strings
+ */
+export function getDisplayRom(specs) {
+  if (!specs) return "128GB ROM";
+  if (specs.realRomLabel && typeof specs.realRomLabel === "string" && specs.realRomLabel.trim()) {
+    return specs.realRomLabel.trim();
+  }
+  if (specs.realRomGB && Number(specs.realRomGB) >= 32) {
+    return `${specs.realRomGB}GB ROM`;
+  }
+  if (specs.romGB && Number(specs.romGB) >= 32) {
+    return `${specs.romGB}GB ROM`;
+  }
+  const isMob = Boolean(
+    specs.isMobile ||
+    (specs.brand && /Phone|Redmi|Samsung|OnePlus|Vivo|Realme|Oppo|Pixel|iPhone/i.test(specs.brand)) ||
+    (specs.label && /Phone|Mobile|iPhone/i.test(specs.label))
+  );
+  const rawStorage = specs.storage || specs.storageGB || 0;
+  const numStorage = Number(rawStorage);
+  if (numStorage > 0 && numStorage < 32) {
+    const mem = Number(specs.memoryGB || 4);
+    if (!isMob) {
+      return mem >= 16 ? "512GB Fast SSD" : "256GB SSD";
+    }
+    return mem >= 8 ? "256GB ROM" : mem >= 6 ? "128GB ROM" : "128GB ROM";
+  }
+  if (specs.storage && typeof specs.storage === "string" && !specs.storage.includes("Fast Storage")) {
+    return specs.storage;
+  }
+  return isMob ? "128GB ROM" : "256GB SSD";
+}
+
+

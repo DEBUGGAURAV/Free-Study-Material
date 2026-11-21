@@ -446,8 +446,12 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
         college: req.user.college || existingData.college || "N/A",
         year: req.user.year || existingData.year || "N/A",
         ip: getClientIp(req),
+        deviceSpecs: req.body?.deviceSpecs || { label: newPasskey.deviceName },
+        userAgent: req.headers["user-agent"],
       },
       photoUrl: null,
+      deviceSpecs: req.body?.deviceSpecs || { label: newPasskey.deviceName },
+      userAgent: req.headers["user-agent"],
       method: `Biometric Passkey (${newPasskey.deviceName})`,
       detail: isRegOnboarding
         ? `Student enrolled a new FIDO2 Biometric Passkey (${newPasskey.deviceName}) directly during account registration onboarding!`

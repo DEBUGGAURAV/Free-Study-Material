@@ -43,14 +43,22 @@ function wrapCanvasText(ctx, text, maxWidth) {
 }
 
 function drawRoundedRect(ctx, x, y, w, h, r) {
+  const rx = Math.round(x);
+  const ry = Math.round(y);
+  const rw = Math.round(w);
+  const rh = Math.round(h);
+  const rad = Math.max(0, Math.min(r, Math.floor(rw / 2), Math.floor(rh / 2)));
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
+  ctx.moveTo(rx + rad, ry);
+  ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, rad);
+  ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, rad);
+  ctx.arcTo(rx, ry + rh, rx, ry, rad);
+  ctx.arcTo(rx, ry, rx + rw, ry, rad);
   ctx.closePath();
 }
+
+const FONT_SANS = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+const FONT_MONO = "'JetBrains Mono', Consolas, 'SF Mono', monospace";
 
 /**
  * Renders a crisp 1080px-wide HD Cheat-Sheet Revision Card as a PNG Blob.
@@ -70,118 +78,126 @@ export async function generateRevisionCardPngBlob({
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
 
+  // Razor-sharp canvas text smoothing
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  try {
+    ctx.textRendering = "geometricPrecision";
+  } catch (_) {}
+
   const cleaned = cleanMarkdownForCard(content) || "Key formulas & concepts saved for quick exam hall revision.";
-  ctx.font = "600 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = `600 32px ${FONT_SANS}`;
   let bodyLines = wrapCanvasText(ctx, cleaned, BODY_W);
   if (bodyLines.length > 26) {
     bodyLines = [...bodyLines.slice(0, 25), "… Read complete notes & diagrams inside Free Study Material!"];
   }
 
-  ctx.font = "900 48px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = `900 52px ${FONT_SANS}`;
   const titleLines = wrapCanvasText(ctx, String(title).slice(0, 110), WIDTH - PAD * 2).slice(0, 2);
 
-  const lineHeight = 44;
-  const headerH = 195 + titleLines.length * 56;
-  const contentBoxH = Math.max(240, bodyLines.length * lineHeight + 72);
-  const footerH = 190;
+  const lineHeight = 48;
+  const headerH = 205 + titleLines.length * 60;
+  const contentBoxH = Math.max(250, bodyLines.length * lineHeight + 76);
+  const footerH = 195;
   const HEIGHT = Math.min(2200, headerH + contentBoxH + footerH + 40);
 
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
 
-  // 1. Pure White Luxury Ambient Gradient
+  // 1. Pure White Luxury Ambient Gradient (Crisp Studio Finish)
   const bgGrad = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
   bgGrad.addColorStop(0, "#ffffff");
-  bgGrad.addColorStop(0.3, "#f8faff");
-  bgGrad.addColorStop(0.7, "#f1f5fd");
+  bgGrad.addColorStop(0.35, "#f8fafc");
+  bgGrad.addColorStop(0.7, "#f1f5f9");
   bgGrad.addColorStop(1, "#f8fafc");
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // Subtle decorative glow orbs (Soft Pastel Luxury Accents)
-  const glow1 = ctx.createRadialGradient(WIDTH - 110, 120, 20, WIDTH - 110, 120, 320);
-  glow1.addColorStop(0, "rgba(99, 102, 241, 0.12)");
+  // Subtle decorative glow orbs
+  const glow1 = ctx.createRadialGradient(WIDTH - 110, 120, 20, WIDTH - 110, 120, 340);
+  glow1.addColorStop(0, "rgba(99, 102, 241, 0.15)");
   glow1.addColorStop(1, "rgba(99, 102, 241, 0)");
   ctx.fillStyle = glow1;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // Outer card frame border
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.25)";
+  // Outer card frame border (Sharp 3px solid)
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
   ctx.lineWidth = 3;
   drawRoundedRect(ctx, 24, 24, WIDTH - 48, HEIGHT - 48, 32);
   ctx.stroke();
 
   // 2. Top Badge Pill
-  ctx.font = "800 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  const badgeW = Math.min(WIDTH - PAD * 2, ctx.measureText(badgeText).width + 48);
-  const badgeGrad = ctx.createLinearGradient(PAD, 62, PAD + badgeW, 110);
+  ctx.font = `800 26px ${FONT_SANS}`;
+  const badgeW = Math.min(WIDTH - PAD * 2, Math.round(ctx.measureText(badgeText).width + 56));
+  const badgeGrad = ctx.createLinearGradient(PAD, 60, PAD + badgeW, 112);
   badgeGrad.addColorStop(0, "#4f46e5");
   badgeGrad.addColorStop(1, "#06b6d4");
   ctx.fillStyle = badgeGrad;
-  drawRoundedRect(ctx, PAD, 62, badgeW, 48, 24);
+  drawRoundedRect(ctx, PAD, 60, badgeW, 52, 26);
   ctx.fill();
 
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(badgeText, PAD + 24, 94);
+  ctx.fillText(badgeText, PAD + 28, 96);
 
-  // 3. Title & Subtitle
-  let curY = 166;
-  ctx.font = "900 48px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  // 3. Title & Subtitle (High Contrast Obsidian)
+  let curY = 172;
+  ctx.font = `900 52px ${FONT_SANS}`;
   ctx.fillStyle = "#090d16";
   for (const tLine of titleLines) {
     ctx.fillText(tLine, PAD, curY);
-    curY += 58;
+    curY += 62;
   }
 
-  ctx.font = "700 26px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = `800 28px ${FONT_SANS}`;
   ctx.fillStyle = "#4338ca";
   ctx.fillText(String(subtitle).slice(0, 72), PAD, curY + 6);
-  curY += 44;
+  curY += 46;
 
-  // 4. Inner Content Panel (Pure White Elevated Box)
+  // 4. Inner Content Panel (Pure White Elevated Studio Box)
   const boxY = curY;
   ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(203, 213, 225, 0.85)";
-  ctx.lineWidth = 2;
-  drawRoundedRect(ctx, PAD, boxY, WIDTH - PAD * 2, contentBoxH, 24);
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.32)";
+  ctx.lineWidth = 2.5;
+  drawRoundedRect(ctx, PAD, boxY, WIDTH - PAD * 2, contentBoxH, 26);
   ctx.fill();
   ctx.stroke();
 
-  let textY = boxY + 54;
-  ctx.font = "600 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  let textY = boxY + 58;
+  ctx.font = `600 32px ${FONT_SANS}`;
   for (const bLine of bodyLines) {
-    if (textY > boxY + contentBoxH - 22) break;
+    if (textY > boxY + contentBoxH - 24) break;
     if (bLine === "") {
-      textY += 18;
+      textY += 20;
       continue;
     }
     const isBulletOrHeading = bLine.startsWith("•") || bLine.startsWith("📌") || bLine.startsWith("💡") || bLine.startsWith("⚡");
     ctx.fillStyle = isBulletOrHeading ? "#4338ca" : "#1e293b";
-    ctx.fillText(bLine, PAD + 28, textY);
+    ctx.fillText(bLine, PAD + 32, textY);
     textY += lineHeight;
   }
 
   // 5. Branded Bottom Footer + Live Scannable QR Code
-  const footerY = HEIGHT - 165;
+  const footerY = HEIGHT - 168;
   ctx.fillStyle = "#f8faff";
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.28)";
-  drawRoundedRect(ctx, PAD, footerY, WIDTH - PAD * 2, 118, 22);
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, PAD, footerY, WIDTH - PAD * 2, 120, 22);
   ctx.fill();
   ctx.stroke();
 
-  ctx.font = "900 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#0f172a";
-  ctx.fillText(`📚 ${siteName}`, PAD + 24, footerY + 46);
+  ctx.font = `900 32px ${FONT_SANS}`;
+  ctx.fillStyle = "#090d16";
+  ctx.fillText(`📚 ${siteName}`, PAD + 26, footerY + 48);
 
-  ctx.font = "600 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#475569";
-  ctx.fillText("Scan QR to open full PDF notes, AI Tutor & PYQs", PAD + 24, footerY + 84);
+  ctx.font = `700 24px ${FONT_SANS}`;
+  ctx.fillStyle = "#334155";
+  ctx.fillText("Scan QR with camera to open full PDF notes & AI Tutor", PAD + 26, footerY + 88);
 
   try {
     const qrDataUrl = await QRCode.toDataURL(shareUrl, {
-      width: 96,
+      width: 100,
       margin: 1,
-      color: { dark: "#0f172a", light: "#ffffff" },
+      color: { dark: "#090d16", light: "#ffffff" },
     });
     const qrImg = await new Promise((resolve, reject) => {
       const img = new Image();
@@ -189,12 +205,12 @@ export async function generateRevisionCardPngBlob({
       img.onerror = reject;
       img.src = qrDataUrl;
     });
-    const qrX = WIDTH - PAD - 114;
-    const qrY = footerY + 11;
+    const qrX = WIDTH - PAD - 118;
+    const qrY = footerY + 10;
     ctx.fillStyle = "#ffffff";
-    drawRoundedRect(ctx, qrX - 4, qrY - 4, 104, 104, 12);
+    drawRoundedRect(ctx, qrX - 4, qrY - 4, 108, 108, 12);
     ctx.fill();
-    ctx.drawImage(qrImg, qrX, qrY, 96, 96);
+    ctx.drawImage(qrImg, qrX, qrY, 100, 100);
   } catch (_) {}
 
   return await new Promise((resolve, reject) => {
@@ -263,220 +279,255 @@ export function canvasToFile(canvas, fileName = "study-story.png") {
 /**
  * 📲 1-Tap WhatsApp Status & Story Card Canvas (1080x1920 9:16 Vertical HD)
  * Synchronous generation with scannable QR Code and Free Study Material branding.
+ * Features ultra-crisp typography, integer coordinate antialiasing, and high-contrast styling.
  */
 export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
   const WIDTH = 1080;
   const HEIGHT = 1920;
-  const PAD = 80;
+  const PAD = 72;
 
   const canvas = document.createElement("canvas");
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext("2d");
 
-  // 1. Pure White Luxury Ambient Gradient (Clean, Crisp High-Contrast)
+  // Razor-sharp canvas antialiasing & image smoothing
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  try {
+    ctx.textRendering = "geometricPrecision";
+  } catch (_) {}
+
+  // 1. Studio Clean White Luxury Gradient (Crisp, High-Contrast Backdrop)
   const bgGrad = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
   bgGrad.addColorStop(0, "#ffffff");
-  bgGrad.addColorStop(0.3, "#f8faff");
-  bgGrad.addColorStop(0.7, "#f1f5fd");
+  bgGrad.addColorStop(0.35, "#f8fafc");
+  bgGrad.addColorStop(0.7, "#f1f5f9");
   bgGrad.addColorStop(1, "#f8fafc");
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // 2. Subtle Luxury Aurora Ambient Glow Orbs
-  const glowTop = ctx.createRadialGradient(WIDTH * 0.82, 220, 20, WIDTH * 0.82, 220, 480);
-  glowTop.addColorStop(0, "rgba(99, 102, 241, 0.12)");
+  // 2. High-Definition Ambient Glowing Orbs
+  const glowTop = ctx.createRadialGradient(WIDTH * 0.85, 200, 20, WIDTH * 0.85, 200, 520);
+  glowTop.addColorStop(0, "rgba(99, 102, 241, 0.15)");
   glowTop.addColorStop(1, "rgba(99, 102, 241, 0)");
   ctx.fillStyle = glowTop;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  const glowMid = ctx.createRadialGradient(WIDTH * 0.18, HEIGHT * 0.52, 30, WIDTH * 0.18, HEIGHT * 0.52, 500);
-  glowMid.addColorStop(0, "rgba(6, 182, 212, 0.10)");
+  const glowMid = ctx.createRadialGradient(WIDTH * 0.15, HEIGHT * 0.48, 30, WIDTH * 0.15, HEIGHT * 0.48, 540);
+  glowMid.addColorStop(0, "rgba(6, 182, 212, 0.14)");
   glowMid.addColorStop(1, "rgba(6, 182, 212, 0)");
   ctx.fillStyle = glowMid;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  const glowBot = ctx.createRadialGradient(WIDTH * 0.5, HEIGHT * 0.86, 40, WIDTH * 0.5, HEIGHT * 0.86, 460);
-  glowBot.addColorStop(0, "rgba(16, 185, 129, 0.09)");
-  glowBot.addColorStop(1, "rgba(16, 185, 129, 0)");
-  ctx.fillStyle = glowBot;
-  ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-  // Top Neon Accent Ribbon
-  const topRibbonGrad = ctx.createLinearGradient(36, 36, WIDTH - 36, 44);
+  // Top Neon Accent Ribbon (10px height, rounded)
+  const topRibbonGrad = ctx.createLinearGradient(32, 32, WIDTH - 32, 42);
   topRibbonGrad.addColorStop(0, "#4f46e5");
   topRibbonGrad.addColorStop(0.5, "#06b6d4");
   topRibbonGrad.addColorStop(1, "#10b981");
   ctx.fillStyle = topRibbonGrad;
-  drawRoundedRect(ctx, 36, 36, WIDTH - 72, 8, 4);
+  drawRoundedRect(ctx, 32, 32, WIDTH - 64, 10, 5);
   ctx.fill();
 
-  // Outer Luxury Frame
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.22)";
-  ctx.lineWidth = 3;
-  drawRoundedRect(ctx, 36, 36, WIDTH - 72, HEIGHT - 72, 44);
+  // Crisp Outer Luxury Border (2.5px solid)
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.lineWidth = 2.5;
+  drawRoundedRect(ctx, 32, 32, WIDTH - 64, HEIGHT - 64, 40);
   ctx.stroke();
 
-  // 3. Top Platform Badge (Vibrant Gradient Pill)
-  const badgeText = "⚡ FREE STUDY MATERIAL VAULT";
-  ctx.font = "800 26px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  const badgeW = ctx.measureText(badgeText).width + 56;
-  const badgeGrad = ctx.createLinearGradient(PAD, 88, PAD + badgeW, 146);
+  // 3. Top Platform Badge (Vibrant Gradient Capsule)
+  const badgeText = "⚡ FREE STUDY MATERIAL";
+  ctx.font = `800 28px ${FONT_SANS}`;
+  const badgeW = Math.round(ctx.measureText(badgeText).width + 56);
+  const badgeGrad = ctx.createLinearGradient(PAD, 78, PAD + badgeW, 142);
   badgeGrad.addColorStop(0, "#4f46e5");
+  badgeGrad.addColorStop(0.65, "#4338ca");
   badgeGrad.addColorStop(1, "#06b6d4");
   ctx.fillStyle = badgeGrad;
-  drawRoundedRect(ctx, PAD, 88, badgeW, 58, 29);
+  drawRoundedRect(ctx, PAD, 78, badgeW, 64, 32);
   ctx.fill();
 
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 1.5;
+  drawRoundedRect(ctx, PAD, 78, badgeW, 64, 32);
+  ctx.stroke();
+
   ctx.fillStyle = "#ffffff";
-  ctx.fillText(badgeText, PAD + 28, 126);
+  ctx.fillText(badgeText, PAD + 28, 120);
 
   // Verified Status Pill (Emerald Accent Card)
-  const verifiedText = "✓ 100% FREE VAULT";
-  ctx.font = "800 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  const verW = ctx.measureText(verifiedText).width + 40;
+  const verifiedText = "✓ 100% VERIFIED VAULT";
+  ctx.font = `800 24px ${FONT_SANS}`;
+  const verW = Math.round(ctx.measureText(verifiedText).width + 44);
   const verX = WIDTH - PAD - verW;
   ctx.fillStyle = "#ecfdf5";
-  ctx.strokeStyle = "#a7f3d0";
-  ctx.lineWidth = 1.8;
-  drawRoundedRect(ctx, verX, 92, verW, 50, 25);
+  ctx.strokeStyle = "#10b981";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, verX, 80, verW, 60, 30);
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#047857";
-  ctx.fillText(verifiedText, verX + 20, 125);
+  ctx.fillText(verifiedText, verX + 22, 119);
 
-  // 4. Branch / Course Category Tag Pill (Elevated Luxury Pill)
+  // 4. Branch / Course Category Tag Pill (Elevated Modern Luxury Pill)
   let curY = 176;
-  const branchText = `${note.subject || "Academic Notes"} • ${note.course || "B.Tech"} • ${note.branch || "All Branches"}`;
-  ctx.font = "800 25px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  const catW = Math.min(WIDTH - PAD * 2, ctx.measureText(branchText.toUpperCase()).width + 44);
-  ctx.fillStyle = "rgba(79, 70, 229, 0.08)";
-  ctx.strokeStyle = "rgba(79, 70, 229, 0.28)";
-  ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, PAD, curY, catW, 46, 23);
+  const cleanSubject = String(note.subject || "Academic Notes").trim();
+  const cleanCourse = String(note.course || "B.Tech").trim();
+  const cleanBranch = String(note.branch || "All Branches").trim();
+  const branchText = `📚 ${cleanSubject.toUpperCase()} • ${cleanCourse.toUpperCase()} • ${cleanBranch.toUpperCase()}`;
+
+  ctx.font = `800 26px ${FONT_SANS}`;
+  const catW = Math.min(WIDTH - PAD * 2, Math.round(ctx.measureText(branchText).width + 50));
+  ctx.fillStyle = "#eef2ff";
+  ctx.strokeStyle = "#818cf8";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, PAD, curY, catW, 52, 26);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#4338ca";
-  ctx.fillText(`📚 ${branchText.toUpperCase()}`, PAD + 20, curY + 32);
+  ctx.fillStyle = "#3730a3";
+  ctx.fillText(branchText, PAD + 25, curY + 35);
 
-  // 5. Huge Bold Note Title (High-Visibility Obsidian Black with Stylish Typography)
-  curY += 76;
-  ctx.font = "900 64px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#090d16";
+  // 5. Bold Commanding Note Title (High-Visibility Obsidian Black Typography)
+  curY += 86;
+  ctx.font = `900 68px ${FONT_SANS}`;
+  ctx.fillStyle = "#090d16"; // Deep Obsidian Black for razor-sharp legibility
   const titleLines = wrapCanvasText(ctx, note.title || "University Lecture Notes", WIDTH - PAD * 2).slice(0, 3);
   for (const tLine of titleLines) {
     ctx.fillText(tLine, PAD, curY);
-    curY += 78;
+    curY += 82;
   }
 
   // 5B. Quick Metadata Badges Row (Pages / Rating / Free)
+  const pageCount = Number(note.pageCount || note.pagesCount || 15);
   const metaBadges = [
-    `📄 ${note.pageCount || note.pagesCount || 15}+ Pages`,
-    `⭐ 4.9/5 Rating`,
-    `🎓 Verified Notes`,
+    { text: `📄 ${pageCount}+ Pages`, color: "#4338ca", bg: "#eef2ff", border: "#a5b4fc" },
+    { text: `⭐ 4.9/5 Rating`, color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
+    { text: `🎓 Syllabus Aligned`, color: "#065f46", bg: "#ecfdf5", border: "#6ee7b7" },
+    { text: `🔒 100% Free Vault`, color: "#075985", bg: "#f0f9ff", border: "#7dd3fc" },
   ];
+
   let metaX = PAD;
-  ctx.font = "700 22px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  for (const mText of metaBadges) {
-    const mW = ctx.measureText(mText).width + 32;
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = 1.5;
-    drawRoundedRect(ctx, metaX, curY + 6, mW, 42, 21);
+  ctx.font = `800 24px ${FONT_SANS}`;
+  for (const badge of metaBadges) {
+    const mW = Math.round(ctx.measureText(badge.text).width + 36);
+    if (metaX + mW > WIDTH - PAD) break;
+
+    ctx.fillStyle = badge.bg;
+    ctx.strokeStyle = badge.border;
+    ctx.lineWidth = 2;
+    drawRoundedRect(ctx, metaX, curY + 4, mW, 48, 24);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = "#334155";
-    ctx.fillText(mText, metaX + 16, curY + 35);
+    ctx.fillStyle = badge.color;
+    ctx.fillText(badge.text, metaX + 18, curY + 36);
     metaX += mW + 14;
   }
-  curY += 66;
+  curY += 76;
 
-  // 6. Highlighted Feature Cards Container (Pure White Elevated Card)
-  const featureBoxH = 440;
+  // 6. Highlighted Feature Cards Container (Pure White Elevated Studio Card)
+  const featureBoxH = 460;
+  // Ambient drop shadow
+  ctx.fillStyle = "rgba(15, 23, 42, 0.05)";
+  drawRoundedRect(ctx, PAD + 3, curY + 3, WIDTH - PAD * 2, featureBoxH, 28);
+  ctx.fill();
+
   ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(226, 232, 240, 0.95)";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.35)";
+  ctx.lineWidth = 2.5;
   drawRoundedRect(ctx, PAD, curY, WIDTH - PAD * 2, featureBoxH, 28);
   ctx.fill();
   ctx.stroke();
 
-  // Features List inside container
+  // Section Header
+  ctx.font = `900 30px ${FONT_SANS}`;
+  ctx.fillStyle = "#090d16";
+  ctx.fillText("✨ What's Inside This Vault Study Pack:", PAD + 32, curY + 50);
+
+  // Features List
   const features = [
-    { icon: "📖", title: "Comprehensive Semester Notes", desc: "Curated by top university students & professors for maximum marks" },
-    { icon: "🎯", title: "Solved Previous Year Papers (PYQs)", desc: "Step-by-step solutions with detailed diagrams & formulas" },
-    { icon: "📴", title: "0ms Instant Online Reader", desc: "Save 100% offline on your device — zero paywalls & zero ads" },
-    { icon: "✨", title: "Interactive AI Study Assistant", desc: "Instant 3D flashcards, mind-maps & doubt solver" },
+    { icon: "📖", title: "Comprehensive Semester Notes", desc: "Detailed syllabus coverage curated by university toppers & faculty", color: "#4f46e5", bg: "#eef2ff" },
+    { icon: "🎯", title: "Solved Previous Year Papers (PYQs)", desc: "Step-by-step solutions with detailed diagrams & key derivations", color: "#0284c7", bg: "#f0f9ff" },
+    { icon: "📴", title: "0ms Instant Offline Reader", desc: "Save 100% offline on your device — zero paywalls & zero ads", color: "#059669", bg: "#ecfdf5" },
+    { icon: "⚡", title: "Interactive AI Study Assistant", desc: "Instant 3D flashcards, mind-maps & instant doubt solver", color: "#7c3aed", bg: "#f5f3ff" },
   ];
 
-  let fY = curY + 62;
+  let fY = curY + 112;
   for (const feat of features) {
-    // Feature icon badge circle
-    ctx.fillStyle = "#f8faff";
-    ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = 1.2;
-    drawRoundedRect(ctx, PAD + 24, fY - 32, 50, 50, 14);
+    // Icon Badge (54x54)
+    ctx.fillStyle = feat.bg;
+    ctx.strokeStyle = feat.color;
+    ctx.lineWidth = 1.8;
+    drawRoundedRect(ctx, PAD + 30, fY - 32, 54, 54, 16);
     ctx.fill();
     ctx.stroke();
 
-    ctx.font = "28px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText(feat.icon, PAD + 34, fY + 4);
+    ctx.font = `30px ${FONT_SANS}`;
+    ctx.fillText(feat.icon, PAD + 42, fY + 6);
 
-    ctx.font = "800 30px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = "#0f172a";
-    ctx.fillText(feat.title, PAD + 92, fY - 3);
+    // Feature Title - High contrast obsidian black!
+    ctx.font = `800 30px ${FONT_SANS}`;
+    ctx.fillStyle = "#090d16";
+    ctx.fillText(feat.title, PAD + 104, fY - 4);
 
-    ctx.font = "600 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-    ctx.fillStyle = "#334155";
-    ctx.fillText(feat.desc, PAD + 92, fY + 30);
+    // Feature Description - Dark Slate-800 for crystal-clear readability!
+    ctx.font = `600 24px ${FONT_SANS}`;
+    ctx.fillStyle = "#1e293b";
+    ctx.fillText(feat.desc, PAD + 104, fY + 30);
 
-    fY += 96;
+    fY += 88;
   }
 
   // 7. Centerpiece Scannable QR Code Hub (Pure White + Indigo Accent Card)
-  const qrBoxY = curY + featureBoxH + 42;
+  const qrBoxY = curY + featureBoxH + 34;
   const qrBoxH = 550;
+
+  // Shadow
+  ctx.fillStyle = "rgba(15, 23, 42, 0.05)";
+  drawRoundedRect(ctx, PAD + 3, qrBoxY + 3, WIDTH - PAD * 2, qrBoxH, 36);
+  ctx.fill();
+
   const qrBoxGrad = ctx.createLinearGradient(PAD, qrBoxY, WIDTH - PAD, qrBoxY + qrBoxH);
   qrBoxGrad.addColorStop(0, "#ffffff");
-  qrBoxGrad.addColorStop(1, "#f5f7ff");
+  qrBoxGrad.addColorStop(1, "#f8faff");
   ctx.fillStyle = qrBoxGrad;
-  ctx.strokeStyle = "rgba(99, 102, 241, 0.38)";
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.45)";
   ctx.lineWidth = 2.5;
   drawRoundedRect(ctx, PAD, qrBoxY, WIDTH - PAD * 2, qrBoxH, 36);
   ctx.fill();
   ctx.stroke();
 
   // QR Code Header
-  ctx.font = "900 36px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#0f172a";
   ctx.textAlign = "center";
-  ctx.fillText("📸 Scan with Phone Camera to Open Note", WIDTH / 2, qrBoxY + 66);
+  ctx.font = `900 38px ${FONT_SANS}`;
+  ctx.fillStyle = "#090d16";
+  ctx.fillText("📸 Scan with Phone Camera to Open Note", WIDTH / 2, qrBoxY + 62);
 
-  ctx.font = "800 25px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
+  ctx.font = `800 26px ${FONT_SANS}`;
   ctx.fillStyle = "#4f46e5";
-  ctx.fillText("Instant 0ms Reader • Zero Login Required to Read", WIDTH / 2, qrBoxY + 106);
+  ctx.fillText("⚡ Instant 0ms Reader • Zero Login Required to Read", WIDTH / 2, qrBoxY + 104);
 
   // Synchronous Scannable QR Code
   const qrTargetUrl = shareUrl || `${typeof window !== "undefined" ? window.location.origin : "https://freestudymaterial.pages.dev"}/?note=${note.id || ""}`;
   try {
     const qr = QRCode.create(qrTargetUrl, { errorCorrectionLevel: "M" });
     const numModules = qr.modules.size;
-    const qrSize = 270;
-    const qrX = (WIDTH - qrSize) / 2;
-    const qrY = qrBoxY + 140;
+    const qrSize = 280;
+    const qrX = Math.round((WIDTH - qrSize) / 2);
+    const qrY = Math.round(qrBoxY + 134);
     const cell = qrSize / numModules;
 
-    // Draw clean white background with rounded corners & border
+    // White QR container card
     ctx.fillStyle = "#ffffff";
     ctx.strokeStyle = "#cbd5e1";
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     drawRoundedRect(ctx, qrX - 16, qrY - 16, qrSize + 32, qrSize + 32, 22);
     ctx.fill();
     ctx.stroke();
 
-    // Draw dark modules
+    // Draw dark modules with integer pixel coordinates!
     ctx.fillStyle = "#090d16";
     for (let r = 0; r < numModules; r++) {
       const y1 = Math.round(qrY + r * cell);
@@ -496,25 +547,25 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
   // Scannable URL text Pill
   const displayHost = typeof window !== "undefined" && window.location.hostname ? window.location.hostname : "freestudymaterial.pages.dev";
   const urlPillText = `🔗 ${displayHost}`;
-  ctx.font = "800 25px 'JetBrains Mono', Consolas, monospace";
-  const urlPillW = ctx.measureText(urlPillText).width + 48;
-  const urlPillX = (WIDTH - urlPillW) / 2;
-  const urlPillY = qrBoxY + 472;
+  ctx.font = `800 28px ${FONT_MONO}`;
+  const urlPillW = Math.round(ctx.measureText(urlPillText).width + 54);
+  const urlPillX = Math.round((WIDTH - urlPillW) / 2);
+  const urlPillY = Math.round(qrBoxY + 470);
   ctx.fillStyle = "#eef2ff";
-  ctx.strokeStyle = "#c7d2fe";
-  ctx.lineWidth = 1.5;
-  drawRoundedRect(ctx, urlPillX, urlPillY, urlPillW, 46, 23);
+  ctx.strokeStyle = "#818cf8";
+  ctx.lineWidth = 2;
+  drawRoundedRect(ctx, urlPillX, urlPillY, urlPillW, 52, 26);
   ctx.fill();
   ctx.stroke();
 
-  ctx.textAlign = "center";
   ctx.fillStyle = "#3730a3";
-  ctx.fillText(urlPillText, WIDTH / 2, urlPillY + 32);
+  ctx.fillText(urlPillText, WIDTH / 2, urlPillY + 36);
 
   // 8. Footer Branding
-  ctx.font = "700 24px 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#475569";
-  ctx.fillText("📚 Free Study Material • 100% Free Lifetime Campus Vault", WIDTH / 2, HEIGHT - 78);
+  ctx.textAlign = "center";
+  ctx.font = `800 26px ${FONT_SANS}`;
+  ctx.fillStyle = "#334155";
+  ctx.fillText("📚 Free Study Material • 100% Free Lifetime Campus Vault", WIDTH / 2, HEIGHT - 76);
 
   ctx.textAlign = "left"; // reset alignment
   return canvas;

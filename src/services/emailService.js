@@ -578,10 +578,15 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
   const memoryGB = Number(specs?.memoryGB || 0);
   const isMobile = Boolean(specs?.isMobile || /Android|iPhone|iPad|Mobile/i.test(ua));
   const tier = String(specs?.tier || "").toLowerCase();
+  const gpuRenderer = specs?.gpuRenderer || user?.gpuRenderer || "";
 
   let storage = "";
-  if (specs?.romGB && Number(specs.romGB) >= 32) {
+  if (specs?.realRomLabel && typeof specs.realRomLabel === "string" && specs.realRomLabel.trim()) {
+    storage = specs.realRomLabel.trim();
+  } else if (specs?.romGB && Number(specs.romGB) >= 32) {
     storage = `${specs.romGB} GB ROM (${isMobile ? "UFS Flash" : "SSD"})`;
+  } else if (specs?.realRomGB && Number(specs.realRomGB) >= 32) {
+    storage = `${specs.realRomGB} GB ROM (${isMobile ? "UFS Flash" : "SSD"})`;
   } else if (specs?.storage && typeof specs.storage === "string" && specs.storage.trim() && !/^[0-9.]+\s*GB\s*Fast\s*Storage$/i.test(specs.storage.trim())) {
     storage = specs.storage.trim();
   } else if (specs?.storageGB && Number(specs.storageGB) >= 32) {
@@ -589,10 +594,24 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
   } else if (user?.storage && typeof user.storage === "string") {
     storage = user.storage.trim();
   } else {
-    const inferredRom = !isMobile
-      ? (memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256)
-      : (memoryGB >= 12 ? 512 : memoryGB >= 8 ? 256 : memoryGB >= 4 ? 128 : 64);
-    storage = isMobile ? `${inferredRom} GB ROM (UFS High-Speed)` : `${inferredRom} GB Fast SSD`;
+    // Platform-specific realistic hardware inference
+    if (/iPhone/i.test(ua)) {
+      storage = memoryGB >= 6 ? "256 GB Apple NVMe Storage" : "128 GB Apple NVMe Storage";
+    } else if (/iPad/i.test(ua)) {
+      storage = "128 GB Apple Flash Storage";
+    } else if (/Macintosh|Mac OS X/i.test(ua)) {
+      storage = memoryGB >= 16 ? "512 GB Apple Unified SSD" : "256 GB Apple Unified SSD";
+    } else if (/Windows NT 10.0/i.test(ua) || /Windows/i.test(ua)) {
+      storage = (memoryGB >= 16 || cores >= 12) ? "1 TB NVMe SSD" : (memoryGB >= 8 || cores >= 8) ? "512 GB Fast SSD" : "256 GB SSD";
+    } else if (/Linux/i.test(ua)) {
+      storage = (memoryGB >= 16 || cores >= 8) ? "512 GB Fast SSD" : "256 GB SSD";
+    } else if (isMobile) {
+      const inferredRom = memoryGB >= 12 ? 512 : memoryGB >= 8 ? 256 : memoryGB >= 4 ? 128 : 64;
+      storage = `${inferredRom} GB ROM (UFS High-Speed)`;
+    } else {
+      const inferredRom = memoryGB >= 16 || cores >= 16 ? 1024 : memoryGB >= 8 || cores >= 8 ? 512 : 256;
+      storage = `${inferredRom} GB Fast SSD`;
+    }
   }
 
   const storageSnippet = storage ? ` • ${storage}` : "";
@@ -617,7 +636,9 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
     if (storage && !hardwareCapability.includes("Storage")) {
       hardwareCapability += ` • ${storage}`;
     }
-  } else if (tier === "high" || tier === "workstation") {
+  } else if (tier === "workstation") {
+    hardwareCapability = `Workstation Architecture (${cores || 8} Cores, ${memoryGB || 16}GB RAM${storageSnippet})`;
+  } else if (tier === "high") {
     hardwareCapability = `High Performance Multi-Core Architecture${storageSnippet}`;
   } else if (tier === "ultra_low" || tier === "low") {
     hardwareCapability = `Budget Mobile Architecture (Adaptive Guard${storageSnippet})`;
@@ -638,7 +659,7 @@ function resolveDeviceAndHardwareInfo(user = {}, directDeviceSpecs = null, direc
     }
   }
 
-  return { deviceName, hardwareCapability, storage };
+  return { deviceName, hardwareCapability, storage, gpuRenderer };
 }
 
 /**
@@ -769,9 +790,7 @@ async function sendTelegramAuthNotice({
     }
 
     const timeStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-    const deviceInfo = (event === "REGISTER" || event === "LOGIN" || event === "LOGOUT")
-      ? resolveDeviceAndHardwareInfo(user, deviceSpecs, userAgent)
-      : null;
+    const deviceInfo = resolveDeviceAndHardwareInfo(user, deviceSpecs, userAgent);
     let titleIcon = "🔔";
     let eventTitle = "User Activity";
 
@@ -971,7 +990,7 @@ async function sendTelegramAuthNotice({
         (user.telegramName && user.telegramName !== "N/A" ? `🤖 <b>Telegram Account:</b> <code>${user.telegramName}</code>\n` : "") +
         (user.telegramDetails?.id ? `🆔 <b>Telegram User ID:</b> <code>${user.telegramDetails.id}</code>\n` : "") +
         (user.telegramDetails?.username ? `🔗 <b>Telegram Handle:</b> @${user.telegramDetails.username}\n` : "") +
-        (deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage:</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") : "") +
+        (deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage (ROM):</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") + (deviceInfo.gpuRenderer ? `🎮 <b>GPU Renderer:</b> <code>${escapeHtml(deviceInfo.gpuRenderer)}</code>\n` : "") : "") +
         `📝 <b>Registration Method:</b> <code>${regMethodDisplay}</code>\n` +
         `⚡ <b>Account Status:</b> <code>✅ Active & Verified Student (Vault Access Granted)</code>\n` +
         (isGoogle ? `✨ <b>Google Verification:</b> <code>100% Cryptographically Verified by Google</code>\n` : "") +
@@ -1026,7 +1045,7 @@ async function sendTelegramAuthNotice({
       if (event === "DEVTOOLS_VIOLATION" && detail) {
         caption = detail;
       } else {
-        const isAuthDeviceNotice = (event === "LOGIN" || event === "LOGOUT");
+        const hasDeviceInfo = Boolean(deviceInfo && (deviceInfo.deviceName || deviceInfo.hardwareCapability));
         caption = `${titleIcon} <b>Free Study Material — ${eventTitle}</b>\n\n` +
           nameAndIdentityBlock +
           (user.oldMobile ? `📱 <b>Previous Mobile:</b> <code>${user.oldMobile}</code>\n` : "") +
@@ -1035,7 +1054,7 @@ async function sendTelegramAuthNotice({
           (user.college ? `🏛️ <b>College:</b> <code>${user.college}</code>\n` : "") +
           (user.year ? `📚 <b>Year:</b> <code>${user.year}</code>\n` : "") +
           (user.ip ? `🌐 <b>Client IP:</b> <code>${user.ip}</code>\n` : "") +
-          (isAuthDeviceNotice && deviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage:</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") : "") +
+          (hasDeviceInfo ? `📱 <b>Device Name:</b> <code>${escapeHtml(deviceInfo.deviceName)}</code>\n⚡ <b>Hardware Capability:</b> <code>${escapeHtml(deviceInfo.hardwareCapability)}</code>\n` + (deviceInfo.storage ? `💾 <b>Device Storage (ROM):</b> <code>${escapeHtml(deviceInfo.storage)}</code>\n` : "") + (deviceInfo.gpuRenderer ? `🎮 <b>GPU Renderer:</b> <code>${escapeHtml(deviceInfo.gpuRenderer)}</code>\n` : "") : "") +
           (context ? `📍 <b>Enrollment Timing:</b> <code>${context}</code>\n` : "") +
           `<b>${methodLabel}:</b> <code>${displayMethod}</code>\n` +
           (detail ? (detail.includes("<") ? `\n${detail}\n` : `⚠️ <b>Note:</b> <code>${detail}</code>\n`) : "") +
