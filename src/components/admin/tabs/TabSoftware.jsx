@@ -337,6 +337,15 @@ export default function TabSoftware(props) {
                     </div>
                     <div style={{ fontSize: "0.68rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>● AWS Mumbai • WiredTiger NVMe</div>
                   </div>
+
+                  {/* Engine 10: Google Cloud Firestore Disaster Recovery Cold Mirror */}
+                  <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(234, 67, 53, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Google Cloud Firestore (Disaster Mirror)</div>
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#f87171", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <Zap size={16} /> &lt; 28 ms
+                    </div>
+                    <div style={{ fontSize: "0.68rem", color: "#f87171", marginTop: "4px", fontWeight: 600 }}>● Offsite Cold Storage • 0% Quota Impact</div>
+                  </div>
                 </div>
 
                 <div style={{ marginTop: "10px", fontSize: "0.72rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -1231,6 +1240,80 @@ export default function TabSoftware(props) {
                         {mongoFlushMsg.text}
                       </div>
                     )}
+                  </div>
+                </div>
+
+                {/* 2c. Google Cloud Firestore: Disaster Recovery & Offsite Cold Mirror */}
+                <div style={{ background: "rgba(15, 23, 42, 0.45)", border: "1px solid rgba(234, 67, 53, 0.35)", borderRadius: "var(--radius-lg)", padding: "18px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "10px",
+                        background: "rgba(234, 67, 53, 0.15)",
+                        color: "#f87171",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}>
+                        <Database size={20} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>
+                          Google Cloud Firestore: Offsite Disaster Recovery Mirror
+                        </div>
+                        <div style={{
+                          fontSize: "0.72rem",
+                          color: "#34d399",
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}>
+                          ● ONLINE &amp; CONNECTED (Cold Storage Tier)
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 800,
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                          background: "rgba(234, 67, 53, 0.15)",
+                          color: "#f87171",
+                          border: "1px solid rgba(234, 67, 53, 0.3)",
+                        }}
+                      >
+                        OFFSITE MIRROR
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "0.8rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Mirror Status:</span>
+                      <span style={{ color: "#34d399", fontWeight: 700 }}>STANDBY &amp; SYNC READY</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Google Cloud Project:</span>
+                      <span style={{ color: "#38bdf8", fontWeight: 600 }}>tech-titan-team (REST API v1)</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Cloud Region:</span>
+                      <span style={{ color: "#fff", fontWeight: 600 }}>asia-south1 (Mumbai) / Global Datastore</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Daily Schedule:</span>
+                      <span style={{ color: "#a78bfa", fontWeight: 600 }}>Daily 03:30 AM IST (1 write/day • 49,999 free writes remaining)</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ color: "var(--text-dim)" }}>Collection Path:</span>
+                      <span style={{ color: "#fbbf24", fontWeight: 700 }}>fsm_disaster_recovery_backups</span>
+                    </div>
                   </div>
                 </div>
 

@@ -1295,6 +1295,11 @@ export const api = {
     return `/api/admin/database/export?token=${token || ""}`;
   },
 
+  // 🛡️ Google Cloud Firestore Disaster Recovery Mirror
+  triggerGoogleDisasterBackup: () => request("/admin/database/google-backup", { method: "POST" }),
+  getGoogleDisasterStatus: () => request("/admin/database/google-backup/status"),
+  getGoogleDisasterSnapshots: () => request("/admin/database/google-backup/snapshots"),
+
   // Security Bot Controls
   getSecurityBotSettings: () => request("/admin/security-bot/settings"),
   getSubjectForumTopics: () => request("/admin/security-bot/subject-topics"),

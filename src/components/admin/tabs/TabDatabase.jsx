@@ -45,6 +45,16 @@ export default function TabDatabase(props) {
   const [mongoFlushing, setMongoFlushing] = useState(false);
   const [mongoFlushMsg, setMongoFlushMsg] = useState(null);
   const [chatTelemetry, setChatTelemetry] = useState(null);
+  const [googleBackupLoading, setGoogleBackupLoading] = useState(false);
+  const [googleBackupStatus, setGoogleBackupStatus] = useState(null);
+  const [googleBackupMsg, setGoogleBackupMsg] = useState(null);
+
+  const loadGoogleBackupStatus = async () => {
+    try {
+      const res = await api.getGoogleDisasterStatus();
+      if (res?.success) setGoogleBackupStatus(res);
+    } catch (_) {}
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -53,8 +63,33 @@ export default function TabDatabase(props) {
         setChatTelemetry(res);
       }
     }).catch(() => {});
+    loadGoogleBackupStatus();
     return () => { isMounted = false; };
   }, []);
+
+  const handleTriggerGoogleBackup = async () => {
+    setGoogleBackupLoading(true);
+    setGoogleBackupMsg(null);
+    try {
+      const res = await api.triggerGoogleDisasterBackup();
+      if (res?.success) {
+        setGoogleBackupMsg({
+          type: "success",
+          text: `✅ Google Cloud Backup Completed! Snapshot: ${res.snapshotId} (${res.notesCount} notes, ${res.usersCount} users mirrored to Firestore).`,
+        });
+        loadGoogleBackupStatus();
+      } else {
+        setGoogleBackupMsg({
+          type: "error",
+          text: `❌ Google Backup failed: ${res?.error || "Unknown error"}`,
+        });
+      }
+    } catch (err) {
+      setGoogleBackupMsg({ type: "error", text: err.message || "Backup failed" });
+    } finally {
+      setGoogleBackupLoading(false);
+    }
+  };
 
   const handleFlushMongoBuffer = async () => {
     setMongoFlushing(true);
@@ -200,6 +235,92 @@ export default function TabDatabase(props) {
                     <span>Last Synced:</span>
                     <strong style={{ color: "#fff" }}>
                       {formatSyncTime(lastSyncInfo || stats?.lastSync)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🛡️ GOOGLE CLOUD FIRESTORE: DISASTER RECOVERY & OFFSITE COLD MIRROR */}
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(234, 67, 53, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)",
+                  border: "1.5px solid rgba(234, 67, 53, 0.35)",
+                  borderRadius: "var(--radius-lg)",
+                  padding: "16px 18px",
+                  marginBottom: "20px",
+                  boxShadow: "0 4px 20px rgba(0, 0, 0, 0.25)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div style={{ width: "36px", height: "36px", borderRadius: "8px", background: "rgba(234, 67, 53, 0.18)", color: "#f87171", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Database size={18} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, color: "#fff", fontSize: "0.96rem", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>Google Cloud Firestore: Offsite Disaster Recovery Mirror</span>
+                        <span style={{ fontSize: "0.68rem", padding: "2px 8px", borderRadius: "999px", background: "rgba(52, 211, 153, 0.18)", color: "#34d399", border: "1px solid rgba(52, 211, 153, 0.35)", fontWeight: 800 }}>
+                          ● {googleBackupStatus?.connected ? "ONLINE & READY" : "ONLINE"}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                        Project: <code style={{ color: "#38bdf8" }}>{googleBackupStatus?.projectId || "tech-titan-team"}</code> • Cold Storage Tier (100% Free • Zero Daily Read Quota Impact)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      onClick={handleTriggerGoogleBackup}
+                      disabled={googleBackupLoading}
+                      className="btn-primary"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "0.8rem",
+                        padding: "7px 14px",
+                        background: "linear-gradient(135deg, #ea4335, #c5221f)",
+                        borderColor: "rgba(234, 67, 53, 0.5)",
+                      }}
+                    >
+                      <Zap size={14} className={googleBackupLoading ? "spinner" : ""} />
+                      <span>{googleBackupLoading ? "Mirroring to Google Cloud..." : "⚡ Sync Backup to Google Cloud Now"}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {googleBackupMsg && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      marginBottom: "10px",
+                      fontSize: "0.78rem",
+                      fontWeight: 600,
+                      background: googleBackupMsg.type === "success" ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                      color: googleBackupMsg.type === "success" ? "#34d399" : "#f87171",
+                      border: `1px solid ${googleBackupMsg.type === "success" ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                    }}
+                  >
+                    {googleBackupMsg.text}
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", fontSize: "0.76rem", background: "rgba(0,0,0,0.25)", padding: "10px 12px", borderRadius: "8px" }}>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Cloud Region &amp; Engine: </span>
+                    <strong style={{ color: "#fff" }}>Google Cloud (asia-south1 Mumbai)</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Automated Schedule: </span>
+                    <strong style={{ color: "#38bdf8" }}>Daily 03:30 AM IST (1 write/day)</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-dim)" }}>Last Mirror Snapshot: </span>
+                    <strong style={{ color: googleBackupStatus?.lastBackup?.timestamp ? "#34d399" : "#fbbf24" }}>
+                      {googleBackupStatus?.lastBackup?.timestamp ? new Date(googleBackupStatus.lastBackup.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "Ready for Initial Sync"}
                     </strong>
                   </div>
                 </div>

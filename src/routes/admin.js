@@ -3474,6 +3474,41 @@ router.get("/database/overview", authenticateToken, checkAdminOrPermission("data
   }
 });
 
+/**
+ * 🛡️ GOOGLE CLOUD FIRESTORE DISASTER RECOVERY & OFFSITE BACKUP CONTROLS
+ */
+router.get("/database/google-backup/status", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
+  try {
+    const { getDisasterRecoveryTelemetry } = require("../services/googleCloudDisasterRecoveryService");
+    const telemetry = await getDisasterRecoveryTelemetry();
+    return res.json({ success: true, ...telemetry });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.post("/database/google-backup", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
+  try {
+    const { executeDisasterBackup } = require("../services/googleCloudDisasterRecoveryService");
+    const result = await executeDisasterBackup({
+      triggeredBy: `Admin Manual Snapshot (${req.user?.email || "Admin"})`,
+    });
+    return res.json(result);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+router.get("/database/google-backup/snapshots", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
+  try {
+    const { listDisasterSnapshots } = require("../services/googleCloudDisasterRecoveryService");
+    const snapshots = await listDisasterSnapshots(20);
+    return res.json({ success: true, snapshots });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.get("/database/export", authenticateToken, checkAdminOrPermission("database"), async (req, res) => {
   try {
     if (!checkDb(res, "DB unavailable")) return;
