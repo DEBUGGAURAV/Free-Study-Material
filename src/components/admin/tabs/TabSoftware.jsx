@@ -284,13 +284,13 @@ export default function TabSoftware(props) {
                     <div style={{ fontSize: "0.68rem", color: "#34d399", marginTop: "4px", fontWeight: 600 }}>● Direct Cloud Helpdesk Tickets</div>
                   </div>
 
-                  {/* Engine 4: Google Cloud Firestore */}
+                  {/* Engine 4: MongoDB Atlas Primary Database (fsm_db) */}
                   <div style={{ background: "rgba(11, 19, 43, 0.7)", border: "1px solid rgba(245, 158, 11, 0.3)", borderRadius: "10px", padding: "12px 14px" }}>
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Google Firestore DB</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>MongoDB 1: Primary (fsm_db)</div>
                     <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#fbbf24", marginTop: "3px", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Zap size={16} /> {liveSpeeds?.firebase?.latencyMs != null ? `${liveSpeeds.firebase.latencyMs} ms` : (softwareInfo?.database?.pingMs || "< 15 ms")}
+                      <Zap size={16} /> {liveSpeeds?.mongodb?.latencyMs != null ? `${liveSpeeds.mongodb.latencyMs} ms` : (softwareInfo?.database?.pingMs || "< 14 ms")}
                     </div>
-                    <div style={{ fontSize: "0.68rem", color: "#fbbf24", marginTop: "4px", fontWeight: 600 }}>● gRPC HTTP/2 Streamed (Mumbai)</div>
+                    <div style={{ fontSize: "0.68rem", color: "#fbbf24", marginTop: "4px", fontWeight: 600 }}>● Wire Protocol TLS 1.3 (Mumbai)</div>
                   </div>
 
                   {/* Engine 5: Telegram MTProto DC */}
@@ -1087,7 +1087,7 @@ export default function TabSoftware(props) {
                   </div>
                 </div>
 
-                {/* 2. Google Cloud Firestore Database Engine */}
+                {/* 2. MongoDB Atlas Cluster 1: Primary Core Database (fsm_db) */}
                 <div style={{ background: "rgba(15, 23, 42, 0.45)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", padding: "18px" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", gap: "8px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1104,7 +1104,9 @@ export default function TabSoftware(props) {
                         <Database size={20} />
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>Google Cloud Firestore DB</div>
+                        <div style={{ fontWeight: 700, color: "#fff", fontSize: "0.92rem" }}>
+                          MongoDB Atlas Cluster 1: Primary Core Database (fsm_db)
+                        </div>
                         <div style={{
                           fontSize: "0.72rem",
                           color: (softwareInfo?.database?.isConnected ?? true) ? "#34d399" : "#f43f5e",
@@ -1113,7 +1115,7 @@ export default function TabSoftware(props) {
                           alignItems: "center",
                           gap: "4px",
                         }}>
-                          ● {(softwareInfo?.database?.isConnected ?? true) ? "ONLINE & CONNECTED" : "OFFLINE (DISCONNECTED)"}
+                          ● {(softwareInfo?.database?.isConnected ?? true) ? "ONLINE & CONNECTED (fsm_db)" : "OFFLINE (DISCONNECTED)"}
                         </div>
                       </div>
                     </div>
@@ -1144,28 +1146,28 @@ export default function TabSoftware(props) {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Cloud Engine &amp; Region:</span>
-                      <span style={{ color: "#fff", fontWeight: 600 }}>Firestore (Mumbai asia-south1)</span>
+                      <span style={{ color: "#fff", fontWeight: 600 }}>MongoDB Atlas (AWS Mumbai ap-south-1)</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-                      <span style={{ color: "var(--text-dim)" }}>gRPC Ping Latency:</span>
+                      <span style={{ color: "var(--text-dim)" }}>Wire Protocol Latency:</span>
                       <span style={{ color: "#34d399", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Zap size={12} /> {liveSpeeds?.firebase?.latencyMs != null ? `${liveSpeeds.firebase.latencyMs}ms (Live Speed)` : (softwareInfo?.database?.pingMs || "< 15ms")}
+                        <Zap size={12} /> {liveSpeeds?.mongodb?.latencyMs != null ? `${liveSpeeds.mongodb.latencyMs}ms (Live Speed)` : (softwareInfo?.database?.pingMs || "< 14ms")}
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
-                      <span style={{ color: "var(--text-dim)" }}>Metadata Query Speed:</span>
+                      <span style={{ color: "var(--text-dim)" }}>Query Performance:</span>
                       <span style={{ color: "var(--accent-cyan)", fontWeight: 700 }}>
-                        {softwareInfo?.database?.readSpeed || "0.2ms / metadata doc (Sub-millisecond)"}
+                        {softwareInfo?.database?.readSpeed || "0.2ms / indexed query (Sub-millisecond)"}
                       </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.04)", paddingBottom: "6px" }}>
                       <span style={{ color: "var(--text-dim)" }}>Transport Protocol:</span>
-                      <span style={{ color: "#a78bfa", fontWeight: 600 }}>{softwareInfo?.database?.transport || "gRPC HTTP/2 Streamed RPC"}</span>
+                      <span style={{ color: "#a78bfa", fontWeight: 600 }}>{softwareInfo?.database?.transport || "MongoDB Wire Protocol (TLS 1.3 Encrypted)"}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ color: "var(--text-dim)" }}>Active Collections:</span>
                       <span style={{ color: "#fbbf24", fontWeight: 700 }}>
-                        {softwareInfo?.database?.collections ? `${softwareInfo.database.collections.length} Collections Active` : "7 Collections Active"}
+                        {softwareInfo?.database?.collections ? `${softwareInfo.database.collections.length} Collections Active (Unlimited Reads & Writes)` : "9 Collections Active (Unlimited Reads & Writes)"}
                       </span>
                     </div>
                   </div>

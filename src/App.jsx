@@ -173,20 +173,6 @@ export default function App() {
   // User & Notices
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
   const [notices, setNotices] = useState([]);
-  const [hideSecurityBanner, setHideSecurityBanner] = useState(() => {
-    try {
-      return localStorage.getItem("fsm_dismiss_security_policy") === "true";
-    } catch (_) {
-      return false;
-    }
-  });
-
-  const dismissSecurityBanner = () => {
-    setHideSecurityBanner(true);
-    try {
-      localStorage.setItem("fsm_dismiss_security_policy", "true");
-    } catch (_) {}
-  };
 
   // Inactivity Auto-Logout State (30 Minutes = 1,800,000 ms)
   const [autoLogoutNotice, setAutoLogoutNotice] = useState(null);
@@ -925,6 +911,11 @@ export default function App() {
     const authAction = urlParams.get("auth");
     if (authAction && !currentUser) {
       openAuth(authAction === "signup" ? "signup" : "signin");
+      try {
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete("auth");
+        window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : ""));
+      } catch (_) {}
     }
 
     // 🛡️ Zero-Downtime Session Re-hydration: Restore from IndexedDB & Cookie
@@ -1675,6 +1666,7 @@ export default function App() {
           {isAuthOpen && (
             <AuthModal
               isOpen={isAuthOpen}
+              currentUser={currentUser}
               initialTab={authInitialTab}
               isMaintenanceMode={Boolean(maintenanceState?.active)}
               onClose={() => setIsAuthOpen(false)}
@@ -2271,91 +2263,6 @@ export default function App() {
           </div>
         ) : (
           <>
-            {/* Account Lifecycle Security Policy Banner (Only for regular students, never for Admin, and permanently dismissable) */}
-            {!hideSecurityBanner && currentUser && currentUser.role !== "admin" && currentUser.role !== "half_admin" && !currentUser.isMainAdmin && (
-              <div
-                className="student-security-banner"
-                style={{
-                  background: "linear-gradient(135deg, rgba(240, 250, 248, 0.95), rgba(242, 246, 255, 0.95))",
-                  border: "1px solid rgba(8, 124, 112, 0.22)",
-                  borderRadius: "16px",
-                  padding: "12px 16px",
-                  margin: "0 0 14px 0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "14px",
-                  boxShadow: "0 8px 24px -12px rgba(8, 124, 112, 0.18)",
-                  position: "relative",
-                  zIndex: 1,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      borderRadius: "10px",
-                      background: "linear-gradient(135deg, #e5f5f1, #d0f0e8)",
-                      border: "1px solid #cce8df",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      marginTop: "2px",
-                    }}
-                  >
-                    <ShieldCheck size={18} color="#087c70" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#1d2b42", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                      <span>Account Security Policy: Active Student Protection</span>
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          padding: "2px 7px",
-                          borderRadius: "999px",
-                          background: "#e4f6ef",
-                          color: "#087c70",
-                          fontWeight: 600,
-                          border: "1px solid #c5eadd",
-                        }}
-                      >
-                        Active &amp; Safe
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.78rem", color: "#526179", marginTop: "3px", lineHeight: "1.45" }}>
-                      To protect student privacy and university resources, accounts that do not log in for <strong>90 consecutive days</strong> are automatically deleted. Simply sign in once every 90 days to keep your student account active.
-                    </div>
-                  </div>
-                </div>
-
-                <div className="student-security-banner-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexShrink: 0 }}>
-                  <button
-                    className="student-security-dismiss"
-                    onClick={dismissSecurityBanner}
-                    style={{
-                      background: "#fff",
-                      border: "1px solid #dce4ef",
-                      color: "#526179",
-                      borderRadius: "8px",
-                      padding: "6px 12px",
-                      cursor: "pointer",
-                      fontSize: "0.75rem",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      fontWeight: 600,
-                    }}
-                    title="Dismiss notice"
-                  >
-                    <X size={13} />
-                    <span>Dismiss</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Header: Student Command Center (Logged-In) or Hero Banner (Guest) */}
             {currentUser ? (
               <StudentCommandCenter
@@ -2827,6 +2734,7 @@ export default function App() {
         {isAuthOpen && (
           <AuthModal
             isOpen={isAuthOpen}
+            currentUser={currentUser}
             onClose={() => setIsAuthOpen(false)}
             initialTab={authInitialTab}
             isMaintenanceMode={Boolean(maintenanceState?.active)}
@@ -2835,6 +2743,11 @@ export default function App() {
               setCurrentUser(user);
               setIsAuthOpen(false);
               safeStorage.setItem("vault_last_active", String(Date.now()));
+              try {
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete("auth");
+                window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : ""));
+              } catch (_) {}
               fetchNotes(user);
             }}
           />

@@ -26,6 +26,7 @@ export default function AuthModal({
   isOpen,
   onClose,
   onAuthSuccess,
+  currentUser = null,
   initialTab = "signin",
   isMaintenanceMode = false,
 }) {
@@ -320,12 +321,19 @@ export default function AuthModal({
         ...(postRegUser || {}),
         hasPasskey: true,
       };
-      setTimeout(() => {
-        if (onAuthSuccess && finalUser) onAuthSuccess(finalUser);
-        setShowPostRegPasskeyPrompt(false);
-        setPostRegUser(null);
-        onClose();
-      }, 750);
+      if (onAuthSuccess && finalUser) onAuthSuccess(finalUser);
+      setShowPostRegPasskeyPrompt(false);
+      setPostRegUser(null);
+      setTab("signin");
+      resetAllFormFields();
+      onClose();
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("auth")) {
+          url.searchParams.delete("auth");
+          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+        }
+      } catch (_) {}
     } catch (err) {
       if (err.message && (err.message.includes("cancelled") || err.message.includes("NotAllowedError"))) {
         setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now' below to continue to notes.");
@@ -341,10 +349,19 @@ export default function AuthModal({
     localStorage.setItem("academic_vault_login_pref", "password");
     setLoginViewMode("password");
     const userToLogin = postRegUser;
+    if (onAuthSuccess && userToLogin) onAuthSuccess(userToLogin);
     setShowPostRegPasskeyPrompt(false);
     setPostRegUser(null);
-    if (onAuthSuccess && userToLogin) onAuthSuccess(userToLogin);
+    setTab("signin");
+    resetAllFormFields();
     onClose();
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("auth")) {
+        url.searchParams.delete("auth");
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+      }
+    } catch (_) {}
   };
 
   const handleRegistrationSuccess = (authenticatedUser) => {
@@ -369,7 +386,18 @@ export default function AuthModal({
       if (onAuthSuccess) {
         onAuthSuccess(authenticatedUser);
       }
+      setShowPostRegPasskeyPrompt(false);
+      setPostRegUser(null);
+      setTab("signin");
+      resetAllFormFields();
       onClose();
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("auth")) {
+          url.searchParams.delete("auth");
+          window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+        }
+      } catch (_) {}
     }
   };
 
@@ -492,6 +520,10 @@ export default function AuthModal({
 
   useEffect(() => {
     if (isOpen) {
+      if (currentUser && !showPostRegPasskeyPrompt) {
+        onClose();
+        return;
+      }
       resetAllFormFields();
       setTab(isMaintenanceMode ? "signin" : initialTab);
       const hasPasskeyPref =
@@ -500,7 +532,7 @@ export default function AuthModal({
           localStorage.getItem("academic_vault_has_passkey") === "true");
       setLoginViewMode(hasPasskeyPref ? "passkey" : "password");
     }
-  }, [isOpen, initialTab, isMaintenanceMode]);
+  }, [isOpen, currentUser, showPostRegPasskeyPrompt, initialTab, isMaintenanceMode, onClose]);
 
   // Clear any legacy session storage on mount to guarantee fresh forms
   useEffect(() => {
@@ -1133,6 +1165,15 @@ export default function AuthModal({
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
+        setRegTgStep(false);
+        setRegTgOtpCode("");
+        try {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("auth")) {
+            url.searchParams.delete("auth");
+            window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+          }
+        } catch (_) {}
         handleRegistrationSuccess(authenticatedUser);
       } else {
         onClose();
@@ -1214,6 +1255,15 @@ export default function AuthModal({
       const authenticatedUser = res?.user;
       if (authenticatedUser) {
         setSuccessMsg("Account verified & created successfully! Welcome to Academic Vault.");
+        setSignUpOtpStep(false);
+        setSignUpOtpCode("");
+        try {
+          const url = new URL(window.location.href);
+          if (url.searchParams.has("auth")) {
+            url.searchParams.delete("auth");
+            window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+          }
+        } catch (_) {}
         handleRegistrationSuccess(authenticatedUser);
       } else {
         onClose();
