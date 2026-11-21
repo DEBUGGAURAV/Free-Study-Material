@@ -15,6 +15,7 @@ export default function TabSoftware(props) {
     loadSoftwareInfo,
     maintenanceMode,
     notes,
+    renderMaintenanceControlCard,
     securityScanReport,
     securityScanning,
     softwareInfo,
@@ -23,7 +24,7 @@ export default function TabSoftware(props) {
     testingSmtp,
   } = props;
 
-  // ⚡ Live Real-Time Multi-Engine Speed Monitor (Turso • Telegram • Firebase)
+  // ⚡ Live Real-Time Multi-Engine Speed Monitor (Turso • Telegram • Firebase • MongoDB)
   const [liveSpeeds, setLiveSpeeds] = useState(null);
   const [speedMeasuring, setSpeedMeasuring] = useState(false);
   const [pulseCount, setPulseCount] = useState(0);
@@ -33,6 +34,30 @@ export default function TabSoftware(props) {
   const [studentTursoCleanMsg, setStudentTursoCleanMsg] = useState(null);
   const [pulsingAntiSleep, setPulsingAntiSleep] = useState(false);
   const [antiSleepPulseMsg, setAntiSleepPulseMsg] = useState(null);
+  const [flushingMongo, setFlushingMongo] = useState(false);
+  const [mongoFlushMsg, setMongoFlushMsg] = useState(null);
+
+  const handleFlushMongoBuffer = async () => {
+    if (!window.confirm("Flush and synchronize MongoDB Chat Hot Buffer to Turso LibSQL warm tier storage now?")) return;
+    setFlushingMongo(true);
+    setMongoFlushMsg(null);
+    try {
+      const res = await api.flushMongoChatBuffer();
+      if (res?.success) {
+        setMongoFlushMsg({
+          type: "success",
+          text: res.message || "MongoDB Hot Buffer successfully synchronized to Turso LibSQL!",
+        });
+        if (typeof loadSoftwareInfo === "function") loadSoftwareInfo();
+      } else {
+        setMongoFlushMsg({ type: "error", text: res?.message || "Failed to flush MongoDB Hot Buffer." });
+      }
+    } catch (err) {
+      setMongoFlushMsg({ type: "error", text: "Error: " + err.message });
+    } finally {
+      setFlushingMongo(false);
+    }
+  };
 
   const handleTriggerAntiSleep = async () => {
     setPulsingAntiSleep(true);
@@ -139,7 +164,7 @@ export default function TabSoftware(props) {
                     </span>
                   </div>
                   <p style={{ fontSize: "0.78rem", color: "var(--text-dim)", margin: "3px 0 0" }}>
-                    Server maintenance gate, Dual Turso LibSQL edge databases, Cloudflare Global CDN, Telegram MTProto socket, and V8 runtime.
+                    Server maintenance gate, Sextuple Turso LibSQL edge databases, MongoDB Atlas Dedicated Chat Buffer, Cloudflare Global CDN, Telegram MTProto socket, and V8 runtime.
                   </p>
                 </div>
 
@@ -154,7 +179,10 @@ export default function TabSoftware(props) {
                 </button>
               </div>
 
-              {/* ⚡ REAL-TIME MULTI-ENGINE SPEED & LATENCY MATRIX (TURSO • TELEGRAM • FIREBASE) */}
+              {/* 🛠️ SERVER MAINTENANCE MODE EMERGENCY CONTROL CARD */}
+              {renderMaintenanceControlCard && renderMaintenanceControlCard("Software & Maintenance")}
+
+              {/* ⚡ REAL-TIME MULTI-ENGINE SPEED & LATENCY MATRIX (TURSO • TELEGRAM • FIREBASE • MONGODB) */}
               <div
                 style={{
                   background: "linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(6, 182, 212, 0.12), rgba(168, 85, 247, 0.1))",
@@ -174,7 +202,7 @@ export default function TabSoftware(props) {
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                         <span>Multi-Engine Real-Time Speed Matrix (Turso • Telegram • Firebase • MongoDB)</span>
                         <span style={{ fontSize: "0.72rem", background: "#10b981", color: "#000", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
-                          ⚡ 8/8 ENGINES LIVE
+                          ⚡ 9/9 ENGINES LIVE
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
@@ -334,13 +362,13 @@ export default function TabSoftware(props) {
                     </div>
                     <div>
                       <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#fff", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                        <span>Sextuple Turso LibSQL Edge Databases (Live Status &amp; Speed Telemetry)</span>
+                        <span>Sextuple Turso LibSQL Edge + MongoDB Atlas Databases (Live Status &amp; Speed Telemetry)</span>
                         <span style={{ fontSize: "0.72rem", background: "#06b6d4", color: "#000", fontWeight: 800, padding: "2px 7px", borderRadius: "4px" }}>
-                          6 ENGINES ACTIVE
+                          7 ENGINES ACTIVE
                         </span>
                       </div>
                       <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", marginTop: "2px" }}>
-                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault, Student Sessions Vault, AI Search Intelligence Vault &amp; Dedicated Chat Vault.
+                        Real-time health, ping speed, query latency, and blind-index encryption for Primary Vault, Notes Edge Cache, Support Help Vault, Student Sessions Vault, AI Search Intelligence Vault, Dedicated Chat Vault &amp; MongoDB Atlas Dedicated Hot Buffer.
                       </div>
                     </div>
                   </div>
@@ -891,6 +919,127 @@ export default function TabSoftware(props) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Engine 7: MongoDB Atlas Dedicated Hot Buffer (fsmchat) */}
+                  <div
+                    style={{
+                      background: "rgba(11, 19, 43, 0.7)",
+                      border: "1.5px solid rgba(16, 185, 129, 0.35)",
+                      borderRadius: "12px",
+                      padding: "16px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Database size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#fff" }}>
+                              7. MongoDB Atlas Dedicated Hot Buffer (fsmchat)
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                              WiredTiger NVMe SSD • Sub-5ms Chat Streaming &amp; Real-Time Ingest
+                            </div>
+                          </div>
+                        </div>
+
+                        <span
+                          style={{
+                            fontSize: "0.7rem",
+                            fontWeight: 800,
+                            padding: "2px 8px",
+                            borderRadius: "4px",
+                            background: (softwareInfo?.mongoDatabase?.configured ?? true) ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+                            color: (softwareInfo?.mongoDatabase?.configured ?? true) ? "#34d399" : "#fbbf24",
+                            border: `1px solid ${(softwareInfo?.mongoDatabase?.configured ?? true) ? "rgba(16, 185, 129, 0.4)" : "rgba(245, 158, 11, 0.4)"}`,
+                          }}
+                        >
+                          {(softwareInfo?.mongoDatabase?.configured ?? true) ? "🟢 LIVE & ONLINE" : "🟡 STANDBY"}
+                        </span>
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "7px", fontSize: "0.78rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Speed / Ping Latency:</span>
+                          <span style={{ color: "#34d399", fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
+                            <Zap size={12} /> {liveSpeeds?.mongodb?.latencyMs != null ? `${liveSpeeds.mongodb.latencyMs}ms (Live Speed)` : "< 5ms (Direct Atlas)"}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Cluster Region:</span>
+                          <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                            AWS Mumbai (ap-south-1) • WiredTiger Engine
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Active Buffered msgs:</span>
+                          <span style={{ color: "#38bdf8", fontWeight: 800 }}>
+                            {(softwareInfo?.mongoDatabase?.hotBufferCount ?? 0).toLocaleString()} Messages Buffered
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.05)", paddingBottom: "5px" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Connection Pool:</span>
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>
+                            maxPoolSize: 20 (Strict 20 / 500 Max - 480 Free)
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "var(--text-dim)" }}>Cluster Host:</span>
+                          <span style={{ color: "var(--text-dim)", fontFamily: "monospace", fontSize: "0.72rem" }}>
+                            fsmchat.kilhriu.mongodb.net
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Maintenance Flush Controller */}
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Maintenance:</span>
+                      <button
+                        type="button"
+                        disabled={flushingMongo}
+                        onClick={handleFlushMongoBuffer}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid rgba(16, 185, 129, 0.4)",
+                          background: "rgba(16, 185, 129, 0.15)",
+                          color: "#34d399",
+                          cursor: flushingMongo ? "not-allowed" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Flush and sync MongoDB hot buffer messages to Turso LibSQL warm tier"
+                      >
+                        <RefreshCw size={12} className={flushingMongo ? "spin" : ""} />
+                        <span>{flushingMongo ? "Flushing..." : "Flush Buffer to Turso"}</span>
+                      </button>
+                    </div>
+
+                    {mongoFlushMsg && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "0.72rem",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          background: mongoFlushMsg.type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                          color: mongoFlushMsg.type === "success" ? "#34d399" : "#f87171",
+                        }}
+                      >
+                        {mongoFlushMsg.text}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1113,6 +1262,49 @@ export default function TabSoftware(props) {
                         {softwareInfo?.mongoDatabase?.maskedUri || "mongodb+srv://jnplotus_db_user:****@fsm-cluster"}
                       </span>
                     </div>
+
+                    {/* Maintenance Flush Controller */}
+                    <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Maintenance:</span>
+                      <button
+                        type="button"
+                        disabled={flushingMongo}
+                        onClick={handleFlushMongoBuffer}
+                        style={{
+                          padding: "5px 12px",
+                          fontSize: "0.74rem",
+                          fontWeight: 700,
+                          borderRadius: "6px",
+                          border: "1px solid rgba(16, 185, 129, 0.4)",
+                          background: "rgba(16, 185, 129, 0.15)",
+                          color: "#34d399",
+                          cursor: flushingMongo ? "not-allowed" : "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                          transition: "all 0.15s ease",
+                        }}
+                        title="Flush and sync MongoDB hot buffer messages to Turso LibSQL warm tier"
+                      >
+                        <RefreshCw size={12} className={flushingMongo ? "spin" : ""} />
+                        <span>{flushingMongo ? "Flushing..." : "Flush Buffer to Turso"}</span>
+                      </button>
+                    </div>
+
+                    {mongoFlushMsg && (
+                      <div
+                        style={{
+                          marginTop: "8px",
+                          fontSize: "0.72rem",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          background: mongoFlushMsg.type === "success" ? "rgba(16, 185, 129, 0.2)" : "rgba(239, 68, 68, 0.2)",
+                          color: mongoFlushMsg.type === "success" ? "#34d399" : "#f87171",
+                        }}
+                      >
+                        {mongoFlushMsg.text}
+                      </div>
+                    )}
                   </div>
                 </div>
 

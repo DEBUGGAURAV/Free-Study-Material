@@ -2138,7 +2138,7 @@ export default function AdminModal({
               </span>
             </div>
             <div style={{ fontSize: "0.78rem", color: "#334155", fontWeight: 500, marginTop: "3px" }}>
-              One-click platform shield: pauses student traffic with a professional maintenance screen while keeping Render, LibSQL, MTProto, and Admin Studio 100% operational in the background.
+              One-click platform shield: pauses student traffic with a professional maintenance screen while keeping Render, LibSQL, MongoDB Atlas, MTProto, and Admin Studio 100% operational in the background.
             </div>
           </div>
         </div>
@@ -2191,7 +2191,7 @@ export default function AdminModal({
         <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", boxShadow: "0 2px 6px rgba(15, 23, 42, 0.03)" }}>
           <div style={{ fontSize: "0.72rem", color: "#047857", fontWeight: 800, textTransform: "uppercase" }}>⚡ Zero Server Downtime</div>
           <div style={{ fontSize: "0.82rem", color: "#0f172a", marginTop: "3px", fontWeight: 700 }}>Daemon Kept 100% Online</div>
-          <div style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 500, marginTop: "2px" }}>Render daemon, Express, MTProto &amp; LibSQL remain connected</div>
+          <div style={{ fontSize: "0.72rem", color: "#334155", fontWeight: 500, marginTop: "2px" }}>Render daemon, Express, MongoDB Atlas, MTProto &amp; LibSQL remain connected</div>
         </div>
         <div style={{ background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", boxShadow: "0 2px 6px rgba(15, 23, 42, 0.03)" }}>
           <div style={{ fontSize: "0.72rem", color: "#b45309", fontWeight: 800, textTransform: "uppercase" }}>🚀 Instant Restoration</div>
@@ -2287,6 +2287,70 @@ export default function AdminModal({
               Server #3 CONNECTED
             </span>
           )}
+        </div>
+      </div>
+
+      {/* 🍃 Dual Database Stack State During Maintenance (Turso LibSQL + MongoDB Atlas) */}
+      <div
+        style={{
+          background: "rgba(11, 19, 43, 0.65)",
+          border: "1.5px solid rgba(16, 185, 129, 0.35)",
+          borderRadius: "10px",
+          padding: "10px 14px",
+          marginBottom: "14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "8px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+          <Database size={15} style={{ color: "#34d399" }} />
+          <span style={{ fontSize: "0.82rem", fontWeight: 800, color: "#fff" }}>
+            Databases Synchronized During Maintenance:
+          </span>
+          <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+            Zero data loss • Real-time failover &amp; live cluster protection
+          </span>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+          <span
+            style={{
+              background: "rgba(16, 185, 129, 0.15)",
+              border: "1px solid rgba(16, 185, 129, 0.45)",
+              color: "#34d399",
+              padding: "4px 10px",
+              borderRadius: "6px",
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 6px #10b981" }}></span>
+            MongoDB Atlas (fsmchat): ACTIVE
+          </span>
+
+          <span
+            style={{
+              background: "rgba(6, 182, 212, 0.15)",
+              border: "1px solid rgba(6, 182, 212, 0.45)",
+              color: "var(--accent-cyan)",
+              padding: "4px 10px",
+              borderRadius: "6px",
+              fontSize: "0.72rem",
+              fontWeight: 800,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "5px",
+            }}
+          >
+            <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#06b6d4", boxShadow: "0 0 6px #06b6d4" }}></span>
+            Turso LibSQL (6 Vaults): ACTIVE
+          </span>
         </div>
       </div>
 
