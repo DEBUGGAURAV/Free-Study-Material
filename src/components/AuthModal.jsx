@@ -376,6 +376,8 @@ export default function AuthModal({
     if (supportsPasskey && !authenticatedUser.hasPasskey) {
       setPostRegUser(authenticatedUser);
       setShowPostRegPasskeyPrompt(true);
+      setTab("signin");
+      setIsGoogleOnboarding(false);
       setError(null);
       setFieldErrors({});
       setSuccessMsg(null);
@@ -670,6 +672,7 @@ export default function AuthModal({
         }
         setGoogleUser(gUser);
         setIsGoogleOnboarding(true);
+        setTab("signin");
         setSuccessMsg("Google account verified! Please enter your mobile number and college to finish registration.");
       } else if (res.user) {
         onAuthSuccess(res.user);
@@ -1502,12 +1505,12 @@ export default function AuthModal({
               </div>
             </div>
           ) : (
-            <div className={`auth-3d-flipper ${tab === "signup" ? "is-flipped" : ""}`}>
+            <div className={`auth-3d-flipper ${tab === "signup" && !isGoogleOnboarding && !showPostRegPasskeyPrompt ? "is-flipped" : ""}`}>
 
             {/* =================================================================
                 FRONT FACE (Sign In, Recovery, Google Onboarding, Passkey Setup)
                 ================================================================= */}
-            <div className={`auth-card-face auth-card-front ${tab !== "signup" ? "face-active" : "face-hidden"}`}>
+            <div className={`auth-card-face auth-card-front ${(tab !== "signup" || isGoogleOnboarding || showPostRegPasskeyPrompt) ? "face-active" : "face-hidden"}`}>
               {/* Passcard Front Header */}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #e2e8f0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
@@ -2847,7 +2850,7 @@ export default function AuthModal({
       {/* =================================================================
           BACK FACE (Student Sign Up)
           ================================================================= */}
-      <div className={`auth-card-face auth-card-back ${tab === "signup" ? "face-active" : "face-hidden"}`}>
+      <div className={`auth-card-face auth-card-back ${tab === "signup" && !isGoogleOnboarding && !showPostRegPasskeyPrompt ? "face-active" : "face-hidden"}`}>
         {/* Passcard Back Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px solid #e2e8f0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>

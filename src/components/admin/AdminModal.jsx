@@ -2045,7 +2045,7 @@ export default function AdminModal({
             estimatedEnd: payload.estimatedEnd,
           });
         }
-        setMaintenanceFeedback(res.message || (nextActive ? "✅ Maintenance Mode ACTIVATED Across All 3 Servers (Teeno Servers Connected)" : "✅ Platform Live Across All 3 Servers"));
+        setMaintenanceFeedback(res.message || (nextActive ? "✅ Maintenance Mode ACTIVATED Across All 3 Servers" : "✅ Platform Live Across All 3 Servers"));
       }
     } catch (err) {
       alert("Failed to toggle maintenance mode: " + err.message);

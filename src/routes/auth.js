@@ -413,6 +413,8 @@ router.post("/register-telegram-verify", authLimiter, async (req, res) => {
 
     // ⚡ Cache user in RAM cache for instant 0ms lookup
     ramCache.set(`auth_user_${cleanEmail}`, { userRecord: newUser, docId: userId }, 600);
+    // Cache user metadata in dedicated Turso Cache Database
+    cacheUserInTurso({ ...newUser, id: userId, passwordHash: hashedPassword }).catch(() => {});
 
     // Send Real-time Telegram Security Notice to Security Bot with full manual + telegram breakdown
     sendTelegramAuthNotice({
