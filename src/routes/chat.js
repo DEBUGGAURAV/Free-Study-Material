@@ -1167,7 +1167,7 @@ function initChatWebSocket(server) {
       // 1. Try token from query param
       if (token) {
         try {
-          user = jwt.verify(token, JWT_SECRET);
+          user = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
         } catch (jwtErr) {
           console.warn("[CHAT-WS] Query token verify failed:", jwtErr.message);
         }
@@ -1180,7 +1180,7 @@ function initChatWebSocket(server) {
         if (match && match[1]) {
           try {
             const cookieToken = decodeURIComponent(match[1].trim());
-            user = jwt.verify(cookieToken, JWT_SECRET);
+            user = jwt.verify(cookieToken, JWT_SECRET, { algorithms: ["HS256"] });
           } catch (cErr) {
             console.warn("[CHAT-WS] Cookie token verify failed:", cErr.message);
           }
@@ -1201,7 +1201,7 @@ function initChatWebSocket(server) {
 
         let verifiedAdminClaims = null;
         if (token) {
-          try { verifiedAdminClaims = jwt.verify(token, JWT_SECRET); } catch (_) {}
+          try { verifiedAdminClaims = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }); } catch (_) {}
         }
         const hasAdminClaims = verifiedAdminClaims && (
           verifiedAdminClaims.role === "admin" ||

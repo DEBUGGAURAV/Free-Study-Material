@@ -285,7 +285,7 @@ router.post("/ask", helpLimiter, authenticateToken, async (req, res) => {
           if (token) {
             const jwt = require("jsonwebtoken");
             const { JWT_SECRET } = require("../middleware/auth");
-            user = jwt.verify(token, JWT_SECRET);
+            user = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
           }
         }
       } catch (_) {}
@@ -479,7 +479,7 @@ router.post("/my-tickets", authenticateToken, async (req, res) => {
           if (token) {
             const jwt = require("jsonwebtoken");
             const { JWT_SECRET } = require("../middleware/auth");
-            const decoded = jwt.verify(token, JWT_SECRET);
+            const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
             userId = decoded.id;
             user = decoded;
           }

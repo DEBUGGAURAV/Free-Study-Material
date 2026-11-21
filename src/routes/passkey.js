@@ -32,6 +32,9 @@ const {
 // In-Memory Challenge Store (TTL = 5 minutes)
 const passkeyChallenges = new Map();
 
+// ⚡ In-Memory High-Speed Passkey Cache (0ms instant biometric verification)
+const ramPasskeyCache = new Map();
+
 setInterval(() => {
   const now = Date.now();
   for (const [key, value] of passkeyChallenges.entries()) {
@@ -572,6 +575,14 @@ router.post("/login-verify", async (req, res) => {
     let userId = null;
     let userRecord = null;
 
+    // 0. High-Speed RAM Cache check (0.001ms instant biometric lookup)
+    const cachedPk = ramPasskeyCache.get(credential.id);
+    if (cachedPk && cachedPk.passkeyRecord) {
+      passkeyRecord = cachedPk.passkeyRecord;
+      userId = cachedPk.userId;
+      userRecord = cachedPk.userRecord;
+    }
+
     // 1. Check Turso Edge Cloud / Local LibSQL (sub-5ms)
     try {
       const { getPasskeyFromTurso } = require("../services/tursoService");
@@ -720,6 +731,7 @@ router.post("/login-verify", async (req, res) => {
     const newCounter = verification.authenticationInfo.newCounter;
     passkeyRecord.counter = newCounter;
     passkeyRecord.lastUsedAt = new Date().toISOString();
+    ramPasskeyCache.set(passkeyRecord.id, { passkeyRecord, userId, userRecord });
 
     if (db && userId) {
       db.collection("passkeys").doc(passkeyRecord.id).set({ counter: newCounter, lastUsedAt: passkeyRecord.lastUsedAt }, { merge: true }).catch(() => {});

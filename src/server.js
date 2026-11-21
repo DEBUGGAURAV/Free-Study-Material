@@ -279,7 +279,7 @@ app.all(["/health", "/api/health", "/api/anti-sleep-relay", "/api/keepalive", "/
         try {
           const jwt = require("jsonwebtoken");
           const { JWT_SECRET } = require("./middleware/auth");
-          const decoded = jwt.verify(token, JWT_SECRET);
+          const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
           if (decoded && (adminRouter.isPendingUserStorageWipe(decoded.id) || adminRouter.isPendingUserStorageWipe(decoded.email))) {
             wipeRequired = true;
             adminRouter.clearPendingUserStorageWipe(decoded.id);

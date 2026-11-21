@@ -61,8 +61,8 @@ async function checkAccountLockout(identifier) {
         remainingMinutes: Math.ceil(remainingMs / (60 * 1000)),
       };
     }
-    // Clean account cached in RAM recently (< 60s) -> return 0ms instant verdict
-    if (now - (cached.lastAttempt || 0) < 60000 && (!cached.lockedUntil || cached.lockedUntil <= now)) {
+    // Clean account cached in RAM recently (< 5 minutes) -> return 0ms instant verdict
+    if (now - (cached.lastAttempt || 0) < 300000 && (!cached.lockedUntil || cached.lockedUntil <= now)) {
       return { isLocked: false, remainingMs: 0, remainingMinutes: 0 };
     }
   }
