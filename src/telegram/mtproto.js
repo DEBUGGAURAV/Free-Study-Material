@@ -267,7 +267,7 @@ function normalizeNoteTitle(str) {
  * Checks if a note already exists in the Firestore database to prevent any duplicates
  * Single-field queries with in-memory matching (Zero composite index requirement)
  */
-async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileSize, fileHash }) {
+async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileSize, fileHash, topicThreadId = null, subject = "" }) {
   if (!db) return null;
 
   let candidateDoc = null;
@@ -365,18 +365,120 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
       }
     }
 
-    // 🛡️ LIVENESS CHECK: If candidate found, check if message is actually still alive on Telegram
+    // 🛡️ LIVENESS & TOPIC REPLACEMENT CHECK:
     if (candidateDoc) {
       const d = candidateDoc.data();
+
+      // A. Self-Message Guard: If botPoller just indexed this exact message milliseconds ago, do NOT send a duplicate receipt!
+      if (
+        msgId &&
+        (Number(d.telegramMessageId) === Number(msgId) ||
+          Number(d.telegramOriginMessageId) === Number(msgId))
+      ) {
+        return { isSelfMessage: true, id: candidateDoc.id, data: () => d };
+      }
+
+      const oldTopicId = Number(d.telegramTopicId || d.telegramThreadId || 0);
+      const incomingTopicId = Number(topicThreadId || 0);
+
+      // B. If the note is being uploaded into a newly created topic (different threadId), check if the old topic was replaced/deleted
+      if (oldTopicId > 0 && incomingTopicId > 0 && oldTopicId !== incomingTopicId) {
+        let isOldTopicReplaced = false;
+        try {
+          const topicSub = (subject || d.subject || "").trim();
+          if (topicSub) {
+            const normKey = topicSub.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").slice(0, 60);
+            const topicDoc = await db.collection("subject_forum_topics").doc(normKey).get();
+            if (topicDoc.exists) {
+              const activeTid = Number(topicDoc.data()?.threadId || 0);
+              if (activeTid > 0 && activeTid !== oldTopicId) {
+                isOldTopicReplaced = true;
+              }
+            }
+          }
+        } catch (_) {}
+
+        if (!isOldTopicReplaced) {
+          try {
+            if (client) {
+              const checkChat = d.telegramOriginChatId || storageChatId;
+              if (checkChat) {
+                const topicMsgs = await client.getMessages(checkChat, { ids: [oldTopicId] });
+                const topicMsg = topicMsgs && topicMsgs[0];
+                if (!topicMsg || topicMsg.className === "MessageEmpty") {
+                  isOldTopicReplaced = true;
+                }
+              }
+            } else if (incomingTopicId > oldTopicId) {
+              isOldTopicReplaced = true;
+            }
+          } catch (_) {
+            if (incomingTopicId > oldTopicId) {
+              isOldTopicReplaced = true;
+            }
+          }
+        }
+
+        if (isOldTopicReplaced) {
+          console.log(`[MTProto] 🔄 Prior note "${d.title}" belonged to deleted/replaced Topic #${oldTopicId} (New Topic: #${incomingTopicId}). Purging stale record!`);
+          archiveNoteToTursoRecycleBin(candidateDoc.id, d, `Telegram Topic #${oldTopicId} Replaced by #${incomingTopicId}`);
+          await db.collection("deleted_records").doc(`notes_${candidateDoc.id}`).set({
+            ...d,
+            originalId: candidateDoc.id,
+            collectionName: "notes",
+            typeLabel: "Note",
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Pre-Upload Stale Purge",
+          }).catch(() => {});
+          await db.collection("deleted_notes").doc(candidateDoc.id).set({
+            ...d,
+            archivedAt: new Date().toISOString(),
+            archivedBy: "Telegram Pre-Upload Stale Purge",
+          }).catch(() => {});
+          await db.collection("notes").doc(candidateDoc.id).delete().catch(() => {});
+          purgeNoteFromWebAndCdn(candidateDoc.id);
+          try {
+            const { purgeNotesForReplacedTopic } = require("./botPoller");
+            if (typeof purgeNotesForReplacedTopic === "function") {
+              await purgeNotesForReplacedTopic({
+                oldThreadId: oldTopicId,
+                newThreadId: incomingTopicId,
+                cleanSubject: subject || d.subject || "",
+              });
+            }
+          } catch (_) {}
+          return null;
+        }
+      }
+
+      // C. Direct Message & Parent Topic Liveness Probe on Telegram
       try {
         if (client) {
           const checkChat = d.telegramOriginChatId || storageChatId;
-          const checkMsgId = d.telegramOriginMessageId || d.telegramMessageId;
-          if (checkChat && checkMsgId) {
-            const remoteMsgs = await client.getMessages(checkChat, { ids: [Number(checkMsgId)] });
-            const isDead = !remoteMsgs || !remoteMsgs[0] || remoteMsgs[0].className === "MessageEmpty" || !remoteMsgs[0].media;
-            if (isDead) {
-              console.log(`[MTProto] 🔄 Prior note "${d.title}" (ID: ${candidateDoc.id}) was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
+          const checkMsgId = Number(d.telegramOriginMessageId || d.telegramMessageId || 0);
+          if (checkChat && (checkMsgId > 0 || oldTopicId > 0)) {
+            const idsToProbe = [];
+            if (checkMsgId > 0) idsToProbe.push(checkMsgId);
+            if (oldTopicId > 0 && oldTopicId !== checkMsgId) idsToProbe.push(oldTopicId);
+
+            const remoteMsgs = await client.getMessages(checkChat, { ids: idsToProbe });
+            const msgObj = checkMsgId > 0 ? remoteMsgs?.[0] : null;
+            const topicObj =
+              oldTopicId > 0
+                ? oldTopicId === checkMsgId
+                  ? remoteMsgs?.[0]
+                  : remoteMsgs?.[idsToProbe.indexOf(oldTopicId)]
+                : null;
+
+            const isMsgDead =
+              checkMsgId > 0 &&
+              (!msgObj || msgObj.className === "MessageEmpty" || !msgObj.media);
+            const isTopicDead =
+              oldTopicId > 0 &&
+              (!topicObj || topicObj.className === "MessageEmpty");
+
+            if (isMsgDead || isTopicDead) {
+              console.log(`[MTProto] 🔄 Prior note "${d.title}" (ID: ${candidateDoc.id}) or its Topic #${oldTopicId} was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
               archiveNoteToTursoRecycleBin(candidateDoc.id, d, "Telegram Pre-Upload Stale Purge");
               await db.collection("deleted_records").doc(`notes_${candidateDoc.id}`).set({
                 ...d,
@@ -393,6 +495,18 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
               }).catch(() => {});
               await db.collection("notes").doc(candidateDoc.id).delete().catch(() => {});
               purgeNoteFromWebAndCdn(candidateDoc.id);
+              if (isTopicDead && oldTopicId > 0) {
+                try {
+                  const { purgeNotesForReplacedTopic } = require("./botPoller");
+                  if (typeof purgeNotesForReplacedTopic === "function") {
+                    await purgeNotesForReplacedTopic({
+                      oldThreadId: oldTopicId,
+                      newThreadId: incomingTopicId || -1,
+                      cleanSubject: subject || d.subject || "",
+                    });
+                  }
+                } catch (_) {}
+              }
               return null; // Stale duplicate purged! Allow fresh upload!
             }
           }
@@ -417,11 +531,7 @@ function setupChannelSyncListeners(c) {
   c.addEventHandler(async (event) => {
     try {
       const message = event.message;
-      if (!message || !message.media || !message.media.document) return;
-
-      const doc = message.media.document;
-      const docIdStr = doc.id?.toString();
-      const msgId = Number(message.id);
+      if (!message) return;
 
       const targetStr = storageChatId ? storageChatId.toString().replace("-100", "") : "";
       const chatStr = (message.chatId || message.peerId?.channelId || message.peerId?.chatId || "").toString().replace("-100", "");
@@ -432,12 +542,46 @@ function setupChannelSyncListeners(c) {
         return;
       }
 
+      // Detect Topic Creation via MTProto (`MessageActionTopicCreate`) and immediately purge stale notes from any replaced topic
+      if (message.action && message.action.className === "MessageActionTopicCreate" && message.action.title) {
+        try {
+          const rawTitle = (message.action.title || "").trim();
+          const cleanSub = rawTitle.replace(/^[^\w\s]+/, "").trim();
+          const normKey = cleanSub.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
+          const newTid = Number(message.id);
+          if (cleanSub && newTid > 0) {
+            const { purgeNotesForReplacedTopic } = require("./botPoller");
+            if (typeof purgeNotesForReplacedTopic === "function") {
+              await purgeNotesForReplacedTopic({
+                newThreadId: newTid,
+                cleanSubject: cleanSub,
+                normalizedKey: normKey,
+              });
+            }
+          }
+        } catch (_) {}
+        return;
+      }
+
+      if (!message.media || !message.media.document) return;
+
+      const doc = message.media.document;
+      const docIdStr = doc.id?.toString();
+      const msgId = Number(message.id);
+
+      // Give botPoller.js a 650ms head-start on Forum Topic / Supergroup uploads so botPoller claims syncLock first
+      if ((process.env.TELEGRAM_BOT_TOKEN || "").trim()) {
+        await new Promise((r) => setTimeout(r, 650));
+      }
+
       // =========================================================================
       // STORAGE CHANNEL INGEST:
       // If forwarded from botPoller or locked in syncLock, SKIP!
       // =========================================================================
       if (message.fwdFrom) return;
-      if (msgId && !syncLock.canProcess(`msg_${msgId}`)) return;
+      const chatMsgKey = `msg_${storageChatId}_${msgId}`;
+      const rawMsgKey = `msg_${msgId}`;
+      if (msgId && (!syncLock.canProcess(rawMsgKey) || !syncLock.canProcess(chatMsgKey))) return;
       if (msgId && !syncLock.canProcess(`stored_${msgId}`)) return;
       if (docIdStr && !syncLock.canProcess(`doc_${docIdStr}`)) return;
       if (processingMsgIds.has(msgId)) return;
@@ -454,80 +598,85 @@ function setupChannelSyncListeners(c) {
       const sig = syncLock.getDocSignature(originalName, fileSize);
       if (sig && !syncLock.canProcess(sig)) return;
 
-      // Topic thread ID detection from GramJS message reply header
-      const topicThreadId = message.replyTo?.replyToTopId || message.replyTo?.replyToMsgId || null;
-      let threadTitle = "";
-      if (topicThreadId) {
-        try {
-          const { getSubjectFromThreadId } = require("../services/emailService");
-          const matchedSubject = await getSubjectFromThreadId(topicThreadId);
-          if (matchedSubject) {
-            threadTitle = matchedSubject;
-          }
-        } catch (_) {}
-      }
-
-      // Extract dynamic academic metadata from filename & caption
-      const meta = extractAcademicMetadata({ fileName: originalName, caption, threadTitle });
-      let { title, subject, branch, course, year } = meta;
-      if (!subject && threadTitle) {
-        subject = threadTitle;
-      }
-      const fileHash = crypto.createHash("sha256").update(`${originalName}_${fileSize}`).digest("hex");
-
-      // Comprehensive duplicate prevention check (Single-field queries, zero composite index needed)
-      const dup = await isDuplicateNote(db, {
-        docIdStr,
-        msgId,
-        originalName,
-        title,
-        fileSize,
-        fileHash,
-      });
-      if (dup) {
-        processingMsgIds.add(msgId);
-        if (docIdStr) processingDocIds.add(docIdStr);
-        console.log(`[MTProto SYNC] 🛡️ Duplicate note ignored in channel: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
-
-        if (topicThreadId && syncLock.canSendReceipt(storageChatId, msgId)) {
-          function formatRealSize(bytes) {
-            const num = Number(bytes || 0);
-            if (!num || num <= 0) return "0.01 MB (10 KB)";
-            const mb = num / (1024 * 1024);
-            const kb = num / 1024;
-            if (mb < 0.1) return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
-            return `${mb.toFixed(2)} MB`;
-          }
-          const realSize = formatRealSize(fileSize);
-          const siteUrl = getSiteUrl();
-          const dupNotice =
-            `♻️ <b>${getVaultName()} — Duplicate Notice Receipt</b>\n\n` +
-            `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
-            `📄 <b>Title:</b> ${title}\n` +
-            `📚 <b>Subject:</b> ${subject}\n` +
-            `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
-            `💾 <b>Size:</b> ${realSize}\n` +
-            `🔗 <b>Direct Link:</b> ${getNotePublicUrl(dup.id || dup.docId || "")}\n` +
-            `🌐 <b>Website:</b> ${siteUrl}\n\n` +
-            `<i>🛡️ This document is already live on the platform. Duplicate re-upload was safely prevented.</i>`;
-
-          c.sendMessage(storageChatId, {
-            message: dupNotice,
-            parseMode: "html",
-            replyTo: Number(topicThreadId),
-          }).catch(() => {});
-        }
-        return;
-      }
-
-      // Reserve immediately in memory & syncLock
+      // Reserve IMMEDIATELY in memory & syncLock BEFORE any async await calls to prevent race conditions with botPoller
       processingMsgIds.add(msgId);
       if (docIdStr) processingDocIds.add(docIdStr);
-      syncLock.lock(`msg_${msgId}`);
+      syncLock.lock(rawMsgKey);
+      syncLock.lock(chatMsgKey);
       if (docIdStr) syncLock.lock(`doc_${docIdStr}`);
       if (sig) syncLock.lock(sig);
 
-      console.log(`[MTProto SYNC] 🚀 Direct Telegram note detected in vault: "${originalName}" (Msg ID: ${message.id})`);
+      try {
+        // Topic thread ID detection from GramJS message reply header
+        const topicThreadId = message.replyTo?.replyToTopId || message.replyTo?.replyToMsgId || null;
+        let threadTitle = "";
+        if (topicThreadId) {
+          try {
+            const { getSubjectFromThreadId } = require("../services/emailService");
+            const matchedSubject = await getSubjectFromThreadId(topicThreadId);
+            if (matchedSubject) {
+              threadTitle = matchedSubject;
+            }
+          } catch (_) {}
+        }
+
+        // Extract dynamic academic metadata from filename & caption
+        const meta = extractAcademicMetadata({ fileName: originalName, caption, threadTitle });
+        let { title, subject, branch, course, year } = meta;
+        if (!subject && threadTitle) {
+          subject = threadTitle;
+        }
+        const fileHash = crypto.createHash("sha256").update(`${originalName}_${fileSize}`).digest("hex");
+
+        // Comprehensive duplicate prevention check (Single-field queries, zero composite index needed)
+        const dup = await isDuplicateNote(db, {
+          docIdStr,
+          msgId,
+          originalName,
+          title,
+          fileSize,
+          fileHash,
+          topicThreadId,
+          subject,
+        });
+        if (dup) {
+          if (dup.isSelfMessage) {
+            return;
+          }
+          console.log(`[MTProto SYNC] 🛡️ Duplicate note ignored in channel: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
+
+          if (topicThreadId && syncLock.canSendReceipt(storageChatId, msgId)) {
+            function formatRealSize(bytes) {
+              const num = Number(bytes || 0);
+              if (!num || num <= 0) return "0.01 MB (10 KB)";
+              const mb = num / (1024 * 1024);
+              const kb = num / 1024;
+              if (mb < 0.1) return `${kb.toFixed(1)} KB (${mb.toFixed(2)} MB)`;
+              return `${mb.toFixed(2)} MB`;
+            }
+            const realSize = formatRealSize(fileSize);
+            const siteUrl = getSiteUrl();
+            const dupNotice =
+              `♻️ <b>${getVaultName()} — Duplicate Notice Receipt</b>\n\n` +
+              `⚠️ <b>Duplicate File Detected: Already in Cloud Vault!</b>\n` +
+              `📄 <b>Title:</b> ${title}\n` +
+              `📚 <b>Subject:</b> ${subject}\n` +
+              `🎓 <b>Program:</b> ${course} (${branch} • ${year})\n` +
+              `💾 <b>Size:</b> ${realSize}\n` +
+              `🔗 <b>Direct Link:</b> ${getNotePublicUrl(dup.id || dup.docId || "")}\n` +
+              `🌐 <b>Website:</b> ${siteUrl}\n\n` +
+              `<i>🛡️ This document is already live on the platform. Duplicate re-upload was safely prevented.</i>`;
+
+            c.sendMessage(storageChatId, {
+              message: dupNotice,
+              parseMode: "html",
+              replyTo: Number(topicThreadId),
+            }).catch(() => {});
+          }
+          return;
+        }
+
+        console.log(`[MTProto SYNC] 🚀 Direct Telegram note detected in vault: "${originalName}" (Msg ID: ${message.id})`);
 
       const noteRef = db.collection("notes").doc();
       const now = new Date();
@@ -551,6 +700,8 @@ function setupChannelSyncListeners(c) {
         compressedSize: fileSize,
         savingsPercent: 0,
         telegramMessageId: Number(message.id),
+        telegramOriginChatId: storageChatId ? storageChatId.toString() : null,
+        telegramOriginMessageId: Number(message.id),
         telegramDocumentId: doc.id?.toString() || null,
         telegramThreadId: topicThreadId,
         telegramTopicId: topicThreadId,
@@ -598,7 +749,7 @@ function setupChannelSyncListeners(c) {
       } catch (_) {}
 
       // Deliver instant rich HTML receipt back to the Topic in Telegram!
-      if (topicThreadId) {
+      if (topicThreadId && syncLock.canSendReceipt(storageChatId, msgId)) {
         function formatRealSize(bytes) {
           const num = Number(bytes || 0);
           if (!num || num <= 0) return "0.01 MB (10 KB)";
@@ -639,6 +790,12 @@ function setupChannelSyncListeners(c) {
         details: `Indexed into website (#1 Position)`,
         importedCount: 1,
       });
+      } finally {
+        syncLock.unlock(rawMsgKey);
+        syncLock.unlock(chatMsgKey);
+        if (docIdStr) syncLock.unlock(`doc_${docIdStr}`);
+        if (sig) syncLock.unlock(sig);
+      }
     } catch (err) {
       console.warn("[MTProto SYNC] Direct ingest error:", err.message);
     }
@@ -1007,12 +1164,16 @@ async function syncTelegramChannel() {
           title,
           fileSize: docSize,
           fileHash,
+          topicThreadId: recTopicId,
+          subject,
         });
 
         if (dup) {
           knownMsgIds.add(msgId);
           if (docIdStr) processingDocIds.add(docIdStr);
-          console.log(`[MTProto RECONCILE] 🛡️ Duplicate suppressed: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
+          if (!dup.isSelfMessage) {
+            console.log(`[MTProto RECONCILE] 🛡️ Duplicate suppressed: "${title}" (Msg ID: ${msgId}, Doc ID: ${docIdStr})`);
+          }
           continue;
         }
 
@@ -1038,6 +1199,10 @@ async function syncTelegramChannel() {
           compressedSize: docSize,
           savingsPercent: 0,
           telegramMessageId: msgId,
+          telegramOriginChatId: targetStorageChatId,
+          telegramOriginMessageId: msgId,
+          telegramThreadId: recTopicId,
+          telegramTopicId: recTopicId,
           telegramDocumentId: doc.id?.toString() || null,
           status: "ready",
           uploadedBy: "cloud-sync-engine",
@@ -1120,31 +1285,34 @@ async function syncTelegramChannel() {
   }
 
   // 4. Verify topic-based notes: if their topic was removed in Telegram, purge them
-  const topicDocs = snap.docs.filter((d) => (d.data().telegramTopicId || d.data().telegramThreadId) && d.data().telegramOriginChatId);
-  for (const tDoc of topicDocs) {
-    const data = tDoc.data();
-    const topicId = data.telegramTopicId || data.telegramThreadId;
+  const topicNotes = (notesList || []).filter((n) => n && (n.telegramTopicId || n.telegramThreadId));
+  for (const data of topicNotes) {
+    const noteId = data.id || data.docId;
+    if (!noteId) continue;
+    const topicId = Number(data.telegramTopicId || data.telegramThreadId);
+    const topicChat = data.telegramOriginChatId || targetStorageChatId;
+    if (!topicId || !topicChat) continue;
     try {
-      const topicMsgs = await c.getMessages(data.telegramOriginChatId, { ids: [Number(topicId)] });
-      if (!topicMsgs || !topicMsgs[0]) {
+      const topicMsgs = await c.getMessages(topicChat, { ids: [topicId] });
+      if (!topicMsgs || !topicMsgs[0] || topicMsgs[0].className === "MessageEmpty") {
         console.log(`[MTProto RECONCILE] Purging note "${data.title}" because its Topic ${topicId} was removed.`);
-        archiveNoteToTursoRecycleBin(tDoc.id, data, `Topic ${topicId} removed in Telegram`);
-        await db.collection("deleted_records").doc(`notes_${tDoc.id}`).set({
+        archiveNoteToTursoRecycleBin(noteId, data, `Topic ${topicId} removed in Telegram`);
+        await db.collection("deleted_records").doc(`notes_${noteId}`).set({
           ...data,
-          originalId: tDoc.id,
+          originalId: noteId,
           collectionName: "notes",
           typeLabel: "Note",
           title: data.title || "Study Material",
           archivedAt: new Date().toISOString(),
           archivedBy: "Telegram Topic Reconcile Purge",
         }).catch(() => {});
-        await db.collection("deleted_notes").doc(tDoc.id).set({
+        await db.collection("deleted_notes").doc(noteId).set({
           ...data,
           archivedAt: new Date().toISOString(),
           archivedBy: "Telegram Topic Reconcile Purge",
         }).catch(() => {});
-        await db.collection("notes").doc(tDoc.id).delete().catch(() => {});
-        purgeNoteFromWebAndCdn(tDoc.id);
+        await db.collection("notes").doc(noteId).delete().catch(() => {});
+        purgeNoteFromWebAndCdn(noteId);
         purgedCount++;
       }
     } catch {}
@@ -1571,11 +1739,12 @@ async function checkNotesLivenessNow(customNotes = null) {
       }
 
       // 3. Check if the parent Forum Topic itself was deleted in Telegram
-      if (!isDead && (note.telegramThreadId || note.telegramTopicId) && note.telegramOriginChatId) {
+      const targetTopicChat = note.telegramOriginChatId || storageChatId;
+      if (!isDead && (note.telegramThreadId || note.telegramTopicId) && targetTopicChat) {
         const tId = Number(note.telegramThreadId || note.telegramTopicId);
         if (tId && tId > 0) {
           try {
-            const topicCheck = await client.getMessages(note.telegramOriginChatId, { ids: [tId] });
+            const topicCheck = await client.getMessages(targetTopicChat, { ids: [tId] });
             if (!topicCheck || !topicCheck[0] || topicCheck[0].className === "MessageEmpty") {
               isDead = true;
             }

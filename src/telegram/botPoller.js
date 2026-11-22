@@ -41,9 +41,144 @@ function normalizeNoteTitle(str) {
 }
 
 /**
+ * Helper: Archives and purges a stale/orphaned note from Firestore, Turso, and RAM cache
+ */
+async function purgeStaleNoteDoc(docSnapshot, reason = "Telegram Pre-Upload Stale Purge") {
+  if (!db || !docSnapshot) return;
+  const docId = docSnapshot.id;
+  const d = typeof docSnapshot.data === "function" ? docSnapshot.data() : docSnapshot;
+  if (!docId || !d) return;
+
+  try {
+    console.log(`[BOT POLLER] 🔄 Purging stale note "${d.title || docId}" (ID: ${docId}) — Reason: ${reason}`);
+    await db.collection("deleted_records").doc(`notes_${docId}`).set({
+      ...d,
+      originalId: docId,
+      collectionName: "notes",
+      typeLabel: "Note",
+      archivedAt: new Date().toISOString(),
+      archivedBy: reason,
+    }).catch(() => {});
+    await db.collection("deleted_notes").doc(docId).set({
+      ...d,
+      archivedAt: new Date().toISOString(),
+      archivedBy: reason,
+    }).catch(() => {});
+    await db.collection("notes").doc(docId).delete().catch(() => {});
+
+    try {
+      const { purgeNoteFromWebAndCdn } = require("./mtproto");
+      if (typeof purgeNoteFromWebAndCdn === "function") {
+        purgeNoteFromWebAndCdn(docId);
+      }
+    } catch (_) {}
+
+    try {
+      const { broadcastCatalogEvent } = require("../services/realtimeEventService");
+      broadcastCatalogEvent({ event: "note_deleted", noteId: docId, title: d.title });
+    } catch (_) {}
+  } catch (err) {
+    console.warn("[BOT POLLER] purgeStaleNoteDoc warning:", err.message);
+  }
+}
+
+/**
+ * Helper: When a Forum Topic is deleted and a new Topic is created for the same subject,
+ * automatically purge all orphaned notes from the old Topic ID so fresh uploads never trigger false duplicates.
+ */
+async function purgeNotesForReplacedTopic({ oldThreadId = null, newThreadId, cleanSubject = "", normalizedKey = "" }) {
+  if (!db || !newThreadId) return 0;
+  const newTid = Number(newThreadId);
+  if (!newTid || isNaN(newTid)) return 0;
+
+  let purgedCount = 0;
+  const docsToPurge = new Map();
+
+  try {
+    // 1. Discover previous threadId from subject_forum_topics before it gets overwritten
+    let detectedOldTid = oldThreadId ? Number(oldThreadId) : null;
+    if (!detectedOldTid && normalizedKey) {
+      try {
+        const existingTopicSnap = await db.collection("subject_forum_topics").doc(normalizedKey).get();
+        if (existingTopicSnap.exists) {
+          const prevTid = Number(existingTopicSnap.data()?.threadId || 0);
+          if (prevTid > 0 && prevTid !== newTid) {
+            detectedOldTid = prevTid;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. Collect all notes matching the old threadId
+    if (detectedOldTid && detectedOldTid !== newTid) {
+      const [snapTopicNum, snapThreadNum] = await Promise.all([
+        db.collection("notes").where("telegramTopicId", "==", detectedOldTid).get().catch(() => ({ empty: true, docs: [] })),
+        db.collection("notes").where("telegramThreadId", "==", detectedOldTid).get().catch(() => ({ empty: true, docs: [] })),
+      ]);
+      for (const doc of snapTopicNum.docs || []) docsToPurge.set(doc.id, doc);
+      for (const doc of snapThreadNum.docs || []) docsToPurge.set(doc.id, doc);
+    }
+
+    // 3. Also check notes with the same subject that still point to a different (deleted) topic threadId
+    if (cleanSubject) {
+      const { normalizeSubjectName } = require("../services/emailService");
+      const normSub = typeof normalizeSubjectName === "function" ? normalizeSubjectName(cleanSubject) : cleanSubject;
+      const subjectCandidates = Array.from(new Set([cleanSubject.trim(), normSub.trim()].filter(Boolean)));
+
+      for (const subName of subjectCandidates) {
+        const subSnap = await db.collection("notes").where("subject", "==", subName).get().catch(() => ({ empty: true, docs: [] }));
+        for (const doc of subSnap.docs || []) {
+          const d = doc.data();
+          const noteTid = Number(d.telegramTopicId || d.telegramThreadId || 0);
+          if (noteTid > 0 && noteTid !== newTid) {
+            // Verify if that old topic is dead on Telegram or matches detectedOldTid
+            let oldTopicDead = detectedOldTid && noteTid === detectedOldTid;
+            if (!oldTopicDead) {
+              try {
+                const client = await getClient();
+                if (client) {
+                  const checkChat = d.telegramOriginChatId || getStorageChatId();
+                  if (checkChat) {
+                    const tMsgs = await client.getMessages(checkChat, { ids: [noteTid] });
+                    if (!tMsgs || !tMsgs[0] || tMsgs[0].className === "MessageEmpty") {
+                      oldTopicDead = true;
+                    }
+                  }
+                } else {
+                  // If GramJS client is unavailable and a newer topic ID was explicitly created for the same subject
+                  if (newTid > noteTid) oldTopicDead = true;
+                }
+              } catch (_) {
+                if (newTid > noteTid) oldTopicDead = true;
+              }
+            }
+            if (oldTopicDead) {
+              docsToPurge.set(doc.id, doc);
+            }
+          }
+        }
+      }
+    }
+
+    for (const [, docSnap] of docsToPurge.entries()) {
+      await purgeStaleNoteDoc(docSnap, `Old Topic Replaced by New Topic #${newTid}`);
+      purgedCount++;
+    }
+
+    if (purgedCount > 0) {
+      invalidateAllCache();
+      console.log(`[BOT POLLER] 🧹 Auto-purged ${purgedCount} stale note(s) from replaced topic for subject "${cleanSubject || normalizedKey}" (New Topic: #${newTid})`);
+    }
+  } catch (err) {
+    console.warn("[BOT POLLER] purgeNotesForReplacedTopic warning:", err.message);
+  }
+  return purgedCount;
+}
+
+/**
  * Robust Multi-Layer Duplicate Detection Engine (Composite Index Free)
  */
-async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize, fileHash }) {
+async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSize, fileHash, threadId = null, messageId = null, subject = "" }) {
   if (!db) return null;
 
   let matchedDoc = null;
@@ -113,40 +248,115 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
       }
     }
 
-    // 🛡️ LIVENESS CHECK: If a duplicate candidate was found, verify if its Telegram message is ACTUALLY still alive!
-    // If the student deleted the file from Telegram and is now re-uploading, the old record is an orphan!
+    // 🛡️ LIVENESS & TOPIC REPLACEMENT CHECK:
+    // Verify if the matched note's Telegram message AND parent Forum Topic are ACTUALLY still alive!
     if (matchedDoc) {
       const d = matchedDoc.data();
+
+      // A. Self-Message Guard: Never flag the exact message currently being ingested as a duplicate of itself
+      if (
+        messageId &&
+        (Number(d.telegramMessageId) === Number(messageId) ||
+          Number(d.telegramOriginMessageId) === Number(messageId))
+      ) {
+        return { isSelfMessage: true, id: matchedDoc.id, data: () => d };
+      }
+
+      const oldTopicId = Number(d.telegramTopicId || d.telegramThreadId || 0);
+      const incomingTopicId = Number(threadId || 0);
+
+      // B. If the note is being uploaded into a newly created topic (different threadId), check if the old topic was replaced/deleted
+      if (oldTopicId > 0 && incomingTopicId > 0 && oldTopicId !== incomingTopicId) {
+        let isOldTopicReplaced = false;
+
+        // Check if subject_forum_topics now points to incomingTopicId instead of oldTopicId
+        try {
+          const topicSub = (subject || d.subject || "").trim();
+          if (topicSub) {
+            const normKey = topicSub.toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").slice(0, 60);
+            const topicDoc = await db.collection("subject_forum_topics").doc(normKey).get();
+            if (topicDoc.exists) {
+              const activeTid = Number(topicDoc.data()?.threadId || 0);
+              if (activeTid > 0 && activeTid !== oldTopicId) {
+                isOldTopicReplaced = true;
+              }
+            }
+          }
+        } catch (_) {}
+
+        // If the user created a newer topic (incomingTopicId > oldTopicId) for the same subject/file, verify oldTopicId on Telegram
+        if (!isOldTopicReplaced) {
+          try {
+            const client = await getClient();
+            if (client) {
+              const checkChat = d.telegramOriginChatId || getStorageChatId();
+              if (checkChat) {
+                const topicMsgs = await client.getMessages(checkChat, { ids: [oldTopicId] });
+                const topicMsg = topicMsgs && topicMsgs[0];
+                if (!topicMsg || topicMsg.className === "MessageEmpty") {
+                  isOldTopicReplaced = true;
+                }
+              }
+            } else if (incomingTopicId > oldTopicId) {
+              // Fallback when GramJS client is offline: newer topic ID for same file means topic was recreated
+              isOldTopicReplaced = true;
+            }
+          } catch (_) {
+            if (incomingTopicId > oldTopicId) {
+              isOldTopicReplaced = true;
+            }
+          }
+        }
+
+        if (isOldTopicReplaced) {
+          console.log(`[BOT POLLER] 🔄 Prior note "${d.title}" belonged to deleted/replaced Topic #${oldTopicId} (New Topic: #${incomingTopicId}). Purging stale record!`);
+          await purgeStaleNoteDoc(matchedDoc, `Telegram Topic #${oldTopicId} Deleted & Replaced by #${incomingTopicId}`);
+          await purgeNotesForReplacedTopic({
+            oldThreadId: oldTopicId,
+            newThreadId: incomingTopicId,
+            cleanSubject: subject || d.subject || "",
+          });
+          return null; // Stale duplicate purged! Allow fresh upload!
+        }
+      }
+
+      // C. Direct Message & Parent Topic Liveness Probe on Telegram via GramJS
       try {
         const client = await getClient();
         if (client) {
           const checkChat = d.telegramOriginChatId || getStorageChatId();
-          const checkMsgId = d.telegramOriginMessageId || d.telegramMessageId;
-          if (checkChat && checkMsgId) {
-            const remoteMsgs = await client.getMessages(checkChat, { ids: [Number(checkMsgId)] });
-            const isDead = !remoteMsgs || !remoteMsgs[0] || remoteMsgs[0].className === "MessageEmpty" || !remoteMsgs[0].media;
-            if (isDead) {
-              console.log(`[BOT POLLER] 🔄 Prior note "${d.title}" (ID: ${matchedDoc.id}) was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
-              await db.collection("deleted_records").doc(`notes_${matchedDoc.id}`).set({
-                ...d,
-                originalId: matchedDoc.id,
-                collectionName: "notes",
-                typeLabel: "Note",
-                archivedAt: new Date().toISOString(),
-                archivedBy: "Telegram Pre-Upload Stale Purge",
-              }).catch(() => {});
-              await db.collection("deleted_notes").doc(matchedDoc.id).set({
-                ...d,
-                archivedAt: new Date().toISOString(),
-                archivedBy: "Telegram Pre-Upload Stale Purge",
-              }).catch(() => {});
-              await db.collection("notes").doc(matchedDoc.id).delete().catch(() => {});
-              const { purgeNoteFromWebAndCdn } = require("./mtproto");
-              if (typeof purgeNoteFromWebAndCdn === "function") {
-                purgeNoteFromWebAndCdn(matchedDoc.id);
+          const checkMsgId = Number(d.telegramOriginMessageId || d.telegramMessageId || 0);
+          if (checkChat && (checkMsgId > 0 || oldTopicId > 0)) {
+            const idsToProbe = [];
+            if (checkMsgId > 0) idsToProbe.push(checkMsgId);
+            if (oldTopicId > 0 && oldTopicId !== checkMsgId) idsToProbe.push(oldTopicId);
+
+            const remoteMsgs = await client.getMessages(checkChat, { ids: idsToProbe });
+            const msgObj = checkMsgId > 0 ? remoteMsgs?.[0] : null;
+            const topicObj =
+              oldTopicId > 0
+                ? oldTopicId === checkMsgId
+                  ? remoteMsgs?.[0]
+                  : remoteMsgs?.[idsToProbe.indexOf(oldTopicId)]
+                : null;
+
+            const isMsgDead =
+              checkMsgId > 0 &&
+              (!msgObj || msgObj.className === "MessageEmpty" || !msgObj.media);
+            const isTopicDead =
+              oldTopicId > 0 &&
+              (!topicObj || topicObj.className === "MessageEmpty");
+
+            if (isMsgDead || isTopicDead) {
+              console.log(`[BOT POLLER] 🔄 Prior note "${d.title}" (ID: ${matchedDoc.id}) or its Topic #${oldTopicId} was deleted on Telegram. Purging stale record to accept fresh re-upload!`);
+              await purgeStaleNoteDoc(matchedDoc, "Telegram Pre-Upload Stale Purge");
+              if (isTopicDead && oldTopicId > 0) {
+                await purgeNotesForReplacedTopic({
+                  oldThreadId: oldTopicId,
+                  newThreadId: incomingTopicId || -1,
+                  cleanSubject: subject || d.subject || "",
+                });
               }
-              const { broadcastCatalogEvent } = require("../services/realtimeEventService");
-              broadcastCatalogEvent({ event: "note_deleted", noteId: matchedDoc.id, title: d.title });
               return null; // Stale duplicate purged! Allow fresh upload!
             }
           }
@@ -330,6 +540,15 @@ async function processIncomingMessage(message) {
         const cleanSubject = topicName.replace(/^[^\w\s]+/, "").trim();
         const normalizedKey = cleanSubject.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
 
+        // If a brand new topic was created for this subject, purge any stale notes from the old deleted topic
+        if (message.forum_topic_created && cleanSubject) {
+          await purgeNotesForReplacedTopic({
+            newThreadId: Number(threadId),
+            cleanSubject,
+            normalizedKey,
+          });
+        }
+
         if (cleanSubject) {
           try {
             const { saveSubjectTopicToTurso } = require("../services/tursoNotesCacheService");
@@ -426,6 +645,11 @@ async function processIncomingMessage(message) {
             const cleanSub = threadTitle.replace(/^[^\w\s]+/, "").trim();
             const normKey = cleanSub.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
             if (cleanSub) {
+              await purgeNotesForReplacedTopic({
+                newThreadId: Number(threadId),
+                cleanSubject: cleanSub,
+                normalizedKey: normKey,
+              });
               try {
                 const { saveSubjectTopicToTurso } = require("../services/tursoNotesCacheService");
                 saveSubjectTopicToTurso({
@@ -458,13 +682,15 @@ async function processIncomingMessage(message) {
 
   console.log(`[BOT POLLER] 📄 Incoming Document: "${fileName}" (${(fileSize / 1024 / 1024).toFixed(1)} MB) from Chat: ${chatId} (${chatTitle || "DM"})${threadTitle ? ` [Topic: ${threadTitle}]` : ""}`);
 
-  // In-flight concurrency lock & fingerprint check
+  // In-flight concurrency lock & fingerprint check (unified across Bot Poller and MTProto)
   const sig = syncLock.getDocSignature(fileName, fileSize);
   const flightKey = `msg_${chatId}_${messageId}`;
+  const rawMsgKey = `msg_${messageId}`;
   const docKey = fileUniqueId ? `doc_${fileUniqueId}` : null;
 
   if (
     !syncLock.canProcess(flightKey) ||
+    !syncLock.canProcess(rawMsgKey) ||
     (docKey && !syncLock.canProcess(docKey)) ||
     (sig && !syncLock.canProcess(sig)) ||
     inFlightKeys.has(flightKey)
@@ -475,6 +701,7 @@ async function processIncomingMessage(message) {
 
   inFlightKeys.add(flightKey);
   syncLock.lock(flightKey);
+  syncLock.lock(rawMsgKey);
   if (docKey) syncLock.lock(docKey);
   if (sig) syncLock.lock(sig);
 
@@ -490,16 +717,22 @@ async function processIncomingMessage(message) {
     const { title, subject, branch, course, year } = metadata;
     const fileHash = crypto.createHash("sha256").update(`${fileName}_${fileSize}`).digest("hex");
 
-    // 🛡️ 4-Layer Single-Field Duplicate Detection Check
+    // 🛡️ 4-Layer Single-Field Duplicate Detection Check (Topic & Self-Message Aware)
     const duplicateDoc = await checkDuplicateInDatabase({
       fileUniqueId,
       fileName,
       title,
       fileSize,
       fileHash,
+      threadId,
+      messageId,
+      subject,
     });
 
     if (duplicateDoc) {
+      if (duplicateDoc.isSelfMessage) {
+        return;
+      }
       const dupData = duplicateDoc.data();
       console.log(`[BOT POLLER] 🛡️ Duplicate recognized: "${title}" (Already in vault: ${duplicateDoc.id})`);
 
@@ -688,6 +921,7 @@ async function processIncomingMessage(message) {
     });
   } finally {
     syncLock.unlock(flightKey);
+    syncLock.unlock(rawMsgKey);
     if (docKey) syncLock.unlock(docKey);
     if (sig) syncLock.unlock(sig);
 
@@ -818,6 +1052,7 @@ module.exports = {
   stopBotPoller,
   processIncomingMessage,
   checkDuplicateInDatabase,
+  purgeNotesForReplacedTopic,
   sendTelegramMessage,
   forwardToStorageChannel,
   getBotPollerDetails,

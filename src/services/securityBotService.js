@@ -1061,10 +1061,23 @@ async function startSecurityBotPoller() {
         if (msg.forum_topic_created) {
           const rawName = msg.forum_topic_created.name || "";
           const cleanName = rawName.replace(/^[📚📖📁📌\s]+/, "").trim();
-          const threadId = msg.message_thread_id;
+          const threadId = msg.message_thread_id || msg.message_id;
           if (cleanName && threadId) {
             const normalizedKey = cleanName.toLowerCase().replace(/[^a-z0-9]/g, "_").slice(0, 60);
             console.log(`[TOPIC SYNC] Detected newly created topic in Telegram: "${cleanName}" (Thread ID: ${threadId})`);
+
+            // Purge any stale notes from an older deleted topic of the same subject before updating topic ID
+            try {
+              const { purgeNotesForReplacedTopic } = require("../telegram/botPoller");
+              if (typeof purgeNotesForReplacedTopic === "function") {
+                await purgeNotesForReplacedTopic({
+                  newThreadId: Number(threadId),
+                  cleanSubject: cleanName,
+                  normalizedKey,
+                });
+              }
+            } catch (_) {}
+
             // Save in Turso 2 Edge Cache (fsm-cache-freestudymaterial)
             try {
               const { saveSubjectTopicToTurso } = require("./tursoNotesCacheService");
