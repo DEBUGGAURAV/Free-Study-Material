@@ -74,25 +74,44 @@ function getTodayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+export function getReadingProgressSync(noteId) {
+  if (!noteId || typeof window === "undefined") return null;
+  const key = String(noteId);
+  try {
+    const raw = localStorage.getItem(`fsm_reader_progress_${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.lastPage >= 1 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getReadingProgress(noteId) {
   if (!noteId) return null;
   const key = String(noteId);
+  const localRecord = getReadingProgressSync(key);
   let db = null;
   try {
     db = await openStudyDb();
-    return await new Promise((resolve) => {
+    const idbRecord = await new Promise((resolve) => {
       const tx = db.transaction([STORE_PROGRESS], "readonly");
       const req = tx.objectStore(STORE_PROGRESS).get(key);
       req.onsuccess = () => resolve(req.result || null);
       req.onerror = () => resolve(null);
     });
-  } catch {
-    try {
-      const raw = localStorage.getItem(`fsm_reader_progress_${key}`);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
+    if (idbRecord && localRecord) {
+      const best = (localRecord.updatedAt || 0) > (idbRecord.updatedAt || 0) ? localRecord : idbRecord;
+      try { localStorage.setItem(`fsm_reader_progress_${key}`, JSON.stringify(best)); } catch (_) {}
+      return best;
     }
+    const chosen = idbRecord || localRecord || null;
+    if (idbRecord && !localRecord) {
+      try { localStorage.setItem(`fsm_reader_progress_${key}`, JSON.stringify(idbRecord)); } catch (_) {}
+    }
+    return chosen;
+  } catch {
+    return localRecord;
   } finally {
     try { if (db) db.close(); } catch (_) {}
   }
@@ -107,6 +126,11 @@ export async function saveReadingProgress(noteId, lastPage, numPages = 0) {
     numPages: Number(numPages) || 0,
     updatedAt: Date.now(),
   };
+  // Always persist synchronously to localStorage first (0ms, survives instant tab/modal close)
+  try {
+    localStorage.setItem(`fsm_reader_progress_${key}`, JSON.stringify(record));
+  } catch (_) {}
+
   let db = null;
   try {
     db = await openStudyDb();
@@ -118,12 +142,7 @@ export async function saveReadingProgress(noteId, lastPage, numPages = 0) {
     });
     return true;
   } catch {
-    try {
-      localStorage.setItem(`fsm_reader_progress_${key}`, JSON.stringify(record));
-      return true;
-    } catch {
-      return false;
-    }
+    return true;
   } finally {
     try { if (db) db.close(); } catch (_) {}
   }

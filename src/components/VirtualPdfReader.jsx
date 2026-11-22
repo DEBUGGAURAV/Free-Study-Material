@@ -14,6 +14,7 @@ import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote } from "../u
 import { recordStudentNoteRead, recordStudentAcademicDownload } from "../utils/studentStudyContext";
 import {
   getReadingProgress,
+  getReadingProgressSync,
   saveReadingProgress,
   getNoteAnnotations,
   togglePageBookmark,
@@ -56,6 +57,7 @@ if (typeof window !== "undefined") {
  */
 function ContinuousPage({
   pageNum,
+  activePageNum,
   pdfDoc,
   scale,
   nightMode,
@@ -319,6 +321,13 @@ function ContinuousPage({
       }
     };
   }, [pageNum, pdfDoc, scale]);
+
+  // Eagerly render the target/active resumed page and its neighbors without resetting already-rendered pages
+  useEffect(() => {
+    if (activePageNum && Math.abs(pageNum - activePageNum) <= 1 && !renderedRef.current && !renderingRef.current) {
+      renderPage();
+    }
+  }, [pageNum, activePageNum, pdfDoc, scale]);
 
   return (
     <div
@@ -690,10 +699,15 @@ export default function VirtualPdfReader({
 
   const [pdfDoc, setPdfDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(() => {
-    if (initialPage && Number(initialPage) > 0) return Number(initialPage);
+    if (initialPage && Number(initialPage) > 1) return Number(initialPage);
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search).get("page");
-      if (p && Number(p) > 0) return Number(p);
+      if (p && Number(p) > 1) return Number(p);
+    }
+    const activeId = noteId || note?.id;
+    const syncProg = activeId ? getReadingProgressSync(activeId) : null;
+    if (syncProg && Number(syncProg.lastPage) > 1) {
+      return Number(syncProg.lastPage);
     }
     return 1;
   });
@@ -786,8 +800,20 @@ export default function VirtualPdfReader({
   const loadGenerationRef = useRef(0);
 
   // 🔖 Zero-DB-Cost Local Study Features: Resume Last Page + Bookmarks/Highlights + Focus Timer
-  const [resumedPageNotice, setResumedPageNotice] = useState(null);
-  const hasAttemptedResumeRef = useRef(false);
+  const [resumedPageNotice, setResumedPageNotice] = useState(() => {
+    if (initialPage && Number(initialPage) > 1) return null;
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("page");
+      if (p && Number(p) > 1) return null;
+    }
+    const activeId = noteId || note?.id;
+    const syncProg = activeId ? getReadingProgressSync(activeId) : null;
+    return syncProg && Number(syncProg.lastPage) > 1 ? Number(syncProg.lastPage) : null;
+  });
+  const resumeTargetPageRef = useRef(resumedPageNotice || 0);
+  const isResumeScrollLockRef = useRef(Boolean(resumedPageNotice && resumedPageNotice > 1));
+  const isProgressLoadedRef = useRef(Boolean(resumedPageNotice && resumedPageNotice > 1));
+  const hasAttemptedResumeRef = useRef(Boolean(resumedPageNotice && resumedPageNotice > 1));
   const [annotations, setAnnotations] = useState([]);
   const [showBookmarksPanel, setShowBookmarksPanel] = useState(false);
   const [highlightDraftText, setHighlightDraftText] = useState("");
@@ -808,7 +834,7 @@ export default function VirtualPdfReader({
   useEffect(() => {
     let active = true;
     const activeId = noteId || note?.id;
-    hasAttemptedResumeRef.current = false;
+    isProgressLoadedRef.current = false;
 
     getPomodoroStats().then((stats) => {
       if (active && stats) setPomodoroStats(stats);
@@ -823,44 +849,110 @@ export default function VirtualPdfReader({
     const urlPageParam = typeof window !== "undefined" ? Number(new URLSearchParams(window.location.search).get("page")) : 0;
     const hasExplicitPage = (initialPage && Number(initialPage) > 1) || (urlPageParam > 1);
 
-    if (!hasExplicitPage) {
-      getReadingProgress(activeId).then((progress) => {
-        if (!active || !progress || !progress.lastPage || progress.lastPage <= 1) return;
+    if (hasExplicitPage) {
+      const target = (initialPage && Number(initialPage) > 1) ? Number(initialPage) : urlPageParam;
+      resumeTargetPageRef.current = target;
+      isResumeScrollLockRef.current = true;
+      hasAttemptedResumeRef.current = true;
+      setCurrentPage(target);
+      isProgressLoadedRef.current = true;
+    } else {
+      const syncProg = getReadingProgressSync(activeId);
+      if (syncProg && Number(syncProg.lastPage) > 1) {
+        const savedP = Number(syncProg.lastPage);
+        resumeTargetPageRef.current = savedP;
+        isResumeScrollLockRef.current = true;
         hasAttemptedResumeRef.current = true;
-        setCurrentPage(progress.lastPage);
-        setResumedPageNotice(progress.lastPage);
-        setTimeout(() => {
-          setResumedPageNotice((prev) => (prev === progress.lastPage ? null : prev));
-        }, 6000);
-      }).catch(() => {});
+        setCurrentPage(savedP);
+        setResumedPageNotice(savedP);
+      }
+
+      getReadingProgress(activeId).then((progress) => {
+        if (!active) return;
+        if (progress && Number(progress.lastPage) > 1) {
+          const savedP = Number(progress.lastPage);
+          resumeTargetPageRef.current = savedP;
+          isResumeScrollLockRef.current = true;
+          hasAttemptedResumeRef.current = true;
+          setCurrentPage(savedP);
+          setResumedPageNotice(savedP);
+        }
+        isProgressLoadedRef.current = true;
+      }).catch(() => {
+        if (active) isProgressLoadedRef.current = true;
+      });
     }
 
     return () => { active = false; };
   }, [noteId, note?.id, initialPage]);
 
-  // In continuous scroll mode, smoothly jump to resumed page once PDF pages mount
+  // Once PDF numPages is known, clamp resumed page if needed and jump smoothly in continuous or native mode
   useEffect(() => {
-    if (!pdfDoc || !numPages || !hasAttemptedResumeRef.current || currentPage <= 1) return;
-    if (scrollMode === "continuous" && !useNativeViewer) {
-      const timer = setTimeout(() => {
-        const el = document.getElementById(`continuous-page-${currentPage}`);
-        if (el) el.scrollIntoView({ behavior: "auto", block: "start" });
-        hasAttemptedResumeRef.current = false;
-      }, 250);
-      return () => clearTimeout(timer);
+    if (!pdfDoc && !useNativeViewer) return;
+    const targetRaw = resumeTargetPageRef.current;
+    if (!hasAttemptedResumeRef.current || !targetRaw || targetRaw <= 1) {
+      isResumeScrollLockRef.current = false;
+      return;
     }
-    hasAttemptedResumeRef.current = false;
-  }, [pdfDoc, numPages, scrollMode, useNativeViewer, currentPage]);
 
-  // Persist currentPage to IndexedDB whenever user navigates (debounced 400ms)
+    const validPage = numPages > 0 ? Math.min(numPages, targetRaw) : targetRaw;
+    if (validPage !== currentPage) {
+      setCurrentPage(validPage);
+    }
+    if (resumedPageNotice && validPage !== resumedPageNotice) {
+      setResumedPageNotice(validPage);
+    }
+
+    if (useNativeViewer && iframeRef.current) {
+      const baseSrc = (nativeSrc || url || "").split("#")[0];
+      if (baseSrc && !baseSrc.includes("docs.google.com") && !baseSrc.includes("drive.google.com")) {
+        iframeRef.current.src = `${baseSrc}#page=${validPage}`;
+      }
+      hasAttemptedResumeRef.current = false;
+      isResumeScrollLockRef.current = false;
+      return;
+    }
+
+    if (scrollMode === "continuous" && !useNativeViewer && pdfDoc && numPages > 0) {
+      isResumeScrollLockRef.current = true;
+      const scrollToTarget = () => {
+        const el = document.getElementById(`continuous-page-${validPage}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "auto", block: "start" });
+        }
+      };
+      const t1 = setTimeout(scrollToTarget, 60);
+      const t2 = setTimeout(scrollToTarget, 240);
+      const t3 = setTimeout(() => {
+        scrollToTarget();
+        hasAttemptedResumeRef.current = false;
+        isResumeScrollLockRef.current = false;
+      }, 520);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+
+    hasAttemptedResumeRef.current = false;
+    isResumeScrollLockRef.current = false;
+  }, [pdfDoc, numPages, scrollMode, useNativeViewer]);
+
+  // Persist currentPage to LocalStorage + IndexedDB ONLY after initial progress load & PDF ready (never overwrites saved page on mount)
   useEffect(() => {
     const activeId = noteId || note?.id;
     if (!activeId || !currentPage || currentPage < 1) return;
+    if (!isProgressLoadedRef.current || isResumeScrollLockRef.current) return;
+    if (!pdfDoc && !useNativeViewer) return;
+
     const t = setTimeout(() => {
-      saveReadingProgress(activeId, currentPage, numPages || 0).catch(() => {});
-    }, 400);
+      if (!isResumeScrollLockRef.current && isProgressLoadedRef.current) {
+        saveReadingProgress(activeId, currentPage, numPages || 0).catch(() => {});
+      }
+    }, 250);
     return () => clearTimeout(t);
-  }, [noteId, note?.id, currentPage, numPages]);
+  }, [noteId, note?.id, currentPage, numPages, pdfDoc, useNativeViewer]);
 
   // Tick Pomodoro Focus Timer
   useEffect(() => {
@@ -1030,11 +1122,16 @@ export default function VirtualPdfReader({
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  // Sync currentPage whenever noteId, url, or initialPage prop changes
+  // Sync currentPage ONLY when an explicit initialPage > 1 is passed
   useEffect(() => {
-    const target = initialPage && Number(initialPage) > 0 ? Number(initialPage) : 1;
-    setCurrentPage(target);
-  }, [noteId, url, initialPage]);
+    if (initialPage && Number(initialPage) > 1) {
+      const target = Number(initialPage);
+      resumeTargetPageRef.current = target;
+      isResumeScrollLockRef.current = true;
+      hasAttemptedResumeRef.current = true;
+      setCurrentPage(target);
+    }
+  }, [noteId, initialPage]);
 
   // Auto-scroll to initialPage if initialPage > 1 in continuous scroll mode
   useEffect(() => {
@@ -1057,6 +1154,8 @@ export default function VirtualPdfReader({
 
     let rafId = null;
     const updateActivePage = () => {
+      // Do NOT snap back to Page 1 while initial resume scroll to last read page is in progress!
+      if (isResumeScrollLockRef.current || hasAttemptedResumeRef.current) return;
       const c = mainScrollRef.current || container;
       if (!c) return;
 
@@ -2375,22 +2474,29 @@ export default function VirtualPdfReader({
   }, [pdfDoc, currentPage, scale, useNativeViewer]);
 
   const changePage = (newPage) => {
-    const pageNum = Math.max(1, Math.min(numPages || 1, newPage));
-    if (pageNum !== currentPage) {
-      setCurrentPage(pageNum);
-      if (scrollMode === "continuous" && !useNativeViewer) {
-        const el = document.getElementById(`continuous-page-${pageNum}`);
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      } else if (mainScrollRef.current) {
+    const pageNum = Math.max(1, Math.min(numPages || Math.max(1, newPage), newPage));
+    isResumeScrollLockRef.current = false;
+    hasAttemptedResumeRef.current = false;
+    resumeTargetPageRef.current = pageNum;
+    setCurrentPage(pageNum);
+    const activeId = noteId || note?.id;
+    if (activeId && pageNum >= 1) {
+      saveReadingProgress(activeId, pageNum, numPages || 0).catch(() => {});
+    }
+    if (scrollMode === "continuous" && !useNativeViewer) {
+      const el = document.getElementById(`continuous-page-${pageNum}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (pageNum === 1 && mainScrollRef.current) {
         mainScrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
       }
-      if (useNativeViewer && iframeRef.current) {
-        const baseSrc = (nativeSrc || url || "").split("#")[0];
-        if (baseSrc && !baseSrc.includes("docs.google.com") && !baseSrc.includes("drive.google.com")) {
-          iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(pageNum, searchQuery)}`;
-        }
+    } else if (mainScrollRef.current) {
+      mainScrollRef.current.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    if (useNativeViewer && iframeRef.current) {
+      const baseSrc = (nativeSrc || url || "").split("#")[0];
+      if (baseSrc && !baseSrc.includes("docs.google.com") && !baseSrc.includes("drive.google.com")) {
+        iframeRef.current.src = `${baseSrc}${getNativeToolbarParams(pageNum, searchQuery)}`;
       }
     }
   };
@@ -5553,54 +5659,127 @@ export default function VirtualPdfReader({
         </div>
       )}
 
-      {/* 🔖 Resumed Last Page Notification Pill */}
-      {resumedPageNotice && (
+      {/* 🔖 Interactive Resume Reading Choice Prompt (Asks User: Resume from Page X or Start from Page 1) */}
+      {resumedPageNotice && resumedPageNotice > 1 && (
         <div
           style={{
             position: "fixed",
-            bottom: "74px",
+            bottom: isTouchOrMobileDevice ? "64px" : "28px",
             left: "50%",
             transform: "translateX(-50%)",
-            zIndex: 65,
-            background: "rgba(15, 23, 42, 0.94)",
-            border: "1px solid rgba(245, 158, 11, 0.55)",
-            borderRadius: "999px",
-            padding: "7px 14px",
+            zIndex: 85,
+            background: "linear-gradient(145deg, rgba(15, 23, 42, 0.97), rgba(30, 41, 59, 0.97))",
+            border: "1.5px solid rgba(245, 158, 11, 0.65)",
+            borderRadius: "16px",
+            padding: isTouchOrMobileDevice ? "12px 14px" : "14px 18px",
             display: "flex",
-            alignItems: "center",
+            flexDirection: "column",
             gap: "10px",
-            boxShadow: "0 10px 28px rgba(0, 0, 0, 0.55)",
-            fontSize: "0.78rem",
-            color: "#fef3c7",
+            width: "min(92vw, 430px)",
+            boxShadow: "0 18px 42px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.18)",
+            backdropFilter: "blur(12px)",
+            color: "#f8fafc",
           }}
         >
-          <span>🔖 Resumed where you left off (<strong>Page {resumedPageNotice}</strong>)</span>
-          <button
-            type="button"
-            onClick={() => {
-              changePage(1);
-              setResumedPageNotice(null);
-            }}
-            style={{
-              background: "rgba(255, 255, 255, 0.12)",
-              border: "none",
-              color: "#38bdf8",
-              borderRadius: "999px",
-              padding: "3px 9px",
-              fontSize: "0.72rem",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            Page 1
-          </button>
-          <button
-            type="button"
-            onClick={() => setResumedPageNotice(null)}
-            style={{ background: "transparent", border: "none", color: "#94a3b8", cursor: "pointer", display: "flex" }}
-          >
-            <X size={13} />
-          </button>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+              <span
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "10px",
+                  background: "rgba(245, 158, 11, 0.18)",
+                  border: "1px solid rgba(245, 158, 11, 0.45)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "1rem",
+                  flexShrink: 0,
+                }}
+              >
+                📖
+              </span>
+              <div>
+                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fef3c7", lineHeight: 1.25 }}>
+                  Resume Reading from Page {resumedPageNotice}?
+                </div>
+                <div style={{ fontSize: "0.74rem", color: "#cbd5e1", marginTop: "2px" }}>
+                  You last read up to <strong style={{ color: "#fbbf24" }}>Page {resumedPageNotice}{numPages ? ` of ${numPages}` : ""}</strong>. Where would you like to start?
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResumedPageNotice(null)}
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "none",
+                color: "#94a3b8",
+                borderRadius: "8px",
+                padding: "4px",
+                cursor: "pointer",
+                display: "flex",
+                flexShrink: 0,
+              }}
+              title="Keep Page & Close"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+            <button
+              type="button"
+              onClick={() => {
+                const targetP = resumedPageNotice;
+                setResumedPageNotice(null);
+                changePage(targetP);
+              }}
+              style={{
+                flex: 1.2,
+                background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                border: "1px solid rgba(251, 191, 36, 0.6)",
+                color: "#0f172a",
+                borderRadius: "10px",
+                padding: "8px 12px",
+                fontSize: "0.78rem",
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                boxShadow: "0 4px 14px rgba(245, 158, 11, 0.35)",
+              }}
+            >
+              <span>🔖 Continue (Page {resumedPageNotice})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setResumedPageNotice(null);
+                changePage(1);
+              }}
+              style={{
+                flex: 1,
+                background: "rgba(255, 255, 255, 0.09)",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                color: "#e2e8f0",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                fontSize: "0.76rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }}
+            >
+              <span>⏮️ Start from Page 1</span>
+            </button>
+          </div>
         </div>
       )}
 
@@ -6265,6 +6444,7 @@ export default function VirtualPdfReader({
                   <ContinuousPage
                     key={`webreader-p${pNum}-s${scale}`}
                     pageNum={pNum}
+                    activePageNum={currentPage}
                     pdfDoc={pdfDoc}
                     scale={scale}
                     nightMode={nightMode}
@@ -6701,6 +6881,7 @@ export default function VirtualPdfReader({
                 <ContinuousPage
                   key={`cont-page-${pNum}-s${scale}`}
                   pageNum={pNum}
+                  activePageNum={currentPage}
                   pdfDoc={pdfDoc}
                   scale={scale}
                   nightMode={nightMode}

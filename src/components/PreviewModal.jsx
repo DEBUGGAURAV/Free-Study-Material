@@ -12,7 +12,7 @@ export default function PreviewModal({
   currentUser,
   allowNotesDownload = true,
   downloadDisabledReason = "",
-  initialPage = 1,
+  initialPage = null,
 }) {
   if (!note) return null;
 
@@ -79,7 +79,7 @@ export default function PreviewModal({
           isDownloadBlocked={isBlocked}
           downloadDisabledReason={effectiveReason}
           onOpenAuth={onOpenAuth}
-          initialPage={initialPage || note?._initialPage || 1}
+          initialPage={initialPage || note?._initialPage || null}
         />
       </div>
     </div>
