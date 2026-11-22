@@ -182,13 +182,15 @@ function pruneIdleUsers(now = Date.now()) {
   }
 }
 
+let cachedThisNodeRef = null;
 function getThisNode() {
+  if (cachedThisNodeRef) return cachedThisNodeRef;
   const host = getCurrentServerHostname();
-  return (
+  cachedThisNodeRef =
     clusterNodes.find((n) => n.url && host && normalizeHost(n.url) === host) ||
     clusterNodes.find((n) => n.url) ||
-    clusterNodes[0]
-  );
+    clusterNodes[0];
+  return cachedThisNodeRef;
 }
 
 /**
@@ -320,6 +322,13 @@ function requestTelemetryMiddleware(req, res, next) {
       (req.headers["x-forwarded-for"] ? req.headers["x-forwarded-for"].split(",")[0].trim() : null) ||
       req.ip ||
       "guest_client";
+    if (!activeUserTracker.has(clientKey) && activeUserTracker.size >= 500) {
+      pruneIdleUsers(now);
+      if (activeUserTracker.size >= 500) {
+        const oldest = activeUserTracker.keys().next().value;
+        if (oldest) activeUserTracker.delete(oldest);
+      }
+    }
     activeUserTracker.set(clientKey, now);
   }
 

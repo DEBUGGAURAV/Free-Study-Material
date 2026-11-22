@@ -246,9 +246,9 @@ async function refreshNoticesCacheFromFirestore() {
     // Batch save into Turso L2
     await saveNoticesToTursoCache(rawNotices);
 
-    // Save into L1 RAM (60s TTL)
+    // Save into L1 RAM (60 minutes TTL — event-driven updates keep it fresh in real time)
     ramNoticesMemory = rawNotices;
-    ramNoticesExpiresAt = Date.now() + 60 * 1000;
+    ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
 
     return rawNotices;
   } catch (err) {
@@ -298,7 +298,7 @@ async function getAllCachedNotices() {
           cacheHits++;
           firestoreReadsSaved++;
           ramNoticesMemory = parsedNotices;
-          ramNoticesExpiresAt = now + 60 * 1000; // 60s RAM TTL
+          ramNoticesExpiresAt = now + 60 * 60 * 1000; // 60m RAM TTL (Event-driven invalidation)
 
           // Asynchronously purge expired rows from Turso
           client.execute({
