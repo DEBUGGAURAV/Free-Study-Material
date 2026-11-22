@@ -173,62 +173,89 @@ import { getAllCachedNoteChunks, deleteCachedNote, clearAllCachedNotes, deleteP2
  */
 export async function getAnyCachedNoteBuffer(noteId) {
   if (!noteId) return null;
-  const sId = String(noteId);
+  const sId = String(noteId).trim();
 
-  return Promise.race([
-    (async () => {
-      // 1. In-memory session buffer from active reader (fastest, 0ms)
-      try {
-        if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
-          const memBuf = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
-          if (memBuf && memBuf.byteLength > 0) return memBuf;
-        }
-      } catch (_) {}
+  // 1. In-memory session buffer from active reader (instant 0ms synchronous return)
+  try {
+    if (typeof window !== "undefined" && window.__FSM_LOADED_PDF_BUFFERS__) {
+      const memBuf = window.__FSM_LOADED_PDF_BUFFERS__[sId] || window.__FSM_LOADED_PDF_BUFFERS__[noteId];
+      if (memBuf && memBuf.byteLength > 200) return memBuf;
+    }
+  } catch (_) {}
 
-      // 2. Check high-speed P2P IndexedDB binary chunk store (fsm_p2p_cache_v1)
-      try {
-        let p2pBuf = await getCachedNoteBuffer(noteId);
-        if (!p2pBuf || p2pBuf.byteLength === 0) {
-          p2pBuf = await getCachedNoteBuffer(sId);
-        }
-        if (p2pBuf && p2pBuf.byteLength > 0) return p2pBuf;
-      } catch (_) {}
-
-      // 3. Check offline vault store (fsm_offline_vault)
-      try {
-        const vaultBuf = await getOfflineNoteBuffer(noteId);
-        if (vaultBuf && vaultBuf.byteLength > 0) return vaultBuf;
-      } catch (_) {}
-
-      // 4. Check browser Service Worker CacheStorage
-      try {
-        if (typeof caches !== "undefined") {
-          const candidates = [
-            `/api/notes/${sId}/stream.pdf`,
-            `/api/notes/${sId}/stream`,
-            `/api/notes/${sId}/preview`,
-            `/api/notes/${sId}`,
-            `/api/notes/${noteId}/stream.pdf`,
-            `/api/notes/${noteId}/stream`,
-          ];
-          for (const uri of candidates) {
-            const match = await caches.match(uri, { ignoreSearch: true });
-            if (match && match.ok) {
-              const buf = await match.arrayBuffer();
-              if (buf && buf.byteLength > 0) {
-                // Self-healing: persist into IndexedDB so future reads need 0 async roundtrips
-                cacheNoteBuffer(sId, buf).catch(() => {});
-                return buf;
-              }
-            }
+  // 2. Race Browser Cache API (<5ms), P2P IndexedDB, and Offline Vault IndexedDB IN PARALLEL!
+  // Resolves as soon as ANY store returns a valid PDF buffer instead of timing out sequentially.
+  const checkCacheApi = async () => {
+    if (typeof caches === "undefined") return null;
+    try {
+      const candidates = [
+        `/api/notes/${sId}/stream.pdf`,
+        `/api/notes/${sId}/stream`,
+        `/api/notes/${sId}/preview`,
+        `/api/notes/${sId}`,
+      ];
+      for (const uri of candidates) {
+        const match = await caches.match(uri, { ignoreSearch: true });
+        if (match && match.ok) {
+          const buf = await match.arrayBuffer();
+          if (buf && buf.byteLength > 200) {
+            return buf;
           }
         }
-      } catch (_) {}
+      }
+    } catch (_) {}
+    return null;
+  };
 
+  const checkP2pIdb = async () => {
+    try {
+      let p2pBuf = await getCachedNoteBuffer(sId);
+      if ((!p2pBuf || p2pBuf.byteLength <= 200) && noteId !== sId) {
+        p2pBuf = await getCachedNoteBuffer(noteId);
+      }
+      return p2pBuf && p2pBuf.byteLength > 200 ? p2pBuf : null;
+    } catch (_) {
       return null;
-    })(),
-    new Promise((resolve) => setTimeout(() => resolve(null), 700)),
-  ]);
+    }
+  };
+
+  const checkVaultIdb = async () => {
+    try {
+      const vaultBuf = await getOfflineNoteBuffer(sId);
+      return vaultBuf && vaultBuf.byteLength > 200 ? vaultBuf : null;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let remaining = 3;
+    const finish = (val) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve(val);
+      }
+    };
+    const timer = setTimeout(() => finish(null), 1800);
+
+    for (const fn of [checkCacheApi, checkP2pIdb, checkVaultIdb]) {
+      fn()
+        .then((buf) => {
+          if (buf && buf.byteLength > 200) {
+            finish(buf);
+          } else {
+            remaining--;
+            if (remaining <= 0) finish(null);
+          }
+        })
+        .catch(() => {
+          remaining--;
+          if (remaining <= 0) finish(null);
+        });
+    }
+  });
 }
 
 /**

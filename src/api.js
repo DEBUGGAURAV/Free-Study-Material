@@ -1067,10 +1067,9 @@ export const api = {
     const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
-    const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
     const nameParam = cleanName ? `&filename=${encodeURIComponent(cleanName)}` : "";
     const directParam = direct ? "&direct=1" : "";
-    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}download=1${nameParam}${directParam}`;
+    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}download=1${nameParam}${directParam}`;
   },
 
   getStreamUrl: (id, fileName = null) => {
@@ -1078,9 +1077,8 @@ export const api = {
     const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
     if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
-    const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
     const nameParam = cleanName ? `&filename=${encodeURIComponent(cleanName)}` : "";
-    return `${STREAM_BASE}/notes/${id}/${pathSegment}?${tokenParam}${nameParam}`;
+    return `${STREAM_BASE}/notes/${id}/stream.pdf?${tokenParam}preview=1${nameParam}`;
   },
 
   updateNote: async (id, noteData) => {

@@ -99,7 +99,9 @@ export default {
       '127.0.0.1';
 
     // Dynamic 3 -> 2 -> 1 Cascade Load Balancer
-    const streamOrigins = getPrioritizedClusterOrigins(env, clientIp);
+    // For note streams, hash by noteId so ALL students hit the SAME Render origin node (maximizes Tier 3 Server SSD Cache HIT rate!)
+    const noteIdForAffinity = url.pathname.match(/^\/api\/notes\/([^/]+)\//)?.[1] || '';
+    const streamOrigins = getPrioritizedClusterOrigins(env, noteIdForAffinity || clientIp);
     const activeHealthyCount = streamOrigins.filter((o) => getOriginCooldownRemaining(o) === 0).length || 1;
     const originBase = streamOrigins[0] || '';
     const edgeColo = request.cf?.colo || 'Global';
@@ -112,15 +114,20 @@ export default {
       });
     }
 
-    // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains
+    // 🛡️ Block Direct Cross-Site Hotlinking from unauthorized third-party domains (ALLOW pages.dev & APP_URL!)
     const originHeader = request.headers.get('Origin') || request.headers.get('Referer') || '';
     const isDocNav = request.headers.get('Sec-Fetch-Mode') === 'navigate' || request.headers.get('Sec-Fetch-Dest') === 'document';
-    const isAllowedClient = !originHeader || 
+    const appOriginHost = (() => {
+      try { return env.APP_URL ? new URL(env.APP_URL).hostname : ''; } catch { return ''; }
+    })();
+    const isAllowedClient = !originHeader ||
       isDocNav ||
-      originHeader.includes('onrender.com') || 
-      originHeader.includes('localhost') || 
-      originHeader.includes('127.0.0.1') || 
-      originHeader.includes('workers.dev');
+      originHeader.includes('pages.dev') ||
+      originHeader.includes('onrender.com') ||
+      originHeader.includes('localhost') ||
+      originHeader.includes('127.0.0.1') ||
+      originHeader.includes('workers.dev') ||
+      (appOriginHost && originHeader.includes(appOriginHost));
     if (!isAllowedClient && request.headers.get('Sec-Fetch-Site') === 'cross-site') {
       return new Response('Direct cross-site hotlinking blocked by Free Study Material Cloud.', {
         status: 403,

@@ -1594,10 +1594,16 @@ export default function VirtualPdfReader({
     } else {
       const activeId = noteId || note?.id;
       if (activeId) {
-        const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
-        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-        const token = getActiveReaderToken();
-        setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
+        if (localPdfBuffer && localPdfBuffer.byteLength > 200) {
+          try {
+            objectUrl = URL.createObjectURL(new Blob([localPdfBuffer], { type: "application/pdf" }));
+            setNativeSrc(objectUrl);
+          } catch {}
+        } else {
+          const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
+          const token = getActiveReaderToken();
+          setNativeSrc(`/api/notes/${activeId}/stream.pdf?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}${cleanName ? `&filename=${encodeURIComponent(cleanName)}` : ""}`);
+        }
       } else if (url) {
         setNativeSrc(url);
       }
@@ -1608,11 +1614,12 @@ export default function VirtualPdfReader({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [file, url, note, noteId]);
+  }, [file, url, note?.id, noteId, localPdfBuffer]);
 
   // Load document on-demand (streaming range requests or local file)
   useEffect(() => {
     let isCancelled = false;
+    const loadAbortController = new AbortController();
     const currentGeneration = ++loadGenerationRef.current;
 
     // 🎓 Record this note into the student's study context for 6 AM Targeted Exam Pre-fetch & Academic Audit Trail
@@ -1676,18 +1683,19 @@ export default function VirtualPdfReader({
         }
 
         // ⚡ 4-Tier Zero-Downtime Document Pipeline (Read Mode):
-        // Tier 1: IndexedDB -> Tier 2: Local Server -> Tier 3: Server SSD -> Tier 4: Cloud Storage
+        // Tier 1: IndexedDB / Cache API -> Tier 2: Cloudflare Edge CDN -> Tier 3: Server SSD -> Tier 4: Cloud Storage
         const token = getActiveReaderToken();
         const activeId = noteId || note?.id;
         const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
-        const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
-        const directUrl = `/api/notes/${activeId}/${pathSegment}?preview=1&direct=1${token ? `&token=${encodeURIComponent(token)}` : ""}`;
-        if (!nativeSrc) setNativeSrc(directUrl);
+        const fallbackStreamUrl = `/api/notes/${activeId}/stream.pdf?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}${cleanName ? `&filename=${encodeURIComponent(cleanName)}` : ""}`;
+        if (!nativeSrc) setNativeSrc(fallbackStreamUrl);
 
-        const result = await acquireNoteDocument(noteId, {
+        const result = await acquireNoteDocument(activeId, {
           mode: "read",
+          fileName: cleanName,
           note,
           token,
+          signal: loadAbortController.signal,
           onProgress: (m) => {
             if (isCancelled || loadGenerationRef.current !== currentGeneration) return;
             const loaded = Math.round(parseFloat(m.loadedMB || 0) * 1024 * 1024);
@@ -1784,7 +1792,7 @@ export default function VirtualPdfReader({
         setLocalPdfBuffer(safeArrayBuffer);
 
         // Ensure nativeSrc is set for native Web Reader fallback
-        if (!nativeSrc) setNativeSrc(directUrl);
+        if (!nativeSrc) setNativeSrc(fallbackStreamUrl);
 
         // Update progress state: buffer ready, now decompressing and building pages
         setPreviewProgress((prev) => ({
@@ -1862,13 +1870,11 @@ export default function VirtualPdfReader({
           setIsCachingToCdn(false);
           setCdnTransferPercent(100);
 
-          // Pre-cache buffer into P2P mesh & IndexedDB
+          // Buffer is already saved into Cache API + IndexedDB + memory by acquireNoteDocument (avoid duplicate concurrent IDB write-locks!)
           if (typeof window !== "undefined") {
             window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-            window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = safeArrayBuffer;
+            window.__FSM_LOADED_PDF_BUFFERS__[String(activeId)] = safeArrayBuffer;
           }
-          cacheNoteBuffer(noteId, safeArrayBuffer);
-          saveNoteOffline(note || { id: noteId, title }, safeArrayBuffer);
 
           // 1. Background index into MiniSearch Client-Side RAG
           setIsRagIndexing(true);
@@ -1988,9 +1994,10 @@ export default function VirtualPdfReader({
 
     return () => {
       isCancelled = true;
+      try { loadAbortController.abort(); } catch (_) {}
       clearTimeout(safetyWatchdog);
     };
-  }, [url, noteId, file, note?.id, reloadTrigger]);
+  }, [noteId, file, note?.id, reloadTrigger]);
 
   // ⚡ Real-Time Native Browser Engine Loading Simulator & Progress Sync
   useEffect(() => {
@@ -3907,10 +3914,16 @@ export default function VirtualPdfReader({
 
     const activeId = noteId || note?.id;
     if (activeId) {
+      if (localPdfBuffer && localPdfBuffer.byteLength > 200) {
+        try {
+          const blobUrl = URL.createObjectURL(new Blob([localPdfBuffer], { type: "application/pdf" }));
+          setNativeSrc(blobUrl);
+          return;
+        } catch (_) {}
+      }
       const cleanName = getNotePdfFileName(note || { id: activeId, title, originalName: (file && file.name) || note?.originalName, fileName: (file && file.name) || note?.fileName });
-      const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
       const token = getActiveReaderToken();
-      setNativeSrc(`/api/notes/${activeId}/${pathSegment}?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}`);
+      setNativeSrc(`/api/notes/${activeId}/stream.pdf?preview=1${token ? `&token=${encodeURIComponent(token)}` : ""}${cleanName ? `&filename=${encodeURIComponent(cleanName)}` : ""}`);
     }
   };
 

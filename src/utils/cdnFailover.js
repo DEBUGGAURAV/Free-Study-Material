@@ -218,19 +218,34 @@ export async function triggerBrowserDownload(arrayBuffer, fileName, fileHandle =
 }
 
 /**
- * Cache buffer locally in memory and IndexedDB offline vault
+ * Cache buffer locally in memory, Browser Cache API (<5ms), and IndexedDB offline vault
  */
 export function saveToClientOfflineStorage(noteId, note, arrayBuffer) {
   if (!noteId || !isValidPdfArrayBuffer(arrayBuffer)) return;
   try {
+    const sId = String(noteId).trim();
     const safeBuffer = arrayBuffer.slice ? arrayBuffer.slice(0) : arrayBuffer;
     if (typeof window !== "undefined") {
       window.__FSM_LOADED_PDF_BUFFERS__ = window.__FSM_LOADED_PDF_BUFFERS__ || {};
-      window.__FSM_LOADED_PDF_BUFFERS__[String(noteId)] = safeBuffer;
+      window.__FSM_LOADED_PDF_BUFFERS__[sId] = safeBuffer;
     }
-    // Save to BOTH IndexedDB stores (fsm_offline_vault AND fsm_p2p_cache_v1)
-    saveNoteOffline(note || { id: noteId, title: "Academic Document" }, safeBuffer).catch(() => {});
-    cacheNoteBuffer(noteId, safeBuffer).catch(() => {});
+    // 1. Save into Browser Cache API (fastest <5ms read on mobile & desktop, immune to IndexedDB lock delays)
+    if (typeof caches !== "undefined" && typeof Response !== "undefined") {
+      caches.open("fsm-pdf-cache-v1").then((cache) => {
+        const res = new Response(safeBuffer.slice(0), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Length": String(safeBuffer.byteLength),
+            "X-FSM-Cached-At": String(Date.now()),
+          },
+        });
+        return cache.put(`/api/notes/${sId}/stream.pdf`, res);
+      }).catch(() => {});
+    }
+    // 2. Save to BOTH IndexedDB stores (fsm_offline_vault AND fsm_p2p_cache_v1)
+    saveNoteOffline(note || { id: sId, title: "Academic Document" }, safeBuffer).catch(() => {});
+    cacheNoteBuffer(sId, safeBuffer).catch(() => {});
   } catch (_) {}
 }
 
@@ -391,7 +406,7 @@ export async function acquireNoteDocument(noteId, {
   try {
     const localBuf = await Promise.race([
       getAnyCachedNoteBuffer(cleanId),
-      new Promise((resolve) => setTimeout(() => resolve(null), 800)),
+      new Promise((resolve) => setTimeout(() => resolve(null), 2000)),
     ]);
     if (localBuf && isValidPdfArrayBuffer(localBuf)) {
       // 🎉 TIER 1 CACHE HIT (0ms)!
