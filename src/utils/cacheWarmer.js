@@ -32,36 +32,47 @@ async function warmCacheOnBoot() {
       return isNaN(parsed) ? 0 : parsed;
     };
 
-    // 1. Fetch live notes catalog to warm all_raw_notes
-    const snapshot = await db.collection("notes").limit(100).get();
-    if (!snapshot || snapshot.empty) {
-      console.log("[CACHE-WARMER] No existing notes found in vault to warm.");
-      return;
+    // 1. Fetch live notes catalog via Multi-Tier L1/L2 Cache first (Zero unnecessary Firestore scan on boot)
+    let allNotes = null;
+    try {
+      const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+      allNotes = await getAllCachedNotes();
+    } catch (_) {}
+
+    if (!Array.isArray(allNotes) || allNotes.length === 0) {
+      const snapshot = await db.collection("notes").limit(100).get();
+      if (!snapshot || snapshot.empty) {
+        console.log("[CACHE-WARMER] No existing notes found in vault to warm.");
+        return;
+      }
+      allNotes = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const createdMs = getNoteTimestamp(data.createdAt);
+        const updatedMs = getNoteTimestamp(data.updatedAt);
+        const effectiveMs = Math.max(createdMs, updatedMs);
+        const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
+        allNotes.push({
+          id: doc.id,
+          ...data,
+          createdAt: createdAtIso,
+          _sortTimestamp: effectiveMs,
+        });
+      });
     }
 
     const rawNotes = [];
     const warmedNotes = [];
 
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const createdMs = getNoteTimestamp(data.createdAt);
-      const updatedMs = getNoteTimestamp(data.updatedAt);
-      const effectiveMs = Math.max(createdMs, updatedMs);
-      const createdAtIso = createdMs > 0 ? new Date(createdMs).toISOString() : new Date().toISOString();
-
-      const noteObj = {
-        id: doc.id,
-        ...data,
-        createdAt: createdAtIso,
-        _sortTimestamp: effectiveMs,
-      };
-
+    for (const noteObj of allNotes.slice(0, 100)) {
       rawNotes.push(noteObj);
       warmedNotes.push(noteObj);
 
       // Pre-warm individual note record into RAM Cache (3-hour TTL)
-      ramCache.set(`note_${doc.id}`, noteObj, 3 * 3600);
-    });
+      if (noteObj && noteObj.id) {
+        ramCache.set(`note_${noteObj.id}`, noteObj, 3 * 3600);
+      }
+    }
 
     // 2. Pre-warm all_raw_notes into RAM Cache (600 seconds)
     ramCache.set("all_raw_notes", rawNotes, 600);

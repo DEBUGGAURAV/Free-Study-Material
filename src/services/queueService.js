@@ -333,7 +333,7 @@ async function runUploadTask(task) {
           currentStage: "Completed & Ready in Cloud (0s Deduplication)",
         });
 
-        invalidateAllCache();
+        invalidateAllCache({ keepNotesRam: true });
         setTimeout(() => {
           jobStatusMap.delete(noteId);
           pipelineTrackerMap.delete(noteId);
@@ -578,7 +578,7 @@ async function runUploadTask(task) {
         currentStage: "All Stages Completed & Ready in Cloud",
       });
 
-      invalidateAllCache();
+      invalidateAllCache({ keepNotesRam: true });
       console.log(`[QUEUE] Job finished successfully for Note: ${noteId}`);
       setTimeout(() => {
         jobStatusMap.delete(noteId);

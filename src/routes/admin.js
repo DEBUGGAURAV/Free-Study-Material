@@ -1028,12 +1028,19 @@ router.patch("/notes/:id/visibility", authenticateToken, checkAdminOrPermission(
 
     if (!checkDb(res, "DB unavailable")) return;
 
-    await db.collection("notes").doc(id).update({
+    const visUpdate = {
       isVisible: Boolean(isVisible),
       updatedAt: new Date().toISOString(),
-    });
-
-    invalidateAllCache();
+    };
+    await db.collection("notes").doc(id).update(visUpdate);
+    try {
+      const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+      if (typeof upsertNoteInCache === "function") {
+        await upsertNoteInCache({ id, ...visUpdate }).catch(() => {});
+      }
+    } catch (_) {}
+    ramCache.delete(`note_${id}`);
+    invalidateAllCache({ keepNotesRam: true });
     return res.json({ success: true, message: "Note visibility updated." });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -1144,14 +1151,9 @@ router.patch("/notes/:id/allow-download", authenticateToken, checkAdminOrPermiss
     } catch (_) {}
 
     try {
-      const { upsertNoteInCache, refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
       if (typeof upsertNoteInCache === "function") {
         await upsertNoteInCache({ id: targetDocId, ...updateData }).catch(() => {});
-      }
-      if (typeof refreshCacheFromFirestore === "function") {
-        await refreshCacheFromFirestore().catch(() => {});
-      } else if (typeof invalidateTursoNotesCache === "function") {
-        invalidateTursoNotesCache();
       }
     } catch (_) {}
 
@@ -1171,7 +1173,8 @@ router.patch("/notes/:id/allow-download", authenticateToken, checkAdminOrPermiss
       }
     } catch (_) {}
 
-    invalidateAllCache();
+    ramCache.delete(`note_${targetDocId}`);
+    invalidateAllCache({ keepNotesRam: true });
 
     return res.json({
       success: true,
@@ -1301,14 +1304,11 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
       });
     }
 
-    // Purge single note from Turso LibSQL Edge Cache
+    // Purge single note from Turso LibSQL Edge Cache & In-Place L1 RAM Filter (0 full table re-reads)
     try {
-      const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      const { removeNoteFromCache } = require("../services/tursoNotesCacheService");
       if (typeof removeNoteFromCache === "function") {
         await removeNoteFromCache(id);
-      }
-      if (typeof invalidateTursoNotesCache === "function") {
-        invalidateTursoNotesCache();
       }
     } catch (_) {}
 
@@ -1333,7 +1333,8 @@ router.delete("/notes/:id", authenticateToken, checkAdminOrPermission("manage_no
       if (cfWorker) fetch(`${cfWorker}/api/notes/${id}/stream?purge=1`, { method: "PURGE" }).catch(() => {});
     } catch (_) {}
 
-    invalidateAllCache();
+    ramCache.delete(`note_${id}`);
+    invalidateAllCache({ keepNotesRam: true });
     try {
       const { broadcastCatalogEvent } = require("../services/realtimeEventService");
       broadcastCatalogEvent({ event: "note_deleted", noteId: id, title: doc.exists ? doc.data()?.title : "" });

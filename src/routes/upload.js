@@ -245,14 +245,14 @@ router.post(
         }
 
         await docRef.set(noteData);
-        invalidateAllCache();
         upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-UPLOAD] Sync notice:", e.message));
         try {
           const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
           if (typeof upsertNoteInCache === "function") {
-            upsertNoteInCache(noteData).catch(() => {});
+            await upsertNoteInCache(noteData).catch(() => {});
           }
         } catch (_) {}
+        invalidateAllCache({ keepNotesRam: true });
         try {
           const { broadcastCatalogEvent } = require("../services/realtimeEventService");
           broadcastCatalogEvent({ event: "note_created", note: noteData });
@@ -271,8 +271,8 @@ router.post(
           console.log(`[UPLOAD] ⚡ Note ${noteId} (${formatRealSize(file.size)}) > 50MB: Bypassing RAM Cache, streaming direct async to Telegram.`);
         }
 
-        // Auto-create notice on the Notice Board with direct click link!
-        await db.collection("notices").add({
+        // Auto-create notice on the Notice Board with direct click link & sync L1/L2 Notice Cache immediately!
+        const uploadNoticeData = {
           title: `📚 New Material: ${noteTitle}`,
           content: `New study material has been uploaded for ${finalCourse} (${finalBranch} • ${noteYear}) — Subject: ${noteSubject}. Click below to view and download!`,
           link: `/api/notes/${noteId}/stream`,
@@ -282,7 +282,19 @@ router.post(
           createdBy: req.user?.name || "System Vault",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-        }).catch((e) => console.warn("[UPLOAD] Notice creation notice:", e.message));
+        };
+        const noticeRef = await db.collection("notices").add(uploadNoticeData).catch((e) => {
+          console.warn("[UPLOAD] Notice creation notice:", e.message);
+          return null;
+        });
+        if (noticeRef && noticeRef.id) {
+          try {
+            const { upsertNoticeInCache } = require("../services/tursoNoticesCacheService");
+            if (typeof upsertNoticeInCache === "function") {
+              upsertNoticeInCache({ id: noticeRef.id, ...uploadNoticeData }).catch(() => {});
+            }
+          } catch (_) {}
+        }
 
         // Real-time Telegram Notice to Security Bot (Notice text only, strictly zero PDF file attached)
         sendTelegramAuthNotice({

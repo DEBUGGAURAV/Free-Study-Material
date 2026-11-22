@@ -108,12 +108,17 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
           const normInput = cleanInput.replace(/[^a-z0-9]/g, "");
 
           if (normInput.length >= 4) {
-            // Query recent notes to check for normalized title matching
-            const recentSnap = await db.collection("notes").limit(120).get().catch(() => null);
-            if (recentSnap && !recentSnap.empty) {
-              for (const doc of recentSnap.docs) {
-                if (excludeNoteId && doc.id === excludeNoteId) continue;
-                const data = doc.data();
+            // 3A. Check 0ms L1 RAM Cache first (Zero DB reads)
+            let cachedNotes = null;
+            try {
+              const { getAllCachedNotes } = require("./tursoNotesCacheService");
+              cachedNotes = await getAllCachedNotes();
+            } catch (_) {}
+
+            if (Array.isArray(cachedNotes) && cachedNotes.length > 0) {
+              for (const data of cachedNotes) {
+                const docId = data.id || data.docId;
+                if (!docId || (excludeNoteId && docId === excludeNoteId)) continue;
                 if (!data.telegramMessageId && !data.driveLink && !data.fileUrl) continue;
 
                 const docName = (data.originalName || data.title || "").toLowerCase().trim();
@@ -125,9 +130,35 @@ async function findDuplicateNote(fileHash, fileName = null, fileSize = null, exc
                     const sizeDiff = Math.abs(Number(fileSize) - existingSize);
                     if (sizeDiff <= maxVarianceBytes) {
                       console.log(
-                        `[DEDUP] 🧬 Smart Size Variance match! New: ${(Number(fileSize) / (1024 * 1024)).toFixed(2)}MB, Existing: ${(existingSize / (1024 * 1024)).toFixed(2)}MB (Variance: ${(sizeDiff / 1024).toFixed(1)}KB <= ${(maxVarianceBytes / (1024 * 1024)).toFixed(2)}MB limit). Doc: ${doc.id}`
+                        `[DEDUP] 🧬 Smart Size Variance match (L1 RAM)! New: ${(Number(fileSize) / (1024 * 1024)).toFixed(2)}MB, Existing: ${(existingSize / (1024 * 1024)).toFixed(2)}MB. Doc: ${docId}`
                       );
-                      return extractDuplicatePayload(doc);
+                      return extractDuplicatePayload({ id: docId, data: () => data });
+                    }
+                  }
+                }
+              }
+            } else {
+              // 3B. Cold fallback to Firestore
+              const recentSnap = await db.collection("notes").limit(120).get().catch(() => null);
+              if (recentSnap && !recentSnap.empty) {
+                for (const doc of recentSnap.docs) {
+                  if (excludeNoteId && doc.id === excludeNoteId) continue;
+                  const data = doc.data();
+                  if (!data.telegramMessageId && !data.driveLink && !data.fileUrl) continue;
+
+                  const docName = (data.originalName || data.title || "").toLowerCase().trim();
+                  const normDoc = docName.replace(/[^a-z0-9]/g, "");
+
+                  if (normDoc && (normInput === normDoc || (normInput.length > 8 && normDoc.length > 8 && (normInput.includes(normDoc) || normDoc.includes(normInput))))) {
+                    const existingSize = Number(data.fileSize || 0);
+                    if (existingSize > 0) {
+                      const sizeDiff = Math.abs(Number(fileSize) - existingSize);
+                      if (sizeDiff <= maxVarianceBytes) {
+                        console.log(
+                          `[DEDUP] 🧬 Smart Size Variance match! New: ${(Number(fileSize) / (1024 * 1024)).toFixed(2)}MB, Existing: ${(existingSize / (1024 * 1024)).toFixed(2)}MB (Variance: ${(sizeDiff / 1024).toFixed(1)}KB <= ${(maxVarianceBytes / (1024 * 1024)).toFixed(2)}MB limit). Doc: ${doc.id}`
+                        );
+                        return extractDuplicatePayload(doc);
+                      }
                     }
                   }
                 }

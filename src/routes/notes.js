@@ -1158,36 +1158,52 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const { id } = req.params;
     if (!db) return res.status(404).json({ success: false, message: "Database not connected" });
 
-    const doc = await db.collection("notes").doc(id).get();
-    if (!doc.exists) {
-      console.warn(`[NOTES] Requested note ID not found in live collection: "${id}"`);
-      let archivedData = null;
-      try {
-        const { getDeletedRecordFromTurso } = require("../services/tursoNotesCacheService");
-        archivedData = await getDeletedRecordFromTurso(id);
-      } catch (_) {}
-
-      if (!archivedData) {
-        const [delNote, delRec] = await Promise.all([
-          db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
-          db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
-        ]);
-        if (delNote.exists || delRec.exists) {
-          archivedData = delNote.exists ? delNote.data() : delRec.data();
+    // 1. Check 0ms L1 RAM Cache first (Zero DB reads)
+    let noteData = ramCache.get(`note_${id}`);
+    if (!noteData) {
+      const cachedList = await getAllCachedNotes();
+      if (Array.isArray(cachedList)) {
+        const found = cachedList.find((n) => n && n.id === id);
+        if (found) {
+          noteData = found;
+          ramCache.set(`note_${id}`, found, 1800);
         }
       }
-
-      if (archivedData) {
-        return res.status(404).json({
-          success: false,
-          message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,
-          inRecycleBin: true,
-        });
-      }
-      return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
 
-    const noteData = doc.data();
+    if (!noteData) {
+      const doc = await db.collection("notes").doc(id).get();
+      if (!doc.exists) {
+        console.warn(`[NOTES] Requested note ID not found in live collection: "${id}"`);
+        let archivedData = null;
+        try {
+          const { getDeletedRecordFromTurso } = require("../services/tursoNotesCacheService");
+          archivedData = await getDeletedRecordFromTurso(id);
+        } catch (_) {}
+
+        if (!archivedData) {
+          const [delNote, delRec] = await Promise.all([
+            db.collection("deleted_notes").doc(id).get().catch(() => ({ exists: false })),
+            db.collection("deleted_records").doc(`notes_${id}`).get().catch(() => ({ exists: false })),
+          ]);
+          if (delNote.exists || delRec.exists) {
+            archivedData = delNote.exists ? delNote.data() : delRec.data();
+          }
+        }
+
+        if (archivedData) {
+          return res.status(404).json({
+            success: false,
+            message: `Note "${archivedData.title || id}" has been safely moved to the Restore Vault. An administrator can restore it from Admin Studio.`,
+            inRecycleBin: true,
+          });
+        }
+        return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
+      }
+      noteData = { id: doc.id, ...doc.data() };
+      ramCache.set(`note_${id}`, noteData, 1800);
+    }
+
     if (noteData.isVisible === false && !isAdminUser(req.user)) {
       return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
@@ -1196,7 +1212,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     if (cleanDesc && (cleanDesc.includes("TECH TITAN STORAGE") || cleanDesc.includes("Synced from Telegram"))) {
       cleanDesc = "📚 Verified Academic Notes • Free Study Material";
     }
-    return res.json({ success: true, note: { id: doc.id, ...noteData, description: cleanDesc || "📚 Verified Academic Notes • Free Study Material" } });
+    return res.json({ success: true, note: { ...noteData, id, description: cleanDesc || "📚 Verified Academic Notes • Free Study Material" } });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -1220,8 +1236,20 @@ router.get("/:id/access", downloadLimiter, authenticateToken, async (req, res) =
       }
     }
 
-    const doc = await db.collection("notes").doc(req.params.id).get();
-    if (!doc.exists || (doc.data()?.isVisible === false && !isAdminUser(user))) {
+    const { id } = req.params;
+    let noteData = ramCache.get(`note_${id}`);
+    if (!noteData) {
+      const cachedList = await getAllCachedNotes();
+      if (Array.isArray(cachedList)) {
+        noteData = cachedList.find((n) => n && n.id === id) || null;
+      }
+    }
+    if (!noteData) {
+      const doc = await db.collection("notes").doc(id).get();
+      if (doc.exists) noteData = { id: doc.id, ...doc.data() };
+    }
+
+    if (!noteData || (noteData.isVisible === false && !isAdminUser(user))) {
       return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
     }
 
@@ -1263,16 +1291,15 @@ router.put("/:id", authenticateToken, requireAdmin, async (req, res) => {
     if (downloadDisabledReason !== undefined) updateData.downloadDisabledReason = String(downloadDisabledReason || "").trim();
 
     await db.collection("notes").doc(id).update(updateData);
-    invalidateAllCache();
 
     try {
-      const { refreshCacheFromFirestore, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
-      if (typeof refreshCacheFromFirestore === "function") {
-        await refreshCacheFromFirestore().catch(() => {});
-      } else if (typeof invalidateTursoNotesCache === "function") {
-        invalidateTursoNotesCache();
+      const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
+      if (typeof upsertNoteInCache === "function") {
+        await upsertNoteInCache({ id, ...updateData }).catch(() => {});
       }
     } catch (_) {}
+    ramCache.delete(`note_${id}`);
+    invalidateAllCache({ keepNotesRam: true });
 
     return res.json({ success: true, message: "Note updated successfully in vault!" });
   } catch (err) {
@@ -1643,6 +1670,16 @@ router.post("/:id/cache-to-cdn", downloadLimiter, authenticateToken, async (req,
 
     let note = ramCache.get(`note_${id}`);
     if (!note) {
+      const cachedList = await getAllCachedNotes();
+      if (Array.isArray(cachedList)) {
+        const found = cachedList.find((n) => n && n.id === id);
+        if (found) {
+          note = found;
+          ramCache.set(`note_${id}`, note, 3 * 3600);
+        }
+      }
+    }
+    if (!note) {
       const doc = await db.collection("notes").doc(id).get();
       if (!doc.exists) {
         return res.status(404).json({ success: false, message: "Note not found in cloud vault." });
@@ -1721,6 +1758,16 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
 
     let note = ramCache.get(`note_${id}`);
+    if (!note) {
+      const cachedList = await getAllCachedNotes();
+      if (Array.isArray(cachedList)) {
+        const found = cachedList.find((n) => n && n.id === id);
+        if (found) {
+          note = found;
+          ramCache.set(`note_${id}`, note, 1800);
+        }
+      }
+    }
     if (!note) {
       const doc = await db.collection("notes").doc(id).get();
       if (!doc.exists) {
@@ -2497,15 +2544,31 @@ async function prewarmPopularNotes(limit = 10) {
     ? Math.min(2, isNaN(parsedLimit) || parsedLimit <= 0 ? 2 : parsedLimit)
     : (isNaN(parsedLimit) || parsedLimit <= 0 ? 10 : Math.min(parsedLimit, 50));
 
-  let snap = null;
+  let topNotes = [];
   try {
-    snap = await db.collection("notes").orderBy("viewsCount", "desc").limit(finalLimit).get();
-  } catch (_) {
-    snap = await db.collection("notes").limit(finalLimit).get();
+    const cachedNotes = await getAllCachedNotes();
+    if (Array.isArray(cachedNotes) && cachedNotes.length > 0) {
+      topNotes = [...cachedNotes]
+        .sort((a, b) => Number(b.viewsCount || 0) - Number(a.viewsCount || 0))
+        .slice(0, finalLimit);
+    }
+  } catch (_) {}
+
+  if (topNotes.length === 0) {
+    let snap = null;
+    try {
+      snap = await db.collection("notes").orderBy("viewsCount", "desc").limit(finalLimit).get();
+    } catch (_) {
+      snap = await db.collection("notes").limit(finalLimit).get();
+    }
+    if (snap && snap.docs) {
+      topNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    }
   }
+
   let prewarmed = 0;
-  for (const doc of snap.docs) {
-    const note = doc.data();
+  for (const note of topNotes) {
+    const doc = { id: note.id };
     const binPath = path.join(CDN_CACHE_DIR, `${doc.id}.bin`);
     // 1. If already on SSD disk, zero-copy stream is already warm!
     if (fs.existsSync(binPath)) {

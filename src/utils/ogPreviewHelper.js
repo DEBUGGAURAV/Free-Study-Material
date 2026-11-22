@@ -71,7 +71,8 @@ async function getPublicNoteMeta(noteId) {
 
   const cacheKey = `public_og_meta_${cleanId}`;
   const cached = ramCache.get(cacheKey);
-  if (cached !== undefined) return cached;
+  if (cached === "__NOT_FOUND__") return null;
+  if (cached) return cached;
 
   // 1. Check multi-tier Turso/RAM catalog first (0 extra Firestore reads!)
   try {
@@ -98,7 +99,7 @@ async function getPublicNoteMeta(noteId) {
     } catch (_) {}
   }
 
-  ramCache.set(cacheKey, null, 300);
+  ramCache.set(cacheKey, "__NOT_FOUND__", 300);
   return null;
 }
 

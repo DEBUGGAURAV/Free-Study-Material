@@ -367,8 +367,19 @@ async function upsertNoticeInCache(notice) {
       });
     }
 
-    // Invalidate L1 RAM cache to force refresh on next call
-    invalidateTursoNoticesCache();
+    if (ramNoticesMemory) {
+      const idx = ramNoticesMemory.findIndex((n) => n.id === notice.id);
+      if (idx >= 0) {
+        ramNoticesMemory[idx] = { ...ramNoticesMemory[idx], ...noticeObj };
+      } else {
+        ramNoticesMemory.unshift(noticeObj);
+      }
+      ramNoticesMemory.sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return (b._sortTimestamp || 0) - (a._sortTimestamp || 0);
+      });
+      ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
+    }
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Single upsert warning:", err.message);
@@ -389,7 +400,10 @@ async function removeNoticeFromCache(noticeId) {
         args: [noticeId],
       });
     }
-    invalidateTursoNoticesCache();
+    if (ramNoticesMemory) {
+      ramNoticesMemory = ramNoticesMemory.filter((n) => n.id !== noticeId);
+      ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
+    }
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Remove notice error:", err.message);
@@ -411,7 +425,11 @@ async function bulkRemoveNoticesFromCache(noticeIds) {
         args: noticeIds,
       });
     }
-    invalidateTursoNoticesCache();
+    if (ramNoticesMemory) {
+      const idSet = new Set(noticeIds);
+      ramNoticesMemory = ramNoticesMemory.filter((n) => !idSet.has(n.id));
+      ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
+    }
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Bulk remove error:", err.message);
@@ -428,7 +446,8 @@ async function clearAllNoticesFromCache() {
     if (client) {
       await client.execute("DELETE FROM notices_cache");
     }
-    invalidateTursoNoticesCache();
+    ramNoticesMemory = [];
+    ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Clear all error:", err.message);
@@ -456,7 +475,17 @@ async function updateNoticePinInCache(noticeId, isPinned) {
         });
       }
     }
-    invalidateTursoNoticesCache();
+    if (ramNoticesMemory) {
+      const idx = ramNoticesMemory.findIndex((n) => n.id === noticeId);
+      if (idx >= 0) {
+        ramNoticesMemory[idx] = { ...ramNoticesMemory[idx], isPinned: Boolean(isPinned) };
+        ramNoticesMemory.sort((a, b) => {
+          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+          return (b._sortTimestamp || 0) - (a._sortTimestamp || 0);
+        });
+        ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
+      }
+    }
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Update pin error:", err.message);
@@ -470,6 +499,7 @@ async function updateNoticePinInCache(noticeId, isPinned) {
  */
 async function updateNoticeExpiryInCache(noticeId, retentionDays, expiresAt) {
   try {
+    const rDays = parseInt(retentionDays, 10);
     if (client) {
       const res = await client.execute({
         sql: "SELECT data FROM notices_cache WHERE id = ? LIMIT 1",
@@ -477,7 +507,6 @@ async function updateNoticeExpiryInCache(noticeId, retentionDays, expiresAt) {
       });
       if (res && res.rows && res.rows[0]) {
         const item = JSON.parse(res.rows[0].data);
-        const rDays = parseInt(retentionDays, 10);
         item.retentionDays = rDays;
         item.expiresAt = expiresAt;
         const expMs = expiresAt ? getTimestampMs(expiresAt) : null;
@@ -488,7 +517,13 @@ async function updateNoticeExpiryInCache(noticeId, retentionDays, expiresAt) {
         });
       }
     }
-    invalidateTursoNoticesCache();
+    if (ramNoticesMemory) {
+      const idx = ramNoticesMemory.findIndex((n) => n.id === noticeId);
+      if (idx >= 0) {
+        ramNoticesMemory[idx] = { ...ramNoticesMemory[idx], retentionDays: rDays, expiresAt };
+        ramNoticesExpiresAt = Date.now() + 60 * 60 * 1000;
+      }
+    }
     return true;
   } catch (err) {
     console.warn("[TURSO-NOTICES-CACHE] Update expiry error:", err.message);
@@ -509,11 +544,11 @@ function invalidateTursoNoticesCache() {
  * Telemetry details for Admin
  */
 async function getTursoNoticesTelemetry() {
-  let count = 0;
+  let count = Array.isArray(ramNoticesMemory) ? ramNoticesMemory.length : 0;
   let latencyMs = 0;
   let lastSynced = null;
 
-  if (client) {
+  if (client && !Array.isArray(ramNoticesMemory)) {
     try {
       const t0 = Date.now();
       const countRes = await client.execute("SELECT COUNT(*) as cnt FROM notices_cache");
