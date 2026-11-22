@@ -11,6 +11,7 @@
 import { getAnyCachedNoteBuffer, saveNoteOffline } from "./offlineQueue";
 import { cacheNoteBuffer } from "./p2pMesh";
 import { loadAuthSession } from "./authIndexedDb";
+import { BACKEND_CLUSTER_URLS } from "../config/clientConfig";
 
 // Determine valid Cloudflare Worker URL (Tier 2 Edge CDN Worker)
 const rawWorkerEnv =
@@ -18,6 +19,50 @@ const rawWorkerEnv =
     ? String(import.meta.env.VITE_CF_WORKER_URL).trim()
     : "";
 export const CF_WORKER = rawWorkerEnv;
+
+// Circuit breaker cooldown if CF_WORKER is unreachable / times out
+let workerCooldownUntil = 0;
+
+/**
+ * Verifies that an ArrayBuffer is a valid binary document (not an HTML error page or JSON error payload)
+ */
+export function isValidPdfArrayBuffer(buf) {
+  if (!buf || !(buf.byteLength > 200)) return false;
+  try {
+    const u8 = new Uint8Array(buf, 0, Math.min(64, buf.byteLength));
+    // Check for standard %PDF- signature anywhere in first 32 bytes
+    for (let i = 0; i <= Math.min(24, u8.length - 4); i++) {
+      if (u8[i] === 0x25 && u8[i + 1] === 0x50 && u8[i + 2] === 0x44 && u8[i + 3] === 0x46) {
+        return true;
+      }
+    }
+    // Reject HTML or JSON error payloads masquerading as 200 OK
+    const prefix = String.fromCharCode(...u8).trim().toLowerCase();
+    if (
+      prefix.startsWith("<!doctype") ||
+      prefix.startsWith("<html") ||
+      prefix.startsWith("<head") ||
+      prefix.startsWith("<body") ||
+      prefix.startsWith('{"success":false') ||
+      prefix.startsWith('{"error":')
+    ) {
+      return false;
+    }
+    return true;
+  } catch {
+    return buf.byteLength > 500;
+  }
+}
+
+/**
+ * Verifies that a fetch Response is a valid document stream (not HTML or JSON error)
+ */
+function isValidPdfStreamResponse(res) {
+  if (!res || (!res.ok && res.status !== 206)) return false;
+  const ct = (res.headers?.get("content-type") || "").toLowerCase();
+  if (ct.includes("text/html") || ct.includes("application/json")) return false;
+  return true;
+}
 
 export const originBase =
   typeof window !== "undefined" && window.location.origin
@@ -51,29 +96,7 @@ export function parseSourceFromHeaders(headers) {
   const edgeLocation = get("x-edge-location") || get("cf-ray")?.split("-")[1] || "";
   const dataSource = get("x-data-source");
 
-  // Tier 2: Cloudflare Edge CDN Worker
-  if (
-    realSource === "CLOUDFLARE_WORKER" ||
-    xEdgeCache === "HIT" ||
-    (cfCache === "HIT" && realSource !== "RAM_BUFFER" && realSource !== "DISK_CACHE") ||
-    dataSource === "cdn"
-  ) {
-    return {
-      id: "worker",
-      label: sourceLabel || `Local Server (${edgeLocation || "Global"} Node)`,
-      short: "Local Server (1ms)",
-      details: edgeLocation
-        ? `Local Server (${edgeLocation}) • 0ms Cache HIT`
-        : "Local Server • 0ms Cache HIT",
-      colo: edgeLocation || "Edge",
-      icon: "⚡",
-      color: "#38bdf8",
-      bgColor: "rgba(56, 189, 248, 0.14)",
-      borderColor: "rgba(56, 189, 248, 0.35)",
-    };
-  }
-
-  // Tier 3: In-Memory RAM Buffer (0ms)
+  // Tier 3: In-Memory RAM Buffer (0ms) - Check before generic HIT headers
   if (realSource === "RAM_BUFFER" || dataSource === "ram") {
     return {
       id: "ram",
@@ -88,7 +111,7 @@ export function parseSourceFromHeaders(headers) {
     };
   }
 
-  // Tier 3: Local NVMe SSD Disk Cache (1ms)
+  // Tier 3: Local NVMe SSD Disk Cache (1ms) - Check before generic HIT headers
   if (realSource === "DISK_CACHE" || dataSource === "disk") {
     return {
       id: "disk",
@@ -100,6 +123,28 @@ export function parseSourceFromHeaders(headers) {
       color: "#4ade80",
       bgColor: "rgba(34, 197, 94, 0.14)",
       borderColor: "rgba(34, 197, 94, 0.35)",
+    };
+  }
+
+  // Tier 2: Cloudflare Edge CDN Worker
+  if (
+    realSource === "CLOUDFLARE_WORKER" ||
+    xEdgeCache === "HIT" ||
+    cfCache === "HIT" ||
+    dataSource === "cdn"
+  ) {
+    return {
+      id: "worker",
+      label: sourceLabel || `Local Server (${edgeLocation || "Global"} Node)`,
+      short: "Local Server (1ms)",
+      details: edgeLocation
+        ? `Local Server (${edgeLocation}) • 0ms Cache HIT`
+        : "Local Server • 0ms Cache HIT",
+      colo: edgeLocation || "Edge",
+      icon: "⚡",
+      color: "#38bdf8",
+      bgColor: "rgba(56, 189, 248, 0.14)",
+      borderColor: "rgba(56, 189, 248, 0.35)",
     };
   }
 
@@ -176,7 +221,7 @@ export async function triggerBrowserDownload(arrayBuffer, fileName, fileHandle =
  * Cache buffer locally in memory and IndexedDB offline vault
  */
 export function saveToClientOfflineStorage(noteId, note, arrayBuffer) {
-  if (!noteId || !arrayBuffer || arrayBuffer.byteLength < 500) return;
+  if (!noteId || !isValidPdfArrayBuffer(arrayBuffer)) return;
   try {
     const safeBuffer = arrayBuffer.slice ? arrayBuffer.slice(0) : arrayBuffer;
     if (typeof window !== "undefined") {
@@ -348,7 +393,7 @@ export async function acquireNoteDocument(noteId, {
       getAnyCachedNoteBuffer(cleanId),
       new Promise((resolve) => setTimeout(() => resolve(null), 800)),
     ]);
-    if (localBuf && localBuf.byteLength > 500) {
+    if (localBuf && isValidPdfArrayBuffer(localBuf)) {
       // 🎉 TIER 1 CACHE HIT (0ms)!
       onProgress({
         tier: 1,
@@ -377,26 +422,26 @@ export async function acquireNoteDocument(noteId, {
   // =========================================================================
   // TIER 2: Edge CDN (Cloudflare Global Edge Cache • 1ms)
   // =========================================================================
-  if (CF_WORKER) {
-    onProgress({
-      tier: 2,
-      tierLabel: "Tier 2: Edge CDN (Cloudflare Global)",
-      percent: 15,
-      speed: "Edge CDN Cache Check (1ms)...",
-      loadedMB: "0",
-      totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
-      timeRemaining: "Estimating...",
-      source: "worker",
-      icon: "⚡",
-    });
+  onProgress({
+    tier: 2,
+    tierLabel: "Tier 2: Edge CDN (Cloudflare Global)",
+    percent: 15,
+    speed: "Edge CDN Cache Check (1ms)...",
+    loadedMB: "0",
+    totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
+    timeRemaining: "Estimating...",
+    source: "worker",
+    icon: "⚡",
+  });
 
+  if (CF_WORKER && Date.now() >= workerCooldownUntil) {
     try {
       const workerUrl = `${CF_WORKER}/api/notes/${cleanId}/stream.pdf?${
         mode === "download" ? "download=1" : "preview=1"
       }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
 
       const workerController = new AbortController();
-      const workerTimeout = setTimeout(() => workerController.abort(), 1800); // 1.8s fast timeout for edge worker
+      const workerTimeout = setTimeout(() => workerController.abort(), 1600); // 1.6s fast timeout for edge worker
       if (signal) {
         signal.addEventListener("abort", () => workerController.abort(), { once: true });
       }
@@ -408,13 +453,7 @@ export async function acquireNoteDocument(noteId, {
       });
       clearTimeout(workerTimeout);
 
-      const contentType = workerRes.headers.get("content-type") || "";
-      if (
-        workerRes.ok &&
-        (contentType.includes("pdf") ||
-          contentType.includes("octet-stream") ||
-          workerRes.status === 206)
-      ) {
+      if (isValidPdfStreamResponse(workerRes)) {
         // 🎉 TIER 2 HIT!
         const buffer = await streamResponseBody(workerRes, {
           onProgress,
@@ -426,7 +465,7 @@ export async function acquireNoteDocument(noteId, {
           signal,
         });
 
-        if (buffer && buffer.byteLength > 500) {
+        if (isValidPdfArrayBuffer(buffer)) {
           saveToClientOfflineStorage(cleanId, note, buffer);
           let blob = null;
           if (mode === "download") {
@@ -436,8 +475,13 @@ export async function acquireNoteDocument(noteId, {
           }
           return { buffer, blob, source: "worker", tier: 2 };
         }
+      } else if (workerRes && workerRes.status >= 500) {
+        workerCooldownUntil = Date.now() + 45000;
       }
     } catch (t2Err) {
+      if (!(signal && signal.aborted)) {
+        workerCooldownUntil = Date.now() + 45000;
+      }
       console.debug("[WATERFALL] Tier 2 CDN worker fallback to Tier 3:", t2Err.message);
     }
   }
@@ -457,18 +501,20 @@ export async function acquireNoteDocument(noteId, {
     icon: "💽",
   });
 
-  const originUrl = `/api/notes/${cleanId}/stream.pdf?${
+  const streamEndpointPath = `/api/notes/${cleanId}/stream.pdf?${
     mode === "download" ? "download=1" : "preview=1"
   }&direct=1${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
 
+  const fetchHeaders = {
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    "X-Direct-Origin": "1",
+    "X-Requested-With": "XMLHttpRequest",
+  };
+
   let serverRes = null;
   try {
-    serverRes = await fetch(originUrl, {
-      headers: {
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        "X-Direct-Origin": "1",
-        "X-Requested-With": "XMLHttpRequest",
-      },
+    serverRes = await fetch(streamEndpointPath, {
+      headers: fetchHeaders,
       signal,
       credentials: "include",
     });
@@ -476,34 +522,49 @@ export async function acquireNoteDocument(noteId, {
     console.warn("[WATERFALL] Tier 3 fetch network notice:", netErr.message);
   }
 
-  // 🛡️ Auto-Retry for 503 Storage Warm-ups (gives background MTProto pull 2.5s to finish SSD caching)
+  // 🛡️ Multi-Node Cluster Failover if local origin is offline, 502/503/504, or returned static HTML fallback
+  if (!isValidPdfStreamResponse(serverRes) && (!serverRes || serverRes.status >= 500 || (serverRes.headers?.get("content-type") || "").includes("text/html"))) {
+    const clusterNodes = Array.isArray(BACKEND_CLUSTER_URLS) ? BACKEND_CLUSTER_URLS : [];
+    for (const clusterOrigin of clusterNodes) {
+      if (signal && signal.aborted) break;
+      try {
+        const candidateRes = await fetch(`${clusterOrigin}${streamEndpointPath}`, {
+          headers: fetchHeaders,
+          signal,
+          credentials: "include",
+        });
+        if (isValidPdfStreamResponse(candidateRes) || (candidateRes && candidateRes.status < 500)) {
+          serverRes = candidateRes;
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // 🛡️ Auto-Retry for 503 Storage Warm-ups (gives background MTProto pull 2.2s to finish SSD caching)
   if (!serverRes || serverRes.status === 503) {
     onProgress({
-      tier: 3,
-      tierLabel: "Tier 3: Connecting Academic Vault...",
+      tier: 4,
+      tierLabel: "Tier 4: Cloud Storage Vault (Warming Up)",
       percent: 30,
-      speed: "Warming cloud vault stream (2.5s)...",
+      speed: "Warming cloud vault stream (2.2s)...",
       loadedMB: "0",
       totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
       timeRemaining: "Retrying...",
-      source: "disk",
-      icon: "⏳",
+      source: "telegram",
+      icon: "☁️",
     });
-    await new Promise((r) => setTimeout(r, 2500));
+    await new Promise((r) => setTimeout(r, 2200));
     try {
-      serverRes = await fetch(originUrl, {
-        headers: {
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-          "X-Direct-Origin": "1",
-          "X-Requested-With": "XMLHttpRequest",
-        },
+      serverRes = await fetch(streamEndpointPath, {
+        headers: fetchHeaders,
         signal,
         credentials: "include",
       });
     } catch (_) {}
   }
 
-  if (!serverRes || !serverRes.ok) {
+  if (!serverRes || (!serverRes.ok && serverRes.status !== 206)) {
     let errMsg = `Document unavailable (${serverRes?.status || "network"})`;
     try {
       const errJson = await serverRes.json();
@@ -517,43 +578,45 @@ export async function acquireNoteDocument(noteId, {
   const edgeCache = (serverRes.headers.get("x-edge-cache") || "").toUpperCase();
   const dataSource = (serverRes.headers.get("x-data-source") || "").toLowerCase();
 
-  const isEdgeCdn =
-    cfCache === "HIT" ||
-    edgeCache === "HIT" ||
-    realSource === "CLOUDFLARE_WORKER" ||
-    dataSource === "cdn";
-
+  // Check Server SSD / RAM Buffer BEFORE generic CF/Edge HIT headers!
   const isServerSsd =
     realSource === "DISK_CACHE" ||
     realSource === "RAM_BUFFER" ||
     dataSource === "disk" ||
     dataSource === "ram";
 
+  const isEdgeCdn =
+    !isServerSsd &&
+    (realSource === "CLOUDFLARE_WORKER" ||
+      dataSource === "cdn" ||
+      cfCache === "HIT" ||
+      edgeCache === "HIT");
+
   let tierNum = 4;
   let tierLabel = "Tier 4: Cloud Storage Vault";
   let tierIcon = "☁️";
   let tierSource = "telegram";
 
-  if (isEdgeCdn) {
-    tierNum = 2;
-    tierLabel = "Tier 2: Edge CDN (Cloudflare 1ms)";
-    tierIcon = "⚡";
-    tierSource = "worker";
-  } else if (isServerSsd) {
+  if (isServerSsd) {
     tierNum = 3;
     tierLabel = "Tier 3: Server SSD Disk (Zero-Copy 100ms)";
     tierIcon = "💽";
     tierSource = "disk";
+  } else if (isEdgeCdn) {
+    tierNum = 2;
+    tierLabel = "Tier 2: Edge CDN (Cloudflare 1ms)";
+    tierIcon = "⚡";
+    tierSource = "worker";
   }
 
   onProgress({
     tier: tierNum,
     tierLabel: `Streaming from ${tierLabel}...`,
     percent: 35,
-    speed: isEdgeCdn
-      ? "Edge CDN Stream (1ms)"
-      : isServerSsd
+    speed: isServerSsd
       ? "Zero-Copy SSD Stream (100ms)"
+      : isEdgeCdn
+      ? "Edge CDN Stream (1ms)"
       : "Stream Chunks + Auto-Save to SSD",
     loadedMB: "0",
     totalMB: ((note?.compressedSize || note?.fileSize || 1048576) / (1024 * 1024)).toFixed(2),
@@ -572,6 +635,10 @@ export async function acquireNoteDocument(noteId, {
     signal,
   });
 
+  if (!isValidPdfArrayBuffer(buffer)) {
+    throw new Error("Received invalid or corrupted document stream from server.");
+  }
+
   // Background: Pre-cache in IndexedDB & memory so subsequent calls are Tier 1 (0ms Hit)
   saveToClientOfflineStorage(cleanId, note, buffer);
 
@@ -582,7 +649,7 @@ export async function acquireNoteDocument(noteId, {
     blob = new Blob([buffer], { type: "application/pdf" });
   }
 
-  return { buffer, blob, source: isServerSsd ? "disk" : "telegram", tier: tierNum };
+  return { buffer, blob, source: isServerSsd ? "disk" : isEdgeCdn ? "worker" : "telegram", tier: tierNum };
 }
 
 /**

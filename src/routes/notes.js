@@ -2252,11 +2252,26 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     // ⚡ INSTANT FAST-STREAM ENGINE: If MTProto message ID exists, stream directly to user!
     // Never block range requests or user preview on downloading the full 50MB file!
     if (note.telegramMessageId) {
-      // Asynchronously trigger background CDN caching to NVMe SSD disk so next hits are 1ms
-      triggerBackgroundCdnCache(id, note);
+      if (req.headers.range) {
+        // For partial range requests, asynchronously trigger background CDN caching to NVMe SSD disk
+        triggerBackgroundCdnCache(id, note);
+      }
 
       try {
-        await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range);
+        await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range, {
+          noteId: id,
+          cdnCacheDir: CDN_CACHE_DIR,
+          onCached: () => {
+            if (db && !note.isCdnCached) {
+              db.collection("notes").doc(id).update({
+                isCdnCached: true,
+                cdnCachedAt: new Date().toISOString(),
+              }).catch(() => {});
+              note.isCdnCached = true;
+              ramCache.set(`note_${id}`, note, 3 * 3600);
+            }
+          },
+        });
         return;
       } catch (streamErr) {
         console.warn(`[FAST-STREAM] Direct MTProto stream notice for ${id}, falling back to buffer fetch:`, streamErr.message);

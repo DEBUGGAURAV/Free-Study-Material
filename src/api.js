@@ -1062,7 +1062,7 @@ export const api = {
 
   getNoteById: (id) => request(`/notes/${id}`),
 
-  getDownloadUrl: (id, fileName = null, direct = false) => {
+  getDownloadUrl: (id, fileName = null, direct = true) => {
     const token = getAuthToken();
     const tokenParam = token ? `token=${encodeURIComponent(token)}&` : "";
     let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
@@ -1097,74 +1097,115 @@ export const api = {
    * Upload Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
    */
   uploadNoteWithProgress: (formData, onProgress) => {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      const token = getAuthToken();
-      const startTime = performance.now();
-      let prevLoaded = 0;
-      let prevTime = startTime;
+    const attemptXhrUpload = (targetUrl) =>
+      new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const token = getAuthToken();
+        const startTime = performance.now();
+        let prevLoaded = 0;
+        let prevTime = startTime;
 
-      xhr.upload.addEventListener("progress", (e) => {
-        if (e.lengthComputable) {
-          const now = performance.now();
-          const timeDiff = (now - prevTime) / 1000;
-          const loadedDiff = e.loaded - prevLoaded;
+        xhr.upload.addEventListener("progress", (e) => {
+          if (e.lengthComputable) {
+            const now = performance.now();
+            const timeDiff = (now - prevTime) / 1000;
+            const loadedDiff = e.loaded - prevLoaded;
 
-          // Speed in bytes per second
-          let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
-          if (speedBytes <= 0) {
-            const totalElapsed = (now - startTime) / 1000;
-            speedBytes = totalElapsed > 0 ? e.loaded / totalElapsed : 0;
+            // Speed in bytes per second
+            let speedBytes = timeDiff > 0.08 ? loadedDiff / timeDiff : 0;
+            if (speedBytes <= 0) {
+              const totalElapsed = (now - startTime) / 1000;
+              speedBytes = totalElapsed > 0 ? e.loaded / totalElapsed : 0;
+            }
+
+            prevLoaded = e.loaded;
+            prevTime = now;
+
+            const percent = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0;
+
+            const remainingBytes = e.total - e.loaded;
+            const speedFormatted =
+              speedBytes >= 1024 * 1024
+                ? `${(speedBytes / (1024 * 1024)).toFixed(1)} MB/s`
+                : speedBytes > 0
+                ? `${Math.round(speedBytes / 1024)} KB/s`
+                : "Calculating...";
+            const secondsRemaining = speedBytes > 0 ? remainingBytes / speedBytes : null;
+
+            if (onProgress) {
+              onProgress({
+                percent,
+                speed: speedFormatted,
+                loadedMB: (e.loaded / (1024 * 1024)).toFixed(2),
+                totalMB: (e.total / (1024 * 1024)).toFixed(2),
+                timeRemaining:
+                  secondsRemaining === null
+                    ? "Calculating..."
+                    : secondsRemaining > 0.1
+                    ? `~${secondsRemaining.toFixed(1)}s remaining`
+                    : "Completing...",
+              });
+            }
           }
+        });
 
-          prevLoaded = e.loaded;
-          prevTime = now;
-
-          const percent = e.total > 0 ? Math.min(100, Math.round((e.loaded / e.total) * 100)) : 0;
-
-          const remainingBytes = e.total - e.loaded;
-          const speedFormatted = speedBytes >= 1024 * 1024
-            ? `${(speedBytes / (1024 * 1024)).toFixed(1)} MB/s`
-            : speedBytes > 0 ? `${Math.round(speedBytes / 1024)} KB/s` : "Calculating...";
-          const secondsRemaining = speedBytes > 0 ? remainingBytes / speedBytes : null;
-
-          if (onProgress) {
-            onProgress({
-              percent,
-              speed: speedFormatted,
-              loadedMB: (e.loaded / (1024 * 1024)).toFixed(2),
-              totalMB: (e.total / (1024 * 1024)).toFixed(2),
-              timeRemaining: secondsRemaining === null
-                ? "Calculating..."
-                : secondsRemaining > 0.1 ? `~${secondsRemaining.toFixed(1)}s remaining` : "Completing...",
-            });
+        xhr.addEventListener("load", () => {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            if (xhr.status >= 200 && xhr.status < 300) {
+              invalidateClientNotesCache();
+              resolve(res);
+            } else {
+              const err = new Error(res.message || "Upload failed with status " + xhr.status);
+              err.status = xhr.status;
+              reject(err);
+            }
+          } catch {
+            const err = new Error("Invalid response received from server.");
+            err.status = xhr.status || 502;
+            reject(err);
           }
+        });
+
+        xhr.addEventListener("error", () => {
+          const err = new Error("Network transfer failed.");
+          err.status = 0;
+          reject(err);
+        });
+        xhr.addEventListener("abort", () => {
+          const err = new Error("Upload cancelled.");
+          err.aborted = true;
+          reject(err);
+        });
+
+        xhr.open("POST", targetUrl);
+        xhr.withCredentials = true;
+        if (token) {
+          xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         }
+        xhr.send(formData);
       });
 
-      xhr.addEventListener("load", () => {
-        try {
-          const res = JSON.parse(xhr.responseText);
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(res);
-          } else {
-            reject(new Error(res.message || "Upload failed with status " + xhr.status));
-          }
-        } catch {
-          reject(new Error("Invalid response received from server."));
+    return (async () => {
+      try {
+        return await attemptXhrUpload(`${API_BASE}/upload`);
+      } catch (primaryErr) {
+        if (primaryErr.aborted || (primaryErr.status >= 400 && primaryErr.status < 500 && primaryErr.status !== 405 && primaryErr.status !== 404)) {
+          throw primaryErr;
         }
-      });
-
-      xhr.addEventListener("error", () => reject(new Error("Network transfer failed.")));
-      xhr.addEventListener("abort", () => reject(new Error("Upload cancelled.")));
-
-      xhr.open("POST", `${API_BASE}/upload`);
-      xhr.withCredentials = true;
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+        const clusterNodes = Array.isArray(BACKEND_CLUSTER_URLS) ? BACKEND_CLUSTER_URLS : [];
+        for (const nodeOrigin of clusterNodes) {
+          try {
+            return await attemptXhrUpload(`${nodeOrigin}/api/upload`);
+          } catch (nodeErr) {
+            if (nodeErr.aborted || (nodeErr.status >= 400 && nodeErr.status < 500 && nodeErr.status !== 405 && nodeErr.status !== 404)) {
+              throw nodeErr;
+            }
+          }
+        }
+        throw primaryErr;
       }
-      xhr.send(formData);
-    });
+    })();
   },
 
   /**

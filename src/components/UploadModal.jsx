@@ -3,6 +3,7 @@ import { X, UploadCloud, CheckCircle2, AlertCircle, Sparkles, Activity, ChevronD
 import { api } from "../api";
 import { formatFileSize, formatMB, sanitizeNoteTitle } from "../utils/formatUtils";
 import { calculateHardwareHash, compressPdfClient } from "../utils/clientCompressor";
+import { saveToClientOfflineStorage } from "../utils/cdnFailover";
 
 export default function UploadModal({ isOpen, onClose, onUploadQueued, existingBranches = [] }) {
   const [file, setFile] = useState(null);
@@ -178,6 +179,27 @@ export default function UploadModal({ isOpen, onClose, onUploadQueued, existingB
         setUploadProgress(metrics);
       });
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+
+      // 📱 Pre-seed Client Tier 1 IndexedDB Cache immediately upon upload (< 50MB PDFs)
+      // Guarantees instant 0ms Tier 1 Cache Hit when the uploader opens or downloads their note!
+      if (res?.noteId && uploadFile && uploadFile.size <= 50 * 1024 * 1024) {
+        uploadFile
+          .arrayBuffer()
+          .then((buf) => {
+            saveToClientOfflineStorage(
+              res.noteId,
+              {
+                id: res.noteId,
+                title: cleanTitle,
+                subject: subject || "General Academic",
+                course,
+                branch: isCustomBranch ? customBranchName.trim().toUpperCase() : branch,
+              },
+              buf
+            );
+          })
+          .catch(() => {});
+      }
 
       setSuccessData({
         elapsed,

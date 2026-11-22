@@ -533,17 +533,20 @@ async function runUploadTask(task) {
           const cdnCacheDir = path.join(process.cwd(), "cache", "cdn");
           if (!fs.existsSync(cdnCacheDir)) fs.mkdirSync(cdnCacheDir, { recursive: true });
           const targetBin = path.join(cdnCacheDir, `${noteId}.bin`);
+          const tmpBin = path.join(cdnCacheDir, `${noteId}.bin.tmp.${Date.now()}`);
           const targetMeta = path.join(cdnCacheDir, `${noteId}.meta.json`);
           if (fs.existsSync(tempFilePath)) {
-            await fs.promises.copyFile(tempFilePath, targetBin);
+            await fs.promises.copyFile(tempFilePath, tmpBin);
+            await fs.promises.rename(tmpBin, targetBin);
+            const exactDiskSize = fs.statSync(targetBin).size;
             await fs.promises.writeFile(targetMeta, JSON.stringify({
               id: noteId,
               title: meta?.title || originalName || noteId,
               mimeType: mimeType || "application/pdf",
-              totalSize: compressedSize || originalSize,
-              cachedAt: new Date().toISOString(),
+              totalSize: exactDiskSize,
+              cachedAt: Date.now(),
             }), "utf8");
-            console.log(`[QUEUE] 💽 Pre-seeded newly uploaded note ${noteId} directly to Server SSD Disk Cache!`);
+            console.log(`[QUEUE] 💽 Pre-seeded newly uploaded note ${noteId} (${exactDiskSize} bytes) directly to Server SSD Disk Cache!`);
             if (db) {
               db.collection("notes").doc(noteId).update({ isCdnCached: true }).catch(() => {});
             }

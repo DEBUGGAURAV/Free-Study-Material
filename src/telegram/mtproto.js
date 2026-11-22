@@ -1438,8 +1438,9 @@ async function uploadToStorageChannel(filePath, caption = "", fileName = null, o
 
 /**
  * Streams a document from Telegram storage channel directly in 512KB chunks
+ * Optional cacheOptions: { noteId, cdnCacheDir, onCached } simultaneously writes full stream to Server SSD disk cache!
  */
-async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
+async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cacheOptions = null) {
   let c = await getClient();
   if (!c) {
     console.log("[MTProto STREAM] MTProto socket initializing, awaiting connection...");
@@ -1493,6 +1494,43 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
     res.setHeader("Content-Length", totalSize);
   }
 
+  // 💽 Simultaneous Zero-RAM Pass-Through Disk Tee (for full non-range streams <= 50MB)
+  let diskStream = null;
+  let tmpPath = null;
+  let binPath = null;
+  let metaPath = null;
+  if (
+    !isRange &&
+    cacheOptions &&
+    cacheOptions.noteId &&
+    cacheOptions.cdnCacheDir &&
+    totalSize > 0 &&
+    totalSize <= 50 * 1024 * 1024
+  ) {
+    try {
+      const safeId = path.basename(String(cacheOptions.noteId)).replace(/[^a-zA-Z0-9_-]/g, "");
+      if (safeId && safeId.length <= 128) {
+        binPath = path.join(cacheOptions.cdnCacheDir, `${safeId}.bin`);
+        metaPath = path.join(cacheOptions.cdnCacheDir, `${safeId}.meta.json`);
+        if (!fs.existsSync(binPath)) {
+          if (!fs.existsSync(cacheOptions.cdnCacheDir)) {
+            fs.mkdirSync(cacheOptions.cdnCacheDir, { recursive: true });
+          }
+          tmpPath = path.join(
+            cacheOptions.cdnCacheDir,
+            `${safeId}.bin.tmp.${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+          );
+          diskStream = fs.createWriteStream(tmpPath);
+          diskStream.on("error", () => {
+            diskStream = null;
+          });
+        }
+      }
+    } catch (_) {
+      diskStream = null;
+    }
+  }
+
   // Stream using 4KB-aligned block boundary for instant sub-second response
   const alignedStart = Math.floor(start / 4096) * 4096;
   let skipInitial = start - alignedStart;
@@ -1509,38 +1547,68 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null) {
   });
 
   let bytesWritten = 0;
-  for await (const rawChunk of c.iterDownload({
-    file: location,
-    offset: bigInt(alignedStart),
-    chunkSize: chunkSize,
-    requestSize: chunkSize,
-    workers: 4,
-  })) {
-    if (res.writableEnded || res.destroyed) break;
+  try {
+    for await (const rawChunk of c.iterDownload({
+      file: location,
+      offset: bigInt(alignedStart),
+      chunkSize: chunkSize,
+      requestSize: chunkSize,
+      workers: 4,
+    })) {
+      if (res.writableEnded || res.destroyed) break;
 
-    let chunk = rawChunk;
-    if (skipInitial > 0) {
-      if (chunk.length <= skipInitial) {
-        skipInitial -= chunk.length;
-        continue;
+      let chunk = rawChunk;
+      if (skipInitial > 0) {
+        if (chunk.length <= skipInitial) {
+          skipInitial -= chunk.length;
+          continue;
+        }
+        chunk = chunk.slice(skipInitial);
+        skipInitial = 0;
       }
-      chunk = chunk.slice(skipInitial);
-      skipInitial = 0;
+
+      const remaining = contentLength - bytesWritten;
+      if (remaining <= 0) break;
+
+      const sliceToWrite = chunk.length > remaining ? chunk.slice(0, remaining) : chunk;
+      res.write(sliceToWrite);
+      if (diskStream) {
+        try {
+          diskStream.write(sliceToWrite);
+        } catch (_) {}
+      }
+      bytesWritten += sliceToWrite.length;
+
+      if (bytesWritten >= contentLength) break;
     }
-
-    const remaining = contentLength - bytesWritten;
-    if (remaining <= 0) break;
-
-    if (chunk.length > remaining) {
-      res.write(chunk.slice(0, remaining));
-      bytesWritten += remaining;
-      break;
-    } else {
-      res.write(chunk);
-      bytesWritten += chunk.length;
+  } finally {
+    if (diskStream) {
+      try {
+        await new Promise((resolve) => diskStream.end(resolve));
+        if (!isRange && bytesWritten === totalSize && tmpPath && binPath && metaPath && fs.existsSync(tmpPath)) {
+          await fs.promises.rename(tmpPath, binPath);
+          await fs.promises.writeFile(
+            metaPath,
+            JSON.stringify({
+              mimeType: finalMime,
+              totalSize,
+              cachedAt: Date.now(),
+            }),
+            "utf8"
+          );
+          if (typeof cacheOptions?.onCached === "function") {
+            cacheOptions.onCached(totalSize);
+          }
+          console.log(`[MTProto STREAM] 💽 Auto-saved streamed note ${cacheOptions.noteId} (${(totalSize / 1048576).toFixed(2)} MB) to Server SSD Disk Cache (Tier 3 ready)!`);
+        } else if (tmpPath && fs.existsSync(tmpPath)) {
+          await fs.promises.unlink(tmpPath).catch(() => {});
+        }
+      } catch (_) {
+        if (tmpPath && fs.existsSync(tmpPath)) {
+          fs.promises.unlink(tmpPath).catch(() => {});
+        }
+      }
     }
-
-    if (bytesWritten >= contentLength) break;
   }
 
   if (!res.writableEnded) {

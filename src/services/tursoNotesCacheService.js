@@ -343,13 +343,27 @@ function invalidateTursoNotesCache() {
  */
 async function upsertNoteInCache(note) {
   if (!note || !note.id) return;
+  let mergedNote = { ...note };
+
   if (ramNotesMemory) {
     const idx = ramNotesMemory.findIndex((n) => n.id === note.id);
     if (idx >= 0) {
-      ramNotesMemory[idx] = { ...ramNotesMemory[idx], ...note };
+      mergedNote = { ...ramNotesMemory[idx], ...note };
+      ramNotesMemory[idx] = mergedNote;
     } else {
-      ramNotesMemory.unshift(note);
+      ramNotesMemory.unshift(mergedNote);
     }
+  } else if (client) {
+    try {
+      const existing = await client.execute({
+        sql: "SELECT data FROM notes_cache WHERE id = ? LIMIT 1",
+        args: [note.id],
+      });
+      if (existing?.rows?.[0]?.data) {
+        const parsed = JSON.parse(existing.rows[0].data);
+        mergedNote = { ...parsed, ...note };
+      }
+    } catch (_) {}
   }
 
   if (client) {
@@ -361,16 +375,16 @@ async function upsertNoteInCache(note) {
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         args: [
-          note.id,
-          JSON.stringify(note),
-          note.branch || "All",
-          note.course || "All",
-          note.year || "All",
-          note.semester || "All",
-          note.subject || "",
-          note.title || "",
-          note._sortTimestamp || Date.now(),
-          note.isVisible === false ? 0 : 1,
+          mergedNote.id,
+          JSON.stringify(mergedNote),
+          mergedNote.branch || "All",
+          mergedNote.course || "All",
+          mergedNote.year || "All",
+          mergedNote.semester || "All",
+          mergedNote.subject || "",
+          mergedNote.title || "",
+          mergedNote._sortTimestamp || Date.now(),
+          mergedNote.isVisible === false ? 0 : 1,
           Date.now(),
         ],
       });
