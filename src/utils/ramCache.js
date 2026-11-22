@@ -26,6 +26,18 @@ class MemoryCache {
   }
 
   set(key, data, ttlSeconds = 60) {
+    // Delete existing key first so re-insertion refreshes Map insertion order (LRU behavior)
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= 400) {
+      this.clearExpired();
+      // Hard cap at 400 keys to keep RAM footprint < 3MB
+      while (this.cache.size >= 400) {
+        const oldestKey = this.cache.keys().next().value;
+        if (!oldestKey) break;
+        this.cache.delete(oldestKey);
+      }
+    }
     this.cache.set(key, {
       data,
       expiresAt: Date.now() + ttlSeconds * 1000,

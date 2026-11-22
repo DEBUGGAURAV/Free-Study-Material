@@ -36,13 +36,28 @@ class TelegramSyncLock {
   unlock(key) {
     if (!key) return;
     this.inFlight.delete(key);
-    this.processedKeys.set(key, Date.now());
+    const now = Date.now();
+    // Bounded memory cap (max 300 keys) to prevent unbounded RAM growth
+    if (this.processedKeys.size >= 300) {
+      for (const [k, ts] of this.processedKeys.entries()) {
+        if (now - ts > 30 * 60 * 1000) this.processedKeys.delete(k);
+      }
+      if (this.processedKeys.size >= 300) {
+        const oldest = this.processedKeys.keys().next().value;
+        if (oldest) this.processedKeys.delete(oldest);
+      }
+    }
+    this.processedKeys.set(key, now);
   }
 
   canSendReceipt(chatId, messageId) {
     const key = `rcpt_${chatId}_${messageId}`;
     if (this.sentReceipts.has(key)) {
       return false;
+    }
+    if (this.sentReceipts.size >= 300) {
+      const oldest = this.sentReceipts.values().next().value;
+      if (oldest) this.sentReceipts.delete(oldest);
     }
     this.sentReceipts.add(key);
     return true;

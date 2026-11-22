@@ -303,8 +303,8 @@ function startRamBufferGuard(tempDir, manualThresholdMb = null) {
     }
   };
 
-  // Inspect RAM every 15 seconds for rapid, responsive auto-purge
-  setInterval(checkMemory, 15 * 1000);
+  // Inspect RAM every 30 seconds for low-CPU, responsive auto-purge
+  setInterval(checkMemory, 30 * 1000);
   // Initial check 5s after server boot
   setTimeout(checkMemory, 5000);
 }
@@ -416,14 +416,15 @@ function startTelegramHeartbeat(reconnectCallback, passiveCheckIntervalMs = 10 *
 
 /**
  * 5. ⏱️ Event-Loop Lag Detector (Site Freeze Prevention)
- * Detects heavy synchronous tasks and signals the background queue to yield
+ * Detects heavy synchronous tasks and signals the background queue to yield (Low-CPU 5s sampling)
  */
 function startEventLoopLagDetector() {
   let lastTime = Date.now();
+  const SAMPLE_INTERVAL_MS = 5000;
 
   setInterval(() => {
     const now = Date.now();
-    const delay = now - lastTime - 500; // Expected ~0ms delay for a 500ms interval
+    const delay = now - lastTime - SAMPLE_INTERVAL_MS;
     currentEventLoopLag = Math.max(0, delay);
 
     if (currentEventLoopLag > 1000) {
@@ -437,7 +438,7 @@ function startEventLoopLagDetector() {
     }
 
     lastTime = now;
-  }, 500);
+  }, SAMPLE_INTERVAL_MS);
 }
 
 /**
@@ -458,37 +459,42 @@ function getWatchdogStats() {
 }
 
 let lastActivityTimestamp = Date.now();
+let hasFlushedCurrentIdlePeriod = false;
 
 function recordServerActivity() {
   lastActivityTimestamp = Date.now();
+  hasFlushedCurrentIdlePeriod = false;
 }
 
 /**
  * 6. 🧹 Auto-Garbage Collector & Memory Flusher (Idle Cleaner)
- * When server has been idle for 3 minutes, automatically flushes unused memory,
- * clearing expired items from RAM cache and invoking V8 GC to bring RAM down to base level (~25-40MB).
+ * When server enters idle state (3 minutes without traffic), flushes expired cache items
+ * and invokes V8 GC ONCE per idle period (zero repeated stop-the-world CPU spikes).
  */
 function startIdleMemoryCleaner(idleThresholdMs = 3 * 60 * 1000) {
   setInterval(() => {
     try {
       const idleTime = Date.now() - lastActivityTimestamp;
-      if (idleTime >= idleThresholdMs) {
+      if (idleTime >= idleThresholdMs && !hasFlushedCurrentIdlePeriod) {
+        hasFlushedCurrentIdlePeriod = true;
         if (ramCache && typeof ramCache.clearExpired === "function") {
           ramCache.clearExpired();
         }
-        if (global.gc) {
+        const memBefore = process.memoryUsage();
+        const heapMb = Math.round(memBefore.heapUsed / (1024 * 1024));
+        if (global.gc && heapMb > 55) {
           try {
             global.gc();
             const mem = process.memoryUsage();
             const rssMb = Math.round(mem.rss / (1024 * 1024));
-            console.log(`[SELF-HEALING-IDLE] 💤 Server idle for ${(idleTime / 60000).toFixed(1)}m. Flushed memory to base level: ${rssMb}MB RSS.`);
+            console.log(`[SELF-HEALING-IDLE] 💤 Server entered idle (${(idleTime / 60000).toFixed(1)}m). Single-pass memory flush complete: ${rssMb}MB RSS.`);
           } catch (_) {}
         }
       }
     } catch (e) {
       console.warn("[SELF-HEALING-IDLE] Cleaner notice:", e.message);
     }
-  }, 90 * 1000); // Sweep every 90 seconds
+  }, 2 * 60 * 1000); // Lightweight check every 2 minutes
 }
 
 /**

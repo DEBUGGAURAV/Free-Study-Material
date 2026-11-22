@@ -619,6 +619,14 @@ function setupChannelSyncListeners(c) {
       if (sig && !syncLock.canProcess(sig)) return;
 
       // Reserve IMMEDIATELY in memory & syncLock BEFORE any async await calls to prevent race conditions with botPoller
+      if (processingMsgIds.size >= 300) {
+        const oldestMsg = processingMsgIds.values().next().value;
+        if (oldestMsg !== undefined) processingMsgIds.delete(oldestMsg);
+      }
+      if (processingDocIds.size >= 300) {
+        const oldestDoc = processingDocIds.values().next().value;
+        if (oldestDoc !== undefined) processingDocIds.delete(oldestDoc);
+      }
       processingMsgIds.add(msgId);
       if (docIdStr) processingDocIds.add(docIdStr);
       syncLock.lock(rawMsgKey);
@@ -841,6 +849,8 @@ function setupChannelSyncListeners(c) {
           purgedCount: deletedIds.length,
         });
 
+        let directPurgedCount = 0;
+
         for (const delId of deletedIds) {
           // A. Purge note by telegramMessageId (Storage Channel message)
           const snapMsg = await db.collection("notes").where("telegramMessageId", "==", delId).get();
@@ -865,6 +875,7 @@ function setupChannelSyncListeners(c) {
               });
               await db.collection("notes").doc(doc.id).delete();
               purgeNoteFromWebAndCdn(doc.id);
+              directPurgedCount++;
             }
           }
 
@@ -891,6 +902,7 @@ function setupChannelSyncListeners(c) {
               });
               await db.collection("notes").doc(doc.id).delete();
               purgeNoteFromWebAndCdn(doc.id);
+              directPurgedCount++;
             }
           }
 
@@ -929,12 +941,15 @@ function setupChannelSyncListeners(c) {
                 deleteTelegramMessages([noteData.telegramMessageId], storageChatId).catch(() => {});
               }
               purgeNoteFromWebAndCdn(doc.id);
+              directPurgedCount++;
             }
           }
         }
 
-        // Event-driven liveness verification: triggered ONLY when an actual Telegram deletion event occurs!
-        await checkNotesLivenessNow().catch(() => {});
+        // Only run lightweight fallback liveness probe if the deleted IDs did not directly match any known message/topic ID
+        if (directPurgedCount === 0) {
+          await checkNotesLivenessNow().catch(() => {});
+        }
         clearCache();
       }
     } catch (err) {
@@ -1767,15 +1782,19 @@ let autoSyncTimer = null;
 let isAutoSyncing = false;
 let fastLivenessTimer = null;
 let isCheckingFastLiveness = false;
+let lastLivenessRunAt = 0;
 
 /**
  * Event-Driven Telegram Liveness Verifier
- * Invoked on actual Telegram events, on-demand during sync, or when an admin reconciles.
- * Zero recurring 10-second background polling!
+ * Invoked ONLY on actual Telegram deletion events (when ID didn't directly match) or manual admin reconcile.
+ * Debounced (25s cooldown) and capped at latest 10 notes from L1 RAM for ultra-low CPU & RAM load!
  */
 async function checkNotesLivenessNow(customNotes = null) {
+  const now = Date.now();
   if (isCheckingFastLiveness || !client || !client.connected) return;
+  if (!customNotes && now - lastLivenessRunAt < 25000) return;
   isCheckingFastLiveness = true;
+  lastLivenessRunAt = now;
   try {
     const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
     const allNotes = customNotes || (await getAllCachedNotes());
@@ -1784,8 +1803,8 @@ async function checkNotesLivenessNow(customNotes = null) {
     const db = getFirestoreDb();
     if (!db) return;
 
-    // Check the latest 30 notes (fast 0-cost RAM inspection)
-    const recentNotes = allNotes.slice(0, 30);
+    // Check only the latest 10 notes (ultra-fast 0-cost RAM inspection, minimal CPU)
+    const recentNotes = allNotes.slice(0, 10);
 
     for (const note of recentNotes) {
       let isDead = false;

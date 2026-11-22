@@ -818,10 +818,10 @@ async function removeClusterNode(nodeId) {
   return { success: true };
 }
 
-// Initialize on server boot
+// Initialize on server boot (Low-CPU 5-minute passive background health check; on-demand probe when admin views cluster tab)
 setTimeout(initClusterStateFromFirestore, 2000);
 setTimeout(() => probeClusterNodes({ force: true }), 4000);
-setInterval(() => probeClusterNodes({ force: true }), 30000);
+setInterval(() => probeClusterNodes({ force: false }), 5 * 60 * 1000);
 
 /**
  * Exported getter for admin hardware telemetry
