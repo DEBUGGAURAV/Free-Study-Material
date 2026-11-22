@@ -2687,6 +2687,14 @@ export default function App() {
               setPreviewInitialPage(1);
               openAuth(mode || "signin");
             }}
+            onOpenChat={() => {
+              if (!currentUser) {
+                openAuth("signin");
+              } else {
+                setIsChatOpen(true);
+              }
+            }}
+            onOpenHelp={() => setIsHelpOpen(true)}
           />
         )}
 

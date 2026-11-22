@@ -9,6 +9,8 @@ export default function PreviewModal({
   note,
   onClose,
   onOpenAuth,
+  onOpenChat,
+  onOpenHelp,
   currentUser,
   allowNotesDownload = true,
   downloadDisabledReason = "",
@@ -95,6 +97,8 @@ export default function PreviewModal({
           isDownloadBlocked={isBlocked}
           downloadDisabledReason={effectiveReason}
           onOpenAuth={onOpenAuth}
+          onOpenChat={onOpenChat}
+          onOpenHelp={onOpenHelp}
           initialPage={initialPage || note?._initialPage || null}
         />
       </div>

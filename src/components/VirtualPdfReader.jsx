@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2 } from "lucide-react";
+import { X, Moon, Sun, Search, ChevronLeft, ChevronRight, ChevronDown, ZoomIn, ZoomOut, Download, FileText, AlertCircle, Sparkles, RefreshCw, Volume2, VolumeX, Users, Bot, Send, Mic, MicOff, Scissors, Smartphone, Zap, QrCode, MessageSquare, Copy, Check, Bookmark, Highlighter, Timer, Play, Pause, RotateCcw, Trash2, Share2, HelpCircle } from "lucide-react";
 import { useTechFlags } from "../utils/techFlagsStore";
 import { shareOrDownloadRevisionCard } from "../utils/revisionCardCanvas";
 import QRCode from "qrcode";
@@ -663,6 +663,8 @@ export default function VirtualPdfReader({
   onClose,
   onDownload,
   onOpenAuth,
+  onOpenChat = null,
+  onOpenHelp = null,
   isDownloadBlocked = false,
   downloadDisabledReason = "",
   initialPage = 1,
@@ -717,6 +719,8 @@ export default function VirtualPdfReader({
   const [fitMode, setFitMode] = useState("width"); // "width" by default for full-bleed sharp reading | "page" | "custom"
   const [showToolsDrawer, setShowToolsDrawer] = useState(false);
   const [showSearchInline, setShowSearchInline] = useState(false);
+  const [isRightRailCollapsed, setIsRightRailCollapsed] = useState(false);
+  const [isMobileHubOpen, setIsMobileHubOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pageRendering, setPageRendering] = useState(false);
   const [nightMode, setNightMode] = useState(() => {
@@ -6329,6 +6333,18 @@ export default function VirtualPdfReader({
         </div>
       )}
 
+      {/* Main Workspace Row: PDF Canvas + Dedicated Slim Right Action Rail (Zero Overlap Ever!) */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "row",
+          position: "relative",
+          overflow: "hidden",
+          width: "100%",
+        }}
+      >
       {/* Main Virtual Document Canvas Area */}
       <div
         ref={mainScrollRef}
@@ -6337,6 +6353,7 @@ export default function VirtualPdfReader({
         onTouchEnd={handleTouchEnd}
         style={{
           flex: 1,
+          minWidth: 0,
           overflow: "auto",
           display: "flex",
           flexDirection: scrollMode === "continuous" && !useNativeViewer ? "column" : "row",
@@ -7478,6 +7495,414 @@ export default function VirtualPdfReader({
           </div>
           )
         )}
+      </div>
+
+      {/* ✨ OPTION 3 (Desktop): Dedicated Slim Vertical Right Action Rail — Zero Overlap, Zero Edge Cutoff */}
+      {!isMobileScreen && (
+        isRightRailCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setIsRightRailCollapsed(false)}
+            title="Expand Quick Study Tools (AI Study, Circle Search, Chat, Help)"
+            style={{
+              position: "absolute",
+              right: "8px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              zIndex: 135,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px",
+              padding: "10px 6px",
+              borderRadius: "999px",
+              background: nightMode ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.95)",
+              border: nightMode ? "1px solid rgba(99, 102, 241, 0.45)" : "1.5px solid #cbd5e1",
+              color: nightMode ? "#a5b4fc" : "#4f46e5",
+              boxShadow: nightMode
+                ? "0 8px 24px rgba(0, 0, 0, 0.55), 0 0 12px rgba(99, 102, 241, 0.25)"
+                : "0 8px 24px rgba(15, 23, 42, 0.14)",
+              backdropFilter: "blur(14px)",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <ChevronLeft size={15} />
+            <Sparkles size={13} color={nightMode ? "#c084fc" : "#7c3aed"} />
+          </button>
+        ) : (
+          <aside
+            aria-label="Quick Study Actions Rail"
+            style={{
+              width: "56px",
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "12px 4px",
+              background: nightMode ? "rgba(11, 17, 32, 0.98)" : "rgba(255, 255, 255, 0.98)",
+              borderLeft: nightMode ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid #e2e8f0",
+              zIndex: 35,
+              boxSizing: "border-box",
+              userSelect: "none",
+            }}
+          >
+            <div style={{ height: "12px" }} />
+
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
+              {/* 1. AI Study */}
+              <button
+                type="button"
+                onClick={handleOpenAiStudy}
+                title="AI Study — Tutor Chat, 3D Flashcards & Summary"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #7c3aed 0%, #a855f7 52%, #ec4899 100%)",
+                    border: "1.5px solid rgba(244, 114, 182, 0.55)",
+                    boxShadow: "0 6px 16px rgba(168, 85, 247, 0.35), inset 0 1px 2px rgba(255,255,255,0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "transform 0.18s ease",
+                  }}
+                >
+                  <Sparkles size={16} color="#ffffff" style={{ filter: "drop-shadow(0 0 4px rgba(255,255,255,0.85))" }} />
+                </span>
+                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: nightMode ? "#cbd5e1" : "#334155", lineHeight: 1 }}>
+                  AI
+                </span>
+              </button>
+
+              {/* 2. Circle Search */}
+              <button
+                type="button"
+                onClick={handleToggleCircleSearch}
+                title={isCircleSearchMode ? "Cancel Circle Search" : "Circle to Search — Draw around any text or formula"}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: isCircleSearchMode
+                      ? "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)"
+                      : "linear-gradient(135deg, #4f46e5 0%, #06b6d4 52%, #10b981 100%)",
+                    border: isCircleSearchMode ? "2px solid #ffffff" : "1.5px solid rgba(165, 243, 252, 0.65)",
+                    boxShadow: isCircleSearchMode
+                      ? "0 0 0 3px rgba(56, 189, 248, 0.45), 0 6px 16px rgba(6, 182, 212, 0.5)"
+                      : "0 6px 16px rgba(6, 182, 212, 0.35), inset 0 1px 2px rgba(255,255,255,0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "transform 0.18s ease",
+                  }}
+                >
+                  <GeminiIcon size={17} withRing ringColor="#ffffff" color="#ffffff" />
+                </span>
+                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: isCircleSearchMode ? "#0284c7" : (nightMode ? "#cbd5e1" : "#334155"), lineHeight: 1 }}>
+                  {isCircleSearchMode ? "Stop" : "Circle"}
+                </span>
+              </button>
+
+              {/* 3. Student Chat */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onOpenChat === "function") {
+                    onOpenChat();
+                  } else {
+                    window.dispatchEvent(new CustomEvent("open_student_chat"));
+                  }
+                }}
+                title="Live Student Chat Hub & Study Pods"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span
+                  style={{
+                    position: "relative",
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #0284c7 0%, #2563eb 52%, #4f46e5 100%)",
+                    border: "1.5px solid rgba(147, 197, 253, 0.55)",
+                    boxShadow: "0 6px 16px rgba(37, 99, 235, 0.35), inset 0 1px 2px rgba(255,255,255,0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "transform 0.18s ease",
+                  }}
+                >
+                  <MessageSquare size={16} color="#ffffff" />
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-1px",
+                      right: "-1px",
+                      width: "9px",
+                      height: "9px",
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      border: "1.5px solid #ffffff",
+                      boxShadow: "0 0 6px #10b981",
+                    }}
+                  />
+                </span>
+                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: nightMode ? "#cbd5e1" : "#334155", lineHeight: 1 }}>
+                  Chat
+                </span>
+              </button>
+
+              {/* 4. Need Help */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof onOpenHelp === "function") {
+                    onOpenHelp();
+                  }
+                }}
+                title="Need Help? Instant FAQs, Request Missing Notes & Support"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "4px",
+                }}
+              >
+                <span
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #f59e0b 0%, #ea580c 52%, #dc2626 100%)",
+                    border: "1.5px solid rgba(254, 215, 170, 0.6)",
+                    boxShadow: "0 6px 16px rgba(234, 88, 12, 0.32), inset 0 1px 2px rgba(255,255,255,0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    transition: "transform 0.18s ease",
+                  }}
+                >
+                  <HelpCircle size={17} color="#ffffff" />
+                </span>
+                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: nightMode ? "#cbd5e1" : "#334155", lineHeight: 1 }}>
+                  Help
+                </span>
+              </button>
+            </div>
+
+            {/* Subtle Collapse Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsRightRailCollapsed(true)}
+              title="Collapse Right Rail"
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "8px",
+                border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid #cbd5e1",
+                background: nightMode ? "rgba(255,255,255,0.05)" : "#f8fafc",
+                color: nightMode ? "#94a3b8" : "#64748b",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </aside>
+        )
+      )}
+
+      {/* ✨ OPTION 2 (Mobile): Single Quick-Hub Orb Speed-Dial — Zero Edge Cutoff */}
+      {isMobileScreen && (
+        <div
+          style={{
+            position: "absolute",
+            right: "12px",
+            bottom: "56px",
+            zIndex: 145,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "8px",
+          }}
+        >
+          {isMobileHubOpen && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "8px", animation: "fadeIn 0.18s ease-out" }}>
+              <button
+                type="button"
+                onClick={() => { setIsMobileHubOpen(false); handleOpenAiStudy(); }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "4px 4px 4px 12px",
+                  borderRadius: "999px",
+                  background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+                  border: nightMode ? "1px solid rgba(168, 85, 247, 0.45)" : "1px solid #cbd5e1",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.2)",
+                  backdropFilter: "blur(12px)",
+                  cursor: "pointer",
+                }}
+              >
+                <span>AI Study</span>
+                <span style={{ width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #7c3aed, #ec4899)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Sparkles size={14} color="#ffffff" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setIsMobileHubOpen(false); handleToggleCircleSearch(); }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "4px 4px 4px 12px",
+                  borderRadius: "999px",
+                  background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+                  border: nightMode ? "1px solid rgba(6, 182, 212, 0.45)" : "1px solid #cbd5e1",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.2)",
+                  backdropFilter: "blur(12px)",
+                  cursor: "pointer",
+                }}
+              >
+                <span>{isCircleSearchMode ? "Stop Circle" : "Circle Search"}</span>
+                <span style={{ width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #4f46e5, #06b6d4, #10b981)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <GeminiIcon size={15} withRing ringColor="#ffffff" color="#ffffff" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileHubOpen(false);
+                  if (typeof onOpenChat === "function") onOpenChat();
+                  else window.dispatchEvent(new CustomEvent("open_student_chat"));
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "4px 4px 4px 12px",
+                  borderRadius: "999px",
+                  background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+                  border: nightMode ? "1px solid rgba(37, 99, 235, 0.45)" : "1px solid #cbd5e1",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.2)",
+                  backdropFilter: "blur(12px)",
+                  cursor: "pointer",
+                }}
+              >
+                <span>Student Chat</span>
+                <span style={{ position: "relative", width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #0284c7, #4f46e5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <MessageSquare size={14} color="#ffffff" />
+                  <span style={{ position: "absolute", top: "-1px", right: "-1px", width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", border: "1.5px solid #ffffff" }} />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setIsMobileHubOpen(false); if (typeof onOpenHelp === "function") onOpenHelp(); }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "4px 4px 4px 12px",
+                  borderRadius: "999px",
+                  background: nightMode ? "rgba(15, 23, 42, 0.94)" : "rgba(255, 255, 255, 0.96)",
+                  border: nightMode ? "1px solid rgba(245, 158, 11, 0.45)" : "1px solid #cbd5e1",
+                  color: nightMode ? "#f8fafc" : "#0f172a",
+                  fontSize: "0.74rem",
+                  fontWeight: 700,
+                  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.2)",
+                  backdropFilter: "blur(12px)",
+                  cursor: "pointer",
+                }}
+              >
+                <span>Need Help</span>
+                <span style={{ width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #f59e0b, #dc2626)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <HelpCircle size={15} color="#ffffff" />
+                </span>
+              </button>
+            </div>
+          )}
+
+          {/* Master Quick-Hub Orb */}
+          <button
+            type="button"
+            onClick={() => setIsMobileHubOpen((prev) => !prev)}
+            title="Quick Study Hub (AI, Circle Search, Chat, Help)"
+            style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "50%",
+              background: isMobileHubOpen
+                ? "linear-gradient(135deg, #1e293b, #0f172a)"
+                : "linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)",
+              border: "1.5px solid rgba(255, 255, 255, 0.45)",
+              color: "#ffffff",
+              boxShadow: "0 8px 24px rgba(79, 70, 229, 0.45)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
+          >
+            {isMobileHubOpen ? <X size={18} /> : <Sparkles size={18} />}
+          </button>
+        </div>
+      )}
       </div>
 
       {/* Footer Info Strip (Docked at Bottom - Zero Canvas Overlap & Zero Right-Edge Cutoff) */}
