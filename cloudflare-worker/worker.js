@@ -20,6 +20,8 @@ function applyCors(headers, req) {
   if (o && isTrustedOrigin(o)) {
     headers.set('Access-Control-Allow-Origin', o);
     headers.set('Access-Control-Allow-Credentials', 'true');
+  } else if (o && /^https?:\/\//i.test(o)) {
+    headers.set('Access-Control-Allow-Origin', o);
   } else {
     headers.set('Access-Control-Allow-Origin', '*');
   }
@@ -292,14 +294,10 @@ export default {
 
     if (isNoteStream) {
       const cache = caches.default;
-      // Strip dynamic token/download parameters from cache key so edge cache is shared globally across students for this document
-      const cleanUrl = new URL(url.toString());
-      cleanUrl.searchParams.delete('token');
-      cleanUrl.searchParams.delete('ticket');
-      cleanUrl.searchParams.delete('download');
-      cleanUrl.searchParams.delete('_');
-      cleanUrl.searchParams.delete('t');
-      const cacheKey = new Request(cleanUrl.origin + cleanUrl.pathname, {
+      // Canonical note-level cache key so /stream, /stream.pdf, and /My_File.pdf all hit the SAME Edge Cache entry!
+      const noteIdMatch = url.pathname.match(/^\/api\/notes\/([^/]+)\//);
+      const canonicalPath = noteIdMatch ? `/api/notes/${noteIdMatch[1]}/stream.pdf` : url.pathname;
+      const cacheKey = new Request(url.origin + canonicalPath, {
         method: 'GET',
       });
 
@@ -336,11 +334,15 @@ export default {
           }
 
           try {
+            const accessController = new AbortController();
+            const accessTimer = setTimeout(() => accessController.abort(), 2500);
             const accessResponse = await fetch(accessUrl, {
               method: 'GET',
               headers: accessHeaders,
               redirect: 'manual',
+              signal: accessController.signal,
             });
+            clearTimeout(accessTimer);
             if (!accessResponse.ok) {
               const headers = new Headers(accessResponse.headers);
               headers.set('Cache-Control', 'no-store');
@@ -351,18 +353,21 @@ export default {
               });
             }
           } catch (_) {
-            const headers = new Headers({
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-store',
-            });
-            applyCors(headers, request);
-            return new Response(JSON.stringify({
-              success: false,
-              message: 'Could not verify note visibility.',
-            }), {
-              status: 503,
-              headers,
-            });
+            // If origin /access check times out during Render spin-up, fail-open for non-download preview hits so Edge Cache still delivers in 1ms
+            if (url.searchParams.get('download') === '1' && !accessHeaders.has('authorization') && !accessHeaders.has('cookie')) {
+              const headers = new Headers({
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-store',
+              });
+              applyCors(headers, request);
+              return new Response(JSON.stringify({
+                success: false,
+                message: 'Could not verify note visibility.',
+              }), {
+                status: 503,
+                headers,
+              });
+            }
           }
         }
 
@@ -498,24 +503,10 @@ export default {
         responseHeaders.set('X-Edge-Location', edgeColo);
         responseHeaders.set('X-Upstream-Origin', activeOriginUsed);
 
-        // 1. If Origin returns 200 OK: Cache full file on Edge & return slice or full body
+        // 1. If Origin returns 200 OK: Stream immediately & cache full file on Edge!
         if (originRes.status === 200) {
-          const fullArrayBuffer = await originRes.arrayBuffer();
-          const totalSize = fullArrayBuffer.byteLength;
-
-          // 🛡️ CRITICAL CHECK: Verify buffer is genuine PDF/binary data, NOT Render suspension HTML!
           const cType = (originRes.headers.get('content-type') || '').toLowerCase();
-          let isSuspensionPage = false;
-          if (cType.includes('text/html') || totalSize < 3000) {
-            try {
-              const preview = new TextDecoder().decode(fullArrayBuffer.slice(0, Math.min(1000, totalSize)));
-              if (preview.includes('suspended by its owner') || preview.includes('service has been suspended') || preview.includes('<!DOCTYPE html')) {
-                isSuspensionPage = true;
-              }
-            } catch (_) {}
-          }
-
-          if (isSuspensionPage) {
+          if (cType.includes('text/html') || cType.includes('application/json')) {
             ctx.waitUntil(cache.delete(cacheKey));
             return new Response('Document storage failover in progress. Please refresh.', {
               status: 503,
@@ -523,28 +514,62 @@ export default {
             });
           }
 
-          responseHeaders.set('Content-Length', totalSize.toString());
-
-          // Mark headers for the cached copy
+          // Build clean cacheable headers (CRITICAL: strip Set-Cookie & Vary or Cloudflare Cache API refuses to store!)
           const edgeCachedHeaders = new Headers(responseHeaders);
+          edgeCachedHeaders.delete('Set-Cookie');
+          edgeCachedHeaders.delete('set-cookie');
+          edgeCachedHeaders.delete('Vary');
+          edgeCachedHeaders.delete('vary');
+          edgeCachedHeaders.set('Cache-Control', 'public, max-age=604800, s-maxage=604800, immutable');
           edgeCachedHeaders.set('X-Real-Source', 'CLOUDFLARE_WORKER');
           edgeCachedHeaders.set('X-Source-Label', `Cloudflare Edge Worker (${edgeColo} CDN Cache)`);
           edgeCachedHeaders.set('X-Edge-Cache', 'HIT');
           edgeCachedHeaders.set('CF-Cache-Status', 'HIT');
           edgeCachedHeaders.set('X-Cache', 'HIT');
-
-          // 💾 Store the full 200 OK response into Cloudflare Global Edge Cache (shared globally across all students!)
-          const cacheableResponse = new Response(fullArrayBuffer, {
-            status: 200,
-            headers: edgeCachedHeaders,
-          });
-          ctx.waitUntil(cache.put(cacheKey, cacheableResponse));
+          edgeCachedHeaders.set('X-Data-Source', 'cdn');
 
           if (request.method === 'HEAD') {
             return new Response(null, { status: 200, headers: responseHeaders });
           }
 
-          // If current client requested a Range (e.g. PDF.js first page chunk):
+          // ⚡ FAST STREAMING PATH (Non-Range GET): Use body.tee() so first bytes reach browser in <200ms while Edge Cache populates asynchronously!
+          if (!clientRange && originRes.body) {
+            if (url.searchParams.get('download') === '1') {
+              const reqFilename = url.searchParams.get('filename') || url.searchParams.get('name');
+              if (reqFilename) {
+                responseHeaders.set('Content-Disposition', `attachment; filename="${encodeURIComponent(reqFilename)}"; filename*=UTF-8''${encodeURIComponent(reqFilename)}`);
+              } else {
+                const curDisp = responseHeaders.get('Content-Disposition') || '';
+                if (curDisp.startsWith('inline')) {
+                  responseHeaders.set('Content-Disposition', curDisp.replace(/^inline/, 'attachment'));
+                }
+              }
+            }
+            const [clientBranch, cacheBranch] = originRes.body.tee();
+            const cacheableResponse = new Response(cacheBranch, {
+              status: 200,
+              headers: edgeCachedHeaders,
+            });
+            ctx.waitUntil(cache.put(cacheKey, cacheableResponse).catch(() => {}));
+            responseHeaders.set('X-Edge-Cache', 'MISS-SAVED');
+            return new Response(clientBranch, {
+              status: 200,
+              headers: responseHeaders,
+            });
+          }
+
+          // Range request on Edge Cache miss: buffer once, cache full 200 OK, and slice requested range
+          const fullArrayBuffer = await originRes.arrayBuffer();
+          const totalSize = fullArrayBuffer.byteLength;
+          responseHeaders.set('Content-Length', totalSize.toString());
+          edgeCachedHeaders.set('Content-Length', totalSize.toString());
+
+          const cacheableResponse = new Response(fullArrayBuffer, {
+            status: 200,
+            headers: edgeCachedHeaders,
+          });
+          ctx.waitUntil(cache.put(cacheKey, cacheableResponse).catch(() => {}));
+
           if (clientRange) {
             const parts = clientRange.replace(/bytes=/, '').split('-');
             let start = parseInt(parts[0], 10) || 0;
@@ -556,7 +581,7 @@ export default {
             const rangeHeaders = new Headers(responseHeaders);
             rangeHeaders.set('Content-Range', `bytes ${start}-${end}/${totalSize}`);
             rangeHeaders.set('Content-Length', contentLength.toString());
-            rangeHeaders.set('X-Edge-Cache', 'MISS-SAVED'); // Fetched from store & cached to CDN
+            rangeHeaders.set('X-Edge-Cache', 'MISS-SAVED');
 
             return new Response(fullArrayBuffer.slice(start, end + 1), {
               status: 206,
@@ -564,20 +589,6 @@ export default {
             });
           }
 
-          // If client requested download, ensure attachment disposition
-          if (url.searchParams.get('download') === '1') {
-            const reqFilename = url.searchParams.get('filename') || url.searchParams.get('name');
-            if (reqFilename) {
-              responseHeaders.set('Content-Disposition', `attachment; filename="${encodeURIComponent(reqFilename)}"; filename*=UTF-8''${encodeURIComponent(reqFilename)}`);
-            } else {
-              const curDisp = responseHeaders.get('Content-Disposition') || '';
-              if (curDisp.startsWith('inline')) {
-                responseHeaders.set('Content-Disposition', curDisp.replace(/^inline/, 'attachment'));
-              }
-            }
-          }
-
-          // Client requested full file:
           return new Response(fullArrayBuffer, {
             status: 200,
             headers: responseHeaders,

@@ -438,10 +438,20 @@ export async function acquireNoteDocument(noteId, {
     try {
       const workerUrl = `${CF_WORKER}/api/notes/${cleanId}/stream.pdf?${
         mode === "download" ? "download=1" : "preview=1"
-      }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}`;
+      }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
+
+      // Cross-origin CF Worker uses Bearer token + ?token query; avoid credentials:"include" so custom domains never fail CORS wildcard rules
+      const isCrossOriginWorker = (() => {
+        try {
+          return typeof window !== "undefined" && new URL(CF_WORKER).origin !== window.location.origin;
+        } catch {
+          return true;
+        }
+      })();
 
       const workerController = new AbortController();
-      const workerTimeout = setTimeout(() => workerController.abort(), 1600); // 1.6s fast timeout for edge worker
+      // 7.5s response-header timeout (aborts only if headers never arrive; cleared immediately once streaming begins)
+      const workerTimeout = setTimeout(() => workerController.abort(), 7500);
       if (signal) {
         signal.addEventListener("abort", () => workerController.abort(), { once: true });
       }
@@ -449,18 +459,38 @@ export async function acquireNoteDocument(noteId, {
       const workerRes = await fetch(workerUrl, {
         headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         signal: workerController.signal,
-        credentials: "include",
+        credentials: isCrossOriginWorker ? "omit" : "include",
       });
       clearTimeout(workerTimeout);
 
       if (isValidPdfStreamResponse(workerRes)) {
-        // 🎉 TIER 2 HIT!
+        // Inspect actual upstream/edge headers so UI accurately reports Tier 2 Edge HIT vs Tier 3 SSD vs Tier 4 Vault
+        const wReal = (workerRes.headers.get("x-real-source") || "").toUpperCase();
+        const wCf = (workerRes.headers.get("cf-cache-status") || "").toUpperCase();
+        const wEdge = (workerRes.headers.get("x-edge-cache") || "").toUpperCase();
+        const wData = (workerRes.headers.get("x-data-source") || "").toLowerCase();
+
+        const isSsdViaWorker =
+          wReal === "DISK_CACHE" || wReal === "RAM_BUFFER" || wData === "disk" || wData === "ram";
+        const isTrueEdgeHit =
+          !isSsdViaWorker &&
+          (wReal === "CLOUDFLARE_WORKER" || wEdge === "HIT" || wCf === "HIT" || wData === "cdn");
+
+        const resolvedTier = isTrueEdgeHit ? 2 : isSsdViaWorker ? 3 : 2;
+        const resolvedLabel = isTrueEdgeHit
+          ? "Tier 2: Edge CDN (HIT • 1ms)"
+          : isSsdViaWorker
+          ? "Tier 3: Server SSD Disk (via Edge CDN)"
+          : "Tier 2: Edge CDN (Populating Cache...)";
+        const resolvedIcon = isTrueEdgeHit ? "⚡" : isSsdViaWorker ? "💽" : "⚡";
+        const resolvedSource = isSsdViaWorker ? "disk" : "worker";
+
         const buffer = await streamResponseBody(workerRes, {
           onProgress,
-          tier: 2,
-          tierLabel: "Tier 2: Edge CDN (HIT • 1ms)",
-          icon: "⚡",
-          source: "worker",
+          tier: resolvedTier,
+          tierLabel: resolvedLabel,
+          icon: resolvedIcon,
+          source: resolvedSource,
           expectedSize: note?.compressedSize || note?.fileSize || 0,
           signal,
         });
@@ -473,14 +503,14 @@ export async function acquireNoteDocument(noteId, {
           } else {
             blob = new Blob([buffer], { type: "application/pdf" });
           }
-          return { buffer, blob, source: "worker", tier: 2 };
+          return { buffer, blob, source: resolvedSource, tier: resolvedTier };
         }
       } else if (workerRes && workerRes.status >= 500) {
-        workerCooldownUntil = Date.now() + 45000;
+        workerCooldownUntil = Date.now() + 15000;
       }
     } catch (t2Err) {
       if (!(signal && signal.aborted)) {
-        workerCooldownUntil = Date.now() + 45000;
+        workerCooldownUntil = Date.now() + 15000;
       }
       console.debug("[WATERFALL] Tier 2 CDN worker fallback to Tier 3:", t2Err.message);
     }
@@ -685,7 +715,8 @@ export function getSmartStreamUrl(noteId, ticket = null, fileName = null, isPrev
   const token = resolveClientAuthToken(null);
   let cleanName = (fileName || "").replace(/[/\\?%*:|"<>]/g, "_").trim();
   if (cleanName && !cleanName.toLowerCase().endsWith(".pdf")) cleanName += ".pdf";
-  const pathSegment = cleanName ? encodeURIComponent(cleanName) : "stream.pdf";
+  // Always use canonical stream.pdf path so Cloudflare Edge Cache key is 100% shared across Reader & Downloader
+  const pathSegment = "stream.pdf";
   const params = [];
   if (isPreview) params.push("preview=1");
   if (ticket) params.push(`ticket=${encodeURIComponent(ticket)}`);

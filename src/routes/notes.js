@@ -7,7 +7,7 @@ const https = require("https");
 const jwt = require("jsonwebtoken");
 const { db } = require("../firebase");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
-const { getAllCachedNotes, getTursoNotesCacheStats } = require("../services/tursoNotesCacheService");
+const { getAllCachedNotes, getTursoNotesCacheStats, upsertNoteInCache } = require("../services/tursoNotesCacheService");
 const { downloadLimiter, getClientIp } = require("../middleware/rateLimit");
 const { streamDocumentFromChannel, getDocumentBufferFromChannel } = require("../telegram/mtproto");
 const { authenticateToken, requireAuth, requireAdmin, JWT_SECRET } = require("../middleware/auth");
@@ -120,6 +120,22 @@ function sanitizeCacheId(id) {
 // Lightweight In-Memory Metadata Index for Disk-Cached PDFs (Max 400 entries, <40KB RAM, eliminates blocking fs.statSync/readFileSync on every range chunk)
 const cdnMetaCache = new Map();
 
+function registerDiskCacheEntry(id, binPath, totalSize, mimeType = "application/pdf") {
+  const safeId = sanitizeCacheId(id);
+  if (!safeId || !binPath || !totalSize || totalSize <= 0) return;
+  if (cdnMetaCache.size >= 400) {
+    const oldest = cdnMetaCache.keys().next().value;
+    if (oldest) cdnMetaCache.delete(oldest);
+  }
+  cdnMetaCache.set(safeId, {
+    isDiskOnly: true,
+    binPath,
+    totalSize,
+    contentType: mimeType || "application/pdf",
+    cachedAt: Date.now(),
+  });
+}
+
 function saveCdnBuffer(id, buffer, mimeType) {
   const safeId = sanitizeCacheId(id);
   if (!safeId || !buffer) return;
@@ -139,17 +155,7 @@ function saveCdnBuffer(id, buffer, mimeType) {
       await fs.promises.writeFile(tmpBinFile, buffer);
       await fs.promises.rename(tmpBinFile, binFile);
       await fs.promises.writeFile(metaFile, metaContent, "utf8");
-      if (cdnMetaCache.size >= 400) {
-        const oldest = cdnMetaCache.keys().next().value;
-        if (oldest) cdnMetaCache.delete(oldest);
-      }
-      cdnMetaCache.set(safeId, {
-        isDiskOnly: true,
-        binPath: binFile,
-        totalSize: buffer.length,
-        contentType: mimeType || "application/pdf",
-        cachedAt: now,
-      });
+      registerDiskCacheEntry(safeId, binFile, buffer.length, mimeType || "application/pdf");
     } catch (err) {
       try { if (fs.existsSync(tmpBinFile)) await fs.promises.unlink(tmpBinFile); } catch (_) {}
       console.warn("[CDN-DISK] Write error:", err.message);
@@ -162,27 +168,44 @@ function getCdnBuffer(id) {
   if (!safeId) return null;
 
   if (cdnMetaCache.has(safeId)) {
-    return cdnMetaCache.get(safeId);
+    const cachedEntry = cdnMetaCache.get(safeId);
+    if (cachedEntry?.binPath && fs.existsSync(cachedEntry.binPath)) {
+      return cachedEntry;
+    }
+    cdnMetaCache.delete(safeId);
   }
 
   const binPath = path.join(CDN_CACHE_DIR, `${safeId}.bin`);
   const metaPath = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
-  if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
+  if (fs.existsSync(binPath)) {
     try {
       const stat = fs.statSync(binPath);
-      if (stat.size <= 0) {
-        try { fs.unlinkSync(binPath); fs.unlinkSync(metaPath); } catch (_) {}
+      if (stat.size <= 200) {
+        try { fs.unlinkSync(binPath); } catch (_) {}
+        try { if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath); } catch (_) {}
         return null;
       }
       let meta = { mimeType: "application/pdf" };
-      try {
-        meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      } catch (_) {}
+      if (fs.existsSync(metaPath)) {
+        try {
+          meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+        } catch (_) {}
+      } else {
+        // Self-heal missing .meta.json when valid .bin exists on SSD
+        try {
+          fs.writeFileSync(
+            metaPath,
+            JSON.stringify({ mimeType: "application/pdf", totalSize: stat.size, cachedAt: Date.now() }),
+            "utf8"
+          );
+        } catch (_) {}
+      }
       const totalSize = meta.totalSize || stat.size;
       // If file on disk is smaller than expected totalSize, it was interrupted/corrupted!
       if (meta.totalSize && stat.size < meta.totalSize) {
         console.warn(`[CDN-DISK] ⚠️ Corrupt/partial cache detected for ${safeId} (${stat.size} < ${meta.totalSize}). Purging.`);
-        try { fs.unlinkSync(binPath); fs.unlinkSync(metaPath); } catch (_) {}
+        try { fs.unlinkSync(binPath); } catch (_) {}
+        try { if (fs.existsSync(metaPath)) fs.unlinkSync(metaPath); } catch (_) {}
         return null;
       }
       // Zero-RAM Mode: Returns file metadata & path without loading multi-megabyte buffer into Node.js heap!
@@ -193,11 +216,7 @@ function getCdnBuffer(id) {
         contentType: meta.mimeType || "application/pdf",
         cachedAt: meta.cachedAt || Date.now(),
       };
-      if (cdnMetaCache.size >= 400) {
-        const oldest = cdnMetaCache.keys().next().value;
-        if (oldest) cdnMetaCache.delete(oldest);
-      }
-      cdnMetaCache.set(safeId, entry);
+      registerDiskCacheEntry(safeId, binPath, totalSize, entry.contentType);
       return entry;
     } catch (err) {
       console.warn("[CDN-DISK] Metadata read error:", err.message);
@@ -372,6 +391,7 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
     let tmpPath = null;
     let diskStream = null;
+    let streamCompleted = false;
     const fileReq = https.get(fileUrl, (fileRes) => {
       if (fileRes.statusCode !== 200) {
         return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
@@ -391,53 +411,80 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
 
       const safeId = sanitizeCacheId(noteId);
       const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
-      tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
+      tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}_${Math.random().toString(36).slice(2, 6)}`) : null;
       let bytesWritten = 0;
       try {
-        if (tmpPath && fs.existsSync(CDN_CACHE_DIR)) {
+        if (tmpPath) {
+          if (!fs.existsSync(CDN_CACHE_DIR)) {
+            fs.mkdirSync(CDN_CACHE_DIR, { recursive: true });
+          }
           diskStream = fs.createWriteStream(tmpPath);
+          diskStream.on("error", () => {
+            diskStream = null;
+          });
         }
       } catch (_) {}
 
       fileRes.on("data", (chunk) => {
         if (!res.writableEnded) res.write(chunk);
-        if (diskStream) {
+        if (diskStream && !diskStream.destroyed) {
           bytesWritten += chunk.length;
           diskStream.write(chunk);
         }
       });
 
       fileRes.on("end", async () => {
-        if (!res.writableEnded) res.end();
-        if (diskStream) {
-          diskStream.end();
+        streamCompleted = true;
+        const activeDisk = diskStream;
+        diskStream = null;
+        if (activeDisk) {
+          try {
+            await new Promise((done) => activeDisk.end(done));
+          } catch (_) {}
           if (safeId && tmpPath && binPath) {
             try {
-              // Only promote to real cache if stream finished with all expected bytes
-              if (!total || bytesWritten >= total) {
+              // Promote to real SSD cache if stream finished with all expected bytes
+              if (bytesWritten > 200 && (!total || bytesWritten >= total)) {
                 await fs.promises.rename(tmpPath, binPath);
+                const finalSize = bytesWritten || total;
                 const metaFile = path.join(CDN_CACHE_DIR, `${safeId}.meta.json`);
                 await fs.promises.writeFile(
                   metaFile,
                   JSON.stringify({
                     mimeType: "application/pdf",
-                    totalSize: bytesWritten || total,
+                    totalSize: finalSize,
                     cachedAt: Date.now(),
                   }),
                   "utf8"
                 );
+                registerDiskCacheEntry(safeId, binPath, finalSize, "application/pdf");
+                if (db && noteId) {
+                  db.collection("notes").doc(noteId).update({
+                    isCdnCached: true,
+                    cdnCachedAt: new Date().toISOString(),
+                  }).catch(() => {});
+                }
+                if (noteId) {
+                  upsertNoteInCache({ id: noteId, isCdnCached: true, cdnCachedAt: new Date().toISOString() }).catch(() => {});
+                }
+                console.log(`[BOT-STREAM] 💽 Auto-saved note ${noteId} (${(finalSize / 1048576).toFixed(2)} MB) to Server SSD Disk Cache (Tier 3 ready)!`);
               } else {
                 if (fs.existsSync(tmpPath)) await fs.promises.unlink(tmpPath);
               }
-            } catch (_) {}
+            } catch (cacheErr) {
+              console.warn(`[BOT-STREAM] SSD promote notice for ${noteId}:`, cacheErr.message);
+              try { if (fs.existsSync(tmpPath)) await fs.promises.unlink(tmpPath); } catch (_) {}
+            }
           }
         }
+        if (!res.writableEnded) res.end();
         resolve(true);
       });
 
       fileRes.on("error", (err) => {
         if (diskStream) {
           diskStream.destroy();
+          diskStream = null;
           try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
         }
         reject(err);
@@ -453,9 +500,12 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
 
     if (res && typeof res.on === "function") {
       res.on("close", () => {
+        // CRITICAL: res.on('close') fires on normal completion too! Only abort/delete temp cache on premature client disconnect.
+        if (streamCompleted || res.writableFinished) return;
         fileReq.destroy();
         if (diskStream) {
           diskStream.destroy();
+          diskStream = null;
           try { if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
         }
       });
@@ -577,18 +627,20 @@ async function fetchAndCacheNoteBuffer(id, note) {
 
 function triggerBackgroundCdnCache(id, note) {
   // 🛡️ Zero-RAM & Zero-CPU Protection:
-  // Only pre-cache compact files (<= 8MB) when server has idle memory (< 170MB RSS) and no active downloads.
-  // Larger PDFs stream directly via 512KB chunked Zero-Copy pipes without allocating full file buffers or running synchronous GC!
+  // Pre-cache files <= 25MB to NVMe SSD Disk Cache so subsequent reads/downloads hit Tier 3 (1ms) instead of Telegram!
   try {
-    if (note?.fileSize && Number(note.fileSize) > 8 * 1024 * 1024) {
+    if (!id || inFlightFetches.has(id) || getCdnBuffer(id)) {
       return;
     }
-    if (activeStorageDownloads > 0) {
+    if (note?.fileSize && Number(note.fileSize) > 25 * 1024 * 1024) {
+      return;
+    }
+    if (activeStorageDownloads >= MAX_CONCURRENT_STORAGE_DOWNLOADS) {
       return;
     }
     const mem = process.memoryUsage();
     const rssMb = Math.round(mem.rss / (1024 * 1024));
-    if (rssMb > 170) {
+    if (rssMb > 280) {
       return;
     }
   } catch (_) {}
@@ -1844,19 +1896,34 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
+    // Helper: Strict hostname suffix verification (prevents evil-pages.dev.attacker.com substring spoofing)
+    const isTrustedHostUrl = (urlStr, currentHost = "") => {
+      if (!urlStr) return true;
+      try {
+        const parsed = new URL(urlStr.startsWith("http") ? urlStr : `https://${urlStr}`);
+        const hn = parsed.hostname.toLowerCase();
+        const curHn = String(currentHost || "").split(":")[0].toLowerCase();
+        if (curHn && hn === curHn) return true;
+        if (hn === "localhost" || hn === "127.0.0.1") return true;
+        return (
+          hn === "freestudymaterial.pages.dev" ||
+          hn === "freestudymaterial.onrender.com" ||
+          hn === "freestudymaterial1.onrender.com" ||
+          hn === "freestudymaterial2.onrender.com" ||
+          hn === "fsm-edge.jnplotus.workers.dev" ||
+          hn.endsWith(".freestudymaterial.pages.dev")
+        );
+      } catch (_) {
+        return false;
+      }
+    };
+
     // 3. Fallback for queryToken ONLY if from same-origin browser request (prevents copied console links)
     if (!requestingUser && queryToken) {
       const isDocumentNav = req.headers["sec-fetch-dest"] === "document" || req.headers["sec-fetch-mode"] === "navigate";
       const referer = req.headers["referer"] || "";
       const host = req.headers["host"] || "";
-      const isSameOriginReferer =
-        !referer ||
-        referer.includes(host) ||
-        referer.includes("localhost") ||
-        referer.includes("127.0.0.1") ||
-        referer.includes("onrender.com") ||
-        referer.includes("workers.dev") ||
-        referer.includes("pages.dev");
+      const isSameOriginReferer = isTrustedHostUrl(referer, host);
 
       // If someone copied the raw query link into another browser / external tool without cookie:
       if (!cookieToken && isDocumentNav && !isSameOriginReferer) {
@@ -1877,25 +1944,18 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     // Only check if user is NOT authenticated (authenticated students are always permitted)
     if (!requestingUser) {
       const secFetchSite = req.headers["sec-fetch-site"];
-      const originHeader = (req.headers["origin"] || req.headers["referer"] || "").toLowerCase();
+      const originHeader = (req.headers["origin"] || req.headers["referer"] || "").trim();
       const hostHeader = (req.headers["host"] || "").toLowerCase();
 
-      const isTrustedOrigin =
-        !originHeader ||
-        originHeader.includes("onrender.com") ||
-        originHeader.includes("localhost") ||
-        originHeader.includes("127.0.0.1") ||
-        originHeader.includes("workers.dev") ||
-        originHeader.includes("pages.dev") ||
-        (hostHeader && originHeader.includes(hostHeader));
+      const isTrustedOrigin = isTrustedHostUrl(originHeader, hostHeader);
 
       const workerSecret = (process.env.CF_WORKER_SECRET || process.env.WORKER_SECRET || "").trim();
       const clientWorkerSig = (req.headers["x-worker-signature"] || req.headers["x-worker-secret"] || "").trim();
       const hasValidWorkerSig = Boolean(workerSecret && clientWorkerSig && clientWorkerSig === workerSecret);
       const isOriginWorkerDev = Boolean(
-        (req.headers["x-forwarded-host"] && (req.headers["x-forwarded-host"].includes("workers.dev") || req.headers["x-forwarded-host"].includes("pages.dev"))) ||
-        (req.headers["referer"] && (req.headers["referer"].includes("workers.dev") || req.headers["referer"].includes("pages.dev"))) ||
-        (req.headers["origin"] && (req.headers["origin"].includes("workers.dev") || req.headers["origin"].includes("pages.dev")))
+        (req.headers["x-forwarded-host"] && isTrustedHostUrl(req.headers["x-forwarded-host"], hostHeader)) ||
+        (req.headers["referer"] && isTrustedHostUrl(req.headers["referer"], hostHeader)) ||
+        (req.headers["origin"] && isTrustedHostUrl(req.headers["origin"], hostHeader))
       );
       const isWorkerProxy = Boolean(
         hasValidWorkerSig ||
@@ -2009,11 +2069,16 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
     );
 
     if (cfWorkerUrl && !isDirectFromWorker && !isExplicitDirect && !isFetchOrApi && isActualDownload) {
-      const authHdr = req.headers["authorization"] ? req.headers["authorization"].replace(/^Bearer\s+/i, "").trim() : "";
-      let qToken = req.query.token || authHdr || (req.cookies && (req.cookies.fsm_token || req.cookies.vault_token || req.cookies.token)) || "";
-      if (!qToken && requestingUser && requestingUser.id) {
+      // 🛡️ SECURITY FIX: Never copy a 7-day HttpOnly session cookie into a 302 redirect URL query string.
+      // Always mint a short-lived (5 min) download-scoped token bound to this note.
+      let qToken = "";
+      if (requestingUser && requestingUser.id) {
         try {
-          qToken = jwt.sign({ id: requestingUser.id, role: requestingUser.role || "student" }, JWT_SECRET, { expiresIn: "10m" });
+          qToken = jwt.sign(
+            { id: requestingUser.id, role: requestingUser.role || "student", scope: "download", noteId: id },
+            JWT_SECRET,
+            { expiresIn: "5m" }
+          );
         } catch (_) {}
       }
       const realDlName = (note.originalName || note.fileName || req.query.filename || "").trim();
@@ -2200,6 +2265,9 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       incrementDbWritesPrevented();
     }
 
+    // 🚀 1. Resolve Server SSD / RAM Buffer metadata upfront (safe for both HEAD & GET)
+    const cached = getCdnBuffer(id);
+
     // ⚡ Instant HEAD response for preflight metadata checks (0ms, 0 byte overhead)
     if (req.method === "HEAD") {
       let headSize = note.fileSize || note.compressedSize || 0;
@@ -2226,17 +2294,19 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       return res.status(200).end();
     }
 
-    // 🚀 1. Check if file is already brought to Edge CDN / RAM / Disk Cache (Instant 1ms Stream)
-    const cached = getCdnBuffer(id);
-
     if (isDiskCached || cached) {
-      // ⚡ If found on disk or RAM, make sure Firestore has isCdnCached: true
-      if (db && !note.isCdnCached) {
-        db.collection("notes").doc(id).update({
-          isCdnCached: true,
-          cdnCachedAt: new Date().toISOString(),
-        }).catch(() => {});
+      // ⚡ If found on disk or RAM, make sure DB & L1 cache have isCdnCached: true
+      if (!note.isCdnCached) {
+        const cachedIso = new Date().toISOString();
+        if (db) {
+          db.collection("notes").doc(id).update({
+            isCdnCached: true,
+            cdnCachedAt: cachedIso,
+          }).catch(() => {});
+        }
         note.isCdnCached = true;
+        ramCache.set(`note_${id}`, note, 3 * 3600);
+        upsertNoteInCache({ id, isCdnCached: true, cdnCachedAt: cachedIso }).catch(() => {});
       }
 
       if (isRamCached) {
@@ -2340,14 +2410,21 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         await streamDocumentFromChannel(note.telegramMessageId, res, req.headers.range, {
           noteId: id,
           cdnCacheDir: CDN_CACHE_DIR,
-          onCached: () => {
-            if (db && !note.isCdnCached) {
-              db.collection("notes").doc(id).update({
-                isCdnCached: true,
-                cdnCachedAt: new Date().toISOString(),
-              }).catch(() => {});
+          onCached: (cachedSize) => {
+            if (binPath) {
+              registerDiskCacheEntry(id, binPath, cachedSize || note.fileSize || 0, contentType);
+            }
+            const cachedIso = new Date().toISOString();
+            if (!note.isCdnCached) {
+              if (db) {
+                db.collection("notes").doc(id).update({
+                  isCdnCached: true,
+                  cdnCachedAt: cachedIso,
+                }).catch(() => {});
+              }
               note.isCdnCached = true;
               ramCache.set(`note_${id}`, note, 3 * 3600);
+              upsertNoteInCache({ id, isCdnCached: true, cdnCachedAt: cachedIso }).catch(() => {});
             }
           },
         });

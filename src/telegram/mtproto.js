@@ -1557,7 +1557,18 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cac
       if (safeId && safeId.length <= 128) {
         binPath = path.join(cacheOptions.cdnCacheDir, `${safeId}.bin`);
         metaPath = path.join(cacheOptions.cdnCacheDir, `${safeId}.meta.json`);
-        if (!fs.existsSync(binPath)) {
+        let existingValid = false;
+        if (fs.existsSync(binPath)) {
+          try {
+            const st = fs.statSync(binPath);
+            if (st.size > 200 && (!totalSize || st.size >= totalSize)) {
+              existingValid = true;
+            } else {
+              fs.unlinkSync(binPath);
+            }
+          } catch (_) {}
+        }
+        if (!existingValid) {
           if (!fs.existsSync(cacheOptions.cdnCacheDir)) {
             fs.mkdirSync(cacheOptions.cdnCacheDir, { recursive: true });
           }
@@ -1630,25 +1641,27 @@ async function streamDocumentFromChannel(messageId, res, rangeHeader = null, cac
     if (diskStream) {
       try {
         await new Promise((resolve) => diskStream.end(resolve));
-        if (!isRange && bytesWritten === totalSize && tmpPath && binPath && metaPath && fs.existsSync(tmpPath)) {
+        if (!isRange && bytesWritten > 200 && (!totalSize || bytesWritten >= totalSize) && tmpPath && binPath && metaPath && fs.existsSync(tmpPath)) {
+          const finalBytes = bytesWritten || totalSize;
           await fs.promises.rename(tmpPath, binPath);
           await fs.promises.writeFile(
             metaPath,
             JSON.stringify({
               mimeType: finalMime,
-              totalSize,
+              totalSize: finalBytes,
               cachedAt: Date.now(),
             }),
             "utf8"
           );
           if (typeof cacheOptions?.onCached === "function") {
-            cacheOptions.onCached(totalSize);
+            cacheOptions.onCached(finalBytes);
           }
-          console.log(`[MTProto STREAM] 💽 Auto-saved streamed note ${cacheOptions.noteId} (${(totalSize / 1048576).toFixed(2)} MB) to Server SSD Disk Cache (Tier 3 ready)!`);
+          console.log(`[MTProto STREAM] 💽 Auto-saved streamed note ${cacheOptions.noteId} (${(finalBytes / 1048576).toFixed(2)} MB) to Server SSD Disk Cache (Tier 3 ready)!`);
         } else if (tmpPath && fs.existsSync(tmpPath)) {
           await fs.promises.unlink(tmpPath).catch(() => {});
         }
-      } catch (_) {
+      } catch (cacheErr) {
+        console.warn(`[MTProto STREAM] SSD disk promote notice for ${cacheOptions?.noteId}:`, cacheErr.message);
         if (tmpPath && fs.existsSync(tmpPath)) {
           fs.promises.unlink(tmpPath).catch(() => {});
         }

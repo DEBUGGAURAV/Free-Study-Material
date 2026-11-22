@@ -68,11 +68,22 @@ export async function onRequest(context) {
   }
 
   // 1.1 Cloudflare Edge CDN Cache Check (Tier 2: 1ms Instant Hit for PDF streams)
-  const isStreamRequest = request.method === "GET" && url.pathname.includes("/stream");
+  const noteStreamMatch = url.pathname.match(/^\/api\/notes\/([^/]+)\/(?:stream(?:\.pdf)?|[^/]+\.pdf)$/i);
+  const isStreamRequest = request.method === "GET" && Boolean(noteStreamMatch);
+  const isDownloadParam = url.searchParams.get("download") === "1";
+  const hasAuthCredential = Boolean(
+    request.headers.get("authorization") ||
+    request.headers.get("cookie") ||
+    url.searchParams.get("token") ||
+    url.searchParams.get("ticket")
+  );
   const edgeCache = typeof caches !== "undefined" ? caches.default : null;
-  const cacheKey = isStreamRequest ? new Request(url.origin + url.pathname, { method: "GET" }) : null;
+  const cacheKey = isStreamRequest
+    ? new Request(`${url.origin}/api/notes/${noteStreamMatch[1]}/stream.pdf`, { method: "GET" })
+    : null;
 
-  if (isStreamRequest && edgeCache && cacheKey) {
+  // Serve directly from Cloudflare Edge Cache for previews or authenticated downloads (unauthenticated downloads still hit origin for 401 gate)
+  if (isStreamRequest && edgeCache && cacheKey && (!isDownloadParam || hasAuthCredential)) {
     try {
       const cached = await edgeCache.match(cacheKey);
       if (cached) {
@@ -80,15 +91,44 @@ export async function onRequest(context) {
         cHeaders.set("CF-Cache-Status", "HIT");
         cHeaders.set("X-Edge-Cache", "HIT");
         cHeaders.set("X-Real-Source", "CLOUDFLARE_WORKER");
+        cHeaders.set("X-Source-Label", "Cloudflare Global Edge CDN (1ms Cache HIT)");
         cHeaders.set("X-Data-Source", "cdn");
+        cHeaders.set("Accept-Ranges", "bytes");
         if (reqOrigin && isTrustedOrigin(reqOrigin)) {
           cHeaders.set("Access-Control-Allow-Origin", reqOrigin);
           cHeaders.set("Access-Control-Allow-Credentials", "true");
         } else {
           cHeaders.set("Access-Control-Allow-Origin", "*");
         }
+        if (isDownloadParam) {
+          const reqFilename = url.searchParams.get("filename") || url.searchParams.get("name");
+          if (reqFilename) {
+            cHeaders.set("Content-Disposition", `attachment; filename="${encodeURIComponent(reqFilename)}"; filename*=UTF-8''${encodeURIComponent(reqFilename)}`);
+          } else {
+            const curDisp = cHeaders.get("Content-Disposition") || "";
+            if (curDisp.startsWith("inline")) {
+              cHeaders.set("Content-Disposition", curDisp.replace(/^inline/, "attachment"));
+            }
+          }
+        }
+        const rangeHeader = request.headers.get("Range") || request.headers.get("range");
+        if (rangeHeader) {
+          const buf = await cached.arrayBuffer();
+          const totalSize = buf.byteLength;
+          const parts = rangeHeader.replace(/bytes=/, "").split("-");
+          let start = parseInt(parts[0], 10) || 0;
+          let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
+          if (isNaN(start)) start = 0;
+          if (isNaN(end) || end >= totalSize) end = totalSize - 1;
+          cHeaders.set("Content-Range", `bytes ${start}-${end}/${totalSize}`);
+          cHeaders.set("Content-Length", String(Math.max(0, end - start + 1)));
+          return new Response(buf.slice(start, end + 1), {
+            status: 206,
+            headers: cHeaders,
+          });
+        }
         return new Response(cached.body, {
-          status: cached.status,
+          status: 200,
           headers: cHeaders,
         });
       }
@@ -203,10 +243,23 @@ export async function onRequest(context) {
       resHeaders.set("X-Load-Balancer", "Cloudflare Edge Intelligent Failover");
       resHeaders.set("X-Served-By", origin);
 
-      // Save streamed document into Cloudflare Edge Cache (Tier 2)
-      if (isStreamRequest && edgeCache && cacheKey && response.status === 200 && response.body) {
+      // Save streamed PDF document into Cloudflare Edge Cache (Tier 2)
+      const isCacheablePdf =
+        isStreamRequest &&
+        edgeCache &&
+        cacheKey &&
+        response.status === 200 &&
+        response.body &&
+        !contentType.includes("text/html") &&
+        !contentType.includes("application/json");
+      if (isCacheablePdf) {
         try {
           const cacheHeaders = new Headers(resHeaders);
+          // CRITICAL: Strip Set-Cookie & Vary so Cloudflare Cache API stores the response instead of silently dropping it!
+          cacheHeaders.delete("Set-Cookie");
+          cacheHeaders.delete("set-cookie");
+          cacheHeaders.delete("Vary");
+          cacheHeaders.delete("vary");
           cacheHeaders.set("Cache-Control", "public, max-age=604800, s-maxage=604800, immutable");
           cacheHeaders.set("CF-Cache-Status", "HIT");
           cacheHeaders.set("X-Edge-Cache", "HIT");
@@ -218,7 +271,7 @@ export async function onRequest(context) {
             headers: cacheHeaders,
           });
           if (typeof context.waitUntil === "function") {
-            context.waitUntil(edgeCache.put(cacheKey, toCache));
+            context.waitUntil(edgeCache.put(cacheKey, toCache).catch(() => {}));
           } else {
             edgeCache.put(cacheKey, toCache).catch(() => {});
           }
