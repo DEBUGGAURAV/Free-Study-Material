@@ -712,6 +712,7 @@ export default function VirtualPdfReader({
     return 1;
   });
   const [numPages, setNumPages] = useState(0);
+  const [pageInputValue, setPageInputValue] = useState(() => String(currentPage || 1));
   const [scale, setScale] = useState(1.0);
   const [fitMode, setFitMode] = useState("width"); // "width" by default for full-bleed sharp reading | "page" | "custom"
   const [showToolsDrawer, setShowToolsDrawer] = useState(false);
@@ -1116,11 +1117,24 @@ export default function VirtualPdfReader({
 
 
 
-  // Keep currentPageRef in sync with currentPage state
+  // Keep currentPageRef and editable pageInputValue in sync with currentPage state
   const currentPageRef = useRef(currentPage);
   useEffect(() => {
     currentPageRef.current = currentPage;
+    setPageInputValue(String(currentPage || 1));
   }, [currentPage]);
+
+  const handleJumpToPageInput = (rawValue) => {
+    const rawStr = String(rawValue !== undefined ? rawValue : pageInputValue).trim();
+    const parsed = parseInt(rawStr, 10);
+    if (!isNaN(parsed) && parsed >= 1) {
+      const target = Math.max(1, Math.min(numPages || parsed, parsed));
+      setPageInputValue(String(target));
+      changePage(target);
+    } else {
+      setPageInputValue(String(currentPage || 1));
+    }
+  };
 
   // Sync currentPage ONLY when an explicit initialPage > 1 is passed
   useEffect(() => {
@@ -4092,12 +4106,17 @@ export default function VirtualPdfReader({
                   <ChevronLeft size={13} />
                 </button>
 
-                <span
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleJumpToPageInput(pageInputValue);
+                    e.currentTarget.querySelector("input")?.blur();
+                  }}
                   style={{
-                    padding: "2px 7px",
+                    padding: "1px 6px",
                     borderRadius: "5px",
                     background: nightMode ? "rgba(255,255,255,0.08)" : "#f8fafc",
-                    border: nightMode ? "1px solid rgba(255,255,255,0.12)" : "1px solid #cbd5e1",
+                    border: nightMode ? "1px solid rgba(255,255,255,0.16)" : "1px solid #cbd5e1",
                     fontFamily: "var(--font-mono)",
                     fontSize: isMobileScreen ? "0.7rem" : "0.74rem",
                     fontWeight: 700,
@@ -4105,13 +4124,46 @@ export default function VirtualPdfReader({
                     whiteSpace: "nowrap",
                     display: "inline-flex",
                     alignItems: "center",
-                    gap: "4px",
+                    gap: "3px",
                     flexShrink: 0,
                   }}
-                  title={numPages > 1 ? `Page ${currentPage} of ${numPages} (~${Math.max(1, Math.ceil(((numPages || 1) - currentPage) * 1.5))}m reading time left)` : `Page ${currentPage}`}
+                  title={numPages > 1 ? `Type page number (1-${numPages}) and press Enter to jump` : `Page ${currentPage}`}
                 >
-                  <span>{currentPage} / {numPages || "..."}</span>
-                </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="Go to page number"
+                    value={pageInputValue}
+                    disabled={loading}
+                    onFocus={(e) => e.target.select()}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setPageInputValue(e.target.value.replace(/[^0-9]/g, ""))}
+                    onBlur={() => handleJumpToPageInput(pageInputValue)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Escape") {
+                        setPageInputValue(String(currentPage || 1));
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    style={{
+                      width: `${Math.max(2, String(numPages || pageInputValue || "1").length) * 8 + 8}px`,
+                      minWidth: "24px",
+                      maxWidth: "48px",
+                      padding: "1px 2px",
+                      border: "none",
+                      borderRadius: "3px",
+                      outline: "none",
+                      background: nightMode ? "rgba(255,255,255,0.12)" : "#ffffff",
+                      color: nightMode ? "#38bdf8" : "#0284c7",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "inherit",
+                      fontWeight: 800,
+                      textAlign: "center",
+                    }}
+                  />
+                  <span style={{ opacity: 0.7 }}>/ {numPages || "..."}</span>
+                </form>
 
                 <button
                   type="button"
@@ -6363,7 +6415,46 @@ export default function VirtualPdfReader({
                   📖 <strong>Web Reader</strong>
                 </span>
                 <span style={{ opacity: 0.6 }}>•</span>
-                <span>Page {currentPage} of {numPages || 1}</span>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleJumpToPageInput(pageInputValue);
+                    e.currentTarget.querySelector("input")?.blur();
+                  }}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+                >
+                  <span>Page</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    aria-label="Go to page number"
+                    value={pageInputValue}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setPageInputValue(e.target.value.replace(/[^0-9]/g, ""))}
+                    onBlur={() => handleJumpToPageInput(pageInputValue)}
+                    onKeyDown={(e) => {
+                      e.stopPropagation();
+                      if (e.key === "Escape") {
+                        setPageInputValue(String(currentPage || 1));
+                        e.currentTarget.blur();
+                      }
+                    }}
+                    style={{
+                      width: "36px",
+                      padding: "1px 4px",
+                      borderRadius: "4px",
+                      border: nightMode ? "1px solid rgba(255,255,255,0.22)" : "1px solid #cbd5e1",
+                      background: nightMode ? "rgba(255,255,255,0.1)" : "#ffffff",
+                      color: nightMode ? "#38bdf8" : "#0284c7",
+                      fontFamily: "var(--font-mono)",
+                      fontWeight: 800,
+                      fontSize: "0.76rem",
+                      textAlign: "center",
+                      outline: "none",
+                    }}
+                  />
+                  <span>of {numPages || 1}</span>
+                </form>
               </div>
 
               {/* Quick Reader Controls: Zoom, Page Navigation, and Switch to Streamer */}
@@ -7574,8 +7665,13 @@ export default function VirtualPdfReader({
           <ChevronLeft size={16} />
         </button>
 
-        {/* Page Indicator Badge */}
-        <span
+        {/* Editable Page Jump Input Badge */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleJumpToPageInput(pageInputValue);
+            e.currentTarget.querySelector("input")?.blur();
+          }}
           style={{
             fontSize: isTouchOrMobileDevice ? "0.7rem" : "0.74rem",
             fontWeight: 800,
@@ -7585,10 +7681,47 @@ export default function VirtualPdfReader({
             borderRadius: "999px",
             background: nightMode ? "rgba(255, 255, 255, 0.08)" : "#f1f5f9",
             whiteSpace: "nowrap",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "3px",
           }}
+          title="Type page number and press Enter to jump"
         >
-          {currentPage} / {numPages || 1}
-        </span>
+          <input
+            type="text"
+            inputMode="numeric"
+            aria-label="Jump to page"
+            value={pageInputValue}
+            disabled={loading}
+            onFocus={(e) => e.target.select()}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setPageInputValue(e.target.value.replace(/[^0-9]/g, ""))}
+            onBlur={() => handleJumpToPageInput(pageInputValue)}
+            onKeyDown={(e) => {
+              e.stopPropagation();
+              if (e.key === "Escape") {
+                setPageInputValue(String(currentPage || 1));
+                e.currentTarget.blur();
+              }
+            }}
+            style={{
+              width: `${Math.max(2, String(numPages || pageInputValue || "1").length) * 7 + 8}px`,
+              minWidth: "22px",
+              maxWidth: "44px",
+              padding: "0 2px",
+              border: "none",
+              borderRadius: "4px",
+              outline: "none",
+              background: nightMode ? "rgba(255,255,255,0.14)" : "#ffffff",
+              color: nightMode ? "#38bdf8" : "#0284c7",
+              fontFamily: "var(--font-mono)",
+              fontSize: "inherit",
+              fontWeight: 800,
+              textAlign: "center",
+            }}
+          />
+          <span style={{ opacity: 0.7 }}>/ {numPages || 1}</span>
+        </form>
 
         {/* Page Flip: Next Button */}
         <button
