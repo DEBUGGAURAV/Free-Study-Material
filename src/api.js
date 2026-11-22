@@ -1635,6 +1635,11 @@ export const api = {
       body: JSON.stringify({ roomId }),
     }),
   getChatMessages: (roomId) => request(`/chat/messages/${roomId}`),
+  sendChatMessage: (payload) =>
+    request("/chat/messages", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   uploadChatMedia: async (file) => {
     const formData = new FormData();
     formData.append("file", file);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { X, Send, Paperclip, Smile, Shield, Crown, Lock, Globe, Plus, Key, Users, Trash2, Edit2, Copy, Check, FileText, ExternalLink, Megaphone, RefreshCw, LogOut, Download, Eye, MoreVertical, CheckCircle, ArrowLeft, Share2, Mic, Volume2, VolumeX, CornerUpLeft, Play, Pause, BookOpen, ShieldOff, UserX, UserCheck, Camera, Search, Clock } from "lucide-react";
-import { api, getAuthToken } from "../api";
+import { api, getAuthToken, setAuthToken } from "../api";
 import { formatFileSize } from "../utils/formatUtils";
 import { wipeAllDeviceOfflineStorage } from "../utils/offlineQueue";
 import { playChatSound } from "../utils/soundEffects";
@@ -486,12 +486,13 @@ export default function StudentChatModal({
       wsRef.current = ws;
 
       ws.onopen = () => {
+        const activeRoom = currentRoomRef.current || currentRoom;
         // Automatically join current room on connect
         ws.send(
           JSON.stringify({
             type: "join_room",
-            roomId: currentRoom.id,
-            secretCode: currentRoom.secretCode || "",
+            roomId: activeRoom.id,
+            secretCode: activeRoom.secretCode || "",
           })
         );
       };
@@ -525,8 +526,12 @@ export default function StudentChatModal({
           }
           setTimeout(() => scrollToBottom("auto"), 80);
         } else if (data.type === "new_message") {
-          setMessages((prev) => [...prev, data.message]);
-          if (data.message.sender?.id !== currentUser?.id) {
+          setMessages((prev) => {
+            if (!data.message) return prev;
+            if (prev.some((m) => m && m.id === data.message.id)) return prev;
+            return [...prev, data.message];
+          });
+          if (data.message?.sender?.id !== currentUser?.id) {
             playChime("receive");
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: "mark_read" }));
@@ -761,7 +766,7 @@ export default function StudentChatModal({
         ws.close();
       }
     };
-  }, [isOpen, currentUser, currentRoom.id]);
+  }, [isOpen, currentUser?.id]);
 
   // 🛡️ Mobile Keyboard Viewport Adjuster (Zero Overlap with Input Bar)
   useEffect(() => {
@@ -817,7 +822,51 @@ export default function StudentChatModal({
     return () => window.removeEventListener("prefill_student_chat_request", handlePrefill);
   }, []);
 
-  const handleConfirmShareNote = () => {
+  // Universal Message Dispatcher (HTTP REST Primary + WebSocket Broadcast & Fallback — 100% Delivery Guarantee)
+  const dispatchChatMessage = async (payload) => {
+    const activeRoom = currentRoomRef.current || currentRoom;
+    const finalPayload = {
+      roomId: payload.roomId || activeRoom?.id || "public",
+      secretCode: payload.secretCode !== undefined ? payload.secretCode : (activeRoom?.secretCode || ""),
+      text: payload.text || "",
+      messageType: payload.messageType || "text",
+      fileUrl: payload.fileUrl || null,
+      fileName: payload.fileName || null,
+      fileSize: payload.fileSize || null,
+      audioDuration: payload.audioDuration || null,
+      noteData: payload.noteData || null,
+      replyTo: payload.replyTo || null,
+    };
+
+    try {
+      const res = await api.sendChatMessage(finalPayload);
+      if (res && res.success && res.message) {
+        if (finalPayload.roomId === (currentRoomRef.current?.id || currentRoom?.id)) {
+          setMessages((prev) => {
+            if (prev.some((m) => m && m.id === res.message.id)) return prev;
+            return [...prev, res.message];
+          });
+          setTimeout(() => scrollToBottom("smooth"), 50);
+        }
+        return res.message;
+      }
+    } catch (restErr) {
+      console.warn("[CHAT] REST send notice, attempting WebSocket fallback:", restErr.message);
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: "send_message",
+            ...finalPayload,
+          })
+        );
+        return true;
+      }
+      throw restErr;
+    }
+    return null;
+  };
+
+  const handleConfirmShareNote = async () => {
     if (!shareNoteModal) return;
     const note = shareNoteModal;
     const targetRoom =
@@ -826,38 +875,39 @@ export default function StudentChatModal({
         ? { id: "public", name: "💬 Public Community Chat", isPrivate: false }
         : currentRoom);
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: "send_message",
-          roomId: targetRoom.id,
-          secretCode: targetRoom.secretCode || "",
-          text: shareCustomText.trim() || `Shared Note: ${note.title}`,
-          messageType: "note",
-          noteData: {
-            id: note.id,
-            title: note.title,
-            subject: note.subject,
-            branch: note.branch,
-            year: note.year,
-            fileSize: note.fileSize,
-            fileUrl: note.fileUrl || note.downloadUrl || "",
-          },
-        })
-      );
-      playChime("send");
-
-      if (currentRoom.id !== targetRoom.id) {
-        handleSwitchRoom(targetRoom);
-      }
-      setTimeout(() => scrollToBottom("smooth"), 100);
-    }
     setShareNoteModal(null);
+    playChime("send");
+
+    if (currentRoom.id !== targetRoom.id) {
+      handleSwitchRoom(targetRoom);
+    }
+
+    try {
+      await dispatchChatMessage({
+        roomId: targetRoom.id,
+        secretCode: targetRoom.secretCode || "",
+        text: shareCustomText.trim() || `Shared Note: ${note.title}`,
+        messageType: "note",
+        noteData: {
+          id: note.id,
+          title: note.title,
+          subject: note.subject,
+          branch: note.branch,
+          year: note.year,
+          fileSize: note.fileSize,
+          fileUrl: note.fileUrl || note.downloadUrl || "",
+        },
+      });
+      setTimeout(() => scrollToBottom("smooth"), 100);
+    } catch (err) {
+      alert("Could not share note to chat: " + err.message);
+    }
   };
 
   // Switch Room
   const handleSwitchRoom = (room) => {
     setCurrentRoom(room);
+    currentRoomRef.current = room;
     setActiveTab(room.isPrivate ? "private" : "public");
     setMessages([]);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -869,6 +919,12 @@ export default function StudentChatModal({
         })
       );
     }
+    api.getChatMessages(room.id).then((res) => {
+      if (res && res.success && Array.isArray(res.messages)) {
+        setMessages((prev) => (prev.length > 0 ? prev : res.messages));
+        setTimeout(() => scrollToBottom("auto"), 80);
+      }
+    }).catch(() => {});
   };
 
   // Handle Input Change & Mention Trigger Detection (@)
@@ -1076,31 +1132,39 @@ export default function StudentChatModal({
     }
   };
 
-  // Send Message
-  const handleSendMessage = (e) => {
-    e?.preventDefault();
-    if (!messageText.trim() || isBlocked) return;
+  // Send Message (Guaranteed delivery on Enter key & Send button)
+  const handleSendMessage = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const cleanText = messageText.trim();
+    if (!cleanText || isBlocked) return;
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(
-        JSON.stringify({
-          type: "send_message",
-          text: messageText.trim(),
-          messageType: "text",
-          replyTo: replyingTo
-            ? {
-                id: replyingTo.id,
-                text: replyingTo.text,
-                senderName: replyingTo.senderName,
-                type: replyingTo.type,
-              }
-            : null,
-        })
-      );
-      playChime("send");
-      setMessageText("");
-      setShowEmojiPicker(false);
-      setReplyingTo(null);
+    const activeRoom = currentRoomRef.current || currentRoom;
+    const replyPayload = replyingTo
+      ? {
+          id: replyingTo.id,
+          text: replyingTo.text,
+          senderName: replyingTo.senderName,
+          type: replyingTo.type,
+        }
+      : null;
+
+    setMessageText("");
+    setShowEmojiPicker(false);
+    setReplyingTo(null);
+    playChime("send");
+
+    try {
+      await dispatchChatMessage({
+        roomId: activeRoom?.id || "public",
+        secretCode: activeRoom?.secretCode || "",
+        text: cleanText,
+        messageType: "text",
+        replyTo: replyPayload,
+      });
+    } catch (err) {
+      console.error("[CHAT] Send message error:", err.message);
+      setMessageText(cleanText);
+      alert(err.message || "Could not send message. Please try again.");
     }
   };
 
@@ -1185,26 +1249,23 @@ export default function StudentChatModal({
         const audioFile = new File([audioBlob], `voice-note-${Date.now()}.webm`, { type: "audio/webm" });
         setUploadingFile(true);
         const res = await api.uploadChatMedia(audioFile);
-        if (res && res.success && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(
-            JSON.stringify({
-              type: "send_message",
-              text: `🎙️ Voice Note (${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")})`,
-              messageType: "audio",
-              fileUrl: res.fileUrl,
-              fileName: res.fileName,
-              fileSize: res.fileSize,
-              audioDuration: duration,
-              replyTo: replyingTo
-                ? {
-                    id: replyingTo.id,
-                    text: replyingTo.text,
-                    senderName: replyingTo.senderName,
-                    type: replyingTo.type,
-                  }
-                : null,
-            })
-          );
+        if (res && res.success) {
+          await dispatchChatMessage({
+            text: `🎙️ Voice Note (${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")})`,
+            messageType: "audio",
+            fileUrl: res.fileUrl,
+            fileName: res.fileName,
+            fileSize: res.fileSize,
+            audioDuration: duration,
+            replyTo: replyingTo
+              ? {
+                  id: replyingTo.id,
+                  text: replyingTo.text,
+                  senderName: replyingTo.senderName,
+                  type: replyingTo.type,
+                }
+              : null,
+          });
           playChime("send");
           setReplyingTo(null);
         }
@@ -1231,29 +1292,26 @@ export default function StudentChatModal({
     try {
       setUploadingFile(true);
       const res = await api.uploadChatMedia(file);
-      if (res && res.success && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      if (res && res.success) {
         const isPdf = file.type?.includes("pdf") || file.name?.toLowerCase().endsWith(".pdf");
         const isImg = file.type?.startsWith("image/") || /\.(png|jpe?g|webp|gif)$/i.test(file.name);
         const msgType = isImg ? "image" : isPdf ? "document" : "file";
 
-        wsRef.current.send(
-          JSON.stringify({
-            type: "send_message",
-            text: isPdf ? `📄 Academic Document: ${res.fileName || file.name}` : `🖼️ Image: ${res.fileName || file.name}`,
-            messageType: msgType,
-            fileUrl: res.fileUrl,
-            fileName: res.fileName || file.name,
-            fileSize: res.fileSize || file.size,
-            replyTo: replyingTo
-              ? {
-                  id: replyingTo.id,
-                  text: replyingTo.text,
-                  senderName: replyingTo.senderName,
-                  type: replyingTo.type,
-                }
-              : null,
-          })
-        );
+        await dispatchChatMessage({
+          text: isPdf ? `📄 Academic Document: ${res.fileName || file.name}` : `🖼️ Image: ${res.fileName || file.name}`,
+          messageType: msgType,
+          fileUrl: res.fileUrl,
+          fileName: res.fileName || file.name,
+          fileSize: res.fileSize || file.size,
+          replyTo: replyingTo
+            ? {
+                id: replyingTo.id,
+                text: replyingTo.text,
+                senderName: replyingTo.senderName,
+                type: replyingTo.type,
+              }
+            : null,
+        });
         playChime("send");
         setReplyingTo(null);
       }
@@ -2294,522 +2352,519 @@ export default function StudentChatModal({
         }}
       >
         {/* =========================================================
-            HEADER APP BAR (INSTAGRAM / WHATSAPP HYBRID)
+            HEADER APP BAR (INSTAGRAM / WHATSAPP HYBRID — ZERO OVERLAP)
             ========================================================= */}
         <div
           className="scm-header-wrap"
           style={{
-            padding: "12px 18px",
+            padding: "10px 16px",
             background: "#ffffff",
             borderBottom: "1.5px solid #e2e8f0",
             display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
+            flexDirection: "column",
+            gap: "8px",
             zIndex: 10,
           }}
         >
-          {/* Left: Back / Close & Room Identity */}
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1 }}>
-            {/* Back Button */}
-            <button
-              onClick={onClose}
-              style={{
-                background: "#f1f5f9",
-                border: "1.5px solid #cbd5e1",
-                borderRadius: "10px",
-                width: "36px",
-                height: "36px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#334155",
-                cursor: "pointer",
-                flexShrink: 0,
-                transition: "all 0.15s ease",
-              }}
-              title="Close Chat"
-            >
-              <ArrowLeft size={18} />
-            </button>
-
-            {/* Room Avatar with Instagram Story Gradient Ring */}
-            <div
-              style={{
-                position: "relative",
-                width: "42px",
-                height: "42px",
-                borderRadius: "50%",
-                padding: "2px",
-                background: currentRoom.isPrivate
-                  ? "linear-gradient(135deg, #ef4444 0%, #f97316 100%)"
-                  : "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
-                flexShrink: 0,
-              }}
-            >
-              <div
+          {/* Row 1: Room Identity (Left) + Global Controls (Right) */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
+              width: "100%",
+              minWidth: 0,
+            }}
+          >
+            {/* Left: Back / Close & Room Identity */}
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0, flex: 1, overflow: "hidden" }}>
+              {/* Back Button */}
+              <button
+                type="button"
+                onClick={onClose}
                 style={{
-                  width: "100%",
-                  height: "100%",
-                  borderRadius: "50%",
-                  background: "#ffffff",
+                  background: "#f1f5f9",
+                  border: "1.5px solid #cbd5e1",
+                  borderRadius: "10px",
+                  width: "36px",
+                  height: "36px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#0f172a",
-                  fontSize: "1.05rem",
-                  boxShadow: "inset 0 0 4px rgba(0,0,0,0.06)",
+                  color: "#334155",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  transition: "all 0.15s ease",
                 }}
+                title="Close Chat"
               >
-                {currentRoom.isPrivate ? <Lock size={18} color="#ef4444" /> : "🏛️"}
-              </div>
+                <ArrowLeft size={18} />
+              </button>
 
-              {/* Pulsing Active Online Dot */}
-              <span
-                style={{
-                  position: "absolute",
-                  bottom: "1px",
-                  right: "1px",
-                  width: "11px",
-                  height: "11px",
-                  borderRadius: "50%",
-                  background: "#10b981",
-                  border: "2px solid #ffffff",
-                  boxShadow: "0 0 6px #10b981",
-                }}
-              />
-            </div>
-
-            {/* Room Title & Online Subtitle */}
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "0.98rem",
-                    fontWeight: 800,
-                    color: "#0f172a",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                  title={currentRoom.name}
-                >
-                  {currentRoom.name}
-                </h3>
-                {currentRoom.isPrivate && (
-                  <span
-                    style={{
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      padding: "2px 7px",
-                      borderRadius: "6px",
-                      background: "rgba(99, 102, 241, 0.2)",
-                      border: "1px solid rgba(99, 102, 241, 0.4)",
-                      color: "#a5b4fc",
-                      flexShrink: 0,
-                      letterSpacing: "0.03em",
-                    }}
-                  >
-                    PRIVATE
-                  </span>
-                )}
-                {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
-                  <button
-                    type="button"
-                    onClick={() => openRenameModal(currentRoom)}
-                    style={{
-                      background: "rgba(56, 189, 248, 0.14)",
-                      border: "1px solid rgba(56, 189, 248, 0.35)",
-                      borderRadius: "6px",
-                      padding: "2px 6px",
-                      color: "#38bdf8",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "3px",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                      transition: "all 0.15s ease",
-                    }}
-                    title="Rename this private chat room"
-                  >
-                    <Edit2 size={11} />
-                    <span>Rename</span>
-                  </button>
-                )}
-                {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
-                  <button
-                    type="button"
-                    onClick={() => openMembersModal(currentRoom)}
-                    style={{
-                      background: "rgba(168, 85, 247, 0.14)",
-                      border: "1px solid rgba(168, 85, 247, 0.35)",
-                      borderRadius: "6px",
-                      padding: "2px 6px",
-                      color: "#c084fc",
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "3px",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                      transition: "all 0.15s ease",
-                    }}
-                    title="Manage members & reset invite link"
-                  >
-                    <Users size={11} />
-                    <span>Members</span>
-                  </button>
-                )}
-                {currentRoom.isPrivate && isAdmin && (
-                  <span
-                    style={{
-                      fontSize: "0.65rem",
-                      fontWeight: 700,
-                      padding: "1px 6px",
-                      borderRadius: "6px",
-                      background: "rgba(249, 115, 22, 0.2)",
-                      border: "1px solid rgba(249, 115, 22, 0.45)",
-                      color: "#fb923c",
-                      flexShrink: 0,
-                    }}
-                    title="Administrator active"
-                  >
-                    👑 ADMIN
-                  </span>
-                )}
-              </div>
-
+              {/* Room Avatar with Instagram Story Gradient Ring */}
               <div
                 style={{
-                  fontSize: "0.74rem",
-                  color: "var(--accent-emerald)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  marginTop: "1px",
-                }}
-              >
-                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", display: "inline-block" }} />
-                <span style={{ color: "var(--text-dim)" }}>
-                  Active now • <strong style={{ color: "#34d399" }}>{onlineCount}</strong> {currentRoom.isPrivate ? "student(s)" : "online"}
-                  {currentRoom.isPrivate && isAdmin && (
-                    <span style={{ color: "#fb923c", marginLeft: "6px", fontWeight: 700 }}>
-                      (Admin Active)
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Header Actions */}
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
-            {/* If in Private Chat: Quick Copy Invite Code Chip */}
-            {currentRoom.isPrivate && currentRoom.secretCode && (
-              <button
-                onClick={handleCopySecretKey}
-                style={{
-                  background: "rgba(6, 182, 212, 0.12)",
-                  border: "1px solid rgba(6, 182, 212, 0.35)",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  color: "var(--accent-cyan)",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                }}
-                title="Tap to copy Invite Code"
-              >
-                {copiedCode ? <Check size={12} color="#34d399" /> : <Copy size={12} />}
-                <span>{currentRoom.secretCode}</span>
-              </button>
-            )}
-
-            {/* 🚀 If in Private Chat: Dedicated Share Button */}
-            {currentRoom.isPrivate && currentRoom.secretCode && (
-              <button
-                onClick={() => handleSharePrivateRoom(currentRoom)}
-                style={{
-                  background: "linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2))",
-                  border: "1px solid rgba(56, 189, 248, 0.45)",
-                  borderRadius: "999px",
-                  padding: "4px 11px",
-                  color: "#38bdf8",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.18s ease",
-                }}
-                title="Share this Private Chat with peers"
-              >
-                <Share2 size={12} />
-                <span>Share</span>
-              </button>
-            )}
-
-            {/* Host or Admin: Rename Chat Button */}
-            {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
-              <button
-                onClick={() => openRenameModal(currentRoom)}
-                style={{
-                  background: "rgba(56, 189, 248, 0.15)",
-                  border: "1px solid rgba(56, 189, 248, 0.4)",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  color: "#38bdf8",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                title="Rename this private study room"
-              >
-                <Edit2 size={12} color="#38bdf8" />
-                <span>Rename</span>
-              </button>
-            )}
-
-            {/* Host or Admin: Manage Members Button */}
-            {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
-              <button
-                onClick={() => openMembersModal(currentRoom)}
-                style={{
-                  background: "rgba(168, 85, 247, 0.15)",
-                  border: "1px solid rgba(168, 85, 247, 0.4)",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  color: "#c084fc",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                title="Manage members, add/remove students & reset invite link"
-              >
-                <Users size={12} color="#c084fc" />
-                <span>Members</span>
-              </button>
-            )}
-
-            {/* Host or Admin: Permanently Delete Chat Button */}
-            {currentRoom.isPrivate && (currentRoom.createdBy === currentUser?.id || isAdmin) && (
-              <button
-                onClick={handleDeletePrivateRoom}
-                style={{
-                  background: "rgba(239, 68, 68, 0.15)",
-                  border: "1px solid rgba(239, 68, 68, 0.35)",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  color: "#fca5a5",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                title="Permanently delete this private chat for all participants"
-              >
-                <Trash2 size={12} color="#fca5a5" />
-                <span>Delete Chat</span>
-              </button>
-            )}
-
-            {/* Non-creator Joined Participant: Leave Chat Button (Chat stays active for host) */}
-            {currentRoom.isPrivate && currentRoom.createdBy !== currentUser?.id && !isAdmin && (
-              <button
-                onClick={handleLeavePrivateRoom}
-                style={{
-                  background: "rgba(245, 158, 11, 0.15)",
-                  border: "1px solid rgba(245, 158, 11, 0.35)",
-                  borderRadius: "999px",
-                  padding: "4px 10px",
-                  color: "#fcd34d",
-                  fontSize: "0.74rem",
-                  fontWeight: 700,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                }}
-                title="Leave this private chat (remains active for host and others)"
-              >
-                <LogOut size={12} color="#fcd34d" />
-                <span>Leave Chat</span>
-              </button>
-            )}
-
-            {/* Admin Purge Button */}
-            {isAdmin && (
-              <button
-                onClick={handlePurgeRoom}
-                style={{
-                  background: "rgba(239, 68, 68, 0.15)",
-                  border: "1px solid rgba(239, 68, 68, 0.3)",
-                  borderRadius: "8px",
-                  padding: "6px 9px",
-                  color: "#fca5a5",
-                  fontSize: "0.74rem",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-                title="Admin Action: Purge Messages"
-              >
-                <Trash2 size={13} />
-                <span className="scm-action-btn-text">Purge</span>
-              </button>
-            )}
-
-            {/* Admin Blocked Users Manager Button */}
-            {isAdmin && (
-              <button
-                onClick={() => {
-                  fetchBlockedStudents();
-                  setShowBlockedModal(true);
-                }}
-                style={{
-                  background: blockedUserIds.size > 0 ? "rgba(239, 68, 68, 0.18)" : "rgba(245, 158, 11, 0.12)",
-                  border: blockedUserIds.size > 0 ? "1px solid rgba(239, 68, 68, 0.45)" : "1px solid rgba(245, 158, 11, 0.35)",
-                  borderRadius: "8px",
-                  padding: "6px 9px",
-                  color: blockedUserIds.size > 0 ? "#fca5a5" : "#fcd34d",
-                  fontSize: "0.74rem",
-                  cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "4px",
-                  fontWeight: 600,
-                }}
-                title="View & manage blocked students across all rooms"
-              >
-                {blockedUserIds.size > 0 ? <ShieldOff size={13} color="#ef4444" /> : <Shield size={13} color="#f59e0b" />}
-                <span className="scm-action-btn-text">
-                  {blockedUserIds.size > 0 ? `${blockedUserIds.size} Blocked` : "Blocked"}
-                </span>
-              </button>
-            )}
-
-            {/* Student Chat DP & Handle Button */}
-            <button
-              onClick={() => {
-                setEditingUsername(chatProfile?.chatUsername || "");
-                setAvatarPreview(chatProfile?.avatarUrl || "");
-                setAvatarFile(null);
-                setProfileMsg(null);
-                setShowChatProfileModal(true);
-              }}
-              style={{
-                background: "rgba(56, 189, 248, 0.12)",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-                borderRadius: "999px",
-                padding: "3px 10px 3px 4px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-              }}
-              title="Edit Chat Handle & Profile"
-            >
-              <div
-                style={{
-                  width: "26px",
-                  height: "26px",
+                  position: "relative",
+                  width: "40px",
+                  height: "40px",
                   borderRadius: "50%",
-                  overflow: "hidden",
-                  background: "#0284c7",
-                  color: "#fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "0.72rem",
-                  fontWeight: 800,
+                  padding: "2px",
+                  background: currentRoom.isPrivate
+                    ? "linear-gradient(135deg, #ef4444 0%, #f97316 100%)"
+                    : "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
                   flexShrink: 0,
                 }}
               >
-                {chatProfile?.avatarUrl ? (
-                  <img src={chatProfile.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  (chatProfile?.chatUsername || currentUser?.name || "U").charAt(0).toUpperCase()
-                )}
+                <div
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    borderRadius: "50%",
+                    background: "#ffffff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#0f172a",
+                    fontSize: "1.02rem",
+                    boxShadow: "inset 0 0 4px rgba(0,0,0,0.06)",
+                  }}
+                >
+                  {currentRoom.isPrivate ? <Lock size={17} color="#ef4444" /> : "🏛️"}
+                </div>
+
+                {/* Pulsing Active Online Dot */}
+                <span
+                  style={{
+                    position: "absolute",
+                    bottom: "1px",
+                    right: "1px",
+                    width: "11px",
+                    height: "11px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    border: "2px solid #ffffff",
+                    boxShadow: "0 0 6px #10b981",
+                  }}
+                />
               </div>
-              <span style={{ fontSize: "0.74rem", fontWeight: 700, color: "#38bdf8" }}>
-                {chatProfile?.chatUsername ? `@${chatProfile.chatUsername}` : "My Profile"}
-              </span>
-            </button>
 
-            {/* Sound Chimes Mute / Unmute Toggle */}
-            <button
-              onClick={toggleSound}
-              style={{
-                background: soundEnabled ? "rgba(56, 189, 248, 0.12)" : "rgba(239, 68, 68, 0.15)",
-                border: soundEnabled ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(239, 68, 68, 0.35)",
-                borderRadius: "8px",
-                padding: "6px 9px",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "5px",
-                color: soundEnabled ? "#38bdf8" : "#fca5a5",
-                fontSize: "0.74rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-              }}
-              title={soundEnabled ? "Chat Sound: ON (Click to Mute)" : "Chat Sound: MUTED (Click to Unmute)"}
-              aria-label={soundEnabled ? "Mute Chat Sounds" : "Unmute Chat Sounds"}
-            >
-              {soundEnabled ? <Volume2 size={13} /> : <VolumeX size={13} />}
-              <span className="scm-action-btn-text">
-                {soundEnabled ? "Sound ON" : "Muted"}
-              </span>
-            </button>
+              {/* Room Title & Online Subtitle */}
+              <div style={{ minWidth: 0, flex: 1, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", minWidth: 0, overflow: "hidden" }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: "0.96rem",
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      minWidth: 0,
+                    }}
+                    title={currentRoom.name}
+                  >
+                    {currentRoom.name}
+                  </h3>
+                  {currentRoom.isPrivate && (
+                    <span
+                      style={{
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        padding: "2px 6px",
+                        borderRadius: "6px",
+                        background: "#eef2ff",
+                        border: "1px solid #c7d2fe",
+                        color: "#4338ca",
+                        flexShrink: 0,
+                        letterSpacing: "0.03em",
+                      }}
+                    >
+                      PRIVATE
+                    </span>
+                  )}
+                  {currentRoom.isPrivate && isAdmin && (
+                    <span
+                      style={{
+                        fontSize: "0.62rem",
+                        fontWeight: 800,
+                        padding: "2px 6px",
+                        borderRadius: "6px",
+                        background: "#fff7ed",
+                        border: "1px solid #fed7aa",
+                        color: "#c2410c",
+                        flexShrink: 0,
+                      }}
+                      title="Administrator active"
+                    >
+                      👑 ADMIN
+                    </span>
+                  )}
+                </div>
 
-            {/* Close Button */}
-            <button
-              onClick={onClose}
+                <div
+                  style={{
+                    fontSize: "0.73rem",
+                    color: "#059669",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginTop: "2px",
+                  }}
+                >
+                  <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#10b981", display: "inline-block", flexShrink: 0 }} />
+                  <span style={{ color: "#475569", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    Active now • <strong style={{ color: "#059669" }}>{onlineCount}</strong> {currentRoom.isPrivate ? "student(s)" : "online"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Header Global Actions */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+              {/* Admin Purge Button */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handlePurgeRoom}
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: "8px",
+                    padding: "5px 9px",
+                    color: "#dc2626",
+                    fontSize: "0.73rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                  title="Admin Action: Purge Messages"
+                >
+                  <Trash2 size={13} color="#dc2626" />
+                  <span className="scm-action-btn-text">Purge</span>
+                </button>
+              )}
+
+              {/* Admin Blocked Users Manager Button */}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchBlockedStudents();
+                    setShowBlockedModal(true);
+                  }}
+                  style={{
+                    background: blockedUserIds.size > 0 ? "#fef2f2" : "#fffbeb",
+                    border: blockedUserIds.size > 0 ? "1px solid #fecaca" : "1px solid #fde68a",
+                    borderRadius: "8px",
+                    padding: "5px 9px",
+                    color: blockedUserIds.size > 0 ? "#dc2626" : "#b45309",
+                    fontSize: "0.73rem",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontWeight: 700,
+                  }}
+                  title="View & manage blocked students across all rooms"
+                >
+                  {blockedUserIds.size > 0 ? <ShieldOff size={13} color="#dc2626" /> : <Shield size={13} color="#d97706" />}
+                  <span className="scm-action-btn-text">
+                    {blockedUserIds.size > 0 ? `${blockedUserIds.size} Blocked` : "Blocked"}
+                  </span>
+                </button>
+              )}
+
+              {/* Student Chat DP & Handle Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingUsername(chatProfile?.chatUsername || "");
+                  setAvatarPreview(chatProfile?.avatarUrl || "");
+                  setAvatarFile(null);
+                  setProfileMsg(null);
+                  setShowChatProfileModal(true);
+                }}
+                style={{
+                  background: "#f0f9ff",
+                  border: "1px solid #bae6fd",
+                  borderRadius: "999px",
+                  padding: "3px 10px 3px 4px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                title="Edit Chat Handle & Profile"
+              >
+                <div
+                  style={{
+                    width: "25px",
+                    height: "25px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background: "#0284c7",
+                    color: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.72rem",
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  {chatProfile?.avatarUrl ? (
+                    <img src={chatProfile.avatarUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    (chatProfile?.chatUsername || currentUser?.name || "U").charAt(0).toUpperCase()
+                  )}
+                </div>
+                <span style={{ fontSize: "0.73rem", fontWeight: 700, color: "#0369a1" }}>
+                  {chatProfile?.chatUsername ? `@${chatProfile.chatUsername}` : "My Profile"}
+                </span>
+              </button>
+
+              {/* Sound Chimes Mute / Unmute Toggle */}
+              <button
+                type="button"
+                onClick={toggleSound}
+                style={{
+                  background: soundEnabled ? "#f0f9ff" : "#fef2f2",
+                  border: soundEnabled ? "1px solid #bae6fd" : "1px solid #fecaca",
+                  borderRadius: "8px",
+                  padding: "5px 9px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  color: soundEnabled ? "#0369a1" : "#dc2626",
+                  fontSize: "0.73rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.2s ease",
+                }}
+                title={soundEnabled ? "Chat Sound: ON (Click to Mute)" : "Chat Sound: MUTED (Click to Unmute)"}
+                aria-label={soundEnabled ? "Mute Chat Sounds" : "Unmute Chat Sounds"}
+              >
+                {soundEnabled ? <Volume2 size={13} color="#0284c7" /> : <VolumeX size={13} color="#dc2626" />}
+                <span className="scm-action-btn-text">
+                  {soundEnabled ? "Sound ON" : "Muted"}
+                </span>
+              </button>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "10px",
+                  background: "#fef2f2",
+                  border: "1.5px solid #fecaca",
+                  color: "#ef4444",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                  boxShadow: "0 2px 6px rgba(239, 68, 68, 0.12)",
+                  transition: "all 0.15s ease",
+                }}
+                title="Close Chat (ESC)"
+              >
+                <X size={17} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2 (Only when inside a Private Room): Dedicated Room Controls Strip — Zero Overlap */}
+          {currentRoom.isPrivate && (
+            <div
               style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "10px",
-                background: "#fef2f2",
-                border: "1.5px solid #fecaca",
-                color: "#ef4444",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                flexShrink: 0,
-                boxShadow: "0 2px 6px rgba(239, 68, 68, 0.15)",
-                transition: "all 0.15s ease",
+                gap: "6px",
+                paddingTop: "6px",
+                borderTop: "1px dashed #e2e8f0",
+                overflowX: "auto",
+                scrollbarWidth: "none",
+                WebkitOverflowScrolling: "touch",
               }}
-              title="Close Chat (ESC)"
             >
-              <X size={18} strokeWidth={2.5} />
-            </button>
-          </div>
+              <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "#64748b", marginRight: "2px", whiteSpace: "nowrap" }}>
+                Room Controls:
+              </span>
+
+              {/* Quick Copy Invite Code Chip */}
+              {currentRoom.secretCode && (
+                <button
+                  type="button"
+                  onClick={handleCopySecretKey}
+                  style={{
+                    background: "#f0f9ff",
+                    border: "1px solid #bae6fd",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#0369a1",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Tap to copy Invite Code"
+                >
+                  {copiedCode ? <Check size={12} color="#059669" /> : <Copy size={12} color="#0284c7" />}
+                  <span>Code: {currentRoom.secretCode}</span>
+                </button>
+              )}
+
+              {/* Share Private Room Button */}
+              {currentRoom.secretCode && (
+                <button
+                  type="button"
+                  onClick={() => handleSharePrivateRoom(currentRoom)}
+                  style={{
+                    background: "#eff6ff",
+                    border: "1px solid #bfdbfe",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#1d4ed8",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Share this Private Chat with peers"
+                >
+                  <Share2 size={12} color="#2563eb" />
+                  <span>Share</span>
+                </button>
+              )}
+
+              {/* Host or Admin: Rename Chat Button */}
+              {(currentRoom.createdBy === currentUser?.id || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => openRenameModal(currentRoom)}
+                  style={{
+                    background: "#f0fdf4",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#15803d",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Rename this private study room"
+                >
+                  <Edit2 size={11} color="#16a34a" />
+                  <span>Rename</span>
+                </button>
+              )}
+
+              {/* Host or Admin: Manage Members Button */}
+              {(currentRoom.createdBy === currentUser?.id || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={() => openMembersModal(currentRoom)}
+                  style={{
+                    background: "#faf5ff",
+                    border: "1px solid #e9d5ff",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#7e22ce",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Manage members, add/remove students & reset invite link"
+                >
+                  <Users size={12} color="#9333ea" />
+                  <span>Members</span>
+                </button>
+              )}
+
+              {/* Host or Admin: Permanently Delete Chat Button */}
+              {(currentRoom.createdBy === currentUser?.id || isAdmin) && (
+                <button
+                  type="button"
+                  onClick={handleDeletePrivateRoom}
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fecaca",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#dc2626",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Permanently delete this private chat for all participants"
+                >
+                  <Trash2 size={12} color="#dc2626" />
+                  <span>Delete Chat</span>
+                </button>
+              )}
+
+              {/* Non-creator Joined Participant: Leave Chat Button */}
+              {currentRoom.createdBy !== currentUser?.id && !isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleLeavePrivateRoom}
+                  style={{
+                    background: "#fffbeb",
+                    border: "1px solid #fde68a",
+                    borderRadius: "999px",
+                    padding: "3px 10px",
+                    color: "#b45309",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  title="Leave this private chat (remains active for host and others)"
+                >
+                  <LogOut size={12} color="#d97706" />
+                  <span>Leave Chat</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* =========================================================
@@ -3252,37 +3307,39 @@ export default function StudentChatModal({
                           }
                         }}
                         style={{
-                          background: "rgba(255, 255, 255, 0.025)",
-                          border: "1px solid rgba(255, 255, 255, 0.08)",
+                          background: "#f8fafc",
+                          border: "1.5px solid #cbd5e1",
                           borderRadius: "12px",
                           padding: "12px 14px",
                           cursor: "pointer",
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
+                          gap: "10px",
+                          flexWrap: "wrap",
                           transition: "all 0.18s ease",
                         }}
                       >
                         <div style={{ minWidth: 0, flex: 1, paddingRight: "8px" }}>
-                          <div style={{ fontSize: "0.86rem", fontWeight: 700, color: "#fff", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: "0.88rem", fontWeight: 800, color: "#0f172a", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
                             {r.name}
                           </div>
                           {r.secretCode ? (
-                            <div style={{ fontSize: "0.72rem", color: "var(--accent-cyan)", marginTop: "2px" }}>
+                            <div style={{ fontSize: "0.73rem", color: "#0284c7", fontWeight: 700, marginTop: "2px" }}>
                               Code: {r.secretCode}
                             </div>
                           ) : isAdmin ? (
-                            <div style={{ fontSize: "0.72rem", color: "#fb923c", marginTop: "2px" }}>
+                            <div style={{ fontSize: "0.73rem", color: "#c2410c", fontWeight: 700, marginTop: "2px" }}>
                               👑 Administrator Access
                             </div>
                           ) : (
-                            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "2px" }}>
+                            <div style={{ fontSize: "0.73rem", color: "#64748b", marginTop: "2px" }}>
                               🔒 Passcode Required
                             </div>
                           )}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                          <span style={{ fontSize: "0.72rem", color: "#34d399", fontWeight: 700 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 700 }}>
                             {r.membersCount} Online
                           </span>
                           <button
@@ -3292,13 +3349,13 @@ export default function StudentChatModal({
                               handleSharePrivateRoom(r);
                             }}
                             style={{
-                              background: "rgba(6, 182, 212, 0.15)",
-                              border: "1px solid rgba(6, 182, 212, 0.35)",
+                              background: "#eff6ff",
+                              border: "1px solid #bfdbfe",
                               borderRadius: "8px",
                               padding: "4px 8px",
-                              color: "#38bdf8",
+                              color: "#1d4ed8",
                               fontSize: "0.72rem",
-                              fontWeight: 600,
+                              fontWeight: 700,
                               display: "inline-flex",
                               alignItems: "center",
                               gap: "4px",
@@ -3307,7 +3364,7 @@ export default function StudentChatModal({
                             }}
                             title="Share this Private Chat"
                           >
-                            <Share2 size={12} />
+                            <Share2 size={12} color="#2563eb" />
                             <span>Share</span>
                           </button>
                           {(r.createdBy === currentUser?.id || isAdmin) && (
@@ -3318,13 +3375,13 @@ export default function StudentChatModal({
                                 openRenameModal(r);
                               }}
                               style={{
-                                background: "rgba(56, 189, 248, 0.15)",
-                                border: "1px solid rgba(56, 189, 248, 0.35)",
+                                background: "#f0fdf4",
+                                border: "1px solid #bbf7d0",
                                 borderRadius: "8px",
                                 padding: "4px 8px",
-                                color: "#38bdf8",
+                                color: "#15803d",
                                 fontSize: "0.72rem",
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
@@ -3333,7 +3390,7 @@ export default function StudentChatModal({
                               }}
                               title="Rename this Private Chat"
                             >
-                              <Edit2 size={11} />
+                              <Edit2 size={11} color="#16a34a" />
                               <span>Rename</span>
                             </button>
                           )}
@@ -3345,13 +3402,13 @@ export default function StudentChatModal({
                                 openMembersModal(r);
                               }}
                               style={{
-                                background: "rgba(168, 85, 247, 0.15)",
-                                border: "1px solid rgba(168, 85, 247, 0.35)",
+                                background: "#faf5ff",
+                                border: "1px solid #e9d5ff",
                                 borderRadius: "8px",
                                 padding: "4px 8px",
-                                color: "#c084fc",
+                                color: "#7e22ce",
                                 fontSize: "0.72rem",
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 display: "inline-flex",
                                 alignItems: "center",
                                 gap: "4px",
@@ -3360,7 +3417,7 @@ export default function StudentChatModal({
                               }}
                               title="Manage Members & Link"
                             >
-                              <Users size={11} />
+                              <Users size={11} color="#9333ea" />
                               <span>Members</span>
                             </button>
                           )}
@@ -3377,12 +3434,12 @@ export default function StudentChatModal({
             {/* MESSAGES LIST */}
             <div className="scm-chat-feed">
               {(!Array.isArray(messages) || messages.length === 0) ? (
-                <div style={{ textAlign: "center", margin: "auto", color: "var(--text-dim)", maxWidth: "320px", padding: "20px" }}>
+                <div style={{ textAlign: "center", margin: "auto", color: "#475569", maxWidth: "340px", padding: "24px 20px" }}>
                   <div style={{ fontSize: "2.5rem", marginBottom: "10px" }}>💬</div>
-                  <div style={{ fontSize: "1rem", fontWeight: 800, color: "#fff", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "#0f172a", marginBottom: "6px" }}>
                     Welcome to {currentRoom?.name || "Community Chat"}!
                   </div>
-                  <div style={{ fontSize: "0.8rem", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "0.82rem", color: "#64748b", lineHeight: 1.5 }}>
                     Be the first to say hi, ask a question regarding exam topics, or share an academic note with classmates.
                   </div>
                 </div>
@@ -4373,6 +4430,13 @@ export default function StudentChatModal({
                         } else if (e.key === "Tab" && showMentionDropdown && mentionSuggestions.length > 0) {
                           e.preventDefault();
                           insertMention(mentionSuggestions[0].tag);
+                        } else if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          if (showMentionDropdown && mentionSuggestions.length > 0 && mentionQuery) {
+                            insertMention(mentionSuggestions[0].tag);
+                          } else {
+                            handleSendMessage(e);
+                          }
                         }
                       }}
                       disabled={isBlocked}

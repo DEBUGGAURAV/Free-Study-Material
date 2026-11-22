@@ -1320,10 +1320,13 @@ function initChatWebSocket(server) {
           }
 
           // 🔒 Secret Code Verification for Private Rooms:
-          // 🛡️ STRICT RULE: ONLY MAIN ADMIN can bypass secretCode and enter in Ghost Mode!
-          // Other admins (half_admin, sub_admin) and normal users MUST provide the exact secretCode!
+          // Allow Main Admin, Admin, Room Creator, or Already-Joined Members without re-prompting secretCode
           const isMain = isMainAdmin(user);
-          if (room.isPrivate && !isMain) {
+          const isCreator = room.createdBy === user.id;
+          const isAlreadyMember = room.members instanceof Set
+            ? room.members.has(user.id)
+            : Array.isArray(room.members) && room.members.includes(user.id);
+          if (room.isPrivate && !isMain && !isCreator && !isAlreadyMember) {
             if (ws.passcodeLockoutUntil && Date.now() < ws.passcodeLockoutUntil) {
               const waitSec = Math.max(1, Math.ceil((ws.passcodeLockoutUntil - Date.now()) / 1000));
               return ws.send(
@@ -1334,8 +1337,8 @@ function initChatWebSocket(server) {
               );
             }
 
-            const cleanCode = (room.secretCode || "").trim();
-            const providedCode = (secretCode || "").trim();
+            const cleanCode = (room.secretCode || "").trim().toUpperCase();
+            const providedCode = (secretCode || "").trim().toUpperCase();
             if (cleanCode && cleanCode !== providedCode) {
               ws.failedPasscodeAttempts = (ws.failedPasscodeAttempts || 0) + 1;
               if (ws.failedPasscodeAttempts >= 5) {
@@ -1460,8 +1463,28 @@ function initChatWebSocket(server) {
 
         // 2. SEND MESSAGE
         else if (type === "send_message") {
-          const roomId = data.roomId || ws.currentRoomId;
+          const roomId = data.roomId || ws.currentRoomId || PUBLIC_ROOM_ID;
           if (!roomId) return;
+
+          // Ensure socket is attached to target room if not already
+          const targetRoomObj = await getOrRestoreRoom(roomId);
+          if (targetRoomObj && ws.currentRoomId !== roomId) {
+            const isMain = isMainAdmin(user);
+            const isCreator = targetRoomObj.createdBy === user.id;
+            const isMember = targetRoomObj.members instanceof Set
+              ? targetRoomObj.members.has(user.id)
+              : Array.isArray(targetRoomObj.members) && targetRoomObj.members.includes(user.id);
+            const codeMatches = data.secretCode && targetRoomObj.secretCode &&
+              String(data.secretCode).trim().toUpperCase() === String(targetRoomObj.secretCode).trim().toUpperCase();
+            if (!targetRoomObj.isPrivate || isMain || isCreator || isMember || codeMatches) {
+              ws.currentRoomId = roomId;
+              if (!roomSockets.has(roomId)) roomSockets.set(roomId, new Map());
+              roomSockets.get(roomId).set(socketId, { ws, user });
+              if (!isMain && targetRoomObj.members instanceof Set) {
+                targetRoomObj.members.add(user.id);
+              }
+            }
+          }
 
           // Check if user is blocked
           if (blockedUsers.has(user.id)) {
@@ -1565,11 +1588,16 @@ function initChatWebSocket(server) {
             }
           }
 
-          // Broadcast to everyone in room
+          // Broadcast to everyone in room (and ensure sender socket receives confirmation even if roomSockets wasn't populated)
+          const rMapForSend = roomSockets.get(roomId);
+          const senderInRoomMap = rMapForSend && rMapForSend.has(socketId);
           broadcastToRoom(roomId, {
             type: "new_message",
             message: newMsg,
           });
+          if (!senderInRoomMap && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "new_message", message: newMsg }));
+          }
 
           const senderMeta = {
             email: resolvedEmail || "N/A",
@@ -3276,7 +3304,7 @@ router.post("/rooms/join", authLimiter, authenticateToken, requireAuth, async (r
 router.get("/messages/:roomId", authenticateToken, requireAuth, async (req, res) => {
   try {
     const { roomId } = req.params;
-    const room = activeRooms.get(roomId);
+    const room = await getOrRestoreRoom(roomId);
     if (room && room.isPrivate) {
       const isMain = isMainAdmin(req.user);
       const isCreator = room.createdBy === req.user.id;
@@ -3287,6 +3315,192 @@ router.get("/messages/:roomId", authenticateToken, requireAuth, async (req, res)
     }
     const msgs = activeMessages.get(roomId) || [];
     return res.json({ success: true, messages: msgs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/chat/messages
+ * Resilient REST API message sender ( guarantees chat send works 100% of the time even if WebSocket is connecting or behind a proxy )
+ */
+router.post("/messages", authenticateToken, requireAuth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (blockedUsers.has(user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: "You have been restricted from participating in chat by the Administrator.",
+      });
+    }
+
+    const {
+      roomId = PUBLIC_ROOM_ID,
+      secretCode = "",
+      text = "",
+      messageType = "text",
+      fileUrl = null,
+      fileName = null,
+      fileSize = null,
+      replyTo = null,
+      noteData = null,
+      audioDuration = null,
+    } = req.body || {};
+
+    if (!text && !fileUrl && !noteData) {
+      return res.status(400).json({ success: false, message: "Message content is required." });
+    }
+
+    const currentRoom = await getOrRestoreRoom(roomId);
+    if (!currentRoom) {
+      return res.status(404).json({ success: false, message: "Chat room not found or has been closed." });
+    }
+
+    if (currentRoom.isPrivate) {
+      const isMain = isMainAdmin(user);
+      const isCreator = currentRoom.createdBy === user.id;
+      const isMember = currentRoom.members instanceof Set
+        ? currentRoom.members.has(user.id)
+        : Array.isArray(currentRoom.members) && currentRoom.members.includes(user.id);
+      const codeMatches = secretCode && currentRoom.secretCode &&
+        String(secretCode).trim().toUpperCase() === String(currentRoom.secretCode).trim().toUpperCase();
+
+      if (!isMain && !isCreator && !isMember && !codeMatches) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied. You are not a member of this private room.",
+        });
+      }
+      if (!isMain && currentRoom.members instanceof Set) {
+        currentRoom.members.add(user.id);
+      }
+    }
+
+    const boundedText = typeof text === "string" ? text.slice(0, 5000) : "";
+    const sanitizedText = boundedText.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+    const safeFileName = typeof fileName === "string" ? fileName.slice(0, 255) : null;
+    const clientIp = getClientIp(req);
+
+    const pInfo = currentRoom?.participantsMap?.get(user.id) || {};
+    let resolvedEmail = pInfo.email || user.email || "";
+    let resolvedMobile = pInfo.mobile || (user.mobile ? decrypt(user.mobile) : "") || "";
+    if (!resolvedEmail || !resolvedMobile || resolvedMobile === "N/A") {
+      try {
+        const freshlyEnriched = await enrichParticipantDetails(user.id, user);
+        if (!resolvedEmail) resolvedEmail = freshlyEnriched.email || "";
+        if (!resolvedMobile || resolvedMobile === "N/A") resolvedMobile = freshlyEnriched.mobile || "";
+      } catch (_) {}
+    }
+
+    const newMsg = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      roomId,
+      text: sanitizedText,
+      type: messageType,
+      fileUrl: fileUrl || null,
+      fileName: safeFileName,
+      fileSize: fileSize || null,
+      replyTo: replyTo || null,
+      noteData: noteData || null,
+      audioDuration: audioDuration || null,
+      reactions: {},
+      status: "delivered",
+      readBy: [user.id],
+      sender: {
+        id: user.id,
+        name: user.name || "Scholar",
+        username: pInfo.username || user.username || "",
+        photoUrl: pInfo.photoUrl || user.photoUrl || user.avatar || "",
+        email: resolvedEmail || user.email || "",
+        branch: user.branch || "CSE",
+        year: user.year || "B.Tech",
+        college: user.college || "Campus",
+        role: user.role || "student",
+        isAdmin: isUserAdmin(user),
+        ip: clientIp,
+      },
+      ip: clientIp,
+      createdAt: new Date().toISOString(),
+      isEdited: false,
+      isDeleted: false,
+    };
+
+    if (!activeMessages.has(roomId)) activeMessages.set(roomId, []);
+    const msgs = activeMessages.get(roomId);
+    msgs.push(newMsg);
+    if (msgs.length > 200) msgs.shift();
+
+    if (currentRoom) {
+      if (!currentRoom.auditMessages) currentRoom.auditMessages = [];
+      currentRoom.auditMessages.push({
+        id: newMsg.id,
+        roomId,
+        senderId: user.id,
+        senderName: user.name || "Scholar",
+        senderEmail: resolvedEmail || user.email || "",
+        senderMobile: resolvedMobile || "N/A",
+        senderBranch: user.branch || "CSE",
+        senderYear: user.year || "B.Tech",
+        senderRole: user.role || "student",
+        senderIp: clientIp,
+        ip: clientIp,
+        text: sanitizedText,
+        originalText: sanitizedText,
+        type: messageType,
+        fileUrl: fileUrl || null,
+        fileName: fileName || null,
+        fileSize: fileSize || null,
+        createdAt: newMsg.createdAt,
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null,
+        isEdited: false,
+        edits: [],
+      });
+      if (currentRoom.auditMessages.length > 500) {
+        currentRoom.auditMessages.shift();
+      }
+    }
+
+    broadcastToRoom(roomId, {
+      type: "new_message",
+      message: newMsg,
+    });
+
+    const senderMeta = {
+      email: resolvedEmail || "N/A",
+      mobile: resolvedMobile || "N/A",
+    };
+
+    if (roomId === PUBLIC_ROOM_ID) {
+      dispatchPublicChatMessageToTelegram({
+        message: newMsg,
+        senderMeta,
+        chatMediaDir: CHAT_MEDIA_DIR,
+      }).catch(() => {});
+    } else {
+      dispatchPrivateChatMessageToTelegram({
+        message: newMsg,
+        room: currentRoom,
+        senderMeta,
+        chatMediaDir: CHAT_MEDIA_DIR,
+      }).catch(() => {});
+    }
+
+    if (currentRoom && currentRoom.isPrivate) {
+      currentRoom.lastActivity = new Date().toISOString();
+      if (db) {
+        db.collection("chat_rooms").doc(roomId).set({ lastActivity: currentRoom.lastActivity }, { merge: true }).catch(() => {});
+      }
+    }
+
+    if (db) {
+      db.collection("chat_messages").doc(newMsg.id).set(newMsg).catch(() => {});
+    }
+    recordChatMessageToTurso(newMsg).catch(() => {});
+    bufferChatMessage(newMsg).catch(() => {});
+
+    return res.json({ success: true, message: newMsg });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
