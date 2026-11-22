@@ -205,9 +205,9 @@ async function refreshCacheFromFirestore() {
     // Batch save into Turso
     await saveNotesToTursoCache(rawNotes);
 
-    // Set L1 RAM (5 minutes TTL)
+    // Set L1 RAM (60 minutes TTL — event-driven incremental updates keep it fresh in real time)
     ramNotesMemory = rawNotes;
-    ramNotesExpiresAt = Date.now() + 5 * 60 * 1000;
+    ramNotesExpiresAt = Date.now() + 60 * 60 * 1000;
 
     return rawNotes;
   } catch (err) {
@@ -297,7 +297,7 @@ async function getAllCachedNotes() {
           cacheHits++;
           firestoreReadsSaved++;
           ramNotesMemory = parsedNotes;
-          ramNotesExpiresAt = now + 5 * 60 * 1000; // 5 min RAM TTL
+          ramNotesExpiresAt = now + 60 * 60 * 1000; // 60 min RAM TTL (Event-driven incremental updates)
           return parsedNotes;
         }
       }
@@ -314,7 +314,7 @@ async function getAllCachedNotes() {
             }
             if (parsedNotes.length > 0) {
               ramNotesMemory = parsedNotes;
-              ramNotesExpiresAt = now + 5 * 60 * 1000;
+              ramNotesExpiresAt = now + 60 * 60 * 1000;
               return parsedNotes;
             }
           }

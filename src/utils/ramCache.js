@@ -82,13 +82,27 @@ class MemoryCache {
 
 const ramCache = new MemoryCache();
 
-function invalidateAllCache() {
-  ramCache.clear();
-  try {
-    const { invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
-    invalidateTursoNotesCache();
-  } catch (_) {}
-  console.log("[RAM CACHE] Cache invalidated.");
+function invalidateAllCache(options = {}) {
+  // Selectively preserve auth_user_* and tg_sub_topic_* / tg_topic_sub_* so user logins and topic mappings don't trigger unnecessary DB reads
+  for (const key of Array.from(ramCache.cache.keys())) {
+    if (
+      !options.full &&
+      (key.startsWith("auth_user_") ||
+        key.startsWith("tg_sub_topic_") ||
+        key.startsWith("tg_topic_sub_") ||
+        key.startsWith("user_min_version_"))
+    ) {
+      continue;
+    }
+    ramCache.cache.delete(key);
+  }
+  if (!options.keepNotesRam) {
+    try {
+      const { invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+      invalidateTursoNotesCache();
+    } catch (_) {}
+  }
+  console.log("[RAM CACHE] Cache invalidated (Selective Event-Driven Mode).");
 }
 
 module.exports = {

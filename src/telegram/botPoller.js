@@ -228,20 +228,40 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
       }
     }
 
-    // 5. Normalized title matching (Catches punctuation and spacing differences)
+    // 5. Normalized title matching via 0ms L1 RAM Cache first (Zero DB Read overhead)
     if (!matchedDoc) {
       const normInput = normalizeNoteTitle(title || fileName);
       if (normInput) {
-        const allNotes = await db.collection("notes").limit(200).get();
-        for (const doc of allNotes.docs) {
-          const d = doc.data();
-          const normDoc = normalizeNoteTitle(d.title || d.originalName);
-          if (normDoc && normInput === normDoc) {
-            const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
-            const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
-            if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-              matchedDoc = doc;
-              break;
+        let cachedList = null;
+        try {
+          const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+          cachedList = await getAllCachedNotes();
+        } catch (_) {}
+
+        if (Array.isArray(cachedList) && cachedList.length > 0) {
+          for (const item of cachedList) {
+            const normDoc = normalizeNoteTitle(item.title || item.originalName);
+            if (normDoc && normInput === normDoc) {
+              const sizeDiff = Math.abs(Number(item.fileSize || 0) - Number(fileSize || 0));
+              const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+              if (!fileSize || !item.fileSize || sizeDiff <= maxDiff || Number(item.fileSize) < 5000 || Number(fileSize) < 5000) {
+                matchedDoc = { id: item.id || item.docId, data: () => item };
+                break;
+              }
+            }
+          }
+        } else {
+          const allNotes = await db.collection("notes").limit(200).get();
+          for (const doc of allNotes.docs) {
+            const d = doc.data();
+            const normDoc = normalizeNoteTitle(d.title || d.originalName);
+            if (normDoc && normInput === normDoc) {
+              const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+              const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+              if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+                matchedDoc = doc;
+                break;
+              }
             }
           }
         }
@@ -847,9 +867,9 @@ async function processIncomingMessage(message) {
       const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
       const { invalidateAllCache } = require("../utils/ramCache");
       if (typeof upsertNoteInCache === "function") {
-        upsertNoteInCache(noteData).catch(() => {});
+        await upsertNoteInCache(noteData).catch(() => {});
       }
-      invalidateAllCache();
+      invalidateAllCache({ keepNotesRam: true });
     } catch (_) {}
     try {
       const { broadcastCatalogEvent } = require("../services/realtimeEventService");
@@ -912,7 +932,7 @@ async function processIncomingMessage(message) {
       }
     }
 
-    invalidateAllCache();
+    invalidateAllCache({ keepNotesRam: true });
     console.log(`[BOT POLLER] ✅ Successfully published note "${title}" (#1 Position on Web)!`);
     recordSyncEvent({
       trigger: `Direct Telegram ${message.chat.type === "private" ? "DM" : "Message"}: "${title}"`,

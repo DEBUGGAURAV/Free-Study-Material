@@ -1033,7 +1033,17 @@ async function startSecurityBotPoller() {
         }
         processedUpdateIds.add(msgDedupKey);
 
-        if (db) {
+        // Only write to database deduplication collection when the message is an actionable bot event (avoids DB writes on random group chatter)
+        const isActionableBotEvent = Boolean(
+          msg.forum_topic_created ||
+          msg.forum_topic_edited ||
+          contact ||
+          text.startsWith("/") ||
+          msg.chat?.type === "private" ||
+          userBotStates.has(chatId)
+        );
+
+        if (db && isActionableBotEvent) {
           try {
             const dedupRef = db.collection("telegram_processed_messages").doc(msgDedupKey);
             await dedupRef.create({

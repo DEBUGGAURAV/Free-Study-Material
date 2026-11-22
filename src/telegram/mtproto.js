@@ -95,10 +95,10 @@ function purgeNoteFromWebAndCdn(noteId) {
   } catch (_) {}
 }
 
-function clearCache() {
+function clearCache(options = { keepNotesRam: true }) {
   try {
     const { invalidateAllCache } = require("../utils/ramCache");
-    invalidateAllCache();
+    invalidateAllCache(options);
   } catch {}
 }
 
@@ -345,20 +345,40 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
       }
     }
 
-    // 7. Normalized title matching (Catches slight punctuation/spacing variations)
+    // 7. Normalized title matching via 0ms L1 RAM Cache first (Zero DB Read overhead)
     if (!candidateDoc) {
       const normInput = normalizeNoteTitle(title || originalName);
       if (normInput) {
-        const allNotes = await db.collection("notes").limit(200).get();
-        for (const doc of allNotes.docs) {
-          const d = doc.data();
-          const normDoc = normalizeNoteTitle(d.title || d.originalName);
-          if (normDoc && normInput === normDoc) {
-            const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
-            const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
-            if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
-              candidateDoc = doc;
-              break;
+        let cachedList = null;
+        try {
+          const { getAllCachedNotes } = require("../services/tursoNotesCacheService");
+          cachedList = await getAllCachedNotes();
+        } catch (_) {}
+
+        if (Array.isArray(cachedList) && cachedList.length > 0) {
+          for (const item of cachedList) {
+            const normDoc = normalizeNoteTitle(item.title || item.originalName);
+            if (normDoc && normInput === normDoc) {
+              const sizeDiff = Math.abs(Number(item.fileSize || 0) - Number(fileSize || 0));
+              const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+              if (!fileSize || !item.fileSize || sizeDiff <= maxDiff || Number(item.fileSize) < 5000 || Number(fileSize) < 5000) {
+                candidateDoc = { id: item.id || item.docId, data: () => item };
+                break;
+              }
+            }
+          }
+        } else {
+          const allNotes = await db.collection("notes").limit(200).get();
+          for (const doc of allNotes.docs) {
+            const d = doc.data();
+            const normDoc = normalizeNoteTitle(d.title || d.originalName);
+            if (normDoc && normInput === normDoc) {
+              const sizeDiff = Math.abs(Number(d.fileSize || 0) - Number(fileSize || 0));
+              const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
+              if (!fileSize || !d.fileSize || sizeDiff <= maxDiff || Number(d.fileSize) < 5000 || Number(fileSize) < 5000) {
+                candidateDoc = doc;
+                break;
+              }
             }
           }
         }
@@ -732,16 +752,16 @@ function setupChannelSyncListeners(c) {
         updatedAt: nowIso,
       }).catch(() => {});
 
-      // Sync to Turso database and RAM caches
+      // Sync to Turso database and RAM caches (Incremental in-place update -> 0 full table re-reads)
       try {
         const { upsertNoteToTurso } = require("../services/tursoService");
         const { upsertNoteInCache } = require("../services/tursoNotesCacheService");
         const { invalidateAllCache } = require("../utils/ramCache");
         upsertNoteToTurso(noteData).catch((e) => console.warn("[TURSO-MTPROTO] Sync warning:", e.message));
         if (typeof upsertNoteInCache === "function") {
-          upsertNoteInCache(noteData).catch(() => {});
+          await upsertNoteInCache(noteData).catch(() => {});
         }
-        invalidateAllCache();
+        invalidateAllCache({ keepNotesRam: true });
         try {
           const { broadcastCatalogEvent } = require("../services/realtimeEventService");
           broadcastCatalogEvent({ event: "note_created", note: noteData });
@@ -913,6 +933,8 @@ function setupChannelSyncListeners(c) {
           }
         }
 
+        // Event-driven liveness verification: triggered ONLY when an actual Telegram deletion event occurs!
+        await checkNotesLivenessNow().catch(() => {});
         clearCache();
       }
     } catch (err) {
@@ -1860,46 +1882,39 @@ async function checkNotesLivenessNow(customNotes = null) {
 }
 
 /**
- * 5-Minute Quota-Saver & Event-Driven Two-Way Auto-Sync Engine
- * 1. Executes initial sync at boot.
- * 2. Runs lightweight 5-minute background sweep (promptly detecting Telegram deletions).
- * 3. Catches real-time instant uploads and deletions as they happen.
+ * 100% Pure Event-Driven Two-Way Sync Engine (Zero Periodic Polling / Zero Quota Waste)
+ * 1. Executes a single initial reconciliation at boot to catch any offline changes.
+ * 2. All subsequent updates (uploads, topic creations, message/topic deletions) happen
+ *    strictly in real-time when a Telegram event occurs (or on manual /sync).
  */
-function startAutoSyncWorker(intervalMs = 5 * 60 * 1000) {
+function startAutoSyncWorker() {
   if (autoSyncTimer) return;
-  console.log(`[MTProto AUTOSYNC] ⚡ 5-Minute Two-Way Auto-Sync active (Interval: ${intervalMs / 1000 / 60}m).`);
+  console.log("[MTProto AUTOSYNC] ⚡ Pure Event-Driven Two-Way Sync active (0 background polling timers; updates trigger strictly on real Telegram events).");
 
-  const runSync = async () => {
+  const runInitialBootSync = async () => {
     if (isAutoSyncing) return;
     isAutoSyncing = true;
     try {
-      console.log("[MTProto AUTOSYNC] 🔄 Executing 5-minute periodic two-way sync cycle...");
+      console.log("[MTProto AUTOSYNC] 🔄 Executing one-time startup reconciliation...");
       await syncTelegramChannel();
-      await checkNotesLivenessNow();
       recordSyncEvent({
-        trigger: "5-Minute Two-Way Auto-Sync",
-        details: "Auto-Sync Cycle Verified (Database & Telegram Online)",
+        trigger: "Startup One-Time Auto-Sync",
+        details: "Initial Boot Sync Complete — Switched to 100% Event-Driven Mode",
       });
     } catch (e) {
-      console.warn("[MTProto AUTOSYNC] Periodic sync notice:", e.message);
-      recordSyncEvent({
-        trigger: "5-Min Periodic Heartbeat",
-        details: "Heartbeat Verified (Database & Telegram Online)",
-      });
+      console.warn("[MTProto AUTOSYNC] Initial boot sync notice:", e.message);
     } finally {
       isAutoSyncing = false;
     }
   };
 
-  // Run initial auto-sync after 4 seconds of startup to catch any offline changes
-  setTimeout(runSync, 4000);
-
-  // 5-minute recurring quota-saving interval
-  autoSyncTimer = setInterval(runSync, intervalMs);
+  // Run once after 4 seconds of startup to catch any offline changes; no recurring setInterval!
+  autoSyncTimer = setTimeout(runInitialBootSync, 4000);
 }
 
 function stopAutoSyncWorker() {
   if (autoSyncTimer) {
+    clearTimeout(autoSyncTimer);
     clearInterval(autoSyncTimer);
     autoSyncTimer = null;
   }
