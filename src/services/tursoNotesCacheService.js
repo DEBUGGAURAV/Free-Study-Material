@@ -351,8 +351,12 @@ async function upsertNoteInCache(note) {
       mergedNote = { ...ramNotesMemory[idx], ...note };
       ramNotesMemory[idx] = mergedNote;
     } else {
+      if (ramNotesMemory.length > 0 && ramNotesMemory[0].isLatest) {
+        ramNotesMemory[0] = { ...ramNotesMemory[0], isLatest: false };
+      }
       ramNotesMemory.unshift(mergedNote);
     }
+    ramNotesExpiresAt = Date.now() + 60 * 60 * 1000;
   } else if (client) {
     try {
       const existing = await client.execute({

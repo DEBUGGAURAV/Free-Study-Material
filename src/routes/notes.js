@@ -665,14 +665,11 @@ async function purgeDeletedTelegramNote(noteId, noteTitle = "") {
     console.warn("[TELEGRAM-PURGE] Firestore error:", e.message);
   }
 
-  // Purge from Turso LibSQL Edge Cache
+  // Purge from Turso LibSQL Edge Cache & In-Place L1 RAM Filter (0 full table re-reads)
   try {
-    const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
+    const { removeNoteFromCache } = require("../services/tursoNotesCacheService");
     if (typeof removeNoteFromCache === "function") {
       await removeNoteFromCache(noteId);
-    }
-    if (typeof invalidateTursoNotesCache === "function") {
-      invalidateTursoNotesCache();
     }
   } catch (_) {}
 
@@ -684,11 +681,11 @@ async function purgeDeletedTelegramNote(noteId, noteTitle = "") {
     }
   } catch (_) {}
 
-  // Purge from local RAM and buffers
+  // Purge from local RAM and buffers while keeping warm ramNotesMemory
   try {
     ramCache.delete(`note_${noteId}`);
     ramCache.delete("all_raw_notes");
-    invalidateAllCache();
+    invalidateAllCache({ keepNotesRam: true });
     purgeCdnDiskBuffer(noteId);
     noteBufferCache.delete(noteId);
   } catch (_) {}
@@ -930,7 +927,8 @@ router.get("/", authenticateToken, async (req, res) => {
     // Universal Search: Matches Title, Subject, Description, Branch, Course, Year, and Tesseract OCR Handwritten Notes!
     if (search && search.trim() !== "") {
       const q = search.toLowerCase();
-      notes = notes.filter((n) => {
+      const matchedSearchNotes = [];
+      for (const n of notes) {
         const titleMatch = (n.title || "").toLowerCase().includes(q);
         const subjMatch = (n.subject || "").toLowerCase().includes(q);
         const descMatch = (n.description || "").toLowerCase().includes(q);
@@ -940,19 +938,22 @@ router.get("/", authenticateToken, async (req, res) => {
         const tagMatch = (n.tags || []).some((t) => t.toLowerCase().includes(q));
         const ocrMatch = (n.ocrText || "").toLowerCase().includes(q);
 
-        if (ocrMatch && !titleMatch && !subjMatch) {
-          n.foundViaOcr = true; // Mark as found inside handwritten notes
+        if (titleMatch || subjMatch || descMatch || branchMatch || courseMatch || yearMatch || tagMatch || ocrMatch) {
+          if (ocrMatch && !titleMatch && !subjMatch) {
+            matchedSearchNotes.push({ ...n, foundViaOcr: true });
+          } else {
+            matchedSearchNotes.push(n);
+          }
         }
-
-        return titleMatch || subjMatch || descMatch || branchMatch || courseMatch || yearMatch || tagMatch || ocrMatch;
-      });
+      }
+      notes = matchedSearchNotes;
     }
 
     // ⚡ STRICT LATEST-FIRST SORT: Highest timestamp always at index 0 (#1 position)
     notes.sort((a, b) => (b._sortTimestamp || 0) - (a._sortTimestamp || 0));
 
-    if (notes.length > 0) {
-      notes[0].isLatest = true;
+    if (notes.length > 0 && !notes[0].isLatest) {
+      notes[0] = { ...notes[0], isLatest: true };
     }
 
     const totalCount = notes.length;

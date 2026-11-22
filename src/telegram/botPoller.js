@@ -166,7 +166,7 @@ async function purgeNotesForReplacedTopic({ oldThreadId = null, newThreadId, cle
     }
 
     if (purgedCount > 0) {
-      invalidateAllCache();
+      invalidateAllCache({ keepNotesRam: true });
       console.log(`[BOT POLLER] 🧹 Auto-purged ${purgedCount} stale note(s) from replaced topic for subject "${cleanSubject || normalizedKey}" (New Topic: #${newTid})`);
     }
   } catch (err) {
@@ -240,12 +240,14 @@ async function checkDuplicateInDatabase({ fileUniqueId, fileName, title, fileSiz
 
         if (Array.isArray(cachedList) && cachedList.length > 0) {
           for (const item of cachedList) {
+            const itemId = item.id || item.docId;
+            if (!itemId) continue;
             const normDoc = normalizeNoteTitle(item.title || item.originalName);
             if (normDoc && normInput === normDoc) {
               const sizeDiff = Math.abs(Number(item.fileSize || 0) - Number(fileSize || 0));
               const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
               if (!fileSize || !item.fileSize || sizeDiff <= maxDiff || Number(item.fileSize) < 5000 || Number(fileSize) < 5000) {
-                matchedDoc = { id: item.id || item.docId, data: () => item };
+                matchedDoc = { id: itemId, data: () => item };
                 break;
               }
             }
@@ -876,8 +878,8 @@ async function processIncomingMessage(message) {
       broadcastCatalogEvent({ event: "note_created", note: noteData });
     } catch (_) {}
 
-    // Auto-post to Notice Board
-    await db.collection("notices").add({
+    // Auto-post to Notice Board & sync L1/L2 Notice Cache immediately
+    const autoNoticeData = {
       title: `📚 Cloud Vault: ${title}`,
       content: `New study material synced live for ${course} (${branch}) — Subject: ${subject}.`,
       link: `/api/notes/${noteRef.id}/stream`,
@@ -887,7 +889,16 @@ async function processIncomingMessage(message) {
       createdBy: "Auto-Sync Engine",
       createdAt: nowIso,
       updatedAt: nowIso,
-    }).catch(() => {});
+    };
+    const noticeRef = await db.collection("notices").add(autoNoticeData).catch(() => null);
+    if (noticeRef && noticeRef.id) {
+      try {
+        const { upsertNoticeInCache } = require("../services/tursoNoticesCacheService");
+        if (typeof upsertNoticeInCache === "function") {
+          upsertNoticeInCache({ id: noticeRef.id, ...autoNoticeData }).catch(() => {});
+        }
+      } catch (_) {}
+    }
 
     // Send EXACTLY ONE Instant Rich HTML Receipt back to Chat / Subgroup / DM
     if (syncLock.canSendReceipt(chatId, messageId)) {

@@ -45,25 +45,22 @@ function purgeNoteFromWebAndCdn(noteId) {
     }
   } catch (_) {}
 
-  // 2. Invalidate RAM cache for note and all raw notes
+  // 2. Purge from Turso LibSQL Edge Database & In-Place L1 RAM Filter (0 full table re-reads)
+  try {
+    const { removeNoteFromCache } = require("../services/tursoNotesCacheService");
+    if (typeof removeNoteFromCache === "function") {
+      removeNoteFromCache(noteId).catch(() => {});
+    }
+  } catch (_) {}
+
+  // 3. Invalidate HTTP response cache keys while preserving warm ramNotesMemory
   try {
     const { ramCache, invalidateAllCache } = require("../utils/ramCache");
     if (ramCache) {
       ramCache.delete(`note_${noteId}`);
       ramCache.delete("all_raw_notes");
     }
-    invalidateAllCache();
-  } catch (_) {}
-
-  // 3. Purge from Turso LibSQL Edge Database & Invalidate Turso Memory Cache
-  try {
-    const { removeNoteFromCache, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
-    if (typeof removeNoteFromCache === "function") {
-      removeNoteFromCache(noteId).catch(() => {});
-    }
-    if (typeof invalidateTursoNotesCache === "function") {
-      invalidateTursoNotesCache();
-    }
+    invalidateAllCache({ keepNotesRam: true });
   } catch (_) {}
 
   try {
@@ -357,12 +354,14 @@ async function isDuplicateNote(db, { docIdStr, msgId, originalName, title, fileS
 
         if (Array.isArray(cachedList) && cachedList.length > 0) {
           for (const item of cachedList) {
+            const itemId = item.id || item.docId;
+            if (!itemId) continue;
             const normDoc = normalizeNoteTitle(item.title || item.originalName);
             if (normDoc && normInput === normDoc) {
               const sizeDiff = Math.abs(Number(item.fileSize || 0) - Number(fileSize || 0));
               const maxDiff = Math.max(3 * 1024 * 1024, Number(fileSize || 0) * 0.25);
               if (!fileSize || !item.fileSize || sizeDiff <= maxDiff || Number(item.fileSize) < 5000 || Number(fileSize) < 5000) {
-                candidateDoc = { id: item.id || item.docId, data: () => item };
+                candidateDoc = { id: itemId, data: () => item };
                 break;
               }
             }
@@ -747,8 +746,8 @@ function setupChannelSyncListeners(c) {
 
       await noteRef.set(noteData);
 
-      // Auto-post to Notice Board
-      await db.collection("notices").add({
+      // Auto-post to Notice Board & sync L1/L2 Notice Cache immediately
+      const autoNoticeData = {
         title: `📚 Cloud Vault: ${title}`,
         content: `New note synced live for ${course} (${branch}) — Subject: ${subject}.`,
         link: `/api/notes/${noteRef.id}/stream`,
@@ -758,7 +757,16 @@ function setupChannelSyncListeners(c) {
         createdBy: "Auto-Sync",
         createdAt: nowIso,
         updatedAt: nowIso,
-      }).catch(() => {});
+      };
+      const noticeRef = await db.collection("notices").add(autoNoticeData).catch(() => null);
+      if (noticeRef && noticeRef.id) {
+        try {
+          const { upsertNoticeInCache } = require("../services/tursoNoticesCacheService");
+          if (typeof upsertNoticeInCache === "function") {
+            upsertNoticeInCache({ id: noticeRef.id, ...autoNoticeData }).catch(() => {});
+          }
+        } catch (_) {}
+      }
 
       // Sync to Turso database and RAM caches (Incremental in-place update -> 0 full table re-reads)
       try {
