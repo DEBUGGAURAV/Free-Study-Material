@@ -1360,7 +1360,7 @@ export default function AuthModal({
           return;
         }
         // Prevent accidental closing when user is awaiting OTP!
-        if (regTgStep || forgotTgStep || signUpOtpStep || loginOtpStep) return;
+        if (regTgStep || forgotTgOtpStep || signUpOtpStep || loginOtpStep) return;
         onClose();
       }}
     >

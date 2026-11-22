@@ -439,6 +439,8 @@ async function getTursoNotesCacheTelemetry() {
   let latencyMs = 0;
   let isAlive = false;
   let totalRowsInTable = 0;
+  let topicsCount = 0;
+  let deletedCount = 0;
   if (client) {
     try {
       const t0 = Date.now();

@@ -2533,6 +2533,7 @@ export default function AdminModal({
     currentNotice,
     dbOverview,
     dbRetentionDays,
+    setDbRetentionDays,
     downloadGateLoading,
     filteredNotes,
     filteredRecycleItems,

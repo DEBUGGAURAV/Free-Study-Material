@@ -2047,11 +2047,11 @@ async function purgeUserHelpTickets(userId, userEmail = null) {
     const cleanEmail = userEmail ? String(userEmail).trim().toLowerCase() : null;
 
     // 1. Purge from in-memory Map
-    for (const [code, t] of inMemoryTickets.entries()) {
+    for (const [code, t] of memoryTickets.entries()) {
       const matchId = cleanId && (t.user_id === cleanId || t.userId === cleanId);
       const matchEmail = cleanEmail && ((t.user_email || "").toLowerCase() === cleanEmail || (t.userEmail || "").toLowerCase() === cleanEmail);
       if (matchId || matchEmail) {
-        inMemoryTickets.delete(code);
+        memoryTickets.delete(code);
         deletedCount++;
       }
     }

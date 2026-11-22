@@ -5575,12 +5575,15 @@ router.post("/threats/unblock-user", authenticateToken, requireAdmin, async (req
         unblockedAt: new Date().toISOString(),
       });
     }
-    if (tursoClient && email && email !== "N/A") {
+    if (email && email !== "N/A") {
       try {
-        await tursoClient.execute({
-          sql: `UPDATE users SET is_blocked = 0 WHERE email = ?`,
-          args: [email.toLowerCase().trim()],
-        });
+        const { tursoClient } = require("../services/tursoService");
+        if (tursoClient) {
+          await tursoClient.execute({
+            sql: `UPDATE users SET is_blocked = 0 WHERE email = ?`,
+            args: [email.toLowerCase().trim()],
+          });
+        }
       } catch (_) {}
     }
     try {

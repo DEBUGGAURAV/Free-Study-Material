@@ -370,6 +370,8 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
   const fileInfo = await getTelegramBotFileInfo(botToken, botFileId, 10000);
   return new Promise((resolve, reject) => {
     const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
+    let tmpPath = null;
+    let diskStream = null;
     const fileReq = https.get(fileUrl, (fileRes) => {
       if (fileRes.statusCode !== 200) {
         return reject(new Error(`Telegram Bot file status ${fileRes.statusCode}`));
@@ -389,8 +391,7 @@ async function streamTelegramBotDocument(botToken, botFileId, res, req, noteId, 
 
       const safeId = sanitizeCacheId(noteId);
       const binPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin`) : null;
-      const tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
-      let diskStream = null;
+      tmpPath = safeId ? path.join(CDN_CACHE_DIR, `${safeId}.bin.tmp.${Date.now()}`) : null;
       let bytesWritten = 0;
       try {
         if (tmpPath && fs.existsSync(CDN_CACHE_DIR)) {
@@ -1753,11 +1754,12 @@ router.post("/:id/cache-to-cdn", downloadLimiter, authenticateToken, async (req,
  * Records download activity for student
  */
 router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLimiter, async (req, res) => {
+  const { id } = req.params;
+  let note = null;
   try {
-    const { id } = req.params;
     if (!db) return res.status(503).json({ success: false, message: "Database unavailable" });
 
-    let note = ramCache.get(`note_${id}`);
+    note = ramCache.get(`note_${id}`);
     if (!note) {
       const cachedList = await getAllCachedNotes();
       if (Array.isArray(cachedList)) {

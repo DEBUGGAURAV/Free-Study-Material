@@ -65,6 +65,7 @@ export function getDisplayRom(specs) {
 export default function TabStudents(props) {
   const {
     DASHBOARD_TABS = [],
+    dbRetentionDays = 90,
     handleAdjustStudentPurgeDays,
     handleDeleteAllStudents,
     handleDeleteStudent,

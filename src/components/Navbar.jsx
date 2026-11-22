@@ -200,7 +200,7 @@ export default function Navbar({
       window.removeEventListener("beforeinstallprompt", handler);
       window.removeEventListener("appinstalled", onAppInstalled);
       if (mediaQuery && mediaQuery.removeEventListener) {
-        mediaQuery.removeEventListener("change", checkStandalone);
+        mediaQuery.removeEventListener("change", syncStandalone);
       }
     };
   }, []);

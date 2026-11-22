@@ -14,6 +14,7 @@ export default function TabDatabase(props) {
     collectionLoading,
     dbOverview,
     dbRetentionDays,
+    setDbRetentionDays,
     formatSyncTime,
     handleBulkPurgeCollection,
     handleDeleteCollectionDoc,

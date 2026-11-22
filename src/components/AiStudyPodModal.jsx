@@ -177,7 +177,7 @@ export default function AiStudyPodModal({
           timestamp: Date.now(),
         };
         setChatMessages((prev) => [...prev, disabledMsg]);
-        setIsAiTyping(false);
+        setIsSendingChat(false);
         return;
       }
 
