@@ -48,21 +48,37 @@ export default function PreviewModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ padding: "8px", zIndex: 1100 }}>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        padding: "4px",
+        boxSizing: "border-box",
+        zIndex: 1100,
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "stretch",
+        justifyContent: "center",
+      }}
+    >
       <div
-        className="modal-content"
+        className="modal-content preview-reader-modal"
         style={{
-          maxWidth: "1680px",
-          width: "98vw",
-          height: "96vh",
-          maxHeight: "96vh",
+          maxWidth: "1800px",
+          width: "100%",
+          height: "100%",
+          maxHeight: "100%",
+          margin: "0",
           display: "flex",
           flexDirection: "column",
           padding: "0",
           overflow: "hidden",
-          borderRadius: "14px",
-          border: "1.5px solid #e2e8f0",
-          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.12), 0 0 40px rgba(99, 102, 241, 0.08)",
+          boxSizing: "border-box",
+          borderRadius: "10px",
+          border: "1.5px solid #cbd5e1",
+          boxShadow: "0 24px 64px rgba(0, 0, 0, 0.18), 0 0 40px rgba(99, 102, 241, 0.08)",
           background: "#ffffff",
         }}
         onClick={(e) => e.stopPropagation()}

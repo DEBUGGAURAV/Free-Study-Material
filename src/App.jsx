@@ -2910,99 +2910,103 @@ export default function App() {
 
       </React.Suspense>
 
-      {/* 🛸 4 Movable 3D Floating Action Widgets (AI Study, Circle Search, Chat, Need Help) */}
-      {/* 1. ✨ AI Study (Movable 3D Cyberpunk Violet-Magenta) */}
-      <Movable3DFloatingWidget
-        id="ai"
-        animIndex={2}
-        defaultPos={{ bottom: activeJob ? 248 : 192, right: 16 }}
-        onClick={() => {
-          if (!currentUser) {
-            openAuth("signin");
-            return;
-          }
-          setHomeAiPodNote(previewNote || null);
-          setHomeAiPodInitialTab("chat");
-          setIsHomeAiPodOpen(true);
-        }}
-        title="Open AI Study Chatbox, 3D Flashcards & Summary"
-        icon={<Sparkles size={17} color="#ffffff" style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.9))" }} />}
-        label="AI Study"
-        bgGradient="linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%)"
-        glowColor="rgba(168, 85, 247, 0.5)"
-        borderGradient="rgba(244, 114, 182, 0.55)"
-      />
+      {/* 🛸 4 Movable 3D Floating Action Widgets (AI Study, Circle Search, Chat, Need Help) - Hidden when full-screen PDF Reader or Admin Studio is open */}
+      {!previewNote && !isAdminOpen && (
+        <>
+          {/* 1. ✨ AI Study (Movable 3D Cyberpunk Violet-Magenta) */}
+          <Movable3DFloatingWidget
+            id="ai"
+            animIndex={2}
+            defaultPos={{ bottom: activeJob ? 248 : 192, right: 16 }}
+            onClick={() => {
+              if (!currentUser) {
+                openAuth("signin");
+                return;
+              }
+              setHomeAiPodNote(previewNote || null);
+              setHomeAiPodInitialTab("chat");
+              setIsHomeAiPodOpen(true);
+            }}
+            title="Open AI Study Chatbox, 3D Flashcards & Summary"
+            icon={<Sparkles size={17} color="#ffffff" style={{ filter: "drop-shadow(0 0 6px rgba(255,255,255,0.9))" }} />}
+            label="AI Study"
+            bgGradient="linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #ec4899 100%)"
+            glowColor="rgba(168, 85, 247, 0.5)"
+            borderGradient="rgba(244, 114, 182, 0.55)"
+          />
 
-      {/* 2. ⭕ Circle Search (Movable 3D Gemini Galaxy AI: Indigo, Cyan & Emerald Mint) */}
-      <Movable3DFloatingWidget
-        id="circle"
-        animIndex={3}
-        defaultPos={{ bottom: activeJob ? 192 : 136, right: 16 }}
-        onClick={() => {
-          if (!currentUser) {
-            openAuth("signin");
-            return;
-          }
-          setIsScreenPencilActive(true);
-        }}
-        title="Pencil & Circle Search: Draw any shape with Pencil to get instant AI search"
-        icon={<GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />}
-        label="Circle Search"
-        bgGradient="linear-gradient(135deg, #4f46e5 0%, #06b6d4 50%, #10b981 100%)"
-        glowColor="rgba(6, 182, 212, 0.55)"
-        borderGradient="rgba(165, 243, 252, 0.65)"
-      />
+          {/* 2. ⭕ Circle Search (Movable 3D Gemini Galaxy AI: Indigo, Cyan & Emerald Mint) */}
+          <Movable3DFloatingWidget
+            id="circle"
+            animIndex={3}
+            defaultPos={{ bottom: activeJob ? 192 : 136, right: 16 }}
+            onClick={() => {
+              if (!currentUser) {
+                openAuth("signin");
+                return;
+              }
+              setIsScreenPencilActive(true);
+            }}
+            title="Pencil & Circle Search: Draw any shape with Pencil to get instant AI search"
+            icon={<GeminiIcon size={18} withRing ringColor="#ffffff" color="#ffffff" />}
+            label="Circle Search"
+            bgGradient="linear-gradient(135deg, #4f46e5 0%, #06b6d4 50%, #10b981 100%)"
+            glowColor="rgba(6, 182, 212, 0.55)"
+            borderGradient="rgba(165, 243, 252, 0.65)"
+          />
 
-      {/* 3. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
-      {!isChatOpen && (
-        <Movable3DFloatingWidget
-          id="chat"
-          animIndex={4}
-          defaultPos={{ bottom: activeJob ? 136 : 80, right: 16 }}
-          onClick={() => {
-            if (!currentUser) {
-              openAuth("signin");
-            } else {
-              setIsChatOpen(true);
-            }
-          }}
-          title="Open Live Student Chat Hub & Study Pods"
-          icon={<MessageSquare size={17} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
-          label="Chat"
-          bgGradient="linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%)"
-          glowColor="rgba(37, 99, 235, 0.52)"
-          borderGradient="rgba(147, 197, 253, 0.55)"
-          badge={
-            <span
-              style={{
-                position: "absolute",
-                top: "-3px",
-                right: "-3px",
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 7px #10b981",
+          {/* 3. 💬 Chat (Movable 3D Sapphire Ocean & Indigo) */}
+          {!isChatOpen && (
+            <Movable3DFloatingWidget
+              id="chat"
+              animIndex={4}
+              defaultPos={{ bottom: activeJob ? 136 : 80, right: 16 }}
+              onClick={() => {
+                if (!currentUser) {
+                  openAuth("signin");
+                } else {
+                  setIsChatOpen(true);
+                }
               }}
+              title="Open Live Student Chat Hub & Study Pods"
+              icon={<MessageSquare size={17} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
+              label="Chat"
+              bgGradient="linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%)"
+              glowColor="rgba(37, 99, 235, 0.52)"
+              borderGradient="rgba(147, 197, 253, 0.55)"
+              badge={
+                <span
+                  style={{
+                    position: "absolute",
+                    top: "-3px",
+                    right: "-3px",
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#10b981",
+                    boxShadow: "0 0 7px #10b981",
+                  }}
+                />
+              }
             />
-          }
-        />
-      )}
+          )}
 
-      {/* 4. ❓ Need Help? (Movable 3D Sunset Amber Glow) */}
-      <Movable3DFloatingWidget
-        id="help"
-        animIndex={1}
-        defaultPos={{ bottom: activeJob ? 80 : 24, right: 16 }}
-        onClick={() => setIsHelpOpen(true)}
-        title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
-        icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
-        label="Need Help?"
-        bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
-        glowColor="rgba(234, 88, 12, 0.48)"
-        borderGradient="rgba(254, 215, 170, 0.55)"
-        badge={<span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff" }} />}
-      />
+          {/* 4. ❓ Need Help? (Movable 3D Sunset Amber Glow) */}
+          <Movable3DFloatingWidget
+            id="help"
+            animIndex={1}
+            defaultPos={{ bottom: activeJob ? 80 : 24, right: 16 }}
+            onClick={() => setIsHelpOpen(true)}
+            title="Need Help? Instant FAQs, Request Missing Notes & 2-Way Admin Support"
+            icon={<HelpCircle size={18} color="#ffffff" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.4))" }} />}
+            label="Need Help?"
+            bgGradient="linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%)"
+            glowColor="rgba(234, 88, 12, 0.48)"
+            borderGradient="rgba(254, 215, 170, 0.55)"
+            badge={<span style={{ position: "absolute", top: "-2px", right: "-2px", width: "7px", height: "7px", borderRadius: "50%", background: "#ffffff", boxShadow: "0 0 8px #ffffff" }} />}
+          />
+        </>
+      )}
 
       {/* ✏️ Global Live Screen Freehand Pencil Overlay (Identical to Read PDF Circle Search!) */}
       <FreehandCircleOverlay

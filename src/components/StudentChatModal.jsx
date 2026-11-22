@@ -438,6 +438,8 @@ export default function StudentChatModal({
     }
   };
 
+  const [wsReconnectNonce, setWsReconnectNonce] = useState(0);
+
   // Connect WebSocket
   useEffect(() => {
     if (!isOpen || !currentUser) return;
@@ -766,7 +768,7 @@ export default function StudentChatModal({
         ws.close();
       }
     };
-  }, [isOpen, currentUser?.id]);
+  }, [isOpen, currentUser?.id, wsReconnectNonce]);
 
   // 🛡️ Mobile Keyboard Viewport Adjuster (Zero Overlap with Input Bar)
   useEffect(() => {
@@ -2997,7 +2999,7 @@ export default function StudentChatModal({
                   type="button"
                   onClick={() => {
                     setAuthError(null);
-                    establishWebSocket();
+                    setWsReconnectNonce((n) => n + 1);
                   }}
                   style={{
                     background: "rgba(255, 255, 255, 0.15)",
@@ -3472,16 +3474,15 @@ export default function StudentChatModal({
                         <div style={{ textAlign: "center", margin: "8px 0" }}>
                           <span
                             style={{
-                              background: "rgba(255, 255, 255, 0.07)",
-                              backdropFilter: "blur(6px)",
-                              border: "1px solid rgba(255, 255, 255, 0.08)",
+                              background: "#e2e8f0",
+                              border: "1px solid #cbd5e1",
                               padding: "3px 12px",
                               borderRadius: "999px",
                               fontSize: "0.68rem",
-                              fontWeight: 600,
-                              color: "#94a3b8",
+                              fontWeight: 700,
+                              color: "#334155",
                               letterSpacing: "0.3px",
-                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                              boxShadow: "0 1px 4px rgba(15, 23, 42, 0.06)",
                             }}
                           >
                             {formatDateSeparator(msg.createdAt)}
@@ -3661,10 +3662,10 @@ export default function StudentChatModal({
                                   setMessageContextMenuId((prev) => (prev === msg.id ? null : msg.id));
                                 }}
                                 style={{
-                                  background: "rgba(255, 255, 255, 0.08)",
-                                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                                  background: "#f1f5f9",
+                                  border: "1px solid #cbd5e1",
                                   borderRadius: "6px",
-                                  color: "#cbd5e1",
+                                  color: "#334155",
                                   cursor: "pointer",
                                   padding: "2px 5px",
                                   display: "inline-flex",
@@ -3841,7 +3842,7 @@ export default function StudentChatModal({
                                   marginTop: "4px",
                                   fontSize: "0.72rem",
                                   fontWeight: 600,
-                                  color: isMine ? "#e0f2fe" : "#cbd5e1",
+                                  color: isMine ? "#e0f2fe" : "#64748b",
                                 }}
                               >
                                 {msg.isEdited && <span style={{ fontStyle: "italic", opacity: 0.85 }}>(edited)</span>}
@@ -3849,7 +3850,7 @@ export default function StudentChatModal({
                                 {isMine && !msg.isDeleted && (
                                   <span
                                     style={{
-                                      color: msg.status === "read" ? "#38bdf8" : "#cbd5e1",
+                                      color: msg.status === "read" ? "#38bdf8" : "#e0f2fe",
                                       fontWeight: 900,
                                       fontSize: "0.78rem",
                                       letterSpacing: "-1px",
@@ -4266,13 +4267,13 @@ export default function StudentChatModal({
                           width: "28px",
                           height: "28px",
                           borderRadius: "50%",
-                          background: item.color ? `${item.color}25` : "rgba(255,255,255,0.1)",
-                          border: `1px solid ${item.color || "rgba(255,255,255,0.2)"}`,
+                          background: item.color ? `${item.color}20` : "#e0f2fe",
+                          border: `1px solid ${item.color || "#bae6fd"}`,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontSize: "0.82rem",
-                          color: item.color || "#fff",
+                          color: item.color || "#0284c7",
                           flexShrink: 0,
                           overflow: "hidden",
                         }}
@@ -4285,14 +4286,14 @@ export default function StudentChatModal({
                       </div>
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <span style={{ fontSize: "0.84rem", fontWeight: 700, color: item.color || "#fff" }}>
+                          <span style={{ fontSize: "0.84rem", fontWeight: 700, color: item.color || "#0284c7" }}>
                             {item.tag}
                           </span>
-                          <span style={{ fontSize: "0.76rem", color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span style={{ fontSize: "0.76rem", color: "#334155", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {item.name}
                           </span>
                         </div>
-                        <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                        <span style={{ fontSize: "0.7rem", color: "#64748b" }}>
                           {item.subtitle}
                         </span>
                       </div>
@@ -5034,11 +5035,11 @@ export default function StudentChatModal({
                   onClick={fetchBlockedStudents}
                   disabled={loadingBlockedList}
                   style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "none",
+                    background: "#ffffff",
+                    border: "1px solid #fecaca",
                     borderRadius: "6px",
                     padding: "6px",
-                    color: "var(--text-dim)",
+                    color: "#dc2626",
                     cursor: "pointer",
                   }}
                   title="Refresh list"
@@ -5048,11 +5049,11 @@ export default function StudentChatModal({
                 <button
                   onClick={() => setShowBlockedModal(false)}
                   style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "none",
+                    background: "#ffffff",
+                    border: "1px solid #fecaca",
                     borderRadius: "6px",
                     padding: "6px",
-                    color: "var(--text-dim)",
+                    color: "#dc2626",
                     cursor: "pointer",
                   }}
                 >
@@ -5065,12 +5066,12 @@ export default function StudentChatModal({
             <div
               style={{
                 padding: "12px 18px",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(0, 0, 0, 0.25)",
+                borderBottom: "1.5px solid #e2e8f0",
+                background: "#f8fafc",
               }}
             >
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                <Search size={15} color="var(--text-dim)" style={{ position: "absolute", left: "12px" }} />
+                <Search size={15} color="#64748b" style={{ position: "absolute", left: "12px" }} />
                 <input
                   type="text"
                   value={studentSearchQuery}
@@ -5078,12 +5079,12 @@ export default function StudentChatModal({
                   placeholder="🔍 Search student by name, email, or mobile..."
                   style={{
                     width: "100%",
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    background: "#ffffff",
+                    border: "1.5px solid #cbd5e1",
                     borderRadius: "10px",
                     padding: "9px 34px 9px 36px",
                     fontSize: "0.82rem",
-                    color: "#fff",
+                    color: "#0f172a",
                     outline: "none",
                   }}
                 />
@@ -5098,7 +5099,7 @@ export default function StudentChatModal({
                       right: "10px",
                       background: "none",
                       border: "none",
-                      color: "var(--text-dim)",
+                      color: "#64748b",
                       cursor: "pointer",
                       padding: "2px",
                     }}
@@ -5123,14 +5124,14 @@ export default function StudentChatModal({
               {/* If user is searching */}
               {studentSearchQuery.trim().length >= 2 ? (
                 searchingStudents ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                  <div style={{ padding: "40px", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
                     <RefreshCw size={24} className="spin" style={{ marginBottom: "10px", opacity: 0.7 }} />
                     <div>Searching student directory...</div>
                   </div>
                 ) : studentSearchResults.length === 0 ? (
-                  <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
+                  <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
                     <UserX size={36} color="#94a3b8" style={{ marginBottom: "10px", opacity: 0.6 }} />
-                    <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "#cbd5e1" }}>
+                    <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "#334155" }}>
                       No students found matching "{studentSearchQuery}"
                     </div>
                   </div>
@@ -5141,8 +5142,8 @@ export default function StudentChatModal({
                       <div
                         key={st.id}
                         style={{
-                          background: "rgba(255, 255, 255, 0.03)",
-                          border: "1px solid rgba(255, 255, 255, 0.07)",
+                          background: "#f8fafc",
+                          border: "1.5px solid #e2e8f0",
                           borderRadius: "10px",
                           padding: "12px 14px",
                           display: "flex",
@@ -5153,16 +5154,17 @@ export default function StudentChatModal({
                       >
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontWeight: 700, fontSize: "0.86rem", color: blocked ? "#f87171" : "#fff" }}>
+                            <span style={{ fontWeight: 800, fontSize: "0.86rem", color: blocked ? "#dc2626" : "#0f172a" }}>
                               {st.name || "Student"}
                             </span>
                             {st.username && (
-                              <span style={{ fontSize: "0.75rem", color: "var(--accent-cyan)" }}>@{st.username}</span>
+                              <span style={{ fontSize: "0.75rem", color: "#0284c7", fontWeight: 700 }}>@{st.username}</span>
                             )}
                             <span
                               style={{
-                                background: blocked ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
-                                color: blocked ? "#ef4444" : "#10b981",
+                                background: blocked ? "#fef2f2" : "#ecfdf5",
+                                color: blocked ? "#dc2626" : "#059669",
+                                border: blocked ? "1px solid #fecaca" : "1px solid #a7f3d0",
                                 fontSize: "0.62rem",
                                 padding: "1px 6px",
                                 borderRadius: "4px",
@@ -5175,7 +5177,7 @@ export default function StudentChatModal({
                           <div
                             style={{
                               fontSize: "0.72rem",
-                              color: "var(--text-dim)",
+                              color: "#475569",
                               marginTop: "3px",
                               display: "flex",
                               flexDirection: "column",
@@ -5192,9 +5194,9 @@ export default function StudentChatModal({
                           <button
                             onClick={() => handleToggleBlockStudent(st.id, st.name)}
                             style={{
-                              background: blocked ? "rgba(52, 211, 153, 0.15)" : "rgba(239, 68, 68, 0.15)",
-                              border: blocked ? "1px solid rgba(52, 211, 153, 0.4)" : "1px solid rgba(239, 68, 68, 0.4)",
-                              color: blocked ? "#34d399" : "#f87171",
+                              background: blocked ? "#ecfdf5" : "#fef2f2",
+                              border: blocked ? "1px solid #6ee7b7" : "1px solid #fecaca",
+                              color: blocked ? "#059669" : "#dc2626",
                               borderRadius: "8px",
                               padding: "6px 10px",
                               fontSize: "0.74rem",
@@ -5214,9 +5216,9 @@ export default function StudentChatModal({
                           <button
                             onClick={() => handleDeleteAllByUser(st.id, st.name)}
                             style={{
-                              background: "rgba(239, 68, 68, 0.1)",
-                              border: "1px solid rgba(239, 68, 68, 0.25)",
-                              color: "#fca5a5",
+                              background: "#fef2f2",
+                              border: "1px solid #fecaca",
+                              color: "#dc2626",
                               borderRadius: "8px",
                               padding: "6px 9px",
                               fontSize: "0.74rem",
@@ -5229,7 +5231,7 @@ export default function StudentChatModal({
                             }}
                             title="Purge all chat messages sent by this student"
                           >
-                            <Trash2 size={12} color="#fca5a5" />
+                            <Trash2 size={12} color="#dc2626" />
                             <span>Purge Msgs</span>
                           </button>
                         </div>
@@ -5240,17 +5242,17 @@ export default function StudentChatModal({
               ) : (
                 /* Default: Currently Restricted Students */
                 loadingBlockedList ? (
-                  <div style={{ padding: "40px", textAlign: "center", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                  <div style={{ padding: "40px", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
                     <RefreshCw size={24} className="spin" style={{ marginBottom: "10px", opacity: 0.7 }} />
                     <div>Loading restricted students directory...</div>
                   </div>
                 ) : blockedStudentsList.length === 0 ? (
-                  <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-dim)" }}>
-                    <UserCheck size={36} color="#34d399" style={{ marginBottom: "10px", opacity: 0.8 }} />
-                    <div style={{ fontSize: "0.88rem", fontWeight: 600, color: "#cbd5e1" }}>
+                  <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748b" }}>
+                    <UserCheck size={36} color="#059669" style={{ marginBottom: "10px", opacity: 0.8 }} />
+                    <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1e293b" }}>
                       No Students Currently Restricted
                     </div>
-                    <div style={{ fontSize: "0.75rem", marginTop: "4px", color: "var(--text-dim)" }}>
+                    <div style={{ fontSize: "0.76rem", marginTop: "4px", color: "#64748b" }}>
                       Type a student's name, email, or mobile in the search box above to find and block any student.
                     </div>
                   </div>
@@ -5259,8 +5261,8 @@ export default function StudentChatModal({
                     <div
                       key={st.id}
                       style={{
-                        background: "rgba(255, 255, 255, 0.03)",
-                        border: "1px solid rgba(255, 255, 255, 0.07)",
+                        background: "#f8fafc",
+                        border: "1.5px solid #e2e8f0",
                         borderRadius: "10px",
                         padding: "12px 14px",
                         display: "flex",
@@ -5271,13 +5273,14 @@ export default function StudentChatModal({
                     >
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: 700, fontSize: "0.86rem", color: "#f87171" }}>
+                          <span style={{ fontWeight: 800, fontSize: "0.86rem", color: "#dc2626" }}>
                             {st.name || "Student"}
                           </span>
                           <span
                             style={{
-                              background: "rgba(239, 68, 68, 0.15)",
-                              color: "#ef4444",
+                              background: "#fef2f2",
+                              color: "#dc2626",
+                              border: "1px solid #fecaca",
                               fontSize: "0.62rem",
                               padding: "1px 6px",
                               borderRadius: "4px",
@@ -5290,7 +5293,7 @@ export default function StudentChatModal({
                         <div
                           style={{
                             fontSize: "0.72rem",
-                            color: "var(--text-dim)",
+                            color: "#475569",
                             marginTop: "3px",
                             display: "flex",
                             flexDirection: "column",
@@ -5307,9 +5310,9 @@ export default function StudentChatModal({
                         <button
                           onClick={() => handleToggleBlockStudent(st.id, st.name)}
                           style={{
-                            background: "rgba(52, 211, 153, 0.15)",
-                            border: "1px solid rgba(52, 211, 153, 0.4)",
-                            color: "#34d399",
+                            background: "#ecfdf5",
+                            border: "1px solid #6ee7b7",
+                            color: "#059669",
                             borderRadius: "8px",
                             padding: "6px 12px",
                             fontSize: "0.75rem",
@@ -5330,9 +5333,9 @@ export default function StudentChatModal({
                         <button
                           onClick={() => handleDeleteAllByUser(st.id, st.name)}
                           style={{
-                            background: "rgba(239, 68, 68, 0.1)",
-                            border: "1px solid rgba(239, 68, 68, 0.25)",
-                            color: "#fca5a5",
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            color: "#dc2626",
                             borderRadius: "8px",
                             padding: "6px 9px",
                             fontSize: "0.74rem",
@@ -5345,7 +5348,7 @@ export default function StudentChatModal({
                           }}
                           title="Purge all chat messages sent by this student"
                         >
-                          <Trash2 size={12} color="#fca5a5" />
+                          <Trash2 size={12} color="#dc2626" />
                           <span>Purge Msgs</span>
                         </button>
                       </div>
@@ -5359,8 +5362,8 @@ export default function StudentChatModal({
             <div
               style={{
                 padding: "12px 18px",
-                borderTop: "1px solid rgba(255, 255, 255, 0.08)",
-                background: "rgba(0, 0, 0, 0.25)",
+                borderTop: "1.5px solid #e2e8f0",
+                background: "#f8fafc",
                 display: "flex",
                 justifyContent: "flex-end",
               }}
@@ -5369,13 +5372,13 @@ export default function StudentChatModal({
                 type="button"
                 onClick={() => setShowBlockedModal(false)}
                 style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "none",
+                  background: "#e2e8f0",
+                  border: "1px solid #cbd5e1",
                   borderRadius: "8px",
-                  padding: "8px 16px",
-                  color: "#cbd5e1",
+                  padding: "7px 16px",
+                  color: "#1e293b",
                   fontSize: "0.82rem",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   cursor: "pointer",
                 }}
               >
@@ -6334,8 +6337,8 @@ export default function StudentChatModal({
               {/* Reset Link & Invite Code Bar */}
               <div
                 style={{
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "#f8fafc",
+                  border: "1.5px solid #e2e8f0",
                   borderRadius: "14px",
                   padding: "12px 14px",
                   display: "flex",
@@ -6345,10 +6348,10 @@ export default function StudentChatModal({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                  <div style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
                     Group Secret Code
                   </div>
-                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#38bdf8", fontFamily: "monospace" }}>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 800, color: "#0284c7", fontFamily: "monospace" }}>
                     {membersTargetRoom?.secretCode || currentRoom.secretCode}
                   </div>
                 </div>
@@ -6362,11 +6365,11 @@ export default function StudentChatModal({
                       alert("Link copied to clipboard!");
                     }}
                     style={{
-                      background: "rgba(56, 189, 248, 0.15)",
-                      border: "1px solid rgba(56, 189, 248, 0.35)",
+                      background: "#f0f9ff",
+                      border: "1px solid #bae6fd",
                       borderRadius: "8px",
                       padding: "6px 10px",
-                      color: "#38bdf8",
+                      color: "#0369a1",
                       fontSize: "0.74rem",
                       fontWeight: 700,
                       cursor: "pointer",
@@ -6375,7 +6378,7 @@ export default function StudentChatModal({
                       gap: "4px",
                     }}
                   >
-                    <Copy size={13} />
+                    <Copy size={13} color="#0284c7" />
                     <span>Copy Link</span>
                   </button>
                   <button
@@ -6383,11 +6386,11 @@ export default function StudentChatModal({
                     disabled={resetLinkLoading}
                     onClick={() => handleResetInviteLink(membersTargetRoom || currentRoom)}
                     style={{
-                      background: "rgba(239, 68, 68, 0.15)",
-                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
                       borderRadius: "8px",
                       padding: "6px 10px",
-                      color: "#f87171",
+                      color: "#dc2626",
                       fontSize: "0.74rem",
                       fontWeight: 700,
                       cursor: resetLinkLoading ? "wait" : "pointer",
@@ -6406,13 +6409,13 @@ export default function StudentChatModal({
               {/* Add Member Form */}
               <div
                 style={{
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  background: "#f8fafc",
+                  border: "1.5px solid #e2e8f0",
                   borderRadius: "14px",
                   padding: "14px",
                 }}
               >
-                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: "8px" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", marginBottom: "8px" }}>
                   Add Student to Group (Direct Access)
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -6423,12 +6426,12 @@ export default function StudentChatModal({
                     placeholder="Enter student email or ID..."
                     style={{
                       flex: 1,
-                      background: "rgba(0, 0, 0, 0.35)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      background: "#ffffff",
+                      border: "1.5px solid #cbd5e1",
                       borderRadius: "10px",
                       padding: "8px 12px",
                       fontSize: "0.8rem",
-                      color: "#fff",
+                      color: "#0f172a",
                       outline: "none",
                     }}
                     onKeyDown={(e) => {
@@ -6466,11 +6469,11 @@ export default function StudentChatModal({
               {/* Active Members List */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#cbd5e1", textTransform: "uppercase" }}>
+                  <span style={{ fontSize: "0.76rem", fontWeight: 800, color: "#475569", textTransform: "uppercase" }}>
                     Active Members ({roomMembersList.length})
                   </span>
                   {membersLoading && (
-                    <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>Refreshing...</span>
+                    <span style={{ fontSize: "0.7rem", color: "#64748b" }}>Refreshing...</span>
                   )}
                 </div>
 
@@ -6485,8 +6488,8 @@ export default function StudentChatModal({
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "10px 12px",
-                          background: "rgba(255, 255, 255, 0.04)",
-                          border: "1px solid rgba(255, 255, 255, 0.06)",
+                          background: "#f8fafc",
+                          border: "1.5px solid #e2e8f0",
                           borderRadius: "12px",
                         }}
                       >
@@ -6514,7 +6517,7 @@ export default function StudentChatModal({
                           </div>
                           <div>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontSize: "0.84rem", fontWeight: 700, color: "#fff" }}>
+                              <span style={{ fontSize: "0.84rem", fontWeight: 800, color: "#0f172a" }}>
                                 {m.name || "Student"}
                               </span>
                               {isGroupHost && (
@@ -6522,9 +6525,9 @@ export default function StudentChatModal({
                                   style={{
                                     fontSize: "0.62rem",
                                     fontWeight: 800,
-                                    background: "rgba(234, 179, 8, 0.2)",
-                                    border: "1px solid rgba(234, 179, 8, 0.4)",
-                                    color: "#fde047",
+                                    background: "#fef3c7",
+                                    border: "1px solid #fde68a",
+                                    color: "#b45309",
                                     padding: "1px 5px",
                                     borderRadius: "4px",
                                   }}
@@ -6533,10 +6536,10 @@ export default function StudentChatModal({
                                 </span>
                               )}
                               {m.id === currentUser?.id && (
-                                <span style={{ fontSize: "0.65rem", color: "var(--text-dim)" }}>(You)</span>
+                                <span style={{ fontSize: "0.65rem", color: "#64748b", fontWeight: 600 }}>(You)</span>
                               )}
                             </div>
-                            <div style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                            <div style={{ fontSize: "0.7rem", color: "#64748b" }}>
                               {m.isOnline ? "🟢 Active now" : "⚪ Offline"}
                             </div>
                           </div>
@@ -6544,7 +6547,7 @@ export default function StudentChatModal({
 
                         <div>
                           {isGroupHost ? (
-                            <span style={{ fontSize: "0.72rem", color: "#fde047", fontWeight: 700 }}>
+                            <span style={{ fontSize: "0.72rem", color: "#b45309", fontWeight: 800 }}>
                               Group Creator
                             </span>
                           ) : (
@@ -6552,11 +6555,11 @@ export default function StudentChatModal({
                               type="button"
                               onClick={() => handleRemoveMember(m.id, m.name)}
                               style={{
-                                background: "rgba(239, 68, 68, 0.12)",
-                                border: "1px solid rgba(239, 68, 68, 0.35)",
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
                                 borderRadius: "8px",
                                 padding: "4px 10px",
-                                color: "#f87171",
+                                color: "#dc2626",
                                 fontSize: "0.72rem",
                                 fontWeight: 700,
                                 cursor: "pointer",
@@ -6581,16 +6584,16 @@ export default function StudentChatModal({
               {/* Removed / Blocked Members List (WhatsApp Rule) */}
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ fontSize: "0.76rem", fontWeight: 700, color: "#f87171", textTransform: "uppercase" }}>
+                  <span style={{ fontSize: "0.76rem", fontWeight: 800, color: "#dc2626", textTransform: "uppercase" }}>
                     Removed Members ({roomBannedList.length})
                   </span>
                 </div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-dim)", marginBottom: "8px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#64748b", marginBottom: "8px" }}>
                   Removed users cannot rejoin using the invite link until you click "Add Back".
                 </div>
 
                 {roomBannedList.length === 0 ? (
-                  <div style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontStyle: "italic", padding: "8px 12px", background: "rgba(255, 255, 255, 0.02)", borderRadius: "8px" }}>
+                  <div style={{ fontSize: "0.76rem", color: "#64748b", fontStyle: "italic", padding: "8px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
                     No removed users.
                   </div>
                 ) : (
@@ -6603,17 +6606,17 @@ export default function StudentChatModal({
                           alignItems: "center",
                           justifyContent: "space-between",
                           padding: "8px 12px",
-                          background: "rgba(239, 68, 68, 0.06)",
-                          border: "1px solid rgba(239, 68, 68, 0.2)",
+                          background: "#fef2f2",
+                          border: "1px solid #fecaca",
                           borderRadius: "10px",
                         }}
                       >
                         <div>
-                          <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#cbd5e1" }}>
+                          <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#0f172a" }}>
                             {bm.name || "Removed Member"}
                           </div>
                           {bm.email && (
-                            <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>
+                            <div style={{ fontSize: "0.68rem", color: "#64748b" }}>
                               {bm.email}
                             </div>
                           )}
@@ -6623,11 +6626,11 @@ export default function StudentChatModal({
                           type="button"
                           onClick={() => handleAddMember(bm.id, null)}
                           style={{
-                            background: "rgba(16, 185, 129, 0.15)",
-                            border: "1px solid rgba(16, 185, 129, 0.4)",
+                            background: "#ecfdf5",
+                            border: "1px solid #6ee7b7",
                             borderRadius: "8px",
                             padding: "4px 10px",
-                            color: "#34d399",
+                            color: "#059669",
                             fontSize: "0.72rem",
                             fontWeight: 700,
                             cursor: "pointer",
@@ -6649,12 +6652,20 @@ export default function StudentChatModal({
             </div>
 
             {/* Modal Footer */}
-            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1.5px solid #e2e8f0", display: "flex", justifyContent: "flex-end" }}>
               <button
                 type="button"
                 onClick={() => setMembersModalOpen(false)}
-                className="btn-ghost"
-                style={{ padding: "8px 18px", fontSize: "0.82rem" }}
+                style={{
+                  background: "#f1f5f9",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: "8px",
+                  padding: "7px 18px",
+                  color: "#334155",
+                  fontSize: "0.82rem",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
               >
                 Close
               </button>
