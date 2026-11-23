@@ -121,7 +121,7 @@ export default function TabCommunityChat(props) {
                         border: "1px solid rgba(56, 189, 248, 0.25)",
                       }}
                     >
-                      👥 {chatOnlineCount || 1} Active in Room
+                      👥 {chatOnlineCount ?? 0} Active in Room
                     </span>
                   </div>
                   <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "var(--text-dim)" }}>

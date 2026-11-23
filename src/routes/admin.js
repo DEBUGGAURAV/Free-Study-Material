@@ -333,6 +333,14 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
       snap = await db.collection("users").get();
     }
 
+    let clusterPresenceMap = new Map();
+    try {
+      const { getClusterLiveUsersMap } = require("../services/clusterTelemetryService");
+      if (typeof getClusterLiveUsersMap === "function") {
+        clusterPresenceMap = getClusterLiveUsersMap();
+      }
+    } catch (_) {}
+
     let users = [];
 
     snap.forEach((doc) => {
@@ -428,24 +436,37 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
           isOnline = true;
           isRecentlyActive = false;
           lastActiveAtStr = new Date(nowMs).toISOString();
-          recordUserLivePresence(doc.id, { ip: req.ip, email: d.email });
-          if (req.user?.id) recordUserLivePresence(req.user.id, { ip: req.ip, email: d.email });
+          recordUserLivePresence(doc.id, { ip: req.ip, email: d.email, name: d.name, role: isMain ? "admin" : (d.role || "admin") });
+          if (req.user?.id) recordUserLivePresence(req.user.id, { ip: req.ip, email: d.email, name: d.name, role: req.user.role });
         } else {
           const livePres = getUserLivePresence(doc.id, d.email);
-          const liveLastSeen = livePres ? livePres.lastSeen : 0;
+          const localLastSeen = livePres ? livePres.lastSeen : 0;
+          const emailLower = (d.email || "").toLowerCase().trim();
+          const clusterLastSeen = Math.max(
+            clusterPresenceMap.get(doc.id) || 0,
+            emailLower ? (clusterPresenceMap.get(emailLower) || 0) : 0
+          );
+          const liveLastSeen = Math.max(localLastSeen, clusterLastSeen);
 
           const activeSessionsList = Array.isArray(d.activeSessions) ? d.activeSessions : [];
-          const highestSessionActive = activeSessionsList.reduce((max, s) => Math.max(max, Number(s.lastActiveAt) || 0), 0);
+          const hasActiveSession = activeSessionsList.length > 0;
+          const highestSessionActive = hasActiveSession
+            ? activeSessionsList.reduce((max, s) => Math.max(max, Number(s.lastActiveAt) || 0), 0)
+            : 0;
 
-          const mostRecentActiveMs = Math.max(liveLastSeen, highestSessionActive, lastLoginTime);
-          if (mostRecentActiveMs > 0) {
-            lastActiveAtStr = new Date(mostRecentActiveMs).toISOString();
-            const diffMs = nowMs - mostRecentActiveMs;
-            if (diffMs < 5 * 60 * 1000) {
-              isOnline = true;
-            } else if (diffMs < 15 * 60 * 1000) {
-              isRecentlyActive = true;
-            }
+          // Only consider DB session activity when user actually has an active (non-logged-out) session!
+          // Never mark a logged-out user Online just because lastLoginTime was < 5 mins ago.
+          const effectiveLiveMs = Math.max(liveLastSeen, hasActiveSession ? highestSessionActive : 0);
+          const displayLastActiveMs = Math.max(effectiveLiveMs, lastLoginTime);
+          if (displayLastActiveMs > 0) {
+            lastActiveAtStr = new Date(displayLastActiveMs).toISOString();
+          }
+          if (liveLastSeen > 0 && (nowMs - liveLastSeen) < 3 * 60 * 1000) {
+            isOnline = true;
+          } else if (hasActiveSession && highestSessionActive > 0 && (nowMs - highestSessionActive) < 5 * 60 * 1000) {
+            isOnline = true;
+          } else if (effectiveLiveMs > 0 && (nowMs - effectiveLiveMs) < 15 * 60 * 1000) {
+            isRecentlyActive = true;
           }
         }
       } catch (_) {}
@@ -503,6 +524,10 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
     });
 
+    // 🟢 Calculate global presence counts BEFORE search & status filters so the badge always reflects true platform-wide online count!
+    const totalOnlineCount = users.filter((u) => u.isOnline).length;
+    const totalRecentlyActiveCount = users.filter((u) => u.isOnline || u.isRecentlyActive).length;
+
     if (search && search.trim() !== "") {
       const q = search.trim().toLowerCase();
       users = users.filter((u) =>
@@ -512,10 +537,6 @@ router.get("/users", authenticateToken, checkAdminOrPermission("manage_users"), 
         (u.college && u.college.toLowerCase().includes(q))
       );
     }
-
-    // 🟢 Calculate global presence counts before status filter
-    const totalOnlineCount = users.filter((u) => u.isOnline).length;
-    const totalRecentlyActiveCount = users.filter((u) => u.isOnline || u.isRecentlyActive).length;
 
     // Status query filter (supports online, recent, blocked, active, immune, expiring)
     if (status === "online") {

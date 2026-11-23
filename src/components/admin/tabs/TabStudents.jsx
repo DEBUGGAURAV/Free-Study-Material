@@ -213,8 +213,8 @@ export default function TabStudents(props) {
     return true;
   });
 
-  // Realtime online users count
-  const onlineCount = studentsOnlineCount || (students || []).filter((s) => s.isOnline).length;
+  // Realtime online users count (trust server global count even when 0)
+  const onlineCount = typeof studentsOnlineCount === "number" ? studentsOnlineCount : (students || []).filter((s) => s.isOnline).length;
 
   // Export Students (CSV or JSON)
   const handleExportStudents = (format = "csv") => {

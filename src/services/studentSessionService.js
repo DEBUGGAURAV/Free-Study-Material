@@ -30,15 +30,40 @@ const userLivePresence = new Map(); // userId or email -> { lastSeen: number, ip
 function recordUserLivePresence(userId, extra = {}) {
   if (!userId && !extra.email) return;
   const now = Date.now();
+  const existing =
+    (userId && userLivePresence.get(String(userId))) ||
+    (extra.email && userLivePresence.get(String(extra.email).toLowerCase().trim())) ||
+    {};
   const data = {
-    lastSeen: now,
+    ...existing,
     ...extra,
+    userId: userId ? String(userId) : (existing.userId || null),
+    email: extra.email ? String(extra.email).toLowerCase().trim() : (existing.email || null),
+    lastSeen: now,
   };
   if (userId) {
     userLivePresence.set(String(userId), data);
   }
-  if (extra.email) {
-    userLivePresence.set(String(extra.email).toLowerCase().trim(), data);
+  if (data.email) {
+    userLivePresence.set(data.email, data);
+  }
+}
+
+function clearUserLivePresence(userId, email = null) {
+  if (userId) {
+    const existing = userLivePresence.get(String(userId));
+    if (existing?.email) {
+      userLivePresence.delete(String(existing.email).toLowerCase().trim());
+    }
+    userLivePresence.delete(String(userId));
+  }
+  if (email) {
+    const cleanEmail = String(email).toLowerCase().trim();
+    const existing = userLivePresence.get(cleanEmail);
+    if (existing?.userId) {
+      userLivePresence.delete(String(existing.userId));
+    }
+    userLivePresence.delete(cleanEmail);
   }
 }
 
@@ -52,27 +77,21 @@ function getUserLivePresence(userId, email = null) {
   return null;
 }
 
-function isUserOnlineNow(userId, email = null, thresholdMs = 5 * 60 * 1000) {
+function isUserOnlineNow(userId, email = null, thresholdMs = 3 * 60 * 1000) {
   const p = getUserLivePresence(userId, email);
   if (!p) return false;
   return (Date.now() - p.lastSeen) < thresholdMs;
 }
 
-function getLiveOnlineCount(thresholdMs = 5 * 60 * 1000) {
-  const now = Date.now();
-  let count = 0;
-  for (const [, data] of userLivePresence.entries()) {
-    if (now - data.lastSeen < thresholdMs) {
-      count++;
-    }
-  }
-  return count;
+function getLiveOnlineCount(thresholdMs = 3 * 60 * 1000) {
+  // Deduplicated count (userLivePresence indexes each user under both userId & email)
+  return getLiveOnlineUsers(thresholdMs).length;
 }
 
 /**
  * Returns detailed list of currently active users on this node
  */
-function getLiveOnlineUsers(thresholdMs = 5 * 60 * 1000) {
+function getLiveOnlineUsers(thresholdMs = 3 * 60 * 1000) {
   const now = Date.now();
   const seenKeys = new Set();
   const list = [];
@@ -649,7 +668,7 @@ async function touchSessionActive(userId, sessionId, req = null) {
 
   const now = Date.now();
   const last = sessionActiveThrottle.get(sessionId) || 0;
-  if (now - last < 10 * 60 * 1000) return; // 10-minute throttle
+  if (now - last < 4 * 60 * 1000) return; // 4-minute throttle (stays aligned with 5-min multi-node online check)
 
   pruneSessionCaches();
   sessionActiveThrottle.set(sessionId, now);
@@ -1110,6 +1129,7 @@ module.exports = {
   recordStudentAcademicActivity,
   formatDeviceIdentifier,
   recordUserLivePresence,
+  clearUserLivePresence,
   getUserLivePresence,
   isUserOnlineNow,
   getLiveOnlineCount,

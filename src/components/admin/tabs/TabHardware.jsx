@@ -55,9 +55,9 @@ export default function TabHardware(props) {
     on: 3098,
     off: 22,
     inflight: 1,
-    rps: 14.2,
-    successRatePercent: 99.3,
-    totalConnectedUsers: 1,
+    rps: 0,
+    successRatePercent: 100,
+    totalConnectedUsers: 0,
   };
 
   const defaultNodes = [
@@ -74,8 +74,8 @@ export default function TabHardware(props) {
       downReason: null,
       trafficRedirection: null,
       trafficShare: "33.4% Active User Share (Sticky IP-Hash Load Balanced)",
-      activeUsers: Math.ceil((requests.totalConnectedUsers || 1) / 3),
-      requestsOn: requests.on || 3098,
+      activeUsers: 0,
+      requestsOn: requests.on || 0,
       requestsOff: requests.off || 0,
     },
     {
@@ -91,8 +91,8 @@ export default function TabHardware(props) {
       downReason: null,
       trafficRedirection: null,
       trafficShare: "33.3% Active User Share (Sticky IP-Hash Load Balanced)",
-      activeUsers: Math.floor((requests.totalConnectedUsers || 1) / 3),
-      requestsOn: requests.on || 2894,
+      activeUsers: 0,
+      requestsOn: requests.on || 0,
       requestsOff: 0,
     },
     {
@@ -108,8 +108,8 @@ export default function TabHardware(props) {
       downReason: null,
       trafficRedirection: null,
       trafficShare: "33.3% Active User Share (Sticky IP-Hash Load Balanced)",
-      activeUsers: Math.floor((requests.totalConnectedUsers || 1) / 3),
-      requestsOn: 1204,
+      activeUsers: 0,
+      requestsOn: 0,
       requestsOff: 0,
     },
   ];
@@ -355,7 +355,7 @@ export default function TabHardware(props) {
               <Users size={14} style={{ color: "#c084fc" }} />
             </div>
             <div style={{ fontSize: "1.45rem", fontWeight: 900, color: "#c084fc" }}>
-              {requests.totalConnectedUsers || 1} <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#d8b4fe" }}>online</span>
+              {requests.totalConnectedUsers ?? 0} <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "#d8b4fe" }}>online</span>
             </div>
             <div style={{ fontSize: "0.68rem", color: "#e9d5ff", marginTop: "3px" }}>
               Active Students on Cluster

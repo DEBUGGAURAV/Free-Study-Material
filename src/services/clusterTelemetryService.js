@@ -171,12 +171,13 @@ const liveRequestStats = {
   recentTimestamps: [],
 };
 
-// Rolling 10-minute active user/session tracking on THIS backend instance
+// Rolling 3-minute active user/session tracking on THIS backend instance (matches live online window)
 const activeUserTracker = new Map();
+const LIVE_ONLINE_WINDOW_MS = 3 * 60 * 1000;
 
 function pruneIdleUsers(now = Date.now()) {
   for (const [key, timestamp] of activeUserTracker.entries()) {
-    if (now - timestamp > 600000) {
+    if (now - timestamp > LIVE_ONLINE_WINDOW_MS) {
       activeUserTracker.delete(key);
     }
   }
@@ -230,12 +231,12 @@ function getLocalNodeTelemetry() {
   let activeUsersList = [];
   try {
     const { getLiveOnlineUsers } = require("./studentSessionService");
-    activeUsersList = getLiveOnlineUsers(5 * 60 * 1000) || [];
+    activeUsersList = getLiveOnlineUsers(LIVE_ONLINE_WINDOW_MS) || [];
   } catch (_) {}
 
   const seenIps = new Set(activeUsersList.map((u) => u.ip).filter(Boolean));
   for (const [ip, timestamp] of activeUserTracker.entries()) {
-    if (now - timestamp < 5 * 60 * 1000 && !seenIps.has(ip) && ip !== "guest_client") {
+    if (now - timestamp < LIVE_ONLINE_WINDOW_MS && !seenIps.has(ip) && ip !== "guest_client") {
       activeUsersList.push({
         isGuest: true,
         email: `Guest (${ip.slice(0, 15)})`,
@@ -249,7 +250,8 @@ function getLocalNodeTelemetry() {
     }
   }
 
-  const liveUsersCount = Math.max(activeUsersList.length, activeUserTracker.size, liveRequestStats.inflight > 0 ? 1 : 0);
+  // Exact deduplicated live user count (no inflation from stale 10-min IPs or bots)
+  const liveUsersCount = activeUsersList.length;
 
   return {
     hostname: getCurrentServerHostname(),
@@ -301,11 +303,22 @@ function getLocalNodeTelemetry() {
  * Express middleware to continuously measure real-time request counts and live users
  */
 function requestTelemetryMiddleware(req, res, next) {
-  // Don't count internal cluster telemetry probes as student users
-  const isInternalProbe =
+  // Don't count internal cluster probes, health pings, crawlers, or logout calls as live student users
+  const pathLower = String(req.path || "").toLowerCase();
+  const uaLower = String(req.headers["user-agent"] || "").toLowerCase();
+  const isBotOrHealthProbe =
     Boolean(req.headers["x-cluster-sync"]) ||
-    req.path.includes("/cluster/node-telemetry") ||
-    req.query?.probe === "cf";
+    req.query?.probe === "cf" ||
+    pathLower === "/health" ||
+    pathLower === "/api/health" ||
+    pathLower === "/ping" ||
+    pathLower === "/favicon.ico" ||
+    pathLower === "/robots.txt" ||
+    pathLower.includes("/cluster/node-telemetry") ||
+    pathLower.includes("/public-meta") ||
+    pathLower.includes("/og-image") ||
+    pathLower.includes("/auth/logout") ||
+    /(bot|crawler|spider|whatsapp|telegrambot|uptime|pingdom|render|cloudflare-health|headless|curl\/|wget|axios|node-fetch|python-requests|go-http-client)/i.test(uaLower);
 
   liveRequestStats.total++;
   liveRequestStats.inflight++;
@@ -315,21 +328,23 @@ function requestTelemetryMiddleware(req, res, next) {
     liveRequestStats.recentTimestamps = liveRequestStats.recentTimestamps.filter((t) => now - t < 10000);
   }
 
-  if (!isInternalProbe) {
+  if (!isBotOrHealthProbe) {
     const clientKey =
       req.headers["cf-connecting-ip"] ||
       req.headers["x-real-ip"] ||
       (req.headers["x-forwarded-for"] ? req.headers["x-forwarded-for"].split(",")[0].trim() : null) ||
       req.ip ||
       "guest_client";
-    if (!activeUserTracker.has(clientKey) && activeUserTracker.size >= 500) {
-      pruneIdleUsers(now);
-      if (activeUserTracker.size >= 500) {
-        const oldest = activeUserTracker.keys().next().value;
-        if (oldest) activeUserTracker.delete(oldest);
+    if (clientKey && clientKey !== "127.0.0.1" && clientKey !== "::1") {
+      if (!activeUserTracker.has(clientKey) && activeUserTracker.size >= 500) {
+        pruneIdleUsers(now);
+        if (activeUserTracker.size >= 500) {
+          const oldest = activeUserTracker.keys().next().value;
+          if (oldest) activeUserTracker.delete(oldest);
+        }
       }
+      activeUserTracker.set(clientKey, now);
     }
-    activeUserTracker.set(clientKey, now);
   }
 
   const thisNode = getThisNode();
@@ -392,11 +407,11 @@ function recalculateClusterDistribution() {
   const now = Date.now();
   pruneIdleUsers(now);
 
-  // Sum real per-node live users if synced; fall back to local active tracker
+  // Sum real per-node live users if synced; fall back to local active tracker (never fake minimum of 1)
   const syncedHealthyNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy && n.telemetrySynced);
-  const localLive = Math.max(activeUserTracker.size, liveRequestStats.inflight > 0 ? 1 : 0);
+  const localLive = activeUserTracker.size;
   const syncedSum = syncedHealthyNodes.reduce((acc, n) => acc + (n.liveNodeUsers || 0), 0);
-  const totalLiveUsers = Math.max(syncedSum, localLive, 1);
+  const totalLiveUsers = Math.max(syncedSum, localLive, 0);
 
   const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
   const activeCount = activeNodes.length;
@@ -833,6 +848,34 @@ setTimeout(() => probeClusterNodes({ force: true }), 4000);
 setInterval(() => probeClusterNodes({ force: false }), 5 * 60 * 1000);
 
 /**
+ * Returns deduplicated map of live authenticated users across ALL healthy cluster nodes
+ * Keyed by lowercase email AND userId -> most recent lastSeen timestamp (ms).
+ * Enables accurate multi-node online status in Admin Panel with ZERO extra DB queries!
+ */
+function getClusterLiveUsersMap() {
+  const map = new Map();
+  const now = Date.now();
+  const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
+  for (const node of activeNodes) {
+    const list = Array.isArray(node.activeUsersList) ? node.activeUsersList : [];
+    for (const u of list) {
+      if (!u || u.isGuest) continue;
+      const seen = Number(u.lastSeen) || (typeof u.agoSec === "number" ? now - u.agoSec * 1000 : 0);
+      if (!seen || now - seen > LIVE_ONLINE_WINDOW_MS) continue;
+      if (u.userId) {
+        const key = String(u.userId);
+        map.set(key, Math.max(map.get(key) || 0, seen));
+      }
+      if (u.email && u.email.includes("@")) {
+        const eKey = String(u.email).toLowerCase().trim();
+        map.set(eKey, Math.max(map.get(eKey) || 0, seen));
+      }
+    }
+  }
+  return map;
+}
+
+/**
  * Exported getter for admin hardware telemetry
  */
 function getClusterTelemetry() {
@@ -846,7 +889,25 @@ function getClusterTelemetry() {
   const activeNodes = clusterNodes.filter((n) => n.isEnabled && n.isHealthy);
   const activeCount = activeNodes.length;
 
-  const totalConnectedUsers = activeNodes.reduce((acc, n) => acc + (n.activeUsers || 0), 0);
+  // Deduplicate connected users across all active nodes (prevents 1 user hitting Node 1 + Node 2 from counting as 2!)
+  const uniqueClusterUsers = new Set();
+  let hasDetailedLists = false;
+  for (const n of activeNodes) {
+    if (Array.isArray(n.activeUsersList) && n.activeUsersList.length > 0) {
+      hasDetailedLists = true;
+      for (const u of n.activeUsersList) {
+        const seen = Number(u.lastSeen) || (typeof u.agoSec === "number" ? now - u.agoSec * 1000 : now);
+        if (now - seen > LIVE_ONLINE_WINDOW_MS) continue;
+        const dedupKey =
+          (u.email && u.email.includes("@") ? `e:${u.email.toLowerCase().trim()}` : null) ||
+          (u.userId ? `u:${u.userId}` : null) ||
+          (u.ip ? `ip:${u.ip}` : null);
+        if (dedupKey) uniqueClusterUsers.add(dedupKey);
+      }
+    }
+  }
+  const rawNodeSum = activeNodes.reduce((acc, n) => acc + (n.activeUsers || 0), 0);
+  const totalConnectedUsers = hasDetailedLists ? uniqueClusterUsers.size : rawNodeSum;
   const totalRequests = clusterNodes.reduce((acc, n) => acc + (n.totalRequests || n.requestsOn || 0), 0) || liveRequestStats.total;
   const totalOn = clusterNodes.reduce((acc, n) => acc + (n.requestsOn || 0), 0) || liveRequestStats.on;
   const totalOff = clusterNodes.reduce((acc, n) => acc + (n.requestsOff || 0), 0) || liveRequestStats.off;
@@ -900,7 +961,7 @@ function getClusterTelemetry() {
       successRatePercent: totalRequests > 0
         ? Number(((totalOn / totalRequests) * 100).toFixed(1))
         : 100,
-      totalConnectedUsers: Math.max(totalConnectedUsers, 1),
+      totalConnectedUsers: Math.max(totalConnectedUsers, 0),
     },
     clusterMemory: {
       totalConfiguredNodes: configuredNodes.length || 1,
@@ -938,6 +999,7 @@ module.exports = {
   requestTelemetryMiddleware,
   getLocalNodeTelemetry,
   getClusterTelemetry,
+  getClusterLiveUsersMap,
   toggleClusterNode,
   syncNodeState,
   probeClusterNodes,
