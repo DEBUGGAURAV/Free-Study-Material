@@ -348,6 +348,39 @@ export default function AuthModal({
     } catch (_) {}
   };
 
+  // Helper: Complete post-registration authentication and enter the logged-in app directly (no re-login needed)
+  const completeAuthenticatedSession = (user, overrides = {}) => {
+    setShowPostRegPasskeyPrompt(false);
+    setPostRegUser(null);
+    setSignUpOtpStep(false);
+    setSignUpOtpCode("");
+    setRegTgStep(false);
+    setRegTgOtpCode("");
+    setIsGoogleOnboarding(false);
+    setError(null);
+    setFieldErrors({});
+    setSuccessMsg(null);
+
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("auth")) {
+        url.searchParams.delete("auth");
+        window.history.replaceState({}, document.title, url.pathname + (url.search ? url.search : ""));
+      }
+    } catch (_) {}
+
+    if (user) {
+      const finalUser = { ...user, ...overrides };
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("vault_last_active", String(Date.now()));
+      }
+      if (onAuthSuccess) onAuthSuccess(finalUser);
+      if (onClose) onClose();
+    } else {
+      transitionToLoginPage(null, "password", "✅ Account created successfully! Please sign in.");
+    }
+  };
+
   // Register Passkey right after successful account signup
   const handlePostRegEnablePasskey = async () => {
     try {
@@ -355,20 +388,16 @@ export default function AuthModal({
       setError(null);
       setFieldErrors({});
       setSuccessMsg(null);
-      const res = await registerDevicePasskey("", "registration");
+      await registerDevicePasskey("", "registration");
       if (typeof localStorage !== "undefined") {
         localStorage.setItem("academic_vault_has_passkey", "true");
         localStorage.setItem("academic_vault_login_pref", "passkey");
       }
       const savedUser = postRegUser;
-      transitionToLoginPage(
-        savedUser,
-        "passkey",
-        res?.message || "🎉 Passkey registered successfully! 1-Click biometric sign-in is ready."
-      );
+      completeAuthenticatedSession(savedUser, { hasPasskey: true });
     } catch (err) {
       if (err.message && (err.message.includes("cancelled") || err.message.includes("NotAllowedError"))) {
-        setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now' below to continue to login.");
+        setError("Biometric prompt was cancelled. You can retry or click 'Skip for Now & Continue' below to enter your dashboard.");
       } else {
         setError(err.message || "Failed to set up passkey on this device.");
       }
@@ -382,14 +411,7 @@ export default function AuthModal({
       localStorage.setItem("academic_vault_login_pref", "password");
     }
     const savedUser = postRegUser;
-    const isGoogle = savedUser?.authProvider === "google";
-    transitionToLoginPage(
-      savedUser,
-      isGoogle ? "passkey" : "password",
-      isGoogle
-        ? "✅ Google account verified! Please sign in with Google or 1-Click Passkey."
-        : "✅ Account created successfully! Please enter your password to sign in."
-    );
+    completeAuthenticatedSession(savedUser);
   };
 
   const handleRegistrationSuccess = (authenticatedUser) => {
@@ -418,12 +440,8 @@ export default function AuthModal({
       setFieldErrors({});
       setSuccessMsg(null);
     } else {
-      // If passkey is not supported or already setup, immediately transition directly to login page!
-      transitionToLoginPage(
-        authenticatedUser,
-        authenticatedUser.hasPasskey ? "passkey" : "password",
-        "✅ Account created successfully! Please sign in with your credentials."
-      );
+      // If passkey is not supported or already setup, directly enter the logged-in dashboard!
+      completeAuthenticatedSession(authenticatedUser);
     }
   };
 
@@ -1393,7 +1411,7 @@ export default function AuthModal({
                     className="modal-close-btn"
                     onClick={handlePostRegSkipPasskey}
                     type="button"
-                    title="Skip and go to sign in"
+                    title="Skip and continue to dashboard"
                   >
                     <X size={16} />
                   </button>
@@ -1546,7 +1564,7 @@ export default function AuthModal({
                       transition: "all 0.18s ease",
                     }}
                   >
-                    Skip for Now
+                    Skip for Now &amp; Continue
                   </button>
                 </div>
               </div>

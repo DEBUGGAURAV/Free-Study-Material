@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const jwt = require("jsonwebtoken");
+const net = require("node:net");
 const { JWT_SECRET } = require("./auth");
 
 function cleanIpString(raw) {
@@ -36,47 +37,36 @@ function getClientIp(req) {
     if (!req) return "127.0.0.1";
     const headers = req.headers || {};
 
-    // 1. Cloudflare Connecting IP (True visitor IP)
+    // 1. Cloudflare Connecting IP — ONLY trust when paired with CF-Ray header and valid IP syntax
     const cfIp = headers["cf-connecting-ip"];
-    if (cfIp) {
+    if (cfIp && headers["cf-ray"]) {
       const val = Array.isArray(cfIp) ? cfIp[0] : cfIp;
       const clean = cleanIpString(val);
-      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
+      if (clean && net.isIP(clean) && !isPrivateIp(clean)) return clean;
     }
 
-    // 2. Real-IP / True-Client-IP headers (Reverse Proxies & CDNs)
-    const realIp = headers["x-real-ip"] || headers["true-client-ip"] || headers["x-client-ip"];
-    if (realIp) {
-      const val = Array.isArray(realIp) ? realIp[0] : realIp;
-      const clean = cleanIpString(val);
-      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
-    }
-
-    // 3. X-Forwarded-For header (handles array or comma-separated string)
+    // 2. X-Forwarded-For header — pick the RIGHTMOST non-private IP (appended by Render/trusted reverse proxy),
+    // NEVER the leftmost entry which any attacker can spoof directly!
     const fwd = headers["x-forwarded-for"];
     if (fwd) {
       const fwdStr = Array.isArray(fwd) ? fwd.join(",") : String(fwd);
       const ips = fwdStr
         .split(",")
         .map(cleanIpString)
-        .filter(Boolean);
+        .filter((ip) => ip && net.isIP(ip));
 
-      // Prefer the first public, non-private IP
-      const publicIp = ips.find((ip) => !isPrivateIp(ip));
-      if (publicIp) return publicIp;
-      // Note: If only private IPs exist in X-Forwarded-For, do not trust client header to prevent rate-limit immunity spoofing; fall through to req.ip / socket
+      for (let i = ips.length - 1; i >= 0; i--) {
+        if (!isPrivateIp(ips[i])) {
+          return ips[i];
+        }
+      }
     }
 
-    // 4. Express proxy-verified client IP (Respects app.set("trust proxy", true))
-    if (req.ip && typeof req.ip === "string" && req.ip.trim()) {
-      const clean = cleanIpString(req.ip);
-      if (clean && clean !== "127.0.0.1" && clean !== "::1") return clean;
-    }
-
-    // 5. Socket remote address fallback
+    // 3. Socket remote address fallback (cannot be spoofed via HTTP headers)
     const directIp =
-      req.connection?.remoteAddress ||
       req.socket?.remoteAddress ||
+      req.connection?.remoteAddress ||
+      req.ip ||
       "127.0.0.1";
 
     return cleanIpString(directIp) || "127.0.0.1";

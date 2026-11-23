@@ -16,7 +16,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { db } = require("../firebase");
 const { JWT_SECRET, authenticateToken, setAuthCookie } = require("../middleware/auth");
-const { getClientIp } = require("../middleware/rateLimit");
+const { getClientIp, authLimiter } = require("../middleware/rateLimit");
 const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
@@ -483,7 +483,7 @@ router.post("/register-verify", authenticateToken, async (req, res) => {
  * POST /api/auth/passkey/login-options
  * ============================================================================
  */
-router.post("/login-options", async (req, res) => {
+router.post("/login-options", authLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
     let allowCredentials = undefined;
@@ -542,7 +542,11 @@ router.post("/login-options", async (req, res) => {
       userVerification: "preferred",
     });
 
-    // Save challenge
+    // Save challenge with strict Map size cap against RAM exhaustion
+    if (passkeyChallenges.size >= 1000) {
+      const oldestKey = passkeyChallenges.keys().next().value;
+      if (oldestKey) passkeyChallenges.delete(oldestKey);
+    }
     passkeyChallenges.set(`auth_${options.challenge}`, {
       challenge: options.challenge,
       email: email ? email.toLowerCase().trim() : null,
@@ -562,7 +566,7 @@ router.post("/login-options", async (req, res) => {
  * POST /api/auth/passkey/login-verify
  * ============================================================================
  */
-router.post("/login-verify", async (req, res) => {
+router.post("/login-verify", authLimiter, async (req, res) => {
   try {
     const { credential, challenge } = req.body;
     if (!credential || !credential.id || !challenge) {
@@ -690,27 +694,50 @@ router.post("/login-verify", async (req, res) => {
       }
     }
 
-    // If still no userRecord (e.g. fresh admin or newly enrolled user)
-    if (!userRecord) {
-      const email = passkeyRecord.userEmail || stored?.email || (userId === "admin-root" ? MAIN_ADMIN_EMAIL : null);
-      if (email) {
-        const isAdmin = email === MAIN_ADMIN_EMAIL || userId === "admin-root";
-        userRecord = {
-          id: userId || Buffer.from(email).toString("base64url"),
-          email: email,
-          name: isAdmin ? "Master Administrator" : "Student Scholar",
-          role: isAdmin ? "admin" : "student",
-          college: isAdmin ? "Central Academic Administration" : "Academic Institute",
-          isMainAdmin: isAdmin,
-          permissions: isAdmin
-            ? ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"]
-            : ["download_notes", "upload_notes"],
-        };
-      }
+    // 🛡️ CRITICAL SECURITY FIX: Verify live account status (prevent blocked or deleted users from logging in via stale cache/passkey)
+    if (db && userId && userId !== "admin-root") {
+      try {
+        const liveDoc = await db.collection("users").doc(userId).get();
+        if (!liveDoc.exists) {
+          ramPasskeyCache.delete(credential.id);
+          return res.status(403).json({
+            success: false,
+            message: "This account no longer exists. Please register a new account.",
+          });
+        }
+        const liveData = decryptUserObject(liveDoc.data());
+        if (liveData) {
+          userRecord = { ...userRecord, ...liveData, id: userId };
+        }
+      } catch (_) {}
+    }
+
+    // Only allow fallback admin-root profile for explicitly configured Master Admin; never fabricate student accounts
+    if (!userRecord && userId === "admin-root" && MAIN_ADMIN_EMAIL) {
+      userRecord = {
+        id: "admin-root",
+        email: MAIN_ADMIN_EMAIL,
+        name: "Master Administrator",
+        role: "admin",
+        college: "Central Academic Administration",
+        isMainAdmin: true,
+        permissions: ["all", "manage_notes", "manage_users", "manage_notices", "delete_records"],
+      };
     }
 
     if (!userRecord) {
+      ramPasskeyCache.delete(credential.id);
       return res.status(404).json({ success: false, message: "No student account found registered with this passkey." });
+    }
+
+    // 🛡️ CRITICAL SECURITY FIX: Enforce account suspension/block check on passkey login
+    if (userRecord.isBlocked) {
+      ramPasskeyCache.delete(credential.id);
+      return res.status(403).json({
+        success: false,
+        isBlocked: true,
+        message: "Your account has been suspended by an administrator. Please contact support.",
+      });
     }
 
     const { rpID, expectedOrigin } = getRpInfo(req);

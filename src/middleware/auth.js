@@ -149,7 +149,25 @@ function authenticateToken(req, res, next) {
               return next();
             }
           }
-        } catch (_) {}
+        } catch (_) {
+          // 🛡️ Fallback to Turso Edge User Cache during transient Firestore errors so blocked users cannot bypass auth
+          try {
+            const { getCachedUserByIdFromTurso } = require("../services/tursoUserCacheService");
+            const tursoUser = await getCachedUserByIdFromTurso(uId);
+            if (tursoUser) {
+              if (tursoUser.isBlocked) {
+                clearAuthCookie(res, req);
+                req.user = null;
+                return next();
+              }
+              const minV = Number(tursoUser.tokenVersion || tursoUser.sessionRevokedAt || 0);
+              if (minV > 0) {
+                revocation = { minVersion: minV, revokedAt: Date.now() };
+                userRevokedTokenVersions.set(uId, revocation);
+              }
+            }
+          } catch (_) {}
+        }
       }
 
       if (revocation && userTokenVersion < revocation.minVersion) {
@@ -174,16 +192,20 @@ function authenticateToken(req, res, next) {
         } catch (_) {}
       }
 
-      // 🟢 Live in-memory presence tracking (0 database cost)
-      try {
-        const { recordUserLivePresence } = require("../services/studentSessionService");
-        recordUserLivePresence(user.id, {
-          ip: req.ip || req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"],
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        });
-      } catch (_) {}
+      // 🟢 Live in-memory presence tracking (0 database cost) — skip logout endpoints so logged-out users don't get re-marked online!
+      const reqPathLower = String(req.originalUrl || req.path || "").toLowerCase();
+      const isLogoutRoute = reqPathLower.includes("/logout");
+      if (!isLogoutRoute) {
+        try {
+          const { recordUserLivePresence, extractClientIp } = require("../services/studentSessionService");
+          recordUserLivePresence(user.id, {
+            ip: typeof extractClientIp === "function" ? extractClientIp(req) : (req.headers["cf-connecting-ip"] || req.ip),
+            email: user.email,
+            name: user.name,
+            role: user.role,
+          });
+        } catch (_) {}
+      }
     }
 
     // 🛡️ 30-Minute Student Inactivity Check (Server-Side Shield for Mobile & Web)

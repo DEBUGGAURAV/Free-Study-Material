@@ -651,6 +651,7 @@ router.post("/forgot-telegram-verify", authLimiter, async (req, res) => {
 
     const newVersion = Date.now();
     setRevokedTokenVersion(userId, newVersion);
+    invalidateFastPasswordCache(userId);
 
     // 🛡️ Revoke all sessions across all devices in Firestore on password reset
     try {
@@ -1383,9 +1384,21 @@ router.post("/google", authLimiter, async (req, res) => {
       });
     }
 
+    const signupToken = jwt.sign(
+      {
+        purpose: "google_onboarding",
+        email: verifiedEmail,
+        name: verifiedName || "Scholar",
+        picture: verifiedPicture || "",
+      },
+      JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
     return res.json({
       success: true,
       isNewUser: true,
+      signupToken,
       message: "Google verification successful. Please complete your student profile.",
       googleUser: {
         email: verifiedEmail,
@@ -1407,20 +1420,40 @@ router.post("/google", authLimiter, async (req, res) => {
 router.post("/google-complete-profile", authLimiter, async (req, res) => {
   if (rejectIfMaintenanceActive(res, "Student registration")) return;
   try {
-    const { email, name, mobile, college, year, picture } = req.body;
-    const cleanEmail = (email || "").trim().toLowerCase();
+    const { name, mobile, college, year, signupToken } = req.body || {};
+
+    // 🛡️ CRITICAL SECURITY FIX: Require cryptographically signed onboarding token issued by /api/auth/google
+    if (!signupToken || typeof signupToken !== "string") {
+      return res.status(401).json({
+        success: false,
+        message: "Google verification session expired or missing. Please click 'Continue with Google' again.",
+      });
+    }
+
+    let verifiedGoogleClaims = null;
+    try {
+      verifiedGoogleClaims = jwt.verify(signupToken.trim(), JWT_SECRET, { algorithms: ["HS256"] });
+    } catch (_) {
+      return res.status(401).json({
+        success: false,
+        message: "Google verification token expired or invalid. Please sign in with Google again.",
+      });
+    }
+
+    if (!verifiedGoogleClaims || verifiedGoogleClaims.purpose !== "google_onboarding" || !verifiedGoogleClaims.email) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid Google onboarding token. Please sign in with Google again.",
+      });
+    }
+
+    // Derive email & Google picture strictly from verified JWT claims (never trust unverified req.body.email)
+    const cleanEmail = String(verifiedGoogleClaims.email).trim().toLowerCase();
     const cleanMobile = (mobile || "").trim();
     const cleanCollege = (college || "").trim();
-    const cleanName = (name || "").trim();
+    const cleanName = (name || verifiedGoogleClaims.name || "").trim();
     const cleanYear = (year || "1st Year").trim();
-    const avatarPhotoUrl = (
-      picture ||
-      req.body.photoUrl ||
-      req.body.avatar ||
-      req.body.image ||
-      (req.body.googleUser && (req.body.googleUser.picture || req.body.googleUser.photoUrl)) ||
-      ""
-    ).trim();
+    const avatarPhotoUrl = String(verifiedGoogleClaims.picture || "").trim();
 
     if (!cleanEmail || !cleanEmail.includes("@")) {
       return res.status(400).json({ success: false, message: "Valid email address is required." });
@@ -1435,9 +1468,17 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: "College name is required." });
     }
 
-    // Parallelized unique checks (safely handles Firestore quota limits)
-    let isEmailTaken = false;
+    // Parallelized unique checks (RAM + Turso + Firestore, fail-closed on DB outage)
+    let isEmailTaken = Boolean(ramCache && ramCache.get(`auth_user_${cleanEmail}`));
     let isMobileTaken = false;
+
+    if (!isEmailTaken) {
+      try {
+        const { getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
+        const tursoExisting = await getCachedUserByEmailFromTurso(cleanEmail);
+        if (tursoExisting) isEmailTaken = true;
+      } catch (_) {}
+    }
 
     if (db) {
       try {
@@ -1450,7 +1491,11 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
         if (!snap.empty) isEmailTaken = true;
         if (!mHashSnap.empty || !legacyMobSnap.empty) isMobileTaken = true;
       } catch (dbChkErr) {
-        console.warn("[AUTH-GOOGLE-COMPLETE] Firestore unique check notice:", dbChkErr.message);
+        console.warn("[AUTH-GOOGLE-COMPLETE] Firestore unique check error:", dbChkErr.message);
+        return res.status(503).json({
+          success: false,
+          message: "Database temporarily busy while verifying your account. Please try again in a few seconds.",
+        });
       }
     }
 
@@ -1568,28 +1613,41 @@ router.post("/google-complete-profile", authLimiter, async (req, res) => {
 });
 
 // ⚡ High-Speed In-Memory Fast Password Verification Cache
-// Stores SHA-256 HMAC of verified passwords per user to eliminate repeated ~150ms bcrypt key derivations
+// Stores SHA-256 HMAC keyed by userId so password changes/resets immediately invalidate old passwords
 const fastPasswordAuthCache = new Map();
 
 function verifyFastPasswordCache(userId, plainPassword) {
   if (!userId || !plainPassword) return false;
-  const hashKey = crypto.createHmac("sha256", JWT_SECRET).update(`${userId}:${plainPassword}`).digest("hex");
-  const expiresAt = fastPasswordAuthCache.get(hashKey);
-  if (expiresAt && expiresAt > Date.now()) {
-    return true;
+  const entry = fastPasswordAuthCache.get(String(userId));
+  if (!entry) return false;
+  if (entry.expiresAt <= Date.now()) {
+    fastPasswordAuthCache.delete(String(userId));
+    return false;
   }
-  if (expiresAt) fastPasswordAuthCache.delete(hashKey);
-  return false;
+  const hashKey = crypto.createHmac("sha256", JWT_SECRET).update(`${userId}:${plainPassword}`).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(entry.hashKey, "hex"), Buffer.from(hashKey, "hex"));
+  } catch (_) {
+    return false;
+  }
 }
 
 function storeFastPasswordCache(userId, plainPassword) {
   if (!userId || !plainPassword) return;
   const hashKey = crypto.createHmac("sha256", JWT_SECRET).update(`${userId}:${plainPassword}`).digest("hex");
-  fastPasswordAuthCache.set(hashKey, Date.now() + 2 * 60 * 60 * 1000); // 2 hours fast-track
+  fastPasswordAuthCache.set(String(userId), {
+    hashKey,
+    expiresAt: Date.now() + 2 * 60 * 60 * 1000, // 2 hours fast-track
+  });
   if (fastPasswordAuthCache.size > 2000) {
     const oldest = fastPasswordAuthCache.keys().next().value;
     fastPasswordAuthCache.delete(oldest);
   }
+}
+
+function invalidateFastPasswordCache(userId) {
+  if (!userId) return;
+  fastPasswordAuthCache.delete(String(userId));
 }
 
 /**
@@ -2514,6 +2572,7 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
 
     const newVersion = Date.now();
     setRevokedTokenVersion(userId, newVersion);
+    invalidateFastPasswordCache(userId);
 
     const userDocRef = db.collection("users").doc(userId);
     await userDocRef.update({
@@ -2546,7 +2605,10 @@ router.post("/forgot-password-verify-otp", authLimiter, async (req, res) => {
  */
 router.post("/profile/request-mobile-otp", authLimiter, authenticateToken, async (req, res) => {
   try {
-    const { newMobile } = req.body;
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ success: false, message: "Authentication required." });
+    }
+    const { newMobile } = req.body || {};
     if (!newMobile) {
       return res.status(400).json({ success: false, message: "New 10-digit mobile number is required." });
     }
@@ -2693,6 +2755,7 @@ router.put("/profile", authenticateToken, async (req, res) => {
       }
 
       if (!pendingRecord || Date.now() > pendingRecord.expiresAt) {
+        pendingProfileMobileOtps.delete(req.user.id);
         return res.status(400).json({
           success: false,
           requireOtp: true,
@@ -2700,7 +2763,27 @@ router.put("/profile", authenticateToken, async (req, res) => {
         });
       }
 
-      if (pendingRecord.newMobile !== cleanNewMobile || pendingRecord.otp !== inputOtp) {
+      pendingRecord.attempts = (pendingRecord.attempts || 0) + 1;
+      if (pendingRecord.attempts > 5) {
+        pendingProfileMobileOtps.delete(req.user.id);
+        return res.status(429).json({
+          success: false,
+          requireOtp: true,
+          message: "Too many incorrect OTP attempts. Please request a fresh verification code.",
+        });
+      }
+
+      let otpMatches = false;
+      const storedOtpStr = String(pendingRecord.otp || "");
+      if (inputOtp.length === storedOtpStr.length && storedOtpStr.length > 0) {
+        try {
+          otpMatches = crypto.timingSafeEqual(Buffer.from(inputOtp), Buffer.from(storedOtpStr));
+        } catch (_) {
+          otpMatches = false;
+        }
+      }
+
+      if (pendingRecord.newMobile !== cleanNewMobile || !otpMatches) {
         return res.status(400).json({
           success: false,
           requireOtp: true,
@@ -2819,6 +2902,7 @@ router.put("/change-password", authenticateToken, authLimiter, async (req, res) 
 
     const newVersion = Date.now();
     setRevokedTokenVersion(req.user.id, newVersion);
+    invalidateFastPasswordCache(req.user.id);
 
     await userDocRef.update({
       password: hashedNewPassword,
@@ -2956,10 +3040,13 @@ router.post("/logout", authenticateToken, async (req, res) => {
       });
     }
 
-    if (req.user && req.user.sid && req.user.id) {
+    if (req.user && req.user.id) {
       try {
-        const { terminateSingleSession } = require("../services/studentSessionService");
-        terminateSingleSession(req.user.id, req.user.sid, "Manual Logout").catch(() => {});
+        const { terminateSingleSession, clearUserLivePresence } = require("../services/studentSessionService");
+        clearUserLivePresence(req.user.id, req.user.email);
+        if (req.user.sid) {
+          terminateSingleSession(req.user.id, req.user.sid, "Manual Logout").catch(() => {});
+        }
       } catch (_) {}
     }
 
@@ -3023,9 +3110,10 @@ router.post("/logout-all-devices", authenticateToken, async (req, res) => {
     const newVersion = Date.now();
     setRevokedTokenVersion(req.user.id, newVersion);
 
-    // Revoke all sessions in Firestore
+    // Revoke all sessions in Firestore & clear live presence immediately
     try {
-      const { terminateAllUserSessions } = require("../services/studentSessionService");
+      const { terminateAllUserSessions, clearUserLivePresence } = require("../services/studentSessionService");
+      clearUserLivePresence(req.user.id, req.user.email);
       await terminateAllUserSessions(req.user.id);
     } catch (_) {}
 
@@ -3217,10 +3305,15 @@ router.post("/record-activity", authenticateToken, async (req, res) => {
 router.post("/heartbeat", authenticateToken, (req, res) => {
   try {
     if (req.user?.id) {
-      const { recordUserLivePresence } = require("../services/studentSessionService");
-      recordUserLivePresence(req.user.id, { ip: req.ip, email: req.user.email });
+      const { recordUserLivePresence, extractClientIp } = require("../services/studentSessionService");
+      recordUserLivePresence(req.user.id, {
+        ip: typeof extractClientIp === "function" ? extractClientIp(req) : req.ip,
+        email: req.user.email,
+        name: req.user.name,
+        role: req.user.role,
+      });
     }
-    return res.json({ success: true, online: true });
+    return res.json({ success: true, online: Boolean(req.user?.id) });
   } catch (_) {
     return res.json({ success: true, online: false });
   }

@@ -5860,51 +5860,56 @@ export default function VirtualPdfReader({
         </div>
       )}
 
-      {/* 🔖 Interactive Resume Reading Choice Prompt (Asks User: Resume from Page X or Start from Page 1) */}
+      {/* 🔖 Interactive Resume Reading Choice Prompt (Floats cleanly ABOVE Dynamic Island on Desktop & Mobile) */}
       {resumedPageNotice && resumedPageNotice > 1 && (
         <div
           style={{
-            position: "fixed",
-            bottom: isTouchOrMobileDevice ? "64px" : "28px",
+            position: "absolute",
+            bottom: isTouchOrMobileDevice
+              ? "calc(106px + env(safe-area-inset-bottom, 0px))"
+              : "108px",
             left: "50%",
             transform: "translateX(-50%)",
-            zIndex: 85,
+            zIndex: 160,
             background: "linear-gradient(145deg, rgba(15, 23, 42, 0.97), rgba(30, 41, 59, 0.97))",
             border: "1.5px solid rgba(245, 158, 11, 0.65)",
             borderRadius: "16px",
-            padding: isTouchOrMobileDevice ? "12px 14px" : "14px 18px",
+            padding: isTouchOrMobileDevice ? "11px 13px" : "14px 18px",
             display: "flex",
             flexDirection: "column",
-            gap: "10px",
-            width: "min(92vw, 430px)",
+            gap: isTouchOrMobileDevice ? "9px" : "10px",
+            width: isTouchOrMobileDevice ? "calc(100% - 24px)" : "min(92vw, 430px)",
+            maxWidth: "430px",
+            boxSizing: "border-box",
             boxShadow: "0 18px 42px rgba(0, 0, 0, 0.65), 0 0 24px rgba(245, 158, 11, 0.18)",
             backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
             color: "#f8fafc",
           }}
         >
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "9px", minWidth: 0 }}>
               <span
                 style={{
-                  width: "32px",
-                  height: "32px",
+                  width: isTouchOrMobileDevice ? "30px" : "32px",
+                  height: isTouchOrMobileDevice ? "30px" : "32px",
                   borderRadius: "10px",
                   background: "rgba(245, 158, 11, 0.18)",
                   border: "1px solid rgba(245, 158, 11, 0.45)",
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "1rem",
+                  fontSize: isTouchOrMobileDevice ? "0.95rem" : "1rem",
                   flexShrink: 0,
                 }}
               >
                 📖
               </span>
-              <div>
-                <div style={{ fontSize: "0.86rem", fontWeight: 800, color: "#fef3c7", lineHeight: 1.25 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isTouchOrMobileDevice ? "0.82rem" : "0.86rem", fontWeight: 800, color: "#fef3c7", lineHeight: 1.25 }}>
                   Resume Reading from Page {resumedPageNotice}?
                 </div>
-                <div style={{ fontSize: "0.74rem", color: "#cbd5e1", marginTop: "2px" }}>
+                <div style={{ fontSize: isTouchOrMobileDevice ? "0.71rem" : "0.74rem", color: "#cbd5e1", marginTop: "2px", lineHeight: 1.35 }}>
                   You last read up to <strong style={{ color: "#fbbf24" }}>Page {resumedPageNotice}{numPages ? ` of ${numPages}` : ""}</strong>. Where would you like to start?
                 </div>
               </div>
@@ -5917,7 +5922,7 @@ export default function VirtualPdfReader({
                 border: "none",
                 color: "#94a3b8",
                 borderRadius: "8px",
-                padding: "4px",
+                padding: "5px",
                 cursor: "pointer",
                 display: "flex",
                 flexShrink: 0,
@@ -5928,7 +5933,7 @@ export default function VirtualPdfReader({
             </button>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "8px", width: "100%" }}>
             <button
               type="button"
               onClick={() => {
@@ -5937,19 +5942,20 @@ export default function VirtualPdfReader({
                 changePage(targetP);
               }}
               style={{
-                flex: 1.2,
+                flex: "1 1 140px",
                 background: "linear-gradient(135deg, #f59e0b, #d97706)",
                 border: "1px solid rgba(251, 191, 36, 0.6)",
                 color: "#0f172a",
                 borderRadius: "10px",
-                padding: "8px 12px",
-                fontSize: "0.78rem",
+                padding: isTouchOrMobileDevice ? "9px 10px" : "8px 12px",
+                fontSize: isTouchOrMobileDevice ? "0.75rem" : "0.78rem",
                 fontWeight: 800,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "5px",
+                whiteSpace: "nowrap",
                 boxShadow: "0 4px 14px rgba(245, 158, 11, 0.35)",
               }}
             >
@@ -5963,19 +5969,20 @@ export default function VirtualPdfReader({
                 changePage(1);
               }}
               style={{
-                flex: 1,
+                flex: "1 1 125px",
                 background: "rgba(255, 255, 255, 0.09)",
                 border: "1px solid rgba(255, 255, 255, 0.2)",
                 color: "#e2e8f0",
                 borderRadius: "10px",
-                padding: "8px 10px",
-                fontSize: "0.76rem",
+                padding: isTouchOrMobileDevice ? "9px 10px" : "8px 10px",
+                fontSize: isTouchOrMobileDevice ? "0.74rem" : "0.76rem",
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "4px",
+                whiteSpace: "nowrap",
               }}
             >
               <span>⏮️ Start from Page 1</span>

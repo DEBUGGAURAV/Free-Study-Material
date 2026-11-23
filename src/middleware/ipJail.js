@@ -287,6 +287,23 @@ function isWhitelistedIp(req, ip) {
   return false;
 }
 
+function escapeHtmlAttr(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeJsString(str) {
+  return JSON.stringify(String(str || "")).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+}
+
+function sanitizeDeviceId(raw) {
+  return String(raw || "").trim().replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 128);
+}
+
 /**
  * Lightweight 4KB HTML Quarantine Screen for severe floods or fallback
  */
@@ -301,7 +318,7 @@ function renderQuarantineHtml({
   deviceId = "",
   unjailTime = null,
 }) {
-  const targetMs = unjailTime || (Date.now() + (remainingSec || 86400) * 1000);
+  const targetMs = Number(unjailTime) || (Date.now() + (Number(remainingSec) || 86400) * 1000);
   const releaseDateStr = new Date(targetMs).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",
     weekday: "short",
@@ -315,6 +332,15 @@ function renderQuarantineHtml({
   const cleanReason = (reasonStr || "Security policy violation")
     .replace(/\.?\s*Auto-release in \d+ seconds\.?/gi, "")
     .trim();
+
+  const safePolicyName = escapeHtmlAttr(policyName);
+  const safeCleanReason = escapeHtmlAttr(cleanReason);
+  const safeIncidentIdHtml = escapeHtmlAttr(incidentId);
+  const safeDurationLabel = escapeHtmlAttr(durationLabel);
+  const safeAutoReleasePolicy = escapeHtmlAttr(autoReleasePolicy);
+  const safeReleaseDateStr = escapeHtmlAttr(releaseDateStr);
+  const safeIncidentIdJs = safeJsString(incidentId);
+  const safeDeviceIdJs = safeJsString(sanitizeDeviceId(deviceId));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -513,11 +539,11 @@ function renderQuarantineHtml({
 
     <div class="badge">
       <span>Violation Policy:</span>
-      <span style="color: #fff;">${policyName}</span>
+      <span style="color: #fff;">${safePolicyName}</span>
     </div>
     
     <div class="reason-box">
-      Security Violation: ${cleanReason}. Incident: ${incidentId}
+      Security Violation: ${safeCleanReason}. Incident: ${safeIncidentIdHtml}
     </div>
     
     <div class="timer-card">
@@ -532,15 +558,15 @@ function renderQuarantineHtml({
       <div class="table-rows">
         <div class="table-row">
           <span style="color: #cbd5e1;">🛡️ Detention Window:</span>
-          <strong style="color: #fff;">${durationLabel}</strong>
+          <strong style="color: #fff;">${safeDurationLabel}</strong>
         </div>
         <div class="table-row">
           <span style="color: #cbd5e1;">🔓 Auto-Release Policy:</span>
-          <strong style="color: #34d399;">${autoReleasePolicy}</strong>
+          <strong style="color: #34d399;">${safeAutoReleasePolicy}</strong>
         </div>
         <div class="table-row">
           <span style="color: #cbd5e1;">📅 Auto-Release At:</span>
-          <strong style="color: #f1f5f9;">${releaseDateStr}</strong>
+          <strong style="color: #f1f5f9;">${safeReleaseDateStr}</strong>
         </div>
         <div class="table-row">
           <span style="color: #cbd5e1;">⚡ Admin Pardon:</span>
@@ -555,7 +581,7 @@ function renderQuarantineHtml({
     </div>
 
     <div class="incident-bar">
-      Incident ID: <code class="incident-code">${incidentId}</code>
+      Incident ID: <code class="incident-code">${safeIncidentIdHtml}</code>
     </div>
 
     <form class="appeal-form" id="appealForm" onsubmit="submitAppeal(event)">
@@ -612,7 +638,7 @@ function renderQuarantineHtml({
     // Auto-check pardon status silently in background - ONLY reload if explicitly pardoned by Admin!
     setInterval(async () => {
       try {
-        const incId = "${incidentId}";
+        const incId = ${safeIncidentIdJs};
         if (!incId) return;
         const res = await fetch("/api/security/check-pardon?incidentId=" + encodeURIComponent(incId), { cache: "no-store" });
         if (res.ok) {
@@ -653,12 +679,12 @@ function renderQuarantineHtml({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            incidentId: "${incidentId}",
+            incidentId: ${safeIncidentIdJs},
             name: nameVal,
             email: emailVal,
             mobile: mobileVal,
             message: messageVal,
-            deviceId: "${deviceId || ""}",
+            deviceId: ${safeDeviceIdJs},
           })
         });
         const data = await res.json();
@@ -719,7 +745,7 @@ function ipJailFirewall(req, res, next) {
     p === "/health" ||
     p === "/api/health" ||
     p.includes("/health") ||
-    Boolean(req && req.headers && req.headers["range"]) ||
+    Boolean(req && req.method === "GET" && p.includes("/stream") && req.headers && req.headers["range"]) ||
     p.includes("/stream") ||
     p.startsWith("/assets/") ||
     p.endsWith(".js") ||
@@ -735,7 +761,7 @@ function ipJailFirewall(req, res, next) {
   }
 
   const now = Date.now();
-  const deviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || "").trim();
+  const deviceId = sanitizeDeviceId(req.headers["x-device-id"] || req.cookies?.fsm_device_id || "");
 
   // 3. Dual-Key Check: IP Quarantine & Device Fingerprint Quarantine
   const isIpJailed = jailedIps.has(ip) && (now < jailedIps.get(ip));

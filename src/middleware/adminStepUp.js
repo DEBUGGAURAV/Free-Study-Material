@@ -32,12 +32,17 @@ function createStepUpToken(adminUser) {
  * Middleware: Enforces valid Step-Up Token or fresh admin session for sensitive operations
  */
 function requireStepUpAuth(req, res, next) {
-  const stepUpToken = req.headers["x-step-up-token"] || req.body?.stepUpToken || req.query?.stepUpToken;
+  const stepUpToken = req.headers["x-step-up-token"] || req.body?.stepUpToken;
 
-  if (stepUpToken) {
+  if (stepUpToken && req.user?.id) {
     try {
       const decoded = jwt.verify(stepUpToken, JWT_SECRET, { algorithms: ["HS256"] });
-      if (decoded && decoded.stepUp) {
+      if (
+        decoded &&
+        decoded.stepUp === true &&
+        decoded.adminId &&
+        String(decoded.adminId) === String(req.user.id)
+      ) {
         req.stepUpAuth = decoded;
         return next();
       }

@@ -332,8 +332,12 @@ router.post("/tamper-alert", apiLimiter, async (req, res) => {
       }
 
       // C. Dual-Key Detention: 24h Device Quarantine + Shared-Network Safe IP Cool-off
-      const incidentId = req.body?.incidentId || `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
-      const rawDeviceId = (req.headers["x-device-id"] || req.cookies?.fsm_device_id || req.body?.deviceId || forensics?.deviceHash || guestUid || "").trim();
+      // 🛡️ SECURITY FIX: Only quarantine caller's own cookie/header deviceId (ignore arbitrary body-supplied deviceIds)
+      const incidentId = `FSM-SEC-${Math.floor(100000 + Math.random() * 900000)}`;
+      const rawDeviceId = String(req.cookies?.fsm_device_id || req.headers["x-device-id"] || "")
+        .trim()
+        .replace(/[^a-zA-Z0-9._-]/g, "")
+        .slice(0, 128);
 
       // Device is quarantined for full 24 hours
       if (rawDeviceId) {
@@ -415,14 +419,14 @@ router.post("/anti-bot-alert", apiLimiter, async (req, res) => {
     const messageText = [
       `🤖 <b>[SECURITY ALERT: ANTI-BOT & MULTI-ACCOUNT FORENSICS]</b>`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
-      `👤 <b>Student:</b> ${user?.name || "Suspicious Device Session"}`,
-      `📧 <b>Email:</b> <code>${user?.email || "N/A"}</code>`,
-      `🌐 <b>IP Address:</b> <code>${clientIp}</code>`,
-      `💻 <b>Hardware Spec:</b> ${deviceSpecs?.label || (deviceSpecs?.cores ? `${deviceSpecs.cores} Cores, ${deviceSpecs.memoryGB}GB RAM` : "Client Hardware")}${deviceSpecs?.storage ? ` • ${deviceSpecs.storage}` : ""}`,
-      deviceSpecs?.storage ? `💾 <b>Device Storage:</b> <code>${deviceSpecs.storage}</code>` : null,
-      accountsDetected ? `👥 <b>Linked Accounts Detected:</b> <code>${accountsDetected}</code>` : null,
+      `👤 <b>Student:</b> ${safeHtml(user?.name || "Suspicious Device Session")}`,
+      `📧 <b>Email:</b> <code>${safeHtml(user?.email || "N/A")}</code>`,
+      `🌐 <b>IP Address:</b> <code>${safeHtml(clientIp)}</code>`,
+      `💻 <b>Hardware Spec:</b> ${safeHtml(deviceSpecs?.label || (deviceSpecs?.cores ? `${deviceSpecs.cores} Cores, ${deviceSpecs.memoryGB}GB RAM` : "Client Hardware"))}${deviceSpecs?.storage ? ` • ${safeHtml(deviceSpecs.storage)}` : ""}`,
+      deviceSpecs?.storage ? `💾 <b>Device Storage:</b> <code>${safeHtml(deviceSpecs.storage)}</code>` : null,
+      accountsDetected ? `👥 <b>Linked Accounts Detected:</b> <code>${safeHtml(String(accountsDetected))}</code>` : null,
       `⚠️ <b>Forensic Anomaly:</b>`,
-      `<i>${reason || "Automated headless browser or multi-account clone cluster detected."}</i>`,
+      `<i>${safeHtml(reason || "Automated headless browser or multi-account clone cluster detected.")}</i>`,
       `🎯 <b>Route Target:</b> <b>FSM Security Supergroup Topic 6</b>`,
       `🕒 <b>Time:</b> ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}`,
     ]
@@ -573,44 +577,49 @@ router.get("/check-pardon", async (req, res) => {
   }
 
   // 🛡️ Intelligent Account Ban Auto-Pardon Check
+  // SECURITY FIX: Require authenticated JWT matching the banned account to prevent unauthenticated email enumeration
   if (!pardoned && incidentId.startsWith("FSM-BAN-")) {
-    const rawToken = incidentId.replace("FSM-BAN-", "").trim().toLowerCase();
+    let callerUser = null;
     try {
-      let targetUser = null;
+      const authHeader = req.headers["authorization"] || "";
+      const rawTok =
+        (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null) ||
+        req.cookies?.fsm_token ||
+        req.cookies?.token ||
+        req.cookies?.vault_token;
+      if (rawTok) {
+        callerUser = jwt.verify(rawTok, JWT_SECRET, { algorithms: ["HS256"] });
+      }
+    } catch (_) {}
 
-      // 1. Check direct doc ID in Firestore
-      if (db) {
-        const directDoc = await db.collection("users").doc(rawToken).get().catch(() => null);
-        if (directDoc?.exists) {
-          targetUser = directDoc.data();
-        } else {
-          // 2. Query by email with limit(1)
-          const snap = await db.collection("users").where("email", "==", rawToken).limit(1).get().catch(() => null);
-          if (snap && !snap.empty) {
-            targetUser = snap.docs[0].data();
+    if (callerUser && callerUser.id) {
+      try {
+        let targetUser = null;
+        if (db) {
+          const directDoc = await db.collection("users").doc(String(callerUser.id)).get().catch(() => null);
+          if (directDoc?.exists) {
+            targetUser = directDoc.data();
           }
         }
-      }
+        if (!targetUser) {
+          try {
+            const { getCachedUserByIdFromTurso } = require("../services/tursoUserCacheService");
+            targetUser = await getCachedUserByIdFromTurso(String(callerUser.id));
+          } catch (_) {}
+        }
 
-      // 3. Fallback: Check Turso User Cache (0ms Edge speed)
-      if (!targetUser) {
-        try {
-          const { getCachedUserByIdFromTurso, getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
-          targetUser = (await getCachedUserByIdFromTurso(rawToken)) || (await getCachedUserByEmailFromTurso(rawToken));
-        } catch (_) {}
-      }
-
-      if (targetUser) {
-        const isNotBlocked = targetUser.isBlocked === false || !targetUser.isBlocked;
-        if (isNotBlocked) {
-          pardoned = true;
-          if (typeof addPardonedIncident === "function") {
-            addPardonedIncident(incidentId);
+        if (targetUser) {
+          const isNotBlocked = targetUser.isBlocked === false || !targetUser.isBlocked;
+          if (isNotBlocked) {
+            pardoned = true;
+            if (typeof addPardonedIncident === "function") {
+              addPardonedIncident(incidentId);
+            }
           }
         }
+      } catch (e) {
+        console.warn("[CHECK-PARDON] Error checking account unblock status in DB:", e.message);
       }
-    } catch (e) {
-      console.warn("[CHECK-PARDON] Error checking account unblock status in DB:", e.message);
     }
   }
 

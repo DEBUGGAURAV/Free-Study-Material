@@ -195,8 +195,10 @@ const TRUSTED_DOMAIN_REGEX = /^https:\/\/(freestudymaterial[12]?\.onrender\.com|
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin or "null" (direct browser navigation, privacy browsers, mobile WebViews, curl, PWA)
-      if (!origin || origin === "null") return callback(null, true);
+      // Allow requests with no Origin header (same-origin navigation, server-to-server, curl),
+      // but strictly reject "null" origin (sandboxed iframes / file://) when credentials: true is active
+      if (!origin) return callback(null, true);
+      if (origin === "null") return callback(null, false);
       const cfWorkerUrl = (process.env.CF_WORKER_URL || "").trim();
       const isTrusted =
         allowedOrigins.includes(origin) ||

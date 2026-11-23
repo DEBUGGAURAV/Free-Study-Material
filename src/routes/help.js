@@ -193,11 +193,20 @@ const CURATED_FAQS = [
 /**
  * POST /api/help/upload-attachment
  * Upload attachment (image, pdf, video, doc) for help ticket
+ * Guest uploads are capped at 10MB; authenticated students up to 35MB
  */
-router.post("/upload-attachment", helpLimiter, uploadHelpAttachment.single("file"), async (req, res) => {
+router.post("/upload-attachment", helpLimiter, authenticateToken, uploadHelpAttachment.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No file was uploaded." });
+    }
+    const maxAllowedBytes = req.user ? 35 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (req.file.size > maxAllowedBytes) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+      return res.status(413).json({
+        success: false,
+        message: "Guest attachments are limited to 10 MB. Please sign in to upload larger attachments.",
+      });
     }
     const filename = req.file.filename;
     const url = `/api/help/attachment/${encodeURIComponent(filename)}`;
@@ -211,6 +220,9 @@ router.post("/upload-attachment", helpLimiter, uploadHelpAttachment.single("file
       },
     });
   } catch (err) {
+    if (req.file?.path) {
+      try { fs.unlinkSync(req.file.path); } catch (_) {}
+    }
     return res.status(500).json({ success: false, message: err.message });
   }
 });
@@ -765,10 +777,13 @@ router.post("/admin/create-topics", authenticateToken, async (req, res) => {
 
 /**
  * GET /api/help/admin/telemetry
- * Live telemetry stats
+ * Live telemetry stats (Admin only)
  */
 router.get("/admin/telemetry", authenticateToken, async (req, res) => {
   try {
+    if (!isHelpAdmin(req.user)) {
+      return res.status(403).json({ success: false, message: "Unauthorized. Administrator access required." });
+    }
     const turso = await getHelpTursoTelemetry();
     const bot = getHelpBotTelemetry();
     return res.json({ success: true, turso, bot });

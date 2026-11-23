@@ -2711,15 +2711,38 @@ async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir
     }
   }
 
-  if (!fileBuffer && message.fileUrl && message.fileUrl.startsWith("http")) {
+  // 🛡️ SSRF-Safe External Media Fetcher (blocks private/loopback IPs, enforces HTTPS, 8s timeout & 15MB cap)
+  const fetchSafeExternalBuffer = async (rawUrl, maxBytes = 15 * 1024 * 1024) => {
     try {
-      const resp = await fetch(message.fileUrl);
-      if (resp.ok) {
-        const arrBuf = await resp.arrayBuffer();
-        fileBuffer = Buffer.from(arrBuf);
+      const parsed = new URL(rawUrl);
+      if (parsed.protocol !== "https:") return null;
+      const hn = parsed.hostname.toLowerCase();
+      if (
+        hn === "localhost" ||
+        hn.endsWith(".local") ||
+        hn.endsWith(".internal") ||
+        /^(\d{1,3}\.){3}\d{1,3}$/.test(hn) ||
+        hn.includes(":")
+      ) {
+        return null;
       }
-    } catch {}
+      const resp = await fetch(parsed.toString(), { signal: AbortSignal.timeout(8000), redirect: "error" });
+      if (!resp.ok) return null;
+      const contentLen = Number(resp.headers.get("content-length") || 0);
+      if (contentLen > maxBytes) return null;
+      const arrBuf = await resp.arrayBuffer();
+      if (arrBuf.byteLength === 0 || arrBuf.byteLength > maxBytes) return null;
+      return Buffer.from(arrBuf);
+    } catch (_) {
+      return null;
+    }
+  };
+
+  if (!fileBuffer && message.fileUrl && message.fileUrl.startsWith("https://")) {
+    fileBuffer = await fetchSafeExternalBuffer(message.fileUrl, 15 * 1024 * 1024);
   }
+
+  const safeMultipartName = String(originalName || "pod_file").replace(/[\r\n"\\]/g, "_").slice(0, 120);
 
   const caption =
     `📎 <b>[PRIVATE CHAT MEDIA VAULT - REAL-TIME VAULT]</b>\n\n` +
@@ -2746,7 +2769,7 @@ async function dispatchPrivateMediaToTelegramVault({ message, room, chatMediaDir
       const isImage = (message.type === "image" || /\.(jpe?g|png|webp|gif)$/i.test(originalName));
       const fieldName = isImage ? "photo" : "document";
       const mimeType = isImage ? "image/jpeg" : "application/octet-stream";
-      formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${originalName}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+      formHeader += `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${safeMultipartName}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
 
       const payload = Buffer.concat([
         Buffer.from(formHeader),
@@ -2875,25 +2898,47 @@ async function dispatchChatForensicAudit({
             }
           }
 
-          if (!fileBuffer && att.fileUrl && att.fileUrl.startsWith("http")) {
+          // 🛡️ SSRF-safe external fetch helper (HTTPS only, blocks loopback/private/raw IPs, 8s timeout, 15MB max)
+          const safeFetchAuditUrl = async (rawUrl, maxBytes = 15 * 1024 * 1024) => {
             try {
-              const resp = await fetch(att.fileUrl);
-              if (resp.ok) {
-                const arrBuf = await resp.arrayBuffer();
-                fileBuffer = Buffer.from(arrBuf);
+              const parsed = new URL(rawUrl);
+              if (parsed.protocol !== "https:") return null;
+              const hn = parsed.hostname.toLowerCase();
+              if (
+                hn === "localhost" ||
+                hn.endsWith(".local") ||
+                hn.endsWith(".internal") ||
+                /^(\d{1,3}\.){3}\d{1,3}$/.test(hn) ||
+                hn.includes(":")
+              ) {
+                return null;
               }
-            } catch {}
+              const resp = await fetch(parsed.toString(), { signal: AbortSignal.timeout(8000), redirect: "error" });
+              if (!resp.ok) return null;
+              const cl = Number(resp.headers.get("content-length") || 0);
+              if (cl > maxBytes) return null;
+              const ab = await resp.arrayBuffer();
+              if (ab.byteLength === 0 || ab.byteLength > maxBytes) return null;
+              return Buffer.from(ab);
+            } catch (_) {
+              return null;
+            }
+          };
+
+          if (!fileBuffer && att.fileUrl && att.fileUrl.startsWith("https://")) {
+            fileBuffer = await safeFetchAuditUrl(att.fileUrl, 15 * 1024 * 1024);
           }
 
           if (fileBuffer && fileBuffer.length > 0 && fileBuffer.length <= 50 * 1024 * 1024) {
             try {
+              const safeOrigName = String(originalName || `pod_attachment_${i + 1}`).replace(/[\r\n"\\]/g, "_").slice(0, 120);
               const fileMb = (fileBuffer.length / (1024 * 1024)).toFixed(2);
               const delStatus = att.isDeleted ? "⚠️ [USER DELETED THIS FILE IN CHAT - PRESERVED IN AUDIT]" : "✅ [ACTIVE AT POD CLOSE]";
               const caption =
                 `📎 <b>[PRIVATE CHAT MEDIA VAULT - ARCHIVE COPY]</b>\n\n` +
                 `🏠 <b>Pod Origin:</b> <b>${escapeHtml(room.name)}</b>\n` +
                 `🆔 <b>Room ID:</b> <code>${room.id}</code> (🔑 Code: <code>${escapeHtml(room.secretCode || "N/A")}</code>)\n` +
-                `📁 <b>File Name:</b> <code>${originalName}</code> (${fileMb} MB)\n` +
+                `📁 <b>File Name:</b> <code>${escapeHtml(safeOrigName)}</code> (${fileMb} MB)\n` +
                 `👤 <b>Sender:</b> ${escapeHtml(att.senderName || "Student")} (📱 <code>${escapeHtml(att.senderMobile || "N/A")}</code> | 🌐 <code>${escapeHtml(att.senderIp || "127.0.0.1")}</code>)\n` +
                 `🕒 <b>Sent At:</b> ${att.createdAt || "N/A"}\n` +
                 `🔍 <b>Condition / Status:</b> <b>${delStatus}</b>`;
@@ -2905,7 +2950,7 @@ async function dispatchChatForensicAudit({
               }
               fileFormHeader += `--${fileBoundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n`;
               fileFormHeader += `--${fileBoundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nHTML\r\n`;
-              fileFormHeader += `--${fileBoundary}\r\nContent-Disposition: form-data; name="document"; filename="${originalName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
+              fileFormHeader += `--${fileBoundary}\r\nContent-Disposition: form-data; name="document"; filename="${safeOrigName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
 
               const filePayload = Buffer.concat([
                 Buffer.from(fileFormHeader),
@@ -2940,14 +2985,32 @@ async function dispatchChatForensicAudit({
           if (av.photoUrl.startsWith("data:")) {
             try {
               const base64Data = av.photoUrl.split(",")[1];
-              if (base64Data) avatarBuffer = Buffer.from(base64Data, "base64");
+              if (base64Data && base64Data.length < 12 * 1024 * 1024) {
+                avatarBuffer = Buffer.from(base64Data, "base64");
+              }
             } catch (_) {}
-          } else if (av.photoUrl.startsWith("http")) {
+          } else if (av.photoUrl.startsWith("https://")) {
             try {
-              const r = await fetch(av.photoUrl);
-              if (r.ok) {
-                const ab = await r.arrayBuffer();
-                avatarBuffer = Buffer.from(ab);
+              const parsedAv = new URL(av.photoUrl);
+              const avHn = parsedAv.hostname.toLowerCase();
+              const isUnsafeAv =
+                parsedAv.protocol !== "https:" ||
+                avHn === "localhost" ||
+                avHn.endsWith(".local") ||
+                avHn.endsWith(".internal") ||
+                /^(\d{1,3}\.){3}\d{1,3}$/.test(avHn) ||
+                avHn.includes(":");
+              if (!isUnsafeAv) {
+                const r = await fetch(parsedAv.toString(), { signal: AbortSignal.timeout(6000), redirect: "error" });
+                if (r.ok) {
+                  const cl = Number(r.headers.get("content-length") || 0);
+                  if (cl <= 8 * 1024 * 1024) {
+                    const ab = await r.arrayBuffer();
+                    if (ab.byteLength > 0 && ab.byteLength <= 8 * 1024 * 1024) {
+                      avatarBuffer = Buffer.from(ab);
+                    }
+                  }
+                }
               }
             } catch (_) {}
           }

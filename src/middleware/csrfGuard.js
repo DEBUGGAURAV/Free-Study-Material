@@ -88,8 +88,8 @@ function sameOriginGuard(req, res, next) {
     return next();
   }
 
-  // 2. Exempted public routes
-  const cleanPath = req.path.toLowerCase();
+  // 2. Exempted public routes (include req.baseUrl since middleware is mounted at /api)
+  const cleanPath = `${req.baseUrl || ""}${req.path || ""}`.toLowerCase();
   if (EXEMPTED_PATHS.some((p) => cleanPath === p || cleanPath.startsWith(`${p}/`))) {
     return next();
   }
@@ -102,13 +102,22 @@ function sameOriginGuard(req, res, next) {
   const checkHost = originHost || refererHost;
   const allowedHosts = getAllowedHosts(req);
 
+  // Reject explicit Origin: null on mutating requests (sandboxed iframe CSRF vector)
+  if (origin === "null") {
+    console.warn(`[CSRF-GUARD] 🚨 Blocked null-origin mutating request: ${req.method} ${req.originalUrl}`);
+    return res.status(403).json({
+      error: "Cross-Site Request Blocked. Null-origin mutating requests are not permitted.",
+      code: "CSRF_NULL_ORIGIN_FORBIDDEN",
+    });
+  }
+
   // 4. Modern Browser Sec-Fetch-Site check
   // Possible values: 'same-origin', 'same-site', 'none' (user navigated directly), 'cross-site'
   const secFetchSite = req.headers["sec-fetch-site"];
   if (secFetchSite === "cross-site") {
-    // Only block if request does not originate from verified platform frontend
-    if (checkHost && !allowedHosts.has(checkHost)) {
-      console.warn(`[CSRF-GUARD] 🚨 Blocked cross-site request: ${req.method} ${req.originalUrl} from unauthorized host: ${checkHost}`);
+    // Block if request does not originate from a verified platform frontend (even when Origin/Referer are missing)
+    if (!checkHost || !allowedHosts.has(checkHost)) {
+      console.warn(`[CSRF-GUARD] 🚨 Blocked cross-site request: ${req.method} ${req.originalUrl} from unauthorized host: ${checkHost || "missing"}`);
       return res.status(403).json({
         error: "Cross-Site Request Blocked. Mutating actions must originate from the verified study platform.",
         code: "CSRF_CROSS_SITE_FORBIDDEN",

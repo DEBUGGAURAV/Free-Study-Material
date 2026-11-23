@@ -225,7 +225,8 @@ function NoteCard({
   const isAdminUser = Boolean(
     isAdmin ||
     currentUser?.role === "admin" ||
-    currentUser?.email === "aky435316@gmail.com" ||
+    currentUser?.isMainAdmin ||
+    currentUser?.isMasterAdmin ||
     (currentUser?.permissions && currentUser.permissions.includes("all"))
   );
   const isNoteDownloadBlocked = isAdminUser

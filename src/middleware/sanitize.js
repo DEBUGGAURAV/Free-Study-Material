@@ -28,11 +28,11 @@ function isDangerousKey(key) {
 }
 
 function scrubValue(val, clientIp = "unknown", depth = 0) {
-  if (depth > 10) return val; // 🛡️ Prevent Call Stack Overflow / ReDoS from deeply nested JSON
+  if (depth > 10) return undefined; // 🛡️ Drop overly nested payloads instead of passing un-scrubbed objects
 
   if (typeof val === "string") {
-    // 🛡️ Fast-path for large base64 image strings (canvas crop/OCR) to prevent huge V8 string allocations
-    if (val.length > 100000 && val.startsWith("data:image/")) {
+    // 🛡️ Fast-path strictly for large safe raster base64 images (explicitly excludes SVG)
+    if (val.length > 100000 && /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(val)) {
       return val;
     }
 

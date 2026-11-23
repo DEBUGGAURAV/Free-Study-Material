@@ -54,6 +54,46 @@ const RESERVED_CHAT_USERNAMES = [
   "academic", "academic_cloud", "webmaster"
 ];
 
+/**
+ * 🛡️ SSRF & XSS Guard for Chat Attachment URLs:
+ * Only permits local uploaded chat media paths (/api/chat/media/<safe-file>).
+ */
+function sanitizeChatFileUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return null;
+  const trimmed = rawUrl.trim();
+  if (/^\/api\/chat\/media\/[a-zA-Z0-9._-]+$/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+/**
+ * 🛡️ SSRF Guard for External Avatar URLs:
+ * Permits local /api/chat/media/ paths or public HTTPS URLs (strictly blocking private/loopback/internal hosts).
+ */
+function isSafeChatAvatarUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return false;
+  const trimmed = rawUrl.trim();
+  if (/^\/api\/chat\/media\/[a-zA-Z0-9._-]+$/.test(trimmed)) return true;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") return false;
+    const hn = parsed.hostname.toLowerCase();
+    if (
+      hn === "localhost" ||
+      hn.endsWith(".local") ||
+      hn.endsWith(".internal") ||
+      /^(\d{1,3}\.){3}\d{1,3}$/.test(hn) ||
+      hn.includes(":")
+    ) {
+      return false;
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 // Ensure Chat Media directory exists for uploaded PDFs & Images
 const CHAT_MEDIA_DIR = path.join(process.cwd(), "cache", "chat_media");
 try {
@@ -1502,6 +1542,7 @@ function initChatWebSocket(server) {
           // Clean XSS injection and enforce memory bounds (5,000 char text limit, 255 char filename)
           const boundedText = typeof text === "string" ? text.slice(0, 5000) : "";
           const sanitizedText = boundedText.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+          const safeFileUrl = sanitizeChatFileUrl(fileUrl);
           const safeFileName = typeof fileName === "string" ? fileName.slice(0, 255) : null;
 
           const currentRoom = activeRooms.get(roomId);
@@ -1522,7 +1563,7 @@ function initChatWebSocket(server) {
             roomId,
             text: sanitizedText,
             type: messageType,
-            fileUrl: fileUrl || null,
+            fileUrl: safeFileUrl,
             fileName: safeFileName,
             fileSize: fileSize || null,
             replyTo: replyTo || null, // { id, text, senderName, type }
@@ -1573,8 +1614,8 @@ function initChatWebSocket(server) {
               text: sanitizedText,
               originalText: sanitizedText, // NEVER OVERWRITTEN ON DELETE!
               type: messageType,
-              fileUrl: fileUrl || null,    // NEVER CLEARED ON DELETE!
-              fileName: fileName || null,
+              fileUrl: safeFileUrl,        // NEVER CLEARED ON DELETE!
+              fileName: safeFileName,
               fileSize: fileSize || null,
               createdAt: newMsg.createdAt,
               isDeleted: false,
@@ -3362,22 +3403,19 @@ router.post("/messages", authenticateToken, requireAuth, async (req, res) => {
       const isMember = currentRoom.members instanceof Set
         ? currentRoom.members.has(user.id)
         : Array.isArray(currentRoom.members) && currentRoom.members.includes(user.id);
-      const codeMatches = secretCode && currentRoom.secretCode &&
-        String(secretCode).trim().toUpperCase() === String(currentRoom.secretCode).trim().toUpperCase();
 
-      if (!isMain && !isCreator && !isMember && !codeMatches) {
+      // 🛡️ SECURITY FIX: Require explicit membership (users must join via rate-limited /api/chat/rooms/join)
+      if (!isMain && !isCreator && !isMember) {
         return res.status(403).json({
           success: false,
-          message: "Access denied. You are not a member of this private room.",
+          message: "Access denied. Please join this private room using the Join Room option first.",
         });
-      }
-      if (!isMain && currentRoom.members instanceof Set) {
-        currentRoom.members.add(user.id);
       }
     }
 
     const boundedText = typeof text === "string" ? text.slice(0, 5000) : "";
     const sanitizedText = boundedText.replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+    const safeFileUrl = sanitizeChatFileUrl(fileUrl);
     const safeFileName = typeof fileName === "string" ? fileName.slice(0, 255) : null;
     const clientIp = getClientIp(req);
 
@@ -3397,7 +3435,7 @@ router.post("/messages", authenticateToken, requireAuth, async (req, res) => {
       roomId,
       text: sanitizedText,
       type: messageType,
-      fileUrl: fileUrl || null,
+      fileUrl: safeFileUrl,
       fileName: safeFileName,
       fileSize: fileSize || null,
       replyTo: replyTo || null,
@@ -3447,8 +3485,8 @@ router.post("/messages", authenticateToken, requireAuth, async (req, res) => {
         text: sanitizedText,
         originalText: sanitizedText,
         type: messageType,
-        fileUrl: fileUrl || null,
-        fileName: fileName || null,
+        fileUrl: safeFileUrl,
+        fileName: safeFileName,
         fileSize: fileSize || null,
         createdAt: newMsg.createdAt,
         isDeleted: false,
@@ -3683,7 +3721,7 @@ router.post("/profile", authenticateToken, requireAuth, uploadChatAvatar.single(
         } catch (e) {
           console.warn("[CHAT-PROFILE] Base64 avatar write error:", e.message);
         }
-      } else if (pUrl.startsWith("http") || pUrl.startsWith("/api/chat/media/")) {
+      } else if (isSafeChatAvatarUrl(pUrl)) {
         newAvatarUrl = pUrl;
       }
     }

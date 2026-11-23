@@ -5,7 +5,7 @@ const bcrypt = require("bcryptjs");
 const os = require("os");
 const { db } = require("../firebase");
 const { requireDb, checkDb } = require("../middleware/dbGuard");
-const { authenticateToken, requireAdmin } = require("../middleware/auth");
+const { authenticateToken, requireAdmin, setRevokedTokenVersion } = require("../middleware/auth");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
 const { encrypt, decrypt, blindIndex, decryptUserObject } = require("../utils/cryptoVault");
@@ -799,10 +799,27 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
       req.user?.role === "admin" ||
       (req.user?.email && MAIN_ADMIN_EMAIL && req.user.email.toLowerCase() === MAIN_ADMIN_EMAIL)
     );
-    if (!isCallerFullAdmin && (role === "admin" || role === "half_admin" || targetUser.role === "admin" || targetUser.role === "half_admin")) {
+    const VALID_ROLES = new Set(["student", "half_admin", "admin"]);
+    if (role !== undefined && !VALID_ROLES.has(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role specified.",
+      });
+    }
+
+    // 🛡️ CRITICAL SECURITY FIX: Half-admins cannot modify roles/permissions of admins OR assign elevated permissions to anyone
+    if (
+      !isCallerFullAdmin &&
+      (role === "admin" ||
+        role === "half_admin" ||
+        targetUser.role === "admin" ||
+        targetUser.role === "half_admin" ||
+        permissions !== undefined ||
+        req.body.allowedTabs !== undefined)
+    ) {
       return res.status(403).json({
         success: false,
-        message: "PERMISSION DENIED: Only Full Platform Administrators can assign or modify Administrator privileges.",
+        message: "PERMISSION DENIED: Only Full Platform Administrators can assign or modify Administrator roles or permissions.",
       });
     }
 
@@ -813,8 +830,7 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     if (name !== undefined) updateData.name = name.trim();
     if (mobile !== undefined) {
       const cleanMob = mobile.trim();
-      updateData.mobile = cleanMob;
-      updateData.plainMobile = cleanMob;
+      updateData.mobile = cleanMob ? encrypt(cleanMob) : "";
       updateData.mobileHash = cleanMob ? blindIndex(cleanMob) : "";
     }
     if (college !== undefined) updateData.college = college.trim();
@@ -823,9 +839,11 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
     if (req.body.rollNumber !== undefined) updateData.rollNumber = String(req.body.rollNumber).trim();
     if (req.body.semester !== undefined) updateData.semester = String(req.body.semester).trim();
 
+    let roleOrPermsChanged = false;
     // Only allow role / permission updates if target is NOT main admin
     if (targetUser.email?.toLowerCase() !== MAIN_ADMIN_EMAIL) {
       if (role !== undefined) {
+        if (role !== targetUser.role) roleOrPermsChanged = true;
         updateData.role = role;
         // 🛡️ Automatic Immunity Rule:
         // Admin / Half-Admin -> NEVER PURGE ON (Permanent Immunity)
@@ -843,8 +861,9 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
           updateData.customInactivityDays = defaultPurge;
         }
       }
-      if (permissions !== undefined) {
-        updateData.permissions = permissions;
+      if (permissions !== undefined && isCallerFullAdmin) {
+        roleOrPermsChanged = true;
+        updateData.permissions = Array.isArray(permissions) ? permissions : [];
       } else if (role === "admin") {
         updateData.permissions = ["all", "manage_notes", "manage_users", "manage_notices", "delete_records", "database"];
       } else if (role === "half_admin") {
@@ -852,8 +871,19 @@ router.put("/users/:id", authenticateToken, checkAdminOrPermission("manage_users
       } else if (role === "student") {
         updateData.permissions = ["upload_notes", "download_notes"];
       }
-      if (req.body.allowedTabs !== undefined) {
+      if (req.body.allowedTabs !== undefined && isCallerFullAdmin) {
         updateData.allowedTabs = Array.isArray(req.body.allowedTabs) ? req.body.allowedTabs : [];
+      }
+    }
+
+    // 🛡️ CRITICAL SECURITY FIX: Revoke active JWT sessions immediately when a user's role/permissions change
+    if (roleOrPermsChanged) {
+      const newVersion = Date.now();
+      updateData.tokenVersion = newVersion;
+      updateData.sessionRevokedAt = newVersion;
+      setRevokedTokenVersion(id, newVersion);
+      if (ramCache && targetUser.email) {
+        ramCache.delete(`auth_user_${targetUser.email.toLowerCase().trim()}`);
       }
     }
 
