@@ -20,6 +20,7 @@ const SUBJECT_PATTERNS = [
 
   // AI & Data
   { regex: /\b(AI|ARTIFICIAL\s*INTELLIGENCE)\b/i, name: "Artificial Intelligence (AI)" },
+  { regex: /\b(MLT|MACHINE\s*LEARNING\s*TECHNIQUES?)\b/i, name: "Machine Learning Techniques (MLT)" },
   { regex: /\b(ML|MACHINE\s*LEARNING)\b/i, name: "Machine Learning (ML)" },
   { regex: /\b(DL|DEEP\s*LEARNING)\b/i, name: "Deep Learning (DL)" },
   { regex: /\b(NLP|NATURAL\s*LANGUAGE\s*PROCESSING)\b/i, name: "Natural Language Processing (NLP)" },
@@ -95,13 +96,31 @@ function normalizeAcademicYear(raw = "") {
 }
 
 /**
- * Resolves a dynamic CSE subject from any string
+ * Resolves a dynamic CSE subject from any string (filename / caption substring match)
  */
 function resolveDynamicCseSubject(text = "") {
   if (!text) return null;
   const clean = text.replace(/[_.\-]+/g, " ").trim();
   for (const item of SUBJECT_PATTERNS) {
     if (item.regex.test(clean)) {
+      return item.name;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolves a canonical CSE subject ONLY when the ENTIRE cleaned topic title matches a pattern.
+ * Prevents partial substring hijacking (e.g. Telegram topic "Machine Learning Techniques"
+ * or "Applied Machine Learning" will NEVER be overwritten with "Machine Learning (ML)").
+ */
+function resolveExactCseSubject(text = "") {
+  if (!text) return null;
+  const clean = text.replace(/[_.\-]+/g, " ").replace(/\s+/g, " ").trim();
+  if (!clean) return null;
+  for (const item of SUBJECT_PATTERNS) {
+    const m = clean.match(item.regex);
+    if (m && m[0].trim().length === clean.length) {
       return item.name;
     }
   }
@@ -213,30 +232,32 @@ function parseTopicMetadata(threadTitle = "") {
     year = "1st Year";
   }
 
-  // 2. Extract Subject from topic title
-  // A. Check canonical dictionary on raw topic
-  let subject = resolveDynamicCseSubject(raw) || "";
+  // 2. Extract Subject from Telegram Forum Topic title
+  // Respect the exact topic name created on Telegram! Strip emojis + Year/Semester/Course noise first,
+  // and ONLY apply canonical dictionary when the ENTIRE cleaned topic name matches (never partial substring hijack).
+  let subject = "";
+  const clean = raw
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F]/gu, " ")
+    .replace(/[-_]+/g, " ")
+    .replace(/\b(1ST|FIRST|2ND|SECOND|3RD|THIRD|4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/gi, "")
+    .replace(/\bYEAR\s*[1-4]\b/gi, "")
+    .replace(/\b(SEM|SEMESTER)\s*[1-8]\b/gi, "")
+    .replace(/\b[1-8](ST|ND|RD|TH)?\s*(SEM|SEMESTER)\b/gi, "")
+    .replace(/\b(B\.?TECH|M\.?TECH|BCA|MCA|DIPLOMA|CSE?|IT|DEPARTMENT|BRANCH|SECTION|NOTES?|VAULT|MATERIALS?|FILES?|STUDY)\b/gi, "")
+    .replace(/[():\-–—|/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  // B. If not found, strip Year, Semester, Course, and Noise to find subject
-  if (!subject) {
-    let clean = raw
-      .replace(/[-_]+/g, " ")
-      .replace(/\b(1ST|FIRST|2ND|SECOND|3RD|THIRD|4TH|FOURTH|FINAL)\s*(YEAR|YR|YER)?\b/gi, "")
-      .replace(/\bYEAR\s*[1-4]\b/gi, "")
-      .replace(/\b(SEM|SEMESTER)\s*[1-8]\b/gi, "")
-      .replace(/\b[1-8](ST|ND|RD|TH)?\s*(SEM|SEMESTER)\b/gi, "")
-      .replace(/\b(B\.?TECH|M\.?TECH|BCA|MCA|DIPLOMA|CSE?|IT|DEPARTMENT|BRANCH|SECTION|NOTES?|VAULT|MATERIALS?|FILES?|STUDY)\b/gi, "")
-      .replace(/[():\-–—|/]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (clean) {
-      subject = resolveDynamicCseSubject(clean) || "";
-      // If still not in directory, keep clean string as subject (min 3 chars, not generic noise)
-      if (!subject && clean.length >= 3 && !/^(General|Chat|Group|Uploads|Misc|Folder)$/i.test(clean)) {
-        subject = clean;
-      }
+  if (clean && clean.length >= 2 && !/^(General|Chat|Group|Uploads|Misc|Folder)$/i.test(clean)) {
+    const exactMatch = resolveExactCseSubject(clean);
+    if (exactMatch) {
+      subject = exactMatch;
+    } else if (clean.length >= 3) {
+      // Preserve exact custom/specific Telegram Forum Topic subject name!
+      subject = clean;
     }
+  } else {
+    subject = resolveExactCseSubject(raw) || "";
   }
 
   // 3. If year wasn't explicitly stated in topic, but topic provided a clear subject, infer year from syllabus!

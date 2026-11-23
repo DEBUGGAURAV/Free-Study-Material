@@ -116,6 +116,8 @@ function normalizeSubjectName(raw) {
   let clean = raw.trim().replace(/^[📚📖📁📌\s]+/, "").trim();
   const lower = clean.toLowerCase().replace(/[^a-z0-9]/g, "");
   if (lower === "ai" || lower === "artificialintelligence") return "Artificial Intelligence";
+  if (lower === "mlt" || lower === "machinelearningtechnique" || lower === "machinelearningtechniques" || lower === "machinelearningtechniquesmlt") return "Machine Learning Techniques (MLT)";
+  if (lower === "ml" || lower === "machinelearning" || lower === "machinelearningml") return "Machine Learning (ML)";
   if (lower === "dbms" || lower === "databasemanagementsystems" || lower === "databasemanagementsystem") return "Database Management Systems (DBMS)";
   if (lower === "os" || lower === "operatingsystem" || lower === "operatingsystems") return "Operating Systems (OS)";
   if (lower === "cd" || lower === "compilerdesign") return "Compiler Design (CD)";

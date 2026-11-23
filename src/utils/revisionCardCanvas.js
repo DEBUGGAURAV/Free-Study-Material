@@ -140,7 +140,7 @@ export async function generateRevisionCardPngBlob({
   ctx.fillText(badgeText, PAD + 28, 96);
 
   // 3. Title & Subtitle (High Contrast Obsidian)
-  let curY = 172;
+  let curY = 180;
   ctx.font = `900 52px ${FONT_SANS}`;
   ctx.fillStyle = "#090d16";
   for (const tLine of titleLines) {
@@ -377,29 +377,46 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
   const cleanBranch = String(note.branch || "All Branches").trim();
   const branchText = `📚 ${cleanSubject.toUpperCase()} • ${cleanCourse.toUpperCase()} • ${cleanBranch.toUpperCase()}`;
 
-  ctx.font = `800 26px ${FONT_SANS}`;
-  const catW = Math.min(WIDTH - PAD * 2, Math.round(ctx.measureText(branchText).width + 50));
+  // Auto-scale category pill font so long subjects like "MACHINE LEARNING TECHNIQUES (MLT)" never overflow
+  const maxPillW = WIDTH - PAD * 2;
+  let pillFontSize = 26;
+  ctx.font = `800 ${pillFontSize}px ${FONT_SANS}`;
+  while (pillFontSize > 19 && ctx.measureText(branchText).width + 50 > maxPillW) {
+    pillFontSize -= 1;
+    ctx.font = `800 ${pillFontSize}px ${FONT_SANS}`;
+  }
+  const catH = 54;
+  const catW = Math.min(maxPillW, Math.round(ctx.measureText(branchText).width + 50));
   ctx.fillStyle = "#eef2ff";
   ctx.strokeStyle = "#818cf8";
   ctx.lineWidth = 2;
-  drawRoundedRect(ctx, PAD, curY, catW, 52, 26);
+  drawRoundedRect(ctx, PAD, curY, catW, catH, 27);
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#3730a3";
-  ctx.fillText(branchText, PAD + 25, curY + 35);
+  ctx.fillText(branchText, PAD + 25, curY + Math.round(catH / 2 + pillFontSize * 0.34), catW - 50);
 
   // 5. Bold Commanding Note Title (High-Visibility Obsidian Black Typography)
-  curY += 86;
-  ctx.font = `900 68px ${FONT_SANS}`;
-  ctx.fillStyle = "#090d16"; // Deep Obsidian Black for razor-sharp legibility
+  // Place baseline well below pill bottom (catH=54 + 38px breathing gap + ~54px font ascent = +146px) so capitals NEVER touch the pill!
+  const pillBottom = curY + catH;
+  ctx.font = `900 64px ${FONT_SANS}`;
+  const rawTitleLines = wrapCanvasText(ctx, note.title || "University Lecture Notes", WIDTH - PAD * 2);
+  const titleFontSize = rawTitleLines.length >= 3 ? 58 : 64;
+  const titleLineHeight = titleFontSize === 58 ? 72 : 78;
+  ctx.font = `900 ${titleFontSize}px ${FONT_SANS}`;
   const titleLines = wrapCanvasText(ctx, note.title || "University Lecture Notes", WIDTH - PAD * 2).slice(0, 3);
+
+  curY = pillBottom + 36 + Math.round(titleFontSize * 0.86);
+  ctx.fillStyle = "#090d16"; // Deep Obsidian Black for razor-sharp legibility
   for (const tLine of titleLines) {
     ctx.fillText(tLine, PAD, curY);
-    curY += 82;
+    curY += titleLineHeight;
   }
 
   // 5B. Quick Metadata Badges Row (Pages / Rating / Free)
+  // Align cleanly 28px below the last title line's descender
+  const badgeRowY = curY - titleLineHeight + Math.round(titleFontSize * 0.25) + 28;
   const pageCount = Number(note.pageCount || note.pagesCount || 15);
   const metaBadges = [
     { text: `📄 ${pageCount}+ Pages`, color: "#4338ca", bg: "#eef2ff", border: "#a5b4fc" },
@@ -417,15 +434,15 @@ export function generateWhatsAppStoryCardCanvas(note = {}, shareUrl = "") {
     ctx.fillStyle = badge.bg;
     ctx.strokeStyle = badge.border;
     ctx.lineWidth = 2;
-    drawRoundedRect(ctx, metaX, curY + 4, mW, 48, 24);
+    drawRoundedRect(ctx, metaX, badgeRowY, mW, 48, 24);
     ctx.fill();
     ctx.stroke();
 
     ctx.fillStyle = badge.color;
-    ctx.fillText(badge.text, metaX + 18, curY + 36);
+    ctx.fillText(badge.text, metaX + 18, badgeRowY + 32);
     metaX += mW + 14;
   }
-  curY += 76;
+  curY = badgeRowY + 48 + 32;
 
   // 6. Highlighted Feature Cards Container (Pure White Elevated Studio Card)
   const featureBoxH = 460;
