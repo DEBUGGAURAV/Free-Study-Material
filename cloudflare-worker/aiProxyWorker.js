@@ -16,10 +16,35 @@
  * 0.00% Render CPU Load • 0.00% Render RAM Usage • 100% Mobile Optimized
  */
 
+function isTrustedOrigin(origin) {
+  if (!origin || origin === "null") return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return (
+      host === "freestudymaterial.pages.dev" ||
+      host.endsWith(".freestudymaterial.pages.dev") ||
+      host === "freestudymaterial.onrender.com" ||
+      host === "freestudymaterial1.onrender.com" ||
+      host === "freestudymaterial2.onrender.com" ||
+      host === "fsm-edge.jnplotus.workers.dev" ||
+      host === "fsm-ai-edge.jnplotus.workers.dev" ||
+      host === "free-study-ai-edge.jnplotus.workers.dev" ||
+      host === "localhost" ||
+      host === "127.0.0.1"
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
 function applyCors(headers, req) {
   const o = req ? req.headers.get("Origin") : null;
-  headers.set("Access-Control-Allow-Origin", o || "*");
-  headers.set("Access-Control-Allow-Credentials", "true");
+  if (o && isTrustedOrigin(o)) {
+    headers.set("Access-Control-Allow-Origin", o);
+    headers.set("Access-Control-Allow-Credentials", "true");
+  } else {
+    headers.set("Access-Control-Allow-Origin", "*");
+  }
   headers.set("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS");
   headers.set("Access-Control-Allow-Headers", "*");
   headers.set(

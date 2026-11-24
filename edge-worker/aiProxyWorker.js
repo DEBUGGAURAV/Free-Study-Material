@@ -17,14 +17,24 @@
  */
 
 function isTrustedOrigin(origin) {
-  if (!origin) return false;
-  return (
-    origin.includes("pages.dev") ||
-    origin.includes("onrender.com") ||
-    origin.includes("localhost") ||
-    origin.includes("127.0.0.1") ||
-    origin.includes("workers.dev")
-  );
+  if (!origin || origin === "null") return false;
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return (
+      host === "freestudymaterial.pages.dev" ||
+      host.endsWith(".freestudymaterial.pages.dev") ||
+      host === "freestudymaterial.onrender.com" ||
+      host === "freestudymaterial1.onrender.com" ||
+      host === "freestudymaterial2.onrender.com" ||
+      host === "fsm-edge.jnplotus.workers.dev" ||
+      host === "fsm-ai-edge.jnplotus.workers.dev" ||
+      host === "free-study-ai-edge.jnplotus.workers.dev" ||
+      host === "localhost" ||
+      host === "127.0.0.1"
+    );
+  } catch (_) {
+    return false;
+  }
 }
 
 function applyCors(headers, req) {

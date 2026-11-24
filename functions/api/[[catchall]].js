@@ -67,13 +67,14 @@ export async function onRequest(context) {
     });
   }
 
-  // 1.1 Cloudflare Edge CDN Cache Check (Tier 2: 1ms Instant Hit for PDF streams)
+  // 1.1 Cloudflare Edge CDN Cache Check (Tier 2: 1ms Instant Hit for Authenticated PDF streams)
   const noteStreamMatch = url.pathname.match(/^\/api\/notes\/([^/]+)\/(?:stream(?:\.pdf)?|[^/]+\.pdf)$/i);
   const isStreamRequest = request.method === "GET" && Boolean(noteStreamMatch);
   const isDownloadParam = url.searchParams.get("download") === "1";
+  const cookieStr = request.headers.get("cookie") || "";
   const hasAuthCredential = Boolean(
     request.headers.get("authorization") ||
-    request.headers.get("cookie") ||
+    /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=/.test(cookieStr) ||
     url.searchParams.get("token") ||
     url.searchParams.get("ticket")
   );
@@ -82,11 +83,89 @@ export async function onRequest(context) {
     ? new Request(`${url.origin}/api/notes/${noteStreamMatch[1]}/stream.pdf`, { method: "GET" })
     : null;
 
-  // Serve directly from Cloudflare Edge Cache for previews or authenticated downloads (unauthenticated downloads still hit origin for 401 gate)
-  if (isStreamRequest && edgeCache && cacheKey && (!isDownloadParam || hasAuthCredential)) {
+  // 🛡️ STRICT LOGIN GATE ("notes sabhi ko dikhein, use wahi kar paaye jo login ho"):
+  // Block unauthenticated PDF read & download requests immediately at Cloudflare Pages Edge (0 Render load!)
+  if (isStreamRequest && !hasAuthCredential) {
+    const unauthHeaders = new Headers({
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": reqOrigin && isTrustedOrigin(reqOrigin) ? reqOrigin : "*",
+      ...(reqOrigin && isTrustedOrigin(reqOrigin) ? { "Access-Control-Allow-Credentials": "true" } : {}),
+    });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        authRequired: true,
+        message: "Restricted Access: Please sign in or register to read or download notes.",
+      }),
+      { status: 401, headers: unauthHeaders }
+    );
+  }
+
+  // Serve directly from Cloudflare Edge Cache ONLY for authenticated users after verifying /access (Maintenance, Visibility & Download Locks)
+  if (isStreamRequest && edgeCache && cacheKey && hasAuthCredential) {
     try {
       const cached = await edgeCache.match(cacheKey);
       if (cached) {
+        const noteId = noteStreamMatch[1];
+        const accessHeaders = new Headers();
+        for (const hName of ["authorization", "cookie", "cf-connecting-ip", "x-forwarded-for"]) {
+          const val = request.headers.get(hName);
+          if (val) accessHeaders.set(hName, val);
+        }
+        const qTok = url.searchParams.get("token");
+        if (!accessHeaders.has("authorization") && qTok) {
+          accessHeaders.set("Authorization", `Bearer ${qTok}`);
+        }
+        let accessVerified = false;
+        const nowCheck = Date.now();
+        const accessOrigins = [...BACKEND_ORIGINS].sort((a, b) => {
+          const aDead = (unhealthyOrigins.get(a) || 0) > nowCheck;
+          const bDead = (unhealthyOrigins.get(b) || 0) > nowCheck;
+          if (aDead === bDead) return 0;
+          return aDead ? 1 : -1;
+        });
+        for (const accOrigin of accessOrigins) {
+          const accessUrl = new URL(`/api/notes/${encodeURIComponent(noteId)}/access`, accOrigin);
+          for (const pName of ["ticket", "download", "attachment"]) {
+            const val = url.searchParams.get(pName);
+            if (val) accessUrl.searchParams.set(pName, val);
+          }
+          try {
+            const ac = new AbortController();
+            const tId = setTimeout(() => ac.abort(), 3000);
+            const accessRes = await fetch(accessUrl.toString(), {
+              method: "GET",
+              headers: accessHeaders,
+              redirect: "manual",
+              signal: ac.signal,
+            });
+            clearTimeout(tId);
+            if (accessRes.ok) {
+              accessVerified = true;
+              break;
+            }
+            if (accessRes.status >= 400 && accessRes.status < 500) {
+              const denyHeaders = new Headers(accessRes.headers);
+              denyHeaders.set("Cache-Control", "no-store");
+              if (reqOrigin && isTrustedOrigin(reqOrigin)) {
+                denyHeaders.set("Access-Control-Allow-Origin", reqOrigin);
+                denyHeaders.set("Access-Control-Allow-Credentials", "true");
+              } else {
+                denyHeaders.set("Access-Control-Allow-Origin", "*");
+              }
+              return new Response(accessRes.body, { status: accessRes.status, headers: denyHeaders });
+            }
+            unhealthyOrigins.set(accOrigin, Date.now() + UNHEALTHY_COOLDOWN_MS);
+          } catch (_) {
+            unhealthyOrigins.set(accOrigin, Date.now() + UNHEALTHY_COOLDOWN_MS);
+          }
+        }
+        if (!accessVerified) {
+          // Do NOT bypass auth/access verification on backend timeout — fall through to full proxy failover
+          throw new Error("ACCESS_CHECK_UNAVAILABLE");
+        }
+
         const cHeaders = new Headers(cached.headers);
         cHeaders.set("CF-Cache-Status", "HIT");
         cHeaders.set("X-Edge-Cache", "HIT");
@@ -131,6 +210,73 @@ export async function onRequest(context) {
           status: 200,
           headers: cHeaders,
         });
+      }
+    } catch (_) {}
+  }
+
+  // 1.2 ⚡ Zero-Load Edge Catalog Cache for Public Guest Reads (/api/notes, /api/notices, /api/admin/tech-flags)
+  const PUBLIC_CATALOG_PATHS = new Set([
+    "/api/notes",
+    "/api/notices",
+    "/api/notes/branches",
+    "/api/notes/subjects",
+    "/api/admin/tech-flags",
+  ]);
+  const isCatalogPurge = (request.method === "PURGE" || url.searchParams.get("purge") === "1") && PUBLIC_CATALOG_PATHS.has(url.pathname) && Boolean(edgeCache);
+  if (isCatalogPurge) {
+    try {
+      const cleanUrl = new URL(url.toString());
+      cleanUrl.searchParams.delete("purge");
+      const purgeKeys = [
+        new Request(cleanUrl.origin + cleanUrl.pathname + cleanUrl.search, { method: "GET" }),
+        new Request(cleanUrl.origin + cleanUrl.pathname, { method: "GET" }),
+      ];
+      await Promise.all(purgeKeys.map((k) => edgeCache.delete(k).catch(() => false)));
+    } catch (_) {}
+    if (request.method === "PURGE") {
+      return new Response(JSON.stringify({ success: true, purged: url.pathname }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store",
+          "Access-Control-Allow-Origin": reqOrigin && isTrustedOrigin(reqOrigin) ? reqOrigin : "*",
+          ...(reqOrigin && isTrustedOrigin(reqOrigin) ? { "Access-Control-Allow-Credentials": "true" } : {}),
+        },
+      });
+    }
+  }
+  const isPublicCatalogReq = request.method === "GET" && PUBLIC_CATALOG_PATHS.has(url.pathname) && !hasAuthCredential && url.searchParams.get("purge") !== "1" && Boolean(edgeCache);
+  const catalogCacheKey = isPublicCatalogReq ? new Request(url.origin + url.pathname + url.search, { method: "GET" }) : null;
+  if (isPublicCatalogReq && catalogCacheKey) {
+    try {
+      const cachedCatalog = await edgeCache.match(catalogCacheKey);
+      if (cachedCatalog) {
+        const corsExtra = reqOrigin && isTrustedOrigin(reqOrigin)
+          ? { "Access-Control-Allow-Origin": reqOrigin, "Access-Control-Allow-Credentials": "true" }
+          : { "Access-Control-Allow-Origin": "*" };
+        const clientEtag = request.headers.get("if-none-match");
+        const cachedEtag = cachedCatalog.headers.get("etag");
+        if (clientEtag && cachedEtag && clientEtag === cachedEtag) {
+          return new Response(null, {
+            status: 304,
+            headers: {
+              "ETag": cachedEtag,
+              "Cache-Control": cachedCatalog.headers.get("cache-control") || "public, max-age=60, s-maxage=600",
+              "X-Edge-Catalog-Cache": "HIT-304",
+              ...corsExtra,
+            },
+          });
+        }
+        const hitHeaders = new Headers(cachedCatalog.headers);
+        hitHeaders.set("X-Edge-Catalog-Cache", "HIT");
+        hitHeaders.set("CF-Cache-Status", "HIT");
+        if (reqOrigin && isTrustedOrigin(reqOrigin)) {
+          hitHeaders.set("Access-Control-Allow-Origin", reqOrigin);
+          hitHeaders.set("Access-Control-Allow-Credentials", "true");
+        } else {
+          hitHeaders.set("Access-Control-Allow-Origin", "*");
+        }
+        return new Response(cachedCatalog.body, { status: 200, headers: hitHeaders });
       }
     } catch (_) {}
   }
@@ -280,6 +426,37 @@ export async function onRequest(context) {
             headers: resHeaders,
           });
         } catch (_) {}
+      }
+
+      // Save public catalog JSON into Cloudflare Edge Cache (0 Render load on repeat guest views)
+      if (isPublicCatalogReq && catalogCacheKey && response.status === 200 && response.body) {
+        const respCC = (response.headers.get("cache-control") || "").toLowerCase();
+        if (!respCC.includes("private") && !respCC.includes("no-store")) {
+          try {
+            const catHeaders = new Headers(resHeaders);
+            catHeaders.delete("Set-Cookie");
+            catHeaders.delete("set-cookie");
+            catHeaders.delete("Vary");
+            catHeaders.delete("vary");
+            const edgeCC = url.pathname === "/api/admin/tech-flags"
+              ? "public, max-age=15, s-maxage=15, stale-while-revalidate=60"
+              : "public, max-age=60, s-maxage=600, stale-while-revalidate=1800";
+            catHeaders.set("Cache-Control", edgeCC);
+            catHeaders.set("X-Edge-Catalog-Cache", "HIT");
+            const [clientCatBody, cacheCatBody] = response.body.tee();
+            const toCacheCat = new Response(cacheCatBody, { status: 200, headers: catHeaders });
+            if (typeof context.waitUntil === "function") {
+              context.waitUntil(edgeCache.put(catalogCacheKey, toCacheCat).catch(() => {}));
+            } else {
+              edgeCache.put(catalogCacheKey, toCacheCat).catch(() => {});
+            }
+            resHeaders.set("X-Edge-Catalog-Cache", "MISS-SAVED");
+            return new Response(clientCatBody, {
+              status: 200,
+              headers: resHeaders,
+            });
+          } catch (_) {}
+        }
       }
 
       return new Response(response.body, {
