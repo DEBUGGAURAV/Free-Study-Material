@@ -188,15 +188,17 @@ export async function getAnyCachedNoteBuffer(noteId) {
   const checkCacheApi = async () => {
     if (typeof caches === "undefined") return null;
     try {
+      // ONLY check binary PDF stream URLs — NEVER /api/notes/${sId} (which returns JSON metadata and would poison Tier 1!)
       const candidates = [
         `/api/notes/${sId}/stream.pdf`,
         `/api/notes/${sId}/stream`,
         `/api/notes/${sId}/preview`,
-        `/api/notes/${sId}`,
       ];
       for (const uri of candidates) {
         const match = await caches.match(uri, { ignoreSearch: true });
         if (match && match.ok) {
+          const ct = (match.headers?.get("content-type") || "").toLowerCase();
+          if (ct.includes("application/json") || ct.includes("text/html")) continue;
           const buf = await match.arrayBuffer();
           if (buf && buf.byteLength > 200) {
             return buf;

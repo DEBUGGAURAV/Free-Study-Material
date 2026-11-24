@@ -17,40 +17,41 @@ import { BACKEND_CLUSTER_URLS } from "../config/clientConfig";
 const rawWorkerEnv =
   typeof import.meta !== "undefined" && import.meta.env?.VITE_CF_WORKER_URL
     ? String(import.meta.env.VITE_CF_WORKER_URL).trim()
-    : "";
-export const CF_WORKER = rawWorkerEnv;
+    : "https://fsm-edge.jnplotus.workers.dev";
+export const CF_WORKER = rawWorkerEnv.replace(/\/+$/, "");
 
 // Circuit breaker cooldown if CF_WORKER is unreachable / times out
 let workerCooldownUntil = 0;
 
 /**
- * Verifies that an ArrayBuffer is a valid binary document (not an HTML error page or JSON error payload)
+ * Verifies that an ArrayBuffer is a valid binary PDF document (strictly rejects HTML or JSON error/metadata payloads!)
  */
 export function isValidPdfArrayBuffer(buf) {
   if (!buf || !(buf.byteLength > 200)) return false;
   try {
-    const u8 = new Uint8Array(buf, 0, Math.min(64, buf.byteLength));
-    // Check for standard %PDF- signature anywhere in first 32 bytes
-    for (let i = 0; i <= Math.min(24, u8.length - 4); i++) {
-      if (u8[i] === 0x25 && u8[i + 1] === 0x50 && u8[i + 2] === 0x44 && u8[i + 3] === 0x46) {
-        return true;
-      }
-    }
-    // Reject HTML or JSON error payloads masquerading as 200 OK
-    const prefix = String.fromCharCode(...u8).trim().toLowerCase();
+    const scanLen = Math.min(1024, buf.byteLength);
+    const u8 = new Uint8Array(buf, 0, scanLen);
+    // Reject HTML or ANY JSON payload masquerading as 200 OK (e.g. cached /api/notes/:id metadata JSON!)
+    const prefix = String.fromCharCode(...u8.subarray(0, Math.min(64, u8.length))).trim().toLowerCase();
     if (
       prefix.startsWith("<!doctype") ||
       prefix.startsWith("<html") ||
       prefix.startsWith("<head") ||
       prefix.startsWith("<body") ||
-      prefix.startsWith('{"success":false') ||
-      prefix.startsWith('{"error":')
+      prefix.startsWith("{") ||
+      prefix.startsWith("[")
     ) {
       return false;
     }
-    return true;
+    // Check for standard %PDF- signature anywhere in first 1024 bytes (per PDF spec!)
+    for (let i = 0; i <= u8.length - 4; i++) {
+      if (u8[i] === 0x25 && u8[i + 1] === 0x50 && u8[i + 2] === 0x44 && u8[i + 3] === 0x46) {
+        return true;
+      }
+    }
+    return false;
   } catch {
-    return buf.byteLength > 500;
+    return false;
   }
 }
 
@@ -516,8 +517,8 @@ export async function acquireNoteDocument(noteId, {
       }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
 
       const workerController = new AbortController();
-      // 7.5s response-header timeout (aborts only if headers never arrive; cleared immediately once streaming begins)
-      const workerTimeout = setTimeout(() => workerController.abort(), 7500);
+      // 15s response-header timeout (handles cold Tier 4 Telegram fetches; cleared immediately once streaming begins)
+      const workerTimeout = setTimeout(() => workerController.abort(), 15000);
       if (signal) {
         signal.addEventListener("abort", () => workerController.abort(), { once: true });
       }
@@ -582,14 +583,14 @@ export async function acquireNoteDocument(noteId, {
         denyErr.status = workerRes.status;
         throw denyErr;
       } else if (workerRes && workerRes.status >= 500) {
-        workerCooldownUntil = Date.now() + 60000;
+        workerCooldownUntil = Date.now() + 15000;
       }
     } catch (t2Err) {
       if (t2Err && (t2Err.status === 401 || t2Err.status === 403 || t2Err.status === 404)) {
         throw t2Err;
       }
       if (!(signal && signal.aborted)) {
-        workerCooldownUntil = Date.now() + 60000;
+        workerCooldownUntil = Date.now() + 15000;
       }
       console.debug("[WATERFALL] Tier 2 CDN worker fallback to Tier 3:", t2Err.message);
     }

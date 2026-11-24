@@ -43,8 +43,26 @@ function isTrustedOrigin(origin) {
   return false;
 }
 
+function isAuthorizedCatalogPurge(request, env) {
+  const configuredSecret = (env?.CF_WORKER_SECRET || "").trim();
+  const providedSecret = (
+    request.headers.get("X-Worker-Secret") ||
+    request.headers.get("X-Worker-Signature") ||
+    ""
+  ).trim();
+  const auth = (request.headers.get("Authorization") || "").trim();
+  const cookie = request.headers.get("Cookie") || "";
+  const hasJwtBearer = /^Bearer\s+[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(auth);
+  const hasSessionCookie = /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=[^;\s]+/.test(cookie);
+  if (configuredSecret) {
+    if (providedSecret && providedSecret === configuredSecret) return true;
+    return hasJwtBearer || hasSessionCookie;
+  }
+  return Boolean(hasJwtBearer || hasSessionCookie || request.headers.get("X-Cluster-Sync") === "1");
+}
+
 export async function onRequest(context) {
-  const { request } = context;
+  const { request, env } = context;
   const url = new URL(request.url);
 
   // 1. Handle CORS Preflight OPTIONS
@@ -194,13 +212,17 @@ export async function onRequest(context) {
         if (rangeHeader) {
           const buf = await cached.arrayBuffer();
           const totalSize = buf.byteLength;
-          const parts = rangeHeader.replace(/bytes=/, "").split("-");
-          let start = parseInt(parts[0], 10) || 0;
+          const parts = rangeHeader.replace(/bytes=/i, "").split("-");
+          let start = parseInt(parts[0], 10);
           let end = parts[1] ? parseInt(parts[1], 10) : totalSize - 1;
-          if (isNaN(start)) start = 0;
+          if (isNaN(start) || start < 0) start = 0;
           if (isNaN(end) || end >= totalSize) end = totalSize - 1;
+          if (start >= totalSize || start > end) {
+            cHeaders.set("Content-Range", `bytes */${totalSize}`);
+            return new Response(null, { status: 416, headers: cHeaders });
+          }
           cHeaders.set("Content-Range", `bytes ${start}-${end}/${totalSize}`);
-          cHeaders.set("Content-Length", String(Math.max(0, end - start + 1)));
+          cHeaders.set("Content-Length", String(end - start + 1));
           return new Response(buf.slice(start, end + 1), {
             status: 206,
             headers: cHeaders,
@@ -222,8 +244,20 @@ export async function onRequest(context) {
     "/api/notes/subjects",
     "/api/admin/tech-flags",
   ]);
-  const isCatalogPurge = (request.method === "PURGE" || url.searchParams.get("purge") === "1") && PUBLIC_CATALOG_PATHS.has(url.pathname) && Boolean(edgeCache);
-  if (isCatalogPurge) {
+  const wantsCatalogPurge = (request.method === "PURGE" || url.searchParams.get("purge") === "1") && PUBLIC_CATALOG_PATHS.has(url.pathname) && Boolean(edgeCache);
+  const authorizedCatalogPurge = wantsCatalogPurge && isAuthorizedCatalogPurge(request, env);
+  if (wantsCatalogPurge && !authorizedCatalogPurge && request.method === "PURGE") {
+    return new Response(JSON.stringify({ success: false, message: "Unauthorized catalog purge request" }), {
+      status: 403,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "Access-Control-Allow-Origin": reqOrigin && isTrustedOrigin(reqOrigin) ? reqOrigin : "*",
+        ...(reqOrigin && isTrustedOrigin(reqOrigin) ? { "Access-Control-Allow-Credentials": "true" } : {}),
+      },
+    });
+  }
+  if (authorizedCatalogPurge) {
     try {
       const cleanUrl = new URL(url.toString());
       cleanUrl.searchParams.delete("purge");
@@ -245,8 +279,10 @@ export async function onRequest(context) {
       });
     }
   }
-  const isPublicCatalogReq = request.method === "GET" && PUBLIC_CATALOG_PATHS.has(url.pathname) && !hasAuthCredential && url.searchParams.get("purge") !== "1" && Boolean(edgeCache);
-  const catalogCacheKey = isPublicCatalogReq ? new Request(url.origin + url.pathname + url.search, { method: "GET" }) : null;
+  const cleanPublicUrl = new URL(url.origin + url.pathname + url.search);
+  cleanPublicUrl.searchParams.delete("purge");
+  const isPublicCatalogReq = request.method === "GET" && PUBLIC_CATALOG_PATHS.has(url.pathname) && !hasAuthCredential && !authorizedCatalogPurge && Boolean(edgeCache);
+  const catalogCacheKey = isPublicCatalogReq ? new Request(cleanPublicUrl.toString(), { method: "GET" }) : null;
   if (isPublicCatalogReq && catalogCacheKey) {
     try {
       const cachedCatalog = await edgeCache.match(catalogCacheKey);

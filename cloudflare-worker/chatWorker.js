@@ -39,14 +39,13 @@ function applyCors(headers, req) {
 }
 
 function hasValidAuthCredential(request, url) {
-  const auth = request.headers.get("Authorization") || "";
+  const auth = (request.headers.get("Authorization") || "").trim();
   const cookie = request.headers.get("Cookie") || "";
-  const qToken = url.searchParams.get("token") || url.searchParams.get("ticket") || "";
-  return Boolean(
-    auth.trim() ||
-    /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=/.test(cookie) ||
-    (qToken && qToken !== "null" && qToken !== "undefined")
-  );
+  const qToken = (url.searchParams.get("token") || url.searchParams.get("ticket") || "").trim();
+  const hasJwtBearer = /^Bearer\s+[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(auth);
+  const hasSessionCookie = /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=[^;\s]+/.test(cookie);
+  const hasValidQueryToken = Boolean(qToken && qToken.length >= 16 && qToken !== "null" && qToken !== "undefined");
+  return hasJwtBearer || hasSessionCookie || hasValidQueryToken;
 }
 
 const failedOrigins = new Map();
@@ -99,11 +98,20 @@ export default {
       );
     }
 
-    // 3. Authenticated WebSocket Upgrade for Edge Chat Streaming
+    // 3. Authenticated WebSocket Upgrade for Edge Chat Streaming (CSWSH + DoS hardened)
     const upgradeHeader = request.headers.get("Upgrade");
     if (upgradeHeader && upgradeHeader.toLowerCase() === "websocket") {
+      const wsOrigin = request.headers.get("Origin");
+      if (wsOrigin && !isTrustedOrigin(wsOrigin)) {
+        const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+        applyCors(headers, request);
+        return new Response(
+          JSON.stringify({ success: false, message: "Forbidden WebSocket origin" }),
+          { status: 403, headers }
+        );
+      }
       if (!hasValidAuthCredential(request, url)) {
-        const headers = new Headers({ "Content-Type": "application/json" });
+        const headers = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
         applyCors(headers, request);
         return new Response(
           JSON.stringify({
@@ -122,6 +130,14 @@ export default {
 
       serverWs.addEventListener("message", async (event) => {
         try {
+          const payloadSize =
+            typeof event.data === "string"
+              ? event.data.length
+              : event.data?.byteLength || 0;
+          if (payloadSize > 65536) {
+            serverWs.send(JSON.stringify({ type: "ERROR", message: "Message payload too large" }));
+            return;
+          }
           JSON.parse(event.data);
           serverWs.send(
             JSON.stringify({
@@ -160,10 +176,16 @@ export default {
     }
 
     const hasBody = !["GET", "HEAD"].includes(request.method);
-    const bodyBuf = hasBody ? await request.arrayBuffer() : null;
+    const reqContentType = (request.headers.get("content-type") || "").toLowerCase();
+    const isMultipartUpload =
+      hasBody &&
+      (reqContentType.includes("multipart/form-data") || url.pathname.includes("/upload"));
+    // Never buffer large multipart chat media uploads into 128MB Worker RAM
+    const bodyBuf = hasBody && !isMultipartUpload ? await request.arrayBuffer() : null;
+    const attempts = isMultipartUpload ? [origins[0]] : origins;
 
-    for (let i = 0; i < origins.length; i++) {
-      const originTarget = origins[i];
+    for (let i = 0; i < attempts.length; i++) {
+      const originTarget = attempts[i];
       try {
         const forwardUrl = originTarget + url.pathname + url.search;
         const proxyHeaders = new Headers(request.headers);
@@ -174,27 +196,53 @@ export default {
           method: request.method,
           headers: proxyHeaders,
           redirect: "follow",
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(isMultipartUpload ? 120000 : 25000),
         };
-        if (hasBody && bodyBuf) {
+        if (isMultipartUpload) {
+          proxyInit.body = request.body;
+          proxyInit.duplex = "half";
+        } else if (hasBody && bodyBuf) {
           proxyInit.body = bodyBuf.slice(0);
         }
 
         const response = await fetch(new Request(forwardUrl, proxyInit));
+        const cType = (response.headers.get("content-type") || "").toLowerCase();
         const routingHeader = response.headers.get("x-render-routing") || "";
         const isOriginDown =
           (response.status >= 502 && response.status <= 504) ||
           response.status === 402 ||
-          routingHeader.includes("suspend");
+          routingHeader.includes("suspend") ||
+          (cType.includes("text/html") &&
+            url.pathname.startsWith("/api/") &&
+            (response.status >= 500 || response.status === 200));
 
         if (isOriginDown) {
           failedOrigins.set(originTarget, Date.now());
-          if (i < origins.length - 1) continue;
+          if (i < attempts.length - 1) continue;
+          const downHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(downHeaders, request);
+          return new Response(
+            JSON.stringify({ success: false, error: "CLUSTER_WAKING_UP", message: "Chat backend node is waking up. Please retry." }),
+            { status: 503, headers: downHeaders }
+          );
         } else if (response.status < 500) {
           failedOrigins.delete(originTarget);
         }
 
-        const newHeaders = new Headers(response.headers);
+        const newHeaders = new Headers();
+        for (const [k, v] of response.headers.entries()) {
+          if (k.toLowerCase() !== "set-cookie") {
+            newHeaders.set(k, v);
+          }
+        }
+        if (typeof response.headers.getSetCookie === "function") {
+          for (const c of response.headers.getSetCookie()) {
+            newHeaders.append("Set-Cookie", c);
+          }
+        } else {
+          const rawCookie = response.headers.get("set-cookie");
+          if (rawCookie) newHeaders.set("set-cookie", rawCookie);
+        }
         applyCors(newHeaders, request);
         newHeaders.set("X-Edge-Proxied-By", "fsm-chat-edge");
         newHeaders.set("X-Edge-Colo", request.cf?.colo || "Global");
@@ -205,7 +253,7 @@ export default {
         });
       } catch (err) {
         failedOrigins.set(originTarget, Date.now());
-        if (i < origins.length - 1) continue;
+        if (i < attempts.length - 1) continue;
         const errHeaders = new Headers({ "Content-Type": "application/json" });
         applyCors(errHeaders, request);
         return new Response(JSON.stringify({ error: "Edge Proxy Error", details: err.message }), {

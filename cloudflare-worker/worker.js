@@ -34,9 +34,37 @@ function applyCors(headers, req) {
     headers.set('Access-Control-Allow-Origin', '*');
   }
   headers.set('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS, PURGE, DELETE');
-  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Range, If-None-Match, X-Direct-Origin, X-Admin-Bypass, X-Cluster-Sync');
+  headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cache-Control, Range, If-None-Match, X-Direct-Origin, X-Admin-Bypass, X-Cluster-Sync, X-Worker-Secret, X-Worker-Signature');
   headers.set('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length, Content-Range, Accept-Ranges, X-Real-Source, X-Source-Label, X-Data-Source, X-Storage-Node, CF-Cache-Status, X-Cache, X-Edge-Location, X-Edge-Cache, X-Edge-Catalog-Cache, X-Upstream-Origin, X-Cluster-Active-Nodes, ETag');
   headers.set('Access-Control-Max-Age', '86400');
+}
+
+// 🛡️ Shared strict auth-credential detector (3-part JWT Bearer OR valid session cookie)
+function hasStrongSessionCredential(request) {
+  const auth = (request.headers.get('Authorization') || '').trim();
+  const cookie = request.headers.get('Cookie') || '';
+  const hasJwtBearer = /^Bearer\s+[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(auth);
+  const hasSessionCookie = /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=[^;\s]+/.test(cookie);
+  return hasJwtBearer || hasSessionCookie;
+}
+
+// 🛡️ Prevent unauthenticated Cache-Busting DoS via public GET ?purge=1, PURGE, or DELETE
+function isAuthorizedPurgeRequest(request, env) {
+  const configuredSecret = (env?.CF_WORKER_SECRET || '').trim();
+  const providedSecret = (
+    request.headers.get('X-Worker-Secret') ||
+    request.headers.get('X-Worker-Signature') ||
+    ''
+  ).trim();
+  if (configuredSecret) {
+    if (providedSecret && providedSecret === configuredSecret) return true;
+    return hasStrongSessionCredential(request);
+  }
+  return Boolean(
+    request.method === 'PURGE' ||
+    hasStrongSessionCredential(request) ||
+    request.headers.get('X-Cluster-Sync') === '1'
+  );
 }
 
 // 🌐 In-Memory Origin Health & Auto-Cascade Cooldown Tracker across Edge executions (25s)
@@ -180,10 +208,33 @@ export default {
       });
     }
 
-    // 2.1. 🛡️ 24/7 Anti-Sleep Relay Endpoint (Bypasses container NAT loopback, pings origin from external Cloudflare IP)
+    // 2.1. 🛡️ 24/7 Anti-Sleep Relay Endpoint (SSRF-hardened: strictly allowlists configured cluster origins only)
     if (url.pathname === '/api/anti-sleep-relay' || url.pathname === '/api/keepalive') {
-      const target = url.searchParams.get('target') || originBase;
-      const cleanTarget = target.replace(/\/+$/, '') + '/health?relay=cf&t=' + Date.now();
+      const targetParam = url.searchParams.get('target') || originBase;
+      let cleanTarget;
+      try {
+        const parsed = new URL(targetParam);
+        const host = parsed.hostname.toLowerCase();
+        const allowedHosts = getAllClusterOrigins(env).map((o) => {
+          try { return new URL(o).hostname.toLowerCase(); } catch { return ''; }
+        }).filter(Boolean);
+        if (parsed.protocol !== 'https:' || !allowedHosts.includes(host)) {
+          const deniedHeaders = new Headers({ 'Content-Type': 'application/json' });
+          applyCors(deniedHeaders, request);
+          return new Response(JSON.stringify({ success: false, error: 'Target host not permitted for relay' }), {
+            status: 403,
+            headers: deniedHeaders,
+          });
+        }
+        cleanTarget = `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}/health?relay=cf&t=${Date.now()}`;
+      } catch {
+        const badHeaders = new Headers({ 'Content-Type': 'application/json' });
+        applyCors(badHeaders, request);
+        return new Response(JSON.stringify({ success: false, error: 'Invalid target URL' }), {
+          status: 400,
+          headers: badHeaders,
+        });
+      }
       try {
         const pingRes = await fetch(cleanTarget, {
           method: 'GET',
@@ -209,11 +260,10 @@ export default {
     }
 
     // 2.5. 🤖 Zero-Server-CPU Academic AI Edge Proxy: /api/ai/ask
-    // 🛡️ STRICT LOGIN GATE: Require authenticated session (Authorization or Cookie) before burning AI keys
+    // 🛡️ STRICT LOGIN GATE: Require valid JWT Bearer or session cookie before burning AI keys
     if (url.pathname === '/api/ai/ask' && request.method === 'POST') {
-      const hasAuthCred = Boolean(request.headers.get('Authorization') || request.headers.get('Cookie'));
-      if (!hasAuthCred) {
-        const unauthHeaders = new Headers({ 'Content-Type': 'application/json' });
+      if (!hasStrongSessionCredential(request)) {
+        const unauthHeaders = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
         applyCors(unauthHeaders, request);
         return new Response(JSON.stringify({
           success: false,
@@ -229,19 +279,22 @@ export default {
           const body = await request.json();
           const { query, context } = body;
           if (!query || !query.trim()) {
+            const badHeaders = new Headers({ 'Content-Type': 'application/json' });
+            applyCors(badHeaders, request);
             return new Response(JSON.stringify({ success: false, message: 'Query prompt required' }), {
               status: 400,
-              headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+              headers: badHeaders,
             });
           }
 
           let answer = '';
           let provider = 'groq';
           let failover = false;
+          const groqModel = env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+          const geminiModel = env.GEMINI_MODEL || 'gemini-2.0-flash';
 
           if (groqKey) {
             try {
-              const groqModel = env.GROQ_MODEL;
               const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -256,7 +309,8 @@ export default {
                   ],
                   temperature: 0.3,
                   max_tokens: 500,
-                })
+                }),
+                signal: AbortSignal.timeout(15000),
               });
               if (groqRes.ok) {
                 const groqData = await groqRes.json();
@@ -274,7 +328,6 @@ export default {
 
           if (!answer && geminiKey) {
             try {
-              const geminiModel = env.GEMINI_MODEL;
               const geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/' + geminiModel + ':generateContent?key=' + geminiKey;
               const geminiRes = await fetch(geminiUrl, {
                 method: 'POST',
@@ -282,7 +335,8 @@ export default {
                 body: JSON.stringify({
                   contents: [{ parts: [{ text: "Answer this student's question based on their notes:\n\n" + (context ? '[Context]: ' + context.slice(0, 3500) + '\n\n' : '') + '[Question]: ' + query }] }],
                   generationConfig: { temperature: 0.3, maxOutputTokens: 500 }
-                })
+                }),
+                signal: AbortSignal.timeout(15000),
               });
               if (geminiRes.ok) {
                 const geminiData = await geminiRes.json();
@@ -295,7 +349,6 @@ export default {
           if (answer) {
             const resHeaders = new Headers({
               'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
               'X-AI-Engine': provider,
               'X-Edge-Location': edgeColo,
               'X-Server-Hits': '0',
@@ -305,7 +358,7 @@ export default {
               success: true,
               answer: answer,
               provider: provider,
-              model: provider === 'groq' ? env.GROQ_MODEL : env.GEMINI_MODEL,
+              model: provider === 'groq' ? groqModel : geminiModel,
               failover: failover,
               edgeLocation: edgeColo,
               cached: false
@@ -332,13 +385,27 @@ export default {
         method: 'GET',
       });
 
-      // Handle Explicit Edge Cache Purge Request
+      // Handle Explicit Edge Cache Purge Request (Auth-gated to block public cache-busting DoS)
       if (request.method === 'PURGE' || request.method === 'DELETE' || url.searchParams.get('purge') === '1') {
-        const deleted = await cache.delete(cacheKey);
-        return new Response(JSON.stringify({ success: true, message: `Edge CDN cache purged for ${url.pathname}`, deleted }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        });
+        if (!isAuthorizedPurgeRequest(request, env)) {
+          if (request.method === 'PURGE' || request.method === 'DELETE') {
+            const denyHeaders = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+            applyCors(denyHeaders, request);
+            return new Response(JSON.stringify({ success: false, message: 'Unauthorized cache purge request' }), {
+              status: 403,
+              headers: denyHeaders,
+            });
+          }
+          // Ignore unauthorized ?purge=1 on GET so it falls through to normal authenticated cache lookup
+        } else {
+          const deleted = await cache.delete(cacheKey);
+          const purgeHeaders = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          applyCors(purgeHeaders, request);
+          return new Response(JSON.stringify({ success: true, message: `Edge CDN cache purged for ${url.pathname}`, deleted }), {
+            status: 200,
+            headers: purgeHeaders,
+          });
+        }
       }
 
       const rangeHeader = request.headers.get('Range');
@@ -719,17 +786,29 @@ export default {
       const catalogCacheKey = new Request(cleanCatalogUrl.toString(), { method: 'GET' });
 
       if (request.method === 'PURGE' || url.searchParams.get('purge') === '1') {
-        const baseKey = new Request(url.origin + url.pathname, { method: 'GET' });
-        const [d1, d2] = await Promise.all([
-          cache.delete(catalogCacheKey),
-          cache.delete(baseKey),
-        ]);
-        const purgeHeaders = new Headers({ 'Content-Type': 'application/json' });
-        applyCors(purgeHeaders, request);
-        return new Response(JSON.stringify({ success: true, purged: Boolean(d1 || d2), path: url.pathname }), {
-          status: 200,
-          headers: purgeHeaders,
-        });
+        if (!isAuthorizedPurgeRequest(request, env)) {
+          if (request.method === 'PURGE') {
+            const denyHeaders = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+            applyCors(denyHeaders, request);
+            return new Response(JSON.stringify({ success: false, message: 'Unauthorized catalog purge request' }), {
+              status: 403,
+              headers: denyHeaders,
+            });
+          }
+          // Ignore unauthorized ?purge=1 on GET so public catalog still serves Edge Cache HIT
+        } else {
+          const baseKey = new Request(url.origin + url.pathname, { method: 'GET' });
+          const [d1, d2] = await Promise.all([
+            cache.delete(catalogCacheKey),
+            cache.delete(baseKey),
+          ]);
+          const purgeHeaders = new Headers({ 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          applyCors(purgeHeaders, request);
+          return new Response(JSON.stringify({ success: true, purged: Boolean(d1 || d2), path: url.pathname }), {
+            status: 200,
+            headers: purgeHeaders,
+          });
+        }
       }
 
       const cookieStr = request.headers.get('Cookie') || '';

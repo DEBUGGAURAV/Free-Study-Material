@@ -202,44 +202,6 @@ async function getClient() {
 
 /**
  * Two-Way Realtime Channel Synchronization:
- * 1. Auto-Ingest: When a document/note is posted directly to Telegram, it appears on the web instantly.
- * 2. Auto-Delete: When a note message is deleted in Telegram, it is removed from the database & CDN.
- */
-/**
- * Verifies if a Telegram user is an authorized Administrator (Channel Creator/Admin or Env Admin)
- */
-async function isUserAdmin(userId, c) {
-  if (!userId) return false;
-  const uidStr = userId.toString();
-  const envAdmins = (process.env.TELEGRAM_ADMIN_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
-
-  // If TELEGRAM_ADMIN_IDS is not configured in .env, permit DM uploaders by default so bot is fully functional
-  if (envAdmins.length === 0) {
-    console.log(`[MTProto SYNC] TELEGRAM_ADMIN_IDS empty; permitting user ID ${uidStr} as administrator`);
-    return true;
-  }
-
-  if (envAdmins.includes(uidStr)) return true;
-
-  try {
-    const channel = await c.getEntity(storageChatId);
-    const participant = await c.invoke(new Api.channels.GetParticipant({
-      channel,
-      participant: userId,
-    }));
-    if (
-      participant?.participant instanceof Api.ChannelParticipantCreator ||
-      participant?.participant instanceof Api.ChannelParticipantAdmin
-    ) {
-      return true;
-    }
-  } catch {}
-  return false;
-}
-
-
-/**
- * Two-Way Realtime Channel Synchronization:
  * 1. Storage Channel Ingest: Real-time indexing from main cloud vault channel.
  * 2. Admin Direct DM Ingest: Accepts PDFs sent directly to bot by authorized admins.
  * 3. Topic-Based Group Ingest: Auto-categorizes branch/year from topic threads.

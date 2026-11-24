@@ -84,18 +84,40 @@ function markOriginUp(origin) {
   failedOriginCooldowns.delete(origin);
 }
 
-// Cluster origins are deployment configuration, not code defaults.
+// Cluster origins: prefer Worker env vars, with resilient fallback to active Render production nodes
+const DEFAULT_CLUSTER_ORIGINS = [
+  "https://freestudymaterial1.onrender.com",
+  "https://freestudymaterial2.onrender.com",
+];
+
 function getAllClusterOrigins(env) {
   const list = [
-    env.BACKUP_ORIGIN_URL_1,
-    env.BACKUP_ORIGIN_URL_2,
-    env.ORIGIN_URL,
+    env?.BACKUP_ORIGIN_URL_1,
+    env?.BACKUP_ORIGIN_URL_2,
+    env?.ORIGIN_URL,
+    ...DEFAULT_CLUSTER_ORIGINS,
   ];
   const unique = [];
   for (const item of list) {
     if (item && !unique.includes(item.replace(/\/+$/, ""))) unique.push(item.replace(/\/+$/, ""));
   }
   return unique;
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function hasAiAuthCredential(request) {
+  const auth = (request.headers.get("Authorization") || "").trim();
+  const cookie = request.headers.get("Cookie") || "";
+  const hasJwtBearer = /^Bearer\s+[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/i.test(auth);
+  const hasSessionCookie = /(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|token|vault_token)=[^;\s]+/.test(cookie);
+  return hasJwtBearer || hasSessionCookie;
 }
 
 function hashClientIdentifier(str) {
@@ -479,84 +501,6 @@ async function queryGitHubModelsEdge(env, query, context, imageBase64 = null, im
 }
 
 /**
- * 🌐 OpenRouter Free Models Edge (100% Free • Zero Credit Card • :free models)
- */
-async function queryOpenRouterEdge(env, query, context, imageBase64 = null, imageMimeType = "image/jpeg", customPrompt = null) {
-  const apiKey = (env.OPENROUTER_API_KEY || "").trim();
-  if (!apiKey) throw new Error("OPENROUTER_API_KEY_MISSING");
-  const cleanB64 = imageBase64 ? String(imageBase64).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/i, "") : null;
-  const safeMime = imageMimeType && imageMimeType.startsWith("image/") ? imageMimeType : "image/jpeg";
-
-  let messages = [];
-  if (cleanB64) {
-    const promptText = customPrompt || `You are an elite academic tutor. Decipher handwriting/diagrams and solve step-by-step.${context ? `\n[Context]:\n${context.slice(0, 3000)}` : ""}${query ? `\n[Question]:\n${query}` : ""}`;
-    messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: promptText },
-          { type: "image_url", image_url: { url: `data:${safeMime};base64,${cleanB64}` } },
-        ],
-      },
-    ];
-  } else {
-    const userContent = context && context.trim()
-      ? `[Academic Notes Excerpt]:\n${context.slice(0, 3000)}\n\n[Student Question]:\n${query}`
-      : `[Student Question]:\n${query}`;
-    messages = [
-      { role: "system", content: "You are an elite academic tutor. Answer clearly with formulas." },
-      { role: "user", content: userContent },
-    ];
-  }
-
-  const payload = {
-    messages,
-    temperature: cleanB64 ? 0.15 : 0.2,
-    max_tokens: 600,
-    reasoning: { max_tokens: 0 },
-  };
-
-  if (cleanB64) {
-    payload.model = getRequiredSetting(env, "OPENROUTER_VISION_MODEL");
-  } else {
-    payload.models = getConfiguredList(env, "OPENROUTER_MODELS");
-  }
-
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      ...(env.APP_URL ? { "HTTP-Referer": env.APP_URL } : {}),
-      "X-Title": "Free Study Material",
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`OpenRouter Error (${res.status})`);
-  const data = await res.json();
-  const answer = (data.choices?.[0]?.message?.content || "").trim();
-  if (!answer) throw new Error("Empty OpenRouter response");
-  const model = data.model || payload.model || "openrouter-free";
-  return { answer, model };
-}
-
-/**
- * 🛡️ FSM Heuristic Cloud Guard (Offline Fallback)
- */
-function queryHeuristicGuard(query, context) {
-  if (context && context.trim()) {
-    return {
-      answer: `🤖 [FSM Academic Notes Synthesis]\n\nBased on your course notes, here is the direct excerpt matching "${query}":\n\n"${context.slice(0, 320)}..."\n\n💡 Note: Cloud AI engine is currently on offline standby or awaiting keys in Admin Studio.`,
-      model: "FSM Heuristic Guard",
-    };
-  }
-  return {
-    answer: `🤖 [FSM Academic AI Assistant]\n\nCould not connect to Cloud AI engines right now. Please verify API keys in Admin Studio or consult your course notes directly.`,
-    model: "Offline Guard",
-  };
-}
-
-/**
  * 🤖 Real-Time Telegram Dispatch to "AI Search Logs" Forum Sub-Topic from Edge Worker
  */
 async function dispatchTelegramAiNotification(env, query, provider, model, cached, latencyMs, isCircle, user = null) {
@@ -597,15 +541,18 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       engineTier = "📄 Tier 9 (Offline Extractive Fallback)";
     }
 
-    const studentName = (user?.name || user?.userName || "Student Scholar").replace(/[<>]/g, "");
-    const studentEmail = (user?.email || "anonymous@student.edu").replace(/[<>]/g, "");
-    const studentMobile = user?.mobile || user?.phone || "N/A";
+    const studentName = escapeHtml(String(user?.name || user?.userName || "Student Scholar").slice(0, 120));
+    const studentEmail = escapeHtml(String(user?.email || "anonymous@student.edu").slice(0, 160));
+    const studentMobile = escapeHtml(String(user?.mobile || user?.phone || "N/A").slice(0, 40));
+    const safeEngineName = escapeHtml(engineName);
+    const safeModel = escapeHtml(model || "Academic Model");
+    const safeQuery = escapeHtml(String(query || "").slice(0, 300));
 
     const text = [
       headline,
       "━━━━━━━━━━━━━━━━━━━━",
-      `🧠 <b>AI Used:</b> <b>${engineName}</b>`,
-      `📦 <b>Model:</b> <code>${model || "Academic Model"}</code>`,
+      `🧠 <b>AI Used:</b> <b>${safeEngineName}</b>`,
+      `📦 <b>Model:</b> <code>${safeModel}</code>`,
       `🏷️ <b>Engine Tier:</b> ${engineTier}`,
       `⏱️ <b>Response Time:</b> ${latencyMs}ms`,
       `💾 <b>Cache Status:</b> ${cached ? "🎯 Cache Hit (0ms / 0 Tokens)" : "⚡ Fresh Inference"}`,
@@ -613,7 +560,7 @@ async function dispatchTelegramAiNotification(env, query, provider, model, cache
       `👤 <b>Student:</b> ${studentName}`,
       `📧 <b>Email:</b> <code>${studentEmail}</code>`,
       `📱 <b>Mobile:</b> <code>${studentMobile}</code>`,
-      `❓ <b>Query / Formula:</b>\n<blockquote>${String(query || "").slice(0, 300).replace(/[<>]/g, "")}</blockquote>`,
+      `❓ <b>Query / Formula:</b>\n<blockquote>${safeQuery}</blockquote>`,
       "━━━━━━━━━━━━━━━━━━━━",
       `🕒 <b>Timestamp:</b> ${timeStr}`,
       `📍 <i>Delivered to Dedicated AI Queries Hub (Topic #${topicId})</i>`,
@@ -715,9 +662,25 @@ export default {
 
     // Fast Edge Handwritten OCR endpoint: /api/ai/ocr-handwriting
     if (url.pathname === "/api/ai/ocr-handwriting" && request.method === "POST") {
+      if (!hasAiAuthCredential(request)) {
+        const unauthHeaders = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+        applyCors(unauthHeaders, request);
+        return new Response(
+          JSON.stringify({ success: false, authRequired: true, message: "Please sign in to use Handwriting OCR." }),
+          { status: 401, headers: unauthHeaders }
+        );
+      }
       try {
         const cloned = request.clone();
         const body = await cloned.json();
+        if (body?.imageBase64 && typeof body.imageBase64 === "string" && body.imageBase64.length > 5 * 1024 * 1024) {
+          const tooBigHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(tooBigHeaders, request);
+          return new Response(
+            JSON.stringify({ success: false, message: "Image payload exceeds maximum allowed size of 5MB" }),
+            { status: 413, headers: tooBigHeaders }
+          );
+        }
         if (body?.imageBase64) {
           const ocrPrompt = `You are a precision Academic Handwriting & Mathematical OCR engine. Transcribe ALL handwritten and printed text, equations, fractions, integrals, subscripts, and symbols visible in this image accurately. Ignore ruled lines or shadows. Output ONLY the raw transcribed text/formula without commentary or quotes.`;
           let ocrText = "";
@@ -770,29 +733,58 @@ export default {
       request.method === "POST";
 
     if (isAiEndpoint) {
+      if (!hasAiAuthCredential(request)) {
+        const unauthHeaders = new Headers({ "Content-Type": "application/json", "Cache-Control": "no-store" });
+        applyCors(unauthHeaders, request);
+        return new Response(
+          JSON.stringify({ success: false, authRequired: true, message: "Please sign in to use AI Study Assistant." }),
+          { status: 401, headers: unauthHeaders }
+        );
+      }
       try {
         const clonedAiReq = request.clone();
         const body = await clonedAiReq.json();
         const { query, context, imageBase64, imageMimeType, noteId, subject } = body;
 
-        let user = body?.user || null;
-        if (!user) {
-          const authHeader = request.headers.get("Authorization") || "";
-          if (authHeader.startsWith("Bearer ")) {
-            try {
-              const jwtPart = authHeader.split(" ")[1]?.split(".")[1];
-              if (jwtPart) {
-                const b64 = jwtPart.replace(/-/g, "+").replace(/_/g, "/");
-                const jsonStr = atob(b64);
-                const decoded = JSON.parse(jsonStr);
-                user = {
-                  name: decoded.name || decoded.userName || "Student Scholar",
-                  email: decoded.email || "anonymous@student.edu",
-                  mobile: decoded.mobile || decoded.phone || "N/A",
-                };
-              }
-            } catch (_) {}
-          }
+        if (imageBase64 && typeof imageBase64 === "string" && imageBase64.length > 5 * 1024 * 1024) {
+          const tooBigHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(tooBigHeaders, request);
+          return new Response(
+            JSON.stringify({ success: false, message: "Image payload exceeds maximum allowed size of 5MB" }),
+            { status: 413, headers: tooBigHeaders }
+          );
+        }
+
+        // Prefer JWT token claims (Authorization header or session cookie) over untrusted body.user to prevent audit log spoofing
+        let user = null;
+        const authHeader = request.headers.get("Authorization") || "";
+        let rawJwt = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+        if (!rawJwt) {
+          const cookieHeader = request.headers.get("Cookie") || "";
+          const cookieMatch = cookieHeader.match(/(?:^|;\s*)(?:fsm_token|fsm_admin_token|admin_token|vault_token|token)=([^;\s]+)/);
+          if (cookieMatch) rawJwt = decodeURIComponent(cookieMatch[1]);
+        }
+        if (rawJwt) {
+          try {
+            const jwtPart = rawJwt.split(".")[1];
+            if (jwtPart) {
+              const b64 = jwtPart.replace(/-/g, "+").replace(/_/g, "/");
+              const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+              const decoded = JSON.parse(atob(padded));
+              user = {
+                name: decoded.name || decoded.userName || "Student Scholar",
+                email: decoded.email || "anonymous@student.edu",
+                mobile: decoded.mobile || decoded.phone || "N/A",
+              };
+            }
+          } catch (_) {}
+        }
+        if (!user && body?.user && typeof body.user === "object") {
+          user = {
+            name: String(body.user.name || "Student Scholar").slice(0, 80),
+            email: String(body.user.email || "anonymous@student.edu").slice(0, 120),
+            mobile: String(body.user.mobile || "N/A").slice(0, 24),
+          };
         }
 
         const cleanQuery = (query || "").trim();
@@ -1002,30 +994,64 @@ export default {
       ...baseOrigins.filter((o) => !activePool.includes(o)),
     ];
 
-    for (let i = 0; i < prioritizedOrigins.length; i++) {
-      const origin = prioritizedOrigins[i];
+    const hasBody = !["GET", "HEAD"].includes(request.method);
+    const reqContentType = (request.headers.get("content-type") || "").toLowerCase();
+    const isMultipartUpload =
+      hasBody &&
+      (reqContentType.includes("multipart/form-data") || url.pathname.includes("/upload"));
+    const bufferedBody = hasBody && !isMultipartUpload ? await request.arrayBuffer() : null;
+    const attempts = isMultipartUpload ? [prioritizedOrigins[0]] : prioritizedOrigins;
+
+    for (let i = 0; i < attempts.length; i++) {
+      const origin = attempts[i];
       try {
         const originReqUrl = new URL(url.pathname + url.search, origin);
-        const originRes = await fetch(new Request(originReqUrl.toString(), request));
+        const forwardHeaders = new Headers(request.headers);
+        forwardHeaders.delete("host");
+        forwardHeaders.set("X-Forwarded-Host", url.host);
+
+        const proxyInit = {
+          method: request.method,
+          headers: forwardHeaders,
+          redirect: "follow",
+          signal: AbortSignal.timeout(isMultipartUpload ? 120000 : 25000),
+        };
+        if (isMultipartUpload) {
+          proxyInit.body = request.body;
+          proxyInit.duplex = "half";
+        } else if (hasBody && bufferedBody) {
+          proxyInit.body = bufferedBody.slice(0);
+        }
+
+        const originRes = await fetch(new Request(originReqUrl.toString(), proxyInit));
 
         const cType = (originRes.headers.get("content-type") || "").toLowerCase();
         const routingHeader = originRes.headers.get("x-render-routing") || "";
         const isBadStatus =
           (originRes.status >= 500 && originRes.status <= 504) ||
-          originRes.status === 402 ||
-          originRes.status === 403;
+          originRes.status === 402;
         const isSuspension =
           routingHeader.includes("suspend") ||
-          (cType.includes("text/html") && (url.pathname.startsWith("/api/") || url.pathname.includes("/stream")));
+          (cType.includes("text/html") &&
+            (originRes.status >= 500 || originRes.status === 200) &&
+            (url.pathname.startsWith("/api/") || url.pathname.includes("/stream")));
 
         // If current origin returned failure or suspension, auto-failover to next online node!
-        if ((isBadStatus || isSuspension) && i < prioritizedOrigins.length - 1) {
+        if (isBadStatus || isSuspension) {
           markOriginDown(origin);
-          continue; // Cascade failover to next online node!
+          if (i < attempts.length - 1) {
+            continue; // Cascade failover to next online node!
+          }
+          const downHeaders = new Headers({ "Content-Type": "application/json" });
+          applyCors(downHeaders, request);
+          return new Response(
+            JSON.stringify({ success: false, error: "CLUSTER_WAKING_UP", message: "Cloud backend node is spinning up. Please retry." }),
+            { status: 503, headers: downHeaders }
+          );
         }
 
         // On successful application response (< 500 and not suspension HTML), restore node to healthy status
-        if (originRes.status < 500 && !isHtmlSuspension) {
+        if (originRes.status < 500 && !isSuspension) {
           markOriginUp(origin);
         }
 
@@ -1052,10 +1078,15 @@ export default {
         });
       } catch (err) {
         markOriginDown(origin);
-        if (i < prioritizedOrigins.length - 1) continue;
+        if (i < attempts.length - 1) continue;
       }
     }
-    return new Response("Service unavailable", { status: 503 });
+    const unavailableHeaders = new Headers({ "Content-Type": "application/json" });
+    applyCors(unavailableHeaders, request);
+    return new Response(JSON.stringify({ success: false, error: "Service unavailable" }), {
+      status: 503,
+      headers: unavailableHeaders,
+    });
   },
 
   // 💓 Scheduled Cron Trigger: Pings ALL active Render origins every 12 min to keep them awake!

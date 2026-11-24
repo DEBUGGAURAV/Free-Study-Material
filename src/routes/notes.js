@@ -299,72 +299,6 @@ function getTelegramBotFileInfo(botToken, botFileId, timeoutMs = 15000) {
   });
 }
 
-async function streamTelegramBotFile({ botToken, botFileId, res, rangeHeader }) {
-  const fileInfo = await getTelegramBotFileInfo(botToken, botFileId, 8000);
-  return new Promise((resolve, reject) => {
-    let resolved = false;
-    const totalSize = Number(fileInfo.file_size) || 0;
-    const fileUrl = `https://api.telegram.org/file/bot${botToken}/${fileInfo.file_path}`;
-    const headers = rangeHeader ? { Range: rangeHeader } : {};
-    const fileReq = https.get(fileUrl, { headers }, (fileRes) => {
-      if (fileRes.statusCode !== 200 && fileRes.statusCode !== 206) {
-        return reject(new Error(`Telegram Bot file stream status ${fileRes.statusCode}`));
-      }
-
-      if (!res.headersSent) {
-        res.status(fileRes.statusCode);
-        if (fileRes.headers["content-type"]) res.setHeader("Content-Type", fileRes.headers["content-type"]);
-        if (fileRes.headers["content-length"]) res.setHeader("Content-Length", fileRes.headers["content-length"]);
-        if (fileRes.headers["content-range"]) res.setHeader("Content-Range", fileRes.headers["content-range"]);
-        res.setHeader("Accept-Ranges", "bytes");
-        res.setHeader("X-Real-Source", "CLOUD_STORAGE");
-        res.setHeader("X-Source-Label", "Academic Cloud Storage (Fast Direct Stream)");
-        res.setHeader("X-Data-Source", "bot_api");
-        res.setHeader("CF-Cache-Status", "MISS");
-      }
-
-      fileRes.pipe(res);
-
-      fileRes.on("end", () => {
-        if (!resolved) {
-          resolved = true;
-          resolve({ success: true, totalSize });
-        }
-      });
-
-      fileRes.on("error", (err) => {
-        if (!resolved) {
-          resolved = true;
-          reject(err);
-        }
-      });
-    });
-
-    fileReq.on("error", (err) => {
-      if (!resolved) {
-        resolved = true;
-        reject(err);
-      }
-    });
-    fileReq.setTimeout(25000, () => {
-      fileReq.destroy();
-      if (!resolved) {
-        resolved = true;
-        reject(new Error("Telegram Bot file download timeout"));
-      }
-    });
-
-    if (res && typeof res.on === "function") {
-      res.on("close", () => {
-        if (!resolved) {
-          resolved = true;
-          fileReq.destroy();
-        }
-      });
-    }
-  });
-}
-
 /**
  * Downloads full document buffer from Telegram Bot API with timeout safety.
  */
@@ -1976,7 +1910,13 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
     // Verify requesting user token (cookie, ephemeral ticket, query token, or auth header)
     let requestingUser = null;
-    const cookieToken = req.cookies?.fsm_token || req.cookies?.vault_token || req.cookies?.token;
+    const cookieToken =
+      req.cookies?.fsm_token ||
+      req.cookies?.fsm_admin_token ||
+      req.cookies?.admin_token ||
+      req.cookies?.vault_token ||
+      req.cookies?.token ||
+      null;
     const headerToken = req.headers["authorization"] ? req.headers["authorization"].replace(/^Bearer\s+/i, "").trim() : null;
     const ticketParam = req.query.ticket;
     const queryToken = req.query.token;
@@ -2003,13 +1943,14 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // 2. Verify httpOnly secure cookie or Authorization Bearer header
+    // 2. Verify Authorization Bearer header OR httpOnly cookie (try BOTH so a stale cookie never blocks a fresh Bearer token!)
     if (!requestingUser) {
-      const token = cookieToken || headerToken;
-      if (token) {
+      for (const cand of [headerToken, cookieToken]) {
+        if (!cand || cand === "null" || cand === "undefined") continue;
         try {
-          requestingUser = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] });
-        } catch {}
+          requestingUser = jwt.verify(cand, JWT_SECRET, { algorithms: ["HS256"] });
+          if (requestingUser) break;
+        } catch (_) {}
       }
     }
 
@@ -2127,10 +2068,15 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       if (note.fileUrl && isSafeExternalHttpUrl(note.fileUrl)) {
         return res.redirect(note.fileUrl.trim());
       }
-      return res.status(400).json({
+      const isProcessing = note.status === "processing";
+      if (isProcessing) {
+        res.setHeader("Retry-After", "3");
+      }
+      return res.status(isProcessing ? 503 : 400).json({
         success: false,
-        message: note.status === "processing" 
-          ? "Note is currently being processed in background queue. Please wait a few seconds." 
+        retryable: isProcessing,
+        message: isProcessing
+          ? "Note is currently syncing across cloud nodes. Retrying automatically..."
           : "Note file is missing from cloud vault.",
       });
     }

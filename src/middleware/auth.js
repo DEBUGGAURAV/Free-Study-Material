@@ -49,12 +49,21 @@ function setRevokedTokenVersion(userId, minVersion = 1) {
 }
 
 function authenticateToken(req, res, next) {
-  // 1. High-security httpOnly cookie (fsm_token)
-  // 2. Standard Authorization header (Bearer token)
-  // 3. Query param token (?token=...)
-  const cookieToken = req.cookies?.fsm_token || req.cookies?.token || req.cookies?.vault_token;
+  // 1. Standard Authorization header (Bearer token) — freshest explicit session token
+  // 2. High-security httpOnly cookie (fsm_token / fsm_admin_token / vault_token / token)
+  // 3. Query param token (?token=...) for allowed streaming/export paths
+  const cookieToken =
+    req.cookies?.fsm_token ||
+    req.cookies?.fsm_admin_token ||
+    req.cookies?.admin_token ||
+    req.cookies?.vault_token ||
+    req.cookies?.token ||
+    null;
   const authHeader = req.headers?.["authorization"] || req.headers?.authorization;
-  const headerToken = authHeader && typeof authHeader === "string" ? authHeader.split(" ")[1] : null;
+  const headerToken =
+    authHeader && typeof authHeader === "string"
+      ? authHeader.replace(/^Bearer\s+/i, "").trim()
+      : null;
   let queryToken = req.query?.token;
 
   // 🛡️ Security Check: Prevent query token exposure on mutating requests or non-streaming routes
@@ -79,18 +88,30 @@ function authenticateToken(req, res, next) {
     }
   }
 
-  const token = cookieToken || headerToken || queryToken;
+  // Try every candidate token in priority order so an expired/stale cookie NEVER blocks a valid Bearer header token!
+  const candidateTokens = [headerToken, cookieToken, queryToken].filter(
+    (t, idx, arr) => t && t !== "null" && t !== "undefined" && arr.indexOf(t) === idx
+  );
 
-  if (!token) {
+  if (candidateTokens.length === 0) {
     req.user = null;
     return next();
   }
 
-  jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }, async (err, user) => {
-    if (err) {
-      req.user = null;
-      return next();
-    }
+  let verifiedUser = null;
+  for (const cand of candidateTokens) {
+    try {
+      verifiedUser = jwt.verify(cand, JWT_SECRET, { algorithms: ["HS256"] });
+      if (verifiedUser) break;
+    } catch (_) {}
+  }
+
+  if (!verifiedUser) {
+    req.user = null;
+    return next();
+  }
+
+  (async (user) => {
 
     // 🛡️ Multi-Device & Server Restart Session Invalidation Check
     if (user && user.id) {
@@ -280,6 +301,10 @@ function authenticateToken(req, res, next) {
       });
     }
 
+    next();
+  })(verifiedUser).catch((err) => {
+    console.warn("[AUTH-MIDDLEWARE] Session verification error:", err?.message || err);
+    req.user = null;
     next();
   });
 }
