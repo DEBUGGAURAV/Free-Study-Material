@@ -105,7 +105,7 @@ function getLiveOnlineUsers(thresholdMs = 3 * 60 * 1000) {
         userId: data.userId || (!key.includes("@") ? key : null),
         email: email || "Anonymous Student",
         name: data.name || data.userName || (email ? email.split("@")[0] : "Student"),
-        role: data.role || (email?.toLowerCase().includes("aky435316") ? "admin" : "student"),
+        role: data.role || (email && process.env.ADMIN_EMAIL && email.toLowerCase().trim() === process.env.ADMIN_EMAIL.toLowerCase().trim() ? "admin" : "student"),
         ip: data.ip || null,
         lastSeen: data.lastSeen,
         agoSec: Math.max(0, Math.floor((now - (data.lastSeen || 0)) / 1000)),

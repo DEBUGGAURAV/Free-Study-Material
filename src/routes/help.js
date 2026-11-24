@@ -19,7 +19,7 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const { helpLimiter, getClientIp } = require("../middleware/rateLimit");
-const { authenticateToken, requireAuth } = require("../middleware/auth");
+const { authenticateToken } = require("../middleware/auth");
 
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
 
@@ -114,7 +114,6 @@ const {
   getAllHelpTickets,
   getHelpTursoTelemetry,
   getHelpBotTelemetry,
-  getGlobalHelpRetentionDays,
   setGlobalHelpRetentionDays,
   updateTicketRetention,
   purgeExpiredClosedTickets,

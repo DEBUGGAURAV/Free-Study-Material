@@ -2,8 +2,6 @@ import "react";
 import { X, Trash2, Clock, Save, RefreshCw, Globe, Send, ShieldAlert, Bot, Flame, FileText, Megaphone, Plus, Lock, MessageSquare, Crown, Paperclip } from "lucide-react";
 import "../../../api";
 import { formatFileSize } from "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();
 const isMasterAdminSender = (sender) => {

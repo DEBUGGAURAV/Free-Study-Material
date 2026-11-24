@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { Mail, Trash2, Activity, RefreshCw, Database, Globe, Code, Cloud, Send, Zap, ShieldCheck, Bot, Smartphone } from "lucide-react";
 import { api } from "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 export default function TabSoftware(props) {
   const {

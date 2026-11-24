@@ -5,7 +5,7 @@
 
 const nodemailer = require("nodemailer");
 const { ramCache } = require("../utils/ramCache");
-const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getNotePublicUrl, getVaultName } = require("../config/siteConfig");
 
 // Configuration from environment variables
 const SMTP_HOST = (process.env.BREVO_SMTP_HOST || "smtp-relay.brevo.com").trim();

@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { Trash2, Search, Clock, HardDrive, Zap, Flame } from "lucide-react";
 import "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 export default function TabPerformance(props) {
   const {

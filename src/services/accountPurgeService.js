@@ -1,5 +1,4 @@
 const { db } = require("../firebase");
-const { sendTelegramAuthNotice } = require("./emailService");
 
 const MAIN_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "").toLowerCase().trim();
 const ADMIN_ALIASES = ["admin", "mainadmin", "administrator", "root"];

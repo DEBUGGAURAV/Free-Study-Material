@@ -10,7 +10,7 @@ import { PdfRagSearchIndex } from "../utils/pdfRagSearch";
 import { recognizeCanvasText, warmupClientOcr } from "../utils/clientOcr";
 import { WebrtcStudyRoom } from "../utils/webrtcStudyRoom";
 import { generateClientAiAnswer } from "../utils/clientAi";
-import { saveNoteOffline, isNotePinnedOffline, togglePinOfflineNote } from "../utils/offlineQueue";
+import { isNotePinnedOffline, togglePinOfflineNote } from "../utils/offlineQueue";
 import { recordStudentNoteRead, recordStudentAcademicDownload } from "../utils/studentStudyContext";
 import {
   getReadingProgress,

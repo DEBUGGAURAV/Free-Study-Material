@@ -4,7 +4,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { db } = require("../firebase");
-const { requireDb, checkDb } = require("../middleware/dbGuard");
+const { checkDb } = require("../middleware/dbGuard");
 const { ramCache } = require("../utils/ramCache");
 const { JWT_SECRET, authenticateToken, setAuthCookie, clearAuthCookie, setRevokedTokenVersion } = require("../middleware/auth");
 const { validateStudentEmail, isDisposableEmail } = require("../utils/disposableEmailBlocker");
@@ -21,11 +21,9 @@ const {
   createPendingReset,
   getPendingReset,
   verifyResetOtp,
-  BOT_USERNAME,
 } = require("../services/securityBotService");
 const {
   encrypt,
-  decrypt,
   blindIndex,
   encryptUserObject,
   decryptUserObject,
@@ -33,7 +31,6 @@ const {
 const {
   cacheUserInTurso,
   getCachedUserByEmailFromTurso,
-  invalidateUserCacheInTurso,
 } = require("../services/tursoUserCacheService");
 
 /**

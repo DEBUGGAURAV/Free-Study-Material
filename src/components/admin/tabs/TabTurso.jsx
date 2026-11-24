@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Shield, Trash2, Eye, UserCheck, Activity, Search, Clock, ChevronDown, ChevronUp, Save, RefreshCw, Database, Server, HardDrive, Globe, Send, Download, Zap, ShieldCheck, ShieldAlert, Bot, Flame, Sparkles, FileText, MessageSquare } from "lucide-react";
 import { api } from "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 export default function TabTurso(props) {
   const {

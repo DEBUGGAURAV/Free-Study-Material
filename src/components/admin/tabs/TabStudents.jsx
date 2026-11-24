@@ -1,9 +1,6 @@
 import { useState } from "react";
-import { X, Trash2, Eye, Edit3, UserCheck, UserX, Activity, Search, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Smartphone, Laptop, BookOpen, Shield, Sliders } from "lucide-react";
+import { Trash2, Eye, Edit3, UserCheck, UserX, Activity, Search, ChevronLeft, ChevronRight, RefreshCw, RotateCcw, Smartphone, Laptop, BookOpen, Shield, Sliders } from "lucide-react";
 import { api } from "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 import AdminSubModal from "../AdminSubModal";
 
 const MASTER_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || "").toLowerCase();

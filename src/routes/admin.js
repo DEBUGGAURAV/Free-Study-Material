@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const os = require("os");
 const { db } = require("../firebase");
-const { requireDb, checkDb } = require("../middleware/dbGuard");
+const { checkDb } = require("../middleware/dbGuard");
 const { authenticateToken, requireAdmin, setRevokedTokenVersion } = require("../middleware/auth");
 const { ramCache, invalidateAllCache } = require("../utils/ramCache");
 const { recordSyncEvent, getLastSyncState } = require("../telegram/syncTracker");
@@ -5081,7 +5081,7 @@ function isDownloadAllowed() {
 // ============================================================================
 const { getTursoStatus, syncFromFirestore, getPrivateRoomAudits, prunePrivateRoomAuditsOlderThan, deleteSinglePrivateRoomAudit, pruneChatMessagesOlderThan } = require("../services/tursoService");
 const { getTursoNotesCacheStats, refreshCacheFromFirestore, pruneNotesCacheOlderThan, invalidateTursoNotesCache } = require("../services/tursoNotesCacheService");
-const { getTursoUserCacheStats, syncAllUsersToTursoCache } = require("../services/tursoUserCacheService");
+const { getTursoUserCacheStats } = require("../services/tursoUserCacheService");
 
 router.get("/turso/status", authenticateToken, requireAdmin, async (req, res) => {
   try {

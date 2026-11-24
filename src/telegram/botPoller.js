@@ -16,7 +16,7 @@ const { syncLock } = require("../utils/telegramSyncLock");
 const { getClient } = require("./mtproto");
 const { recordSyncEvent } = require("./syncTracker");
 const { upsertNoteToTurso } = require("../services/tursoService");
-const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl, getNotePublicUrl, getVaultName } = require("../config/siteConfig");
 
 function getBotToken() {
   return (process.env.TELEGRAM_BOT_TOKEN || "").trim();

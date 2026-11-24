@@ -15,11 +15,9 @@ const {
   deleteRoomFromTurso,
   tursoClient,
   pruneChatMessagesOlderThan,
-  getTursoChatTelemetry,
   getChatUserProfile,
   isChatUsernameTaken,
   saveChatUserProfile,
-  getAllChatProfiles,
   getChatTursoClient,
 } = require("../services/tursoService");
 
@@ -32,7 +30,6 @@ const {
   dispatchPrivateChatMessageToTelegram,
   dispatchGroupAuditEventToTelegram,
   dispatchPrivateMediaToTelegramVault,
-  dispatchActiveStudentsReportToTelegram,
   dispatchPublicChatMessageToTelegram,
   dispatchPublicChatEditToTelegram,
   dispatchPublicChatDeleteToTelegram,

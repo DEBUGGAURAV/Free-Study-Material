@@ -1,9 +1,6 @@
 import "react";
 import { Eye, Search } from "lucide-react";
 import "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 function getRecycleItemType(item) {
   if (!item) return "notes";

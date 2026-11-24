@@ -21,7 +21,7 @@ const { decryptUserObject } = require("../utils/cryptoVault");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { isMaintenanceActive } = require("../middleware/maintenance");
 const { ramCache } = require("../utils/ramCache");
-const { getCachedUserByEmailFromTurso, cacheUserInTurso } = require("../services/tursoUserCacheService");
+const { getCachedUserByEmailFromTurso } = require("../services/tursoUserCacheService");
 const {
   generateRegistrationOptions,
   verifyRegistrationResponse,

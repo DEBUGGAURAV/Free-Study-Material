@@ -12,7 +12,6 @@ const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const os = require("os");
 
-const { ramCache } = require("./utils/ramCache");
 const { globalLimiter } = require("./middleware/rateLimit");
 const { getClient, startAutoSyncWorker } = require("./telegram/mtproto");
 const { startBotPoller } = require("./telegram/botPoller");
@@ -23,7 +22,6 @@ const {
   startRamBufferGuard,
   startTelegramHeartbeat,
   startEventLoopLagDetector,
-  getWatchdogStats,
   recordServerActivity,
   startIdleMemoryCleaner,
   startDiskQuotaPruner,
@@ -67,7 +65,7 @@ const securityRoutes = require("./routes/security");
 const examRoutes = require("./routes/exam");
 const pushRoutes = require("./routes/push");
 const aiRoutes = require("./routes/ai");
-const { getSiteUrl, getSiteName, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
+const { getSiteUrl, getVaultName, DEFAULT_DOMAIN } = require("./config/siteConfig");
 const { startAntiSleepService, getAntiSleepTelemetry } = require("./services/antiSleepService");
 const { requestTelemetryMiddleware } = require("./services/clusterTelemetryService");
 

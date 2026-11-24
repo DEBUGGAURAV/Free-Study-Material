@@ -2,8 +2,6 @@ import "react";
 import { Eye, CheckCircle, RefreshCw, Send } from "lucide-react";
 import "../../../api";
 import { formatMB } from "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 export default function TabPipeline(props) {
   const {

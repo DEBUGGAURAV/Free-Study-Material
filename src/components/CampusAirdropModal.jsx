@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { X, Share2, Camera, Copy, Check, RefreshCw, Zap, ShieldCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
-import { getOfflineNotes, getAllStoredOfflineNotes, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
+import { getAllStoredOfflineNotes, getAnyCachedNoteBuffer } from "../utils/offlineQueue";
 import { createAirDropSenderSession, completeSenderWithAnswer, createAirDropReceiverSession, cancelAirDropSession } from "../utils/p2pCampusAirdrop";
 
 

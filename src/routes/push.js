@@ -56,7 +56,10 @@ router.post("/subscribe", authenticateToken, async (req, res) => {
 // 3. Unsubscribe browser/device
 router.post("/unsubscribe", async (req, res) => {
   try {
-    const endpoint = req.body?.endpoint || req.body?.subscription?.endpoint;
+    const endpoint = String(req.body?.endpoint || req.body?.subscription?.endpoint || "").trim();
+    if (!endpoint || endpoint.length > 1024 || !endpoint.startsWith("https://")) {
+      return res.status(400).json({ success: false, message: "Valid HTTPS push subscription endpoint is required." });
+    }
     const result = await unsubscribeDevice(endpoint);
     return res.json({ success: true, ...result });
   } catch (err) {

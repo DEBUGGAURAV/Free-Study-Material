@@ -163,7 +163,7 @@ export async function getOfflineNoteBuffer(noteId) {
   }
 }
 
-import { getAllCachedNoteChunks, deleteCachedNote, clearAllCachedNotes, deleteP2PDatabase, getCachedNoteBuffer, cacheNoteBuffer, invalidateCachedNoteIdsSet } from "./p2pMesh";
+import { getAllCachedNoteChunks, deleteCachedNote, clearAllCachedNotes, deleteP2PDatabase, getCachedNoteBuffer, invalidateCachedNoteIdsSet } from "./p2pMesh";
 
 /**
  * Unified buffer retriever: checks p2p cache (fsm_p2p_cache_v1), offline vault (fsm_offline_vault), and CacheStorage

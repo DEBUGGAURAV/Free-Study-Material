@@ -9,7 +9,6 @@
 
 const crypto = require("crypto");
 const { db } = require("../firebase");
-const { blindIndex, decryptUserObject } = require("../utils/cryptoVault");
 
 const botToken = (process.env.TELEGRAM_OTP_BOT_TOKEN || "").trim();
 const BOT_USERNAME = "fsm_security_otp_bot";
@@ -72,7 +71,7 @@ async function acquireDistributedLock(lockKey, ttlMs = 20000) {
   }
 }
 
-const { getSiteUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl } = require("../config/siteConfig");
 
 
 // Runtime Security Bot Controls (Single Document Commit Pattern to prevent database bloat)

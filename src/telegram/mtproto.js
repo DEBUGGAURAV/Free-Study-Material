@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const { extractAcademicMetadata } = require("../utils/academicMetadata");
 const { syncLock } = require("../utils/telegramSyncLock");
 const { recordSyncEvent, getLastSyncState } = require("./syncTracker");
-const { getSiteUrl, getNotePublicUrl, getSiteName, getVaultName } = require("../config/siteConfig");
+const { getSiteUrl, getNotePublicUrl, getVaultName } = require("../config/siteConfig");
 
 const apiId = parseInt((process.env.TELEGRAM_API_ID || "").trim(), 10);
 const apiHash = (process.env.TELEGRAM_API_HASH || "").trim();

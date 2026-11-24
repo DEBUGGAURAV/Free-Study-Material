@@ -1,9 +1,6 @@
 import { useState, useEffect } from "react";
-import { Trash2, Clock, Save, RefreshCw, Download, ShieldAlert, Database, Zap, Server, ShieldCheck, Activity, HardDrive, CheckCircle2, AlertCircle } from "lucide-react";
+import { Trash2, Clock, Save, RefreshCw, Download, ShieldAlert, Database, Zap, HardDrive } from "lucide-react";
 import { api } from "../../../api";
-import "../../../utils/formatUtils";
-import "../../../utils/hardwareAdaptiveEngine";
-import "../../VirtualPdfReader";
 
 export default function TabDatabase(props) {
   const {

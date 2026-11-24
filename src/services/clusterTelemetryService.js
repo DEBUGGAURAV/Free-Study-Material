@@ -779,9 +779,40 @@ async function initClusterStateFromFirestore() {
   }
 }
 
+function validatePublicHttpsClusterUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error("Invalid server URL format.");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("Cluster node URLs must strictly use https:// protocol.");
+  }
+  const host = (parsed.hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+  if (
+    !host ||
+    host === "localhost" ||
+    host === "::1" ||
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^169\.254\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(host) ||
+    /^0\./.test(host) ||
+    /^(fc|fd|fe80)/i.test(host)
+  ) {
+    throw new Error("Private, loopback, or metadata IP/host URLs are blocked for SSRF protection.");
+  }
+  return parsed.origin;
+}
+
 async function addClusterNode({ name, url, role }) {
-  const cleanUrl = String(url || "").trim().replace(/\/$/, "");
-  if (!cleanUrl) throw new Error("A valid server URL is required");
+  const rawClean = String(url || "").trim().replace(/\/$/, "");
+  if (!rawClean) throw new Error("A valid server URL is required");
+  const cleanUrl = validatePublicHttpsClusterUrl(rawClean);
   const existing = clusterNodes.find((n) => n.url && normalizeHost(n.url) === normalizeHost(cleanUrl));
   if (existing) throw new Error(`Server URL already exists in cluster as ${existing.name}`);
 

@@ -13,8 +13,19 @@ const { streamDocumentFromChannel, getDocumentBufferFromChannel } = require("../
 const { authenticateToken, requireAuth, requireAdmin, JWT_SECRET } = require("../middleware/auth");
 const { sendTelegramAuthNotice } = require("../services/emailService");
 const { getLastSyncState, recordSyncEvent } = require("../telegram/syncTracker");
-const { telegramCircuitBreaker } = require("../utils/circuitBreaker");
 const { getPublicNoteMeta, renderNoteOgPngBuffer } = require("../utils/ogPreviewHelper");
+
+function isSafeExternalHttpUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return false;
+  const trimmed = rawUrl.trim();
+  if (/[\r\n]/.test(trimmed)) return false;
+  try {
+    const u = new URL(trimmed);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 function isAdminUser(user) {
   if (!user) return false;
@@ -2102,16 +2113,16 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
 
     // Only redirect to external Drive link if file is TRULY absent from all Cloud Vault tiers (RAM, Disk, Edge CDN, Telegram)
     if (!hasTelegramStorage && !isDiskCached && !isRamCached && !note.isCdnCached) {
-      if (note.driveLink) {
-        let driveUrl = note.driveLink;
+      if (note.driveLink && isSafeExternalHttpUrl(note.driveLink)) {
+        let driveUrl = note.driveLink.trim();
         const driveMatch = driveUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
         if (driveMatch && driveMatch[1]) {
           driveUrl = `https://drive.google.com/file/d/${driveMatch[1]}/preview`;
         }
         return res.redirect(driveUrl);
       }
-      if (note.fileUrl) {
-        return res.redirect(note.fileUrl);
+      if (note.fileUrl && isSafeExternalHttpUrl(note.fileUrl)) {
+        return res.redirect(note.fileUrl.trim());
       }
       return res.status(400).json({
         success: false,
@@ -2572,12 +2583,12 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       }
     }
 
-    // Failover: External Google Drive link or fileUrl
-    if (note.driveLink) {
-      return res.redirect(note.driveLink);
+    // Failover: External Google Drive link or fileUrl (validated strictly for http/https to prevent open-redirect/XSS)
+    if (note.driveLink && isSafeExternalHttpUrl(note.driveLink)) {
+      return res.redirect(note.driveLink.trim());
     }
-    if (note.fileUrl) {
-      return res.redirect(note.fileUrl);
+    if (note.fileUrl && isSafeExternalHttpUrl(note.fileUrl)) {
+      return res.redirect(note.fileUrl.trim());
     }
 
     // Direct MTProto streaming fallback (Bypasses buffer assembly and streams chunks directly)
