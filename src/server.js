@@ -126,6 +126,8 @@ app.use(
           "https://challenges.cloudflare.com",
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
+          "https://*.onrender.com",
+          "https://*.pages.dev",
           "https://accounts.google.com",
           "https://*.google.com",
           "https://oauth2.googleapis.com",
@@ -152,6 +154,8 @@ app.use(
           "https://challenges.cloudflare.com",
           process.env.CF_WORKER_URL,
           "https://*.workers.dev",
+          "https://*.onrender.com",
+          "https://*.pages.dev",
           "https://accounts.google.com",
           "https://*.google.com",
           "https://drive.google.com",
@@ -162,6 +166,7 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
   })
 );
@@ -188,7 +193,7 @@ const TRUSTED_CORS_ORIGINS = new Set([
   "https://fsm-edge.jnplotus.workers.dev",
 ]);
 
-const TRUSTED_DOMAIN_REGEX = /^https:\/\/(freestudymaterial[12]?\.onrender\.com|freestudymaterial\.pages\.dev|fsm-edge\.jnplotus\.workers\.dev)$/i;
+const TRUSTED_DOMAIN_REGEX = /^https:\/\/(freestudymaterial[12]?\.onrender\.com|([a-z0-9-]+\.)?freestudymaterial\.pages\.dev|fsm-edge\.jnplotus\.workers\.dev)$/i;
 
 app.use(
   cors({

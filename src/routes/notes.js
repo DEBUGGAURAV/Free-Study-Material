@@ -2091,8 +2091,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
       const isHtmlRequest =
         req.headers["sec-fetch-dest"] === "document" ||
         req.headers["sec-fetch-mode"] === "navigate" ||
-        (req.headers["accept"] && req.headers["accept"].includes("text/html")) ||
-        (!req.xhr && req.accepts("html"));
+        Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
 
       if (isHtmlRequest) {
         return res.status(401).send(renderRestrictedAccessHtml(note.title));
@@ -2301,8 +2300,7 @@ router.get(["/:id/stream", "/:id/stream.pdf", "/:id/:filename.pdf"], downloadLim
         const isHtmlRequest =
           req.headers["sec-fetch-dest"] === "document" ||
           req.headers["sec-fetch-mode"] === "navigate" ||
-          (req.headers["accept"] && req.headers["accept"].includes("text/html")) ||
-          (!req.xhr && req.accepts("html"));
+          Boolean(req.headers["accept"] && req.headers["accept"].includes("text/html"));
 
         if (isHtmlRequest) {
           return res.status(403).send(renderDownloadPausedHtml(note.title, note.id || id, effectiveReason));

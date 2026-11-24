@@ -283,7 +283,16 @@ export async function onRequest(context) {
 
   // 2. Multi-Origin Failover Proxy with Circuit-Breaker Sorting
   const hasBody = !["GET", "HEAD"].includes(request.method);
-  const bodyBytes = hasBody ? await request.arrayBuffer() : null;
+  const reqContentType = (request.headers.get("content-type") || "").toLowerCase();
+  const isMultipartUpload =
+    hasBody &&
+    (reqContentType.includes("multipart/form-data") ||
+      url.pathname.startsWith("/api/upload") ||
+      url.pathname.includes("/upload"));
+
+  // CRITICAL: Never buffer large multipart file uploads with request.arrayBuffer() inside 128MB Worker RAM!
+  // Stream upload body directly (duplex: "half") with 120s timeout; only buffer small JSON bodies for failover retry.
+  const bodyBytes = hasBody && !isMultipartUpload ? await request.arrayBuffer() : null;
 
   const now = Date.now();
   // Sort origins: Healthy origins first, recently failed or disabled origins last
@@ -294,8 +303,11 @@ export async function onRequest(context) {
     return aDead ? 1 : -1;
   });
 
-  for (let i = 0; i < sortedOrigins.length; i++) {
-    const origin = sortedOrigins[i];
+  // For streaming multipart uploads, body stream can only be consumed once -> route straight to top healthy node
+  const attempts = isMultipartUpload ? [sortedOrigins[0]] : sortedOrigins;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const origin = attempts[i];
     try {
       const targetUrl = new URL(url.pathname + url.search, origin);
       const reqHeaders = new Headers(request.headers);
@@ -304,9 +316,10 @@ export async function onRequest(context) {
       reqHeaders.set("X-Forwarded-Proto", "https");
       reqHeaders.set("Connection", "keep-alive");
 
-      // Set 22-second subrequest timeout to safely accommodate Render container spin-ups
+      // Realistic timeouts: 120s for file uploads, 60s for PDF streams, 22s for standard API calls
+      const timeoutMs = isMultipartUpload ? 120000 : isStreamRequest ? 60000 : 22000;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 22000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const init = {
         method: request.method,
@@ -315,7 +328,10 @@ export async function onRequest(context) {
         signal: controller.signal,
       };
 
-      if (hasBody && bodyBytes) {
+      if (isMultipartUpload) {
+        init.body = request.body;
+        init.duplex = "half";
+      } else if (hasBody && bodyBytes) {
         init.body = bodyBytes.slice(0); // Cloned buffer for safe re-use across retries
       }
 
@@ -327,17 +343,18 @@ export async function onRequest(context) {
       }
 
       // If backend returns 502/503/504 (or suspended, or server down 520-526, or explicitly disabled by admin), auto-failover
+      // NOTE: Never treat 401/403/404 HTML responses as "server down" (prevents poisoning all healthy backends!)
       const contentType = (response.headers.get("content-type") || "").toLowerCase();
       const isServerDown =
         (response.status >= 500 && response.status <= 504) ||
         (response.status >= 520 && response.status <= 526) ||
         response.status === 402 ||
         response.headers.get("x-node-disabled") === "true" ||
-        (contentType.includes("text/html") && url.pathname.startsWith("/api/"));
+        (contentType.includes("text/html") && url.pathname.startsWith("/api/") && (response.status >= 500 || response.status === 200));
 
       if (isServerDown) {
         unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);
-        if (i < sortedOrigins.length - 1) {
+        if (i < attempts.length - 1) {
           continue; // Seamless failover to next backend
         }
         // If all backends failed or last one is down/HTML/suspended -> NEVER return raw HTML to an /api/* endpoint!
@@ -465,7 +482,7 @@ export async function onRequest(context) {
       });
     } catch (err) {
       unhealthyOrigins.set(origin, Date.now() + UNHEALTHY_COOLDOWN_MS);
-      if (i < sortedOrigins.length - 1) continue;
+      if (i < attempts.length - 1) continue;
       return new Response(JSON.stringify({ error: "Backend cluster unavailable", message: err.message }), {
         status: 503,
         headers: { "Content-Type": "application/json" },

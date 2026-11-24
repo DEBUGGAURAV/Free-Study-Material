@@ -449,20 +449,21 @@ export async function acquireNoteDocument(noteId, {
     icon: "⚡",
   });
 
-  if (CF_WORKER && Date.now() >= workerCooldownUntil) {
+  // Skip cross-origin CF_WORKER when user has cookie-only auth (no Bearer token), so same-origin Pages Edge Cache handles it with HttpOnly cookie!
+  const isCrossOriginWorker = (() => {
+    if (!CF_WORKER) return false;
+    try {
+      return typeof window !== "undefined" && new URL(CF_WORKER).origin !== window.location.origin;
+    } catch {
+      return true;
+    }
+  })();
+
+  if (CF_WORKER && Date.now() >= workerCooldownUntil && (!isCrossOriginWorker || Boolean(authToken))) {
     try {
       const workerUrl = `${CF_WORKER}/api/notes/${cleanId}/stream.pdf?${
         mode === "download" ? "download=1" : "preview=1"
       }${authToken ? `&token=${encodeURIComponent(authToken)}` : ""}&filename=${encodeURIComponent(cleanName)}`;
-
-      // Cross-origin CF Worker uses Bearer token + ?token query; avoid credentials:"include" so custom domains never fail CORS wildcard rules
-      const isCrossOriginWorker = (() => {
-        try {
-          return typeof window !== "undefined" && new URL(CF_WORKER).origin !== window.location.origin;
-        } catch {
-          return true;
-        }
-      })();
 
       const workerController = new AbortController();
       // 7.5s response-header timeout (aborts only if headers never arrive; cleared immediately once streaming begins)
@@ -521,11 +522,11 @@ export async function acquireNoteDocument(noteId, {
           return { buffer, blob, source: resolvedSource, tier: resolvedTier };
         }
       } else if (workerRes && workerRes.status >= 500) {
-        workerCooldownUntil = Date.now() + 15000;
+        workerCooldownUntil = Date.now() + 60000;
       }
     } catch (t2Err) {
       if (!(signal && signal.aborted)) {
-        workerCooldownUntil = Date.now() + 15000;
+        workerCooldownUntil = Date.now() + 60000;
       }
       console.debug("[WATERFALL] Tier 2 CDN worker fallback to Tier 3:", t2Err.message);
     }
@@ -576,7 +577,7 @@ export async function acquireNoteDocument(noteId, {
         const candidateRes = await fetch(`${clusterOrigin}${streamEndpointPath}`, {
           headers: fetchHeaders,
           signal,
-          credentials: "include",
+          credentials: authToken ? "omit" : "include",
         });
         if (isValidPdfStreamResponse(candidateRes) || (candidateRes && candidateRes.status < 500)) {
           serverRes = candidateRes;

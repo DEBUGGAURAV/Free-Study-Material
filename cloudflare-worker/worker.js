@@ -57,12 +57,18 @@ function hashClientIdentifier(str) {
   return Math.abs(hash);
 }
 
-// Cluster origins are deployment configuration, not code defaults.
+// Cluster origins: prefer Worker env vars, with resilient fallback to active Render production nodes
+const DEFAULT_CLUSTER_ORIGINS = [
+  'https://freestudymaterial1.onrender.com',
+  'https://freestudymaterial2.onrender.com',
+];
+
 function getAllClusterOrigins(env) {
   const list = [
-    env.BACKUP_ORIGIN_URL_1,
-    env.BACKUP_ORIGIN_URL_2,
-    env.ORIGIN_URL,
+    env?.ORIGIN_URL,
+    env?.BACKUP_ORIGIN_URL_1,
+    env?.BACKUP_ORIGIN_URL_2,
+    ...DEFAULT_CLUSTER_ORIGINS,
   ];
   const unique = [];
   for (const item of list) {

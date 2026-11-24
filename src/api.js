@@ -1095,10 +1095,11 @@ export const api = {
    * Upload Note with LIVE Speed (MB/s), Transferred Size, Time Remaining & Percentage
    */
   uploadNoteWithProgress: (formData, onProgress) => {
-    const attemptXhrUpload = (targetUrl) =>
+    const attemptXhrUpload = (targetUrl, resolvedToken) =>
       new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        const token = getAuthToken();
+        const token = resolvedToken || getAuthToken();
+        const isRelative = targetUrl.startsWith("/");
         const startTime = performance.now();
         let prevLoaded = 0;
         let prevTime = startTime;
@@ -1170,6 +1171,11 @@ export const api = {
           err.status = 0;
           reject(err);
         });
+        xhr.addEventListener("timeout", () => {
+          const err = new Error("Upload timed out while connecting to server.");
+          err.status = 504;
+          reject(err);
+        });
         xhr.addEventListener("abort", () => {
           const err = new Error("Upload cancelled.");
           err.aborted = true;
@@ -1177,7 +1183,8 @@ export const api = {
         });
 
         xhr.open("POST", targetUrl);
-        xhr.withCredentials = true;
+        xhr.timeout = 180000; // 3-minute generous upload timeout
+        xhr.withCredentials = isRelative || !token;
         if (token) {
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         }
@@ -1185,8 +1192,19 @@ export const api = {
       });
 
     return (async () => {
+      let activeToken = getAuthToken();
+      if (!activeToken) {
+        try {
+          const restored = await loadAuthSession();
+          if (restored?.token) {
+            activeToken = restored.token;
+            setAuthToken(activeToken);
+          }
+        } catch (_) {}
+      }
+
       try {
-        return await attemptXhrUpload(`${API_BASE}/upload`);
+        return await attemptXhrUpload(`${API_BASE}/upload`, activeToken);
       } catch (primaryErr) {
         if (primaryErr.aborted || (primaryErr.status >= 400 && primaryErr.status < 500 && primaryErr.status !== 405 && primaryErr.status !== 404)) {
           throw primaryErr;
@@ -1194,7 +1212,7 @@ export const api = {
         const clusterNodes = Array.isArray(BACKEND_CLUSTER_URLS) ? BACKEND_CLUSTER_URLS : [];
         for (const nodeOrigin of clusterNodes) {
           try {
-            return await attemptXhrUpload(`${nodeOrigin}/api/upload`);
+            return await attemptXhrUpload(`${nodeOrigin}/api/upload`, activeToken);
           } catch (nodeErr) {
             if (nodeErr.aborted || (nodeErr.status >= 400 && nodeErr.status < 500 && nodeErr.status !== 405 && nodeErr.status !== 404)) {
               throw nodeErr;

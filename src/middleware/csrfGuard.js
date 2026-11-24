@@ -102,6 +102,8 @@ function sameOriginGuard(req, res, next) {
   const checkHost = originHost || refererHost;
   const allowedHosts = getAllowedHosts(req);
 
+  const isAllowedHost = (h) => Boolean(h && (allowedHosts.has(h) || h.endsWith(".freestudymaterial.pages.dev")));
+
   // Reject explicit Origin: null on mutating requests (sandboxed iframe CSRF vector)
   if (origin === "null") {
     console.warn(`[CSRF-GUARD] 🚨 Blocked null-origin mutating request: ${req.method} ${req.originalUrl}`);
@@ -116,7 +118,7 @@ function sameOriginGuard(req, res, next) {
   const secFetchSite = req.headers["sec-fetch-site"];
   if (secFetchSite === "cross-site") {
     // Block if request does not originate from a verified platform frontend (even when Origin/Referer are missing)
-    if (!checkHost || !allowedHosts.has(checkHost)) {
+    if (!isAllowedHost(checkHost)) {
       console.warn(`[CSRF-GUARD] 🚨 Blocked cross-site request: ${req.method} ${req.originalUrl} from unauthorized host: ${checkHost || "missing"}`);
       return res.status(403).json({
         error: "Cross-Site Request Blocked. Mutating actions must originate from the verified study platform.",
@@ -125,7 +127,7 @@ function sameOriginGuard(req, res, next) {
     }
   }
 
-  if (checkHost && !allowedHosts.has(checkHost)) {
+  if (checkHost && !isAllowedHost(checkHost)) {
     console.warn(`[CSRF-GUARD] 🚨 Blocked unauthorized origin: ${checkHost} on ${req.method} ${req.originalUrl}`);
     return res.status(403).json({
       error: `Cross-Origin Request Blocked. Origin '${checkHost}' is not authorized.`,
